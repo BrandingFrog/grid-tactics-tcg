@@ -65,7 +65,11 @@ Plans:
   2. Minions move in all 4 directions (up/down/left/right), melee units attack adjacent targets (orthogonal), ranged units attack up to 2 tiles orthogonally or 1 tile diagonally
   3. Drawing a card costs an action (with a configurable flag for auto-draw variant)
   4. Given any game state, legal_actions() returns the complete set of valid actions with no illegal actions included
-**Plans**: TBD
+**Plans:** 3 plans
+Plans:
+- [ ] 03-01-PLAN.md -- MinionInstance, ActionType enum, Action dataclass, GameState extension with minion/react fields
+- [ ] 03-02-PLAN.md -- Effect resolution engine and action resolver (deploy, move, attack, draw, pass, combat)
+- [ ] 03-03-PLAN.md -- React window stack with LIFO chaining, legal_actions() enumeration, integration tests
 
 ### Phase 4: Win Condition & Game Loop
 **Goal**: Complete games can be played from start to finish between two agents (random or scripted) with correct win detection
@@ -152,8 +156,8 @@ Note: Phase 9 depends on Phase 6 (not 8), so Phases 8 and 9 could run in paralle
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Game State Foundation | 4/4 | Complete | 2026-04-02 |
-| 2. Card System & Types | 0/2 | Planned | - |
-| 3. Turn Actions & Combat | 0/TBD | Not started | - |
+| 2. Card System & Types | 2/2 | Complete | 2026-04-02 |
+| 3. Turn Actions & Combat | 0/3 | Planned | - |
 | 4. Win Condition & Game Loop | 0/TBD | Not started | - |
 | 5. RL Environment Interface | 0/TBD | Not started | - |
 | 6. RL Training Pipeline | 0/TBD | Not started | - |
