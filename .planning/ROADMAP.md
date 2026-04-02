@@ -108,7 +108,11 @@ Plans:
   3. Reward shaping provides intermediate signals (damage dealt, board control, mana efficiency) using potential-based shaping
   4. Game results (winner, scores, deck compositions, game length, card actions) are persisted to SQLite
   5. Training run metadata is stored and queryable for experiment comparison
-**Plans**: TBD
+**Plans:** 3 plans
+Plans:
+- [ ] 06-01-PLAN.md -- Install SB3 stack, SQLite schema + writer + reader for data persistence
+- [ ] 06-02-PLAN.md -- Potential-based reward shaping, SelfPlayEnv wrapper, checkpoint pool
+- [ ] 06-03-PLAN.md -- Training entry point, self-play training loop, beats-random validation
 
 ### Phase 7: Self-Play Robustness
 **Goal**: The training pipeline handles the React interrupt mechanic correctly and resists strategy cycling through agent diversity
@@ -166,7 +170,7 @@ Note: Phase 9 depends on Phase 6 (not 8), so Phases 8 and 9 could run in paralle
 | 3. Turn Actions & Combat | 0/3 | Planned | - |
 | 4. Win Condition & Game Loop | 0/2 | Planned | - |
 | 5. RL Environment Interface | 0/2 | Planned | - |
-| 6. RL Training Pipeline | 0/TBD | Not started | - |
+| 6. RL Training Pipeline | 0/3 | Planned | - |
 | 7. Self-Play Robustness | 0/TBD | Not started | - |
 | 8. Card Expansion & Balance | 0/TBD | Not started | - |
 | 9. Analytics Dashboard Core | 0/TBD | Not started | - |
