@@ -34,7 +34,12 @@ Decimal phases appear between their surrounding integers in numeric order.
   2. Mana pool regenerates +1 per turn and unspent mana carries over between turns
   3. Two games initialized with the same seed produce identical state sequences
   4. GameState is immutable -- applying an action returns a new state without modifying the original
-**Plans**: TBD
+**Plans:** 4 plans
+Plans:
+- [ ] 01-01-PLAN.md -- Project scaffolding, enums, types, and test infrastructure
+- [ ] 01-02-PLAN.md -- Board dataclass with 5x5 grid geometry and adjacency helpers
+- [ ] 01-03-PLAN.md -- Player dataclass with mana system and hand management
+- [ ] 01-04-PLAN.md -- GameState, deterministic RNG, validation, and integration tests
 
 ### Phase 2: Card System & Types
 **Goal**: Cards are defined as data (not hardcoded), all three card types work, and a starter pool exists for testing
@@ -143,7 +148,7 @@ Note: Phase 9 depends on Phase 6 (not 8), so Phases 8 and 9 could run in paralle
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Game State Foundation | 0/TBD | Not started | - |
+| 1. Game State Foundation | 0/4 | Planned | - |
 | 2. Card System & Types | 0/TBD | Not started | - |
 | 3. Turn Actions & Combat | 0/TBD | Not started | - |
 | 4. Win Condition & Game Loop | 0/TBD | Not started | - |
