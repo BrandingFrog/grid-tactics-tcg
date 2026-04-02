@@ -96,7 +96,7 @@ Plans:
 **Plans:** 2 plans
 Plans:
 - [x] 05-01-PLAN.md -- Observation encoder, action space encoder, reward function with unit tests
-- [ ] 05-02-PLAN.md -- GridTacticsEnv Gymnasium environment class with 10k episode validation
+- [x] 05-02-PLAN.md -- GridTacticsEnv Gymnasium environment class with 10k episode validation
 
 ### Phase 6: RL Training Pipeline
 **Goal**: An RL agent trains via self-play and learns to beat random play convincingly, with all results persisted for analysis
