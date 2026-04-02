@@ -313,3 +313,171 @@ def test_card_actions(tmp_path: Path):
     assert row["times_played"] == 3
     assert row["total_damage"] == 12
     assert row["times_killed"] == 1
+
+
+# ---------------------------------------------------------------------------
+# Reader tests -- GameResultReader
+# ---------------------------------------------------------------------------
+
+def _populate_run(db_path: Path, run_id: str, num_games: int = 5) -> None:
+    """Helper: create a run with game results and snapshots for reader tests."""
+    from grid_tactics.db.writer import GameResultWriter, TrainingRunWriter
+
+    tw = TrainingRunWriter(db_path)
+    tw.start_run(run_id, {"lr": 3e-4, "batch_size": 64}, description="reader test")
+
+    with GameResultWriter(db_path, buffer_size=200) as gw:
+        for i in range(num_games):
+            gw.record_game(
+                run_id=run_id,
+                episode_num=i,
+                seed=i * 10,
+                winner=0 if i % 3 != 0 else 1,
+                turn_count=30 + i,
+                p1_hp=10 if i % 3 != 0 else 0,
+                p2_hp=0 if i % 3 != 0 else 15,
+                training_player=0,
+            )
+
+    tw.record_snapshot(run_id, timestep=1000, episode_num=50, win_rate_100=0.55)
+    tw.record_snapshot(run_id, timestep=5000, episode_num=250, win_rate_100=0.70,
+                       avg_game_length=35.0, avg_reward=0.4)
+
+
+def test_reader_get_runs(tmp_path: Path):
+    """get_runs returns all runs ordered by start time descending."""
+    import time
+    from grid_tactics.db.reader import GameResultReader
+    from grid_tactics.db.writer import TrainingRunWriter
+
+    db_path = tmp_path / "test.db"
+    tw = TrainingRunWriter(db_path)
+    tw.start_run("run-older", {"lr": 1e-3})
+    time.sleep(0.05)  # ensure different timestamps
+    tw.start_run("run-newer", {"lr": 3e-4})
+
+    reader = GameResultReader(db_path)
+    runs = reader.get_runs()
+
+    assert len(runs) == 2
+    assert runs[0]["run_id"] == "run-newer"
+    assert runs[1]["run_id"] == "run-older"
+
+
+def test_reader_get_game_results(tmp_path: Path):
+    """get_game_results returns all games for a run."""
+    from grid_tactics.db.reader import GameResultReader
+
+    db_path = tmp_path / "test.db"
+    _populate_run(db_path, "run-reader-001", num_games=5)
+
+    reader = GameResultReader(db_path)
+    games = reader.get_game_results("run-reader-001")
+
+    assert len(games) == 5
+    # Verify ordering by episode_num
+    episode_nums = [g["episode_num"] for g in games]
+    assert episode_nums == list(range(5))
+
+
+def test_reader_win_rate_over_time(tmp_path: Path):
+    """get_win_rate_over_time returns snapshots ordered by timestep."""
+    from grid_tactics.db.reader import GameResultReader
+
+    db_path = tmp_path / "test.db"
+    _populate_run(db_path, "run-wr-001")
+
+    reader = GameResultReader(db_path)
+    snapshots = reader.get_win_rate_over_time("run-wr-001")
+
+    assert len(snapshots) == 2
+    assert snapshots[0]["timestep"] == 1000
+    assert snapshots[1]["timestep"] == 5000
+    assert snapshots[0]["win_rate_100"] == pytest.approx(0.55)
+    assert snapshots[1]["win_rate_100"] == pytest.approx(0.70)
+
+
+def test_reader_card_usage(tmp_path: Path):
+    """get_card_usage returns aggregated card statistics."""
+    from grid_tactics.db.reader import GameResultReader
+    from grid_tactics.db.writer import GameResultWriter, TrainingRunWriter
+
+    db_path = tmp_path / "test.db"
+    tw = TrainingRunWriter(db_path)
+    tw.start_run("run-cu-001", {"lr": 1e-3})
+
+    with GameResultWriter(db_path, buffer_size=100) as gw:
+        # Game 1: player 0 wins
+        gw.record_game(
+            run_id="run-cu-001", episode_num=0, seed=1,
+            winner=0, turn_count=30, p1_hp=10, p2_hp=0,
+        )
+        # Game 2: player 1 wins
+        gw.record_game(
+            run_id="run-cu-001", episode_num=1, seed=2,
+            winner=1, turn_count=40, p1_hp=0, p2_hp=5,
+        )
+
+    # Card 5 played in both games by player 0
+    tw.record_card_actions(game_id=1, player=0, card_numeric_id=5,
+                           times_played=3, total_damage=10, times_killed=1)
+    tw.record_card_actions(game_id=2, player=0, card_numeric_id=5,
+                           times_played=2, total_damage=5, times_killed=0)
+    # Card 7 played in game 1 only
+    tw.record_card_actions(game_id=1, player=0, card_numeric_id=7,
+                           times_played=1, total_damage=3, times_killed=1)
+
+    reader = GameResultReader(db_path)
+    usage = reader.get_card_usage("run-cu-001")
+
+    assert len(usage) == 2
+
+    # Card 5 should be first (most played)
+    card5 = usage[0]
+    assert card5["card_numeric_id"] == 5
+    assert card5["total_times_played"] == 5
+    assert card5["games_with_card"] == 2
+    # Win rate: game 1 won (1.0), game 2 lost (0.0) => 0.5
+    assert card5["win_rate_with_card"] == pytest.approx(0.5)
+
+    card7 = usage[1]
+    assert card7["card_numeric_id"] == 7
+    assert card7["total_times_played"] == 1
+    assert card7["games_with_card"] == 1
+    assert card7["win_rate_with_card"] == pytest.approx(1.0)
+
+
+def test_reader_overall_stats(tmp_path: Path):
+    """get_overall_stats returns correct aggregates."""
+    from grid_tactics.db.reader import GameResultReader
+
+    db_path = tmp_path / "test.db"
+    _populate_run(db_path, "run-stats-001", num_games=6)
+
+    reader = GameResultReader(db_path)
+    stats = reader.get_overall_stats("run-stats-001")
+
+    assert stats["total_games"] == 6
+    # training_player=0; winner pattern: 1,0,0,1,0,0 => 4 wins out of 6
+    assert stats["win_rate"] == pytest.approx(4 / 6)
+    assert stats["avg_game_length"] is not None
+    assert stats["avg_game_length"] > 0
+    # avg_reward comes from latest snapshot
+    assert stats["avg_reward"] == pytest.approx(0.4)
+
+
+def test_reader_overall_stats_empty(tmp_path: Path):
+    """get_overall_stats returns zeros for a run with no games."""
+    from grid_tactics.db.reader import GameResultReader
+    from grid_tactics.db.writer import TrainingRunWriter
+
+    db_path = tmp_path / "test.db"
+    tw = TrainingRunWriter(db_path)
+    tw.start_run("run-empty", {"lr": 1e-3})
+
+    reader = GameResultReader(db_path)
+    stats = reader.get_overall_stats("run-empty")
+
+    assert stats["total_games"] == 0
+    assert stats["win_rate"] == 0.0
+    assert stats["avg_game_length"] == 0.0
