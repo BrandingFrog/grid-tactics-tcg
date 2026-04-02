@@ -25,8 +25,8 @@ Requirements for initial release. Each maps to roadmap phases.
 ### RL Integration
 
 - [ ] **RL-01**: Gymnasium-compatible environment with reset(), step(), observation_space, and action_space
-- [ ] **RL-02**: State observation encoding converts board (5x5 grid with unit stats), hand, mana, HP into fixed-size numerical tensors
-- [ ] **RL-03**: Action space definition maps all possible actions into a discrete space with binary action masking for illegal actions
+- [x] **RL-02**: State observation encoding converts board (5x5 grid with unit stats), hand, mana, HP into fixed-size numerical tensors
+- [x] **RL-03**: Action space definition maps all possible actions into a discrete space with binary action masking for illegal actions
 - [ ] **RL-04**: MaskablePPO training via Stable-Baselines3 sb3-contrib
 - [ ] **RL-05**: Self-play training loop where both players are controlled by RL agents
 - [ ] **RL-06**: Reward shaping with intermediate signals (damage dealt, board control, mana efficiency) using potential-based shaping
@@ -104,8 +104,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | ENG-11 | Phase 1 | Complete |
 | ENG-12 | Phase 2 | Complete |
 | RL-01 | Phase 5 | Pending |
-| RL-02 | Phase 5 | Pending |
-| RL-03 | Phase 5 | Pending |
+| RL-02 | Phase 5 | Complete |
+| RL-03 | Phase 5 | Complete |
 | RL-04 | Phase 6 | Pending |
 | RL-05 | Phase 6 | Pending |
 | RL-06 | Phase 6 | Pending |

@@ -95,7 +95,7 @@ Plans:
   4. A random agent can play 10,000 episodes through the environment wrapper without errors
 **Plans:** 2 plans
 Plans:
-- [ ] 05-01-PLAN.md -- Observation encoder, action space encoder, reward function with unit tests
+- [x] 05-01-PLAN.md -- Observation encoder, action space encoder, reward function with unit tests
 - [ ] 05-02-PLAN.md -- GridTacticsEnv Gymnasium environment class with 10k episode validation
 
 ### Phase 6: RL Training Pipeline
