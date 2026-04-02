@@ -93,7 +93,10 @@ Plans:
   2. Board state (5x5 grid with unit stats), hand, mana, and HP are encoded as fixed-size numerical tensors with no information leakage of opponent's hidden state
   3. All possible actions map to a discrete action space with a binary mask that marks illegal actions as unavailable
   4. A random agent can play 10,000 episodes through the environment wrapper without errors
-**Plans**: TBD
+**Plans:** 2 plans
+Plans:
+- [ ] 05-01-PLAN.md -- Observation encoder, action space encoder, reward function with unit tests
+- [ ] 05-02-PLAN.md -- GridTacticsEnv Gymnasium environment class with 10k episode validation
 
 ### Phase 6: RL Training Pipeline
 **Goal**: An RL agent trains via self-play and learns to beat random play convincingly, with all results persisted for analysis
@@ -162,7 +165,7 @@ Note: Phase 9 depends on Phase 6 (not 8), so Phases 8 and 9 could run in paralle
 | 2. Card System & Types | 2/2 | Complete | 2026-04-02 |
 | 3. Turn Actions & Combat | 0/3 | Planned | - |
 | 4. Win Condition & Game Loop | 0/2 | Planned | - |
-| 5. RL Environment Interface | 0/TBD | Not started | - |
+| 5. RL Environment Interface | 0/2 | Planned | - |
 | 6. RL Training Pipeline | 0/TBD | Not started | - |
 | 7. Self-Play Robustness | 0/TBD | Not started | - |
 | 8. Card Expansion & Balance | 0/TBD | Not started | - |
