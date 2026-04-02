@@ -44,6 +44,21 @@ class EffectType(IntEnum):
     HEAL = 1
     BUFF_ATTACK = 2
     BUFF_HEALTH = 3
+    NEGATE = 4       # Cancel the triggering action (react-only)
+
+
+class ReactCondition(IntEnum):
+    """What opponent action must have occurred for a react card to be playable.
+
+    React cards MUST match a condition -- they can't be played generically.
+    The condition is checked against the pending_action in GameState.
+    """
+
+    OPPONENT_PLAYS_MAGIC = 0    # Opponent cast a magic card
+    OPPONENT_PLAYS_MINION = 1   # Opponent deployed a minion
+    OPPONENT_ATTACKS = 2        # Opponent attacked with a minion
+    OPPONENT_PLAYS_REACT = 3    # Opponent played a react card (counter-react)
+    ANY_ACTION = 4              # Reacts to any opponent action
 
 
 class TriggerType(IntEnum):

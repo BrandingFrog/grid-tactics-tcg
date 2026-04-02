@@ -18,7 +18,7 @@ from typing import Optional
 
 from grid_tactics.actions import Action
 from grid_tactics.card_library import CardLibrary
-from grid_tactics.enums import ActionType, CardType, TriggerType, TurnPhase
+from grid_tactics.enums import ActionType, CardType, EffectType, TriggerType, TurnPhase
 from grid_tactics.game_state import GameState
 from grid_tactics.types import MAX_REACT_STACK_DEPTH
 
@@ -178,18 +178,43 @@ def resolve_react_stack(
     from grid_tactics.effect_resolver import resolve_effect
 
     # Resolve stack LIFO (D-06)
-    for entry in reversed(state.react_stack):
+    # Track negated entries -- a NEGATE effect cancels the next entry in the stack
+    negated_indices: set[int] = set()
+
+    stack_list = list(reversed(state.react_stack))
+    for i, entry in enumerate(stack_list):
+        # Skip if this entry was negated by a previous NEGATE
+        if i in negated_indices:
+            continue
+
         card_def = library.get_by_id(entry.card_numeric_id)
         caster_owner = state.players[entry.player_idx].side
 
         if card_def.card_type == CardType.REACT:
-            # Resolve all ON_PLAY effects for react cards
-            for effect in card_def.effects:
-                if effect.trigger == TriggerType.ON_PLAY:
-                    state = resolve_effect(
-                        state, effect, (0, 0), caster_owner, library,
-                        entry.target_pos,
-                    )
+            # Check if this react has NEGATE effects
+            has_negate = any(
+                e.effect_type == EffectType.NEGATE
+                for e in card_def.effects
+            )
+            if has_negate:
+                # NEGATE cancels the next entry in the stack (the action being countered)
+                if i + 1 < len(stack_list):
+                    negated_indices.add(i + 1)
+                # Non-negate effects on the same card still resolve
+                for effect in card_def.effects:
+                    if effect.trigger == TriggerType.ON_PLAY and effect.effect_type != EffectType.NEGATE:
+                        state = resolve_effect(
+                            state, effect, (0, 0), caster_owner, library,
+                            entry.target_pos,
+                        )
+            else:
+                # Normal react -- resolve all ON_PLAY effects
+                for effect in card_def.effects:
+                    if effect.trigger == TriggerType.ON_PLAY:
+                        state = resolve_effect(
+                            state, effect, (0, 0), caster_owner, library,
+                            entry.target_pos,
+                        )
         elif card_def.is_multi_purpose:
             # Resolve the react_effect only for multi-purpose cards
             if card_def.react_effect is not None:

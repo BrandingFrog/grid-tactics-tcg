@@ -20,6 +20,7 @@ from grid_tactics.enums import (
     Attribute,
     CardType,
     EffectType,
+    ReactCondition,
     TargetType,
     TriggerType,
 )
@@ -71,6 +72,9 @@ class CardDefinition:
 
     # Effects list (D-01 through D-05)
     effects: tuple[EffectDefinition, ...] = ()
+
+    # React condition -- what opponent action triggers this react (required for REACT cards)
+    react_condition: Optional[ReactCondition] = None
 
     # Multi-purpose react from hand (D-06, D-07, D-08)
     react_effect: Optional[EffectDefinition] = None
@@ -124,6 +128,22 @@ class CardDefinition:
                 raise ValueError(
                     f"Card '{self.card_id}': Non-minion cards cannot have attack/health"
                 )
+
+        # React cards must have a react_condition
+        if self.card_type == CardType.REACT and self.react_condition is None:
+            raise ValueError(
+                f"Card '{self.card_id}': REACT cards must have a react_condition"
+            )
+
+        # Non-react cards without multi-purpose shouldn't have react_condition
+        # (multi-purpose minions CAN have react_condition for their react mode)
+        if (self.react_condition is not None
+                and self.card_type != CardType.REACT
+                and not (self.card_type == CardType.MINION and self.react_effect is not None)):
+            raise ValueError(
+                f"Card '{self.card_id}': Only REACT cards and multi-purpose minions "
+                f"can have react_condition"
+            )
 
         # Multi-purpose consistency (D-06, D-07)
         if (self.react_effect is None) != (self.react_mana_cost is None):

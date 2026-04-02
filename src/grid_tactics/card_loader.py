@@ -15,6 +15,7 @@ from grid_tactics.enums import (
     Attribute,
     CardType,
     EffectType,
+    ReactCondition,
     TargetType,
     TriggerType,
 )
@@ -66,6 +67,14 @@ class CardLoader:
                 Attribute, attr_str, "attribute", card_id
             )
 
+        # Parse optional react_condition
+        react_condition = None
+        react_cond_str = data.get("react_condition")
+        if react_cond_str is not None:
+            react_condition = CardLoader._parse_enum(
+                ReactCondition, react_cond_str, "react_condition", card_id
+            )
+
         # Construct CardDefinition -- __post_init__ validates invariants
         return CardDefinition(
             card_id=card_id,
@@ -78,6 +87,7 @@ class CardLoader:
             attribute=attribute,
             tribe=data.get("tribe"),
             effects=effects,
+            react_condition=react_condition,
             react_effect=react_effect,
             react_mana_cost=data.get("react_mana_cost"),
         )

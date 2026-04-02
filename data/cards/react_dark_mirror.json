@@ -4,6 +4,7 @@
     "card_type": "react",
     "mana_cost": 1,
     "attribute": "dark",
+    "react_condition": "opponent_plays_minion",
     "effects": [
         {
             "type": "damage",

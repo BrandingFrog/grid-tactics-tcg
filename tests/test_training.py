@@ -138,12 +138,12 @@ def test_beats_random(tmp_path: Path):
     checkpoint_dir = tmp_path / "checkpoints"
 
     result = train_self_play(
-        total_timesteps=100_000,
+        total_timesteps=500_000,
         db_path=db_path,
         checkpoint_dir=checkpoint_dir,
         tensorboard_log=None,
         use_shaped_reward=True,
-        save_freq=10_000,
+        save_freq=50_000,
         eval_freq=0,  # skip periodic eval; we'll evaluate after
         eval_games=100,
         seed=42,

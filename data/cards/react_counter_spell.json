@@ -4,12 +4,13 @@
     "card_type": "react",
     "mana_cost": 2,
     "attribute": "neutral",
+    "react_condition": "opponent_plays_magic",
     "effects": [
         {
-            "type": "damage",
+            "type": "negate",
             "trigger": "on_play",
             "target": "single_target",
-            "amount": 3
+            "amount": 1
         }
     ]
 }

@@ -288,8 +288,9 @@ class TestReactChaining:
         P2 plays shield_block (buff_health +2 on P1's minion at (1,2)).
         P1 counter-reacts with counter_spell (damage 3 on some target).
         P2 passes -> stack resolves LIFO:
-          - counter_spell resolves first (LIFO), dealing 3 damage to target
-          - shield_block resolves second, buffing +2 health
+          - counter_spell resolves first (LIFO): NEGATE cancels shield_block
+          - shield_block is negated, does not resolve
+        Minion stays at 5 HP (no buffs applied).
         """
         counter_spell_id = library.get_numeric_id("counter_spell")
         shield_block_id = library.get_numeric_id("shield_block")
@@ -302,8 +303,8 @@ class TestReactChaining:
         assert len(state.react_stack) == 1
         assert state.react_player_idx == 0  # P1's turn to counter-react
 
-        # Step 2: P1 counter-reacts with counter_spell targeting the same minion at (1,2)
-        action2 = play_react_action(card_index=0, target_pos=(1, 2))
+        # Step 2: P1 counter-reacts with counter_spell (NEGATE, no target needed)
+        action2 = play_react_action(card_index=0)
         state = handle_react_action(state, action2, library)
         assert len(state.react_stack) == 2
         assert state.react_player_idx == 1  # P2's turn to counter-counter
@@ -312,11 +313,12 @@ class TestReactChaining:
         state = handle_react_action(state, pass_action(), library)
 
         # LIFO resolution order:
-        # 1. counter_spell resolves first: 3 damage to minion at (1,2) -> health 5-3=2
-        # 2. shield_block resolves second: buff_health +2 -> health 2+2=4
+        # 1. counter_spell resolves: NEGATE -> cancels next entry (shield_block)
+        # 2. shield_block is negated -> skipped
+        # Minion stays at full health
         minion = state.get_minion(0)
         assert minion is not None
-        assert minion.current_health == 4  # 5 - 3 + 2
+        assert minion.current_health == 5  # unchanged (shield_block was negated)
 
         # Turn advanced
         assert state.phase == TurnPhase.ACTION

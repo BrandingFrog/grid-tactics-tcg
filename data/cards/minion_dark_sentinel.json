@@ -9,6 +9,7 @@
     "attribute": "dark",
     "tribe": "Dark Mage",
     "effects": [],
+    "react_condition": "opponent_plays_magic",
     "react_effect": {
         "type": "damage",
         "trigger": "on_play",

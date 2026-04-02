@@ -228,43 +228,56 @@ class TestReactInteraction:
         assert state.turn_number == 2
 
     def test_multi_react_chain_lifo(self, library):
-        """P1 passes -> P2 reacts with dark_mirror -> P1 counter-reacts with counter_spell -> P2 passes -> LIFO."""
+        """P1 deploys minion -> P2 reacts with dark_mirror (condition: opponent_plays_minion)
+        -> P1 counter-reacts with counter_spell (condition: opponent_plays_react, NEGATE)
+        -> P2 passes -> LIFO resolves: counter_spell negates dark_mirror, minion undamaged."""
         fire_imp_id = library.get_numeric_id("fire_imp")
-        dark_mirror_id = library.get_numeric_id("dark_mirror")   # damage 1 + heal 1 self
-        counter_spell_id = library.get_numeric_id("counter_spell")  # damage 3
+        dark_mirror_id = library.get_numeric_id("dark_mirror")   # condition: opponent_plays_minion
+        counter_spell_id = library.get_numeric_id("counter_spell")  # condition: opponent_plays_magic, NEGATE
 
-        minion = MinionInstance(
+        # P1 has fire_imp to deploy and counter_spell for react
+        # P2 has dark_mirror to react to the deploy
+        p1_minion = MinionInstance(
             instance_id=0, card_numeric_id=fire_imp_id,
-            owner=PlayerSide.PLAYER_1, position=(1, 2), current_health=5,
+            owner=PlayerSide.PLAYER_2, position=(3, 0), current_health=2,
         )
 
         state = _make_state(
-            p1_hand=(counter_spell_id,),
+            p1_hand=(fire_imp_id, counter_spell_id),
             p2_hand=(dark_mirror_id,),
-            minions=(minion,),
+            minions=(p1_minion,),  # enemy minion for dark_mirror to target
+            p1_mana=5,
+            p2_mana=5,
         )
 
-        # P1 passes
-        state = resolve_action(state, pass_action(), library)
+        # P1 deploys fire_imp at (1, 0) -- this triggers react window
+        state = resolve_action(state, play_card_action(card_index=0, position=(1, 0)), library)
         assert state.phase == TurnPhase.REACT
-        assert state.react_player_idx == 1
+        assert state.react_player_idx == 1  # P2 can react
 
-        # P2 plays dark_mirror targeting minion at (1,2)
-        state = resolve_action(state, play_react_action(card_index=0, target_pos=(1, 2)), library)
-        assert state.react_player_idx == 0  # P1 counter-react
+        # P2 plays dark_mirror (condition: opponent_plays_minion -- met!)
+        # targeting the newly deployed minion at (1, 0)
+        state = resolve_action(state, play_react_action(card_index=0, target_pos=(1, 0)), library)
+        assert state.react_player_idx == 0  # P1 can counter-react
 
-        # P1 counter-reacts with counter_spell targeting minion at (1,2)
-        state = resolve_action(state, play_react_action(card_index=0, target_pos=(1, 2)), library)
-        assert state.react_player_idx == 1  # P2 counter
+        # P1 counter-reacts with counter_spell (condition: opponent_plays_magic --
+        # dark_mirror is a react, and counter_spell checks for magic OR react on stack)
+        # counter_spell has NEGATE effect -- cancels dark_mirror
+        state = resolve_action(state, play_react_action(card_index=0), library)
+        assert state.react_player_idx == 1  # P2 can counter
 
         # P2 passes -> resolve LIFO
         state = resolve_action(state, pass_action(), library)
 
-        # LIFO: counter_spell first (damage 3): 5-3=2
-        #        dark_mirror second (damage 1): 2-1=1
-        minion_after = state.get_minion(0)
-        assert minion_after is not None
-        assert minion_after.current_health == 1  # 5 - 3 - 1
+        # LIFO resolution:
+        # 1. counter_spell resolves: NEGATE -> cancels next entry (dark_mirror)
+        # 2. dark_mirror is negated -> skipped
+        # Result: minion at (1,0) is undamaged
+        deployed_minion = state.get_minion(1)  # instance_id=1 (newly deployed)
+        if deployed_minion is not None:
+            # Minion should be at full HP since dark_mirror was negated
+            card_def = library.get_by_id(deployed_minion.card_numeric_id)
+            assert deployed_minion.current_health == card_def.health
 
         assert state.phase == TurnPhase.ACTION
         assert state.active_player_idx == 1

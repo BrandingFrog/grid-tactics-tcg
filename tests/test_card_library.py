@@ -65,6 +65,7 @@ def sample_cards() -> list[dict]:
             "card_type": "react",
             "mana_cost": 1,
             "attribute": "light",
+            "react_condition": "any_action",
             "effects": [
                 {
                     "type": "buff_health",

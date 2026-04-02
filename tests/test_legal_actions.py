@@ -80,6 +80,7 @@ def _make_state(
     phase=TurnPhase.ACTION,
     react_player_idx=None,
     react_stack=(),
+    pending_action=None,
 ):
     p1 = _make_player(PlayerSide.PLAYER_1, p1_hand, p1_deck, p1_mana)
     p2 = _make_player(PlayerSide.PLAYER_2, p2_hand, p2_deck, p2_mana)
@@ -98,6 +99,7 @@ def _make_state(
         minions=tuple(minions), next_minion_id=next_id,
         react_player_idx=react_player_idx,
         react_stack=react_stack,
+        pending_action=pending_action,
     )
 
 
@@ -420,21 +422,23 @@ class TestAttackEnumeration:
 
 class TestReactPhase:
     def test_react_phase_only_react_and_pass(self, library):
-        """During REACT phase, only react cards + multi-purpose react + PASS are legal."""
-        shield_block_id = library.get_numeric_id("shield_block")
+        """During REACT phase, only react cards whose condition matches + PASS are legal."""
+        shield_block_id = library.get_numeric_id("shield_block")  # condition: opponent_attacks
         fire_imp_id = library.get_numeric_id("fire_imp")
-        dark_sentinel_id = library.get_numeric_id("dark_sentinel")
+        dark_sentinel_id = library.get_numeric_id("dark_sentinel")  # condition: opponent_plays_magic
 
         # P2 has shield_block (react), dark_sentinel (multi-purpose), fire_imp (not react)
         enemy_minion = MinionInstance(
             instance_id=0, card_numeric_id=fire_imp_id,
             owner=PlayerSide.PLAYER_1, position=(1, 2), current_health=2,
         )
+        # pending_action is an ATTACK so shield_block's condition (opponent_attacks) is met
         state = _make_state(
             p2_hand=(shield_block_id, dark_sentinel_id, fire_imp_id),
             minions=(enemy_minion,),
             phase=TurnPhase.REACT,
             react_player_idx=1,
+            pending_action=attack_action(minion_id=0, target_id=0),
         )
         actions = legal_actions(state, library)
 

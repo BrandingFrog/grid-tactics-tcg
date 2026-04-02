@@ -146,7 +146,7 @@ class TestEffectType:
             assert isinstance(member, IntEnum)
 
     def test_member_count(self) -> None:
-        assert len(EffectType) == 4
+        assert len(EffectType) == 5  # DAMAGE, HEAL, BUFF_ATTACK, BUFF_HEALTH, NEGATE
 
     def test_bracket_lookup(self) -> None:
         assert EffectType["DAMAGE"] is EffectType.DAMAGE

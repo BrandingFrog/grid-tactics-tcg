@@ -32,7 +32,9 @@ from grid_tactics.actions import (
 )
 from grid_tactics.board import Board
 from grid_tactics.card_library import CardLibrary
-from grid_tactics.enums import CardType, PlayerSide, TargetType, TriggerType, TurnPhase
+from grid_tactics.enums import (
+    ActionType, CardType, PlayerSide, ReactCondition, TargetType, TriggerType, TurnPhase,
+)
 from grid_tactics.game_state import GameState
 from grid_tactics.types import (
     BACK_ROW_P1,
@@ -178,10 +180,69 @@ def _action_phase_actions(
 # ---------------------------------------------------------------------------
 
 
+def _check_react_condition(
+    condition: ReactCondition, state: GameState, library: CardLibrary,
+) -> bool:
+    """Check if a react card's condition is met by the pending action or last react.
+
+    Checks the pending_action (the main-phase action that opened the react window)
+    or the last react on the stack (for counter-react conditions).
+    """
+    # If there are reacts on the stack, the most recent one is what we're reacting to
+    if state.react_stack:
+        last_react = state.react_stack[-1]
+        last_card = library.get_by_id(last_react.card_numeric_id)
+        if condition == ReactCondition.OPPONENT_PLAYS_REACT:
+            return True  # Reacting to a react
+        if condition == ReactCondition.OPPONENT_PLAYS_MAGIC:
+            return last_card.card_type == CardType.MAGIC or last_card.card_type == CardType.REACT
+        if condition == ReactCondition.ANY_ACTION:
+            return True
+        return False
+
+    # Otherwise check the pending_action (the main-phase action that triggered the window)
+    pending = state.pending_action
+    if pending is None:
+        return condition == ReactCondition.ANY_ACTION
+
+    if condition == ReactCondition.OPPONENT_PLAYS_MAGIC:
+        if pending.action_type == ActionType.PLAY_CARD and pending.card_index is not None:
+            # Check if the played card was magic
+            acting_player = state.players[state.active_player_idx]
+            # pending_action was recorded before the card was removed from hand,
+            # so look up the card in graveyard (most recently added)
+            if acting_player.graveyard:
+                last_played_id = acting_player.graveyard[-1]
+                card_def = library.get_by_id(last_played_id)
+                return card_def.card_type == CardType.MAGIC
+        return False
+
+    if condition == ReactCondition.OPPONENT_PLAYS_MINION:
+        if pending.action_type == ActionType.PLAY_CARD:
+            # Check if a minion was deployed (new minion on board from this action)
+            return pending.position is not None  # minion deploy always has position
+        return False
+
+    if condition == ReactCondition.OPPONENT_ATTACKS:
+        return pending.action_type == ActionType.ATTACK
+
+    if condition == ReactCondition.OPPONENT_PLAYS_REACT:
+        return False  # No react on stack means nothing to counter-react
+
+    if condition == ReactCondition.ANY_ACTION:
+        return True
+
+    return False
+
+
 def _react_phase_actions(
     state: GameState, library: CardLibrary,
 ) -> tuple[Action, ...]:
-    """Enumerate all valid actions during the REACT phase."""
+    """Enumerate all valid actions during the REACT phase.
+
+    React cards are only legal if their react_condition matches the
+    pending action or last react on the stack.
+    """
     actions: list[Action] = []
     react_player = state.players[state.react_player_idx]
     react_side = react_player.side
@@ -194,28 +255,48 @@ def _react_phase_actions(
         card_def = library.get_by_id(card_numeric_id)
 
         if card_def.card_type == CardType.REACT:
+            # Check condition matches the triggering action
+            if card_def.react_condition is None:
+                continue  # Shouldn't happen (validation catches this), but safety
+            if not _check_react_condition(card_def.react_condition, state, library):
+                continue  # Condition not met -- this react can't be played now
+
             if react_player.current_mana >= card_def.mana_cost:
+                # NEGATE effects don't need a target (they cancel the triggering action)
+                has_negate = any(
+                    e.effect_type.name == "NEGATE"
+                    for e in card_def.effects
+                )
+                if has_negate:
+                    actions.append(play_react_action(card_index=idx))
+                    continue
+
                 # Check for single-target effects
                 has_single_target = any(
                     e.target == TargetType.SINGLE_TARGET
                     for e in card_def.effects
                 )
                 if has_single_target:
-                    # Enumerate enemy minion positions as targets
                     enemy_positions = _get_enemy_minion_positions(state, react_side)
-                    # Also include friendly minion positions for buff effects
                     friendly_positions = _get_friendly_minion_positions(state, react_side)
                     all_target_positions = list(set(enemy_positions + friendly_positions))
                     for target_pos in all_target_positions:
                         actions.append(play_react_action(
                             card_index=idx, target_pos=target_pos,
                         ))
+                    if not all_target_positions:
+                        # No targets but card is playable (area effects, etc)
+                        actions.append(play_react_action(card_index=idx))
                 else:
                     actions.append(play_react_action(card_index=idx))
 
         elif card_def.is_multi_purpose:
+            # Check condition if multi-purpose card has one
+            if card_def.react_condition is not None:
+                if not _check_react_condition(card_def.react_condition, state, library):
+                    continue
+
             if react_player.current_mana >= card_def.react_mana_cost:
-                # Check react_effect for single-target
                 if (card_def.react_effect is not None
                         and card_def.react_effect.target == TargetType.SINGLE_TARGET):
                     enemy_positions = _get_enemy_minion_positions(state, react_side)
@@ -225,6 +306,8 @@ def _react_phase_actions(
                         actions.append(play_react_action(
                             card_index=idx, target_pos=target_pos,
                         ))
+                    if not all_target_positions:
+                        actions.append(play_react_action(card_index=idx))
                 else:
                     actions.append(play_react_action(card_index=idx))
 

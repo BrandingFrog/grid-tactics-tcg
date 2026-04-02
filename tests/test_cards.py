@@ -11,6 +11,7 @@ from grid_tactics.enums import (
     Attribute,
     CardType,
     EffectType,
+    ReactCondition,
     TargetType,
     TriggerType,
 )
@@ -78,6 +79,7 @@ def _react_card(**overrides) -> CardDefinition:
         card_type=CardType.REACT,
         mana_cost=1,
         effects=(_heal_effect(),),
+        react_condition=ReactCondition.ANY_ACTION,
     )
     defaults.update(overrides)
     return CardDefinition(**defaults)
@@ -437,6 +439,7 @@ class TestMultiPurpose:
                 name="Bad React",
                 card_type=CardType.REACT,
                 mana_cost=1,
+                react_condition=ReactCondition.ANY_ACTION,
                 react_effect=_heal_effect(),
                 react_mana_cost=1,
             )

@@ -12,6 +12,7 @@ from grid_tactics.enums import (
     CardType,
     EffectType,
     PlayerSide,
+    ReactCondition,
     TargetType,
     TriggerType,
     TurnPhase,
@@ -83,7 +84,7 @@ def _make_test_library() -> CardLibrary:
         ),
         "test_react_card": CardDefinition(
             card_id="test_react_card", name="Test React", card_type=CardType.REACT,
-            mana_cost=1,
+            mana_cost=1, react_condition=ReactCondition.ANY_ACTION,
         ),
     }
     return CardLibrary(cards)
