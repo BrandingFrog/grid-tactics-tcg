@@ -42,7 +42,7 @@ Plans:
 - [x] 01-04-PLAN.md -- GameState, deterministic RNG, validation, and integration tests
 
 ### Phase 2: Card System & Types
-**Goal**: Cards are defined as data (not hardcoded), all three card types work, and a starter pool exists for testing
+**Goal**: Cards are defined as data (not hardcoded), all three card types work, and a starter pool of 15-20 unique cards exists for testing
 **Depends on**: Phase 1
 **Requirements**: ENG-04, ENG-05, ENG-12, CARD-01, CARD-02
 **Success Criteria** (what must be TRUE):
@@ -50,8 +50,11 @@ Plans:
   2. Minion cards have Attack, Health, Mana Cost, Range, and optional Effects
   3. Magic cards resolve immediate effects (damage, heal, buff) when played
   4. A Minion card with a React effect can be played from hand as either a deployment or a counter
-  5. A starter pool of 5-10 simple cards exists covering all three card types
-**Plans**: TBD
+  5. A starter pool of 15-20 unique cards exists covering all three card types
+**Plans:** 2 plans
+Plans:
+- [ ] 02-01-PLAN.md -- Card enums, type constants, EffectDefinition and CardDefinition dataclasses
+- [ ] 02-02-PLAN.md -- CardLoader, CardLibrary, 18 starter card JSON files, deck validation
 
 ### Phase 3: Turn Actions & Combat
 **Goal**: Players can take actions (play cards, move minions, attack, draw) with correct rule enforcement and the system can enumerate all legal actions from any state
@@ -148,8 +151,8 @@ Note: Phase 9 depends on Phase 6 (not 8), so Phases 8 and 9 could run in paralle
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Game State Foundation | 0/4 | Planned | - |
-| 2. Card System & Types | 0/TBD | Not started | - |
+| 1. Game State Foundation | 4/4 | Complete | 2026-04-02 |
+| 2. Card System & Types | 0/2 | Planned | - |
 | 3. Turn Actions & Combat | 0/TBD | Not started | - |
 | 4. Win Condition & Game Loop | 0/TBD | Not started | - |
 | 5. RL Environment Interface | 0/TBD | Not started | - |
