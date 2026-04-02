@@ -34,9 +34,10 @@ from grid_tactics.rl.self_play import SelfPlayEnv
 
 
 def create_model(
-    env: SelfPlayEnv,
+    env,
     seed: int = 42,
     tensorboard_log: str | None = "data/tb_logs",
+    device: str = "auto",
     **kwargs: Any,
 ) -> MaskablePPO:
     """Create a configured MaskablePPO model for Grid Tactics.
@@ -73,6 +74,7 @@ def create_model(
         "verbose": 1,
         "seed": seed,
         "tensorboard_log": tensorboard_log,
+        "device": device,
     }
     defaults.update(kwargs)
     return MaskablePPO("MlpPolicy", env, **defaults)
@@ -313,6 +315,8 @@ def train_self_play(
     eval_games: int = 50,
     description: str = "",
     seed: int = 42,
+    n_envs: int = 1,
+    device: str = "auto",
 ) -> dict[str, Any]:
     """Run a full self-play training session with MaskablePPO.
 
@@ -345,12 +349,28 @@ def train_self_play(
     library = CardLibrary.from_directory(Path("data/cards"))
     deck = _build_standard_deck(library)
 
-    base_env = GridTacticsEnv(library, deck, deck, seed=seed)
-    env = SelfPlayEnv(
-        base_env, opponent_policy=None, use_shaped_reward=use_shaped_reward,
-    )
+    if n_envs > 1:
+        # Vectorized: run n_envs games in parallel using SubprocVecEnv
+        from stable_baselines3.common.vec_env import SubprocVecEnv
 
-    model = create_model(env, seed=seed, tensorboard_log=tensorboard_log)
+        def _make_env(env_seed: int):
+            def _init():
+                base = GridTacticsEnv(library, deck, deck, seed=env_seed)
+                return SelfPlayEnv(base, opponent_policy=None, use_shaped_reward=use_shaped_reward)
+            return _init
+
+        env = SubprocVecEnv([_make_env(seed + i) for i in range(n_envs)])
+        # Single env for eval and callback references
+        _single_base = GridTacticsEnv(library, deck, deck, seed=seed)
+        _single_env = SelfPlayEnv(_single_base, opponent_policy=None, use_shaped_reward=use_shaped_reward)
+    else:
+        base_env = GridTacticsEnv(library, deck, deck, seed=seed)
+        env = SelfPlayEnv(
+            base_env, opponent_policy=None, use_shaped_reward=use_shaped_reward,
+        )
+        _single_env = env
+
+    model = create_model(env, seed=seed, tensorboard_log=tensorboard_log, device=device)
 
     checkpoint_manager = CheckpointManager(pool_dir=checkpoint_dir, pool_size=10)
     self_play_callback = SelfPlayCallback(
@@ -377,6 +397,8 @@ def train_self_play(
         "ent_coef": 0.01,
         "use_shaped_reward": use_shaped_reward,
         "seed": seed,
+        "n_envs": n_envs,
+        "device": device,
     }
     run_writer.start_run(run_id, hyperparameters, description)
 

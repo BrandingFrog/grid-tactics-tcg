@@ -57,4 +57,4 @@ BACK_ROW_P2: int = 4  # Player 2's back row
 # ---------------------------------------------------------------------------
 
 # Maximum turns before game is declared a draw (D-11)
-DEFAULT_TURN_LIMIT: int = 200
+DEFAULT_TURN_LIMIT: int = 500
