@@ -1,12 +1,15 @@
 """Tests for GameState dataclass."""
 
+import dataclasses
 import json
 
 import pytest
 
+from grid_tactics.actions import Action, pass_action
 from grid_tactics.board import Board
-from grid_tactics.enums import PlayerSide, TurnPhase
+from grid_tactics.enums import ActionType, PlayerSide, TurnPhase
 from grid_tactics.game_state import GameState
+from grid_tactics.minion import MinionInstance
 from grid_tactics.player import Player
 from grid_tactics.types import STARTING_HAND_SIZE, STARTING_HP, STARTING_MANA
 
@@ -133,3 +136,204 @@ class TestSerialization:
         assert isinstance(restored.players[0].side, PlayerSide)
         assert isinstance(restored.players[0].hand, tuple)
         assert isinstance(restored.board.cells, tuple)
+
+
+# ---------------------------------------------------------------------------
+# Phase 3: Extended GameState tests
+# ---------------------------------------------------------------------------
+
+
+class TestGameStatePhase3Defaults:
+    """Tests for the Phase 3 fields and their default values."""
+
+    def test_new_game_empty_minions(self):
+        """new_game() returns state with empty minions tuple."""
+        state, _ = GameState.new_game(42, DECK_P1, DECK_P2)
+        assert state.minions == ()
+
+    def test_new_game_next_minion_id_zero(self):
+        """new_game() returns state with next_minion_id=0."""
+        state, _ = GameState.new_game(42, DECK_P1, DECK_P2)
+        assert state.next_minion_id == 0
+
+    def test_new_game_empty_react_stack(self):
+        """new_game() returns state with empty react_stack."""
+        state, _ = GameState.new_game(42, DECK_P1, DECK_P2)
+        assert state.react_stack == ()
+
+    def test_new_game_react_player_idx_none(self):
+        """new_game() returns state with react_player_idx=None."""
+        state, _ = GameState.new_game(42, DECK_P1, DECK_P2)
+        assert state.react_player_idx is None
+
+    def test_new_game_pending_action_none(self):
+        """new_game() returns state with pending_action=None."""
+        state, _ = GameState.new_game(42, DECK_P1, DECK_P2)
+        assert state.pending_action is None
+
+
+class TestGameStateWithMinions:
+    """Tests for GameState with minions added via replace()."""
+
+    def test_replace_adds_minions(self):
+        """dataclasses.replace() can add minions to the state."""
+        state, _ = GameState.new_game(42, DECK_P1, DECK_P2)
+        m = MinionInstance(
+            instance_id=0,
+            card_numeric_id=5,
+            owner=PlayerSide.PLAYER_1,
+            position=(0, 0),
+            current_health=3,
+        )
+        new_state = dataclasses.replace(state, minions=(m,), next_minion_id=1)
+        assert len(new_state.minions) == 1
+        assert new_state.minions[0] == m
+        assert new_state.next_minion_id == 1
+
+    def test_replace_preserves_other_fields(self):
+        """Adding minions via replace() does not alter other fields."""
+        state, _ = GameState.new_game(42, DECK_P1, DECK_P2)
+        m = MinionInstance(0, 0, PlayerSide.PLAYER_1, (0, 0), 3)
+        new_state = dataclasses.replace(state, minions=(m,))
+        assert new_state.board == state.board
+        assert new_state.players == state.players
+        assert new_state.turn_number == state.turn_number
+
+
+class TestGetMinion:
+    """Tests for GameState.get_minion() helper."""
+
+    def test_get_existing_minion(self):
+        """get_minion returns the MinionInstance with matching instance_id."""
+        state, _ = GameState.new_game(42, DECK_P1, DECK_P2)
+        m1 = MinionInstance(0, 5, PlayerSide.PLAYER_1, (0, 0), 3)
+        m2 = MinionInstance(1, 6, PlayerSide.PLAYER_2, (4, 4), 4)
+        state = dataclasses.replace(state, minions=(m1, m2))
+        assert state.get_minion(0) == m1
+        assert state.get_minion(1) == m2
+
+    def test_get_nonexistent_minion(self):
+        """get_minion returns None for non-existent instance_id."""
+        state, _ = GameState.new_game(42, DECK_P1, DECK_P2)
+        assert state.get_minion(99) is None
+
+    def test_get_minion_empty_state(self):
+        """get_minion returns None on a state with no minions."""
+        state, _ = GameState.new_game(42, DECK_P1, DECK_P2)
+        assert state.get_minion(0) is None
+
+
+class TestGetMinionsForSide:
+    """Tests for GameState.get_minions_for_side() helper."""
+
+    def test_get_minions_for_player_1(self):
+        """get_minions_for_side returns only Player 1's minions."""
+        state, _ = GameState.new_game(42, DECK_P1, DECK_P2)
+        m1 = MinionInstance(0, 5, PlayerSide.PLAYER_1, (0, 0), 3)
+        m2 = MinionInstance(1, 6, PlayerSide.PLAYER_2, (4, 4), 4)
+        m3 = MinionInstance(2, 7, PlayerSide.PLAYER_1, (1, 1), 2)
+        state = dataclasses.replace(state, minions=(m1, m2, m3))
+        result = state.get_minions_for_side(PlayerSide.PLAYER_1)
+        assert len(result) == 2
+        assert m1 in result
+        assert m3 in result
+
+    def test_get_minions_for_empty_side(self):
+        """get_minions_for_side returns empty tuple if no minions for that side."""
+        state, _ = GameState.new_game(42, DECK_P1, DECK_P2)
+        m1 = MinionInstance(0, 5, PlayerSide.PLAYER_1, (0, 0), 3)
+        state = dataclasses.replace(state, minions=(m1,))
+        result = state.get_minions_for_side(PlayerSide.PLAYER_2)
+        assert result == ()
+
+    def test_get_minions_for_side_no_minions(self):
+        """get_minions_for_side returns empty tuple on empty state."""
+        state, _ = GameState.new_game(42, DECK_P1, DECK_P2)
+        assert state.get_minions_for_side(PlayerSide.PLAYER_1) == ()
+
+
+class TestSerializationPhase3:
+    """Tests for to_dict/from_dict with Phase 3 fields."""
+
+    def test_round_trip_with_minions(self):
+        """to_dict/from_dict round-trip preserves minions."""
+        state, _ = GameState.new_game(42, DECK_P1, DECK_P2)
+        m = MinionInstance(0, 5, PlayerSide.PLAYER_1, (0, 0), 3, attack_bonus=1)
+        board = state.board.place(0, 0, 0)
+        state = dataclasses.replace(
+            state,
+            board=board,
+            minions=(m,),
+            next_minion_id=1,
+        )
+        d = state.to_dict()
+        restored = GameState.from_dict(d)
+        assert restored.minions == state.minions
+        assert restored.next_minion_id == state.next_minion_id
+        assert restored.minions[0].attack_bonus == 1
+
+    def test_round_trip_with_pending_action(self):
+        """to_dict/from_dict round-trip preserves pending_action."""
+        state, _ = GameState.new_game(42, DECK_P1, DECK_P2)
+        action = Action(ActionType.MOVE, minion_id=1, position=(2, 3))
+        state = dataclasses.replace(state, pending_action=action)
+        d = state.to_dict()
+        restored = GameState.from_dict(d)
+        assert restored.pending_action == action
+        assert restored.pending_action.action_type == ActionType.MOVE
+        assert restored.pending_action.minion_id == 1
+        assert restored.pending_action.position == (2, 3)
+
+    def test_round_trip_no_pending_action(self):
+        """to_dict/from_dict round-trip preserves None pending_action."""
+        state, _ = GameState.new_game(42, DECK_P1, DECK_P2)
+        d = state.to_dict()
+        restored = GameState.from_dict(d)
+        assert restored.pending_action is None
+
+    def test_round_trip_with_react_fields(self):
+        """to_dict/from_dict round-trip preserves react fields."""
+        state, _ = GameState.new_game(42, DECK_P1, DECK_P2)
+        state = dataclasses.replace(state, react_player_idx=1)
+        d = state.to_dict()
+        restored = GameState.from_dict(d)
+        assert restored.react_player_idx == 1
+
+    def test_round_trip_json_serializable_with_minions(self):
+        """json.dumps works with Phase 3 fields populated."""
+        state, _ = GameState.new_game(42, DECK_P1, DECK_P2)
+        m = MinionInstance(0, 5, PlayerSide.PLAYER_1, (0, 0), 3)
+        board = state.board.place(0, 0, 0)
+        state = dataclasses.replace(state, board=board, minions=(m,))
+        d = state.to_dict()
+        json_str = json.dumps(d)
+        assert isinstance(json_str, str)
+
+    def test_from_dict_backward_compatible(self):
+        """from_dict handles dicts without Phase 3 fields (backward compat)."""
+        state, _ = GameState.new_game(42, DECK_P1, DECK_P2)
+        d = {
+            "board": list(state.board.cells),
+            "players": [
+                {
+                    "side": int(p.side),
+                    "hp": p.hp,
+                    "current_mana": p.current_mana,
+                    "max_mana": p.max_mana,
+                    "hand": list(p.hand),
+                    "deck": list(p.deck),
+                    "graveyard": list(p.graveyard),
+                }
+                for p in state.players
+            ],
+            "active_player_idx": state.active_player_idx,
+            "phase": int(state.phase),
+            "turn_number": state.turn_number,
+            "seed": state.seed,
+        }
+        restored = GameState.from_dict(d)
+        assert restored.minions == ()
+        assert restored.next_minion_id == 0
+        assert restored.react_stack == ()
+        assert restored.react_player_idx is None
+        assert restored.pending_action is None
