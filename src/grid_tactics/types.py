@@ -36,3 +36,18 @@ MAX_STAT: int = 5
 
 # Effect amount range (starter 1-5, extensible to 10 for Phase 8)
 MAX_EFFECT_AMOUNT: int = 10
+
+# ---------------------------------------------------------------------------
+# Phase 3: Action system constants
+# ---------------------------------------------------------------------------
+
+# Auto-draw variant flag (D-15, ENG-08): when True, draw happens at turn
+# start and DRAW is removed from legal actions
+AUTO_DRAW_ENABLED: bool = False
+
+# Safety cap to prevent infinite react chaining (research Pitfall 3)
+MAX_REACT_STACK_DEPTH: int = 10
+
+# Back-row deployment positions for ranged minions (D-09)
+BACK_ROW_P1: int = 0  # Player 1's back row
+BACK_ROW_P2: int = 4  # Player 2's back row

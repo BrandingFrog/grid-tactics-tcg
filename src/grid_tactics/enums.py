@@ -62,3 +62,23 @@ class TargetType(IntEnum):
     ALL_ENEMIES = 1    # Hits all enemy minions
     ADJACENT = 2       # Hits all adjacent units
     SELF_OWNER = 3     # Affects self or owning player
+
+
+# ---------------------------------------------------------------------------
+# Phase 3: Action system enums
+# ---------------------------------------------------------------------------
+
+
+class ActionType(IntEnum):
+    """Type of action a player can take on their turn (D-12, D-17).
+
+    One action per turn: play card, move minion, attack, draw, or pass.
+    PLAY_REACT is used during the react window (D-04 through D-07).
+    """
+
+    PLAY_CARD = 0   # Deploy minion or cast magic
+    MOVE = 1        # Move a minion on the board
+    ATTACK = 2      # Attack with a minion
+    DRAW = 3        # Draw a card (costs action per D-15)
+    PASS = 4        # Pass turn (always legal per D-16)
+    PLAY_REACT = 5  # Play a react card during react window
