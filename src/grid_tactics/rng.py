@@ -42,6 +42,14 @@ class GameRNG:
         instance._rng.bit_generator.state = state
         return instance
 
+    def choice(self, seq):
+        """Select a random element from a non-empty sequence.
+
+        Uses the seeded generator for deterministic selection.
+        """
+        idx = int(self._rng.integers(0, len(seq)))
+        return seq[idx]
+
     @property
     def generator(self) -> np.random.Generator:
         """Access the underlying numpy Generator for advanced use."""

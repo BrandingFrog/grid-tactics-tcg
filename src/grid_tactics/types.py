@@ -51,3 +51,10 @@ MAX_REACT_STACK_DEPTH: int = 10
 # Back-row deployment positions for ranged minions (D-09)
 BACK_ROW_P1: int = 0  # Player 1's back row
 BACK_ROW_P2: int = 4  # Player 2's back row
+
+# ---------------------------------------------------------------------------
+# Phase 4: Game loop constants
+# ---------------------------------------------------------------------------
+
+# Maximum turns before game is declared a draw (D-11)
+DEFAULT_TURN_LIMIT: int = 200
