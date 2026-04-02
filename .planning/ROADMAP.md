@@ -79,7 +79,10 @@ Plans:
   1. A minion that reaches the opponent's back row can sacrifice itself, dealing its Attack value as player damage
   2. The game correctly detects when a player's HP reaches zero and declares a winner
   3. A random-agent smoke test runs 1000+ complete games without crashes, hangs, or invalid states
-**Plans**: TBD
+**Plans:** 2 plans
+Plans:
+- [ ] 04-01-PLAN.md -- SACRIFICE action type, win/draw detection, legal action enumeration
+- [ ] 04-02-PLAN.md -- Game loop with random agent and 1000-game smoke test
 
 ### Phase 5: RL Environment Interface
 **Goal**: The game engine is wrapped in a standard RL environment that an agent can train against
@@ -158,7 +161,7 @@ Note: Phase 9 depends on Phase 6 (not 8), so Phases 8 and 9 could run in paralle
 | 1. Game State Foundation | 4/4 | Complete | 2026-04-02 |
 | 2. Card System & Types | 2/2 | Complete | 2026-04-02 |
 | 3. Turn Actions & Combat | 0/3 | Planned | - |
-| 4. Win Condition & Game Loop | 0/TBD | Not started | - |
+| 4. Win Condition & Game Loop | 0/2 | Planned | - |
 | 5. RL Environment Interface | 0/TBD | Not started | - |
 | 6. RL Training Pipeline | 0/TBD | Not started | - |
 | 7. Self-Play Robustness | 0/TBD | Not started | - |
