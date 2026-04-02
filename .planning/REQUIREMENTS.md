@@ -51,8 +51,8 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Data Storage
 
-- [ ] **DATA-01**: Game results persisted to SQLite database (winner, scores, deck compositions, game length, card actions)
-- [ ] **DATA-02**: Training run metadata stored for comparison across experiments
+- [x] **DATA-01**: Game results persisted to SQLite database (winner, scores, deck compositions, game length, card actions)
+- [x] **DATA-02**: Training run metadata stored for comparison across experiments
 
 ## v2 Requirements
 
@@ -121,8 +121,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | CARD-02 | Phase 2 | Complete |
 | CARD-03 | Phase 8 | Pending |
 | CARD-04 | Phase 8 | Pending |
-| DATA-01 | Phase 6 | Pending |
-| DATA-02 | Phase 6 | Pending |
+| DATA-01 | Phase 6 | Complete |
+| DATA-02 | Phase 6 | Complete |
 
 **Coverage:**
 - v1 requirements: 32 total
