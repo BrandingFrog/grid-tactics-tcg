@@ -12,7 +12,7 @@ The reinforcement learning engine that discovers and validates game strategies �
 
 ### Validated
 
-(None yet — ship to validate)
+- Game state foundation: immutable 5x5 grid, mana banking, deterministic RNG — Validated in Phase 1
 
 ### Active
 
@@ -103,4 +103,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-04-02 after initialization*
+*Last updated: 2026-04-02 after Phase 1 completion*
