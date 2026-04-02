@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 06-01-PLAN.md
-last_updated: "2026-04-02T16:42:37.564Z"
+stopped_at: Completed 06-02-PLAN.md
+last_updated: "2026-04-02T16:57:19.146Z"
 last_activity: 2026-04-02
 progress:
   total_phases: 10
   completed_phases: 5
   total_plans: 16
-  completed_plans: 14
+  completed_plans: 15
   percent: 0
 ---
 
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-04-02)
 ## Current Position
 
 Phase: 06 (rl-training-pipeline) — EXECUTING
-Plan: 2 of 3
+Plan: 3 of 3
 Status: Ready to execute
 Last activity: 2026-04-02
 
@@ -66,6 +66,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 05 P01 | 6min | 1 tasks | 6 files |
 | Phase 05 P02 | 23min | 1 tasks | 3 files |
 | Phase 06 P01 | 8min | 2 tasks | 6 files |
+| Phase 06 P02 | 12min | 2 tasks | 8 files |
 
 ## Accumulated Context
 
@@ -115,6 +116,9 @@ Recent decisions affecting current work:
 - [Phase 06]: Used sqlite3 dict factory for reader (not sqlite3.Row) for direct DataFrame compatibility
 - [Phase 06]: WAL journal mode set in ensure_schema for concurrent dashboard reads during training writes
 - [Phase 06]: Overall stats win_rate computed from training_player perspective per Pitfall 6
+- [Phase 06]: Potential function uses 4 weighted components: HP advantage (0.3), board control (0.3), mana efficiency (0.2), positional advancement (0.2)
+- [Phase 06]: SelfPlayEnv training agent always player 0; mana component absolute for independent conservation incentive
+- [Phase 06]: CheckpointManager 50/50 latest/random sampling for opponent diversity; SelfPlayCallback save_freq=10k default
 
 ### Pending Todos
 
@@ -128,6 +132,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-04-02T16:42:37.560Z
-Stopped at: Completed 06-01-PLAN.md
+Last session: 2026-04-02T16:57:19.143Z
+Stopped at: Completed 06-02-PLAN.md
 Resume file: None

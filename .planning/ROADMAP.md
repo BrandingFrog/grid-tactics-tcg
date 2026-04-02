@@ -111,7 +111,7 @@ Plans:
 **Plans:** 3 plans
 Plans:
 - [x] 06-01-PLAN.md -- Install SB3 stack, SQLite schema + writer + reader for data persistence
-- [ ] 06-02-PLAN.md -- Potential-based reward shaping, SelfPlayEnv wrapper, checkpoint pool
+- [x] 06-02-PLAN.md -- Potential-based reward shaping, SelfPlayEnv wrapper, checkpoint pool
 - [ ] 06-03-PLAN.md -- Training entry point, self-play training loop, beats-random validation
 
 ### Phase 7: Self-Play Robustness
