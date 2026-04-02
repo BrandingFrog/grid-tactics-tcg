@@ -61,9 +61,9 @@ def legal_actions(
     Returns:
         Tuple of all valid Action instances.
     """
-    # Game is over -- no meaningful actions allowed (Phase 4)
+    # Game is over -- no actions allowed
     if state.is_game_over:
-        return (pass_action(),)
+        return ()
 
     if state.phase == TurnPhase.ACTION:
         return _action_phase_actions(state, library)
@@ -170,9 +170,8 @@ def _action_phase_actions(
     if player.deck:
         actions.append(draw_action())
 
-    # PASS (D-16: always legal)
-    actions.append(pass_action())
-
+    # No PASS in ACTION phase — player must act.
+    # If no legal actions, empty tuple signals auto-lose.
     return tuple(actions)
 
 

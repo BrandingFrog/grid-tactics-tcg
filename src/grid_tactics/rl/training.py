@@ -267,11 +267,21 @@ class _GameLoggingCallback(BaseCallback):
 # ---------------------------------------------------------------------------
 
 
-def _build_standard_deck(library: CardLibrary) -> tuple[int, ...]:
-    """Build a balanced 40-card deck from the starter card pool.
+# Cards excluded from the active training pool (still in data/cards/ for future use)
+EXCLUDED_CARDS: set[str] = {
+    "dark_drain",     # heal effect — stalls games
+    "holy_light",     # heal effect — stalls games
+    "holy_paladin",   # heal on play — stalls games
+    "light_cleric",   # heal on play — stalls games
+    "dark_mirror",    # heal on react — stalls games
+}
 
-    Uses 2 copies of each of the 18 cards (36 total), then adds
-    a 3rd copy of the 4 cheapest cards to reach exactly 40.
+
+def _build_standard_deck(library: CardLibrary) -> tuple[int, ...]:
+    """Build a balanced 40-card deck from the active card pool.
+
+    Excludes cards in EXCLUDED_CARDS. Uses 3 copies of each remaining
+    card, trimmed to reach exactly 40.
 
     Args:
         library: CardLibrary with all card definitions.
@@ -281,22 +291,30 @@ def _build_standard_deck(library: CardLibrary) -> tuple[int, ...]:
     """
     from grid_tactics.types import MIN_DECK_SIZE
 
-    card_ids = sorted(library._card_id_to_id.keys())
-    counts: dict[str, int] = {cid: 2 for cid in card_ids}
+    # Filter out excluded cards
+    card_ids = sorted(
+        cid for cid in library._card_id_to_id.keys()
+        if cid not in EXCLUDED_CARDS
+    )
 
-    # Current total: 36 cards. Need MIN_DECK_SIZE (40) total.
-    deficit = MIN_DECK_SIZE - sum(counts.values())
+    # Build deck: 3 copies of each active card, pad with cheapest to reach 40
+    deck_ids: list[int] = []
+    for cid in card_ids:
+        nid = library.get_numeric_id(cid)
+        deck_ids.extend([nid] * 3)
 
-    # Add extra copies of cheapest cards to fill
-    cards_by_cost = sorted(card_ids, key=lambda c: library.get_by_card_id(c).mana_cost)
-    for cid in cards_by_cost:
-        if deficit <= 0:
-            break
-        if counts[cid] < 3:  # MAX_COPIES_PER_DECK
-            counts[cid] += 1
-            deficit -= 1
+    # Pad if under 40 (13 cards * 3 = 39)
+    if len(deck_ids) < MIN_DECK_SIZE:
+        cards_by_cost = sorted(card_ids, key=lambda c: library.get_by_card_id(c).mana_cost)
+        for cid in cards_by_cost:
+            if len(deck_ids) >= MIN_DECK_SIZE:
+                break
+            deck_ids.append(library.get_numeric_id(cid))
 
-    return library.build_deck(counts)
+    # Trim if over 40
+    deck_ids = deck_ids[:MIN_DECK_SIZE]
+
+    return tuple(deck_ids)
 
 
 # ---------------------------------------------------------------------------

@@ -156,6 +156,20 @@ class GridTacticsEnv(gymnasium.Env):
 
         # Check termination conditions
         terminated = self.state.is_game_over
+
+        # No legal actions = auto-lose for the next player
+        if not terminated:
+            from grid_tactics.legal_actions import legal_actions as _legal_actions
+            next_actions = _legal_actions(self.state, self.library)
+            if len(next_actions) == 0:
+                # Next player has no actions — they lose
+                from dataclasses import replace as _replace
+                from grid_tactics.enums import PlayerSide
+                loser_idx = self.state.active_player_idx
+                winner = PlayerSide(1 - loser_idx)
+                self.state = _replace(self.state, winner=winner, is_game_over=True)
+                terminated = True
+
         truncated = not terminated and self.state.turn_number > self.turn_limit
 
         # Preserve terminal state for logging (SB3 auto-resets before callbacks run)

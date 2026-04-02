@@ -75,26 +75,34 @@ class GameResultReader:
             conn.close()
 
     def get_game_results(
-        self, run_id: str, limit: int = 1000
+        self, run_id: str, limit: int | None = 1000
     ) -> list[dict[str, object]]:
         """Get game results for a training run.
 
         Args:
             run_id: The run identifier.
-            limit: Maximum number of results to return.
+            limit: Maximum number of results to return, or None for all.
 
         Returns:
             List of game result dicts ordered by episode_num.
         """
         conn = self._connect()
         try:
-            rows = conn.execute(
-                """SELECT * FROM game_results
-                   WHERE run_id = ?
-                   ORDER BY episode_num
-                   LIMIT ?""",
-                (run_id, limit),
-            ).fetchall()
+            if limit is None:
+                rows = conn.execute(
+                    """SELECT * FROM game_results
+                       WHERE run_id = ?
+                       ORDER BY episode_num""",
+                    (run_id,),
+                ).fetchall()
+            else:
+                rows = conn.execute(
+                    """SELECT * FROM game_results
+                       WHERE run_id = ?
+                       ORDER BY episode_num
+                       LIMIT ?""",
+                    (run_id, limit),
+                ).fetchall()
             return rows
         finally:
             conn.close()

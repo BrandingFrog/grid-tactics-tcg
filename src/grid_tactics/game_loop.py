@@ -67,6 +67,19 @@ def run_game(
 
     while not state.is_game_over and state.turn_number <= turn_limit:
         actions = legal_actions(state, library)
+
+        # No legal actions = auto-lose for the active player
+        if len(actions) == 0:
+            loser_idx = state.active_player_idx
+            winner_side = PlayerSide(1 - loser_idx)
+            return GameResult(
+                winner=winner_side,
+                turn_count=state.turn_number,
+                final_hp=(state.players[0].hp, state.players[1].hp),
+                is_draw=False,
+                reason="no_actions",
+            )
+
         action = rng.choice(actions)
         state = resolve_action(state, action, library)
 
