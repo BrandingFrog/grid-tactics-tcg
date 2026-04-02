@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 03-01-PLAN.md
-last_updated: "2026-04-02T13:20:24.941Z"
+stopped_at: Completed 03-02-PLAN.md
+last_updated: "2026-04-02T13:31:08.008Z"
 last_activity: 2026-04-02
 progress:
   total_phases: 10
   completed_phases: 2
   total_plans: 9
-  completed_plans: 7
+  completed_plans: 8
   percent: 0
 ---
 
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-04-02)
 ## Current Position
 
 Phase: 03 (turn-actions-combat) — EXECUTING
-Plan: 2 of 3
+Plan: 3 of 3
 Status: Ready to execute
 Last activity: 2026-04-02
 
@@ -59,6 +59,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 02 P01 | 3min | 2 tasks | 5 files |
 | Phase 02 P02 | 5min | 2 tasks | 22 files |
 | Phase 03 P01 | 4min | 2 tasks | 9 files |
+| Phase 03 P02 | 8min | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -89,6 +90,9 @@ Recent decisions affecting current work:
 - [Phase 03]: GameState extended with defaults for backward compatibility -- existing code unchanged
 - [Phase 03]: MinionInstance tracks current_health and attack_bonus separate from CardDefinition base stats (runtime copy pattern)
 - [Phase 03]: Action uses single dataclass with Optional fields rather than per-type subclasses for 6 action types
+- [Phase 03]: SELF_OWNER target routes DAMAGE/HEAL to player HP, BUFF_ATTACK/BUFF_HEALTH to caster minion
+- [Phase 03]: Dead minion on_death effects resolve on post-removal state (dead minions removed first, then effects trigger)
+- [Phase 03]: Magic cards use virtual caster context (no board position) for effect resolution
 
 ### Pending Todos
 
@@ -102,6 +106,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-04-02T13:20:24.938Z
-Stopped at: Completed 03-01-PLAN.md
+Last session: 2026-04-02T13:31:08.003Z
+Stopped at: Completed 03-02-PLAN.md
 Resume file: None

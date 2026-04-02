@@ -68,7 +68,7 @@ Plans:
 **Plans:** 3 plans
 Plans:
 - [x] 03-01-PLAN.md -- MinionInstance, ActionType enum, Action dataclass, GameState extension with minion/react fields
-- [ ] 03-02-PLAN.md -- Effect resolution engine and action resolver (deploy, move, attack, draw, pass, combat)
+- [x] 03-02-PLAN.md -- Effect resolution engine and action resolver (deploy, move, attack, draw, pass, combat)
 - [ ] 03-03-PLAN.md -- React window stack with LIFO chaining, legal_actions() enumeration, integration tests
 
 ### Phase 4: Win Condition & Game Loop
