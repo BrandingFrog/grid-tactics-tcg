@@ -444,7 +444,7 @@ class TestMaskMatchesLegal:
         }
         deck = library.build_deck(card_counts)
 
-        from grid_tactics.game_loop import run_game
+        from grid_tactics.action_resolver import resolve_action
         from grid_tactics.rng import GameRNG
 
         for seed in range(100):
@@ -455,10 +455,8 @@ class TestMaskMatchesLegal:
                 if state.is_game_over:
                     break
                 actions = legal_actions(state, library)
-                action = actions[rng.choice(len(actions))]
-
-                from grid_tactics.action_resolver import resolve_action
-                state = resolve_action(state, action, library, rng)
+                action = rng.choice(actions)
+                state = resolve_action(state, action, library)
 
             if state.is_game_over:
                 continue
