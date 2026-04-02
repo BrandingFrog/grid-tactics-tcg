@@ -1,0 +1,19 @@
+{
+    "card_id": "shadow_stalker",
+    "name": "Shadow Stalker",
+    "card_type": "minion",
+    "mana_cost": 1,
+    "attack": 1,
+    "health": 2,
+    "range": 0,
+    "attribute": "dark",
+    "tribe": "Assassin",
+    "effects": [
+        {
+            "type": "damage",
+            "trigger": "on_death",
+            "target": "single_target",
+            "amount": 2
+        }
+    ]
+}

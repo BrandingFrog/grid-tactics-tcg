@@ -1,0 +1,15 @@
+{
+    "card_id": "fireball",
+    "name": "Fireball",
+    "card_type": "magic",
+    "mana_cost": 3,
+    "attribute": "fire",
+    "effects": [
+        {
+            "type": "damage",
+            "trigger": "on_play",
+            "target": "single_target",
+            "amount": 4
+        }
+    ]
+}

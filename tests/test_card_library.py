@@ -299,3 +299,100 @@ class TestBuildDeck:
         }
         with pytest.raises(ValueError, match="Invalid deck"):
             lib.build_deck(card_counts)
+
+
+# ---------------------------------------------------------------------------
+# Integration tests: Starter card pool (data/cards/)
+# ---------------------------------------------------------------------------
+
+# Path to the real starter card data
+_STARTER_CARDS_DIR = Path(__file__).resolve().parent.parent / "data" / "cards"
+
+
+class TestStarterPool:
+    """Load data/cards/ with CardLibrary.from_directory, verify pool properties."""
+
+    @pytest.fixture
+    def starter_lib(self) -> CardLibrary:
+        return CardLibrary.from_directory(_STARTER_CARDS_DIR)
+
+    def test_card_count_minimum(self, starter_lib: CardLibrary) -> None:
+        """D-16: 15-20 unique starter cards."""
+        assert starter_lib.card_count >= 15
+
+    def test_all_cards_load_without_errors(self, starter_lib: CardLibrary) -> None:
+        """All 18 cards load successfully -- no validation errors."""
+        all_cards = starter_lib.all_cards
+        assert len(all_cards) == 18
+        for card in all_cards:
+            assert isinstance(card, CardDefinition)
+
+
+class TestStarterPoolTypes:
+    """Starter pool has correct type distribution (D-17)."""
+
+    @pytest.fixture
+    def starter_lib(self) -> CardLibrary:
+        return CardLibrary.from_directory(_STARTER_CARDS_DIR)
+
+    def test_minion_count(self, starter_lib: CardLibrary) -> None:
+        minions = [c for c in starter_lib.all_cards if c.card_type == CardType.MINION]
+        assert len(minions) >= 8
+
+    def test_magic_count(self, starter_lib: CardLibrary) -> None:
+        magic = [c for c in starter_lib.all_cards if c.card_type == CardType.MAGIC]
+        assert len(magic) >= 3
+
+    def test_react_count(self, starter_lib: CardLibrary) -> None:
+        react = [c for c in starter_lib.all_cards if c.card_type == CardType.REACT]
+        assert len(react) >= 2
+
+
+class TestStarterPoolMultiPurpose:
+    """At least one multi-purpose card exists (D-18)."""
+
+    def test_has_multi_purpose_card(self) -> None:
+        lib = CardLibrary.from_directory(_STARTER_CARDS_DIR)
+        multi = [c for c in lib.all_cards if c.is_multi_purpose]
+        assert len(multi) >= 1
+
+
+class TestStarterPoolDeck:
+    """A valid 40-card deck can be built from the starter pool."""
+
+    def test_build_valid_deck(self) -> None:
+        lib = CardLibrary.from_directory(_STARTER_CARDS_DIR)
+        # Build a 40-card deck: 3 copies of first 13 cards + 1 of 14th
+        card_ids = sorted([c.card_id for c in lib.all_cards])
+        card_counts = {}
+        total = 0
+        for card_id in card_ids:
+            if total >= 40:
+                break
+            copies = min(3, 40 - total)
+            card_counts[card_id] = copies
+            total += copies
+
+        deck = lib.build_deck(card_counts)
+        assert len(deck) >= 40
+        errors = lib.validate_deck(deck)
+        assert errors == []
+
+
+class TestManaDistribution:
+    """Starter cards exist at mana costs 1 through 5."""
+
+    def test_all_mana_costs_present(self) -> None:
+        lib = CardLibrary.from_directory(_STARTER_CARDS_DIR)
+        costs = {c.mana_cost for c in lib.all_cards}
+        for cost in range(1, 6):
+            assert cost in costs, f"No card at mana cost {cost}"
+
+
+class TestAttributeDistribution:
+    """At least 3 distinct attributes used in starter pool."""
+
+    def test_at_least_three_attributes(self) -> None:
+        lib = CardLibrary.from_directory(_STARTER_CARDS_DIR)
+        attributes = {c.attribute for c in lib.all_cards if c.attribute is not None}
+        assert len(attributes) >= 3

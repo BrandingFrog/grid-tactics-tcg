@@ -1,0 +1,19 @@
+{
+    "card_id": "holy_paladin",
+    "name": "Holy Paladin",
+    "card_type": "minion",
+    "mana_cost": 3,
+    "attack": 2,
+    "health": 4,
+    "range": 0,
+    "attribute": "light",
+    "tribe": "Paladin",
+    "effects": [
+        {
+            "type": "heal",
+            "trigger": "on_play",
+            "target": "self_owner",
+            "amount": 2
+        }
+    ]
+}

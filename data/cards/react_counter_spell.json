@@ -1,0 +1,15 @@
+{
+    "card_id": "counter_spell",
+    "name": "Counter Spell",
+    "card_type": "react",
+    "mana_cost": 2,
+    "attribute": "neutral",
+    "effects": [
+        {
+            "type": "damage",
+            "trigger": "on_play",
+            "target": "single_target",
+            "amount": 3
+        }
+    ]
+}

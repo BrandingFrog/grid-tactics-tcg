@@ -1,0 +1,12 @@
+{
+    "card_id": "stone_golem",
+    "name": "Stone Golem",
+    "card_type": "minion",
+    "mana_cost": 4,
+    "attack": 2,
+    "health": 5,
+    "range": 0,
+    "attribute": "neutral",
+    "tribe": "Golem",
+    "effects": []
+}

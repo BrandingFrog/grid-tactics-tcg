@@ -1,0 +1,15 @@
+{
+    "card_id": "holy_light",
+    "name": "Holy Light",
+    "card_type": "magic",
+    "mana_cost": 2,
+    "attribute": "light",
+    "effects": [
+        {
+            "type": "heal",
+            "trigger": "on_play",
+            "target": "self_owner",
+            "amount": 3
+        }
+    ]
+}

@@ -1,0 +1,19 @@
+{
+    "card_id": "dark_sentinel",
+    "name": "Dark Sentinel",
+    "card_type": "minion",
+    "mana_cost": 3,
+    "attack": 2,
+    "health": 3,
+    "range": 0,
+    "attribute": "dark",
+    "tribe": "Dark Mage",
+    "effects": [],
+    "react_effect": {
+        "type": "damage",
+        "trigger": "on_play",
+        "target": "single_target",
+        "amount": 2
+    },
+    "react_mana_cost": 2
+}

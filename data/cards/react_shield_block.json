@@ -1,0 +1,15 @@
+{
+    "card_id": "shield_block",
+    "name": "Shield Block",
+    "card_type": "react",
+    "mana_cost": 1,
+    "attribute": "light",
+    "effects": [
+        {
+            "type": "buff_health",
+            "trigger": "on_play",
+            "target": "single_target",
+            "amount": 2
+        }
+    ]
+}

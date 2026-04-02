@@ -1,0 +1,12 @@
+{
+    "card_id": "wind_archer",
+    "name": "Wind Archer",
+    "card_type": "minion",
+    "mana_cost": 2,
+    "attack": 2,
+    "health": 2,
+    "range": 2,
+    "attribute": "neutral",
+    "tribe": "Archer",
+    "effects": []
+}
