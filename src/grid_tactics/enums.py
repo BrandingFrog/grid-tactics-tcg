@@ -13,3 +13,52 @@ class TurnPhase(IntEnum):
 
     ACTION = 0
     REACT = 1
+
+
+# ---------------------------------------------------------------------------
+# Phase 2: Card system enums
+# ---------------------------------------------------------------------------
+
+
+class CardType(IntEnum):
+    """Card type determines play rules and which fields are relevant."""
+
+    MINION = 0  # Deployed to board, has attack/health/range
+    MAGIC = 1   # Immediate effect, then discarded
+    REACT = 2   # Played during opponent's action window
+
+
+class Attribute(IntEnum):
+    """Elemental attribute for future synergy mechanics (D-09)."""
+
+    NEUTRAL = 0
+    FIRE = 1
+    DARK = 2
+    LIGHT = 3
+
+
+class EffectType(IntEnum):
+    """What the effect does. Starter cards use damage/heal/buff only (D-01)."""
+
+    DAMAGE = 0
+    HEAL = 1
+    BUFF_ATTACK = 2
+    BUFF_HEALTH = 3
+
+
+class TriggerType(IntEnum):
+    """When the effect activates (D-02)."""
+
+    ON_PLAY = 0     # When the card is played/deployed
+    ON_DEATH = 1    # When the minion dies
+    ON_ATTACK = 2   # When the minion attacks
+    ON_DAMAGED = 3  # When the minion takes damage
+
+
+class TargetType(IntEnum):
+    """What the effect targets (D-03)."""
+
+    SINGLE_TARGET = 0  # Player chooses one target
+    ALL_ENEMIES = 1    # Hits all enemy minions
+    ADJACENT = 2       # Hits all adjacent units
+    SELF_OWNER = 3     # Affects self or owning player

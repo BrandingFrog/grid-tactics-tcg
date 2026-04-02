@@ -21,3 +21,18 @@ MAX_MANA_CAP: int = 10
 # Player constants (per D-09, D-10)
 STARTING_HP: int = 20
 STARTING_HAND_SIZE: int = 5
+
+# ---------------------------------------------------------------------------
+# Phase 2: Card system constants
+# ---------------------------------------------------------------------------
+
+# Card deck constraints (per D-12, D-13)
+MAX_COPIES_PER_DECK: int = 3
+MIN_DECK_SIZE: int = 40
+
+# Card stat ranges (per D-19: stats in 1-5 range)
+MIN_STAT: int = 1
+MAX_STAT: int = 5
+
+# Effect amount range (starter 1-5, extensible to 10 for Phase 8)
+MAX_EFFECT_AMOUNT: int = 10
