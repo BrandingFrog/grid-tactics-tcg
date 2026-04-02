@@ -11,10 +11,10 @@ Requirements for initial release. Each maps to roadmap phases.
 
 - [x] **ENG-01**: Game enforces complete rule set on a 5x5 grid with row ownership, no-man's-land middle row, and deployment zones
 - [x] **ENG-02**: Mana pool regenerates +1 per turn with unspent mana carrying over (banking)
-- [ ] **ENG-03**: Each turn consists of a single action (play card, move minion, attack, draw) followed by an opponent react window
+- [x] **ENG-03**: Each turn consists of a single action (play card, move minion, attack, draw) followed by an opponent react window
 - [x] **ENG-04**: Three card types supported: Minion (deployed to field), Magic (immediate effect), React (counter/interrupt during opponent's action)
 - [x] **ENG-05**: Minions have Attack, Health, Mana Cost, Range, and optional Effects/React effects
-- [ ] **ENG-06**: Minions move in all 4 directions (up, down, left, right) as an action; melee attacks adjacent targets (orthogonal); ranged units attack up to 2 tiles orthogonally or 1 tile diagonally
+- [x] **ENG-06**: Minions move in all 4 directions (up, down, left, right) as an action; melee attacks adjacent targets (orthogonal); ranged units attack up to 2 tiles orthogonally or 1 tile diagonally
 - [ ] **ENG-07**: Minions that reach the opponent's back row can sacrifice to deal their Attack value as player damage
 - [ ] **ENG-08**: Drawing a card costs an action (configurable rule to allow RL testing of auto-draw variant)
 - [ ] **ENG-09**: Game correctly detects win condition when a player's HP reaches zero
@@ -93,10 +93,10 @@ Which phases cover which requirements. Updated during roadmap creation.
 |-------------|-------|--------|
 | ENG-01 | Phase 1 | Complete |
 | ENG-02 | Phase 1 | Complete |
-| ENG-03 | Phase 3 | Pending |
+| ENG-03 | Phase 3 | Complete |
 | ENG-04 | Phase 2 | Complete |
 | ENG-05 | Phase 2 | Complete |
-| ENG-06 | Phase 3 | Pending |
+| ENG-06 | Phase 3 | Complete |
 | ENG-07 | Phase 4 | Pending |
 | ENG-08 | Phase 3 | Pending |
 | ENG-09 | Phase 4 | Pending |
