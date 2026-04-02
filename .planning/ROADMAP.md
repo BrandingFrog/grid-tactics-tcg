@@ -81,7 +81,7 @@ Plans:
   3. A random-agent smoke test runs 1000+ complete games without crashes, hangs, or invalid states
 **Plans:** 2 plans
 Plans:
-- [ ] 04-01-PLAN.md -- SACRIFICE action type, win/draw detection, legal action enumeration
+- [x] 04-01-PLAN.md -- SACRIFICE action type, win/draw detection, legal action enumeration
 - [ ] 04-02-PLAN.md -- Game loop with random agent and 1000-game smoke test
 
 ### Phase 5: RL Environment Interface
