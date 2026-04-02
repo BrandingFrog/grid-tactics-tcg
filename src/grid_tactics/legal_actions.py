@@ -98,12 +98,13 @@ def _action_phase_actions(
                 if has_single_target_on_play:
                     # Enumerate target positions (enemy minions)
                     enemy_positions = _get_enemy_minion_positions(state, player_side)
-                    for target_pos in enemy_positions:
-                        actions.append(play_card_action(
-                            card_index=idx, position=pos, target_pos=target_pos,
-                        ))
-                    # If no enemies, still allow deploy without target
-                    if not enemy_positions:
+                    if enemy_positions:
+                        for target_pos in enemy_positions:
+                            actions.append(play_card_action(
+                                card_index=idx, position=pos, target_pos=target_pos,
+                            ))
+                    else:
+                        # Deploy without target — on_play effect skipped (no valid targets)
                         actions.append(play_card_action(card_index=idx, position=pos))
                 else:
                     actions.append(play_card_action(card_index=idx, position=pos))

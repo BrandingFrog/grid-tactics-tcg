@@ -159,12 +159,13 @@ class TestDamageSingleTarget:
             effect_type=EffectType.DAMAGE, trigger=TriggerType.ON_PLAY,
             target=TargetType.SINGLE_TARGET, amount=2,
         )
-        with pytest.raises(ValueError, match="target_pos"):
-            resolve_effect(
-                state, effect, caster_pos=(0, 0),
-                caster_owner=PlayerSide.PLAYER_1, library=lib,
-                target_pos=None,
-            )
+        # With no target_pos, effect is skipped (state unchanged)
+        result = resolve_effect(
+            state, effect, caster_pos=(0, 0),
+            caster_owner=PlayerSide.PLAYER_1, library=lib,
+            target_pos=None,
+        )
+        assert result == state
 
     def test_damage_single_target_no_minion_at_pos_returns_unchanged(self):
         from grid_tactics.effect_resolver import resolve_effect

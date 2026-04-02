@@ -164,9 +164,8 @@ def _resolve_single_target(
 ) -> GameState:
     """Resolve effect on a single target at target_pos."""
     if target_pos is None:
-        raise ValueError(
-            "target_pos is required for SINGLE_TARGET effects"
-        )
+        # No valid target — skip effect (e.g., minion deployed with no enemies)
+        return state
     minion = _find_minion_at_pos(state.minions, target_pos)
     if minion is None:
         return state  # no minion at position, state unchanged

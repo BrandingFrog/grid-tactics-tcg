@@ -533,6 +533,31 @@ class TestSoundness:
                     f"{action} -> {e}"
                 )
 
+    def test_soundness_no_enemies_on_board(self, library):
+        """legal_actions with single-target minions but no enemies doesn't emit illegal actions."""
+        from grid_tactics.action_resolver import resolve_action
+
+        fire_imp_id = library.get_numeric_id("fire_imp")
+
+        # State with fire_imp in hand but NO enemy minions on the board
+        state = _make_state(
+            p1_hand=(fire_imp_id,),
+            p1_deck=(fire_imp_id,),
+            minions=(),
+            p1_mana=5,
+        )
+
+        actions = legal_actions(state, library)
+
+        for action in actions:
+            try:
+                resolve_action(state, action, library)
+            except ValueError as e:
+                pytest.fail(
+                    f"legal_actions returned an action that raises ValueError: "
+                    f"{action} -> {e}"
+                )
+
     def test_react_phase_soundness(self, library):
         """Every action from legal_actions during REACT resolves without error."""
         from grid_tactics.action_resolver import resolve_action
