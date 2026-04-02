@@ -87,11 +87,11 @@ def _make_state(
 class TestFullTurnCycle:
     def test_play_card_then_pass_react_advances_turn(self, library):
         """P1 deploys a minion -> react window opens -> P2 passes -> turn advances to P2."""
-        fire_imp_id = library.get_numeric_id("fire_imp")  # cost=1, melee
+        shadow_knight_id = library.get_numeric_id("shadow_knight")  # cost=3, melee, no ON_PLAY effects
 
-        state = _make_state(p1_hand=(fire_imp_id,), p1_mana=5)
+        state = _make_state(p1_hand=(shadow_knight_id,), p1_mana=5)
 
-        # P1 deploys fire_imp to (0, 0)
+        # P1 deploys shadow_knight to (0, 0)
         state = resolve_action(state, play_card_action(card_index=0, position=(0, 0)), library)
 
         # Should be in REACT phase, P2's turn to react
@@ -216,9 +216,11 @@ class TestReactInteraction:
         state = resolve_action(state, pass_action(), library)
 
         # shield_block resolved: buff_health +2 on defender at (2,2)
+        # iron_guardian started at 5 HP, took 2 damage (->3), then on_damaged triggered (+1 -> 4)
+        # shield_block adds +2 -> 6
         defender_after = state.get_minion(1)
         assert defender_after is not None
-        assert defender_after.current_health == 5  # 3 + 2
+        assert defender_after.current_health == 6  # 5 - 2 + 1(on_damaged) + 2(shield_block)
 
         # Turn advanced
         assert state.phase == TurnPhase.ACTION
@@ -277,26 +279,26 @@ class TestReactInteraction:
 class TestMultiTurnFlow:
     def test_three_turns_state_consistency(self, library):
         """Play 3 turns and verify state transitions are consistent."""
-        fire_imp_id = library.get_numeric_id("fire_imp")
+        shadow_knight_id = library.get_numeric_id("shadow_knight")  # cost=3, no ON_PLAY effects
 
         state = _make_state(
-            p1_hand=(fire_imp_id,),
-            p2_hand=(fire_imp_id,),
+            p1_hand=(shadow_knight_id,),
+            p2_hand=(shadow_knight_id,),
         )
 
-        # Turn 1: P1 deploys fire_imp at (0,0)
+        # Turn 1: P1 deploys shadow_knight at (0,0)
         state = resolve_action(state, play_card_action(card_index=0, position=(0, 0)), library)
         state = resolve_action(state, pass_action(), library)  # P2 passes react
         assert state.turn_number == 2
         assert state.active_player_idx == 1
 
-        # Turn 2: P2 deploys fire_imp at (4,4)
+        # Turn 2: P2 deploys shadow_knight at (4,4)
         state = resolve_action(state, play_card_action(card_index=0, position=(4, 4)), library)
         state = resolve_action(state, pass_action(), library)  # P1 passes react
         assert state.turn_number == 3
         assert state.active_player_idx == 0
 
-        # Turn 3: P1 moves fire_imp from (0,0) to (1,0)
+        # Turn 3: P1 moves shadow_knight from (0,0) to (1,0)
         state = resolve_action(state, move_action(minion_id=0, position=(1, 0)), library)
         state = resolve_action(state, pass_action(), library)  # P2 passes react
         assert state.turn_number == 4
@@ -310,11 +312,11 @@ class TestMultiTurnFlow:
 
     def test_mana_deduction_and_regeneration(self, library):
         """Mana is deducted on play and regenerated at turn start."""
-        fire_imp_id = library.get_numeric_id("fire_imp")  # cost=1
+        shadow_knight_id = library.get_numeric_id("shadow_knight")  # cost=3, no ON_PLAY effects
 
-        state = _make_state(p1_hand=(fire_imp_id,), p1_mana=3)
+        state = _make_state(p1_hand=(shadow_knight_id,), p1_mana=5)
 
-        # P1 plays fire_imp (cost 1): 3 - 1 = 2
+        # P1 plays shadow_knight (cost 3): 5 - 3 = 2
         state = resolve_action(state, play_card_action(card_index=0, position=(0, 0)), library)
         assert state.players[0].current_mana == 2
 
@@ -362,13 +364,13 @@ class TestMultiTurnFlow:
 class TestLegalActionsConsistency:
     def test_legal_actions_valid_at_every_step(self, library):
         """At every game step, all legal_actions resolve without error."""
-        fire_imp_id = library.get_numeric_id("fire_imp")
+        shadow_knight_id = library.get_numeric_id("shadow_knight")  # no ON_PLAY effects
         shield_block_id = library.get_numeric_id("shield_block")
 
         state = _make_state(
-            p1_hand=(fire_imp_id,),
+            p1_hand=(shadow_knight_id,),
             p2_hand=(shield_block_id,),
-            p1_deck=(fire_imp_id,),
+            p1_deck=(shadow_knight_id,),
         )
 
         # Step 1: ACTION phase - verify all actions are valid
@@ -380,7 +382,7 @@ class TestLegalActionsConsistency:
             except ValueError as e:
                 pytest.fail(f"Step 1 invalid action {a}: {e}")
 
-        # P1 deploys fire_imp
+        # P1 deploys shadow_knight
         state = resolve_action(state, play_card_action(card_index=0, position=(0, 0)), library)
 
         # Step 2: REACT phase - verify react actions are valid
