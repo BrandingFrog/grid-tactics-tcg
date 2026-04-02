@@ -97,16 +97,15 @@ class TestPotential:
         assert -1.0 <= val <= 1.0
 
     def test_potential_zero_sum_symmetric(self, symmetric_state):
-        """potential(s, 0) == -potential(s, 1) for symmetric states."""
+        """Antisymmetric components cancel; mana is absolute so both positive."""
         p0 = potential(symmetric_state, 0)
         p1 = potential(symmetric_state, 1)
-        # In symmetric state with equal mana, HP advantage and board control are 0.
-        # Mana component is the same for both so they don't cancel exactly,
-        # but the HP and board differences should be negated.
-        # Actually the mana component is player-specific (my_mana/10), so
-        # Phi(s,0) and Phi(s,1) won't be perfect negations.
-        # However, for truly symmetric states (same mana), the difference should be very small.
-        assert abs(p0 + p1) < 0.01, f"p0={p0}, p1={p1}, sum={p0 + p1}"
+        # HP diff and board diff are antisymmetric (cancel to 0).
+        # Mana component is absolute (my_mana/10) -- both players have mana=5
+        # so both get +0.2 * 0.5 = +0.1 mana contribution.
+        # With equal mana, p0 should equal p1 (both get same mana bonus,
+        # and the antisymmetric components are 0 for both).
+        assert abs(p0 - p1) < 0.01, f"Symmetric state should yield equal potentials: p0={p0}, p1={p1}"
 
     def test_potential_higher_with_more_hp(
         self, make_game_state_with_minions, make_player,
