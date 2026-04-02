@@ -33,7 +33,8 @@ from grid_tactics.actions import (
 from grid_tactics.board import Board
 from grid_tactics.card_library import CardLibrary
 from grid_tactics.enums import (
-    ActionType, CardType, PlayerSide, ReactCondition, TargetType, TriggerType, TurnPhase,
+    ActionType, Attribute, CardType, EffectType, PlayerSide, ReactCondition,
+    TargetType, TriggerType, TurnPhase,
 )
 from grid_tactics.game_state import GameState
 from grid_tactics.types import (
@@ -232,6 +233,31 @@ def _check_react_condition(
     if condition == ReactCondition.ANY_ACTION:
         return True
 
+    # Attribute-based conditions
+    _ATTR_CONDITIONS = {
+        ReactCondition.OPPONENT_PLAYS_FIRE: Attribute.FIRE,
+        ReactCondition.OPPONENT_PLAYS_DARK: Attribute.DARK,
+        ReactCondition.OPPONENT_PLAYS_LIGHT: Attribute.LIGHT,
+        ReactCondition.OPPONENT_PLAYS_NEUTRAL: Attribute.NEUTRAL,
+    }
+    if condition in _ATTR_CONDITIONS:
+        required_attr = _ATTR_CONDITIONS[condition]
+        if pending.action_type == ActionType.PLAY_CARD:
+            # Check attribute of the card that was just played
+            acting_player = state.players[state.active_player_idx]
+            if acting_player.graveyard:
+                last_played_id = acting_player.graveyard[-1]
+                card_def = library.get_by_id(last_played_id)
+                return card_def.attribute == required_attr
+            # Check newly deployed minions (minion cards go to board, not graveyard)
+            if pending.position is not None and state.minions:
+                # Find minion at the deploy position
+                for m in state.minions:
+                    if m.position == pending.position:
+                        card_def = library.get_by_id(m.card_numeric_id)
+                        return card_def.attribute == required_attr
+        return False
+
     return False
 
 
@@ -297,7 +323,15 @@ def _react_phase_actions(
                     continue
 
             if react_player.current_mana >= card_def.react_mana_cost:
+                # DEPLOY_SELF: react deploys this minion to the board at discount
                 if (card_def.react_effect is not None
+                        and card_def.react_effect.effect_type == EffectType.DEPLOY_SELF):
+                    deploy_positions = _valid_deploy_positions(state, card_def, react_side)
+                    for pos in deploy_positions:
+                        actions.append(play_react_action(
+                            card_index=idx, target_pos=pos,
+                        ))
+                elif (card_def.react_effect is not None
                         and card_def.react_effect.target == TargetType.SINGLE_TARGET):
                     enemy_positions = _get_enemy_minion_positions(state, react_side)
                     friendly_positions = _get_friendly_minion_positions(state, react_side)

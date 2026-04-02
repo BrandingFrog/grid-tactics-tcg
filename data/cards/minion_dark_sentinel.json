@@ -9,12 +9,12 @@
     "attribute": "dark",
     "tribe": "Dark Mage",
     "effects": [],
-    "react_condition": "opponent_plays_magic",
+    "react_condition": "opponent_plays_light",
     "react_effect": {
-        "type": "damage",
+        "type": "deploy_self",
         "trigger": "on_play",
-        "target": "single_target",
-        "amount": 2
+        "target": "self_owner",
+        "amount": 1
     },
-    "react_mana_cost": 2
+    "react_mana_cost": 1
 }

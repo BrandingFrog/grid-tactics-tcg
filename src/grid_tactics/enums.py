@@ -45,6 +45,7 @@ class EffectType(IntEnum):
     BUFF_ATTACK = 2
     BUFF_HEALTH = 3
     NEGATE = 4       # Cancel the triggering action (react-only)
+    DEPLOY_SELF = 5  # Deploy this card as a minion (react-only, for multi-purpose discount deploy)
 
 
 class ReactCondition(IntEnum):
@@ -59,6 +60,10 @@ class ReactCondition(IntEnum):
     OPPONENT_ATTACKS = 2        # Opponent attacked with a minion
     OPPONENT_PLAYS_REACT = 3    # Opponent played a react card (counter-react)
     ANY_ACTION = 4              # Reacts to any opponent action
+    OPPONENT_PLAYS_FIRE = 5     # Opponent played a card with FIRE attribute
+    OPPONENT_PLAYS_DARK = 6     # Opponent played a card with DARK attribute
+    OPPONENT_PLAYS_LIGHT = 7    # Opponent played a card with LIGHT attribute
+    OPPONENT_PLAYS_NEUTRAL = 8  # Opponent played a card with NEUTRAL attribute
 
 
 class TriggerType(IntEnum):

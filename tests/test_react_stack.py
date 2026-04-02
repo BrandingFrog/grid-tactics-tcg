@@ -221,17 +221,17 @@ class TestPlayReactCard:
         """Multi-purpose card (dark_sentinel) can be played as react using react_mana_cost."""
         dark_sentinel_id = library.get_numeric_id("dark_sentinel")
 
-        # P2 plays dark_sentinel (card_index=1) as react, targeting minion at (1,2)
-        action = play_react_action(card_index=1, target_pos=(1, 2))
+        # P2 plays dark_sentinel (card_index=1) as react, target_pos is deploy position
+        action = play_react_action(card_index=1, target_pos=(3, 0))
         result = handle_react_action(react_state_empty_stack, action, library)
 
         # Stack should have one entry
         assert len(result.react_stack) == 1
         assert result.react_stack[0].card_numeric_id == dark_sentinel_id
 
-        # react_mana_cost for dark_sentinel is 2: 5 - 2 = 3
+        # react_mana_cost for dark_sentinel is 1: 5 - 1 = 4
         p2 = result.players[1]
-        assert p2.current_mana == 3
+        assert p2.current_mana == 4
         assert dark_sentinel_id not in p2.hand
 
     def test_insufficient_mana_raises(self, react_state_empty_stack, library):
@@ -378,21 +378,24 @@ class TestResolveReactStack:
         assert result.players[1].hp == STARTING_HP  # Already at max, heal capped
 
     def test_resolve_multi_purpose_react_effect(self, react_state_empty_stack, library):
-        """Multi-purpose card's react_effect resolves during stack resolution."""
+        """Multi-purpose card's DEPLOY_SELF react_effect deploys the minion during stack resolution."""
         dark_sentinel_id = library.get_numeric_id("dark_sentinel")
         entry = ReactEntry(
             player_idx=1,
             card_index=1,
             card_numeric_id=dark_sentinel_id,
-            target_pos=(1, 2),
+            target_pos=(3, 0),  # empty P2 row position
         )
         state = replace(react_state_empty_stack, react_stack=(entry,))
         result = resolve_react_stack(state, library)
 
-        # dark_sentinel react_effect: damage 2 single_target
-        minion = result.get_minion(0)
-        assert minion is not None
-        assert minion.current_health == 3  # 5 - 2
+        # dark_sentinel DEPLOY_SELF: should be deployed as a minion at (3,0)
+        # Find the newly deployed minion (instance_id > 0 since minion 0 already exists)
+        deployed = [m for m in result.minions if m.card_numeric_id == dark_sentinel_id]
+        assert len(deployed) == 1
+        assert deployed[0].position == (3, 0)
+        assert deployed[0].current_health == 3  # dark_sentinel has health=3
+        assert deployed[0].owner == PlayerSide.PLAYER_2
 
 
 # ---------------------------------------------------------------------------

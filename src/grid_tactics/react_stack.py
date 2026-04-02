@@ -218,10 +218,32 @@ def resolve_react_stack(
         elif card_def.is_multi_purpose:
             # Resolve the react_effect only for multi-purpose cards
             if card_def.react_effect is not None:
-                state = resolve_effect(
-                    state, card_def.react_effect, (0, 0), caster_owner, library,
-                    entry.target_pos,
-                )
+                if card_def.react_effect.effect_type == EffectType.DEPLOY_SELF:
+                    # DEPLOY_SELF: deploy this minion to the board at target_pos
+                    if entry.target_pos is not None:
+                        from grid_tactics.minion import MinionInstance
+                        new_minion = MinionInstance(
+                            instance_id=state.next_minion_id,
+                            card_numeric_id=entry.card_numeric_id,
+                            owner=state.players[entry.player_idx].side,
+                            position=entry.target_pos,
+                            current_health=card_def.health,
+                        )
+                        new_board = state.board.place(
+                            entry.target_pos[0], entry.target_pos[1],
+                            new_minion.instance_id,
+                        )
+                        state = replace(
+                            state,
+                            board=new_board,
+                            minions=state.minions + (new_minion,),
+                            next_minion_id=state.next_minion_id + 1,
+                        )
+                else:
+                    state = resolve_effect(
+                        state, card_def.react_effect, (0, 0), caster_owner, library,
+                        entry.target_pos,
+                    )
 
     # Clean up dead minions after react resolution
     from grid_tactics.action_resolver import _cleanup_dead_minions, _check_game_over
