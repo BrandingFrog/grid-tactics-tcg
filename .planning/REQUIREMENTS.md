@@ -14,7 +14,7 @@ Requirements for initial release. Each maps to roadmap phases.
 - [ ] **ENG-03**: Each turn consists of a single action (play card, move minion, attack, draw) followed by an opponent react window
 - [ ] **ENG-04**: Three card types supported: Minion (deployed to field), Magic (immediate effect), React (counter/interrupt during opponent's action)
 - [ ] **ENG-05**: Minions have Attack, Health, Mana Cost, Range, and optional Effects/React effects
-- [ ] **ENG-06**: Minions move on the grid as an action; melee attack adjacent units; ranged units attack at +1 range
+- [ ] **ENG-06**: Minions move in all 4 directions (up, down, left, right) as an action; melee attacks adjacent targets (orthogonal); ranged units attack up to 2 tiles orthogonally or 1 tile diagonally
 - [ ] **ENG-07**: Minions that reach the opponent's back row can sacrifice to deal their Attack value as player damage
 - [ ] **ENG-08**: Drawing a card costs an action (configurable rule to allow RL testing of auto-draw variant)
 - [ ] **ENG-09**: Game correctly detects win condition when a player's HP reaches zero
@@ -91,44 +91,44 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| ENG-01 | TBD | Pending |
-| ENG-02 | TBD | Pending |
-| ENG-03 | TBD | Pending |
-| ENG-04 | TBD | Pending |
-| ENG-05 | TBD | Pending |
-| ENG-06 | TBD | Pending |
-| ENG-07 | TBD | Pending |
-| ENG-08 | TBD | Pending |
-| ENG-09 | TBD | Pending |
-| ENG-10 | TBD | Pending |
-| ENG-11 | TBD | Pending |
-| ENG-12 | TBD | Pending |
-| RL-01 | TBD | Pending |
-| RL-02 | TBD | Pending |
-| RL-03 | TBD | Pending |
-| RL-04 | TBD | Pending |
-| RL-05 | TBD | Pending |
-| RL-06 | TBD | Pending |
-| RL-07 | TBD | Pending |
-| RL-08 | TBD | Pending |
-| DASH-01 | TBD | Pending |
-| DASH-02 | TBD | Pending |
-| DASH-03 | TBD | Pending |
-| DASH-04 | TBD | Pending |
-| DASH-05 | TBD | Pending |
-| DASH-06 | TBD | Pending |
-| CARD-01 | TBD | Pending |
-| CARD-02 | TBD | Pending |
-| CARD-03 | TBD | Pending |
-| CARD-04 | TBD | Pending |
-| DATA-01 | TBD | Pending |
-| DATA-02 | TBD | Pending |
+| ENG-01 | Phase 1 | Pending |
+| ENG-02 | Phase 1 | Pending |
+| ENG-03 | Phase 3 | Pending |
+| ENG-04 | Phase 2 | Pending |
+| ENG-05 | Phase 2 | Pending |
+| ENG-06 | Phase 3 | Pending |
+| ENG-07 | Phase 4 | Pending |
+| ENG-08 | Phase 3 | Pending |
+| ENG-09 | Phase 4 | Pending |
+| ENG-10 | Phase 3 | Pending |
+| ENG-11 | Phase 1 | Pending |
+| ENG-12 | Phase 2 | Pending |
+| RL-01 | Phase 5 | Pending |
+| RL-02 | Phase 5 | Pending |
+| RL-03 | Phase 5 | Pending |
+| RL-04 | Phase 6 | Pending |
+| RL-05 | Phase 6 | Pending |
+| RL-06 | Phase 6 | Pending |
+| RL-07 | Phase 7 | Pending |
+| RL-08 | Phase 7 | Pending |
+| DASH-01 | Phase 9 | Pending |
+| DASH-02 | Phase 9 | Pending |
+| DASH-03 | Phase 9 | Pending |
+| DASH-04 | Phase 10 | Pending |
+| DASH-05 | Phase 10 | Pending |
+| DASH-06 | Phase 9 | Pending |
+| CARD-01 | Phase 2 | Pending |
+| CARD-02 | Phase 2 | Pending |
+| CARD-03 | Phase 8 | Pending |
+| CARD-04 | Phase 8 | Pending |
+| DATA-01 | Phase 6 | Pending |
+| DATA-02 | Phase 6 | Pending |
 
 **Coverage:**
 - v1 requirements: 32 total
-- Mapped to phases: 0
-- Unmapped: 32
+- Mapped to phases: 32
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-04-02*
-*Last updated: 2026-04-02 after initial definition*
+*Last updated: 2026-04-02 after roadmap creation*

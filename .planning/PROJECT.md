@@ -45,7 +45,9 @@ The reinforcement learning engine that discovers and validates game strategies �
 - **Magic** — Direct effects that resolve immediately (damage, heal, buff, debuff). Cost mana.
 - **React** — Counter/interrupt cards played during the opponent's action window. Cost mana/cards/resources.
 
-**Positioning:** Range mechanic (+1 range for ranged units). Placing ranged units behind tanks is a core strategic layer. Melee units must be adjacent to attack.
+**Movement:** Minions can move in all 4 directions (up, down, left, right) — not just forward. This enables flanking, retreating, and lateral positioning strategies.
+
+**Positioning & Range:** Melee units attack adjacent targets (orthogonal). Ranged units can attack targets up to 2 tiles away orthogonally or 1 tile diagonally. Placing ranged units behind tanks is a core strategic layer.
 
 **Drawing:** Costs an action (not automatic per turn).
 
