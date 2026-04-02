@@ -453,24 +453,35 @@ def resolve_action(
 ) -> GameState:
     """Validate and apply a single action, returning a new GameState.
 
-    Flow:
-      1. Validate state.phase == ACTION
-      2. Dispatch to action handler
-      3. Clean up dead minions (D-02)
-      4. Transition to REACT phase (D-13)
+    This is the single entry point for ALL actions. Dispatches based on phase:
+      - ACTION phase: main-phase handlers (play card, move, attack, draw, pass)
+      - REACT phase: delegates to handle_react_action from react_stack.py
+
+    Flow (ACTION phase):
+      1. Dispatch to action handler
+      2. Clean up dead minions (D-02)
+      3. Transition to REACT phase (D-13)
+
+    Flow (REACT phase):
+      Delegates entirely to handle_react_action (PLAY_REACT or PASS).
 
     Args:
-        state: Current game state (must be in ACTION phase).
+        state: Current game state.
         action: The action to apply.
         library: CardLibrary for card definition lookups.
 
     Returns:
-        New GameState after action, cleanup, and phase transition.
+        New GameState after action processing.
 
     Raises:
-        ValueError: If the action is invalid (wrong phase, illegal move, etc.).
+        ValueError: If the action is invalid (wrong phase, illegal action, etc.).
     """
-    # Validate phase
+    # REACT phase: delegate to react handler
+    if state.phase == TurnPhase.REACT:
+        from grid_tactics.react_stack import handle_react_action
+        return handle_react_action(state, action, library)
+
+    # Validate ACTION phase
     if state.phase != TurnPhase.ACTION:
         raise ValueError(
             f"Cannot resolve action in phase {state.phase.name}, expected ACTION"

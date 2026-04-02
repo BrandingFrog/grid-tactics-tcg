@@ -103,6 +103,7 @@ def _make_state(
     phase=TurnPhase.ACTION,
     board=None,
     next_minion_id=None,
+    react_player_idx=None,
 ):
     """Create a GameState with custom parameters."""
     if board is None:
@@ -130,6 +131,7 @@ def _make_state(
         seed=42,
         minions=tuple(minions),
         next_minion_id=next_minion_id,
+        react_player_idx=react_player_idx,
     )
 
 
@@ -612,14 +614,23 @@ class TestPhaseTransition:
         assert new_state.phase == TurnPhase.REACT
         assert new_state.react_player_idx == 1  # opponent
 
-    def test_wrong_phase_raises(self):
+    def test_react_phase_delegates_to_react_handler(self):
+        """resolve_action delegates to handle_react_action during REACT phase.
+
+        Updated from test_wrong_phase_raises: after 03-03, REACT phase actions
+        are handled by handle_react_action instead of raising ValueError.
+        """
         from grid_tactics.action_resolver import resolve_action
 
         lib = _make_test_library()
-        state = _make_state(phase=TurnPhase.REACT)
+        state = _make_state(phase=TurnPhase.REACT, react_player_idx=1)
         action = Action(action_type=ActionType.PASS)
-        with pytest.raises(ValueError, match="ACTION|[Pp]hase"):
-            resolve_action(state, action, lib)
+        new_state = resolve_action(state, action, lib)
+
+        # PASS during react resolves stack and advances turn
+        assert new_state.phase == TurnPhase.ACTION
+        assert new_state.active_player_idx == 1  # flipped from 0
+        assert new_state.turn_number == 2
 
     def test_p2_action_transitions_react_to_p1(self):
         from grid_tactics.action_resolver import resolve_action
