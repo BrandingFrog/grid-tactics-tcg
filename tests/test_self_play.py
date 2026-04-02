@@ -7,6 +7,8 @@ auto-stepping opponent, and set_opponent.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import numpy as np
 import pytest
 
@@ -22,22 +24,35 @@ from grid_tactics.rl.self_play import SelfPlayEnv
 # ---------------------------------------------------------------------------
 
 
+DATA_DIR = Path(__file__).resolve().parent.parent / "data" / "cards"
+
+
 @pytest.fixture
 def library():
     """Load CardLibrary from data/cards."""
-    return CardLibrary.load("data/cards")
+    return CardLibrary.from_directory(DATA_DIR)
 
 
 @pytest.fixture
 def deck(library):
-    """Build a valid deck from the library."""
-    card_ids = list(library.all_ids())
-    deck = []
-    for cid in card_ids:
-        deck.extend([cid] * 3)  # 3 copies of each
-    while len(deck) < 40:
-        deck.append(card_ids[0])
-    return tuple(deck[:40])
+    """Build a valid 40-card deck for testing."""
+    card_counts = {
+        "fire_imp": 3,
+        "shadow_stalker": 3,
+        "dark_assassin": 3,
+        "light_cleric": 3,
+        "wind_archer": 3,
+        "dark_sentinel": 3,
+        "holy_paladin": 3,
+        "iron_guardian": 3,
+        "shadow_knight": 3,
+        "stone_golem": 1,
+        "fireball": 3,
+        "holy_light": 3,
+        "dark_drain": 3,
+        "shield_block": 3,
+    }
+    return library.build_deck(card_counts)
 
 
 @pytest.fixture
