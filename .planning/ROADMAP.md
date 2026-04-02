@@ -82,7 +82,7 @@ Plans:
 **Plans:** 2 plans
 Plans:
 - [x] 04-01-PLAN.md -- SACRIFICE action type, win/draw detection, legal action enumeration
-- [ ] 04-02-PLAN.md -- Game loop with random agent and 1000-game smoke test
+- [x] 04-02-PLAN.md -- Game loop with random agent and 1000-game smoke test
 
 ### Phase 5: RL Environment Interface
 **Goal**: The game engine is wrapped in a standard RL environment that an agent can train against
