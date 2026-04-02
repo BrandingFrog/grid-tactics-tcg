@@ -14,6 +14,7 @@ The reinforcement learning engine that discovers and validates game strategies �
 
 - Game state foundation: immutable 5x5 grid, mana banking, deterministic RNG — Validated in Phase 1
 - Card system: data-driven JSON cards, 3 types, multi-purpose, 18 starter cards — Validated in Phase 2
+- Turn actions & combat: action resolver, effect resolver, react stack, legal_actions() — Validated in Phase 3
 
 ### Active
 
@@ -104,4 +105,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-04-02 after Phase 2 completion*
+*Last updated: 2026-04-02 after Phase 3 completion*
