@@ -69,7 +69,7 @@ Plans:
 Plans:
 - [x] 03-01-PLAN.md -- MinionInstance, ActionType enum, Action dataclass, GameState extension with minion/react fields
 - [x] 03-02-PLAN.md -- Effect resolution engine and action resolver (deploy, move, attack, draw, pass, combat)
-- [ ] 03-03-PLAN.md -- React window stack with LIFO chaining, legal_actions() enumeration, integration tests
+- [x] 03-03-PLAN.md -- React window stack with LIFO chaining, legal_actions() enumeration, integration tests
 
 ### Phase 4: Win Condition & Game Loop
 **Goal**: Complete games can be played from start to finish between two agents (random or scripted) with correct win detection
