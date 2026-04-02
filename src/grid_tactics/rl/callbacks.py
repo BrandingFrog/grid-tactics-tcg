@@ -71,22 +71,34 @@ class SelfPlayCallback(BaseCallback):
         return True
 
     def _swap_opponent(self, checkpoint_path) -> None:
-        """Load a checkpoint and set as opponent in the SelfPlayEnv.
+        """Load a checkpoint and set as opponent in all SelfPlayEnv instances.
+
+        Handles both DummyVecEnv (direct access) and SubprocVecEnv (env_method).
 
         Args:
             checkpoint_path: Path to the checkpoint .zip file.
         """
         try:
             from sb3_contrib import MaskablePPO
+            from stable_baselines3.common.vec_env import SubprocVecEnv
 
-            opponent = MaskablePPO.load(str(checkpoint_path))
+            opponent = MaskablePPO.load(str(checkpoint_path), device="cpu")
 
-            # Get the underlying environment (may be wrapped in VecEnv)
-            env = self.training_env.envs[0]  # type: ignore[attr-defined]
-            if hasattr(env, "set_opponent"):
-                env.set_opponent(opponent)
-            elif hasattr(env, "env") and hasattr(env.env, "set_opponent"):
-                env.env.set_opponent(opponent)
+            if isinstance(self.training_env, SubprocVecEnv):
+                # SubprocVecEnv: can't send a model object across processes.
+                # Instead, send the checkpoint path and let each env load it.
+                self.training_env.env_method(
+                    "_load_opponent_from_path",
+                    str(checkpoint_path),
+                )
+            else:
+                # DummyVecEnv: direct access to env objects
+                env = self.training_env.envs[0]  # type: ignore[attr-defined]
+                # Unwrap through Monitor wrapper if present
+                while hasattr(env, "env") and not hasattr(env, "set_opponent"):
+                    env = env.env
+                if hasattr(env, "set_opponent"):
+                    env.set_opponent(opponent)
         except Exception as e:
             if self.verbose >= 1:
                 print(f"[SelfPlayCallback] Failed to swap opponent: {e}")

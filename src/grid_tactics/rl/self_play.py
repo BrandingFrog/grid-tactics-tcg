@@ -160,6 +160,18 @@ class SelfPlayEnv(gymnasium.Wrapper):
         """
         self.opponent_policy = policy
 
+    def _load_opponent_from_path(self, checkpoint_path: str) -> None:
+        """Load opponent model from a checkpoint file path.
+
+        Used by SubprocVecEnv where model objects can't be sent across
+        process boundaries. Each subprocess loads its own copy.
+
+        Args:
+            checkpoint_path: Path to the .zip checkpoint file.
+        """
+        from sb3_contrib import MaskablePPO
+        self.opponent_policy = MaskablePPO.load(checkpoint_path, device="cpu")
+
     def _is_opponent_turn(self) -> bool:
         """Check if it's the opponent's turn.
 
