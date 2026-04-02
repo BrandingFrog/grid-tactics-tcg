@@ -30,7 +30,10 @@ def test_schema_creation(tmp_path: Path):
     cursor = conn.execute(
         "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name"
     )
-    tables = sorted(row[0] for row in cursor.fetchall())
+    tables = sorted(
+        row[0] for row in cursor.fetchall()
+        if not row[0].startswith("sqlite_")
+    )
     conn.close()
 
     expected = sorted([
