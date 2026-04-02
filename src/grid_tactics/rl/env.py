@@ -89,6 +89,8 @@ class GridTacticsEnv(gymnasium.Env):
         # Game state (initialized on reset)
         self.state: GameState | None = None
         self.rng = None
+        # Terminal state preserved across auto-reset (for logging callbacks)
+        self.last_terminal_state: GameState | None = None
 
     def reset(
         self,
@@ -155,6 +157,10 @@ class GridTacticsEnv(gymnasium.Env):
         # Check termination conditions
         terminated = self.state.is_game_over
         truncated = not terminated and self.state.turn_number > self.turn_limit
+
+        # Preserve terminal state for logging (SB3 auto-resets before callbacks run)
+        if terminated or truncated:
+            self.last_terminal_state = self.state
 
         # Compute reward for the player who just acted
         reward = compute_reward(self.state, acting_player_idx)

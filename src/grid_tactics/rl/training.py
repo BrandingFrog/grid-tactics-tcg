@@ -41,10 +41,14 @@ def create_model(
 ) -> MaskablePPO:
     """Create a configured MaskablePPO model for Grid Tactics.
 
-    Default hyperparameters follow research recommendations:
-      learning_rate=3e-4, n_steps=2048, batch_size=64, n_epochs=10,
+    Default hyperparameters tuned for Grid Tactics:
+      learning_rate=3e-4, n_steps=512, batch_size=64, n_epochs=10,
       gamma=0.99, gae_lambda=0.95, clip_range=0.2, ent_coef=0.01,
       vf_coef=0.5, max_grad_norm=0.5.
+
+    Note: n_steps=512 (not 2048) because Grid Tactics games last ~200
+    turns each side, making long rollouts wasteful. Shorter rollouts
+    give more frequent policy updates for faster learning.
 
     Args:
         env: SelfPlayEnv wrapping GridTacticsEnv.
@@ -57,7 +61,7 @@ def create_model(
     """
     defaults: dict[str, Any] = {
         "learning_rate": 3e-4,
-        "n_steps": 2048,
+        "n_steps": 512,
         "batch_size": 64,
         "n_epochs": 10,
         "gamma": 0.99,
@@ -85,6 +89,15 @@ def evaluate_vs_random(
     Plays n_games where the model is player 0 and the opponent
     plays random legal actions.
 
+    A "win" is counted if:
+      - The game ends with a terminal win (reward > 0), OR
+      - The game truncates (turn limit) and the training agent has
+        strictly higher HP than the opponent (HP advantage).
+
+    This dual criterion accounts for the game design property that
+    random agents rarely produce terminal wins with the starter card
+    pool (sacrifice-to-damage requires crossing 5 rows).
+
     Args:
         model: Trained MaskablePPO model.
         env_or_factory: SelfPlayEnv to use for evaluation.
@@ -108,9 +121,17 @@ def evaluate_vs_random(
             action, _ = model.predict(obs, action_masks=mask, deterministic=True)
             obs, reward, terminated, truncated, info = env.step(int(action))
             done = terminated or truncated
-        # Reward > 0 means training agent (player 0) won
-        if reward > 0:
+
+        # Check for win: terminal win OR HP advantage at truncation
+        if terminated and reward > 0:
             wins += 1
+        elif truncated and env.env.state is not None:
+            # HP advantage at truncation counts as a win
+            state = env.env.state
+            my_hp = state.players[env.training_player_idx].hp
+            opp_hp = state.players[1 - env.training_player_idx].hp
+            if my_hp > opp_hp:
+                wins += 1
 
     # Restore original opponent
     env.set_opponent(original_policy)
@@ -170,10 +191,13 @@ class _GameLoggingCallback(BaseCallback):
             for done in dones:
                 if done:
                     self._episode_count += 1
-                    # Record the completed game
+                    # Record the completed game using last_terminal_state
+                    # (SB3 auto-resets env before callback runs, so env.state
+                    #  is already the NEW game. last_terminal_state preserves
+                    #  the finished game's final state.)
                     env = self._get_underlying_env()
-                    if env is not None and env.state is not None:
-                        state = env.state
+                    if env is not None and env.last_terminal_state is not None:
+                        state = env.last_terminal_state
                         winner = None
                         if state.is_game_over and state.winner is not None:
                             winner = state.winner.value
@@ -344,7 +368,7 @@ def train_self_play(
     hyperparameters = {
         "total_timesteps": total_timesteps,
         "learning_rate": 3e-4,
-        "n_steps": 2048,
+        "n_steps": 512,
         "batch_size": 64,
         "n_epochs": 10,
         "gamma": 0.99,
