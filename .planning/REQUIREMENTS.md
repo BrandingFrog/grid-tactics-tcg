@@ -44,8 +44,8 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Card System
 
-- [ ] **CARD-01**: Data-driven card definitions in JSON/YAML with stats, effects, and keywords interpreted at runtime
-- [ ] **CARD-02**: Starter card pool of 5-10 simple cards for initial RL validation
+- [x] **CARD-01**: Data-driven card definitions in JSON/YAML with stats, effects, and keywords interpreted at runtime
+- [x] **CARD-02**: Starter card pool of 5-10 simple cards for initial RL validation
 - [ ] **CARD-03**: Expanded card pool of 20-30 cards with varied effects for balance testing
 - [ ] **CARD-04**: Automated balance sweep varying card stats (attack, health, cost) and re-running RL to find balanced configurations
 
@@ -117,8 +117,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | DASH-04 | Phase 10 | Pending |
 | DASH-05 | Phase 10 | Pending |
 | DASH-06 | Phase 9 | Pending |
-| CARD-01 | Phase 2 | Pending |
-| CARD-02 | Phase 2 | Pending |
+| CARD-01 | Phase 2 | Complete |
+| CARD-02 | Phase 2 | Complete |
 | CARD-03 | Phase 8 | Pending |
 | CARD-04 | Phase 8 | Pending |
 | DATA-01 | Phase 6 | Pending |

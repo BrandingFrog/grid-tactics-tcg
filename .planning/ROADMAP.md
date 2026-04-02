@@ -54,7 +54,7 @@ Plans:
 **Plans:** 2 plans
 Plans:
 - [x] 02-01-PLAN.md -- Card enums, type constants, EffectDefinition and CardDefinition dataclasses
-- [ ] 02-02-PLAN.md -- CardLoader, CardLibrary, 18 starter card JSON files, deck validation
+- [x] 02-02-PLAN.md -- CardLoader, CardLibrary, 18 starter card JSON files, deck validation
 
 ### Phase 3: Turn Actions & Combat
 **Goal**: Players can take actions (play cards, move minions, attack, draw) with correct rule enforcement and the system can enumerate all legal actions from any state
