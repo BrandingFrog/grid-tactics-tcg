@@ -37,8 +37,8 @@ Decimal phases appear between their surrounding integers in numeric order.
 **Plans:** 4 plans
 Plans:
 - [x] 01-01-PLAN.md -- Project scaffolding, enums, types, and test infrastructure
-- [ ] 01-02-PLAN.md -- Board dataclass with 5x5 grid geometry and adjacency helpers
-- [ ] 01-03-PLAN.md -- Player dataclass with mana system and hand management
+- [x] 01-02-PLAN.md -- Board dataclass with 5x5 grid geometry and adjacency helpers
+- [x] 01-03-PLAN.md -- Player dataclass with mana system and hand management
 - [ ] 01-04-PLAN.md -- GameState, deterministic RNG, validation, and integration tests
 
 ### Phase 2: Card System & Types

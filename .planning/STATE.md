@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 01-01-PLAN.md
-last_updated: "2026-04-02T08:57:00.994Z"
+stopped_at: Completed 01-03-PLAN.md
+last_updated: "2026-04-02T09:01:27.192Z"
 last_activity: 2026-04-02
 progress:
   total_phases: 10
   completed_phases: 0
   total_plans: 4
-  completed_plans: 1
+  completed_plans: 3
   percent: 0
 ---
 
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-04-02)
 ## Current Position
 
 Phase: 01 (game-state-foundation) — EXECUTING
-Plan: 2 of 4
+Plan: 4 of 4
 Status: Ready to execute
 Last activity: 2026-04-02
 
@@ -53,6 +53,8 @@ Progress: [░░░░░░░░░░] 0%
 
 *Updated after each plan completion*
 | Phase 01 P01 | 3min | 2 tasks | 7 files |
+| Phase 01 P02 | 2min | 1 tasks | 2 files |
+| Phase 01 P03 | 2min | 1 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -67,6 +69,10 @@ Recent decisions affecting current work:
 - [Phase 01]: Used IntEnum for PlayerSide/TurnPhase for numpy array compatibility and efficient serialization
 - [Phase 01]: Used src-layout (src/grid_tactics/) for clean package isolation from tests
 - [Phase 01]: All game constants in types.py as module-level typed variables with decision-reference comments (D-01 through D-10)
+- [Phase 01]: Used flat tuple[Optional[int], ...] row-major storage in Board for efficient numpy conversion in RL phase
+- [Phase 01]: Board adjacency/distance methods are @staticmethod operating on position tuples, callable without Board instance
+- [Phase 01]: Used dataclasses.replace() for all Player mutation operations to preserve frozen immutability
+- [Phase 01]: Mana uses Interpretation B (simple +1 to current, capped at MAX_MANA_CAP) -- banking preserves unspent current_mana across regens
 
 ### Pending Todos
 
@@ -80,6 +86,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-04-02T08:57:00.992Z
-Stopped at: Completed 01-01-PLAN.md
+Last session: 2026-04-02T09:01:27.189Z
+Stopped at: Completed 01-03-PLAN.md
 Resume file: None
