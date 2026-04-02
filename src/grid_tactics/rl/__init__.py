@@ -19,6 +19,7 @@ from grid_tactics.rl.observation import (
 )
 from grid_tactics.rl.reward import compute_reward, compute_shaped_reward, potential
 from grid_tactics.rl.self_play import SelfPlayEnv
+from grid_tactics.rl.training import create_model, evaluate_vs_random, train_self_play
 
 __all__ = [
     "encode_observation",
@@ -34,4 +35,7 @@ __all__ = [
     "SelfPlayEnv",
     "SelfPlayCallback",
     "CheckpointManager",
+    "create_model",
+    "train_self_play",
+    "evaluate_vs_random",
 ]

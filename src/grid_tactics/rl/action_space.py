@@ -375,6 +375,12 @@ def build_action_mask(
 
     for action in actions:
         idx = encoder.encode(action, state)
-        mask[idx] = True
+        if 0 <= idx < ACTION_SPACE_SIZE:
+            mask[idx] = True
+        # Skip actions that encode out of bounds (e.g. hand_idx > MAX_HAND_SIZE)
+
+    # Ensure at least PASS is always legal (fallback safety)
+    if not mask.any():
+        mask[PASS_IDX] = True
 
     return mask
