@@ -43,6 +43,10 @@ class GameState:
     react_player_idx: Optional[int] = None  # whose turn to react (None = not in react window)
     pending_action: Optional[Action] = None  # action waiting for react resolution
 
+    # Phase 4: Win/draw detection
+    winner: Optional[PlayerSide] = None  # which player won (None = no winner yet, or draw)
+    is_game_over: bool = False  # True when game has ended (win or draw)
+
     @property
     def active_player(self) -> Player:
         """Return the currently active player."""
@@ -141,6 +145,9 @@ class GameState:
             "react_stack": list(self.react_stack),
             "react_player_idx": self.react_player_idx,
             "pending_action": None,
+            # Phase 4: Win/draw detection
+            "winner": int(self.winner) if self.winner is not None else None,
+            "is_game_over": self.is_game_over,
         }
 
         # Serialize pending_action if present
@@ -206,6 +213,11 @@ class GameState:
                 target_pos=tuple(pa_data["target_pos"]) if pa_data.get("target_pos") is not None else None,
             )
 
+        # Phase 4: Win/draw detection
+        winner_raw = d.get("winner")
+        winner = PlayerSide(winner_raw) if winner_raw is not None else None
+        is_game_over = d.get("is_game_over", False)
+
         return cls(
             board=board,
             players=players,  # type: ignore[arg-type]
@@ -218,4 +230,6 @@ class GameState:
             react_stack=tuple(d.get("react_stack", ())),
             react_player_idx=d.get("react_player_idx"),
             pending_action=pending_action,
+            winner=winner,
+            is_game_over=is_game_over,
         )

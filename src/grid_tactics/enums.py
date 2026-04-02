@@ -82,3 +82,4 @@ class ActionType(IntEnum):
     DRAW = 3        # Draw a card (costs action per D-15)
     PASS = 4        # Pass turn (always legal per D-16)
     PLAY_REACT = 5  # Play a react card during react window
+    SACRIFICE = 6   # Sacrifice minion on opponent's back row for player damage

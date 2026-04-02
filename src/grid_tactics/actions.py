@@ -81,6 +81,15 @@ def play_card_action(
     )
 
 
+def sacrifice_action(minion_id: int) -> Action:
+    """Create a SACRIFICE action for a minion on the opponent's back row.
+
+    The minion is removed from the board and deals its effective attack
+    as damage to the opponent's HP.
+    """
+    return Action(action_type=ActionType.SACRIFICE, minion_id=minion_id)
+
+
 def play_react_action(
     card_index: int,
     target_pos: Optional[tuple[int, int]] = None,

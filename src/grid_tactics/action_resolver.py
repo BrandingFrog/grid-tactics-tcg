@@ -317,6 +317,73 @@ def _cast_magic(
     return state
 
 
+def _apply_sacrifice(
+    state: GameState, action: Action, library: CardLibrary,
+) -> GameState:
+    """Apply SACRIFICE action. Remove minion from board and deal damage to opponent.
+
+    Validates:
+      - Minion exists and belongs to active player
+      - Minion is on opponent's back row (P1 minion at row 4, P2 minion at row 0)
+
+    After validation:
+      1. Look up card definition for base attack
+      2. Calculate effective attack (base + attack_bonus)
+      3. Remove minion from board and minions tuple
+      4. Add minion's card to owner's graveyard
+      5. Deal effective attack as damage to opponent
+    """
+    active_side = _get_active_side(state)
+
+    # Find the minion
+    minion = state.get_minion(action.minion_id)
+    if minion is None:
+        raise ValueError(f"Minion {action.minion_id} not found")
+    if minion.owner != active_side:
+        raise ValueError(
+            f"Cannot sacrifice opponent's minion (belongs to {minion.owner.name})"
+        )
+
+    # Validate minion is on opponent's back row
+    row = minion.position[0]
+    if active_side == PlayerSide.PLAYER_1:
+        if row != BACK_ROW_P2:
+            raise ValueError(
+                f"P1 minion must be on opponent's back row {BACK_ROW_P2} to sacrifice, "
+                f"got row {row}"
+            )
+    else:
+        if row != BACK_ROW_P1:
+            raise ValueError(
+                f"P2 minion must be on opponent's back row {BACK_ROW_P1} to sacrifice, "
+                f"got row {row}"
+            )
+
+    # Look up card definition for base attack
+    card_def = library.get_by_id(minion.card_numeric_id)
+    effective_attack = card_def.attack + minion.attack_bonus
+
+    # Remove minion from board
+    new_board = state.board.remove(minion.position[0], minion.position[1])
+
+    # Remove minion from minions tuple
+    new_minions = tuple(m for m in state.minions if m.instance_id != minion.instance_id)
+
+    # Add card to owner's graveyard
+    owner_idx = int(minion.owner)
+    owner_player = state.players[owner_idx]
+    new_owner = replace(owner_player, graveyard=owner_player.graveyard + (minion.card_numeric_id,))
+    new_players = _replace_player(state.players, owner_idx, new_owner)
+
+    # Deal damage to opponent
+    opponent_idx = 1 - state.active_player_idx
+    opponent = new_players[opponent_idx]
+    new_opponent = opponent.take_damage(effective_attack)
+    new_players = _replace_player(new_players, opponent_idx, new_opponent)
+
+    return replace(state, board=new_board, minions=new_minions, players=new_players)
+
+
 def _apply_attack(
     state: GameState, action: Action, library: CardLibrary,
 ) -> GameState:
@@ -444,6 +511,35 @@ def _cleanup_dead_minions(
 
 
 # ---------------------------------------------------------------------------
+# Win/draw detection (Phase 4)
+# ---------------------------------------------------------------------------
+
+
+def _check_game_over(state: GameState) -> GameState:
+    """Check if the game is over (any player dead) and set winner/is_game_over.
+
+    Called after dead minion cleanup and after react stack resolution.
+    - Both dead: draw (is_game_over=True, winner=None)
+    - P1 dead: P2 wins
+    - P2 dead: P1 wins
+    - Neither dead: no change
+    """
+    p1_alive = state.players[0].is_alive
+    p2_alive = state.players[1].is_alive
+
+    if p1_alive and p2_alive:
+        return state
+
+    if not p1_alive and not p2_alive:
+        # Draw: both dead simultaneously
+        return replace(state, is_game_over=True, winner=None)
+    elif not p1_alive:
+        return replace(state, is_game_over=True, winner=PlayerSide.PLAYER_2)
+    else:
+        return replace(state, is_game_over=True, winner=PlayerSide.PLAYER_1)
+
+
+# ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
 
@@ -498,11 +594,18 @@ def resolve_action(
         state = _apply_play_card(state, action, library)
     elif action.action_type == ActionType.ATTACK:
         state = _apply_attack(state, action, library)
+    elif action.action_type == ActionType.SACRIFICE:
+        state = _apply_sacrifice(state, action, library)
     else:
         raise ValueError(f"Unsupported action type for main phase: {action.action_type}")
 
     # Dead minion cleanup (D-02)
     state = _cleanup_dead_minions(state, library)
+
+    # Win/draw detection (Phase 4) -- after cleanup, before react transition
+    state = _check_game_over(state)
+    if state.is_game_over:
+        return state
 
     # Transition to REACT phase (D-13)
     state = replace(

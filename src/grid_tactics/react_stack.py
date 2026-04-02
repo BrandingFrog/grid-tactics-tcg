@@ -199,8 +199,19 @@ def resolve_react_stack(
                 )
 
     # Clean up dead minions after react resolution
-    from grid_tactics.action_resolver import _cleanup_dead_minions
+    from grid_tactics.action_resolver import _cleanup_dead_minions, _check_game_over
     state = _cleanup_dead_minions(state, library)
+
+    # Win/draw detection after react resolution (Phase 4)
+    state = _check_game_over(state)
+    if state.is_game_over:
+        # Game is over -- clear react state but don't advance turn
+        return replace(
+            state,
+            react_stack=(),
+            react_player_idx=None,
+            pending_action=None,
+        )
 
     # Advance turn: flip active player, increment turn number, clear react state
     new_active_idx = 1 - state.active_player_idx

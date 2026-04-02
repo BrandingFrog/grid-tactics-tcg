@@ -28,10 +28,11 @@ from grid_tactics.actions import (
     pass_action,
     play_card_action,
     play_react_action,
+    sacrifice_action,
 )
 from grid_tactics.board import Board
 from grid_tactics.card_library import CardLibrary
-from grid_tactics.enums import CardType, TargetType, TriggerType, TurnPhase
+from grid_tactics.enums import CardType, PlayerSide, TargetType, TriggerType, TurnPhase
 from grid_tactics.game_state import GameState
 from grid_tactics.types import (
     BACK_ROW_P1,
@@ -57,6 +58,10 @@ def legal_actions(
     Returns:
         Tuple of all valid Action instances.
     """
+    # Game is over -- no meaningful actions allowed (Phase 4)
+    if state.is_game_over:
+        return (pass_action(),)
+
     if state.phase == TurnPhase.ACTION:
         return _action_phase_actions(state, library)
     elif state.phase == TurnPhase.REACT:
@@ -148,6 +153,15 @@ def _action_phase_actions(
                         minion_id=minion.instance_id,
                         target_id=enemy.instance_id,
                     ))
+
+    # SACRIFICE enumeration (Phase 4)
+    # Minions on opponent's back row can be sacrificed
+    for minion in owned_minions:
+        row = minion.position[0]
+        if player_side == PlayerSide.PLAYER_1 and row == BACK_ROW_P2:
+            actions.append(sacrifice_action(minion_id=minion.instance_id))
+        elif player_side == PlayerSide.PLAYER_2 and row == BACK_ROW_P1:
+            actions.append(sacrifice_action(minion_id=minion.instance_id))
 
     # DRAW
     if player.deck:
