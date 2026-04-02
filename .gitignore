@@ -13,3 +13,4 @@ build/
 *.db
 tb_logs/
 wandb/
+.coverage

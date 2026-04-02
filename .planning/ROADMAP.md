@@ -39,7 +39,7 @@ Plans:
 - [x] 01-01-PLAN.md -- Project scaffolding, enums, types, and test infrastructure
 - [x] 01-02-PLAN.md -- Board dataclass with 5x5 grid geometry and adjacency helpers
 - [x] 01-03-PLAN.md -- Player dataclass with mana system and hand management
-- [ ] 01-04-PLAN.md -- GameState, deterministic RNG, validation, and integration tests
+- [x] 01-04-PLAN.md -- GameState, deterministic RNG, validation, and integration tests
 
 ### Phase 2: Card System & Types
 **Goal**: Cards are defined as data (not hardcoded), all three card types work, and a starter pool exists for testing
