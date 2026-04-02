@@ -53,7 +53,7 @@ Plans:
   5. A starter pool of 15-20 unique cards exists covering all three card types
 **Plans:** 2 plans
 Plans:
-- [ ] 02-01-PLAN.md -- Card enums, type constants, EffectDefinition and CardDefinition dataclasses
+- [x] 02-01-PLAN.md -- Card enums, type constants, EffectDefinition and CardDefinition dataclasses
 - [ ] 02-02-PLAN.md -- CardLoader, CardLibrary, 18 starter card JSON files, deck validation
 
 ### Phase 3: Turn Actions & Combat
