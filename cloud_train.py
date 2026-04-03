@@ -25,14 +25,20 @@ def main():
     print("=" * 60)
 
     # Ensure output dir exists
-    output_dir = Path("/workspace/output")
+    output_dir = Path("/root/output")
     output_dir.mkdir(parents=True, exist_ok=True)
 
     from grid_tactics.rl.training import train_self_play
 
+    # SubprocVecEnv crashes on RunPod (shared memory issue)
+    # Use single env — GPU still accelerates the neural net
+    actual_envs = 1 if N_ENVS > 1 else N_ENVS
+    if actual_envs != N_ENVS:
+        print(f"  Note: Using 1 env (SubprocVecEnv not supported on this container)")
+
     result = train_self_play(
         total_timesteps=TOTAL_TIMESTEPS,
-        n_envs=N_ENVS,
+        n_envs=actual_envs,
         device="cuda",
         db_path=output_dir / "training.db",
         checkpoint_dir=output_dir / "checkpoints",
