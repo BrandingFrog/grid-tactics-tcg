@@ -7,9 +7,11 @@ Runs N games simultaneously as PyTorch tensor operations, targeting
 from grid_tactics.tensor_engine.card_table import CardTable
 from grid_tactics.tensor_engine.engine import TensorGameEngine
 from grid_tactics.tensor_engine.state import TensorGameState
+from grid_tactics.tensor_engine.vec_env import TensorVecEnv
 
 __all__ = [
     "CardTable",
     "TensorGameEngine",
     "TensorGameState",
+    "TensorVecEnv",
 ]
