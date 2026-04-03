@@ -178,28 +178,14 @@ def create_env(n_envs: int, seed: int, use_shaped_reward: bool = True):
     vec_type = "single"
 
     if n_envs > 1:
-        # Try SubprocVecEnv first (true parallelism)
-        fix_shared_memory()
-        try:
-            from stable_baselines3.common.vec_env import SubprocVecEnv
-            env = SubprocVecEnv([_make_env(seed + i) for i in range(n_envs)])
-            # Quick smoke test
-            obs = env.reset()
-            assert obs is not None
-            vec_type = f"SubprocVecEnv({n_envs})"
-            print(f"Using {vec_type} — {n_envs} parallel processes")
-        except Exception as e:
-            print(f"SubprocVecEnv failed: {e}")
-            print("Falling back to DummyVecEnv...")
-            try:
-                from stable_baselines3.common.vec_env import DummyVecEnv
-                env = DummyVecEnv([_make_env(seed + i) for i in range(n_envs)])
-                vec_type = f"DummyVecEnv({n_envs})"
-                print(f"Using {vec_type} — {n_envs} sequential envs (still improves learning diversity)")
-            except Exception as e2:
-                print(f"DummyVecEnv also failed: {e2}")
-                print("Falling back to single env")
-                n_envs = 1
+        # Use DummyVecEnv — SubprocVecEnv is unstable on cloud containers
+        # (crashes on pkill, shared memory issues, connection resets).
+        # DummyVecEnv runs sequentially but gives training diversity
+        # and the workload is CPU-bound anyway.
+        from stable_baselines3.common.vec_env import DummyVecEnv
+        env = DummyVecEnv([_make_env(seed + i) for i in range(n_envs)])
+        vec_type = f"DummyVecEnv({n_envs})"
+        print(f"Using {vec_type} — {n_envs} envs for training diversity")
 
     if n_envs == 1:
         base_env = GridTacticsEnv(library, deck, deck, seed=seed)
