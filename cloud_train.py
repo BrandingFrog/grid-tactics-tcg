@@ -237,36 +237,25 @@ def main():
 
     desc = f"{DESCRIPTION} | method={METHOD} | gpu={gpu_name} | vec={vec_type}"
 
-    # For vectorized envs, pass them directly to avoid re-creation
-    # For single env, use train_self_play's built-in env creation
-    if vec_type == "single":
-        result = train_self_play(
-            total_timesteps=TOTAL_TIMESTEPS,
-            n_envs=1,
-            device="cuda",
-            db_path=output_dir / "training.db",
-            checkpoint_dir=output_dir / "checkpoints",
-            tensorboard_log=None,
-            eval_freq=EVAL_FREQ,
-            eval_games=EVAL_GAMES,
-            description=desc,
-            seed=SEED,
-            **method_kwargs,
-        )
-    else:
-        result = train_self_play(
-            total_timesteps=TOTAL_TIMESTEPS,
-            n_envs=N_ENVS,
-            device="cuda",
-            db_path=output_dir / "training.db",
-            checkpoint_dir=output_dir / "checkpoints",
-            tensorboard_log=None,
-            eval_freq=EVAL_FREQ,
-            eval_games=EVAL_GAMES,
-            description=desc,
-            seed=SEED,
-            **method_kwargs,
-        )
+    # eval_freq is in SB3 "calls" not timesteps. With VecEnv, each call
+    # steps all n_envs at once, so divide by n_envs to get the right frequency.
+    actual_n_envs = N_ENVS if vec_type != "single" else 1
+    adjusted_eval_freq = max(1, EVAL_FREQ // actual_n_envs)
+    print(f"  Eval freq: every {adjusted_eval_freq} calls ({EVAL_FREQ} timesteps / {actual_n_envs} envs)")
+
+    result = train_self_play(
+        total_timesteps=TOTAL_TIMESTEPS,
+        n_envs=actual_n_envs,
+        device="cuda",
+        db_path=output_dir / "training.db",
+        checkpoint_dir=output_dir / "checkpoints",
+        tensorboard_log=None,
+        eval_freq=adjusted_eval_freq,
+        eval_games=EVAL_GAMES,
+        description=desc,
+        seed=SEED,
+        **method_kwargs,
+    )
 
     # Save summary
     summary = {
