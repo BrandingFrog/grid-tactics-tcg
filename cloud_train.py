@@ -14,7 +14,8 @@ TOTAL_TIMESTEPS = int(os.environ.get("TRAIN_STEPS", "10_000_000"))
 N_ENVS = int(os.environ.get("TRAIN_ENVS", "16"))
 EVAL_FREQ = int(os.environ.get("EVAL_FREQ", "100_000"))
 EVAL_GAMES = int(os.environ.get("EVAL_GAMES", "100"))
-DESCRIPTION = os.environ.get("TRAIN_DESC", f"RunPod cloud training {TOTAL_TIMESTEPS} steps")
+SEED = int(os.environ.get("TRAIN_SEED", "42"))
+DESCRIPTION = os.environ.get("TRAIN_DESC", f"RunPod cloud training {TOTAL_TIMESTEPS} steps seed={SEED}")
 
 def main():
     print("=" * 60)
@@ -46,6 +47,7 @@ def main():
         eval_freq=EVAL_FREQ,
         eval_games=EVAL_GAMES,
         description=DESCRIPTION,
+        seed=SEED,
     )
 
     # Save summary
