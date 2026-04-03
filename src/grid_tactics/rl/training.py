@@ -335,6 +335,7 @@ def train_self_play(
     seed: int = 42,
     n_envs: int = 1,
     device: str = "auto",
+    **model_kwargs: Any,
 ) -> dict[str, Any]:
     """Run a full self-play training session with MaskablePPO.
 
@@ -388,7 +389,7 @@ def train_self_play(
         )
         _single_env = env
 
-    model = create_model(env, seed=seed, tensorboard_log=tensorboard_log, device=device)
+    model = create_model(env, seed=seed, tensorboard_log=tensorboard_log, device=device, **model_kwargs)
 
     checkpoint_manager = CheckpointManager(pool_dir=checkpoint_dir, pool_size=10)
     self_play_callback = SelfPlayCallback(
@@ -418,6 +419,7 @@ def train_self_play(
         "n_envs": n_envs,
         "device": device,
     }
+    hyperparameters.update(model_kwargs)
     run_writer.start_run(run_id, hyperparameters, description)
 
     # Build evaluation env (separate from training env)

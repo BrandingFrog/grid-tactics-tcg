@@ -93,12 +93,13 @@ class SelfPlayCallback(BaseCallback):
                 )
             else:
                 # DummyVecEnv: direct access to env objects
-                env = self.training_env.envs[0]  # type: ignore[attr-defined]
-                # Unwrap through Monitor wrapper if present
-                while hasattr(env, "env") and not hasattr(env, "set_opponent"):
-                    env = env.env
-                if hasattr(env, "set_opponent"):
-                    env.set_opponent(opponent)
+                for vec_env in self.training_env.envs:  # type: ignore[attr-defined]
+                    env = vec_env
+                    # Unwrap through Monitor wrapper if present
+                    while hasattr(env, "env") and not hasattr(env, "set_opponent"):
+                        env = env.env
+                    if hasattr(env, "set_opponent"):
+                        env.set_opponent(opponent)
         except Exception as e:
             if self.verbose >= 1:
                 print(f"[SelfPlayCallback] Failed to swap opponent: {e}")
