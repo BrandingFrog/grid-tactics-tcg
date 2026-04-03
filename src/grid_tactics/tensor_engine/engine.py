@@ -143,8 +143,9 @@ class TensorGameEngine:
             shuffled_p1 = np.empty((len(mask_cpu), self.deck_size), dtype=np.int32)
             shuffled_p2 = np.empty((len(mask_cpu), self.deck_size), dtype=np.int32)
 
+            seeds_cpu = self.seeds.cpu().numpy() if self.seeds is not None else None
             for idx_pos, i in enumerate(mask_cpu):
-                seed = self.seeds[i].cpu().numpy().item() if self.seeds is not None else int(i)
+                seed = int(seeds_cpu[i]) if seeds_cpu is not None else int(i)
                 rng = np.random.default_rng(seed)
                 d1 = deck_p1_cpu[i].copy()
                 d2 = deck_p2_cpu[i].copy()
