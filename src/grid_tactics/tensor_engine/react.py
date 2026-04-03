@@ -2,6 +2,10 @@
 
 The react stack resolves in fixed-iteration loops with masking.
 NEGATE effects cancel the next entry in LIFO order.
+
+Fully vectorized: zero .item() calls, zero for-loops over batch N.
+Remaining loops are over fixed constants (MAX_REACT_DEPTH, MAX_EFFECTS_PER_CARD,
+MAX_MINIONS).
 """
 
 from __future__ import annotations
@@ -13,6 +17,7 @@ from grid_tactics.tensor_engine.constants import (
     GRID_COLS,
     MAX_MINIONS,
     MAX_REACT_DEPTH,
+    STARTING_HP,
 )
 from grid_tactics.tensor_engine.effects import apply_effects_batch
 
@@ -34,6 +39,7 @@ def resolve_react_stack_batch(state, card_table, resolve_mask=None):
     """
     N = state.board.shape[0]
     device = state.board.device
+    arange_n = torch.arange(N, device=device)
 
     if resolve_mask is None:
         resolve_mask = torch.ones(N, dtype=torch.bool, device=device)
@@ -58,7 +64,7 @@ def resolve_react_stack_batch(state, card_table, resolve_mask=None):
         entry_player = state.react_stack[:, depth_idx, 0]   # [N]
         entry_cid = state.react_stack[:, depth_idx, 1]       # [N]
         entry_target = state.react_stack[:, depth_idx, 2]    # [N] (0-24 or 25=no target)
-        safe_cid = entry_cid.clamp(min=0)
+        safe_cid = entry_cid.clamp(min=0).long()
 
         # Check card type
         ct = card_table.card_type[safe_cid]           # [N]
@@ -68,7 +74,7 @@ def resolve_react_stack_batch(state, card_table, resolve_mask=None):
         # --- REACT cards ---
         react_resolve = should_resolve & is_react_card
         if react_resolve.any():
-            # Check for NEGATE effects
+            # Check for NEGATE effects (loop over MAX_EFFECTS_PER_CARD=3, not N)
             has_negate = torch.zeros(N, dtype=torch.bool, device=device)
             for eff_idx in range(3):
                 eff_type = card_table.effect_type[safe_cid, eff_idx]
@@ -83,12 +89,11 @@ def resolve_react_stack_batch(state, card_table, resolve_mask=None):
             # Resolve non-NEGATE ON_PLAY effects
             # Convert target to flat pos (-1 if no target)
             tgt_flat = torch.where(entry_target < 25, entry_target, torch.tensor(-1, device=device))
-            caster_owners = entry_player
             # React cards have no caster minion on board
             caster_slots = torch.full((N,), -1, dtype=torch.int32, device=device)
 
             apply_effects_batch(
-                state, safe_cid, 0, caster_owners, caster_slots, tgt_flat,
+                state, safe_cid.int(), 0, entry_player, caster_slots, tgt_flat.int(),
                 card_table, react_resolve,
             )
 
@@ -99,92 +104,157 @@ def resolve_react_stack_batch(state, card_table, resolve_mask=None):
             re_target = card_table.react_effect_target[safe_cid]  # [N]
             re_amount = card_table.react_effect_amount[safe_cid]  # [N]
 
-            # DEPLOY_SELF (5)
+            # DEPLOY_SELF (5) -- fully batched
             deploy_mask = multi_resolve & (re_type == 5)
             if deploy_mask.any():
-                for i in range(N):
-                    if not deploy_mask[i]:
-                        continue
-                    tf = entry_target[i].item()
-                    if tf < 0 or tf >= 25:
-                        continue
-                    row = tf // GRID_COLS
-                    col = tf % GRID_COLS
-                    cid = entry_cid[i].item()
-                    owner = entry_player[i].item()
-                    slot = state.next_minion_slot[i].item()
-                    if slot >= MAX_MINIONS:
-                        continue
-                    state.board[i, row, col] = slot
-                    state.minion_card_id[i, slot] = cid
-                    state.minion_owner[i, slot] = owner
-                    state.minion_row[i, slot] = row
-                    state.minion_col[i, slot] = col
-                    state.minion_health[i, slot] = card_table.health[cid].item()
-                    state.minion_atk_bonus[i, slot] = 0
-                    state.minion_alive[i, slot] = True
-                    state.next_minion_slot[i] += 1
+                _deploy_self_batch(state, deploy_mask, entry_cid, entry_player,
+                                   entry_target, card_table, arange_n)
 
-            # Other react effects (non-DEPLOY_SELF)
+            # Other react effects (non-DEPLOY_SELF) -- fully batched
             other_multi = multi_resolve & (re_type != 5) & (re_type >= 0)
             if other_multi.any():
                 tgt_flat = torch.where(entry_target < 25, entry_target, torch.tensor(-1, device=device))
-                caster_owners = entry_player
-                caster_slots = torch.full((N,), -1, dtype=torch.int32, device=device)
-
-                # Build per-effect tensors for the react_effect
-                # We create temporary "virtual" effect data for apply_effects_batch
-                # by directly applying the react_effect
-                for i in range(N):
-                    if not other_multi[i]:
-                        continue
-                    _apply_single_react_effect(
-                        state, i,
-                        re_type[i].item(), re_target[i].item(),
-                        re_amount[i].item(), entry_player[i].item(),
-                        tgt_flat[i].item(), card_table,
-                    )
+                _apply_react_effects_batch(
+                    state, other_multi, re_type, re_target, re_amount,
+                    entry_player, tgt_flat, card_table, arange_n,
+                )
 
 
-def _apply_single_react_effect(state, game_idx, etype, etarget, eamount, owner, target_flat, card_table):
-    """Apply a single react effect for one game."""
-    N = state.board.shape[0]
-    device = state.board.device
+def _deploy_self_batch(state, deploy_mask, card_ids, owners, entry_target, card_table, arange_n):
+    """Deploy minions from react DEPLOY_SELF -- fully batched."""
+    N = deploy_mask.shape[0]
+    device = deploy_mask.device
 
-    if etype == 0:  # DAMAGE
-        if etarget == 0:  # SINGLE_TARGET
-            if 0 <= target_flat < 25:
-                row, col = target_flat // GRID_COLS, target_flat % GRID_COLS
-                slot = state.board[game_idx, row, col].item()
-                if slot >= 0:
-                    state.minion_health[game_idx, slot] -= eamount
-        elif etarget == 1:  # ALL_ENEMIES
+    # Validate target position
+    valid = deploy_mask & (entry_target >= 0) & (entry_target < 25)
+    if not valid.any():
+        return
+
+    row = (entry_target // GRID_COLS).clamp(0, 4)
+    col = (entry_target % GRID_COLS).clamp(0, 4)
+
+    slot = state.next_minion_slot.clone()  # [N]
+    valid = valid & (slot < MAX_MINIONS)
+
+    if not valid.any():
+        return
+
+    safe_slot = slot.clamp(0, MAX_MINIONS - 1).long()
+    safe_cid = card_ids.clamp(0).long()
+
+    # Set board cell
+    state.board[arange_n, row, col] = torch.where(
+        valid, safe_slot.int(), state.board[arange_n, row, col]
+    )
+    # Set minion properties
+    state.minion_card_id[arange_n, safe_slot] = torch.where(
+        valid, card_ids, state.minion_card_id[arange_n, safe_slot]
+    )
+    state.minion_owner[arange_n, safe_slot] = torch.where(
+        valid, owners, state.minion_owner[arange_n, safe_slot]
+    )
+    state.minion_row[arange_n, safe_slot] = torch.where(
+        valid, row.int(), state.minion_row[arange_n, safe_slot]
+    )
+    state.minion_col[arange_n, safe_slot] = torch.where(
+        valid, col.int(), state.minion_col[arange_n, safe_slot]
+    )
+    base_health = card_table.health[safe_cid]
+    state.minion_health[arange_n, safe_slot] = torch.where(
+        valid, base_health, state.minion_health[arange_n, safe_slot]
+    )
+    state.minion_atk_bonus[arange_n, safe_slot] = torch.where(
+        valid, torch.tensor(0, device=device, dtype=torch.int32),
+        state.minion_atk_bonus[arange_n, safe_slot]
+    )
+    state.minion_alive[arange_n, safe_slot] = torch.where(
+        valid, torch.tensor(True, device=device),
+        state.minion_alive[arange_n, safe_slot]
+    )
+    state.next_minion_slot = torch.where(
+        valid, slot + 1, state.next_minion_slot
+    )
+
+
+def _apply_react_effects_batch(state, active_mask, re_type, re_target, re_amount,
+                                 owners, target_flat, card_table, arange_n):
+    """Apply react effects for multi-purpose cards -- fully batched.
+
+    Handles DAMAGE, HEAL, BUFF_ATTACK, BUFF_HEALTH effect types with
+    SINGLE_TARGET, ALL_ENEMIES, SELF_OWNER targeting.
+    """
+    N = active_mask.shape[0]
+    device = active_mask.device
+
+    # --- DAMAGE (0) ---
+    is_damage = active_mask & (re_type == 0)
+    if is_damage.any():
+        # SINGLE_TARGET (0)
+        dmg_single = is_damage & (re_target == 0)
+        if dmg_single.any():
+            valid_pos = dmg_single & (target_flat >= 0) & (target_flat < 25)
+            if valid_pos.any():
+                row = (target_flat // GRID_COLS).clamp(0, 4)
+                col = (target_flat % GRID_COLS).clamp(0, 4)
+                slot = state.board[arange_n, row, col]
+                hit = valid_pos & (slot >= 0)
+                if hit.any():
+                    safe_slot = slot.clamp(0).long()
+                    state.minion_health[arange_n, safe_slot] -= (re_amount * hit.int())
+
+        # ALL_ENEMIES (1)
+        dmg_all = is_damage & (re_target == 1)
+        if dmg_all.any():
             for s in range(MAX_MINIONS):
-                if state.minion_alive[game_idx, s] and state.minion_owner[game_idx, s].item() != owner:
-                    state.minion_health[game_idx, s] -= eamount
-        elif etarget == 3:  # SELF_OWNER
-            state.player_hp[game_idx, owner] -= eamount
+                is_enemy = state.minion_alive[:, s] & (state.minion_owner[:, s] != owners)
+                hit = dmg_all & is_enemy
+                if hit.any():
+                    state.minion_health[:, s] -= (re_amount * hit.int())
 
-    elif etype == 1:  # HEAL
-        if etarget == 0:  # SINGLE_TARGET
-            if 0 <= target_flat < 25:
-                row, col = target_flat // GRID_COLS, target_flat % GRID_COLS
-                slot = state.board[game_idx, row, col].item()
-                if slot >= 0:
-                    cid = state.minion_card_id[game_idx, slot].item()
-                    base_hp = card_table.health[cid].item()
-                    state.minion_health[game_idx, slot] = min(
-                        state.minion_health[game_idx, slot].item() + eamount, base_hp
+        # SELF_OWNER (3) -- damage owning player
+        dmg_self = is_damage & (re_target == 3)
+        if dmg_self.any():
+            for p in range(2):
+                is_p = dmg_self & (owners == p)
+                if is_p.any():
+                    state.player_hp[:, p] -= (re_amount * is_p.int())
+
+    # --- HEAL (1) ---
+    is_heal = active_mask & (re_type == 1)
+    if is_heal.any():
+        # SINGLE_TARGET (0)
+        heal_single = is_heal & (re_target == 0)
+        if heal_single.any():
+            valid_pos = heal_single & (target_flat >= 0) & (target_flat < 25)
+            if valid_pos.any():
+                row = (target_flat // GRID_COLS).clamp(0, 4)
+                col = (target_flat % GRID_COLS).clamp(0, 4)
+                slot = state.board[arange_n, row, col]
+                hit = valid_pos & (slot >= 0)
+                if hit.any():
+                    safe_slot = slot.clamp(0).long()
+                    cid = state.minion_card_id[arange_n, safe_slot].clamp(0).long()
+                    base_hp = card_table.health[cid]
+                    new_hp = torch.min(
+                        state.minion_health[arange_n, safe_slot] + re_amount,
+                        base_hp,
                     )
-        elif etarget == 3:  # SELF_OWNER
-            from grid_tactics.tensor_engine.constants import STARTING_HP
-            new_hp = min(state.player_hp[game_idx, owner].item() + eamount, STARTING_HP)
-            state.player_hp[game_idx, owner] = new_hp
+                    state.minion_health[arange_n, safe_slot] = torch.where(
+                        hit, new_hp, state.minion_health[arange_n, safe_slot]
+                    )
 
-    elif etype == 2:  # BUFF_ATTACK
-        if etarget == 3:  # SELF_OWNER -- no caster minion for react
-            pass  # No minion to buff in react context
+        # SELF_OWNER (3) -- heal owning player
+        heal_self = is_heal & (re_target == 3)
+        if heal_self.any():
+            for p in range(2):
+                is_p = heal_self & (owners == p)
+                if is_p.any():
+                    new_hp = torch.min(
+                        state.player_hp[:, p] + re_amount,
+                        torch.tensor(STARTING_HP, device=device, dtype=torch.int32),
+                    )
+                    state.player_hp[:, p] = torch.where(is_p, new_hp, state.player_hp[:, p])
 
-    elif etype == 3:  # BUFF_HEALTH
-        if etarget == 3:
-            pass  # No minion to buff
+    # --- BUFF_ATTACK (2) / BUFF_HEALTH (3) ---
+    # In react context with no caster minion, SELF_OWNER targeting has no effect
+    # (no minion to buff). This matches the original implementation.
