@@ -42,7 +42,7 @@ def main():
         device="cuda",
         db_path=output_dir / "training.db",
         checkpoint_dir=output_dir / "checkpoints",
-        tensorboard_log=str(output_dir / "tb_logs"),
+        tensorboard_log=None,  # disabled on cloud (tensorboard not installed)
         eval_freq=EVAL_FREQ,
         eval_games=EVAL_GAMES,
         description=DESCRIPTION,
