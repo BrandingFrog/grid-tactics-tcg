@@ -99,7 +99,7 @@ def evaluate_vs_random(policy, engine_cls, card_table, deck, n_games=200):
         actions = torch.zeros(n_games, dtype=torch.long, device=device)
 
         if is_p0.any():
-            obs = encode_observations_batch(state, card_table)
+            obs = encode_observations_batch(state, card_table, state.active_player)
             obs_p0 = obs[is_p0]
             mask_p0 = legal[is_p0]
             with torch.no_grad():
@@ -183,7 +183,7 @@ def main():
         # --- Rollout collection (all on GPU, no Python per-env loop) ---
         for step in range(N_STEPS):
             state = engine.state
-            obs = encode_observations_batch(state, card_table)
+            obs = encode_observations_batch(state, card_table, state.active_player)
             legal = compute_legal_mask_batch(state, card_table).bool()
 
             with torch.no_grad():
@@ -222,7 +222,7 @@ def main():
 
         # --- GAE computation ---
         with torch.no_grad():
-            next_obs = encode_observations_batch(engine.state, card_table)
+            next_obs = encode_observations_batch(engine.state, card_table, engine.state.active_player)
             next_legal = compute_legal_mask_batch(engine.state, card_table).bool()
             _, next_value = policy(next_obs, next_legal)
 
