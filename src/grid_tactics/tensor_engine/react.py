@@ -17,8 +17,14 @@ from grid_tactics.tensor_engine.constants import (
 from grid_tactics.tensor_engine.effects import apply_effects_batch
 
 
-def resolve_react_stack_batch(state, card_table):
-    """Resolve react stacks across all games in batch (LIFO order).
+def resolve_react_stack_batch(state, card_table, resolve_mask=None):
+    """Resolve react stacks for masked games in batch (LIFO order).
+
+    Args:
+        state: TensorGameState
+        card_table: CardTable
+        resolve_mask: [N] bool tensor -- only resolve stacks for these games.
+                      If None, resolve all games.
 
     For each stack entry from top to bottom:
     - If negated, skip
@@ -29,13 +35,16 @@ def resolve_react_stack_batch(state, card_table):
     N = state.board.shape[0]
     device = state.board.device
 
+    if resolve_mask is None:
+        resolve_mask = torch.ones(N, dtype=torch.bool, device=device)
+
     # Track which entries are negated
     negated = torch.zeros((N, MAX_REACT_DEPTH), dtype=torch.bool, device=device)
 
     # Iterate LIFO (highest index = last pushed = first resolved)
     for depth_idx in range(MAX_REACT_DEPTH - 1, -1, -1):
-        # Active = games with stack entries at this depth
-        active = (state.react_stack_depth > depth_idx) & ~state.is_game_over
+        # Active = games with stack entries at this depth AND in resolve_mask
+        active = resolve_mask & (state.react_stack_depth > depth_idx) & ~state.is_game_over
 
         if not active.any():
             continue

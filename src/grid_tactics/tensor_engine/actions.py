@@ -244,12 +244,18 @@ def _deploy_minion(state, game_idx, player_idx, card_id, target_flat, card_table
     state.next_minion_slot[game_idx] += 1
 
     # Trigger ON_PLAY effects for the deployed minion
+    # NOTE: For minion ON_PLAY effects, the target_flat from the action encoding
+    # is the DEPLOY position, NOT the effect target. The action space encoding
+    # doesn't capture the effect target separately for minion deploys.
+    # So we pass -1 (no target) -- matching what happens when the Python engine
+    # decodes from integer (target_pos=None, which means SINGLE_TARGET effects skip).
     N = state.board.shape[0]
     device = state.board.device
     cids = torch.full((N,), card_id, dtype=torch.int32, device=device)
     owners = torch.full((N,), player_idx, dtype=torch.int32, device=device)
     slots = torch.full((N,), slot, dtype=torch.int32, device=device)
-    tgt = torch.full((N,), target_flat, dtype=torch.int32, device=device)
+    # Pass -1 as target: action encoding doesn't capture ON_PLAY target for minions
+    tgt = torch.full((N,), -1, dtype=torch.int32, device=device)
     game_mask = torch.zeros(N, dtype=torch.bool, device=device)
     game_mask[game_idx] = True
     apply_effects_batch(state, cids, 0, owners, slots, tgt, card_table, game_mask)  # trigger=ON_PLAY=0

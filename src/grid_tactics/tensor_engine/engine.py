@@ -295,8 +295,8 @@ class TensorGameEngine:
             apply_react_batch(s, mask, action_type, hand_idx, target_flat, self.card_table)
 
         if is_pass.any():
-            # Resolve react stack for passing games
-            resolve_react_stack_batch(s, self.card_table)
+            # Resolve react stack ONLY for passing games
+            resolve_react_stack_batch(s, self.card_table, resolve_mask=is_pass)
 
             # Cleanup dead minions after react resolution
             self.cleanup_dead_minions_batch()
