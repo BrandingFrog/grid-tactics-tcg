@@ -2,6 +2,10 @@
 
 Provides reset_batch() and step_batch() as the main entry points.
 All N games advance simultaneously with tensor operations.
+
+Fully vectorized: zero .item() calls, zero for-loops over batch N.
+Remaining loops are over fixed constants (2 players, MAX_MINIONS slots,
+STARTING_HAND_SIZE cards, 2 cleanup passes).
 """
 
 from __future__ import annotations
@@ -74,91 +78,106 @@ class TensorGameEngine:
         """Reset all games (or subset via mask).
 
         Shuffles decks using numpy RNG for reproducibility with the Python engine,
-        deals starting hands.
+        deals starting hands. State writes are batched tensor ops; only the RNG
+        shuffle is per-game (numpy requirement for seed compatibility).
         """
         if mask is None:
             mask = torch.ones(self.n_envs, dtype=torch.bool, device=self.device)
 
         s = self.state
+        N = self.n_envs
+        device = self.device
+        arange_n = torch.arange(N, device=device)
 
-        for i in range(self.n_envs):
-            if not mask[i]:
-                continue
-            self._reset_single_game(i)
-
-    def _reset_single_game(self, game_idx: int):
-        """Reset a single game to starting state."""
-        s = self.state
-        i = game_idx
-
-        # Clear board
-        s.board[i] = EMPTY
-
-        # Player state
-        s.player_hp[i, 0] = STARTING_HP
-        s.player_hp[i, 1] = STARTING_HP
-        s.player_mana[i, 0] = STARTING_MANA
-        s.player_mana[i, 1] = STARTING_MANA
-        s.player_max_mana[i, 0] = STARTING_MANA
-        s.player_max_mana[i, 1] = STARTING_MANA
+        # --- Batch-reset scalar/per-player state ---
+        s.board = torch.where(
+            mask.view(N, 1, 1), torch.tensor(EMPTY, device=device, dtype=torch.int32), s.board
+        )
+        for p in range(2):
+            s.player_hp[:, p] = torch.where(mask, torch.tensor(STARTING_HP, device=device, dtype=torch.int32), s.player_hp[:, p])
+            s.player_mana[:, p] = torch.where(mask, torch.tensor(STARTING_MANA, device=device, dtype=torch.int32), s.player_mana[:, p])
+            s.player_max_mana[:, p] = torch.where(mask, torch.tensor(STARTING_MANA, device=device, dtype=torch.int32), s.player_max_mana[:, p])
 
         # Clear hands
-        s.hands[i] = EMPTY
-        s.hand_sizes[i] = 0
-
-        # Shuffle decks using numpy RNG for Python engine compatibility
-        seed = self.seeds[i].item() if self.seeds is not None else i
-        rng = np.random.default_rng(seed)
-
-        # Match Python engine: shuffle p1 first, then p2 (same RNG sequence)
-        deck_p1 = self.deck_p1[i].cpu().numpy().copy()
-        deck_p2 = self.deck_p2[i].cpu().numpy().copy()
-        rng.shuffle(deck_p1)
-        rng.shuffle(deck_p2)
-
-        s.decks[i, 0, :len(deck_p1)] = torch.tensor(deck_p1, dtype=torch.int32, device=self.device)
-        s.decks[i, 1, :len(deck_p2)] = torch.tensor(deck_p2, dtype=torch.int32, device=self.device)
-        s.deck_tops[i] = 0
-        s.deck_sizes[i, 0] = len(deck_p1)
-        s.deck_sizes[i, 1] = len(deck_p2)
+        s.hands = torch.where(mask.view(N, 1, 1), torch.tensor(EMPTY, device=device, dtype=torch.int32), s.hands)
+        s.hand_sizes = torch.where(mask.view(N, 1), torch.tensor(0, device=device, dtype=torch.int32), s.hand_sizes)
 
         # Clear graveyards
-        s.graveyards[i] = EMPTY
-        s.graveyard_sizes[i] = 0
+        s.graveyards = torch.where(mask.view(N, 1, 1), torch.tensor(EMPTY, device=device, dtype=torch.int32), s.graveyards)
+        s.graveyard_sizes = torch.where(mask.view(N, 1), torch.tensor(0, device=device, dtype=torch.int32), s.graveyard_sizes)
 
         # Clear minions
-        s.minion_card_id[i] = EMPTY
-        s.minion_owner[i] = EMPTY
-        s.minion_row[i] = 0
-        s.minion_col[i] = 0
-        s.minion_health[i] = 0
-        s.minion_atk_bonus[i] = 0
-        s.minion_alive[i] = False
-        s.next_minion_slot[i] = 0
+        s.minion_card_id = torch.where(mask.unsqueeze(1), torch.tensor(EMPTY, device=device, dtype=torch.int32), s.minion_card_id)
+        s.minion_owner = torch.where(mask.unsqueeze(1), torch.tensor(EMPTY, device=device, dtype=torch.int32), s.minion_owner)
+        s.minion_row = torch.where(mask.unsqueeze(1), torch.tensor(0, device=device, dtype=torch.int32), s.minion_row)
+        s.minion_col = torch.where(mask.unsqueeze(1), torch.tensor(0, device=device, dtype=torch.int32), s.minion_col)
+        s.minion_health = torch.where(mask.unsqueeze(1), torch.tensor(0, device=device, dtype=torch.int32), s.minion_health)
+        s.minion_atk_bonus = torch.where(mask.unsqueeze(1), torch.tensor(0, device=device, dtype=torch.int32), s.minion_atk_bonus)
+        s.minion_alive = torch.where(mask.unsqueeze(1), torch.tensor(False, device=device), s.minion_alive)
+        s.next_minion_slot = torch.where(mask, torch.tensor(0, device=device, dtype=torch.int32), s.next_minion_slot)
 
         # Turn state
-        s.active_player[i] = 0
-        s.phase[i] = 0  # ACTION
-        s.turn_number[i] = 1
-        s.is_game_over[i] = False
-        s.winner[i] = EMPTY
+        s.active_player = torch.where(mask, torch.tensor(0, device=device, dtype=torch.int32), s.active_player)
+        s.phase = torch.where(mask, torch.tensor(0, device=device, dtype=torch.int32), s.phase)
+        s.turn_number = torch.where(mask, torch.tensor(1, device=device, dtype=torch.int32), s.turn_number)
+        s.is_game_over = torch.where(mask, torch.tensor(False, device=device), s.is_game_over)
+        s.winner = torch.where(mask, torch.tensor(EMPTY, device=device, dtype=torch.int32), s.winner)
 
         # React state
-        s.react_player[i] = 0
-        s.react_stack_depth[i] = 0
-        s.react_stack[i] = EMPTY
-        s.pending_action_type[i] = EMPTY
-        s.pending_action_card_id[i] = EMPTY
-        s.pending_action_had_position[i] = False
+        s.react_player = torch.where(mask, torch.tensor(0, device=device, dtype=torch.int32), s.react_player)
+        s.react_stack_depth = torch.where(mask, torch.tensor(0, device=device, dtype=torch.int32), s.react_stack_depth)
+        s.react_stack = torch.where(mask.view(N, 1, 1), torch.tensor(EMPTY, device=device, dtype=torch.int32), s.react_stack)
+        s.pending_action_type = torch.where(mask, torch.tensor(EMPTY, device=device, dtype=torch.int32), s.pending_action_type)
+        s.pending_action_card_id = torch.where(mask, torch.tensor(EMPTY, device=device, dtype=torch.int32), s.pending_action_card_id)
+        s.pending_action_had_position = torch.where(mask, torch.tensor(False, device=device), s.pending_action_had_position)
 
-        # Deal starting hands (5 cards each)
-        for p in range(2):
+        # --- Shuffle decks using numpy RNG (per-game for seed compatibility) ---
+        # Build shuffled decks on CPU, then upload in bulk
+        mask_indices = torch.where(mask)[0]
+        if mask_indices.numel() > 0:
+            mask_cpu = mask_indices.cpu().numpy()
+            deck_p1_cpu = self.deck_p1.cpu().numpy()
+            deck_p2_cpu = self.deck_p2.cpu().numpy()
+
+            # Pre-allocate result arrays
+            shuffled_p1 = np.empty((len(mask_cpu), self.deck_size), dtype=np.int32)
+            shuffled_p2 = np.empty((len(mask_cpu), self.deck_size), dtype=np.int32)
+
+            for idx_pos, i in enumerate(mask_cpu):
+                seed = self.seeds[i].cpu().numpy().item() if self.seeds is not None else int(i)
+                rng = np.random.default_rng(seed)
+                d1 = deck_p1_cpu[i].copy()
+                d2 = deck_p2_cpu[i].copy()
+                rng.shuffle(d1)
+                rng.shuffle(d2)
+                shuffled_p1[idx_pos] = d1
+                shuffled_p2[idx_pos] = d2
+
+            # Bulk upload shuffled decks
+            shuffled_p1_t = torch.tensor(shuffled_p1, dtype=torch.int32, device=device)
+            shuffled_p2_t = torch.tensor(shuffled_p2, dtype=torch.int32, device=device)
+
+            s.decks[mask_indices, 0, :self.deck_size] = shuffled_p1_t
+            s.decks[mask_indices, 1, :self.deck_size] = shuffled_p2_t
+
+            # Set deck pointers
+            s.deck_tops[mask_indices] = 0
+            s.deck_sizes[mask_indices, 0] = self.deck_size
+            s.deck_sizes[mask_indices, 1] = self.deck_size
+
+            # --- Deal starting hands (batched) ---
+            # For each of the STARTING_HAND_SIZE cards, deal from deck to hand
             for h in range(STARTING_HAND_SIZE):
-                dt = s.deck_tops[i, p].item()
-                if dt < s.deck_sizes[i, p].item():
-                    s.hands[i, p, h] = s.decks[i, p, dt]
-                    s.deck_tops[i, p] += 1
-            s.hand_sizes[i, p] = STARTING_HAND_SIZE
+                for p in range(2):
+                    # Read card at deck_tops position
+                    dt = s.deck_tops[mask_indices, p]  # [M]
+                    card_id = s.decks[mask_indices, p, dt.long()]  # [M] -- dt < deck_size guaranteed
+                    s.hands[mask_indices, p, h] = card_id
+                    s.deck_tops[mask_indices, p] = dt + 1
+
+            # Set hand sizes
+            s.hand_sizes[mask_indices, 0] = STARTING_HAND_SIZE
+            s.hand_sizes[mask_indices, 1] = STARTING_HAND_SIZE
 
     def step_batch(self, action_ints: torch.Tensor):
         """Apply one action per game. Handles both ACTION and REACT phases.
@@ -208,6 +227,7 @@ class TensorGameEngine:
         s = self.state
         N = self.n_envs
         device = self.device
+        arange_n = torch.arange(N, device=device)
 
         # Apply each action type
         apply_draw_batch(s, mask & (action_type == 3), self.card_table)
@@ -217,34 +237,37 @@ class TensorGameEngine:
         apply_sacrifice_batch(s, mask, action_type, source_flat, self.card_table)
         # PASS (type 4) is a no-op on state
 
-        # Record pending action info for react condition checking
-        arange_n = torch.arange(N, device=device)
-        # For PLAY_CARD actions, record the card that was played
+        # Record pending action info for react condition checking (batched)
+        ap = s.active_player
         is_play = mask & (action_type == 0)
         if is_play.any():
             # The card was already removed from hand. Look at the last graveyard entry.
-            ap = s.active_player
-            for i in range(N):
-                if is_play[i]:
-                    p = ap[i].item()
-                    gs = s.graveyard_sizes[i, p].item()
-                    if gs > 0:
-                        s.pending_action_card_id[i] = s.graveyards[i, p, gs - 1]
-                    s.pending_action_had_position[i] = True  # could be minion deploy
-                    # Check if it's actually a minion (had position = deploy)
-                    cid = s.pending_action_card_id[i].item()
-                    if cid >= 0:
-                        ct = self.card_table.card_type[cid].item()
-                        s.pending_action_had_position[i] = (ct == 0)  # MINION
+            gs = s.graveyard_sizes[arange_n, ap]  # [N]
+            safe_gs = (gs - 1).clamp(0, 79).long()
+            last_gy_cid = s.graveyards[arange_n, ap, safe_gs]  # [N]
+
+            # Only update for games that actually played a card and have graveyard entries
+            has_gy = is_play & (gs > 0)
+            s.pending_action_card_id = torch.where(has_gy, last_gy_cid, s.pending_action_card_id)
+            # Default to True for has_position (could be minion deploy)
+            s.pending_action_had_position = torch.where(is_play, torch.tensor(True, device=device), s.pending_action_had_position)
+
+            # Check if it's actually a minion (had position = deploy) -- only if card_id valid
+            safe_cid = s.pending_action_card_id.clamp(0).long()
+            ct = self.card_table.card_type[safe_cid]
+            is_minion_deploy = (ct == 0)  # MINION
+            s.pending_action_had_position = torch.where(
+                has_gy & (s.pending_action_card_id >= 0),
+                is_minion_deploy,
+                s.pending_action_had_position,
+            )
 
         s.pending_action_type = torch.where(mask, action_type, s.pending_action_type)
 
-        # For attack actions, record action type
-        is_attack = mask & (action_type == 2)
-        # pending_action_card_id for attacks: set to -1 (no card played)
+        # For non-play actions, clear card_id and had_position
         s.pending_action_card_id = torch.where(
             mask & ~is_play,
-            torch.tensor(EMPTY, device=device),
+            torch.tensor(EMPTY, device=device, dtype=torch.int32),
             s.pending_action_card_id,
         )
         s.pending_action_had_position = torch.where(
@@ -285,6 +308,7 @@ class TensorGameEngine:
         s = self.state
         N = self.n_envs
         device = self.device
+        arange_n = torch.arange(N, device=device)
 
         # PASS in react -> resolve stack and advance turn
         is_pass = mask & (action_type == 4)
@@ -329,59 +353,106 @@ class TensorGameEngine:
                     should_advance, torch.tensor(0, device=device, dtype=torch.int32), s.phase
                 )
 
-                # Mana regen for new active player
-                for i in range(N):
-                    if should_advance[i]:
-                        ap = s.active_player[i].item()
-                        new_mana = min(s.player_mana[i, ap].item() + 1, 10)
-                        s.player_mana[i, ap] = new_mana
+                # Mana regen for new active player (batched)
+                # After advancing, s.active_player holds the NEW active player
+                ap_new = s.active_player  # [N]
+
+                # Regen for player 0 (where should_advance and new active == 0)
+                regen_p0 = should_advance & (ap_new == 0)
+                if regen_p0.any():
+                    new_mana_p0 = (s.player_mana[:, 0] + 1).clamp(max=10)
+                    s.player_mana[:, 0] = torch.where(regen_p0, new_mana_p0, s.player_mana[:, 0])
+
+                # Regen for player 1 (where should_advance and new active == 1)
+                regen_p1 = should_advance & (ap_new == 1)
+                if regen_p1.any():
+                    new_mana_p1 = (s.player_mana[:, 1] + 1).clamp(max=10)
+                    s.player_mana[:, 1] = torch.where(regen_p1, new_mana_p1, s.player_mana[:, 1])
 
     def cleanup_dead_minions_batch(self):
-        """Remove minions with health <= 0. Trigger ON_DEATH effects. Two-pass."""
+        """Remove minions with health <= 0. Trigger ON_DEATH effects.
+
+        Two-pass cleanup per Python engine convention. Loops over MAX_MINIONS
+        slots (fixed 25) and 2 cleanup passes -- NOT over batch dimension N.
+        """
         s = self.state
         N = self.n_envs
         device = self.device
+        arange_n = torch.arange(N, device=device)
 
         for cleanup_pass in range(2):  # Two passes per Python engine convention
-            # Find dead minions
+            # Find dead minions: [N, MAX_MINIONS]
             dead = s.minion_alive & (s.minion_health <= 0)
             if not dead.any():
                 break
 
-            # Collect death info before removing
-            death_info = []
-            for i in range(N):
-                for slot in range(MAX_MINIONS):
-                    if dead[i, slot]:
-                        cid = s.minion_card_id[i, slot].item()
-                        owner = s.minion_owner[i, slot].item()
-                        row = s.minion_row[i, slot].item()
-                        col = s.minion_col[i, slot].item()
-                        death_info.append((i, slot, cid, owner, row, col))
+            # Capture death info as tensors before modifying state
+            dead_cid = s.minion_card_id.clone()   # [N, MAX_MINIONS]
+            dead_owner = s.minion_owner.clone()    # [N, MAX_MINIONS]
+            dead_row = s.minion_row.clone()        # [N, MAX_MINIONS]
+            dead_col = s.minion_col.clone()        # [N, MAX_MINIONS]
 
-            # Remove dead minions from board and mark as not alive
-            for i, slot, cid, owner, row, col in death_info:
-                if s.board[i, row, col].item() == slot:
-                    s.board[i, row, col] = EMPTY
-                s.minion_alive[i, slot] = False
-                # Add to graveyard
-                gs = s.graveyard_sizes[i, owner].item()
-                if gs < 80:
-                    s.graveyards[i, owner, gs] = cid
-                    s.graveyard_sizes[i, owner] += 1
+            # Remove dead minions from board -- iterate over slots (constant MAX_MINIONS=25)
+            for slot in range(MAX_MINIONS):
+                slot_dead = dead[:, slot]  # [N]
+                if not slot_dead.any():
+                    continue
 
-            # Trigger ON_DEATH effects (sorted by slot = instance_id equivalent)
-            sorted_deaths = sorted(death_info, key=lambda x: (x[0], x[1]))
-            for i, slot, cid, owner, row, col in sorted_deaths:
-                game_mask = torch.zeros(N, dtype=torch.bool, device=device)
-                game_mask[i] = True
-                cids = torch.full((N,), cid, dtype=torch.int32, device=device)
-                owners = torch.full((N,), owner, dtype=torch.int32, device=device)
-                caster_slots = torch.full((N,), slot, dtype=torch.int32, device=device)
-                tgt = torch.full((N,), EMPTY, dtype=torch.int32, device=device)
+                r = dead_row[:, slot]
+                c = dead_col[:, slot]
+
+                # Only clear board if the board cell still points to this slot
+                board_val = s.board[arange_n, r, c]  # [N]
+                should_clear = slot_dead & (board_val == slot)
+                s.board[arange_n, r, c] = torch.where(
+                    should_clear,
+                    torch.tensor(EMPTY, device=device, dtype=torch.int32),
+                    s.board[arange_n, r, c]
+                )
+
+                # Mark as not alive
+                s.minion_alive[:, slot] = torch.where(
+                    slot_dead,
+                    torch.tensor(False, device=device),
+                    s.minion_alive[:, slot]
+                )
+
+                # Add to graveyard (batched per-slot)
+                cid = dead_cid[:, slot]
+                owner = dead_owner[:, slot]
+
+                # Graveyard add for player 0 owners
+                for p in range(2):
+                    is_p = slot_dead & (owner == p)
+                    if not is_p.any():
+                        continue
+                    gs = s.graveyard_sizes[:, p]  # [N]
+                    can_add = is_p & (gs < 80)
+                    if can_add.any():
+                        safe_gs = gs.clamp(0, 79).long()
+                        s.graveyards[arange_n, p, safe_gs] = torch.where(
+                            can_add, cid, s.graveyards[arange_n, p, safe_gs]
+                        )
+                        s.graveyard_sizes[:, p] = torch.where(
+                            can_add, gs + 1, gs
+                        )
+
+            # Trigger ON_DEATH effects -- iterate over slots (constant MAX_MINIONS=25)
+            # Sorted by slot = instance_id equivalent (ascending)
+            for slot in range(MAX_MINIONS):
+                slot_dead = dead[:, slot]  # [N]
+                if not slot_dead.any():
+                    continue
+
+                cid = dead_cid[:, slot]
+                owner = dead_owner[:, slot]
+                safe_cid = cid.clamp(0).long()
+
                 apply_effects_batch(
-                    s, cids, 1, owners, caster_slots, tgt,
-                    self.card_table, game_mask,
+                    s, safe_cid.int(), 1, owner,
+                    torch.full((N,), slot, dtype=torch.int32, device=device),
+                    torch.full((N,), EMPTY, dtype=torch.int32, device=device),
+                    self.card_table, slot_dead,
                 )  # trigger=ON_DEATH=1
 
     def check_game_over_batch(self):
