@@ -1,7 +1,8 @@
-"""Batched legal action mask computation.
+"""Batched legal action mask computation -- fully vectorized.
 
 Produces [N, 1262] bool mask matching the Python engine's legal_actions().
-All computation as tensor operations over the batch dimension.
+All computation as batched tensor operations. NO Python for-loops over any
+game dimension. Minimal CUDA kernel launches via bulk tensor ops and scatter_.
 """
 
 from __future__ import annotations
@@ -17,6 +18,7 @@ from grid_tactics.tensor_engine.constants import (
     GRID_COLS,
     GRID_ROWS,
     GRID_SIZE,
+    MAX_EFFECTS_PER_CARD,
     MAX_HAND,
     MAX_MINIONS,
     MAX_REACT_DEPTH,
@@ -26,6 +28,10 @@ from grid_tactics.tensor_engine.constants import (
     REACT_BASE,
     SACRIFICE_BASE,
 )
+
+# Precomputed direction offsets for moves
+_DR = [-1, 1, 0, 0]
+_DC = [0, 0, -1, 1]
 
 
 def compute_legal_mask_batch(state, card_table) -> torch.Tensor:
@@ -65,427 +71,380 @@ def _compute_action_phase_mask(mask, state, card_table, phase_mask):
     device = mask.device
     arange_n = torch.arange(N, device=device)
     ap = state.active_player  # [N]
+    num_cards = card_table.num_cards
 
-    # --- PLAY_CARD [0:250] ---
-    _compute_play_card_mask(mask, state, card_table, phase_mask, ap)
+    # Common data used by multiple sub-computations
+    board_flat = state.board.reshape(N, GRID_SIZE)
+    board_empty = board_flat == -1  # [N, 25]
 
-    # --- MOVE [250:350] ---
-    _compute_move_mask(mask, state, card_table, phase_mask, ap)
+    player_mana = state.player_mana[arange_n, ap]  # [N]
+    hand_sizes = state.hand_sizes[arange_n, ap]     # [N]
 
-    # --- ATTACK [350:975] ---
-    _compute_attack_mask(mask, state, card_table, phase_mask, ap)
+    minion_owner_matches = state.minion_owner == ap.unsqueeze(1)  # [N, MAX_MINIONS]
+    friendly_alive = state.minion_alive & minion_owner_matches & phase_mask.unsqueeze(1)
+    enemy_alive = state.minion_alive & ~minion_owner_matches & phase_mask.unsqueeze(1)
 
-    # --- SACRIFICE [975:1000] ---
-    _compute_sacrifice_mask(mask, state, card_table, phase_mask, ap)
+    minion_flat = (state.minion_row * GRID_COLS + state.minion_col).clamp(0, GRID_SIZE - 1).long()
 
-    # --- DRAW [1000] ---
-    for i in range(N):
-        if not phase_mask[i]:
-            continue
-        p = ap[i].item()
-        if state.deck_tops[i, p].item() < state.deck_sizes[i, p].item():
-            mask[i, DRAW_IDX] = True
+    # --- DRAW ---
+    deck_top = state.deck_tops[arange_n, ap]
+    deck_size = state.deck_sizes[arange_n, ap]
+    mask[phase_mask & (deck_top < deck_size), DRAW_IDX] = True
 
-    # --- PASS [1001]: NOT legal in ACTION phase per Python engine ---
-    # (no PASS in action phase -- if no actions, empty = auto-lose handled by safety fallback)
+    # --- PLAY_CARD ---
+    _compute_play_card_mask(
+        mask, state, card_table, phase_mask, ap, arange_n,
+        player_mana, hand_sizes, board_empty, enemy_alive,
+        minion_flat, num_cards
+    )
+
+    # --- MOVE ---
+    _compute_move_mask(mask, state, phase_mask, friendly_alive, board_flat)
+
+    # --- ATTACK ---
+    _compute_attack_mask(
+        mask, card_table, friendly_alive, enemy_alive, minion_flat,
+        state.minion_card_id
+    )
+
+    # --- SACRIFICE ---
+    _compute_sacrifice_mask(mask, state, ap, friendly_alive)
 
 
-def _compute_play_card_mask(mask, state, card_table, phase_mask, ap):
-    """Compute PLAY_CARD legal actions."""
+def _compute_play_card_mask(mask, state, card_table, phase_mask, ap, arange_n,
+                             player_mana, hand_sizes, board_empty, enemy_alive,
+                             minion_flat, num_cards):
+    """Compute PLAY_CARD legal actions -- fully vectorized."""
     N = mask.shape[0]
     device = mask.device
 
-    for i in range(N):
-        if not phase_mask[i]:
-            continue
-        p = ap[i].item()
-        player_mana = state.player_mana[i, p].item()
-        hs = state.hand_sizes[i, p].item()
+    # Cell row indices: [25]
+    cell_rows = torch.arange(GRID_SIZE, device=device) // GRID_COLS
 
-        for hi in range(min(hs, MAX_HAND)):
-            cid = state.hands[i, p, hi].item()
-            if cid < 0:
-                continue
+    # Deploy row masks: deploy_masks[player][is_ranged] -> [25]
+    p0_melee = (cell_rows == 0) | (cell_rows == 1)
+    p0_ranged = cell_rows == 0
+    p1_melee = (cell_rows == 3) | (cell_rows == 4)
+    p1_ranged = cell_rows == 4
+    deploy_masks = torch.stack([
+        torch.stack([p0_melee, p0_ranged]),
+        torch.stack([p1_melee, p1_ranged]),
+    ])  # [2, 2, 25]
 
-            ct = card_table.card_type[cid].item()
-            cost = card_table.mana_cost[cid].item()
+    # Enemy minion positions on grid: [N, 25]
+    enemy_pos_mask = torch.zeros(N, GRID_SIZE, dtype=torch.bool, device=device)
+    enemy_pos_mask.scatter_(1, minion_flat, enemy_alive & state.minion_alive)
 
-            # Skip react cards in ACTION phase
-            if ct == 2:  # REACT
-                continue
-            if player_mana < cost:
-                continue
+    # Gather all card IDs for active player's hand: [N, MAX_HAND]
+    all_card_ids = state.hands[arange_n, ap]
 
-            if ct == 0:  # MINION
-                # Compute valid deploy positions
-                atk_range = card_table.attack_range[cid].item()
-                deploy_cells = _get_deploy_cells(state, i, p, atk_range)
+    # Hand slot validity: [N, MAX_HAND]
+    hi_range = torch.arange(MAX_HAND, device=device).unsqueeze(0)
+    slot_valid = phase_mask.unsqueeze(1) & (hi_range < hand_sizes.unsqueeze(1)) & (all_card_ids >= 0)
 
-                # Check for ON_PLAY SINGLE_TARGET effects
-                has_single_target_on_play = False
-                for eff_idx in range(card_table.num_effects[cid].item()):
-                    if (card_table.effect_trigger[cid, eff_idx].item() == 0 and  # ON_PLAY
-                            card_table.effect_target[cid, eff_idx].item() == 0):  # SINGLE_TARGET
-                        has_single_target_on_play = True
-                        break
+    # Card properties for all hand slots
+    card_ids_safe = all_card_ids.clamp(0, num_cards - 1).long()
+    card_ids_flat = card_ids_safe.reshape(-1)
 
-                if has_single_target_on_play:
-                    # Enumerate enemy minion positions as targets
-                    enemy_positions = _get_enemy_minion_positions(state, i, p)
-                    if enemy_positions:
-                        # For targeted minion deploy, the encoding uses cell = deploy position
-                        # The target_pos is encoded separately (Python engine uses position + target_pos)
-                        # But in the action space, PLAY_CARD_BASE + hand_idx * 25 + cell
-                        # where cell = deploy position. The target is implicit.
-                        # Actually, per the action_space.py: for minion deploy, cell = deploy position
-                        # For targeted minions, the Python engine creates one action per deploy_pos x target
-                        # but the integer encoding only captures deploy pos (cell).
-                        # So we enumerate deploy positions as normal.
-                        for cell in deploy_cells:
-                            mask[i, PLAY_CARD_BASE + hi * GRID_SIZE + cell] = True
-                    else:
-                        # Deploy without target (no enemies)
-                        for cell in deploy_cells:
-                            mask[i, PLAY_CARD_BASE + hi * GRID_SIZE + cell] = True
-                else:
-                    for cell in deploy_cells:
-                        mask[i, PLAY_CARD_BASE + hi * GRID_SIZE + cell] = True
+    ct_vals = card_table.card_type[card_ids_flat].reshape(N, MAX_HAND)
+    costs = card_table.mana_cost[card_ids_flat].reshape(N, MAX_HAND)
+    atk_ranges = card_table.attack_range[card_ids_flat].reshape(N, MAX_HAND)
 
-            elif ct == 1:  # MAGIC
-                # Check for SINGLE_TARGET ON_PLAY effects
-                has_single_target = False
-                for eff_idx in range(card_table.num_effects[cid].item()):
-                    if (card_table.effect_trigger[cid, eff_idx].item() == 0 and  # ON_PLAY
-                            card_table.effect_target[cid, eff_idx].item() == 0):  # SINGLE_TARGET
-                        has_single_target = True
-                        break
+    # Valid playable: not react, enough mana
+    playable = slot_valid & (ct_vals != 2) & (player_mana.unsqueeze(1) >= costs)
 
-                if has_single_target:
-                    # Target cells = enemy minion positions
-                    enemy_positions = _get_enemy_minion_positions(state, i, p)
-                    for pos in enemy_positions:
-                        mask[i, PLAY_CARD_BASE + hi * GRID_SIZE + pos] = True
-                else:
-                    # Untargeted magic: cell 0 is the encoding
-                    mask[i, PLAY_CARD_BASE + hi * GRID_SIZE + 0] = True
+    is_minion = playable & (ct_vals == 0)
+    is_magic = playable & (ct_vals == 1)
+
+    # Build output mask: [N, MAX_HAND, 25]
+    play_out = torch.zeros(N, MAX_HAND, GRID_SIZE, dtype=torch.bool, device=device)
+
+    # MINION deployment: deploy_masks[ap, is_ranged] & board_empty & is_minion
+    is_ranged = (atk_ranges > 0).long()
+    deploy_rows = deploy_masks[ap.unsqueeze(1).expand_as(is_ranged), is_ranged]
+    play_out |= (deploy_rows & board_empty.unsqueeze(1) & is_minion.unsqueeze(2))
+
+    # MAGIC cards: check for SINGLE_TARGET ON_PLAY effects
+    eff_triggers = card_table.effect_trigger[card_ids_flat].reshape(N, MAX_HAND, MAX_EFFECTS_PER_CARD)
+    eff_targets = card_table.effect_target[card_ids_flat].reshape(N, MAX_HAND, MAX_EFFECTS_PER_CARD)
+    n_effects = card_table.num_effects[card_ids_flat].reshape(N, MAX_HAND)
+
+    eff_idx_range = torch.arange(MAX_EFFECTS_PER_CARD, device=device)
+    eff_valid = eff_idx_range < n_effects.unsqueeze(2)
+    has_single_target = (eff_valid & (eff_triggers == 0) & (eff_targets == 0)).any(dim=2)
+
+    # Targeted magic -> enemy positions
+    targeted_magic = is_magic & has_single_target
+    play_out |= (targeted_magic.unsqueeze(2) & enemy_pos_mask.unsqueeze(1))
+
+    # Untargeted magic -> cell 0
+    untargeted_magic = is_magic & ~has_single_target
+    play_out[:, :, 0] |= untargeted_magic
+
+    # Write to mask: [N, 250]
+    mask[:, PLAY_CARD_BASE:PLAY_CARD_BASE + MAX_HAND * GRID_SIZE] |= play_out.reshape(N, -1)
 
 
-def _get_deploy_cells(state, game_idx, player_idx, atk_range):
-    """Return list of valid flat cell indices for deploying a minion."""
-    cells = []
-    if player_idx == 0:
-        if atk_range == 0:  # melee: rows 0,1
-            rows = [0, 1]
-        else:  # ranged: row 0 only
-            rows = [0]
-    else:
-        if atk_range == 0:  # melee: rows 3,4
-            rows = [3, 4]
-        else:  # ranged: row 4 only
-            rows = [4]
-
-    for row in rows:
-        for col in range(GRID_COLS):
-            if state.board[game_idx, row, col].item() == -1:
-                cells.append(row * GRID_COLS + col)
-    return cells
-
-
-def _get_enemy_minion_positions(state, game_idx, player_idx):
-    """Return list of flat positions with enemy minions."""
-    positions = []
-    for s in range(MAX_MINIONS):
-        if state.minion_alive[game_idx, s] and state.minion_owner[game_idx, s].item() != player_idx:
-            row = state.minion_row[game_idx, s].item()
-            col = state.minion_col[game_idx, s].item()
-            positions.append(row * GRID_COLS + col)
-    return positions
-
-
-def _get_friendly_minion_positions(state, game_idx, player_idx):
-    """Return list of flat positions with friendly minions."""
-    positions = []
-    for s in range(MAX_MINIONS):
-        if state.minion_alive[game_idx, s] and state.minion_owner[game_idx, s].item() == player_idx:
-            row = state.minion_row[game_idx, s].item()
-            col = state.minion_col[game_idx, s].item()
-            positions.append(row * GRID_COLS + col)
-    return positions
-
-
-def _compute_move_mask(mask, state, card_table, phase_mask, ap):
-    """Compute MOVE legal actions."""
+def _compute_move_mask(mask, state, phase_mask, friendly_alive, board_flat):
+    """Compute MOVE legal actions -- fully vectorized."""
     N = mask.shape[0]
     device = mask.device
 
-    # Direction deltas: 0=up, 1=down, 2=left, 3=right
-    deltas = [(-1, 0), (1, 0), (0, -1), (0, 1)]
+    minion_row = state.minion_row
+    minion_col = state.minion_col
+    src_flat = minion_row * GRID_COLS + minion_col  # [N, MAX_MINIONS]
 
-    for i in range(N):
-        if not phase_mask[i]:
-            continue
-        p = ap[i].item()
+    # All 4 destinations: [N, MAX_MINIONS, 4]
+    dr = torch.tensor(_DR, device=device)
+    dc = torch.tensor(_DC, device=device)
+    nr = minion_row.unsqueeze(2) + dr
+    nc = minion_col.unsqueeze(2) + dc
 
-        for s in range(MAX_MINIONS):
-            if not state.minion_alive[i, s]:
-                continue
-            if state.minion_owner[i, s].item() != p:
-                continue
+    in_bounds = (nr >= 0) & (nr < GRID_ROWS) & (nc >= 0) & (nc < GRID_COLS)
+    dest_flat = (nr * GRID_COLS + nc).clamp(0, GRID_SIZE - 1).long()
 
-            row = state.minion_row[i, s].item()
-            col = state.minion_col[i, s].item()
-            src_flat = row * GRID_COLS + col
+    # Check board empty at destination
+    dest_flat_2d = dest_flat.reshape(N, -1)
+    board_at_dest = torch.gather(board_flat, 1, dest_flat_2d).reshape(N, MAX_MINIONS, 4)
+    dest_empty = board_at_dest == -1
 
-            for d, (dr, dc) in enumerate(deltas):
-                nr, nc = row + dr, col + dc
-                if 0 <= nr < GRID_ROWS and 0 <= nc < GRID_COLS:
-                    if state.board[i, nr, nc].item() == -1:
-                        mask[i, MOVE_BASE + src_flat * 4 + d] = True
+    can_move = friendly_alive.unsqueeze(2) & in_bounds & dest_empty
+
+    # Action indices and scatter
+    d_range = torch.arange(4, device=device)
+    action_idx = (MOVE_BASE + src_flat.unsqueeze(2) * 4 + d_range).reshape(N, -1).long()
+    mask.scatter_(1, action_idx, can_move.reshape(N, -1))
 
 
-def _compute_attack_mask(mask, state, card_table, phase_mask, ap):
-    """Compute ATTACK legal actions."""
+def _compute_attack_mask(mask, card_table, friendly_alive, enemy_alive,
+                          minion_flat, minion_card_id):
+    """Compute ATTACK legal actions -- fully vectorized over all minion pairs."""
     N = mask.shape[0]
     device = mask.device
 
-    for i in range(N):
-        if not phase_mask[i]:
-            continue
-        p = ap[i].item()
+    # Guard: skip if no friendly or enemy alive (avoids [N, 25, 25] alloc)
+    if not friendly_alive.any() or not enemy_alive.any():
+        return
 
-        # Collect owned minions
-        for s in range(MAX_MINIONS):
-            if not state.minion_alive[i, s]:
-                continue
-            if state.minion_owner[i, s].item() != p:
-                continue
+    # Attacker ranges: [N, MAX_MINIONS]
+    a_cid = minion_card_id.clamp(0).long()
+    a_range = card_table.attack_range[a_cid.reshape(-1)].reshape(N, MAX_MINIONS)
 
-            a_row = state.minion_row[i, s].item()
-            a_col = state.minion_col[i, s].item()
-            a_flat = a_row * GRID_COLS + a_col
-            a_cid = state.minion_card_id[i, s].item()
-            a_range = card_table.attack_range[a_cid].item()
+    # Pairwise positions: [N, S, T]
+    a_flat = minion_flat.unsqueeze(2).expand(N, MAX_MINIONS, MAX_MINIONS)
+    d_flat = minion_flat.unsqueeze(1).expand(N, MAX_MINIONS, MAX_MINIONS)
 
-            # Check all enemy minions
-            for t in range(MAX_MINIONS):
-                if not state.minion_alive[i, t]:
-                    continue
-                if state.minion_owner[i, t].item() == p:
-                    continue
+    # Lookup pairwise distances using precomputed tables
+    a_2d = a_flat.reshape(-1)
+    d_2d = d_flat.reshape(-1)
+    manhattan = card_table.distance_manhattan[a_2d, d_2d].reshape(N, MAX_MINIONS, MAX_MINIONS)
+    chebyshev = card_table.distance_chebyshev[a_2d, d_2d].reshape(N, MAX_MINIONS, MAX_MINIONS)
+    ortho = card_table.is_orthogonal[a_2d, d_2d].reshape(N, MAX_MINIONS, MAX_MINIONS)
 
-                d_row = state.minion_row[i, t].item()
-                d_col = state.minion_col[i, t].item()
-                d_flat = d_row * GRID_COLS + d_col
+    a_range_exp = a_range.unsqueeze(2)
 
-                if _can_attack_check(a_row, a_col, d_row, d_col, a_range):
-                    mask[i, ATTACK_BASE + a_flat * GRID_SIZE + d_flat] = True
+    # Melee: range==0, manhattan==1, orthogonal
+    is_melee = a_range_exp == 0
+    melee_ok = is_melee & (manhattan == 1) & ortho
 
+    # Ranged: (ortho & manhattan<=range) | (chebyshev==1 & !ortho)
+    ranged_ok = ~is_melee & ((ortho & (manhattan <= a_range_exp)) | ((chebyshev == 1) & ~ortho))
 
-def _can_attack_check(a_row, a_col, d_row, d_col, atk_range):
-    """Check if attacker can reach defender per game rules."""
-    manhattan = abs(a_row - d_row) + abs(a_col - d_col)
-    chebyshev = max(abs(a_row - d_row), abs(a_col - d_col))
-    is_ortho = (a_row == d_row) or (a_col == d_col)
+    # Pair validity and final mask
+    pair_valid = friendly_alive.unsqueeze(2) & enemy_alive.unsqueeze(1)
+    can_attack = pair_valid & (melee_ok | ranged_ok)
 
-    if atk_range == 0:
-        # Melee: orthogonal adjacent only
-        return manhattan == 1 and is_ortho
-    else:
-        # Ranged: (orthogonal AND manhattan <= range) OR (diagonal adjacent)
-        ortho_in_range = is_ortho and manhattan <= atk_range
-        diag_adjacent = chebyshev == 1 and not is_ortho
-        return ortho_in_range or diag_adjacent
+    # Scatter to mask
+    action_idx = (ATTACK_BASE + a_flat * GRID_SIZE + d_flat).long().reshape(N, -1)
+    mask.scatter_(1, action_idx, can_attack.reshape(N, -1))
 
 
-def _compute_sacrifice_mask(mask, state, card_table, phase_mask, ap):
-    """Compute SACRIFICE legal actions."""
+def _compute_sacrifice_mask(mask, state, ap, friendly_alive):
+    """Compute SACRIFICE legal actions -- fully vectorized."""
     N = mask.shape[0]
+    minion_row = state.minion_row
+    minion_flat = (minion_row * GRID_COLS + state.minion_col).long()
 
-    for i in range(N):
-        if not phase_mask[i]:
-            continue
-        p = ap[i].item()
+    is_p0 = (ap == 0).unsqueeze(1)
+    on_enemy_back_row = torch.where(
+        is_p0, minion_row == BACK_ROW_P2, minion_row == BACK_ROW_P1
+    )
 
-        for s in range(MAX_MINIONS):
-            if not state.minion_alive[i, s]:
-                continue
-            if state.minion_owner[i, s].item() != p:
-                continue
-
-            row = state.minion_row[i, s].item()
-            col = state.minion_col[i, s].item()
-            src_flat = row * GRID_COLS + col
-
-            # P1 minions on row 4 (P2 back row), P2 minions on row 0 (P1 back row)
-            if p == 0 and row == BACK_ROW_P2:
-                mask[i, SACRIFICE_BASE + src_flat] = True
-            elif p == 1 and row == BACK_ROW_P1:
-                mask[i, SACRIFICE_BASE + src_flat] = True
+    can_sacrifice = friendly_alive & on_enemy_back_row
+    action_idx = (SACRIFICE_BASE + minion_flat).long()
+    mask.scatter_(1, action_idx, can_sacrifice)
 
 
 def _compute_react_phase_mask(mask, state, card_table, phase_mask):
-    """Compute legal actions for REACT phase games."""
+    """Compute REACT phase legal actions -- fully vectorized.
+
+    Builds [N, MAX_HAND, 26] react mask and writes via flat OR.
+    """
     N = mask.shape[0]
     device = mask.device
+    arange_n = torch.arange(N, device=device)
 
-    for i in range(N):
-        if not phase_mask[i]:
-            continue
+    mask[phase_mask, PASS_IDX] = True
 
-        rp = state.react_player[i].item()
-        player_mana = state.player_mana[i, rp].item()
-        hs = state.hand_sizes[i, rp].item()
-        stack_depth = state.react_stack_depth[i].item()
+    rp = state.react_player
+    stack_depth = state.react_stack_depth
+    can_react = phase_mask & (stack_depth < MAX_REACT_DEPTH)
+    if not can_react.any():
+        return
 
-        # PASS always legal in react
-        mask[i, PASS_IDX] = True
+    player_mana = state.player_mana[arange_n, rp]
+    hand_sizes = state.hand_sizes[arange_n, rp]
+    num_cards = card_table.num_cards
 
-        # If stack at max depth, only PASS
-        if stack_depth >= MAX_REACT_DEPTH:
-            continue
+    # React condition check
+    react_cond_results = _batch_check_react_condition(state, card_table, can_react)
 
-        for hi in range(min(hs, MAX_HAND)):
-            cid = state.hands[i, rp, hi].item()
-            if cid < 0:
-                continue
+    # All-minion position mask: [N, 25]
+    minion_flat = (state.minion_row * GRID_COLS + state.minion_col).clamp(0, GRID_SIZE - 1).long()
+    all_minion_mask = torch.zeros(N, GRID_SIZE, dtype=torch.bool, device=device)
+    all_minion_mask.scatter_(1, minion_flat, state.minion_alive)
+    has_any_minion = state.minion_alive.any(dim=1)
 
-            ct = card_table.card_type[cid].item()
-            is_react_eligible = card_table.is_react_eligible[cid].item()
-            if not is_react_eligible:
-                continue
+    # Deploy row masks
+    cell_rows = torch.arange(GRID_SIZE, device=device) // GRID_COLS
+    board_flat = state.board.reshape(N, GRID_SIZE)
+    board_empty = board_flat == -1
 
-            # Determine cost
-            is_multi = card_table.is_multi_purpose[cid].item()
-            if is_multi:
-                cost = card_table.react_mana_cost[cid].item()
-            else:
-                cost = card_table.mana_cost[cid].item()
+    p0_melee = (cell_rows == 0) | (cell_rows == 1)
+    p0_ranged = cell_rows == 0
+    p1_melee = (cell_rows == 3) | (cell_rows == 4)
+    p1_ranged = cell_rows == 4
+    deploy_masks = torch.stack([
+        torch.stack([p0_melee, p0_ranged]),
+        torch.stack([p1_melee, p1_ranged]),
+    ])
 
-            if player_mana < cost:
-                continue
+    # All hand cards: [N, MAX_HAND]
+    all_card_ids = state.hands[arange_n, rp]
+    hi_range = torch.arange(MAX_HAND, device=device).unsqueeze(0)
+    slot_valid = can_react.unsqueeze(1) & (hi_range < hand_sizes.unsqueeze(1)) & (all_card_ids >= 0)
 
-            # Check react condition
-            if not _check_react_condition(state, i, cid, card_table):
-                continue
+    card_ids_safe = all_card_ids.clamp(0, num_cards - 1).long()
+    card_ids_flat = card_ids_safe.reshape(-1)
 
-            if ct == 2:  # REACT card
-                # Check for NEGATE
-                has_negate = False
-                for eff_idx in range(card_table.num_effects[cid].item()):
-                    if card_table.effect_type[cid, eff_idx].item() == 4:  # NEGATE
-                        has_negate = True
-                        break
+    # Card properties: [N, MAX_HAND]
+    ct_vals = card_table.card_type[card_ids_flat].reshape(N, MAX_HAND)
+    is_react_elig = card_table.is_react_eligible[card_ids_flat].reshape(N, MAX_HAND)
+    is_multi = card_table.is_multi_purpose[card_ids_flat].reshape(N, MAX_HAND)
 
-                if has_negate:
-                    # NEGATE: no target needed, sentinel = 25
-                    mask[i, REACT_BASE + hi * 26 + 25] = True
-                    continue
+    react_mc = card_table.react_mana_cost[card_ids_flat].reshape(N, MAX_HAND)
+    normal_mc = card_table.mana_cost[card_ids_flat].reshape(N, MAX_HAND)
+    cost = torch.where(is_multi, react_mc, normal_mc)
 
-                # Check for SINGLE_TARGET effects
-                has_single_target = False
-                for eff_idx in range(card_table.num_effects[cid].item()):
-                    if card_table.effect_target[cid, eff_idx].item() == 0:  # SINGLE_TARGET
-                        has_single_target = True
-                        break
+    valid = slot_valid & is_react_elig & (player_mana.unsqueeze(1) >= cost)
 
-                if has_single_target:
-                    # All minion positions (friendly + enemy)
-                    all_positions = (
-                        _get_enemy_minion_positions(state, i, rp)
-                        + _get_friendly_minion_positions(state, i, rp)
-                    )
-                    if all_positions:
-                        for pos in set(all_positions):
-                            mask[i, REACT_BASE + hi * 26 + pos] = True
-                    else:
-                        # No targets available, still playable (untargeted)
-                        mask[i, REACT_BASE + hi * 26 + 25] = True
-                else:
-                    # Untargeted react
-                    mask[i, REACT_BASE + hi * 26 + 25] = True
+    if not valid.any():
+        return
 
-            elif is_multi:
-                # Multi-purpose card used as react
-                re_type = card_table.react_effect_type[cid].item()
-                re_target = card_table.react_effect_target[cid].item()
+    # React condition per card
+    rc = card_table.react_condition[card_ids_flat].reshape(N, MAX_HAND)
+    cond_met = rc < 0
+    for cond_val, cond_mask in react_cond_results.items():
+        cond_met = cond_met | ((rc == cond_val) & cond_mask.unsqueeze(1))
+    valid = valid & cond_met
 
-                if re_type == 5:  # DEPLOY_SELF
-                    # Valid deploy positions
-                    atk_range = card_table.attack_range[cid].item()
-                    deploy_cells = _get_deploy_cells(state, i, rp, atk_range)
-                    for cell in deploy_cells:
-                        mask[i, REACT_BASE + hi * 26 + cell] = True
-                elif re_target == 0:  # SINGLE_TARGET
-                    all_positions = (
-                        _get_enemy_minion_positions(state, i, rp)
-                        + _get_friendly_minion_positions(state, i, rp)
-                    )
-                    if all_positions:
-                        for pos in set(all_positions):
-                            mask[i, REACT_BASE + hi * 26 + pos] = True
-                    else:
-                        mask[i, REACT_BASE + hi * 26 + 25] = True
-                else:
-                    mask[i, REACT_BASE + hi * 26 + 25] = True
+    # Build react output: [N, MAX_HAND, 26]
+    react_out = torch.zeros(N, MAX_HAND, 26, dtype=torch.bool, device=device)
+
+    is_pure_react = valid & (ct_vals == 2)
+    is_multi_react = valid & is_multi
+
+    # Effect properties
+    eff_types = card_table.effect_type[card_ids_flat].reshape(N, MAX_HAND, MAX_EFFECTS_PER_CARD)
+    eff_targets = card_table.effect_target[card_ids_flat].reshape(N, MAX_HAND, MAX_EFFECTS_PER_CARD)
+    n_effects = card_table.num_effects[card_ids_flat].reshape(N, MAX_HAND)
+    eff_idx_range = torch.arange(MAX_EFFECTS_PER_CARD, device=device)
+    eff_valid = eff_idx_range < n_effects.unsqueeze(2)
+
+    has_negate = (eff_valid & (eff_types == 4)).any(dim=2)
+    has_single_target = (eff_valid & (eff_targets == 0)).any(dim=2)
+
+    # Multi-purpose effect properties
+    re_type = card_table.react_effect_type[card_ids_flat].reshape(N, MAX_HAND)
+    re_target = card_table.react_effect_target[card_ids_flat].reshape(N, MAX_HAND)
+
+    # Sentinel categories
+    cat_negate = is_pure_react & has_negate
+    cat_pr_targeted_no = is_pure_react & ~has_negate & has_single_target & ~has_any_minion.unsqueeze(1)
+    cat_pr_untargeted = is_pure_react & ~has_negate & ~has_single_target
+    cat_multi_st_no = is_multi_react & (re_target == 0) & (re_type != 5) & ~has_any_minion.unsqueeze(1)
+    cat_multi_other = is_multi_react & (re_type != 5) & (re_target != 0)
+
+    react_out[:, :, 25] = (
+        cat_negate | cat_pr_targeted_no | cat_pr_untargeted | cat_multi_st_no | cat_multi_other
+    )
+
+    # Targeted categories: minion positions
+    cat_pr_targeted_has = is_pure_react & ~has_negate & has_single_target & has_any_minion.unsqueeze(1)
+    cat_multi_st_has = is_multi_react & (re_target == 0) & (re_type != 5) & has_any_minion.unsqueeze(1)
+    use_minion_targets = cat_pr_targeted_has | cat_multi_st_has
+    react_out[:, :, :25] |= use_minion_targets.unsqueeze(2) & all_minion_mask.unsqueeze(1)
+
+    # Deploy categories
+    cat_deploy = is_multi_react & (re_type == 5)
+    atk_ranges = card_table.attack_range[card_ids_flat].reshape(N, MAX_HAND)
+    is_ranged = (atk_ranges > 0).long()
+    deploy_rows = deploy_masks[rp.unsqueeze(1).expand_as(is_ranged), is_ranged]
+    react_out[:, :, :25] |= cat_deploy.unsqueeze(2) & deploy_rows & board_empty.unsqueeze(1)
+
+    # Write to mask
+    mask[:, REACT_BASE:REACT_BASE + MAX_HAND * 26] |= react_out.reshape(N, -1)
 
 
-def _check_react_condition(state, game_idx, card_id, card_table):
-    """Check if a react card's condition is met for a specific game."""
-    rc = card_table.react_condition[card_id].item()
-    if rc < 0:
-        # No condition (multi-purpose without explicit condition)
-        return True
+def _batch_check_react_condition(state, card_table, can_react):
+    """Batch-check react conditions for all games.
 
-    # ReactCondition enum values
-    # 0=OPPONENT_PLAYS_MAGIC, 1=OPPONENT_PLAYS_MINION, 2=OPPONENT_ATTACKS
-    # 3=OPPONENT_PLAYS_REACT, 4=ANY_ACTION, 5-8=attribute conditions
+    Returns dict mapping condition_value -> [N] bool mask.
+    """
+    N = state.board.shape[0]
+    device = state.board.device
+    arange_n = torch.arange(N, device=device)
 
-    stack_depth = state.react_stack_depth[game_idx].item()
+    stack_depth = state.react_stack_depth
+    has_stack = stack_depth > 0
 
-    if stack_depth > 0:
-        # Reacting to last stack entry
-        last_cid = state.react_stack[game_idx, stack_depth - 1, 1].item()
-        if rc == 3:  # OPPONENT_PLAYS_REACT
-            return True
-        if rc == 0:  # OPPONENT_PLAYS_MAGIC
-            last_ct = card_table.card_type[last_cid].item() if last_cid >= 0 else -1
-            return last_ct == 1 or last_ct == 2  # MAGIC or REACT
-        if rc == 4:  # ANY_ACTION
-            return True
-        return False
+    last_stack_idx = (stack_depth - 1).clamp(0).long()
+    last_cid = state.react_stack[arange_n, last_stack_idx, 1]
+    last_cid_safe = last_cid.clamp(0).long()
+    last_ct = card_table.card_type[last_cid_safe]
 
-    # Check pending action
-    pending_type = state.pending_action_type[game_idx].item()
-    pending_cid = state.pending_action_card_id[game_idx].item()
-    pending_had_pos = state.pending_action_had_position[game_idx].item()
+    pending_type = state.pending_action_type
+    pending_cid = state.pending_action_card_id
+    pending_cid_safe = pending_cid.clamp(0).long()
+    pending_ct = card_table.card_type[pending_cid_safe]
+    pending_attr = card_table.attribute[pending_cid_safe]
+    pending_had_pos = state.pending_action_had_position
 
-    if rc == 4:  # ANY_ACTION
-        return True
+    results = {}
 
-    if rc == 0:  # OPPONENT_PLAYS_MAGIC
-        if pending_type == 0 and pending_cid >= 0:  # PLAY_CARD
-            return card_table.card_type[pending_cid].item() == 1  # MAGIC
-        return False
+    # 0: OPPONENT_PLAYS_MAGIC
+    stack_c0 = has_stack & ((last_ct == 1) | (last_ct == 2))
+    no_stack_c0 = ~has_stack & (pending_type == 0) & (pending_cid >= 0) & (pending_ct == 1)
+    results[0] = can_react & (stack_c0 | no_stack_c0)
 
-    if rc == 1:  # OPPONENT_PLAYS_MINION
-        if pending_type == 0:  # PLAY_CARD
-            return bool(pending_had_pos)
-        return False
+    # 1: OPPONENT_PLAYS_MINION
+    results[1] = can_react & ~has_stack & (pending_type == 0) & pending_had_pos
 
-    if rc == 2:  # OPPONENT_ATTACKS
-        return pending_type == 2  # ATTACK
+    # 2: OPPONENT_ATTACKS
+    results[2] = can_react & ~has_stack & (pending_type == 2)
 
-    if rc == 3:  # OPPONENT_PLAYS_REACT
-        return False  # No stack entry means nothing to counter
+    # 3: OPPONENT_PLAYS_REACT
+    results[3] = can_react & has_stack
 
-    # Attribute conditions (5-8)
-    if 5 <= rc <= 8:
-        required_attr = rc - 5 + 1  # FIRE=1, DARK=2, LIGHT=3, NEUTRAL=0
-        # Map: rc=5->FIRE(1), rc=6->DARK(2), rc=7->LIGHT(3), rc=8->NEUTRAL(0)
-        attr_map = {5: 1, 6: 2, 7: 3, 8: 0}
-        required_attr = attr_map.get(rc, -1)
-        if pending_type == 0 and pending_cid >= 0:
-            return card_table.attribute[pending_cid].item() == required_attr
-        return False
+    # 4: ANY_ACTION
+    results[4] = can_react
 
-    return False
+    # 5-8: attribute conditions
+    attr_map = {5: 1, 6: 2, 7: 3, 8: 0}
+    for rc_val, required_attr in attr_map.items():
+        results[rc_val] = (
+            can_react & ~has_stack & (pending_type == 0) &
+            (pending_cid >= 0) & (pending_attr == required_attr)
+        )
+
+    return results
