@@ -2,6 +2,8 @@
 
 Each action type is computed for the full batch, then merged via
 action_type mask. No Python branching over the batch dimension.
+
+Fully vectorized: zero .item() calls, zero for-loops over N.
 """
 
 from __future__ import annotations
@@ -113,30 +115,33 @@ def apply_draw_batch(state, mask, card_table):
     ap = state.active_player  # [N]
 
     # Get card from top of deck
-    safe_top = state.deck_tops[arange_n, ap].clamp(0, 39)
-    card_id = state.decks[arange_n, ap, safe_top]
+    deck_top = state.deck_tops[arange_n, ap]  # [N]
+    deck_size = state.deck_sizes[arange_n, ap]  # [N]
 
-    # Check deck not empty
-    can_draw = mask & (state.deck_tops[arange_n, ap] < state.deck_sizes[arange_n, ap])
+    # Check deck not empty and hand not full
+    hand_size = state.hand_sizes[arange_n, ap]  # [N]
+    can_draw = mask & (deck_top < deck_size) & (hand_size < MAX_HAND)
 
     if not can_draw.any():
         return
+
+    # Read card from deck at deck_top position
+    safe_top = deck_top.clamp(0, 39).long()
+    card_id = state.decks[arange_n, ap, safe_top]  # [N]
 
     # Place in hand at hand_sizes position
-    hs = state.hand_sizes[arange_n, ap].clamp(0, MAX_HAND - 1)
-    # Only draw if hand not full
-    can_draw = can_draw & (state.hand_sizes[arange_n, ap] < MAX_HAND)
-    if not can_draw.any():
-        return
+    safe_hs = hand_size.clamp(0, MAX_HAND - 1).long()
 
-    for i in range(N):
-        if can_draw[i]:
-            p = ap[i].item()
-            hi = state.hand_sizes[i, p].item()
-            dt = state.deck_tops[i, p].item()
-            state.hands[i, p, hi] = state.decks[i, p, dt]
-            state.hand_sizes[i, p] += 1
-            state.deck_tops[i, p] += 1
+    # Batched writes with masking
+    state.hands[arange_n, ap, safe_hs] = torch.where(
+        can_draw, card_id, state.hands[arange_n, ap, safe_hs]
+    )
+    state.hand_sizes[arange_n, ap] = torch.where(
+        can_draw, hand_size + 1, hand_size
+    )
+    state.deck_tops[arange_n, ap] = torch.where(
+        can_draw, deck_top + 1, deck_top
+    )
 
 
 def apply_move_batch(state, mask, action_type, source_flat, direction):
@@ -157,24 +162,41 @@ def apply_move_batch(state, mask, action_type, source_flat, direction):
     dst_row = (src_row + dr).clamp(0, 4)
     dst_col = (src_col + dc).clamp(0, 4)
 
-    for i in range(N):
-        if not is_move[i]:
-            continue
-        sr, sc = src_row[i].item(), src_col[i].item()
-        dr_i, dc_i = dst_row[i].item(), dst_col[i].item()
-        slot = state.board[i, sr, sc].item()
-        if slot < 0:
-            continue
-        # Move on board
-        state.board[i, sr, sc] = EMPTY
-        state.board[i, dr_i, dc_i] = slot
-        # Update minion position
-        state.minion_row[i, slot] = dr_i
-        state.minion_col[i, slot] = dc_i
+    # Read slot at source position
+    slot = state.board[arange_n, src_row, src_col]  # [N]
+    valid = is_move & (slot >= 0)
+
+    if not valid.any():
+        return
+
+    safe_slot = slot.clamp(0).long()
+
+    # Clear source cell
+    state.board[arange_n, src_row, src_col] = torch.where(
+        valid, torch.tensor(EMPTY, device=device, dtype=torch.int32),
+        state.board[arange_n, src_row, src_col]
+    )
+    # Set destination cell
+    state.board[arange_n, dst_row, dst_col] = torch.where(
+        valid, slot, state.board[arange_n, dst_row, dst_col]
+    )
+    # Update minion position
+    state.minion_row[arange_n, safe_slot] = torch.where(
+        valid, dst_row, state.minion_row[arange_n, safe_slot]
+    )
+    state.minion_col[arange_n, safe_slot] = torch.where(
+        valid, dst_col, state.minion_col[arange_n, safe_slot]
+    )
 
 
 def apply_play_card_batch(state, mask, action_type, hand_idx, target_flat, card_table):
-    """Play a card from hand (minion deploy or magic cast)."""
+    """Play a card from hand (minion deploy or magic cast).
+
+    Batched approach:
+    1. All mana deduction, hand removal, graveyard adds are tensor ops
+    2. Minion deployment is tensor ops
+    3. Effects are dispatched via apply_effects_batch with masks
+    """
     is_play = mask & (action_type == 0)
     if not is_play.any():
         return
@@ -185,97 +207,107 @@ def apply_play_card_batch(state, mask, action_type, hand_idx, target_flat, card_
     ap = state.active_player  # [N]
 
     # Get card from hand
-    safe_hi = hand_idx.clamp(0, MAX_HAND - 1)
-    card_id = state.hands[arange_n, ap, safe_hi]
-    safe_cid = card_id.clamp(min=0)
+    safe_hi = hand_idx.clamp(0, MAX_HAND - 1).long()
+    card_id = state.hands[arange_n, ap, safe_hi]  # [N]
+    valid = is_play & (card_id >= 0)
+
+    if not valid.any():
+        return
+
+    safe_cid = card_id.clamp(min=0).long()
 
     # Card properties
     ctype = card_table.card_type[safe_cid]  # [N]
     cost = card_table.mana_cost[safe_cid]   # [N]
 
-    # Process each game individually for correctness
-    for i in range(N):
-        if not is_play[i]:
-            continue
-        p = ap[i].item()
-        hi = safe_hi[i].item()
-        cid = state.hands[i, p, hi].item()
-        if cid < 0:
-            continue
+    # Spend mana (batched)
+    state.player_mana[arange_n, ap] = torch.where(
+        valid, state.player_mana[arange_n, ap] - cost, state.player_mana[arange_n, ap]
+    )
 
-        ct = card_table.card_type[cid].item()
-        mc = card_table.mana_cost[cid].item()
+    # Remove card from hand (batched shift-left)
+    _remove_from_hand_batch(state, valid, ap, safe_hi, arange_n)
 
-        # Spend mana
-        state.player_mana[i, p] -= mc
+    # Add to graveyard (batched)
+    _add_to_graveyard_batch(state, valid, ap, card_id, arange_n)
 
-        # Remove card from hand (shift left)
-        _remove_from_hand(state, i, p, hi)
+    # --- MINION DEPLOY ---
+    is_minion = valid & (ctype == 0)
+    if is_minion.any():
+        _deploy_minion_batch(state, is_minion, ap, card_id, target_flat, card_table, arange_n)
 
-        # Add to graveyard
-        _add_to_graveyard(state, i, p, cid)
-
-        if ct == 0:  # MINION
-            _deploy_minion(state, i, p, cid, target_flat[i].item(), card_table)
-        elif ct == 1:  # MAGIC
-            # Resolve ON_PLAY effects
-            _apply_magic_effects(state, i, p, cid, target_flat[i].item(), card_table)
+    # --- MAGIC EFFECTS ---
+    is_magic = valid & (ctype == 1)
+    if is_magic.any():
+        # apply_effects_batch handles the entire batch with a mask
+        caster_slots = torch.full((N,), -1, dtype=torch.int32, device=device)
+        apply_effects_batch(
+            state, safe_cid.int(), 0, ap, caster_slots,
+            target_flat.int(), card_table, is_magic,
+        )
 
 
-def _deploy_minion(state, game_idx, player_idx, card_id, target_flat, card_table):
-    """Deploy a single minion for one game."""
-    row = target_flat // GRID_COLS
-    col = target_flat % GRID_COLS
-    if row < 0 or row >= 5 or col < 0 or col >= 5:
+def _deploy_minion_batch(state, deploy_mask, owners, card_ids, target_flat, card_table, arange_n):
+    """Deploy minions for all games in deploy_mask -- fully batched."""
+    N = deploy_mask.shape[0]
+    device = deploy_mask.device
+
+    row = (target_flat // GRID_COLS).clamp(0, 4)
+    col = (target_flat % GRID_COLS).clamp(0, 4)
+
+    # Get next available slot
+    slot = state.next_minion_slot.clone()  # [N]
+    valid = deploy_mask & (slot < MAX_MINIONS) & (target_flat >= 0) & (target_flat < GRID_SIZE)
+
+    if not valid.any():
         return
 
-    slot = state.next_minion_slot[game_idx].item()
-    if slot >= MAX_MINIONS:
-        return
+    safe_slot = slot.clamp(0, MAX_MINIONS - 1).long()
+    safe_cid = card_ids.clamp(min=0).long()
 
-    state.board[game_idx, row, col] = slot
-    state.minion_card_id[game_idx, slot] = card_id
-    state.minion_owner[game_idx, slot] = player_idx
-    state.minion_row[game_idx, slot] = row
-    state.minion_col[game_idx, slot] = col
-    state.minion_health[game_idx, slot] = card_table.health[card_id].item()
-    state.minion_atk_bonus[game_idx, slot] = 0
-    state.minion_alive[game_idx, slot] = True
-    state.next_minion_slot[game_idx] += 1
+    # Set board cell
+    state.board[arange_n, row, col] = torch.where(
+        valid, safe_slot.int(), state.board[arange_n, row, col]
+    )
+    # Set minion properties
+    state.minion_card_id[arange_n, safe_slot] = torch.where(
+        valid, card_ids, state.minion_card_id[arange_n, safe_slot]
+    )
+    state.minion_owner[arange_n, safe_slot] = torch.where(
+        valid, owners, state.minion_owner[arange_n, safe_slot]
+    )
+    state.minion_row[arange_n, safe_slot] = torch.where(
+        valid, row.int(), state.minion_row[arange_n, safe_slot]
+    )
+    state.minion_col[arange_n, safe_slot] = torch.where(
+        valid, col.int(), state.minion_col[arange_n, safe_slot]
+    )
+    base_health = card_table.health[safe_cid]
+    state.minion_health[arange_n, safe_slot] = torch.where(
+        valid, base_health, state.minion_health[arange_n, safe_slot]
+    )
+    state.minion_atk_bonus[arange_n, safe_slot] = torch.where(
+        valid, torch.tensor(0, device=device, dtype=torch.int32),
+        state.minion_atk_bonus[arange_n, safe_slot]
+    )
+    state.minion_alive[arange_n, safe_slot] = torch.where(
+        valid, torch.tensor(True, device=device),
+        state.minion_alive[arange_n, safe_slot]
+    )
+    state.next_minion_slot = torch.where(
+        valid, slot + 1, state.next_minion_slot
+    )
 
-    # Trigger ON_PLAY effects for the deployed minion
-    # NOTE: For minion ON_PLAY effects, the target_flat from the action encoding
-    # is the DEPLOY position, NOT the effect target. The action space encoding
-    # doesn't capture the effect target separately for minion deploys.
-    # So we pass -1 (no target) -- matching what happens when the Python engine
-    # decodes from integer (target_pos=None, which means SINGLE_TARGET effects skip).
-    N = state.board.shape[0]
-    device = state.board.device
-    cids = torch.full((N,), card_id, dtype=torch.int32, device=device)
-    owners = torch.full((N,), player_idx, dtype=torch.int32, device=device)
-    slots = torch.full((N,), slot, dtype=torch.int32, device=device)
+    # Trigger ON_PLAY effects for deployed minions
     # Pass -1 as target: action encoding doesn't capture ON_PLAY target for minions
     tgt = torch.full((N,), -1, dtype=torch.int32, device=device)
-    game_mask = torch.zeros(N, dtype=torch.bool, device=device)
-    game_mask[game_idx] = True
-    apply_effects_batch(state, cids, 0, owners, slots, tgt, card_table, game_mask)  # trigger=ON_PLAY=0
-
-
-def _apply_magic_effects(state, game_idx, player_idx, card_id, target_flat, card_table):
-    """Apply ON_PLAY effects for a magic card (no minion on board)."""
-    N = state.board.shape[0]
-    device = state.board.device
-    cids = torch.full((N,), card_id, dtype=torch.int32, device=device)
-    owners = torch.full((N,), player_idx, dtype=torch.int32, device=device)
-    slots = torch.full((N,), -1, dtype=torch.int32, device=device)  # no caster minion
-    tgt = torch.full((N,), target_flat, dtype=torch.int32, device=device)
-    game_mask = torch.zeros(N, dtype=torch.bool, device=device)
-    game_mask[game_idx] = True
-    apply_effects_batch(state, cids, 0, owners, slots, tgt, card_table, game_mask)
+    apply_effects_batch(
+        state, safe_cid.int(), 0, owners, safe_slot.int(), tgt, card_table, valid,
+    )  # trigger=ON_PLAY=0
 
 
 def apply_attack_batch(state, mask, action_type, source_flat, target_flat, card_table):
-    """Apply ATTACK action -- simultaneous damage exchange."""
+    """Apply ATTACK action -- simultaneous damage exchange, fully batched."""
     is_attack = mask & (action_type == 2)
     if not is_attack.any():
         return
@@ -289,66 +321,58 @@ def apply_attack_batch(state, mask, action_type, source_flat, target_flat, card_
     tgt_row = (target_flat // GRID_COLS).clamp(0, 4)
     tgt_col = (target_flat % GRID_COLS).clamp(0, 4)
 
-    for i in range(N):
-        if not is_attack[i]:
-            continue
-        sr, sc = src_row[i].item(), src_col[i].item()
-        tr, tc = tgt_row[i].item(), tgt_col[i].item()
+    # Get attacker and defender slots from board
+    a_slot = state.board[arange_n, src_row, src_col]  # [N]
+    d_slot = state.board[arange_n, tgt_row, tgt_col]  # [N]
+    valid = is_attack & (a_slot >= 0) & (d_slot >= 0)
 
-        a_slot = state.board[i, sr, sc].item()
-        d_slot = state.board[i, tr, tc].item()
-        if a_slot < 0 or d_slot < 0:
-            continue
+    if not valid.any():
+        return
 
-        a_cid = state.minion_card_id[i, a_slot].item()
-        d_cid = state.minion_card_id[i, d_slot].item()
+    safe_a_slot = a_slot.clamp(0).long()
+    safe_d_slot = d_slot.clamp(0).long()
 
-        # Effective attack = base + bonus
-        a_eff = card_table.attack[a_cid].item() + state.minion_atk_bonus[i, a_slot].item()
-        d_eff = card_table.attack[d_cid].item() + state.minion_atk_bonus[i, d_slot].item()
+    # Get card IDs for attacker and defender
+    a_cid = state.minion_card_id[arange_n, safe_a_slot].clamp(0).long()
+    d_cid = state.minion_card_id[arange_n, safe_d_slot].clamp(0).long()
 
-        # Simultaneous damage
-        state.minion_health[i, a_slot] -= d_eff
-        state.minion_health[i, d_slot] -= a_eff
+    # Effective attack = base + bonus
+    a_eff = card_table.attack[a_cid] + state.minion_atk_bonus[arange_n, safe_a_slot]
+    d_eff = card_table.attack[d_cid] + state.minion_atk_bonus[arange_n, safe_d_slot]
 
-    # Trigger ON_ATTACK for attacker, ON_DAMAGED for both
-    for i in range(N):
-        if not is_attack[i]:
-            continue
-        sr, sc = src_row[i].item(), src_col[i].item()
-        tr, tc = tgt_row[i].item(), tgt_col[i].item()
-        a_slot = state.board[i, sr, sc].item()
-        d_slot = state.board[i, tr, tc].item()
-        if a_slot < 0:
-            continue
+    # Simultaneous damage (batched)
+    state.minion_health[arange_n, safe_a_slot] = torch.where(
+        valid, state.minion_health[arange_n, safe_a_slot] - d_eff,
+        state.minion_health[arange_n, safe_a_slot]
+    )
+    state.minion_health[arange_n, safe_d_slot] = torch.where(
+        valid, state.minion_health[arange_n, safe_d_slot] - a_eff,
+        state.minion_health[arange_n, safe_d_slot]
+    )
 
-        a_cid = state.minion_card_id[i, a_slot].item()
-        game_mask = torch.zeros(N, dtype=torch.bool, device=device)
-        game_mask[i] = True
-        cids = torch.full((N,), a_cid, dtype=torch.int32, device=device)
-        owners = torch.full((N,), state.minion_owner[i, a_slot].item(), dtype=torch.int32, device=device)
-        slots = torch.full((N,), a_slot, dtype=torch.int32, device=device)
-        tgt = torch.full((N,), target_flat[i].item(), dtype=torch.int32, device=device)
+    # --- Trigger ON_ATTACK for attacker ---
+    atk_alive = valid & state.minion_alive[arange_n, safe_a_slot]
+    if atk_alive.any():
+        apply_effects_batch(
+            state, a_cid.int(), 2, state.minion_owner[arange_n, safe_a_slot],
+            safe_a_slot.int(), target_flat.int(), card_table, atk_alive,
+        )
 
-        # ON_ATTACK (2) for attacker
-        if state.minion_alive[i, a_slot]:
-            apply_effects_batch(state, cids, 2, owners, slots, tgt, card_table, game_mask)
+    # --- Trigger ON_DAMAGED for attacker (if defender had attack > 0) ---
+    atk_damaged = valid & (d_eff > 0) & state.minion_alive[arange_n, safe_a_slot]
+    if atk_damaged.any():
+        apply_effects_batch(
+            state, a_cid.int(), 3, state.minion_owner[arange_n, safe_a_slot],
+            safe_a_slot.int(), target_flat.int(), card_table, atk_damaged,
+        )
 
-        # ON_DAMAGED (3) for attacker (if defender had attack > 0)
-        if d_slot >= 0:
-            d_cid = state.minion_card_id[i, d_slot].item()
-            d_eff = card_table.attack[d_cid].item() + state.minion_atk_bonus[i, d_slot].item()
-            if d_eff > 0 and state.minion_alive[i, a_slot]:
-                apply_effects_batch(state, cids, 3, owners, slots, tgt, card_table, game_mask)
-
-            # ON_DAMAGED (3) for defender
-            a_eff = card_table.attack[a_cid].item() + state.minion_atk_bonus[i, a_slot].item()
-            if a_eff > 0 and state.minion_alive[i, d_slot]:
-                d_cids = torch.full((N,), d_cid, dtype=torch.int32, device=device)
-                d_owners = torch.full((N,), state.minion_owner[i, d_slot].item(), dtype=torch.int32, device=device)
-                d_slots = torch.full((N,), d_slot, dtype=torch.int32, device=device)
-                src_pos = torch.full((N,), source_flat[i].item(), dtype=torch.int32, device=device)
-                apply_effects_batch(state, d_cids, 3, d_owners, d_slots, src_pos, card_table, game_mask)
+    # --- Trigger ON_DAMAGED for defender (if attacker had attack > 0) ---
+    def_damaged = valid & (a_eff > 0) & state.minion_alive[arange_n, safe_d_slot]
+    if def_damaged.any():
+        apply_effects_batch(
+            state, d_cid.int(), 3, state.minion_owner[arange_n, safe_d_slot],
+            safe_d_slot.int(), source_flat.int(), card_table, def_damaged,
+        )
 
 
 def apply_sacrifice_batch(state, mask, action_type, source_flat, card_table):
@@ -359,32 +383,45 @@ def apply_sacrifice_batch(state, mask, action_type, source_flat, card_table):
 
     N = mask.shape[0]
     device = mask.device
+    arange_n = torch.arange(N, device=device)
 
     src_row = (source_flat // GRID_COLS).clamp(0, 4)
     src_col = (source_flat % GRID_COLS).clamp(0, 4)
 
-    for i in range(N):
-        if not is_sac[i]:
-            continue
-        sr, sc = src_row[i].item(), src_col[i].item()
-        slot = state.board[i, sr, sc].item()
-        if slot < 0:
-            continue
+    slot = state.board[arange_n, src_row, src_col]  # [N]
+    valid = is_sac & (slot >= 0)
 
-        cid = state.minion_card_id[i, slot].item()
-        owner = state.minion_owner[i, slot].item()
-        eff_atk = card_table.attack[cid].item() + state.minion_atk_bonus[i, slot].item()
+    if not valid.any():
+        return
 
-        # Remove minion
-        state.board[i, sr, sc] = EMPTY
-        state.minion_alive[i, slot] = False
+    safe_slot = slot.clamp(0).long()
+    cid = state.minion_card_id[arange_n, safe_slot]
+    owner = state.minion_owner[arange_n, safe_slot]
+    eff_atk = card_table.attack[cid.clamp(0).long()] + state.minion_atk_bonus[arange_n, safe_slot]
 
-        # Add to graveyard
-        _add_to_graveyard(state, i, owner, cid)
+    # Remove minion from board
+    state.board[arange_n, src_row, src_col] = torch.where(
+        valid, torch.tensor(EMPTY, device=device, dtype=torch.int32),
+        state.board[arange_n, src_row, src_col]
+    )
+    state.minion_alive[arange_n, safe_slot] = torch.where(
+        valid, torch.tensor(False, device=device),
+        state.minion_alive[arange_n, safe_slot]
+    )
 
-        # Deal damage to opponent
-        opponent = 1 - state.active_player[i].item()
-        state.player_hp[i, opponent] -= eff_atk
+    # Add to graveyard
+    _add_to_graveyard_batch(state, valid, owner, cid, arange_n)
+
+    # Deal damage to opponent
+    opponent = (1 - state.active_player).int()  # [N]
+
+    # Damage player 0 where opponent==0 and valid
+    dmg_p0 = valid & (opponent == 0)
+    if dmg_p0.any():
+        state.player_hp[:, 0] -= (eff_atk * dmg_p0.int())
+    dmg_p1 = valid & (opponent == 1)
+    if dmg_p1.any():
+        state.player_hp[:, 1] -= (eff_atk * dmg_p1.int())
 
 
 def apply_react_batch(state, mask, action_type, hand_idx, target_flat, card_table):
@@ -395,67 +432,119 @@ def apply_react_batch(state, mask, action_type, hand_idx, target_flat, card_tabl
 
     N = mask.shape[0]
     device = mask.device
+    arange_n = torch.arange(N, device=device)
 
-    for i in range(N):
-        if not is_react[i]:
-            continue
-        rp = state.react_player[i].item()
-        hi = hand_idx[i].item()
-        if hi < 0 or hi >= state.hand_sizes[i, rp].item():
-            continue
+    rp = state.react_player  # [N]
+    safe_hi = hand_idx.clamp(0, MAX_HAND - 1).long()
 
-        cid = state.hands[i, rp, hi].item()
-        if cid < 0:
-            continue
+    # Check hand slot validity
+    hand_size = state.hand_sizes[arange_n, rp]
+    valid = is_react & (safe_hi < hand_size)
 
-        # Determine cost
-        ct = card_table.card_type[cid].item()
-        if card_table.is_multi_purpose[cid].item():
-            cost = card_table.react_mana_cost[cid].item()
-        else:
-            cost = card_table.mana_cost[cid].item()
+    if not valid.any():
+        return
 
-        # Spend mana
-        state.player_mana[i, rp] -= cost
+    cid = state.hands[arange_n, rp, safe_hi]
+    valid = valid & (cid >= 0)
 
-        # Remove from hand
-        _remove_from_hand(state, i, rp, hi)
+    if not valid.any():
+        return
 
-        # Add to graveyard
-        _add_to_graveyard(state, i, rp, cid)
+    safe_cid = cid.clamp(0).long()
 
-        # Push onto react stack
-        depth = state.react_stack_depth[i].item()
-        if depth < 10:
-            # target: for PLAY_REACT, target_flat encodes target_or_none(26)
-            # 0-24 = flat pos, 25 = no target
-            tf = target_flat[i].item()
-            state.react_stack[i, depth, 0] = rp
-            state.react_stack[i, depth, 1] = cid
-            state.react_stack[i, depth, 2] = tf  # store as-is (25 = no target)
-            state.react_stack_depth[i] += 1
+    # Determine cost: multi-purpose uses react_mana_cost, others use mana_cost
+    is_multi = card_table.is_multi_purpose[safe_cid]
+    cost = torch.where(is_multi, card_table.react_mana_cost[safe_cid], card_table.mana_cost[safe_cid])
 
-        # Swap react player
-        state.react_player[i] = 1 - rp
+    # Spend mana
+    state.player_mana[arange_n, rp] = torch.where(
+        valid, state.player_mana[arange_n, rp] - cost, state.player_mana[arange_n, rp]
+    )
+
+    # Remove from hand
+    _remove_from_hand_batch(state, valid, rp, safe_hi, arange_n)
+
+    # Add to graveyard
+    _add_to_graveyard_batch(state, valid, rp, cid, arange_n)
+
+    # Push onto react stack
+    depth = state.react_stack_depth  # [N]
+    can_push = valid & (depth < 10)
+
+    if can_push.any():
+        safe_depth = depth.clamp(0, 9).long()
+        state.react_stack[arange_n, safe_depth, 0] = torch.where(
+            can_push, rp, state.react_stack[arange_n, safe_depth, 0]
+        )
+        state.react_stack[arange_n, safe_depth, 1] = torch.where(
+            can_push, cid, state.react_stack[arange_n, safe_depth, 1]
+        )
+        state.react_stack[arange_n, safe_depth, 2] = torch.where(
+            can_push, target_flat.int(), state.react_stack[arange_n, safe_depth, 2]
+        )
+        state.react_stack_depth = torch.where(
+            can_push, depth + 1, depth
+        )
+
+    # Swap react player
+    state.react_player = torch.where(
+        valid, (1 - rp).int(), rp
+    )
 
 
 # ---------------------------------------------------------------------------
-# Hand / graveyard helpers
+# Hand / graveyard helpers -- fully batched
 # ---------------------------------------------------------------------------
 
-def _remove_from_hand(state, game_idx: int, player_idx: int, hand_idx: int):
-    """Remove card at hand_idx, shift remaining cards left."""
-    hs = state.hand_sizes[game_idx, player_idx].item()
-    for j in range(hand_idx, hs - 1):
-        state.hands[game_idx, player_idx, j] = state.hands[game_idx, player_idx, j + 1]
-    if hs > 0:
-        state.hands[game_idx, player_idx, hs - 1] = EMPTY
-        state.hand_sizes[game_idx, player_idx] -= 1
+def _remove_from_hand_batch(state, valid_mask, player, hand_idx, arange_n):
+    """Remove card at hand_idx, shift remaining cards left -- batched.
+
+    Iterates over MAX_HAND slots (fixed 10 iterations), not over batch N.
+    """
+    N = valid_mask.shape[0]
+    device = valid_mask.device
+
+    hand_size = state.hand_sizes[arange_n, player]  # [N]
+
+    # For each slot position, shift left if slot >= hand_idx and slot < hand_size - 1
+    for j in range(MAX_HAND - 1):
+        should_shift = valid_mask & (j >= hand_idx) & (j < hand_size - 1)
+        if should_shift.any():
+            next_card = state.hands[arange_n, player, j + 1]
+            state.hands[arange_n, player, j] = torch.where(
+                should_shift, next_card, state.hands[arange_n, player, j]
+            )
+
+    # Clear the last occupied slot
+    last_slot = (hand_size - 1).clamp(0, MAX_HAND - 1).long()
+    should_clear = valid_mask & (hand_size > 0)
+    state.hands[arange_n, player, last_slot] = torch.where(
+        should_clear,
+        torch.tensor(EMPTY, device=device, dtype=torch.int32),
+        state.hands[arange_n, player, last_slot]
+    )
+
+    # Decrement hand size
+    state.hand_sizes[arange_n, player] = torch.where(
+        valid_mask & (hand_size > 0), hand_size - 1, hand_size
+    )
 
 
-def _add_to_graveyard(state, game_idx: int, player_idx: int, card_id: int):
-    """Add card to graveyard at next slot."""
-    gs = state.graveyard_sizes[game_idx, player_idx].item()
-    if gs < 80:
-        state.graveyards[game_idx, player_idx, gs] = card_id
-        state.graveyard_sizes[game_idx, player_idx] += 1
+def _add_to_graveyard_batch(state, valid_mask, player, card_id, arange_n):
+    """Add card to graveyard at next slot -- batched."""
+    N = valid_mask.shape[0]
+    device = valid_mask.device
+
+    gs = state.graveyard_sizes[arange_n, player]  # [N]
+    can_add = valid_mask & (gs < 80)
+
+    if not can_add.any():
+        return
+
+    safe_gs = gs.clamp(0, 79).long()
+    state.graveyards[arange_n, player, safe_gs] = torch.where(
+        can_add, card_id, state.graveyards[arange_n, player, safe_gs]
+    )
+    state.graveyard_sizes[arange_n, player] = torch.where(
+        can_add, gs + 1, gs
+    )
