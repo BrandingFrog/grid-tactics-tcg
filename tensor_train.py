@@ -115,10 +115,10 @@ def evaluate_vs_random(policy, engine_cls, card_table, deck, n_games=200):
         engine.step_batch(actions)
 
         # Check game over
-        new_done = (state.hp[:, 0] <= 0) | (state.hp[:, 1] <= 0) | (state.turn_number >= 200)
+        new_done = (state.player_hp[:, 0] <= 0) | (state.player_hp[:, 1] <= 0) | (state.turn_number >= 200)
         just_done = new_done & ~done
         if just_done.any():
-            wins[just_done & (state.hp[:, 0] > state.hp[:, 1])] = 1.0
+            wins[just_done & (state.player_hp[:, 0] > state.player_hp[:, 1])] = 1.0
         done = new_done
 
     return wins.mean().item()
@@ -201,10 +201,10 @@ def main():
 
             # Reward: +1 win, -1 loss, 0 ongoing
             new_state = engine.state
-            game_over = (new_state.hp[:, 0] <= 0) | (new_state.hp[:, 1] <= 0) | (new_state.turn_number >= 200)
+            game_over = (new_state.player_hp[:, 0] <= 0) | (new_state.player_hp[:, 1] <= 0) | (new_state.turn_number >= 200)
             reward = torch.zeros(N_ENVS, device=device)
-            reward[game_over & (new_state.hp[:, 0] > new_state.hp[:, 1])] = 1.0
-            reward[game_over & (new_state.hp[:, 0] < new_state.hp[:, 1])] = -1.0
+            reward[game_over & (new_state.player_hp[:, 0] > new_state.player_hp[:, 1])] = 1.0
+            reward[game_over & (new_state.player_hp[:, 0] < new_state.player_hp[:, 1])] = -1.0
 
             obs_buf[step] = obs
             act_buf[step] = action
