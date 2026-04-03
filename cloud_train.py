@@ -47,7 +47,7 @@ def verify_gpu():
     device_count = torch.cuda.device_count()
     for i in range(device_count):
         name = torch.cuda.get_device_name(i)
-        mem = torch.cuda.get_device_properties(i).total_mem / 1e9
+        mem = torch.cuda.get_device_properties(i).total_memory / 1e9
         print(f"GPU {i}: {name} ({mem:.1f} GB)")
 
     # Quick benchmark: measure GPU vs CPU speed
