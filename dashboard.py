@@ -1,16 +1,23 @@
 """Grid Tactics TCG - Web Dashboard
 
-Flask app serving training stats, game replays, and card analytics.
+Flask app serving training stats, game replays, card analytics,
+and live cloud training monitoring across RunPod GPU pods.
+
 Run with: .venv/Scripts/python.exe dashboard.py
-Open: http://localhost:5000
+Open: http://localhost:5000        (local training)
+      http://localhost:5000/cloud  (cloud GPU monitoring)
 """
 
 import json
 import os
+import sqlite3
+import subprocess
 import sys
+import threading
+import time
 from pathlib import Path
 
-from flask import Flask, render_template_string, jsonify
+from flask import Flask, render_template_string, jsonify, request as flask_request
 
 # Add src to path
 sys.path.insert(0, str(Path(__file__).parent / "src"))
@@ -22,6 +29,8 @@ app = Flask(__name__)
 
 DB_PATH = Path("data/training.db")
 CARDS_PATH = Path("data/cards")
+CLOUD_DB_DIR = Path("data/cloud_dbs")
+CLOUD_DB_DIR.mkdir(parents=True, exist_ok=True)
 
 def get_reader():
     if not DB_PATH.exists():
@@ -371,9 +380,9 @@ TEMPLATE = """
             <div class="subtitle">RL Training Dashboard</div>
         </div>
         <div class="nav">
-            <a href="/" class="active">Overview</a>
+            <a href="/" class="active">Local</a>
+            <a href="/cloud">Cloud</a>
             <a href="/cards">Cards</a>
-            <a href="/api/runs">API</a>
         </div>
     </div>
 
@@ -762,9 +771,394 @@ def api_cards():
         })
     return jsonify(cards)
 
+# ---------------------------------------------------------------------------
+# Cloud Training Monitor
+# ---------------------------------------------------------------------------
+
+def _discover_pods():
+    """Discover active RunPod pods with SSH access."""
+    try:
+        import runpod
+        env_path = Path(__file__).parent / ".env"
+        if env_path.exists():
+            for line in env_path.read_text().splitlines():
+                if line.startswith("RUNPOD_API_KEY=") and not line.startswith("#"):
+                    runpod.api_key = line.split("=", 1)[1].strip()
+
+        pods = []
+        for pod in runpod.get_pods():
+            pid = pod["id"]
+            name = pod.get("name", pid)
+            full = runpod.get_pod(pid)
+            cost = full.get("costPerHr", 0)
+            runtime = full.get("runtime") or {}
+            ports = runtime.get("ports") or []
+            ssh_ip = ssh_port = None
+            for p in ports:
+                if p.get("privatePort") == 22 and p.get("isIpPublic"):
+                    ssh_ip = p["ip"]
+                    ssh_port = p["publicPort"]
+            method = "unknown"
+            for m in ["default", "largebatch", "highent", "aggressive", "exploration", "low_lr"]:
+                if m in name.lower().replace("_", "").replace("-", ""):
+                    method = {"largebatch": "large_batch", "highent": "high_entropy"}.get(m, m)
+                    break
+            pods.append({
+                "id": pid, "name": name, "method": method,
+                "ssh_ip": ssh_ip, "ssh_port": ssh_port, "cost_per_hr": cost,
+            })
+        return pods
+    except Exception as e:
+        return []
+
+
+def _ssh_cmd(ip, port, cmd, timeout=15):
+    """Run a command on a pod via SSH. Returns stdout or empty string."""
+    if not ip or not port:
+        return ""
+    try:
+        r = subprocess.run(
+            ["ssh", "-o", "StrictHostKeyChecking=no", "-o", "ConnectTimeout=5",
+             "-p", str(port), f"root@{ip}", cmd],
+            capture_output=True, text=True, timeout=timeout,
+        )
+        return r.stdout.strip() if r.returncode == 0 else ""
+    except Exception:
+        return ""
+
+
+def _pull_db(pod):
+    """Download training.db from a pod. Returns local path or None."""
+    if not pod.get("ssh_ip"):
+        return None
+    local = CLOUD_DB_DIR / f"{pod['id']}.db"
+    try:
+        subprocess.run(
+            ["scp", "-o", "StrictHostKeyChecking=no", "-o", "ConnectTimeout=10",
+             "-P", str(pod["ssh_port"]),
+             f"root@{pod['ssh_ip']}:/root/output/training.db", str(local)],
+            capture_output=True, timeout=30,
+        )
+        if local.exists() and local.stat().st_size > 0:
+            return local
+    except Exception:
+        pass
+    return local if local.exists() else None
+
+
+def _read_cloud_db(path):
+    """Read training stats from a downloaded SQLite file."""
+    data = {"runs": [], "snapshots": [], "stats": {}}
+    try:
+        conn = sqlite3.connect(str(path))
+        conn.row_factory = sqlite3.Row
+        data["runs"] = [dict(r) for r in conn.execute(
+            "SELECT * FROM training_runs ORDER BY started_at DESC").fetchall()]
+        data["snapshots"] = [dict(r) for r in conn.execute(
+            "SELECT * FROM win_rate_snapshots ORDER BY timestep").fetchall()]
+        for run in data["runs"]:
+            rid = run["run_id"]
+            row = conn.execute(
+                """SELECT COUNT(*) as total_games,
+                    AVG(CASE WHEN training_player IS NOT NULL AND winner = training_player
+                        THEN 1.0 WHEN winner IS NULL THEN 0.5 ELSE 0.0 END) as win_rate,
+                    AVG(turn_count) as avg_game_length
+                FROM game_results WHERE run_id = ?""", (rid,)).fetchone()
+            if row:
+                data["stats"][rid] = dict(row)
+        conn.close()
+    except Exception:
+        pass
+    return data
+
+
+@app.route('/cloud')
+def cloud_page():
+    return render_template_string(CLOUD_TEMPLATE)
+
+
+@app.route('/api/cloud/pods')
+def api_cloud_pods():
+    """Return all active pods with GPU stats and training progress."""
+    pods = _discover_pods()
+    results = []
+
+    def fetch_pod_data(pod):
+        info = dict(pod)
+        # GPU stats
+        gpu_raw = _ssh_cmd(
+            pod["ssh_ip"], pod["ssh_port"],
+            "nvidia-smi --query-gpu=utilization.gpu,memory.used,memory.total,temperature.gpu --format=csv,noheader,nounits"
+        )
+        if gpu_raw:
+            parts = gpu_raw.split(", ")
+            info["gpu_util"] = int(parts[0])
+            info["mem_used_mb"] = int(parts[1])
+            info["mem_total_mb"] = int(parts[2])
+            info["temp_c"] = int(parts[3])
+
+        # Training data
+        db_path = _pull_db(pod)
+        if db_path:
+            data = _read_cloud_db(db_path)
+            info["data"] = data
+        else:
+            info["data"] = {"runs": [], "snapshots": [], "stats": {}}
+
+        # Log tail
+        info["log_tail"] = _ssh_cmd(
+            pod["ssh_ip"], pod["ssh_port"],
+            "tail -n 3 /root/output/train.log 2>/dev/null"
+        )
+        results.append(info)
+
+    # Fetch in parallel
+    threads = [threading.Thread(target=fetch_pod_data, args=(p,)) for p in pods]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join(timeout=30)
+
+    return jsonify(results)
+
+
+CLOUD_TEMPLATE = """
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Grid Tactics — Cloud Training Monitor</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', system-ui, sans-serif; background: #0f0f1a; color: #e0e0e0; min-height: 100vh; }
+        .header { background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); border-bottom: 2px solid #0f3460; padding: 20px 40px; display: flex; align-items: center; justify-content: space-between; }
+        .header h1 { font-size: 24px; color: #00d4ff; letter-spacing: 1px; }
+        .header .subtitle { color: #888; font-size: 14px; }
+        .nav { display: flex; gap: 20px; }
+        .nav a { color: #aaa; text-decoration: none; padding: 8px 16px; border-radius: 6px; transition: all 0.2s; font-size: 14px; }
+        .nav a:hover, .nav a.active { color: #00d4ff; background: rgba(0,212,255,0.1); }
+        .container { max-width: 1400px; margin: 0 auto; padding: 30px 40px; }
+        .status-bar { display: flex; gap: 20px; margin-bottom: 24px; flex-wrap: wrap; }
+        .status-item { background: #1a1a2e; border: 1px solid #2a2a4a; border-radius: 8px; padding: 12px 20px; flex: 1; min-width: 150px; }
+        .status-item .label { font-size: 11px; color: #888; text-transform: uppercase; letter-spacing: 1px; }
+        .status-item .value { font-size: 28px; font-weight: 700; color: #fff; margin-top: 4px; }
+        .status-item .value.green { color: #4caf50; }
+        .status-item .value.cyan { color: #00d4ff; }
+        .status-item .value.red { color: #f44336; }
+        .status-item .value.yellow { color: #ff9800; }
+        .pod-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(380px, 1fr)); gap: 20px; margin-bottom: 30px; }
+        .pod-card { background: #1a1a2e; border: 1px solid #2a2a4a; border-radius: 12px; padding: 24px; }
+        .pod-card h3 { color: #00d4ff; font-size: 16px; margin-bottom: 4px; }
+        .pod-card .method { color: #888; font-size: 13px; margin-bottom: 16px; }
+        .gpu-bar { background: #2a2a4a; border-radius: 6px; height: 32px; position: relative; overflow: hidden; margin: 8px 0; }
+        .gpu-bar-fill { height: 100%; border-radius: 6px; transition: width 0.5s; display: flex; align-items: center; padding: 0 12px; font-size: 13px; font-weight: 600; color: #fff; }
+        .gpu-low { background: linear-gradient(90deg, #f44336, #ff5722); }
+        .gpu-mid { background: linear-gradient(90deg, #ff9800, #ffc107); }
+        .gpu-high { background: linear-gradient(90deg, #4caf50, #66bb6a); }
+        .stat-row { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid #1e1e35; font-size: 14px; }
+        .stat-row:last-child { border-bottom: none; }
+        .stat-row .label { color: #888; }
+        .stat-row .value { color: #fff; font-weight: 600; }
+        .chart-container { background: #1a1a2e; border: 1px solid #2a2a4a; border-radius: 12px; padding: 24px; margin-bottom: 20px; }
+        .chart-container h3 { color: #00d4ff; font-size: 14px; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 16px; }
+        canvas { width: 100% !important; height: 300px !important; }
+        .log-box { background: #12121f; border: 1px solid #2a2a4a; border-radius: 8px; padding: 12px 16px; font-family: monospace; font-size: 12px; color: #aaa; white-space: pre-wrap; margin-top: 12px; max-height: 80px; overflow: hidden; }
+        .refresh-info { text-align: center; color: #555; font-size: 12px; margin-top: 20px; }
+        .loading { text-align: center; padding: 60px; color: #666; }
+        .loading .spinner { border: 3px solid #2a2a4a; border-top: 3px solid #00d4ff; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; margin: 0 auto 16px; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+</head>
+<body>
+    <div class="header">
+        <div>
+            <h1>GRID TACTICS TCG</h1>
+            <div class="subtitle">Cloud Training Monitor</div>
+        </div>
+        <div class="nav">
+            <a href="/">Local</a>
+            <a href="/cloud" class="active">Cloud</a>
+            <a href="/cards">Cards</a>
+        </div>
+    </div>
+    <div class="container" id="app">
+        <div class="loading"><div class="spinner"></div>Connecting to pods...</div>
+    </div>
+    <script>
+    let winRateChart = null;
+
+    async function loadCloud() {
+        const app = document.getElementById('app');
+        let pods;
+        try {
+            const resp = await fetch('/api/cloud/pods');
+            pods = await resp.json();
+        } catch(e) {
+            app.innerHTML = '<div class="loading">Failed to connect. Retrying...</div>';
+            setTimeout(loadCloud, 10000);
+            return;
+        }
+
+        if (pods.length === 0) {
+            app.innerHTML = `<div class="loading" style="animation:none">
+                <h2 style="color:#444;margin-bottom:12px">No Active Pods</h2>
+                <p style="color:#666">Launch training first:</p>
+                <p style="margin-top:8px"><code style="background:#1a1a2e;padding:4px 10px;border-radius:4px;color:#00d4ff">python manage_pods.py launch --gpu 4090</code></p>
+            </div>`;
+            setTimeout(loadCloud, 15000);
+            return;
+        }
+
+        // Summary stats
+        let totalCost = 0, totalGames = 0, bestWR = 0, bestMethod = '-';
+        pods.forEach(p => {
+            totalCost += p.cost_per_hr || 0;
+            const data = p.data || {};
+            Object.values(data.stats || {}).forEach(s => {
+                totalGames += s.total_games || 0;
+                const wr = s.win_rate || 0;
+                if (wr > bestWR) { bestWR = wr; bestMethod = p.method; }
+            });
+        });
+
+        let html = `
+        <div class="status-bar">
+            <div class="status-item"><div class="label">Active Pods</div><div class="value cyan">${pods.length}</div></div>
+            <div class="status-item"><div class="label">Burn Rate</div><div class="value yellow">$${totalCost.toFixed(2)}/hr</div></div>
+            <div class="status-item"><div class="label">Total Games</div><div class="value">${totalGames.toLocaleString()}</div></div>
+            <div class="status-item"><div class="label">Best Win Rate</div><div class="value green">${(bestWR*100).toFixed(1)}%</div></div>
+            <div class="status-item"><div class="label">Best Method</div><div class="value cyan">${bestMethod}</div></div>
+        </div>`;
+
+        // Win rate chart
+        html += `<div class="chart-container"><h3>Win Rate Comparison — All Methods</h3><canvas id="winRateCanvas"></canvas></div>`;
+
+        // Pod cards
+        html += '<div class="pod-grid">';
+        pods.forEach(p => {
+            const gpuUtil = p.gpu_util !== undefined ? p.gpu_util : -1;
+            const gpuClass = gpuUtil >= 50 ? 'gpu-high' : gpuUtil >= 15 ? 'gpu-mid' : 'gpu-low';
+            const gpuLabel = gpuUtil >= 0 ? gpuUtil + '% GPU' : 'N/A';
+            const gpuWidth = gpuUtil >= 0 ? Math.max(gpuUtil, 5) : 5;
+            const memUsed = p.mem_used_mb || 0;
+            const memTotal = p.mem_total_mb || 1;
+            const temp = p.temp_c || 0;
+
+            const data = p.data || {};
+            const runs = data.runs || [];
+            const snapshots = data.snapshots || [];
+            const stats = data.stats || {};
+
+            let latestWR = '-', totalG = 0, avgLen = '-';
+            if (snapshots.length > 0) {
+                latestWR = ((snapshots[snapshots.length-1].win_rate_100 || 0) * 100).toFixed(1) + '%';
+            }
+            Object.values(stats).forEach(s => {
+                totalG += s.total_games || 0;
+                if (s.avg_game_length) avgLen = Math.round(s.avg_game_length);
+            });
+
+            const latestStep = snapshots.length > 0 ? snapshots[snapshots.length-1].timestep : 0;
+
+            html += `
+            <div class="pod-card">
+                <h3>${p.name}</h3>
+                <div class="method">${p.method} | $${(p.cost_per_hr||0).toFixed(2)}/hr | ${p.id}</div>
+                <div class="gpu-bar"><div class="gpu-bar-fill ${gpuClass}" style="width:${gpuWidth}%">${gpuLabel}</div></div>
+                <div style="font-size:12px;color:#666;margin-bottom:12px">VRAM: ${memUsed}/${memTotal} MB | ${temp}°C</div>
+                <div class="stat-row"><span class="label">Win Rate (eval)</span><span class="value" style="color:${parseFloat(latestWR)>=50?'#4caf50':'#f44336'}">${latestWR}</span></div>
+                <div class="stat-row"><span class="label">Games Played</span><span class="value">${totalG.toLocaleString()}</span></div>
+                <div class="stat-row"><span class="label">Avg Game Length</span><span class="value">${avgLen} turns</span></div>
+                <div class="stat-row"><span class="label">Training Step</span><span class="value">${latestStep.toLocaleString()}</span></div>
+                ${p.log_tail ? '<div class="log-box">' + p.log_tail + '</div>' : ''}
+            </div>`;
+        });
+        html += '</div>';
+
+        html += '<div class="refresh-info">Auto-refreshes every 60 seconds | <a href="#" onclick="loadCloud();return false" style="color:#00d4ff">Refresh now</a></div>';
+
+        app.innerHTML = html;
+
+        // Draw chart
+        drawWinRateChart(pods);
+
+        // Auto-refresh
+        setTimeout(loadCloud, 60000);
+    }
+
+    function drawWinRateChart(pods) {
+        const canvas = document.getElementById('winRateCanvas');
+        if (!canvas) return;
+
+        const datasets = [];
+        const colors = ['#00d4ff', '#4caf50', '#ff9800', '#f44336', '#ce93d8', '#ffeb3b'];
+
+        pods.forEach((p, i) => {
+            const snapshots = (p.data || {}).snapshots || [];
+            if (snapshots.length === 0) return;
+            datasets.push({
+                label: p.name + ' (' + p.method + ')',
+                data: snapshots.map(s => ({ x: s.timestep, y: (s.win_rate_100 || 0) * 100 })),
+                borderColor: colors[i % colors.length],
+                backgroundColor: 'transparent',
+                borderWidth: 2,
+                pointRadius: 3,
+                tension: 0.3,
+            });
+        });
+
+        if (winRateChart) winRateChart.destroy();
+
+        winRateChart = new Chart(canvas, {
+            type: 'line',
+            data: { datasets },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    x: {
+                        type: 'linear',
+                        title: { display: true, text: 'Training Steps', color: '#888' },
+                        ticks: { color: '#666' },
+                        grid: { color: '#1e1e35' },
+                    },
+                    y: {
+                        min: 0, max: 100,
+                        title: { display: true, text: 'Win Rate %', color: '#888' },
+                        ticks: { color: '#666' },
+                        grid: { color: '#1e1e35' },
+                    }
+                },
+                plugins: {
+                    legend: { labels: { color: '#ccc' } },
+                    annotation: {
+                        annotations: {
+                            baseline: {
+                                type: 'line', yMin: 50, yMax: 50,
+                                borderColor: '#555', borderDash: [6, 4], borderWidth: 1,
+                                label: { display: true, content: 'Random (50%)', color: '#666', position: 'start' }
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    loadCloud();
+    </script>
+</body>
+</html>
+"""
+
+
 if __name__ == '__main__':
     print("=" * 50)
     print("  Grid Tactics TCG - Dashboard")
-    print("  Open: http://localhost:5000")
+    print("  Local:  http://localhost:5000")
+    print("  Cloud:  http://localhost:5000/cloud")
     print("=" * 50)
-    app.run(debug=True, port=5000)
+    # host=0.0.0.0 makes it accessible from phone on same network
+    app.run(debug=True, port=5000, host='0.0.0.0')
