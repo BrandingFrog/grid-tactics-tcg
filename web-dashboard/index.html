@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Grid Tactics — Training Dashboard</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4" defer></script>
+<style>
+:root{--bg:#0f0f1a;--card:#1a1a2e;--border:#2a2a4a;--cyan:#00d4ff;--green:#4caf50;--red:#f44336;--yellow:#ff9800;--text:#e0e0e0;--muted:#888}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
+.header{background:linear-gradient(135deg,#1a1a2e,#16213e);border-bottom:2px solid #0f3460;padding:16px 20px;display:flex;align-items:center;justify-content:space-between}
+.header h1{font-size:18px;color:var(--cyan);letter-spacing:1px}
+.header .status{font-size:12px;color:var(--muted)}
+.container{max-width:1200px;margin:0 auto;padding:16px}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin-bottom:16px}
+.stat{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:12px}
+.stat .label{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:1px}
+.stat .value{font-size:24px;font-weight:700;margin-top:2px}
+.stat .value.c{color:var(--cyan)}.stat .value.g{color:var(--green)}.stat .value.y{color:var(--yellow)}.stat .value.r{color:var(--red)}
+.chart-box{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:16px;margin-bottom:16px}
+.chart-box h3{font-size:12px;color:var(--cyan);text-transform:uppercase;letter-spacing:1px;margin-bottom:10px}
+canvas{width:100%!important;height:250px!important}
+.pods{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:12px;margin-bottom:16px}
+.pod{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:16px}
+.pod h3{font-size:15px;color:var(--cyan);margin-bottom:4px}
+.pod .meta{font-size:12px;color:var(--muted);margin-bottom:12px}
+.pod .row{display:flex;justify-content:space-between;padding:4px 0;font-size:13px;border-bottom:1px solid #1e1e35}
+.pod .row:last-child{border:none}
+.pod .row .l{color:var(--muted)}.pod .row .v{font-weight:600}
+.gpu-bar{background:#2a2a4a;border-radius:4px;height:24px;overflow:hidden;margin:8px 0;position:relative}
+.gpu-fill{height:100%;border-radius:4px;display:flex;align-items:center;padding:0 8px;font-size:11px;font-weight:600;color:#fff;transition:width 0.5s}
+.gpu-low{background:linear-gradient(90deg,#f44336,#ff5722)}
+.gpu-mid{background:linear-gradient(90deg,#ff9800,#ffc107)}
+.gpu-high{background:linear-gradient(90deg,#4caf50,#66bb6a)}
+.info{text-align:center;color:var(--muted);font-size:11px;margin-top:12px}
+.info a{color:var(--cyan)}
+.loading{text-align:center;padding:60px;color:var(--muted)}
+.dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px}
+.dot.live{background:var(--green);animation:pulse 2s infinite}
+.dot.dead{background:var(--red)}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.4}}
+@media(max-width:600px){.stats{grid-template-columns:repeat(2,1fr)}.stat .value{font-size:18px}}
+</style>
+</head>
+<body>
+<div class="header">
+  <h1>GRID TACTICS TCG</h1>
+  <div class="status" id="conn-status">Connecting...</div>
+</div>
+<div class="container" id="app">
+  <div class="loading">Connecting to database...</div>
+</div>
+
+<script>
+// Config — filled at deploy time or via env
+const SUPABASE_URL = window.__SUPABASE_URL__ || localStorage.getItem('sb_url') || '';
+const SUPABASE_KEY = window.__SUPABASE_KEY__ || localStorage.getItem('sb_key') || '';
+
+let sb = null;
+let chart = null;
+
+// Check config
+function checkConfig() {
+  if (!SUPABASE_URL || !SUPABASE_KEY) {
+    document.getElementById('app').innerHTML = `
+      <div style="max-width:500px;margin:40px auto;background:#1a1a2e;border:1px solid #2a2a4a;border-radius:12px;padding:24px">
+        <h3 style="color:#00d4ff;margin-bottom:16px">Configure Supabase</h3>
+        <p style="color:#888;font-size:14px;margin-bottom:16px">Enter your Supabase project credentials:</p>
+        <input id="sb-url" placeholder="https://xxxxx.supabase.co" style="width:100%;padding:10px;margin-bottom:10px;background:#12121f;border:1px solid #2a2a4a;border-radius:6px;color:#fff;font-size:14px">
+        <input id="sb-key" placeholder="anon key (eyJ...)" style="width:100%;padding:10px;margin-bottom:16px;background:#12121f;border:1px solid #2a2a4a;border-radius:6px;color:#fff;font-size:14px">
+        <button onclick="saveConfig()" style="width:100%;padding:10px;background:#00d4ff;color:#0f0f1a;border:none;border-radius:6px;font-weight:700;cursor:pointer;font-size:14px">Connect</button>
+      </div>`;
+    return false;
+  }
+  return true;
+}
+
+function saveConfig() {
+  const url = document.getElementById('sb-url').value.trim();
+  const key = document.getElementById('sb-key').value.trim();
+  if (url && key) {
+    localStorage.setItem('sb_url', url);
+    localStorage.setItem('sb_key', key);
+    location.reload();
+  }
+}
+
+async function init() {
+  if (!checkConfig()) return;
+
+  // Wait for Supabase JS to load
+  while (typeof supabase === 'undefined') await new Promise(r => setTimeout(r, 100));
+
+  sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+  document.getElementById('conn-status').innerHTML = '<span class="dot live"></span>Connected';
+
+  // Initial load
+  await loadDashboard();
+
+  // Subscribe to realtime updates
+  sb.channel('training_snapshots')
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'training_snapshots' }, () => {
+      loadDashboard();
+    })
+    .subscribe();
+
+  // Fallback polling every 30s
+  setInterval(loadDashboard, 30000);
+}
+
+async function loadDashboard() {
+  const app = document.getElementById('app');
+
+  // Fetch active runs
+  const { data: runs, error: runsErr } = await sb
+    .from('training_runs')
+    .select('*')
+    .order('started_at', { ascending: false })
+    .limit(10);
+
+  if (runsErr || !runs || runs.length === 0) {
+    app.innerHTML = '<div class="loading">No training data yet. Pods will write here once connected.</div>';
+    return;
+  }
+
+  // Fetch snapshots for active runs
+  const runIds = runs.map(r => r.run_id);
+  const { data: snapshots } = await sb
+    .from('training_snapshots')
+    .select('*')
+    .in('run_id', runIds)
+    .order('timestep', { ascending: true });
+
+  // Summary stats
+  let totalSteps = 0, bestWR = 0, bestRun = '-', totalFPS = 0, activeCount = 0;
+  runs.forEach(r => {
+    if (!r.ended_at) activeCount++;
+    totalSteps += r.current_steps || 0;
+    totalFPS += r.current_fps || 0;
+  });
+
+  const snByRun = {};
+  (snapshots || []).forEach(s => {
+    if (!snByRun[s.run_id]) snByRun[s.run_id] = [];
+    snByRun[s.run_id].push(s);
+    if (s.win_rate > bestWR) { bestWR = s.win_rate; bestRun = s.run_id; }
+  });
+
+  let h = '';
+
+  // Top stats
+  h += '<div class="stats">';
+  h += `<div class="stat"><div class="label">Active Runs</div><div class="value c">${activeCount}</div></div>`;
+  h += `<div class="stat"><div class="label">Total Steps</div><div class="value">${formatNum(totalSteps)}</div></div>`;
+  h += `<div class="stat"><div class="label">Best Win Rate</div><div class="value g">${(bestWR*100).toFixed(1)}%</div></div>`;
+  h += `<div class="stat"><div class="label">Combined FPS</div><div class="value c">${formatNum(totalFPS)}</div></div>`;
+  h += '</div>';
+
+  // Chart
+  h += '<div class="chart-box"><h3>Win Rate Over Training</h3><canvas id="wr-chart"></canvas></div>';
+
+  // Pod cards
+  h += '<div class="pods">';
+  const colors = ['#00d4ff','#4caf50','#ff9800','#f44336','#ce93d8','#ffeb3b'];
+  runs.forEach((r, i) => {
+    const sn = snByRun[r.run_id] || [];
+    const latest = sn.length ? sn[sn.length - 1] : null;
+    const wr = latest ? (latest.win_rate * 100).toFixed(1) + '%' : '-';
+    const wrClass = latest && latest.win_rate >= 0.5 ? 'g' : latest && latest.win_rate >= 0.25 ? 'y' : 'r';
+    const fps = r.current_fps ? formatNum(r.current_fps) : '-';
+    const gpu = r.gpu_util || 0;
+    const gpuClass = gpu >= 50 ? 'gpu-high' : gpu >= 20 ? 'gpu-mid' : 'gpu-low';
+    const isLive = !r.ended_at;
+    const steps = r.current_steps || (latest ? latest.timestep : 0);
+
+    h += `<div class="pod">`;
+    h += `<h3><span class="dot ${isLive ? 'live' : 'dead'}"></span>${r.run_name || r.run_id}</h3>`;
+    h += `<div class="meta">${r.gpu_name || '?'} | ${r.method || 'default'} | seed ${r.seed || '?'}</div>`;
+    if (gpu > 0) h += `<div class="gpu-bar"><div class="gpu-fill ${gpuClass}" style="width:${Math.max(gpu,5)}%">${gpu}% GPU</div></div>`;
+    h += `<div class="row"><span class="l">Win Rate</span><span class="v ${wrClass}">${wr}</span></div>`;
+    h += `<div class="row"><span class="l">Steps</span><span class="v">${formatNum(steps)}</span></div>`;
+    h += `<div class="row"><span class="l">FPS</span><span class="v c">${fps}</span></div>`;
+    h += `<div class="row"><span class="l">Evals</span><span class="v">${sn.length}</span></div>`;
+    h += `</div>`;
+  });
+  h += '</div>';
+
+  h += '<div class="info">Auto-updates via Supabase Realtime | <a href="#" onclick="loadDashboard();return false">Refresh</a> | <a href="#" onclick="localStorage.clear();location.reload()">Reset config</a></div>';
+
+  app.innerHTML = h;
+
+  // Draw chart
+  const canvas = document.getElementById('wr-chart');
+  if (canvas && typeof Chart !== 'undefined') {
+    const datasets = [];
+    runs.forEach((r, i) => {
+      const sn = snByRun[r.run_id] || [];
+      if (!sn.length) return;
+      datasets.push({
+        label: (r.run_name || r.run_id) + ' (' + (r.method || '?') + ')',
+        data: sn.map(s => ({ x: s.timestep, y: s.win_rate * 100 })),
+        borderColor: colors[i % colors.length],
+        backgroundColor: 'transparent',
+        borderWidth: 2, pointRadius: 2, tension: 0.3,
+      });
+    });
+    if (chart) chart.destroy();
+    if (datasets.length) {
+      chart = new Chart(canvas, {
+        type: 'line', data: { datasets },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          scales: {
+            x: { type: 'linear', title: { display: true, text: 'Steps', color: '#888' }, ticks: { color: '#666', callback: v => formatNum(v) }, grid: { color: '#1e1e35' } },
+            y: { min: 0, max: 100, title: { display: true, text: 'Win %', color: '#888' }, ticks: { color: '#666' }, grid: { color: '#1e1e35' } },
+          },
+          plugins: { legend: { labels: { color: '#ccc' } } },
+        }
+      });
+    }
+  }
+}
+
+function formatNum(n) {
+  if (n >= 1e9) return (n/1e9).toFixed(1) + 'B';
+  if (n >= 1e6) return (n/1e6).toFixed(1) + 'M';
+  if (n >= 1e3) return (n/1e3).toFixed(1) + 'K';
+  return n.toString();
+}
+
+// Boot
+init();
+</script>
+</body>
+</html>
