@@ -101,34 +101,51 @@ def fix_shared_memory():
 
 
 def get_method_hyperparams(method: str) -> dict:
-    """Return hyperparameter overrides for different training methods."""
+    """Return hyperparameter overrides for different training methods.
+
+    All methods use a large network (512-512-256) to actually utilize GPU.
+    The default MlpPolicy [64,64] is too small — 0-3% GPU usage on a 4090.
+    With [512,512,256] the network has ~460k params and GPU does real work.
+    """
+    # GPU-worthy network: 292 input -> 512 -> 512 -> 256 -> output
+    # This is ~460k params vs ~25k for default [64,64]
+    _gpu_net = {"policy_kwargs": {"net_arch": [512, 512, 256]}}
+    # Even bigger for methods that need more capacity
+    _big_net = {"policy_kwargs": {"net_arch": [1024, 512, 512, 256]}}
+
     methods = {
         "default": {
-            "desc": "Standard PPO (baseline)",
+            "desc": "Standard PPO with GPU-sized network (512-512-256)",
+            **_gpu_net,
         },
         "high_entropy": {
-            "desc": "High exploration (ent_coef=0.05)",
+            "desc": "High exploration (ent_coef=0.05, 512-512-256)",
             "ent_coef": 0.05,
+            **_gpu_net,
         },
         "low_lr": {
-            "desc": "Low learning rate (1e-4) for stable convergence",
+            "desc": "Low learning rate (1e-4, 512-512-256)",
             "learning_rate": 1e-4,
+            **_gpu_net,
         },
         "large_batch": {
-            "desc": "Large batches (n_steps=2048, batch=256) for GPU utilization",
+            "desc": "Large batches + big network (n_steps=2048, batch=512, 1024-512-512-256)",
             "n_steps": 2048,
-            "batch_size": 256,
+            "batch_size": 512,
+            **_big_net,
         },
         "aggressive": {
-            "desc": "Aggressive learning (lr=1e-3, 20 epochs, low entropy)",
+            "desc": "Aggressive learning (lr=1e-3, 20 epochs, 512-512-256)",
             "learning_rate": 1e-3,
             "n_epochs": 20,
             "ent_coef": 0.001,
+            **_gpu_net,
         },
         "exploration": {
-            "desc": "Maximum exploration (ent_coef=0.1, clip=0.3)",
+            "desc": "Maximum exploration (ent_coef=0.1, clip=0.3, 512-512-256)",
             "ent_coef": 0.1,
             "clip_range": 0.3,
+            **_gpu_net,
         },
     }
     if method not in methods:
