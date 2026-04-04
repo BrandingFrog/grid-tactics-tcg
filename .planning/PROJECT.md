@@ -2,101 +2,161 @@
 
 ## What This Is
 
-A fantasy trading card game played on a 5x5 grid where players deploy minions, cast magic, and use react cards to outmaneuver opponents. The primary purpose of this project is to build a reinforcement learning system in Python that discovers optimal play strategies, validates card balance, and eventually serves as the game's AI opponent. A stats dashboard provides a user-friendly UI for analyzing RL results.
+A fantasy trading card game played on a 5x5 grid where players deploy minions, cast magic, and use react cards to outmaneuver opponents. An RL system discovers optimal play strategies, validates card balance, and serves as the game's AI opponent. A live analytics dashboard (op.gg-style) tracks per-card win rates, training progress, and game statistics in real time.
 
 ## Core Value
 
 The reinforcement learning engine that discovers and validates game strategies — every other component (game rules, cards, UI) exists to feed and display RL insights.
 
+## Current Milestone: v1.1 Online PvP Dueling
+
+**Goal:** Two human players can play Grid Tactics against each other in real-time through a web UI, with the Python game engine enforcing all rules server-side.
+
+**Target features:**
+- Flask-SocketIO game server running the existing Python engine
+- Room code system (create/join) — no matchmaking
+- Per-player views (hidden hand, hidden deck — no information leakage)
+- Legal action filtering (UI shows only valid moves per game state)
+- 5x5 grid game board UI with hand display, mana/HP, react windows
+- Real-time turn flow: auto-draw → action → react window → turn passes
+- Win detection and game-over screen
+
+## Current State (2026-04-04)
+
+**Working end-to-end pipeline:**
+- 3x RTX 4090 pods on RunPod training via GPU-native tensor engine (100K+ FPS)
+- Training data streams to Supabase PostgreSQL in real time
+- Vercel dashboard at https://web-dashboard-bice-eight.vercel.app shows live analytics
+- 19 cards in starter pool, 500+ tests passing
+
 ## Requirements
 
 ### Validated
 
-- Game state foundation: immutable 5x5 grid, mana banking, deterministic RNG — Validated in Phase 1
-- Card system: data-driven JSON cards, 3 types, multi-purpose, 18 starter cards — Validated in Phase 2
-- Turn actions & combat: action resolver, effect resolver, react stack, legal_actions() — Validated in Phase 3
+- Game state foundation: immutable 5x5 grid, mana banking, deterministic RNG — Phase 1
+- Card system: data-driven JSON cards, 3 types, multi-purpose, 19 starter cards — Phase 2
+- Turn actions & combat: action resolver, effect resolver, react stack, legal_actions() — Phase 3
+- Win conditions: sacrifice-to-damage, HP tracking, game loop with 1000+ game smoke test — Phase 4
+- RL environment: Gymnasium wrapper, observation encoding, action masking — Phase 5
+- RL training pipeline: MaskablePPO, self-play, reward shaping, SQLite persistence — Phase 6
+- GPU tensor engine: batched PyTorch game engine, 32K parallel games, 100K+ FPS — Quick task
+- Live dashboard: Supabase PostgreSQL + Vercel, 5-tab analytics with card tier list — Quick task
 
 ### Active
 
-- [ ] Game engine implementing the full rule set (5x5 grid, action-based turns, mana banking, card types)
-- [ ] Reinforcement learning agent that learns optimal play strategy through self-play
-- [ ] Stats dashboard UI showing win rates, card usage, game replays, and balance graphs
-- [ ] Card system supporting multi-purpose cards (minion with react effect from hand)
-- [ ] RL-driven balance analysis for card tuning
-- [ ] Meta-strategy discovery across many games
+- [ ] Flask-SocketIO game server with room code system
+- [ ] Per-player views with hidden information and legal action filtering
+- [ ] 5x5 grid game board web UI (hand, mana, HP, react windows)
+- [ ] Real-time turn flow with win detection and game-over screen
+
+### Deferred (from v1.0)
+
+- [ ] RL-driven card balance analysis (per-card win rates feeding back into design)
+- [ ] Self-play robustness (PettingZoo AEC for react window, agent pool, league training)
+- [ ] Card expansion to 30+ cards with automated balance sweeps
+- [ ] Game replay viewer with step-by-step playback
 
 ### Out of Scope
 
-- Visual card art or polished game graphics — focus is on mechanics and RL, not aesthetics
-- Multiplayer networking or online play — AI vs AI and local play only for now
-- Mobile app — desktop/web stats dashboard only
-- Card trading or collection economy — not relevant to RL strategy testing
+- Visual card art or polished game graphics — focus is on mechanics and RL
+- Multiplayer networking — AI vs AI only for now
+- Card trading or collection economy
 
-## Context
+## Game Rules
 
-### Game Mechanics
+### Board
+5x5 grid. Each player owns 2 rows. Middle row is contested. Minions deploy to friendly rows and must advance forward to sacrifice at the opponent's back row.
 
-**Board:** 5x5 grid. Each player owns 2 rows (their side). Middle row is no-man's-land. Minions deploy to any friendly row and must cross the field to sacrifice themselves at the opponent's side, dealing their attack value as player damage.
+### Turn Structure
+1. **Auto-draw**: Active player draws a card automatically at turn start
+2. **Action**: One action per turn — play card, move minion, attack, sacrifice, or pass
+3. **React window**: Opponent may play a React card to counter
+4. **Turn passes** to the other player
 
-**Turn structure:** Extremely fast-paced. Each "turn" is a single action (play a card, move a minion, attack, or draw a card). After the active player's action, the opponent may play a React card to counter/interrupt. Then the turn passes.
+### Mana
+Pool-based. Regenerates +1 per turn. Unspent mana carries over (banking). Cards cost mana to play.
 
-**Mana:** Pool-based. Regenerates +1 per turn. Unspent mana carries over (banking). Playing cards costs mana from the pool. This creates a core tension: spend small now or save for big plays.
+### Card Types
+- **Minions** — Deploy to board. Stats: ATK, HP, Mana Cost, Range, Effects. Some have React effects (multi-purpose).
+- **Magic** — Immediate effects (damage, heal, buff). Discarded after use.
+- **React** — Counter/interrupt cards played during opponent's action window.
 
-**Card types:**
-- **Minions** — Deployed to the field. Stats: Attack, Health, Mana Cost, Range, Effects. May also have a React effect playable from hand (multi-purpose cards).
-- **Magic** — Direct effects that resolve immediately (damage, heal, buff, debuff). Cost mana.
-- **React** — Counter/interrupt cards played during the opponent's action window. Cost mana/cards/resources.
+### Movement
+**Forward only in lane.** Minions advance toward the enemy in their column. No lateral or backward movement. Player 1 moves down (row+1), Player 2 moves up (row-1).
 
-**Movement:** Minions can move in all 4 directions (up, down, left, right) — not just forward. This enables flanking, retreating, and lateral positioning strategies.
+### Combat
+Melee units attack adjacent targets (orthogonal). Ranged units attack up to 2 tiles orthogonally or 1 tile diagonally. Attacks can target any direction.
 
-**Positioning & Range:** Melee units attack adjacent targets (orthogonal). Ranged units can attack targets up to 2 tiles away orthogonally or 1 tile diagonally. Placing ranged units behind tanks is a core strategic layer.
+### Win Condition
+- **Sacrifice**: Minion on opponent's back row sacrifices itself, dealing ATK as player damage
+- **HP Depletion**: Reduce opponent HP to 0
+- **Timeout**: Turn limit (200), higher HP wins
 
-**Drawing:** Costs an action (not automatic per turn).
+### Card Pool (19 cards)
+| Type | Count | Examples |
+|------|-------|---------|
+| Minion | 11 | Fire Imp (1/1), Shadow Knight (3/3), Flame Wyrm (4/4), Furryroach (1/1 rally) |
+| Magic | 4 | Fireball (4 dmg), Dark Drain (2 dmg + 2 heal), Holy Light (3 heal), Inferno (2 AoE) |
+| React | 3 | Counter Spell (negate magic), Shield Block (+2 HP), Dark Mirror (1 dmg + 1 heal) |
+| Multi-purpose | 1 | Dark Sentinel (minion + react deploy vs light) |
 
-**Deck size:** 40+ cards.
+Attributes: Fire, Dark, Light, Neutral, Earth
 
-**Player HP:** To be determined — candidate for RL optimization.
+### Special Abilities
+- **Furryroach** (Earth 1/1 Insect): ON_MOVE — all other friendly Furryroaches advance forward if possible (rally)
 
-### RL Strategy (Phased)
+## Infrastructure
 
-1. **Phase 1 — Core strategy:** RL learns optimal play decisions (when to play, move, attack, draw, save mana, use react)
-2. **Phase 2 — Card balance:** Use RL win rates and usage data to identify overpowered/underpowered cards
-3. **Phase 3 — Deck composition:** RL explores which card combinations make the strongest decks
-4. **Phase 4 — Meta discovery:** Identify dominant strategies and counter-strategies across many games
-5. **Eventually:** RL agent becomes the game's AI opponent
+### Training Pipeline
+```
+RunPod RTX 4090 pods
+  → tensor_train.py (GPU-native PPO, 32K parallel games)
+  → Supabase PostgreSQL (training_runs, training_snapshots, card_stats, game_results)
+  → Vercel dashboard (real-time analytics)
+```
 
-### Tech Stack
+### Key Components
+| Component | Technology | Location |
+|-----------|-----------|----------|
+| Python game engine | dataclasses, immutable state | `src/grid_tactics/` |
+| Tensor game engine | PyTorch batched ops, GPU | `src/grid_tactics/tensor_engine/` |
+| RL environment | Gymnasium, MaskablePPO | `src/grid_tactics/rl/` |
+| GPU training | Custom PPO loop, 32K envs | `tensor_train.py` |
+| Database | Supabase PostgreSQL | Cloud (qdyatyqbafzgcmfsqzuz) |
+| Dashboard | Vanilla HTML/JS + Chart.js | `web-dashboard/` → Vercel |
+| Deployment | RunPod API + Supabase Storage | `deploy_runpod.py` |
+| Card definitions | JSON files | `data/cards/*.json` |
 
-- **Python** — Game engine and RL training
-- **Stats UI** — User-friendly web dashboard for viewing RL results
-
-## Constraints
-
-- **Language**: Python for game engine and RL
-- **RL focus**: Core strategy discovery is the priority — card balance and composition come later
-- **Testing**: Each development step validated with RL to confirm strategic depth
+### Dashboard Tabs
+1. **Overview** — KPIs, win rate chart, pod status cards
+2. **Training** — Policy loss, value loss, entropy, FPS curves
+3. **Cards** — Tier list with win rate, play rate, popularity + hover card preview
+4. **Games** — Game length distribution, win conditions, recent games
+5. **Models** — Leaderboard, head-to-head comparison, learning efficiency
 
 ## Key Decisions
 
-| Decision | Rationale | Outcome |
-|----------|-----------|---------|
-| Action-per-turn system | Creates tight action economy where every decision matters (play, move, attack, draw) | -- Pending |
-| Mana banking | Adds strategic depth — save small to go big | -- Pending |
-| Sacrifice-to-damage | Minions must cross the board and sacrifice to deal damage, creating positional gameplay | -- Pending |
-| Draw costs action | Increases tension in action economy | -- Pending |
-| Multi-purpose cards | Cards can serve multiple roles (minion + react from hand), adds deck-building depth | -- Pending |
-| RL before game polish | Build the RL pipeline first, use it to validate mechanics before investing in visuals | -- Pending |
+| Decision | Rationale | Status |
+|----------|-----------|--------|
+| Action-per-turn | Tight action economy, every decision matters | Active |
+| Mana banking | Strategic depth — save small to go big | Active |
+| Sacrifice-to-damage | Positional gameplay, must cross board | Active |
+| Auto-draw at turn start | Drawing is mandatory, not an action choice | Active (changed from draw-costs-action) |
+| Forward-only movement | Lane-based strategy, no retreat | Active (changed from 4-dir movement) |
+| GPU tensor engine over SB3 | 100-1000x faster training via batched GPU ops | Active |
+| Supabase PostgreSQL over SQLite | Cloud DB for multi-pod training + live dashboard | Active |
+| Vercel dashboard over Streamlit | Static deployment, real-time via Supabase, no server | Active |
 
 ## Evolution
 
 This document evolves at phase transitions and milestone boundaries.
 
 **After each phase transition** (via `/gsd:transition`):
-1. Requirements invalidated? Move to Out of Scope with reason
-2. Requirements validated? Move to Validated with phase reference
-3. New requirements emerged? Add to Active
-4. Decisions to log? Add to Key Decisions
-5. "What This Is" still accurate? Update if drifted
+1. Requirements invalidated? → Move to Out of Scope with reason
+2. Requirements validated? → Move to Validated with phase reference
+3. New requirements emerged? → Add to Active
+4. Decisions to log? → Add to Key Decisions
+5. "What This Is" still accurate? → Update if drifted
 
 **After each milestone** (via `/gsd:complete-milestone`):
 1. Full review of all sections
@@ -105,4 +165,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-04-02 after Phase 3 completion*
+*Last updated: 2026-04-04*
