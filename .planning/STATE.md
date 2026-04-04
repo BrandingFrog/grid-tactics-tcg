@@ -2,12 +2,12 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Online PvP Dueling
-status: defining-requirements
-stopped_at: Milestone v1.1 started
+status: ready-to-plan
+stopped_at: Roadmap created for v1.1
 last_updated: "2026-04-04"
 last_activity: 2026-04-04
 progress:
-  total_phases: 0
+  total_phases: 5
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -18,23 +18,24 @@ progress:
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-04-02)
+See: .planning/PROJECT.md (updated 2026-04-04)
 
 **Core value:** The reinforcement learning engine that discovers and validates game strategies
-**Current focus:** Phase 06 — rl-training-pipeline
+**Current focus:** Phase 11 — Server Foundation & Room System
 
 ## Current Position
 
-Phase: Not started (defining requirements)
-Plan: —
-Status: Defining requirements
-Last activity: 2026-04-04 — Milestone v1.1 started
+Phase: 11 of 15 (Server Foundation & Room System)
+Plan: 0 of TBD in current phase
+Status: Ready to plan
+Last activity: 2026-04-04 — Roadmap created for v1.1 Online PvP Dueling
+
+Progress: [░░░░░░░░░░] 0%
 
 ## Performance Metrics
 
 **Velocity:**
-
-- Total plans completed: 0
+- Total plans completed: 0 (v1.1)
 - Average duration: --
 - Total execution time: 0 hours
 
@@ -44,27 +45,11 @@ Last activity: 2026-04-04 — Milestone v1.1 started
 |-------|-------|-------|----------|
 | - | - | - | - |
 
-**Recent Trend:**
-
-- Last 5 plans: --
-- Trend: --
+**Recent Trend (from v1.0):**
+- Last 5 plans: 6min, 23min, 8min, 12min
+- Trend: Variable (UI/integration plans take longer)
 
 *Updated after each plan completion*
-| Phase 01 P01 | 3min | 2 tasks | 7 files |
-| Phase 01 P02 | 2min | 1 tasks | 2 files |
-| Phase 01 P03 | 2min | 1 tasks | 2 files |
-| Phase 01 P04 | 3min | 2 tasks | 6 files |
-| Phase 02 P01 | 3min | 2 tasks | 5 files |
-| Phase 02 P02 | 5min | 2 tasks | 22 files |
-| Phase 03 P01 | 4min | 2 tasks | 9 files |
-| Phase 03 P02 | 8min | 2 tasks | 4 files |
-| Phase 03 P03 | 11min | 2 tasks | 7 files |
-| Phase 04 P01 | 5min | 1 tasks | 9 files |
-| Phase 04 P02 | 11min | 1 tasks | 4 files |
-| Phase 05 P01 | 6min | 1 tasks | 6 files |
-| Phase 05 P02 | 23min | 1 tasks | 3 files |
-| Phase 06 P01 | 8min | 2 tasks | 6 files |
-| Phase 06 P02 | 12min | 2 tasks | 8 files |
 
 ## Accumulated Context
 
@@ -73,50 +58,11 @@ Last activity: 2026-04-04 — Milestone v1.1 started
 Decisions are logged in PROJECT.md Key Decisions table.
 Recent decisions affecting current work:
 
-- Roadmap: Game engine split into 4 incremental phases (state, cards, actions, game loop) per research recommendation to catch rule bugs before RL training
-- Roadmap: RL layer split into 3 phases (environment, training, robustness) to isolate observation design from training infrastructure
-- Roadmap: Dashboard phases depend on Phase 6 (not Phase 8) so they can start before card expansion completes
-- [Phase 01]: Used IntEnum for PlayerSide/TurnPhase for numpy array compatibility and efficient serialization
-- [Phase 01]: Used src-layout (src/grid_tactics/) for clean package isolation from tests
-- [Phase 01]: All game constants in types.py as module-level typed variables with decision-reference comments (D-01 through D-10)
-- [Phase 01]: Used flat tuple[Optional[int], ...] row-major storage in Board for efficient numpy conversion in RL phase
-- [Phase 01]: Board adjacency/distance methods are @staticmethod operating on position tuples, callable without Board instance
-- [Phase 01]: Used dataclasses.replace() for all Player mutation operations to preserve frozen immutability
-- [Phase 01]: Mana uses Interpretation B (simple +1 to current, capped at MAX_MANA_CAP) -- banking preserves unspent current_mana across regens
-- [Phase 01]: GameRNG kept separate from frozen GameState (RNG is mutable, state is immutable)
-- [Phase 01]: validate_state returns error lists instead of raising exceptions for graceful handling
-- [Phase 01]: TYPE_CHECKING guard used in validation.py to prevent circular import with game_state.py
-- [Phase 02]: Used attack_range instead of range to avoid shadowing Python builtin
-- [Phase 02]: Effect amount range [1,10] for Phase 8 extensibility; non-minion cards explicitly reject attack/health fields
-- [Phase 02]: CardLoader validates all enum fields at load time with case-insensitive parsing and descriptive error messages
-- [Phase 02]: CardLibrary assigns deterministic numeric IDs via sorted alphabetical card_id ordering
-- [Phase 02]: Starter pool: 18 cards with mana curve 1-cost:2, 2-cost:6, 3-cost:5, 4-cost:3, 5-cost:2 and all 4 attributes represented
-- [Phase 03]: ActionType uses IntEnum matching existing enum pattern for numpy compatibility
-- [Phase 03]: GameState extended with defaults for backward compatibility -- existing code unchanged
-- [Phase 03]: MinionInstance tracks current_health and attack_bonus separate from CardDefinition base stats (runtime copy pattern)
-- [Phase 03]: Action uses single dataclass with Optional fields rather than per-type subclasses for 6 action types
-- [Phase 03]: SELF_OWNER target routes DAMAGE/HEAL to player HP, BUFF_ATTACK/BUFF_HEALTH to caster minion
-- [Phase 03]: Dead minion on_death effects resolve on post-removal state (dead minions removed first, then effects trigger)
-- [Phase 03]: Magic cards use virtual caster context (no board position) for effect resolution
-- [Phase 03]: React stack entries use frozen dataclass with card_numeric_id for effect lookup during LIFO resolution
-- [Phase 03]: resolve_action is the single entry point delegating to handle_react_action during REACT phase
-- [Phase 03]: legal_actions enumerates both friendly and enemy minion targets for react single-target effects
-- [Phase 04]: Win check after cleanup but before react transition: lethal damage ends game immediately
-- [Phase 04]: React resolution game-over skips turn advance/mana regen, returns terminal state
-- [Phase 04]: is_game_over guard at top of legal_actions returns only PASS for finished games
-- [Phase 04]: DEFAULT_TURN_LIMIT=200 as safety cap; random agents rarely win due to healing card pool
-- [Phase 04]: GameRNG.choice() uses numpy integers for deterministic random selection from legal actions
-- [Phase 04]: Win mechanism tested via low-HP integration tests; random play produces draws with starter healing pool
-- [Phase 05]: Position-based action encoding (not minion-ID) for stable integer mapping; minimal hand encoding (2 features/card) for compact observation
-- [Phase 05]: Single-agent alternating perspective: both players act through same GridTacticsEnv with observation from next actor's viewpoint
-- [Phase 05]: Illegal action fallback to PASS for Gymnasium env_checker compatibility (unmasked action sampling)
-- [Phase 05]: Random agents cannot produce natural wins with starter card pool (sacrifice requires crossing 5 rows) -- documented game design property
-- [Phase 06]: Used sqlite3 dict factory for reader (not sqlite3.Row) for direct DataFrame compatibility
-- [Phase 06]: WAL journal mode set in ensure_schema for concurrent dashboard reads during training writes
-- [Phase 06]: Overall stats win_rate computed from training_player perspective per Pitfall 6
-- [Phase 06]: Potential function uses 4 weighted components: HP advantage (0.3), board control (0.3), mana efficiency (0.2), positional advancement (0.2)
-- [Phase 06]: SelfPlayEnv training agent always player 0; mana component absolute for independent conservation incentive
-- [Phase 06]: CheckpointManager 50/50 latest/random sampling for opponent diversity; SelfPlayCallback save_freq=10k default
+- [v1.1 Roadmap]: 5 phases (11-15) derived from 15 requirements across 5 categories (SERVER, VIEW, UI, PLAY, POLISH)
+- [v1.1 Roadmap]: Server tested programmatically before browser UI (Phases 11-12 headless, 13-15 browser)
+- [v1.1 Roadmap]: View filtering in Phase 12 before UI in Phase 13 -- security guarantee before rendering
+- [v1.1 Roadmap]: React window UI separated from base board UI (Phase 14 vs 13) to keep Phase 13 scoped
+- [v1.1 Roadmap]: Session tokens (not socket IDs) established in Phase 11 for Phase 15 reconnection
 
 ### Pending Todos
 
@@ -124,12 +70,12 @@ None yet.
 
 ### Blockers/Concerns
 
-- Research flag: Windows platform has unofficial Gymnasium/PettingZoo support -- test early in Phase 5
-- Research flag: Observation space sizing (300-500 features estimated) needs prototyping in Phase 5
-- Research flag: React window in PettingZoo AEC has limited prior art -- careful implementation needed in Phase 7
+- Research flag: Phase 15 reconnection -- cookie vs localStorage, token expiry, and state resend edge cases may surface
+- Research flag: Phase 15 timer cancellation -- start_background_task() cancellation is MEDIUM confidence per research
+- Gap: Preset deck composition (card copy counts for 30-card deck) must be decided in Phase 11
 
 ## Session Continuity
 
 Last session: 2026-04-04
-Stopped at: Milestone v1.1 started — defining requirements
+Stopped at: Roadmap created for v1.1 Online PvP Dueling -- ready to plan Phase 11
 Resume file: None

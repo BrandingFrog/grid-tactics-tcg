@@ -1,10 +1,14 @@
 # Roadmap: Grid Tactics TCG
 
-## Overview
+## Milestones
 
-This roadmap builds Grid Tactics TCG from the ground up: first a correct, deterministic game engine (Phases 1-4), then an RL training pipeline layered on top (Phases 5-7), then card expansion with RL-driven balance analysis (Phase 8), and finally an analytics dashboard for visualizing results (Phases 9-10). Each phase delivers a verifiable capability. The game engine is built in four incremental slices (state, cards, actions, game loop) rather than as a monolith, because RL agents will exploit every rule gap -- each slice gets tested before the next depends on it. The RL layer is split into environment interface, training pipeline, and self-play robustness to isolate observation/action design from training infrastructure from multi-agent dynamics.
+- :white_check_mark: **v1.0 Game Engine & RL** - Phases 1-10 (shipped 2026-04-04)
+- :construction: **v1.1 Online PvP Dueling** - Phases 11-15 (in progress)
 
 ## Phases
+
+<details>
+<summary>v1.0 Game Engine & RL (Phases 1-10) - SHIPPED 2026-04-04</summary>
 
 **Phase Numbering:**
 - Integer phases (1, 2, 3): Planned milestone work
@@ -12,18 +16,16 @@ This roadmap builds Grid Tactics TCG from the ground up: first a correct, determ
 
 Decimal phases appear between their surrounding integers in numeric order.
 
-- [ ] **Phase 1: Game State Foundation** - 5x5 grid, mana system, deterministic RNG, and core state representation
-- [ ] **Phase 2: Card System & Types** - Data-driven card definitions, three card types, multi-purpose cards, and starter pool
-- [ ] **Phase 3: Turn Actions & Combat** - Action-per-turn system, movement, melee/ranged combat, drawing, and legal action enumeration
-- [ ] **Phase 4: Win Condition & Game Loop** - Sacrifice-to-damage mechanic, HP tracking, win detection, and complete playable games
-- [ ] **Phase 5: RL Environment Interface** - Gymnasium/PettingZoo wrapper, observation encoding, action space with masking
-- [ ] **Phase 6: RL Training Pipeline** - MaskablePPO training, self-play loop, reward shaping, and data persistence
+- [x] **Phase 1: Game State Foundation** - 5x5 grid, mana system, deterministic RNG, and core state representation
+- [x] **Phase 2: Card System & Types** - Data-driven card definitions, three card types, multi-purpose cards, and starter pool
+- [x] **Phase 3: Turn Actions & Combat** - Action-per-turn system, movement, melee/ranged combat, drawing, and legal action enumeration
+- [x] **Phase 4: Win Condition & Game Loop** - Sacrifice-to-damage mechanic, HP tracking, win detection, and complete playable games
+- [x] **Phase 5: RL Environment Interface** - Gymnasium/PettingZoo wrapper, observation encoding, action space with masking
+- [x] **Phase 6: RL Training Pipeline** - MaskablePPO training, self-play loop, reward shaping, and data persistence
 - [ ] **Phase 7: Self-Play Robustness** - PettingZoo AEC for react window modeling, agent pool, and league-based training
 - [ ] **Phase 8: Card Expansion & Balance** - Expanded 20-30 card pool and automated RL-driven balance sweep
 - [ ] **Phase 9: Analytics Dashboard Core** - Streamlit dashboard with win rates, card statistics, and training metrics
 - [ ] **Phase 10: Replay & Balance Visualization** - Game replay viewer with step-by-step playback and balance heatmaps
-
-## Phase Details
 
 ### Phase 1: Game State Foundation
 **Goal**: A correct, immutable game state representation exists for the 5x5 grid with mana banking and deterministic reproducibility
@@ -157,21 +159,96 @@ Plans:
 **Plans**: TBD
 **UI hint**: yes
 
+</details>
+
+### :construction: v1.1 Online PvP Dueling (In Progress)
+
+**Milestone Goal:** Two human players can play Grid Tactics against each other in real-time through a web UI, with the Python game engine enforcing all rules server-side.
+
+- [ ] **Phase 11: Server Foundation & Room System** - Flask-SocketIO server with room code create/join and initial game state emission
+- [ ] **Phase 12: State Serialization & Game Flow** - Hidden-info view filtering, action validation, legal action emission, complete game playable via WebSocket client
+- [ ] **Phase 13: Board & Hand UI** - 5x5 CSS Grid board, hand display, mana/HP bars, and turn phase indicator in the browser
+- [ ] **Phase 14: Gameplay Interaction** - Action submission via click targeting, react window UI, and game over screen
+- [ ] **Phase 15: Resilience & Polish** - Reconnection handling, scrollable game log, and rematch flow
+
+## Phase Details
+
+### Phase 11: Server Foundation & Room System
+**Goal**: Two clients can connect via WebSocket, create or join a game room by code, and both receive a game_start event with initial state
+**Depends on**: Nothing (first phase of v1.1; uses existing Python engine as-is)
+**Requirements**: SERVER-01, SERVER-02
+**Success Criteria** (what must be TRUE):
+  1. User can create a new game room and receive back a short alphanumeric room code they can share
+  2. User can join an existing room by entering the room code, and both players receive a game_start event with initial game state
+  3. A programmatic WebSocket client (Python or wscat) can complete the full create-join-receive flow without any browser UI
+  4. Room codes are unique and rooms are tracked in-memory with player session tokens (not socket IDs) for reconnection readiness
+**Plans**: TBD
+
+### Phase 12: State Serialization & Game Flow
+**Goal**: A complete game is playable via raw WebSocket messages -- both players take turns, react windows work, actions are validated, opponent hand is hidden, and the game ends with a correct winner
+**Depends on**: Phase 11
+**Requirements**: SERVER-03, VIEW-01, VIEW-02, VIEW-03
+**Success Criteria** (what must be TRUE):
+  1. Each player receives state updates containing only their own hand contents -- opponent hand is reduced to a card count with no card IDs or details leaked
+  2. Server validates every submitted action against legal_actions() and rejects illegal actions with an error event (never crashes)
+  3. Each state update includes the player's current legal actions list so the client knows what moves are available
+  4. A complete game can be played to conclusion via two programmatic WebSocket clients taking alternating turns through action and react phases
+**Plans**: TBD
+
+### Phase 13: Board & Hand UI
+**Goal**: The game is fully rendered in the browser -- users see the 5x5 grid with minions, their hand with card details, both players' mana/HP, and whose turn it is
+**Depends on**: Phase 12
+**Requirements**: UI-01, UI-02, UI-03, UI-04
+**Success Criteria** (what must be TRUE):
+  1. User can see the 5x5 grid with minions displayed showing name, ATK/HP, owner color, and attribute indicator
+  2. User can see their hand with full card details (name, mana cost, ATK/HP for minions, effects, attribute) and cards they cannot afford are visually dimmed
+  3. User can see both players' current mana and HP displayed prominently
+  4. User can see whose turn it is and whether the current phase is ACTION or REACT
+  5. The board renders correctly with two browser windows connected to the same room, each showing their own perspective
+**Plans**: TBD
+**UI hint**: yes
+
+### Phase 14: Gameplay Interaction
+**Goal**: Users can play the full game through the browser UI -- clicking cards and board positions to submit actions, responding to react windows, and seeing the game over result
+**Depends on**: Phase 13
+**Requirements**: PLAY-01, PLAY-02, PLAY-03
+**Success Criteria** (what must be TRUE):
+  1. User can submit an action by clicking a card in hand and then clicking a valid board target, with valid targets highlighted after card selection
+  2. During the react window, the user can see the pending action, play a react card from hand to counter it, or click a pass button to let it resolve
+  3. When the game ends, user sees a game over overlay showing victory or defeat, the reason (HP depletion / sacrifice / timeout), and final HP for both players
+**Plans**: TBD
+**UI hint**: yes
+
+### Phase 15: Resilience & Polish
+**Goal**: The game handles real-world conditions -- disconnections recover gracefully, a game log tracks what happened, and players can rematch without creating a new room
+**Depends on**: Phase 14
+**Requirements**: POLISH-01, POLISH-02, POLISH-03
+**Success Criteria** (what must be TRUE):
+  1. User who disconnects and reconnects within 60 seconds resumes the game with full state restored and can continue playing
+  2. User can see a scrollable game log sidebar showing the history of actions taken (who played what, damage dealt, cards drawn)
+  3. After a game ends, user can click a "Rematch" button and both players start a new game in the same room without re-entering room codes
+**Plans**: TBD
+**UI hint**: yes
+
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9 -> 10
-Note: Phase 9 depends on Phase 6 (not 8), so Phases 8 and 9 could run in parallel if desired.
+Phases execute in numeric order: 11 -> 12 -> 13 -> 14 -> 15
 
-| Phase | Plans Complete | Status | Completed |
-|-------|----------------|--------|-----------|
-| 1. Game State Foundation | 4/4 | Complete | 2026-04-02 |
-| 2. Card System & Types | 2/2 | Complete | 2026-04-02 |
-| 3. Turn Actions & Combat | 0/3 | Planned | - |
-| 4. Win Condition & Game Loop | 0/2 | Planned | - |
-| 5. RL Environment Interface | 0/2 | Planned | - |
-| 6. RL Training Pipeline | 0/3 | Planned | - |
-| 7. Self-Play Robustness | 0/TBD | Not started | - |
-| 8. Card Expansion & Balance | 0/TBD | Not started | - |
-| 9. Analytics Dashboard Core | 0/TBD | Not started | - |
-| 10. Replay & Balance Visualization | 0/TBD | Not started | - |
+| Phase | Milestone | Plans Complete | Status | Completed |
+|-------|-----------|----------------|--------|-----------|
+| 1. Game State Foundation | v1.0 | 4/4 | Complete | 2026-04-02 |
+| 2. Card System & Types | v1.0 | 2/2 | Complete | 2026-04-02 |
+| 3. Turn Actions & Combat | v1.0 | 3/3 | Complete | 2026-04-03 |
+| 4. Win Condition & Game Loop | v1.0 | 2/2 | Complete | 2026-04-03 |
+| 5. RL Environment Interface | v1.0 | 2/2 | Complete | 2026-04-03 |
+| 6. RL Training Pipeline | v1.0 | 2/3 | In progress | - |
+| 7. Self-Play Robustness | v1.0 | 0/TBD | Not started | - |
+| 8. Card Expansion & Balance | v1.0 | 0/TBD | Not started | - |
+| 9. Analytics Dashboard Core | v1.0 | 0/TBD | Not started | - |
+| 10. Replay & Balance Visualization | v1.0 | 0/TBD | Not started | - |
+| 11. Server Foundation & Room System | v1.1 | 0/TBD | Not started | - |
+| 12. State Serialization & Game Flow | v1.1 | 0/TBD | Not started | - |
+| 13. Board & Hand UI | v1.1 | 0/TBD | Not started | - |
+| 14. Gameplay Interaction | v1.1 | 0/TBD | Not started | - |
+| 15. Resilience & Polish | v1.1 | 0/TBD | Not started | - |

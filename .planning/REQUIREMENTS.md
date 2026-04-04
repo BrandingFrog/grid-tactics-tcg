@@ -128,22 +128,22 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| SERVER-01 | TBD | Pending |
-| SERVER-02 | TBD | Pending |
-| SERVER-03 | TBD | Pending |
-| VIEW-01 | TBD | Pending |
-| VIEW-02 | TBD | Pending |
-| VIEW-03 | TBD | Pending |
-| UI-01 | TBD | Pending |
-| UI-02 | TBD | Pending |
-| UI-03 | TBD | Pending |
-| UI-04 | TBD | Pending |
-| PLAY-01 | TBD | Pending |
-| PLAY-02 | TBD | Pending |
-| PLAY-03 | TBD | Pending |
-| POLISH-01 | TBD | Pending |
-| POLISH-02 | TBD | Pending |
-| POLISH-03 | TBD | Pending |
+| SERVER-01 | Phase 11 | Pending |
+| SERVER-02 | Phase 11 | Pending |
+| SERVER-03 | Phase 12 | Pending |
+| VIEW-01 | Phase 12 | Pending |
+| VIEW-02 | Phase 12 | Pending |
+| VIEW-03 | Phase 12 | Pending |
+| UI-01 | Phase 13 | Pending |
+| UI-02 | Phase 13 | Pending |
+| UI-03 | Phase 13 | Pending |
+| UI-04 | Phase 13 | Pending |
+| PLAY-01 | Phase 14 | Pending |
+| PLAY-02 | Phase 14 | Pending |
+| PLAY-03 | Phase 14 | Pending |
+| POLISH-01 | Phase 15 | Pending |
+| POLISH-02 | Phase 15 | Pending |
+| POLISH-03 | Phase 15 | Pending |
 
 ### v1.0 — Game Engine & RL (Historical)
 
@@ -178,9 +178,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 **Coverage (v1.1):**
 - v1.1 requirements: 15 total
-- Mapped to phases: 0
-- Unmapped: 15 (pending roadmap creation)
+- Mapped to phases: 15
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-04-02*
-*Last updated: 2026-04-04 after milestone v1.1 definition*
+*Last updated: 2026-04-04 after v1.1 roadmap creation*
