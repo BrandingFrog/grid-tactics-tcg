@@ -3,9 +3,42 @@
 **Defined:** 2026-04-02
 **Core Value:** The reinforcement learning engine that discovers and validates game strategies
 
-## v1 Requirements
+## v1.1 Requirements — Online PvP Dueling
 
-Requirements for initial release. Each maps to roadmap phases.
+Requirements for online PvP dueling milestone. Each maps to roadmap phases.
+
+### Server & Networking
+
+- [ ] **SERVER-01**: User can create a new game room and receive a shareable room code
+- [ ] **SERVER-02**: User can join an existing game room by entering a room code
+- [ ] **SERVER-03**: Both players receive real-time state updates after each action resolves
+
+### Game State & Security
+
+- [ ] **VIEW-01**: User can only see their own hand and deck count — opponent's hand contents and deck order are hidden
+- [ ] **VIEW-02**: Server validates all actions against legal_actions() before applying — illegal actions are rejected
+- [ ] **VIEW-03**: User receives their legal actions list with every state update
+
+### Game Board UI
+
+- [ ] **UI-01**: User can see the 5x5 grid with minions showing name, ATK/HP, owner, and attribute
+- [ ] **UI-02**: User can see their hand with card details (name, mana cost, ATK/HP, effects, attribute) and unplayable cards dimmed
+- [ ] **UI-03**: User can see both players' current mana and HP
+- [ ] **UI-04**: User can see whose turn it is and the current phase (ACTION vs REACT)
+
+### Gameplay Interaction
+
+- [ ] **PLAY-01**: User can submit an action by clicking cards and board positions, with valid targets highlighted
+- [ ] **PLAY-02**: User can see the pending action during react window and choose to play a react card or pass
+- [ ] **PLAY-03**: User sees a game over screen with victory/defeat result and final HP when the game ends
+
+### Polish & Resilience
+
+- [ ] **POLISH-01**: User can reconnect within 60 seconds after disconnecting and resume the game with full state restored
+- [ ] **POLISH-02**: User can see a scrollable game log showing action history
+- [ ] **POLISH-03**: User can click "Rematch" after game ends to start a new game in the same room
+
+## v1.0 Requirements (Completed)
 
 ### Game Engine
 
@@ -33,15 +66,6 @@ Requirements for initial release. Each maps to roadmap phases.
 - [ ] **RL-07**: PettingZoo AEC environment wrapper modeling the react window as alternating agent turns with restricted action sets
 - [ ] **RL-08**: Agent pool / league-based self-play to prevent strategy cycling and collapse
 
-### Analytics Dashboard
-
-- [ ] **DASH-01**: Web-based stats dashboard (Streamlit) displaying RL training results
-- [ ] **DASH-02**: Win rate tracking per agent, per deck composition, over time windows
-- [ ] **DASH-03**: Card usage statistics showing play frequency, win correlation, and effectiveness per card
-- [ ] **DASH-04**: Game replay viewer with step-by-step playback of AI vs AI matches showing board state and decisions
-- [ ] **DASH-05**: Balance heatmaps and card power rankings visualizing overpowered/underpowered cards
-- [ ] **DASH-06**: Training metrics display (loss curves, reward trends, episode lengths)
-
 ### Card System
 
 - [x] **CARD-01**: Data-driven card definitions in JSON/YAML with stats, effects, and keywords interpreted at runtime
@@ -54,11 +78,18 @@ Requirements for initial release. Each maps to roadmap phases.
 - [x] **DATA-01**: Game results persisted to SQLite database (winner, scores, deck compositions, game length, card actions)
 - [x] **DATA-02**: Training run metadata stored for comparison across experiments
 
-## v2 Requirements
+## Future Requirements
 
-Deferred to future release. Tracked but not in current roadmap.
+Deferred to future milestones. Tracked but not in current roadmap.
 
-### Advanced RL
+### Gameplay Enhancements
+
+- **FUTURE-01**: Turn timer with auto-pass (45s action / 20s react)
+- **FUTURE-02**: Card play and attack animations
+- **FUTURE-03**: Sound effects for actions
+- **FUTURE-04**: Spectator mode for third-party viewers
+
+### Advanced RL (from v1.0)
 
 - **ARL-01**: Vectorized/parallel environment execution for 10x+ training speedup
 - **ARL-02**: Curriculum learning starting with simplified scenarios and increasing complexity
@@ -66,7 +97,7 @@ Deferred to future release. Tracked but not in current roadmap.
 - **ARL-04**: Meta-strategy discovery with archetype clustering and matchup matrices
 - **ARL-05**: Deck composition explorer showing strongest card combinations as archetypes
 
-### User Experience
+### User Experience (from v1.0)
 
 - **UX-01**: Human-playable interface to play against trained RL agent
 - **UX-02**: Deck builder UI for constructing and testing custom decks
@@ -77,17 +108,44 @@ Explicitly excluded. Documented to prevent scope creep.
 
 | Feature | Reason |
 |---------|--------|
+| Matchmaking / ELO ranking | No player base yet. Room codes sufficient for friends. |
+| User accounts / authentication | Zero value for friends playing. Anonymous sessions with display names. |
+| Deck builder | Only 19 cards. Not enough variety for meaningful deckbuilding. |
+| Chat / free text | Moderation burden. Not needed for friends (use Discord). |
+| AI opponent in PvP UI | Requires model loading/inference. Separate milestone. |
+| Mobile-responsive layout | Desktop-first. Basic viewport meta tag only. |
+| Persistent game history | Games are ephemeral. In-memory only. |
+| Card art / visual polish | Time sink. Colored borders by attribute, simple type icons. |
+| Peer-to-peer networking | Destroys server authority, enables cheating. |
 | Visual card art / polished graphics | Focus is on RL mechanics, not aesthetics |
-| Multiplayer networking / online play | All games run locally (AI vs AI) |
 | Card trading / collection economy | Not relevant to RL strategy testing |
-| Mobile app | Desktop/web dashboard only |
-| Real-time combat | Game is turn-based by design; real-time changes the RL problem fundamentally |
-| Complex card effect scripting language | Start with Python functions; data-driven is sufficient |
-| Tournament bracket system | Round-robin matchups and Elo from results suffice |
 
 ## Traceability
 
 Which phases cover which requirements. Updated during roadmap creation.
+
+### v1.1 — Online PvP Dueling
+
+| Requirement | Phase | Status |
+|-------------|-------|--------|
+| SERVER-01 | TBD | Pending |
+| SERVER-02 | TBD | Pending |
+| SERVER-03 | TBD | Pending |
+| VIEW-01 | TBD | Pending |
+| VIEW-02 | TBD | Pending |
+| VIEW-03 | TBD | Pending |
+| UI-01 | TBD | Pending |
+| UI-02 | TBD | Pending |
+| UI-03 | TBD | Pending |
+| UI-04 | TBD | Pending |
+| PLAY-01 | TBD | Pending |
+| PLAY-02 | TBD | Pending |
+| PLAY-03 | TBD | Pending |
+| POLISH-01 | TBD | Pending |
+| POLISH-02 | TBD | Pending |
+| POLISH-03 | TBD | Pending |
+
+### v1.0 — Game Engine & RL (Historical)
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
@@ -111,12 +169,6 @@ Which phases cover which requirements. Updated during roadmap creation.
 | RL-06 | Phase 6 | Complete |
 | RL-07 | Phase 7 | Pending |
 | RL-08 | Phase 7 | Pending |
-| DASH-01 | Phase 9 | Pending |
-| DASH-02 | Phase 9 | Pending |
-| DASH-03 | Phase 9 | Pending |
-| DASH-04 | Phase 10 | Pending |
-| DASH-05 | Phase 10 | Pending |
-| DASH-06 | Phase 9 | Pending |
 | CARD-01 | Phase 2 | Complete |
 | CARD-02 | Phase 2 | Complete |
 | CARD-03 | Phase 8 | Pending |
@@ -124,11 +176,11 @@ Which phases cover which requirements. Updated during roadmap creation.
 | DATA-01 | Phase 6 | Complete |
 | DATA-02 | Phase 6 | Complete |
 
-**Coverage:**
-- v1 requirements: 32 total
-- Mapped to phases: 32
-- Unmapped: 0
+**Coverage (v1.1):**
+- v1.1 requirements: 15 total
+- Mapped to phases: 0
+- Unmapped: 15 (pending roadmap creation)
 
 ---
 *Requirements defined: 2026-04-02*
-*Last updated: 2026-04-02 after roadmap creation*
+*Last updated: 2026-04-04 after milestone v1.1 definition*
