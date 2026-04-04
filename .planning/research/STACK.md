@@ -1,242 +1,235 @@
-# Technology Stack
+# Stack Research: Online PvP Dueling Additions
 
-**Project:** Grid Tactics TCG
-**Researched:** 2026-04-02
-**Overall confidence:** HIGH
+**Domain:** Real-time multiplayer web game (turn-based card game over WebSockets)
+**Researched:** 2026-04-04
+**Confidence:** HIGH
 
-## Python Version
-
-| Technology | Version | Purpose | Why |
-|------------|---------|---------|-----|
-| Python | 3.12 | Runtime | Sweet spot: all key libraries require >=3.10 (PyTorch 2.11, SB3 2.8, Gymnasium 1.2, NumPy 2.4). 3.12 is mature, fast (10-15% faster than 3.11), and avoids bleeding-edge 3.13/3.14 compatibility surprises. |
-
-**Confidence:** HIGH -- verified all dependencies support 3.12 on PyPI.
+**Scope:** This document covers ONLY the new stack additions for v1.1 Online PvP Dueling. The existing game engine (dataclasses, NumPy, PyTorch tensor engine), RL pipeline (SB3, PettingZoo, Gymnasium), cloud training (RunPod, Supabase, Vercel analytics dashboard), and testing (pytest, mypy, ruff) are validated and unchanged. See CLAUDE.md for the full existing stack.
 
 ---
 
 ## Recommended Stack
 
-### Game Engine Layer
+### Game Server
 
-| Technology | Version | Purpose | Why |
-|------------|---------|---------|-----|
-| NumPy | >=2.2,<3.0 | Game state arrays, observation encoding | All RL libraries depend on NumPy. Game board (5x5 grid), card stats, and hand/deck state are naturally array-shaped. Pin to >=2.2 to support Python 3.12 while allowing minor upgrades. |
-| dataclasses (stdlib) | -- | Card, Player, GameState modeling | Zero-dependency, fast, immutable-friendly (`frozen=True`). Cards and game rules are data-heavy but don't need runtime validation -- the game engine validates moves. Pydantic adds unnecessary overhead here. |
-| enum (stdlib) | -- | Card types, game phases, action types | Type-safe constants for `CardType.MINION`, `ActionType.MOVE`, `Phase.REACT_WINDOW`, etc. |
+| Technology | Version | Purpose | Why Recommended |
+|------------|---------|---------|-----------------|
+| Flask | >=3.1,<4.0 | HTTP framework / app scaffold | Flask 3.1.3 (Feb 2026) is the current stable release. Minimal, well-understood, and the base for Flask-SocketIO. The game server needs to serve the game HTML page and handle WebSocket connections -- Flask does both with zero ceremony. |
+| Flask-SocketIO | >=5.6,<6.0 | WebSocket server with rooms, events, broadcasting | Flask-SocketIO 5.6.1 (Feb 2026) is the current release. Built-in room management maps directly to game rooms. Event-driven architecture (emit/on) maps to game actions. Auto-reconnection via Socket.IO protocol. The project already uses Python -- Flask-SocketIO is the lowest-friction path to add real-time multiplayer. |
+| simple-websocket | >=1.1 | WebSocket transport for threading async mode | Required for WebSocket support in threading mode. simple-websocket 1.1.0 (Oct 2024) is the current release. Flask-SocketIO auto-detects it. |
 
-**Confidence:** HIGH -- these are foundational Python patterns, not library-dependent.
+**Async Mode Decision: Threading (not gevent, not eventlet).**
 
-### Reinforcement Learning Core
+Rationale:
+- **Eventlet is deprecated.** In maintenance mode ("life support"), incompatible with modern Python. Not recommended for new projects per Flask-SocketIO maintainer.
+- **Gevent requires gevent-websocket for WebSocket transport.** gevent-websocket's last release was 0.10.1 in **2017** -- it is abandoned. Without it, gevent falls back to long-polling only, which adds latency to a real-time game. Using gevent + uWSGI for WebSocket is possible but adds deployment complexity.
+- **Threading + simple-websocket** is the simplest, most compatible option. It supports true WebSocket transport (not just long-polling). For a turn-based card game with 2 players per room, threading handles the load trivially -- each game produces a handful of messages per second, not thousands.
+- **Scaling ceiling is irrelevant here.** The single-worker gunicorn limitation of threading mode matters for apps serving thousands of concurrent WebSocket connections. A card game PvP server with ~10-50 simultaneous rooms (20-100 players) is well within threading capacity.
 
-| Technology | Version | Purpose | Why |
-|------------|---------|---------|-----|
-| Gymnasium | >=1.2,<2.0 | RL environment API standard | The Farama Foundation standard. All RL libraries target this API. Custom environments implement `step()`, `reset()`, `observation_space`, `action_space`. Required by SB3 and PettingZoo. |
-| PettingZoo | >=1.25,<2.0 | Multi-agent (2-player) environment wrapper | "Gymnasium for multi-agent RL." The AEC (Agent-Environment-Cycle) API is purpose-built for turn-based games where agents act sequentially -- exactly the Grid Tactics turn model. Provides `agent_iter()`, legal action tracking, and reward per agent. |
-| SuperSuit | >=3.9 | Environment preprocessing wrappers | Bridges PettingZoo environments to SB3's vectorized environment API via `ss.pettingzoo_env_to_vec_env_v1()`. Also provides observation normalization and padding utilities. |
+**Confidence:** HIGH -- versions verified on PyPI, async mode recommendation based on Flask-SocketIO maintainer discussions and current library maintenance status.
 
-**Confidence:** HIGH -- verified on PyPI. PettingZoo AEC API is the standard for sequential turn-based games.
+### Frontend (Game UI)
 
-### RL Training
+| Technology | Version | Purpose | Why Recommended |
+|------------|---------|---------|-----------------|
+| Socket.IO Client JS | 4.8.3 | Browser-to-server real-time communication | Matches Flask-SocketIO's server protocol. CDN delivery, no build step. Auto-reconnection, fallback to long-polling. |
+| Vanilla HTML/CSS/JS | -- | Game board UI, hand display, mana/HP indicators | **Consistent with the existing dashboard pattern.** The Vercel analytics dashboard is vanilla HTML/JS with CDN libraries. No React/Vue/Svelte -- the game UI is a single page with a 5x5 grid, hand of cards, and status bars. A framework would add build tooling, bundle complexity, and npm dependency management for zero benefit at this UI complexity. |
+| CSS Grid | -- | 5x5 board layout | Native CSS Grid (`grid-template: repeat(5, 1fr) / repeat(5, 1fr)`) is purpose-built for the 5x5 game board. No grid framework needed. |
 
-| Technology | Version | Purpose | Why |
-|------------|---------|---------|-----|
-| Stable-Baselines3 | >=2.8,<3.0 | RL algorithm implementations (PPO) | Best single-agent RL library. Clean API, excellent docs, PyTorch-based. Empirical research (Oct 2025 arXiv:2503.22575) shows SB3's PPO achieves superhuman performance in 50% of trials, outperforming RLlib (<15%). For a single-machine project, SB3's simplicity beats RLlib's distributed complexity. |
-| sb3-contrib | >=2.8,<3.0 | MaskablePPO for action masking | **Critical for this project.** Card games have variable legal actions per turn. MaskablePPO prevents the agent from selecting invalid actions (playing cards you can't afford, moving to occupied tiles, attacking out of range). Without action masking, the agent wastes enormous training time learning what's illegal. |
-| PyTorch | >=2.10,<3.0 | Neural network backend | SB3's backend. PyTorch 2.11 is current. Don't install separately -- SB3 pulls the right version as a dependency. Listed here for awareness. |
+**CDN includes (no npm, no build step):**
+```html
+<script src="https://cdn.socket.io/4.8.3/socket.io.min.js"></script>
+```
 
-**Confidence:** HIGH -- SB3 + MaskablePPO is the community standard for turn-based games with variable action spaces.
+**Confidence:** HIGH -- Socket.IO client 4.8.3 verified on CDN (jsDelivr, cdnjs). Vanilla JS is a deliberate choice matching project conventions.
 
-### RL Monitoring & Experiment Tracking
+### State Serialization
 
-| Technology | Version | Purpose | Why |
-|------------|---------|---------|-----|
-| TensorBoard | >=2.18 | Training metrics visualization | Ships with SB3 integration out of the box. Logs reward curves, loss, episode length. Zero config: pass `tensorboard_log="./tb_logs"` to any SB3 model. |
-| Weights & Biases (wandb) | >=0.19 | Experiment tracking, hyperparameter sweeps | Optional but recommended for Phase 2+. W&B's SB3 integration records metrics, saves model checkpoints, logs hyperparameters, and enables experiment comparison across runs. Free tier is sufficient. |
+| Technology | Version | Purpose | Why Recommended |
+|------------|---------|---------|-----------------|
+| dataclasses.asdict() (stdlib) | -- | Convert frozen GameState to dict for JSON emission | Already used throughout the codebase. Zero new dependencies. Python 3.12 has optimized `asdict()` for common types (int, str, bool, float) -- significant speedup for JSON serialization. |
+| json (stdlib) | -- | JSON encoding for Socket.IO emit | Socket.IO's Python library handles JSON serialization automatically when you `emit()` a dict. No manual `json.dumps()` needed for basic types. |
+| Custom `to_client_dict()` methods | -- | Per-player view filtering (hidden information) | The serialization layer MUST strip opponent's hand, deck contents, and deck order before sending. A custom method on GameState that takes `viewer_side: PlayerSide` produces the filtered view. This is game logic, not a library concern. |
 
-**Confidence:** MEDIUM -- TensorBoard is HIGH confidence (built into SB3). W&B is MEDIUM (useful but not required initially).
+**Why NOT msgspec/orjson/cattrs:** The game server serializes one game state per action per room. At ~1 serialization per second per room, stdlib `json` is more than fast enough. Adding a serialization library would be premature optimization that adds a dependency for no measurable gain.
 
-### Stats Dashboard
+**Confidence:** HIGH -- `dataclasses.asdict()` is stdlib and already the project's pattern.
 
-| Technology | Version | Purpose | Why |
-|------------|---------|---------|-----|
-| Streamlit | >=1.56,<2.0 | Web-based stats dashboard | Fastest path from Python data to interactive web UI. No HTML/CSS/JS required. Built-in charting with `st.line_chart`, `st.bar_chart`. Supports Plotly figures natively. Live reload during development. Data scientists' standard tool. |
-| Plotly | >=6.6,<7.0 | Interactive charts for RL analysis | Richer charts than Streamlit's built-ins: heatmaps for board positions, scatter plots for card balance, animated replays. Plotly figures embed directly in Streamlit via `st.plotly_chart()`. |
+### Room Management
 
-**Confidence:** HIGH -- Streamlit is the clear winner for "Python-native dashboard with minimal frontend work." Verified latest versions on PyPI.
+| Technology | Version | Purpose | Why Recommended |
+|------------|---------|---------|-----------------|
+| Flask-SocketIO rooms (built-in) | -- | Group players by game room | Flask-SocketIO has first-class room support: `join_room(code)`, `leave_room(code)`, `emit('event', data, to=code)`. No additional library needed. |
+| secrets.token_urlsafe(6) (stdlib) | -- | Generate room codes | 8-character URL-safe room codes. Short enough to share verbally, random enough to prevent guessing. Stdlib `secrets` module uses cryptographically secure randomness. |
+| Python dict (in-memory) | -- | Room state registry (room_code -> GameSession) | A simple `dict[str, GameSession]` mapping room codes to active game sessions. For a single-server deployment with ~50 rooms, an in-memory dict is the right choice. No Redis, no database. |
 
-### Data Persistence
+**Why NOT Redis for room state:** Redis adds a network dependency, deployment complexity, and serialization overhead. The PvP server is a single process (threading mode, single gunicorn worker). In-memory state is faster and simpler. If the server restarts, active games are lost -- this is acceptable for a v1.1 MVP. Persistence is a future concern.
 
-| Technology | Version | Purpose | Why |
-|------------|---------|---------|-----|
-| SQLite (stdlib) | -- | Game results, card statistics, RL metrics | Zero-config, single-file database. Perfect for a single-machine project. Store game outcomes, per-card win rates, mana curves, action distributions. No server to manage. |
-| JSON files | -- | Card definitions, deck configurations | Human-readable, version-controllable card data. Load card pool from JSON, not hardcoded classes. Enables rapid balance iteration. |
-| CSV / Parquet | -- | Training run exports, bulk analysis | Pandas-friendly export format for offline analysis. Parquet for large training datasets (millions of games). |
-| pandas | >=2.2 | Data manipulation for dashboard | Powers the data layer between SQLite storage and Streamlit display. Aggregations, filtering, pivots for stats analysis. |
-
-**Confidence:** HIGH for SQLite/JSON/pandas. MEDIUM for Parquet (only needed at scale).
-
-### Testing & Quality
-
-| Technology | Version | Purpose | Why |
-|------------|---------|---------|-----|
-| pytest | >=8.0 | Test framework | Standard. Test game rules exhaustively (legal moves, mana costs, combat resolution, react windows). Test RL environment (observation shapes, reward values, termination conditions). |
-| pytest-cov | >=5.0 | Coverage reporting | Game engine needs high coverage -- bugs in rules corrupt RL training data silently. |
-| mypy | >=1.13 | Static type checking | Catch type errors in game state manipulation before they become RL training corruption. Type annotations on Card, GameState, Action are essential. |
-| ruff | >=0.9 | Linting and formatting | Fast, replaces flake8+black+isort. Single tool for code quality. |
-
-**Confidence:** HIGH -- standard Python development tools.
+**Confidence:** HIGH -- Flask-SocketIO rooms are a core feature, not an add-on.
 
 ---
 
-## Alternatives Considered
+## Supporting Libraries
 
-| Category | Recommended | Alternative | Why Not |
-|----------|-------------|-------------|---------|
-| RL Framework | Stable-Baselines3 | RLlib (Ray) | RLlib is designed for distributed training across clusters. Grid Tactics trains on a single machine. RLlib's abstractions are deep and hard to customize. Empirical evidence shows worse PPO performance than SB3. Only choose RLlib if training takes days and you need GPU clusters. |
-| RL Framework | Stable-Baselines3 | CleanRL | CleanRL is educational -- single-file implementations meant to be read, not imported. No library API. You'd copy-paste and modify code. Good for learning, bad for a production game engine. |
-| RL Framework | Stable-Baselines3 | TorchRL | PyTorch's official RL library. Powerful but immature -- had compatibility issues with Gymnasium >=1.0 as recently as Jan 2025. API is more complex than SB3. Revisit if SB3 hits limitations. |
-| RL Framework | Stable-Baselines3 | RLCard | Purpose-built for card games (poker, UNO). But it imposes its own game abstraction that doesn't fit Grid Tactics' grid-based positioning and react system. You'd fight the framework. |
-| Multi-agent | PettingZoo | OpenSpiel (DeepMind) | OpenSpiel has a broader game theory focus (extensive-form games, normal-form games). More academic, C++ core with Python bindings. PettingZoo is pure Python, simpler API, better SB3 integration. |
-| Dashboard | Streamlit | Dash (Plotly) | Dash gives more UI control but requires callback architecture (Flask-like). Streamlit's script-based model is simpler for a stats dashboard. Dash is better for enterprise apps with complex interactivity. |
-| Dashboard | Streamlit | Panel (HoloViz) | Panel integrates deeply with HoloViews/Bokeh ecosystem. Overkill for this project. Streamlit's larger community means more examples and faster problem-solving. |
-| Dashboard | Streamlit | Gradio | Gradio is ML-model-demo focused (input -> output). Not designed for data exploration dashboards with multiple pages, filters, and historical data. |
-| Data modeling | dataclasses | Pydantic | Pydantic adds runtime validation overhead on every object creation. In RL training, you create millions of game states. The game engine itself validates legality. Pydantic's strengths (API input validation, serialization) aren't needed here. |
-| Database | SQLite | PostgreSQL | PostgreSQL requires a server process and administration. SQLite is embedded, zero-config, and handles the read patterns (dashboard queries) fine. Only switch if you need concurrent writes from multiple processes. |
-| Algorithm | MaskablePPO | DQN | PPO is on-policy and handles continuous/discrete mixed action spaces better. DQN requires a replay buffer and struggles with large discrete action spaces. MaskablePPO's action masking is the decisive advantage for card games. |
+| Library | Version | Purpose | When to Use |
+|---------|---------|---------|-------------|
+| Flask-CORS | >=5.0 | Cross-origin requests if game UI is served from different domain | Only needed if the game HTML is served from a different origin than the Flask-SocketIO server. If serving from the same Flask app (recommended for v1.1), CORS is handled by Flask-SocketIO's `cors_allowed_origins` parameter. |
+| gunicorn | >=23.0 | Production WSGI server | For production deployment. Run with `gunicorn --worker-class=gthread --workers=1 --threads=100 server:app`. Single worker required for Flask-SocketIO session affinity. Threading mode with simple-websocket. |
+
+**Confidence:** MEDIUM for Flask-CORS (may not be needed). HIGH for gunicorn.
+
+---
+
+## Integration With Existing Python Engine
+
+The PvP server wraps the **existing Python game engine** (`src/grid_tactics/`). It does NOT use the tensor engine (that is for GPU training only).
+
+### Integration Surface
+
+```
+Flask-SocketIO Server
+  |
+  |-- GameState.new_game(seed, deck_p1, deck_p2)     # Create game
+  |-- legal_actions(state, library)                    # Get valid moves for UI
+  |-- resolve_action(state, action, library)           # Apply player's chosen action
+  |-- CardLibrary.from_directory("data/cards/")        # Load card pool once at startup
+  |
+  v
+Existing Python Engine (unchanged)
+```
+
+**Key design point:** The server holds one `GameState` per room. When a player submits an action via WebSocket, the server:
+1. Validates the action is in `legal_actions(state, library)`
+2. Calls `resolve_action(state, action, library)` to get the new state
+3. Emits filtered views to each player via `to_client_dict(viewer_side)`
+
+The immutable `GameState` with `dataclasses.replace()` is ideal for this -- each action produces a new state snapshot, and the server holds the latest one.
+
+### Serialization Boundary
+
+The frozen dataclasses use `IntEnum` values throughout (PlayerSide, TurnPhase, ActionType, etc.). These serialize to integers naturally via `dataclasses.asdict()`. The JavaScript client maps integers back to display strings.
+
+Action objects from the client arrive as JSON dicts and must be validated + reconstructed as `Action` dataclass instances server-side. Never trust client-submitted actions -- always validate against `legal_actions()`.
 
 ---
 
 ## Installation
 
 ```bash
-# Create virtual environment
-python -m venv .venv
-source .venv/bin/activate  # or .venv\Scripts\activate on Windows
+# New dependencies for PvP server (add to existing venv)
+pip install Flask>=3.1,<4.0
+pip install Flask-SocketIO>=5.6,<6.0
+pip install simple-websocket>=1.1
 
-# Core game engine (no heavy dependencies)
-pip install numpy
-
-# RL training stack
-pip install stable-baselines3[extra]  # includes tensorboard
-pip install sb3-contrib                # MaskablePPO
-pip install pettingzoo                 # multi-agent environment API
-pip install supersuit                  # PettingZoo-to-SB3 bridge
-
-# Dashboard
-pip install streamlit plotly pandas
-
-# Optional: experiment tracking
-pip install wandb
-
-# Dev dependencies
-pip install pytest pytest-cov mypy ruff
-
-# Pin with a requirements file
-pip freeze > requirements.txt
+# Production server
+pip install gunicorn>=23.0
 ```
 
-### Recommended: Use `pyproject.toml` for dependency management
+### pyproject.toml Addition
 
 ```toml
-[project]
-name = "grid-tactics-tcg"
-requires-python = ">=3.12"
-dependencies = [
-    "numpy>=2.2,<3.0",
-]
-
 [project.optional-dependencies]
-rl = [
-    "stable-baselines3>=2.8,<3.0",
-    "sb3-contrib>=2.8,<3.0",
-    "pettingzoo>=1.25,<2.0",
-    "supersuit>=3.9",
-    "tensorboard>=2.18",
+# ... existing groups ...
+pvp = [
+    "Flask>=3.1,<4.0",
+    "Flask-SocketIO>=5.6,<6.0",
+    "simple-websocket>=1.1",
 ]
-dashboard = [
-    "streamlit>=1.56,<2.0",
-    "plotly>=6.6,<7.0",
-    "pandas>=2.2,<3.0",
-]
-dev = [
-    "pytest>=8.0",
-    "pytest-cov>=5.0",
-    "mypy>=1.13",
-    "ruff>=0.9",
+pvp-prod = [
+    "gunicorn>=23.0",
 ]
 ```
 
----
-
-## Architecture Implications
-
-### Separation of Concerns
-
-The stack naturally splits into three installable layers:
-
-1. **`grid-tactics-core`** -- Game engine (numpy, stdlib only). No RL dependency. This lets you test game rules without importing PyTorch.
-2. **`grid-tactics-rl`** -- RL training (SB3, PettingZoo, SuperSuit). Imports core. Defines the Gymnasium environment wrapping the game engine.
-3. **`grid-tactics-dashboard`** -- Stats UI (Streamlit, Plotly, pandas). Reads from SQLite. No game engine import needed at runtime.
-
-This layering means: you can run the dashboard without installing PyTorch, and you can train without installing Streamlit.
-
-### Key Integration Points
-
-- **Game Engine -> RL**: The PettingZoo AEC environment wraps the game engine. It calls `game.get_legal_actions()` to produce the action mask, `game.step(action)` to advance state, and `game.get_observation()` to produce the numpy observation array.
-- **RL -> Dashboard**: Training writes results to SQLite (game outcomes, per-card stats, model checkpoints). Dashboard reads from SQLite.
-- **Action Masking**: `sb3-contrib.MaskablePPO` requires the environment to provide `action_masks()` returning a boolean numpy array. The game engine must expose legal actions efficiently.
+**Total new dependencies: 3 (Flask, Flask-SocketIO, simple-websocket).** Flask-SocketIO pulls `python-socketio` and `python-engineio` as transitive deps. That is the full dependency tree for the game server.
 
 ---
 
-## Version Compatibility Matrix
+## Alternatives Considered
 
-All versions verified on PyPI as of 2026-04-02.
-
-| Package | Version | Python Requirement | Notes |
-|---------|---------|-------------------|-------|
-| Python | 3.12 | -- | Target runtime |
-| NumPy | 2.4.x | >=3.11 | OK with 3.12 |
-| PyTorch | 2.11.x | >=3.10 | OK with 3.12 |
-| Gymnasium | 1.2.x | >=3.10 | OK with 3.12 |
-| PettingZoo | 1.25.x | >=3.9,<3.13 | OK with 3.12. Note: upper bound <3.13 |
-| SuperSuit | 3.9.x | matches PettingZoo | OK with 3.12 |
-| Stable-Baselines3 | 2.8.x | >=3.10 | OK with 3.12 |
-| sb3-contrib | 2.8.x | >=3.10 | OK with 3.12 |
-| Streamlit | 1.56.x | >=3.10 | OK with 3.12 |
-| Plotly | 6.6.x | >=3.8 | OK with 3.12 |
-| pandas | 2.2.x | >=3.9 | OK with 3.12 |
-
-**Python 3.12 is the correct target.** All packages support it. Python 3.13 would break PettingZoo (<3.13 requirement as of 1.25.0).
+| Recommended | Alternative | Why Not Alternative |
+|-------------|-------------|---------------------|
+| Flask-SocketIO | FastAPI + raw WebSockets | FastAPI WebSockets lack rooms, namespaces, auto-reconnection, and broadcasting -- you would implement all of these manually. Flask-SocketIO provides them out of the box. For a turn-based game where latency tolerance is ~100ms, the raw performance advantage of FastAPI is irrelevant. |
+| Flask-SocketIO | FastAPI + python-socketio | Viable but adds complexity. You mount `socketio.ASGIApp` as a sub-application of FastAPI, requiring ASGI deployment (uvicorn). The project has no existing ASGI infrastructure. Flask-SocketIO is simpler and purpose-built. |
+| Flask-SocketIO | Django Channels | Django is a heavy framework. Grid Tactics has no ORM, no admin panel, no template engine needs. Django Channels adds channel layers (Redis required), ASGI deployment, and significantly more moving parts for the same WebSocket functionality. |
+| Vanilla HTML/JS | React/Vue/Svelte | The game UI is a single page: 5x5 grid, hand of cards, mana bar, HP bar, action buttons. The existing analytics dashboard is vanilla HTML/JS. Introducing a framework means adding npm, a build step, bundling, and a JS dependency tree -- all for a UI that can be built with ~500 lines of vanilla JS. If the UI grows significantly (deck builder, collection, matchmaking lobby), revisit this decision. |
+| Vanilla HTML/JS | Phaser.js | Phaser is a canvas-based game engine. Overkill for a card game with a 5x5 grid that can be represented with CSS Grid and DOM elements. Phaser excels at sprite animation and physics -- neither is needed here. DOM-based UI is simpler to style, more accessible, and easier to debug. |
+| In-memory dict | Redis for room state | Redis adds a network hop, a running service, serialization/deserialization of GameState objects, and deployment complexity. For a single-process server with tens of rooms, an in-memory dict is faster and simpler. Add Redis only if you need multiple server instances (horizontal scaling), which is out of scope for v1.1. |
+| Threading async mode | Gevent | Gevent itself is fine, but its WebSocket support depends on gevent-websocket (last updated 2017, abandoned) or uWSGI with custom config. Threading with simple-websocket (maintained, 2024 release) is simpler and fully supports WebSocket transport. |
+| Threading async mode | Eventlet | Eventlet is deprecated and in maintenance mode. Compatibility issues with Python 3.10+. Not recommended for new projects per Flask-SocketIO maintainer. |
+| dataclasses.asdict() | Pydantic serialization | Pydantic would require rewriting all frozen dataclasses to Pydantic models. The game engine uses `frozen=True` dataclasses with `__post_init__` validation throughout. Pydantic would add runtime overhead to every GameState creation (millions during RL training). The PvP server should use the same data model as the engine, not a parallel one. |
+| dataclasses.asdict() | msgspec / orjson | At ~1 serialization per second per room, stdlib JSON is fast enough. msgspec requires schema definitions, orjson requires a C extension. Neither provides meaningful benefit at this throughput. |
 
 ---
 
 ## What NOT to Use
 
-| Technology | Why Not |
-|------------|---------|
-| Pygame | No value for RL training. The game has no visual rendering needed. If visualization is needed later, the Streamlit dashboard handles it. Pygame adds complexity for a visual layer that doesn't feed RL. |
-| OpenAI Gym (old) | Deprecated. Gymnasium (Farama Foundation) is the successor. Gym is unmaintained since 2022. |
-| TensorFlow/Keras | SB3 is PyTorch-only. Mixing frameworks creates dependency hell. Stick to PyTorch ecosystem. |
-| Docker (initially) | Adds deployment complexity before there's anything to deploy. Add Docker for the dashboard when it's ready to share, not during development. |
-| MongoDB/Redis | Over-engineered for single-machine training. SQLite handles the data volume. |
-| FastAPI/Flask | No API needed. The dashboard reads directly from SQLite. Only add an API if the dashboard and training run on separate machines. |
-| Jupyter Notebooks (for core code) | Fine for exploration, but game engine and RL code must be in proper `.py` modules for testing, importing, and version control. Use notebooks only for one-off analysis. |
+| Avoid | Why | Use Instead |
+|-------|-----|-------------|
+| eventlet | Deprecated, maintenance-mode, Python 3.10+ compatibility issues | Threading + simple-websocket |
+| gevent-websocket | Abandoned (last release 2017), Python 2.7/3.5 only | simple-websocket (1.1.0, 2024) |
+| React / Vue / Svelte | Adds npm, build tooling, bundling for a single-page game UI | Vanilla HTML/CSS/JS (matches existing dashboard) |
+| Redis | Unnecessary for single-process server with tens of rooms | In-memory Python dict |
+| Pydantic | Would require rewriting game engine data model | dataclasses.asdict() with custom view filtering |
+| Pygame | No value for a web-based game | HTML/CSS game board |
+| boardgame.io | JavaScript library -- wrong language. Game engine is Python | Flask-SocketIO wrapping existing Python engine |
+| WebSocket (raw) | No rooms, no auto-reconnect, no broadcasting, no long-polling fallback | Socket.IO (Flask-SocketIO + socket.io-client) |
+| Docker (for v1.1 dev) | Adds container complexity before the server works | Run Flask-SocketIO directly in venv |
+| Database for game state | Active game state does not need persistence. Games are ephemeral | In-memory dict |
+
+---
+
+## Version Compatibility Matrix
+
+All versions verified on PyPI as of 2026-04-04.
+
+| Package | Version | Python Requirement | Compatibility Notes |
+|---------|---------|-------------------|---------------------|
+| Flask | 3.1.3 | >=3.9 | OK with 3.12. Security fix release (Feb 2026). |
+| Flask-SocketIO | 5.6.1 | >=3.8 | OK with 3.12. Session fixes for Flask >=3.1.3. CI tests 3.13/3.14. |
+| python-socketio | 5.16.1 | >=3.8 | OK with 3.12. Transitive dep of Flask-SocketIO. |
+| python-engineio | (matches socketio) | >=3.8 | OK with 3.12. Transitive dep of python-socketio. |
+| simple-websocket | 1.1.0 | >=3.6 | OK with 3.12. WebSocket transport for threading mode. |
+| Socket.IO Client JS | 4.8.3 | N/A (browser) | Protocol-compatible with python-socketio 5.x. CDN delivery. |
+| gunicorn | 23.x | >=3.7 | OK with 3.12. Use `--worker-class=gthread --workers=1 --threads=100`. |
+
+**No conflicts with existing stack.** Flask, Flask-SocketIO, and simple-websocket have no dependency overlap with PyTorch, SB3, NumPy, or the RL stack. The PvP server and training pipeline share the game engine code but have completely separate dependency trees.
+
+---
+
+## Stack Patterns by Variant
+
+**If deploying on same machine as training:**
+- Run Flask-SocketIO on a different port (e.g., 5000) than any training services
+- The PvP server uses CPU only (Python game engine), so it does not compete with GPU training
+- Share the `data/cards/` directory for card definitions
+
+**If deploying on a separate server (Render, Railway, Fly.io):**
+- Package as a single Python app with `gunicorn` entrypoint
+- No GPU needed, cheapest tier is sufficient
+- Upload `data/cards/` and `src/grid_tactics/` with the deployment
+- Consider adding `CORS_ORIGINS` env var for the game UI if served separately
+
+**If adding AI opponent later (vs RL agent):**
+- Load the trained PyTorch model in the Flask-SocketIO server
+- The AI player calls `model.predict(observation, action_masks)` instead of waiting for WebSocket input
+- This requires PyTorch in the PvP server's dependencies -- keep it optional until needed
 
 ---
 
 ## Sources
 
-- [PettingZoo PyPI](https://pypi.org/project/pettingzoo/) -- version 1.25.0 (April 2025), confirmed Python <3.13
-- [Stable-Baselines3 GitHub releases](https://github.com/DLR-RM/stable-baselines3/releases/tag/v2.8.0) -- version 2.8.0 (April 2026)
-- [sb3-contrib PyPI](https://pypi.org/project/sb3-contrib/) -- version 2.8.0 (April 2026), MaskablePPO
-- [Gymnasium PyPI](https://pypi.org/project/gymnasium/) -- version 1.2.3 (December 2025)
-- [PyTorch PyPI](https://pypi.org/project/torch/) -- version 2.11.0 (March 2026)
-- [Streamlit PyPI](https://pypi.org/project/streamlit/) -- version 1.56.0 (March 2026)
-- [Plotly PyPI](https://pypi.org/project/plotly/) -- version 6.6.0 (March 2026)
-- [NumPy PyPI](https://pypi.org/project/numpy/) -- version 2.4.4 (March 2026)
-- [SB3 MaskablePPO docs](https://sb3-contrib.readthedocs.io/en/master/modules/ppo_mask.html)
-- [PettingZoo AEC API](https://pettingzoo.farama.org/api/aec/)
-- [PettingZoo SB3 tutorial](https://pettingzoo.farama.org/tutorials/sb3/index.html)
-- [arXiv:2503.22575](https://arxiv.org/html/2503.22575v2) -- PPO implementation comparison (SB3 vs RLlib performance)
-- [SB3 Custom Environments](https://stable-baselines3.readthedocs.io/en/master/guide/custom_env.html)
-- [W&B SB3 Integration](https://docs.wandb.ai/guides/integrations/stable-baselines-3/)
+- [Flask-SocketIO PyPI](https://pypi.org/project/Flask-SocketIO/) -- version 5.6.1 (Feb 2026), confirmed Python >=3.8
+- [Flask PyPI](https://pypi.org/project/Flask/) -- version 3.1.3 (Feb 2026)
+- [python-socketio PyPI](https://pypi.org/project/python-socketio/) -- version 5.16.1 (Feb 2026)
+- [simple-websocket PyPI](https://pypi.org/project/simple-websocket/) -- version 1.1.0 (Oct 2024)
+- [gevent PyPI](https://pypi.org/project/gevent/) -- version 25.9.1 (Sep 2025), Python 3.9+
+- [gevent-websocket PyPI](https://pypi.org/project/gevent-websocket/) -- version 0.10.1 (Mar 2017), ABANDONED
+- [Socket.IO Client CDN](https://www.jsdelivr.com/package/npm/socket.io-client) -- version 4.8.3 (Dec 2025)
+- [Flask-SocketIO async mode discussion](https://github.com/miguelgrinberg/Flask-SocketIO/discussions/1915) -- maintainer guidance on eventlet/gevent/threading
+- [Flask-SocketIO eventlet deprecation discussion](https://github.com/miguelgrinberg/Flask-SocketIO/discussions/2037) -- eventlet maintenance status
+- [Flask-SocketIO deployment docs](https://flask-socketio.readthedocs.io/en/latest/deployment.html) -- gunicorn config
+- [Socket.IO client installation](https://socket.io/docs/v4/client-installation/) -- CDN URLs and version
+
+---
+*Stack research for: Grid Tactics TCG v1.1 Online PvP Dueling*
+*Researched: 2026-04-04*

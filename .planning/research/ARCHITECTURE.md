@@ -1,424 +1,697 @@
-# Architecture Patterns
+# Architecture Patterns: Online PvP Dueling
 
-**Domain:** TCG game engine with reinforcement learning (5x5 grid tactical card game)
-**Researched:** 2026-04-02
+**Domain:** Real-time multiplayer card game server (Flask-SocketIO + existing Python game engine)
+**Researched:** 2026-04-04
+**Overall confidence:** HIGH
+
+## Executive Summary
+
+The existing Python game engine is already structured for clean PvP integration. The frozen-dataclass architecture with `resolve_action()` as a single entry point, `legal_actions()` for validation, and `GameState.to_dict()`/`from_dict()` for serialization means the server layer is a thin orchestration wrapper -- it does NOT need to modify engine internals.
+
+The PvP server adds a **Layer 5: Multiplayer Server** on top of the existing architecture, wrapping the Python game engine (Layer 1) directly and bypassing the RL layers entirely. Three new components are needed: (1) a Flask-SocketIO game server that holds active game sessions in memory, (2) a room/session manager that maps room codes to game state + player SIDs, and (3) a state sanitizer that strips hidden information before emitting per-player views.
+
+The existing `game_loop.py` pattern (call `legal_actions()`, pick action, call `resolve_action()`) becomes the server's action processing pipeline, with the "pick action" step replaced by receiving player input over WebSocket.
+
+---
 
 ## Recommended Architecture
 
-Grid Tactics TCG requires a **four-layer architecture** that cleanly separates game rules from RL training from analytics. This mirrors the proven pattern used by [RLCard](https://rlcard.org/overview.html) (Environment / Game / Agent layers) but extends it with a grid-positional game layer and a dedicated analytics/dashboard layer.
+### System Overview
 
 ```
-+-------------------------------------------------------------+
-|                    LAYER 4: DASHBOARD                       |
-|  Stats API  |  Game Replay  |  Balance Viz  |  Meta Charts  |
-+-------------------------------------------------------------+
-        |                    reads from
-+-------------------------------------------------------------+
-|                    LAYER 3: TRAINING                        |
-|  Self-Play Loop  |  Agent (PPO)  |  Curriculum  |  Logging  |
-+-------------------------------------------------------------+
-        |                    wraps
-+-------------------------------------------------------------+
-|                    LAYER 2: ENVIRONMENT                     |
-|  Gymnasium/PettingZoo Env  |  Observation Encoder  |        |
-|  Action Masking  |  Reward Shaper  |  Self-Play Wrapper     |
-+-------------------------------------------------------------+
-        |                    drives
-+-------------------------------------------------------------+
-|                    LAYER 1: GAME ENGINE                     |
-|  GameState  |  Board(5x5)  |  Cards/Deck  |  Rules/Judger  |
-|  Player  |  ActionResolver  |  ReactWindow  |  TurnManager  |
-+-------------------------------------------------------------+
+Browser (P1)                    Browser (P2)
+    |                               |
+    | socket.io-client              | socket.io-client
+    |                               |
+    +---------- WebSocket ----------+
+                    |
+     +------------------------------+
+     |   LAYER 5: PVP SERVER (NEW)  |
+     |  Flask-SocketIO  |  Rooms    |
+     |  ViewFilter  |  TimerMgr     |
+     +------------------------------+
+                    |
+         wraps directly (no RL layer)
+                    |
+     +------------------------------+
+     |  LAYER 1: GAME ENGINE (existing)  |
+     |  GameState  |  ActionResolver     |
+     |  LegalActions  |  ReactStack      |
+     |  CardLibrary  |  Board/Player     |
+     +------------------------------+
+
+Existing layers (unchanged, not involved in PvP):
+  Layer 2: RL Environment (Gymnasium/PettingZoo)
+  Layer 3: Training Pipeline (MaskablePPO, tensor engine)
+  Layer 4: Dashboard (Vercel + Supabase)
 ```
 
-### Why This Layering
+The PvP server has **zero ML dependencies** -- it runs on the cheapest possible server with just Flask, Flask-SocketIO, and the core game engine.
 
-**Layer 1 (Game Engine)** knows nothing about RL. It is a pure Python implementation of the game rules that can be used headlessly, tested independently, and reasoned about without any ML dependencies. This is critical: if the game rules are tangled with the RL interface, every rule change breaks the training pipeline.
+### Component Boundaries
 
-**Layer 2 (Environment)** translates between the game engine's rich Python objects and the flat numpy arrays that RL algorithms consume. It follows the [Gymnasium](https://gymnasium.farama.org/) / [PettingZoo AEC](https://pettingzoo.farama.org/) interface standard. This layer handles observation encoding, action decoding, action masking, and reward calculation.
+| Component | Location | Responsibility | Communicates With |
+|-----------|----------|---------------|-------------------|
+| **Flask-SocketIO Server** | `server/app.py` (NEW) | WebSocket event routing, CORS, static file serving, startup | RoomManager, EventHandlers |
+| **RoomManager** | `server/room_manager.py` (NEW) | Room CRUD, player-to-room mapping, SID tracking, cleanup | GameSession instances |
+| **GameSession** | `server/game_session.py` (NEW) | Holds one game: GameState + RNG + player SIDs, processes actions, thread-safe | GameState, resolve_action, legal_actions, CardLibrary |
+| **ViewFilter** | `server/view_filter.py` (NEW) | Strips opponent hand/deck from state dicts, builds per-player views | GameState.to_dict() output |
+| **TimerManager** | `server/timer_manager.py` (NEW) | Per-game background task for turn timeouts, auto-pass on expiry | GameSession, Flask-SocketIO background tasks |
+| **Event Handlers** | `server/events.py` (NEW) | Socket.IO event handlers (create_room, join_room, action, etc.) | RoomManager, GameSession, ViewFilter |
+| **GameState** | `src/grid_tactics/game_state.py` (REUSE) | Immutable game state with to_dict/from_dict | Board, Player, MinionInstance |
+| **resolve_action** | `src/grid_tactics/action_resolver.py` (REUSE) | Validates and applies actions, dead cleanup, game over detection | GameState, CardLibrary |
+| **legal_actions** | `src/grid_tactics/legal_actions.py` (REUSE) | Enumerates all valid actions for current state | GameState, CardLibrary |
+| **CardLibrary** | `src/grid_tactics/card_library.py` (REUSE) | Card definitions loaded from JSON at startup | CardLoader, data/cards/*.json |
+| **Web UI** | `web-pvp/` (NEW) | Browser game board, hand display, action selection | socket.io-client, server via WebSocket |
 
-**Layer 3 (Training)** orchestrates self-play, manages opponent pools, runs training loops, and logs metrics. It uses [Stable Baselines3](https://stable-baselines3.readthedocs.io/) (specifically [MaskablePPO from sb3-contrib](https://sb3-contrib.readthedocs.io/en/master/modules/ppo_mask.html)) as the RL algorithm. This layer is where training hyperparameters, curriculum schedules, and checkpointing live.
+### New vs. Reused Code
 
-**Layer 4 (Dashboard)** reads training logs, game replays, and aggregated statistics to present balance analysis, win rates, and strategy insights. It is a consumer of data, never a producer of game state.
+**Reused as-is (zero modifications needed):**
+- `game_state.py` -- GameState with to_dict()/from_dict() is already serialization-ready
+- `action_resolver.py` -- resolve_action() is a pure function: state in, state out
+- `legal_actions.py` -- legal_actions() is a pure function: state in, actions out
+- `card_library.py` -- CardLibrary.from_directory() loads once at startup
+- `card_loader.py` -- JSON card loading
+- `cards.py` -- CardDefinition frozen dataclass
+- `actions.py` -- Action dataclass + convenience constructors
+- `enums.py` -- All IntEnum types (ActionType, TurnPhase, PlayerSide, etc.)
+- `types.py` -- Constants (GRID_ROWS, STARTING_HP, etc.)
+- `react_stack.py` -- React window handling (called internally by resolve_action)
+- `board.py`, `player.py`, `minion.py`, `rng.py` -- All game primitives
+
+**New components to build:**
+- `server/app.py` -- Flask app + SocketIO initialization + entry point
+- `server/room_manager.py` -- Room code generation, session registry, SID mapping
+- `server/game_session.py` -- Per-game state container + action processing + locking
+- `server/view_filter.py` -- Hidden information filtering per player
+- `server/timer_manager.py` -- Background turn timeout tasks
+- `server/events.py` -- All SocketIO event handlers
+- `web-pvp/index.html` -- Game board UI (separate from analytics dashboard)
+
+**Key insight:** The existing engine's immutable-state, pure-function design means the server layer is purely additive. No engine code needs modification. The `resolve_action(state, action, library) -> new_state` signature is already a perfect RPC-style interface.
 
 ---
 
-## Component Boundaries
+## Data Flow: Browser Click to State Update
 
-### Layer 1: Game Engine Components
-
-| Component | Responsibility | Communicates With |
-|-----------|---------------|-------------------|
-| `GameState` | Immutable snapshot of the entire game at a point in time. Contains board, both players, mana pools, decks, hands, graveyards, turn counter, whose-turn flag, phase flag (action/react). | Everything reads it; only `ActionResolver` produces new states |
-| `Board` | 5x5 grid of cell references. Tracks which minion occupies each cell. Knows grid geometry (rows, adjacency, range calculations). | `GameState` (owns it), `ActionResolver` (queries for legal moves/attacks) |
-| `Card` / `CardLibrary` | Card definitions (name, type, cost, attack, health, range, effects). `CardLibrary` is the design-time database; `Card` instances are runtime copies. | `Deck`, `Player.hand`, `Board` (deployed minions reference their card) |
-| `Deck` | Ordered collection of cards. Handles shuffle, draw. | `Player` (each player has one) |
-| `Player` | Owns a hand, deck, graveyard, mana pool, HP, and side-of-board assignment. | `GameState` (contains two players) |
-| `TurnManager` | Tracks whose turn it is. Advances turns. A "turn" is a single action, not a full round. Manages the action-then-react-window sequence. | `GameState`, `ActionResolver` |
-| `ActionResolver` | Given a GameState and an Action, validates legality and produces the next GameState. This is the core rules engine. Handles: play card, move minion, attack, draw card, pass, play react card. | `GameState` (reads current, produces next), `Board`, `Player`, `ReactWindow` |
-| `ReactWindow` | After the active player's action resolves, opens a window for the opponent to play a React card. If they pass or have no legal reacts, the window closes and the turn advances. | `TurnManager`, `ActionResolver` |
-| `Judger` | Determines game-over conditions (player HP <= 0, deck-out rules if any). Calculates final payoffs (+1 win, -1 loss). | `GameState` |
-
-**Key design decision:** `GameState` should be **immutable** (or treated as such). `ActionResolver` takes a state + action and returns a new state. This enables:
-- Easy undo/redo (keep prior states)
-- Safe parallel simulation (no shared mutable state)
-- Game replay (sequence of states)
-- Tree search algorithms later (MCTS expansion)
-
-#### The React Window Problem
-
-The react mechanic (opponent can interrupt with a React card after each action) is the trickiest architectural element. It means a single "turn" has two decision points:
+### Full Action Lifecycle
 
 ```
-Active Player Action -> [Effects Pending] -> Opponent React Window -> [React Resolves or Skip] -> Effects Resolve -> Turn Passes
+1. BROWSER (P1): User clicks "Play Fire Imp at (1,2)"
+   |
+   v
+2. CLIENT JS: Constructs action payload
+   emit('action', {
+     action_type: 0, card_index: 2, position: [1, 2]
+   })
+   |
+   v
+3. FLASK-SOCKETIO: @socketio.on('action') handler fires
+   |
+   v
+4. EVENT HANDLER (events.py):
+   a. Look up GameSession by request.sid via RoomManager
+   b. Validate request.sid matches current active player SID
+   c. Reconstruct Action dataclass from payload dict
+   |
+   v
+5. GAME SESSION (game_session.py):
+   a. Acquire per-session threading lock
+   b. Validate action is in legal_actions(state, library)
+   c. new_state = resolve_action(state, action, library)
+   d. Store new_state (replace self.state)
+   e. Check new_state.phase -- if REACT, set react_player as "active"
+   f. Check new_state.is_game_over
+   |
+   v
+6. VIEW FILTER (view_filter.py):
+   a. p1_view = filter_for_player(new_state.to_dict(), player_idx=0)
+      -- strips P2 hand contents (shows count only)
+      -- strips both decks (shows count only)
+   b. p2_view = filter_for_player(new_state.to_dict(), player_idx=1)
+      -- strips P1 hand contents (shows count only)
+      -- strips both decks (shows count only)
+   |
+   v
+7. FLASK-SOCKETIO EMIT (per-player, NOT room broadcast):
+   a. emit('state_update', {state: p1_view, legal_actions: [...]}, to=p1_sid)
+   b. emit('state_update', {state: p2_view, legal_actions: []}, to=p2_sid)
+   c. If game over:
+      emit('game_over', { winner, reason, final_hp }, to=room_code)
+   |
+   v
+8. BROWSER (P1 + P2): Both receive their filtered view, UI re-renders
 ```
 
-From the RL perspective, this maps cleanly to the **PettingZoo AEC (Agent Environment Cycle)** model where agents alternate. The active player takes an action, then the opponent gets a "turn" where their legal actions are either React cards or "pass." This is the same pattern used for bidding games and Magic: The Gathering priority systems.
+### React Window Flow
 
-**Implementation:** Model react as a normal turn where the legal action set is restricted to react-eligible cards plus "pass." The `TurnManager` tracks a `phase` enum: `ACTION` or `REACT`. After each `ACTION` phase resolves, it enters `REACT` phase for the opponent. If the opponent passes, it goes back to `ACTION` for the other player.
-
-### Layer 2: Environment Components
-
-| Component | Responsibility | Communicates With |
-|-----------|---------------|-------------------|
-| `GridTacticsEnv` | PettingZoo AEC environment wrapper. Implements `reset()`, `step()`, `observe()`, `action_space()`, `observation_space()`. | Layer 1 (`GameState`, `ActionResolver`), Layer 3 (training loop calls it) |
-| `ObservationEncoder` | Converts `GameState` into a fixed-size numpy array from the perspective of the observing player. Handles information hiding (opponent's hand is hidden). | `GameState` (reads), `GridTacticsEnv` (called by) |
-| `ActionEncoder` | Maps between the engine's structured `Action` objects and integer action IDs that RL algorithms use. Also provides action masks (which action IDs are legal). | `GameState` (reads legal actions), `GridTacticsEnv` (called by) |
-| `RewardShaper` | Calculates reward signals. Start with sparse rewards (win=+1, loss=-1). Later add shaped rewards for intermediate signals (damage dealt, mana efficiency, board control). | `GameState` (reads), `GridTacticsEnv` (returns rewards) |
-| `SelfPlayWrapper` | Wraps the 2-player AEC environment into a single-agent Gymnasium environment by having the opponent be a frozen policy (from the agent pool). Required for SB3 compatibility. | `GridTacticsEnv` (wraps), Agent pool (selects opponent) |
-
-#### Observation Space Design
-
-The observation vector encodes all visible information for one player. For a 5x5 grid TCG:
+The react window creates an additional decision point mid-turn. The existing engine handles this internally:
 
 ```
-Observation Vector (estimated ~300-500 floats):
-  Board State:        25 cells x ~8 features per cell = 200
-                      (occupant owner, attack, health, range, has_acted, card_type_id, empty_flag, ...)
-  My Hand:            max_hand_size x card_feature_count (e.g., 10 x 6 = 60)
-  My Resources:       mana_current, mana_max, hp, deck_size, graveyard_count = 5
-  Opponent Visible:   hp, mana_current, hand_size, deck_size = 4
-  Game Phase:         turn_number, is_my_turn, is_react_phase = 3
-  
-  Total: ~270-350 features (normalize all to [-1, 1] range)
+P1 plays action
+  -> resolve_action() sets phase=REACT, react_player_idx=1
+  -> Server emits state to both players
+  -> P2 sees legal react cards, P1 sees "waiting for opponent"
+
+P2 either:
+  a. Plays a react card -> resolve_action() handles REACT phase
+     -> engine chains react (react_player_idx flips to P1 for counter-react)
+     -> Server emits state, P1 may counter-react
+  b. Passes -> resolve_react_stack() resolves stack LIFO
+     -> Turn advances, P2 becomes active player for next turn
+     -> Auto-draw occurs for P2
+     -> Server emits new state to both players
+
+Server never needs to manage react flow -- the engine already handles it
+via TurnPhase.REACT and react_player_idx in GameState.
 ```
 
-Encode cards by their stats (not one-hot over all card types) so the network generalizes across cards with similar stats.
+### Action Reconstruction
 
-#### Action Space Design
+The client sends a JSON action payload. The server reconstructs the frozen `Action` dataclass:
 
-The action space must cover all possible actions. Use a **flat discrete space** with action masking:
+```python
+# server/events.py
+from grid_tactics.actions import Action
+from grid_tactics.enums import ActionType
 
-```
-Action Space (estimated ~200-400 discrete actions):
-  Play card from hand to cell:  max_hand_size x 10 deploy_cells = 100
-  Move minion from cell to cell: 25 x 4 directions = 100
-  Attack from cell to cell:      25 x ~8 target_cells = 200 (many masked)
-  Draw a card:                   1
-  Pass (react window):           1
-  Play react from hand:          max_hand_size = 10
-  
-  Total: ~400 actions (heavily masked -- typically only 5-20 legal at any time)
-```
-
-Use [MaskablePPO](https://sb3-contrib.readthedocs.io/en/master/modules/ppo_mask.html) which zeros out the probability of illegal actions before sampling, rather than relying on the network to learn which actions are legal.
-
-### Layer 3: Training Components
-
-| Component | Responsibility | Communicates With |
-|-----------|---------------|-------------------|
-| `TrainingLoop` | Orchestrates self-play training. Runs episodes, collects trajectories, calls SB3's `learn()`. | `SelfPlayWrapper` (runs episodes), `AgentPool` (selects opponents), SB3 `MaskablePPO` |
-| `AgentPool` | Stores snapshots of the agent at various training checkpoints. Opponent for current training is sampled from this pool (not always the latest). Prevents strategy collapse. | `TrainingLoop` (adds snapshots), `SelfPlayWrapper` (provides opponent policy) |
-| `MetricsLogger` | Records per-episode data: winner, game length, mana efficiency, cards played, damage dealt, etc. Writes to structured logs (JSON lines or SQLite). | `GridTacticsEnv` (reads post-game stats), TensorBoard/W&B (optional real-time) |
-| `GameRecorder` | Saves full game trajectories (sequence of states + actions) for replay analysis. | `GridTacticsEnv` (records each step), Dashboard (reads replays) |
-| `CheckpointManager` | Saves/loads model weights, training state, and agent pool. | SB3 model, filesystem |
-
-#### Self-Play Architecture
-
-Self-play for two-player games requires converting the multi-agent environment into a single-agent problem. The standard approach, validated in [Connect Four tutorials](https://pettingzoo.farama.org/tutorials/sb3/connect_four/) and card game research:
-
-```
-                    +------------------+
-                    |  Training Agent  |  (being trained)
-                    +--------+---------+
-                             |
-                    +--------v---------+
-                    | SelfPlayWrapper   |  (Gymnasium interface)
-                    |                   |
-                    | When it's agent's |
-                    | turn: return obs, |
-                    | wait for action   |
-                    |                   |
-                    | When it's opp's   |
-                    | turn: query       |
-                    | opponent policy,  |
-                    | auto-step         |
-                    +--------+---------+
-                             |
-                    +--------v---------+
-                    | GridTacticsEnv    |  (PettingZoo AEC)
-                    | (2-player game)   |
-                    +---+-----------+---+
-                        |           |
-              +---------v--+   +----v--------+
-              | Player 1   |   | Player 2    |
-              | (training) |   | (from pool) |
-              +------------+   +-------------+
+def _reconstruct_action(data: dict) -> Action:
+    """Convert client action payload to engine Action dataclass."""
+    return Action(
+        action_type=ActionType(data['action_type']),
+        card_index=data.get('card_index'),
+        position=tuple(data['position']) if data.get('position') else None,
+        minion_id=data.get('minion_id'),
+        target_id=data.get('target_id'),
+        target_pos=tuple(data['target_pos']) if data.get('target_pos') else None,
+    )
 ```
 
-### Layer 4: Dashboard Components
+### Action Serialization (wire format)
 
-| Component | Responsibility | Communicates With |
-|-----------|---------------|-------------------|
-| `StatsAPI` | Reads training logs and game records. Computes aggregated statistics (win rates per card, per strategy, over time). | `MetricsLogger` output, `GameRecorder` output |
-| `ReplayViewer` | Renders a game step-by-step from recorded trajectories. Shows board state, hands, actions taken. | `GameRecorder` data |
-| `BalanceAnalyzer` | Identifies outlier cards (too high/low win rate, pick rate, etc.). Suggests balance adjustments. | `StatsAPI` aggregations |
-| `DashboardUI` | Web frontend for viewing all analytics. | `StatsAPI` (data source) |
+The `Action` dataclass fields map directly to JSON, enabling simple client-side construction:
+
+| Action Field | JSON Key | JSON Type | Notes |
+|-------------|----------|-----------|-------|
+| `action_type` | `action_type` | number (0-6) | ActionType IntEnum value |
+| `card_index` | `card_index` | number or null | Index in player's hand tuple |
+| `position` | `position` | [row, col] or null | Deploy location / move target |
+| `minion_id` | `minion_id` | number or null | Minion instance_id |
+| `target_id` | `target_id` | number or null | Attack target instance_id |
+| `target_pos` | `target_pos` | [row, col] or null | Effect target position |
+
+The client constructs action payloads from UI interactions:
+- Click card in hand + click board cell: `{action_type: 0, card_index: N, position: [r, c]}`
+- Click owned minion + click forward cell: `{action_type: 1, minion_id: N, position: [r, c]}`
+- Click owned minion + click enemy minion: `{action_type: 2, minion_id: N, target_id: M}`
+- Click sacrifice button on eligible minion: `{action_type: 6, minion_id: N}`
+- Click pass button: `{action_type: 4}`
+- Click react card in hand: `{action_type: 5, card_index: N}`
 
 ---
 
-## Data Flow
+## Detailed Component Designs
 
-### During Training (primary loop)
+### 1. GameSession (server/game_session.py)
 
-```
-1. TrainingLoop calls SelfPlayWrapper.reset()
-2. SelfPlayWrapper calls GridTacticsEnv.reset()
-3. GridTacticsEnv calls GameState.new_game() -> initial state
-4. ObservationEncoder encodes state -> numpy observation
-5. ActionEncoder provides action_mask -> numpy bool array
-6. SelfPlayWrapper returns (observation, action_mask) to TrainingLoop
-7. MaskablePPO selects action from masked policy
-8. SelfPlayWrapper calls GridTacticsEnv.step(action)
-9. ActionEncoder decodes action int -> structured Action
-10. ActionResolver validates + applies action -> new GameState
-11. TurnManager checks for ReactWindow -> may give opponent a turn
-12. If opponent's turn: SelfPlayWrapper queries AgentPool opponent policy
-13. RewardShaper calculates reward (0 during game, +1/-1 at end)
-14. GameRecorder logs (state, action, reward) tuple
-15. MetricsLogger records episode stats at game end
-16. Repeat from step 4 until episode ends
-17. MaskablePPO updates policy from collected trajectory
-18. Every N episodes: save agent snapshot to AgentPool
+The central per-game container. Wraps the immutable GameState with mutable session metadata.
+
+```python
+import threading
+import time
+from grid_tactics.actions import Action
+from grid_tactics.action_resolver import resolve_action
+from grid_tactics.card_library import CardLibrary
+from grid_tactics.enums import TurnPhase
+from grid_tactics.game_state import GameState
+from grid_tactics.legal_actions import legal_actions
+from grid_tactics.rng import GameRNG
+
+class GameSession:
+    """One active PvP game. Holds state, RNG, player mapping."""
+
+    def __init__(self, room_code: str, library: CardLibrary,
+                 p1_sid: str, p2_sid: str,
+                 deck_p1: tuple[int, ...], deck_p2: tuple[int, ...],
+                 seed: int):
+        self.room_code = room_code
+        self.library = library
+        self.p1_sid = p1_sid
+        self.p2_sid = p2_sid
+        self.state: GameState
+        self.rng: GameRNG
+        self.state, self.rng = GameState.new_game(seed, deck_p1, deck_p2)
+        self.created_at: float = time.time()
+        self.timer_cancelled: bool = False
+        self._lock = threading.Lock()
+
+    def get_active_sid(self) -> str:
+        """Return the SID of whoever should act next."""
+        if self.state.phase == TurnPhase.REACT:
+            idx = self.state.react_player_idx
+        else:
+            idx = self.state.active_player_idx
+        return self.p1_sid if idx == 0 else self.p2_sid
+
+    def get_player_idx(self, sid: str) -> int:
+        """Map a socket SID to player index (0 or 1)."""
+        if sid == self.p1_sid:
+            return 0
+        elif sid == self.p2_sid:
+            return 1
+        raise ValueError(f"Unknown SID")
+
+    def process_action(self, action: Action, player_sid: str) -> GameState:
+        """Validate and apply an action. Thread-safe."""
+        with self._lock:
+            if player_sid != self.get_active_sid():
+                raise ValueError("Not your turn")
+
+            valid = legal_actions(self.state, self.library)
+            if action not in valid:
+                raise ValueError("Illegal action")
+
+            self.state = resolve_action(self.state, action, self.library)
+            return self.state
 ```
 
-### During Analysis (dashboard)
+**Key design decision:** GameSession holds a mutable reference (`self.state`) to an immutable GameState. Each `process_action` call replaces `self.state` with a new frozen instance. The threading lock prevents race conditions if two WebSocket events arrive nearly simultaneously.
 
+### 2. RoomManager (server/room_manager.py)
+
+Maps room codes to GameSessions. Handles creation, joining, and cleanup.
+
+```python
+import random
+import string
+import time
+from dataclasses import dataclass
+from typing import Optional
+
+@dataclass
+class WaitingRoom:
+    code: str
+    p1_sid: str
+    created_at: float
+
+class RoomManager:
+    def __init__(self):
+        self._rooms: dict[str, GameSession] = {}
+        self._sid_to_room: dict[str, str] = {}
+        self._waiting: dict[str, WaitingRoom] = {}
+
+    def create_room(self, creator_sid: str) -> str:
+        code = self._generate_code()
+        self._waiting[code] = WaitingRoom(code=code, p1_sid=creator_sid,
+                                          created_at=time.time())
+        self._sid_to_room[creator_sid] = code
+        return code
+
+    def join_room(self, code: str, joiner_sid: str,
+                  library, default_deck, seed) -> GameSession:
+        waiting = self._waiting.pop(code)
+        session = GameSession(
+            room_code=code, library=library,
+            p1_sid=waiting.p1_sid, p2_sid=joiner_sid,
+            deck_p1=default_deck, deck_p2=default_deck,
+            seed=seed,
+        )
+        self._rooms[code] = session
+        self._sid_to_room[joiner_sid] = code
+        return session
+
+    def get_session_by_sid(self, sid: str) -> Optional[GameSession]:
+        code = self._sid_to_room.get(sid)
+        return self._rooms.get(code) if code else None
+
+    def cleanup(self, code: str):
+        session = self._rooms.pop(code, None)
+        if session:
+            self._sid_to_room.pop(session.p1_sid, None)
+            self._sid_to_room.pop(session.p2_sid, None)
+
+    def _generate_code(self) -> str:
+        while True:
+            code = ''.join(random.choices(string.ascii_uppercase + string.digits, k=6))
+            if code not in self._rooms and code not in self._waiting:
+                return code
 ```
-1. StatsAPI reads MetricsLogger files (JSON lines / SQLite)
-2. StatsAPI computes aggregations (win rate by card, by turn count, etc.)
-3. BalanceAnalyzer queries StatsAPI for card-level stats
-4. ReplayViewer loads GameRecorder files for specific games
-5. DashboardUI serves web pages pulling from StatsAPI
+
+**Room code format:** 6-character alphanumeric (e.g., "XK4D2M"). Short enough to share verbally, long enough to avoid collisions.
+
+### 3. ViewFilter (server/view_filter.py)
+
+Critically important for card game fairness. Each player sees only their own hand contents.
+
+```python
+import copy
+
+def filter_for_player(state_dict: dict, player_idx: int) -> dict:
+    """Strip hidden information from state dict for a specific player.
+
+    Hidden: opponent hand contents, both deck contents/order.
+    Visible: board, all minions, HP, mana, graveyards, own hand, card counts.
+    """
+    filtered = copy.deepcopy(state_dict)
+    opponent_idx = 1 - player_idx
+
+    # Strip opponent hand -- show count only
+    opp = filtered['players'][opponent_idx]
+    opp['hand_count'] = len(opp['hand'])
+    opp['hand'] = []
+
+    # Strip both decks -- show count only
+    for p in filtered['players']:
+        p['deck_count'] = len(p['deck'])
+        p['deck'] = []
+
+    # Convenience field for client rendering
+    filtered['your_player_idx'] = player_idx
+    return filtered
 ```
+
+### 4. TimerManager (server/timer_manager.py)
+
+Turn timeouts using Flask-SocketIO's `start_background_task()`.
+
+```python
+from grid_tactics.actions import Action
+from grid_tactics.enums import ActionType, TurnPhase
+
+class TimerManager:
+    TURN_TIMEOUT = 60   # seconds for action phase
+    REACT_TIMEOUT = 30  # seconds for react window
+
+    def start(self, session, socketio):
+        self.cancel(session)
+        timeout = (self.REACT_TIMEOUT if session.state.phase == TurnPhase.REACT
+                   else self.TURN_TIMEOUT)
+        session.timer_cancelled = False
+        socketio.start_background_task(
+            target=self._countdown, session=session,
+            socketio=socketio, timeout=timeout,
+        )
+
+    def cancel(self, session):
+        session.timer_cancelled = True
+
+    def _countdown(self, session, socketio, timeout):
+        for remaining in range(timeout, 0, -1):
+            if session.timer_cancelled or session.state.is_game_over:
+                return
+            socketio.emit('timer_tick', {'remaining': remaining},
+                          to=session.room_code)
+            socketio.sleep(1)
+        # Auto-pass on expiry
+        if not session.timer_cancelled and not session.state.is_game_over:
+            auto_pass = Action(action_type=ActionType.PASS)
+            session.process_action(auto_pass, session.get_active_sid())
+            # Event handler should detect and broadcast
+```
+
+### 5. Event Contract
+
+**Client -> Server Events:**
+
+| Event | Payload | Description |
+|-------|---------|-------------|
+| `create_room` | `{ display_name: str }` | Create a new room, get room code back |
+| `join_room` | `{ room_code: str, display_name: str }` | Join existing room by code |
+| `action` | `{ action_type, card_index?, position?, minion_id?, target_id?, target_pos? }` | Submit a game action |
+| `leave_room` | `{ }` | Leave current game |
+| `disconnect` | (automatic) | Handle player disconnect |
+
+**Server -> Client Events:**
+
+| Event | Payload | Description |
+|-------|---------|-------------|
+| `room_created` | `{ room_code }` | Room created, share code with friend |
+| `room_joined` | `{ room_code, players }` | Player joined, waiting or starting |
+| `game_start` | `{ your_side: int, state, card_defs, legal_actions }` | Game begins with initial state + card catalog |
+| `state_update` | `{ state, legal_actions }` | Updated game state (per-player filtered view) |
+| `timer_tick` | `{ remaining: int }` | Countdown seconds remaining |
+| `game_over` | `{ winner: int or null, reason, final_hp: [int, int] }` | Game ended |
+| `error` | `{ msg: str }` | Invalid action or server error |
+| `opponent_left` | `{ }` | Opponent disconnected |
 
 ---
 
 ## Patterns to Follow
 
-### Pattern 1: Immutable GameState with Action-Produces-New-State
+### Pattern 1: Server as Single Source of Truth
 
-**What:** Every game state is a frozen snapshot. Actions don't mutate state; they produce a new state.
+**What:** All game state lives on the server. Clients display state and submit actions. Clients NEVER compute game logic.
 
-**When:** Always -- this is the foundation pattern.
+**When:** Always. Non-negotiable for card games with hidden information.
 
-**Why:** Enables replay, undo, parallel simulation, and tree search. Prevents the most common class of bugs in game engines (stale state references, order-of-mutation issues).
+**Why:** Prevents cheating. If a client computed legal moves locally, a modified client could submit illegal actions. The server validates every action against `legal_actions()` before applying it.
 
-**Example:**
-```python
-@dataclass(frozen=True)
-class GameState:
-    board: Board
-    players: tuple[Player, Player]
-    active_player_idx: int
-    phase: TurnPhase  # ACTION or REACT
-    turn_number: int
-    
-class ActionResolver:
-    def resolve(self, state: GameState, action: Action) -> GameState:
-        """Validate action, apply effects, return new state."""
-        if not self._is_legal(state, action):
-            raise IllegalActionError(action)
-        new_state = self._apply(state, action)
-        return self._advance_phase(new_state)
-```
+### Pattern 2: Event-Driven State Machine (Not Game Loop)
 
-### Pattern 2: Legal Action Generator as Single Source of Truth
+**What:** The server processes one event at a time per game session. No game loop runs continuously. State advances only when a player acts.
 
-**What:** One function generates all legal actions for a given state. Both the game engine (for validation) and the environment (for action masking) use this same function.
+**When:** All action processing.
 
-**When:** Always -- prevents desync between what the engine allows and what the RL agent sees as legal.
+**Why:** Unlike `game_loop.py`'s `run_game()` which loops until game over (calling `rng.choice()` for AI decisions), the PvP server is event-driven -- it waits for a player's WebSocket event, processes it, emits the result, then waits again. Same engine calls, different orchestration pattern.
 
-**Example:**
-```python
-class ActionResolver:
-    def legal_actions(self, state: GameState) -> list[Action]:
-        """All legal actions for the active player in current state."""
-        actions = []
-        if state.phase == TurnPhase.REACT:
-            actions.extend(self._legal_reacts(state))
-            actions.append(Action.PASS)
-        else:
-            actions.extend(self._legal_plays(state))
-            actions.extend(self._legal_moves(state))
-            actions.extend(self._legal_attacks(state))
-            actions.append(Action.DRAW)
-        return actions
-```
+### Pattern 3: Per-SID Emission (Never Room Broadcast for State)
 
-### Pattern 3: Encode by Stats, Not by Identity
+**What:** State updates are always emitted to individual player SIDs, never broadcast to the room.
 
-**What:** Observation vectors encode card stats (attack, health, cost, range, type-flags) rather than one-hot card identity vectors.
+**When:** Every state_update emission.
 
-**When:** When the card pool is moderate (50-200 cards) and you want the agent to generalize across similar cards.
+**Why:** Room broadcast would send the same data to both players. Card games require per-player filtering (hidden hands/decks). Timer ticks and game_over can broadcast to the room since they contain no hidden info.
 
-**Why:** One-hot encoding over N card types creates a sparse, high-dimensional observation. Stat-based encoding lets the agent recognize "3-attack 2-health minion" as similar regardless of card name. This is critical for balance testing -- when you tweak a card's stats, the agent's understanding partially transfers.
+### Pattern 4: Card Definitions Sent Once at Game Start
 
-### Pattern 4: Sparse Rewards First, Shape Later
+**What:** Send the full card definition catalog to both clients at `game_start`. Client uses this for rendering card details without further queries.
 
-**What:** Start with win/loss only (+1/-1 at game end, 0 during). Add intermediate reward signals only if training fails to converge.
+**When:** Once when game begins.
 
-**When:** Initial training phases.
+**Why:** Card definitions are public knowledge. Sending them once eliminates repeated lookups. The state only contains card numeric IDs; the client maps IDs to names/stats/art using the catalog.
 
-**Why:** Reward shaping can introduce bias that makes the agent optimize for the shaped signal rather than winning. Sparse rewards are harder to learn from but produce more robust strategies. If convergence is too slow, add modest shaping (e.g., +0.01 per damage dealt, -0.01 per HP lost).
+### Pattern 5: Legal Actions from Server
+
+**What:** Send the computed legal action list to the active player alongside each state update.
+
+**When:** After every state change.
+
+**Why:** The engine's `legal_actions()` is the authoritative source. Duplicating this in JavaScript would be fragile, error-prone, and a security risk. The client UI enables/disables moves based on the server-provided list.
 
 ---
 
 ## Anti-Patterns to Avoid
 
-### Anti-Pattern 1: Game Logic in the Environment Layer
+### Anti-Pattern 1: Client-Side Game Logic
 
-**What:** Putting rule validation, damage calculation, or turn management inside the Gymnasium/PettingZoo environment wrapper.
+**What:** Running `legal_actions()` or `resolve_action()` in JavaScript.
 
-**Why bad:** Makes the game untestable without RL infrastructure. Makes rule changes require understanding the RL interface. Tightly couples two concerns that change for different reasons.
+**Why bad:** Two sources of truth, cheating vector, requires porting complex Python to JS, any rule change needs two updates.
 
-**Instead:** Keep the environment as a thin translation layer. It calls `ActionResolver.resolve()` and `ObservationEncoder.encode()`, nothing more.
+**Instead:** Client sends raw intent, server validates and applies.
 
-### Anti-Pattern 2: Mutable Game State
+### Anti-Pattern 2: Full State Broadcast to Room
 
-**What:** Having `game.play_card(card)` mutate the game object in place.
+**What:** Using `emit('state', state_dict, to=room_code)`.
 
-**Why bad:** Makes replay impossible (you lose prior states). Makes parallel simulation unsafe. Makes debugging state-dependent bugs extremely difficult. Prevents future MCTS integration.
+**Why bad:** Leaks hidden information (opponent's hand). Any network inspector reveals everything.
 
-**Instead:** `ActionResolver.resolve(state, action) -> new_state`. Use `dataclasses(frozen=True)` or equivalent.
+**Instead:** Emit per-player filtered views to individual SIDs.
 
-### Anti-Pattern 3: Training the Agent Against Itself (No Pool)
+### Anti-Pattern 3: Storing Game State in Database per Action
 
-**What:** Always using the latest policy as both the training agent and opponent.
+**What:** Writing GameState to Supabase after every action.
 
-**Why bad:** Causes **strategy cycling** where the agent discovers strategy A, then strategy B that beats A, then strategy C that beats B but loses to A, in an endless loop. The agent never builds robust play.
+**Why bad:** Adds latency on every game action. Games are ephemeral (5-15 minutes). State persistence adds complexity for throwaway data.
 
-**Instead:** Maintain an `AgentPool` of historical checkpoints. Sample opponents from the pool with some probability of being the latest agent and some probability of being a random historical agent. This is well-established in self-play literature.
+**Instead:** In-memory dict of GameSession objects. If server restarts, active games are lost -- acceptable for v1.1.
 
-### Anti-Pattern 4: Enormous Flat Observation Vectors
+### Anti-Pattern 4: Modifying Engine for Server Needs
 
-**What:** Encoding everything as one massive 1D vector without structure.
+**What:** Adding WebSocket awareness, SID tracking, or timer logic into game_state.py or action_resolver.py.
 
-**Why bad:** The grid has spatial structure. A 2D/3D tensor (channels x rows x cols) enables convolutional processing that exploits spatial locality. Flat vectors lose this.
+**Why bad:** Couples engine to infrastructure, breaks 500+ tests, diverges tensor engine further from Python engine.
 
-**Instead:** Provide the board state as a multi-channel 2D grid (shape: `[C, 5, 5]` where C is features-per-cell) and concatenate non-spatial features (hand, mana, HP) separately. Use a network architecture with CNN for board + MLP for non-spatial, then merge.
+**Instead:** All server concerns (SID mapping, timers, view filtering) live in `server/` modules that import from `grid_tactics/` but never modify it.
 
----
+### Anti-Pattern 5: Complex Frontend Framework
 
-## Suggested Build Order
+**What:** Using React/Vue for the game UI.
 
-Build order is driven by the dependency chain: you cannot train RL without a working game, and you cannot analyze results without training data.
+**Why bad:** Adds npm, build step, bundling. The existing project uses vanilla HTML/JS for the analytics dashboard. A 5x5 grid with cards is well within vanilla JS capability.
 
-```
-Phase 1: Game Engine (Layer 1)
-    No dependencies. Must be complete and correct before anything else.
-    Build: GameState, Board, Card/CardLibrary, Player, Deck,
-           TurnManager, ActionResolver, ReactWindow, Judger
-    Test: Unit tests for every rule. Random-agent smoke tests.
-    Deliverable: Can run a complete game with random players.
-
-Phase 2: RL Environment (Layer 2)
-    Depends on: Phase 1 (complete game engine)
-    Build: ObservationEncoder, ActionEncoder, GridTacticsEnv,
-           RewardShaper, SelfPlayWrapper
-    Test: PettingZoo API compliance tests, observation shape checks,
-          action mask correctness vs legal_actions().
-    Deliverable: Can run a game through the Gymnasium interface.
-
-Phase 3: Training Pipeline (Layer 3)
-    Depends on: Phase 2 (working environment)
-    Build: TrainingLoop, AgentPool, MetricsLogger, GameRecorder,
-           CheckpointManager
-    Test: Agent trains for N episodes without crashing.
-           Win rate against random agent improves.
-    Deliverable: Trained agent that beats random play convincingly.
-
-Phase 4: Dashboard (Layer 4)
-    Depends on: Phase 3 (training data exists)
-    Build: StatsAPI, ReplayViewer, BalanceAnalyzer, DashboardUI
-    Test: Can view replays, see win rate graphs, identify outlier cards.
-    Deliverable: Web dashboard showing RL training insights.
-```
-
-**Critical dependency:** Phase 2 wraps Phase 1. If the game engine API changes, the environment must update. Design the `GameState` / `ActionResolver` / `legal_actions()` interface carefully in Phase 1 because Phase 2 depends on it heavily.
-
-**Parallelizable work:** Card design (what cards exist, their stats) can happen in parallel with the engine. The `CardLibrary` is data, not logic. Similarly, dashboard UI mockups can be designed before training data exists.
+**Instead:** Single HTML file with embedded or linked CSS/JS. Socket.IO client from CDN. Consistent with existing `web-dashboard/` pattern.
 
 ---
 
-## Network Architecture Recommendation
+## Integration Points with Existing Engine
 
-For the RL agent's neural network (inside MaskablePPO):
+### What the Server Calls
+
+| Engine Function | Where Called | Purpose |
+|----------------|-------------|---------|
+| `GameState.new_game(seed, deck_p1, deck_p2)` | `GameSession.__init__` | Start a new game |
+| `legal_actions(state, library)` | `GameSession.process_action`, after each state change | Validate actions + send to client |
+| `resolve_action(state, action, library)` | `GameSession.process_action` | Apply validated action |
+| `GameState.to_dict()` | Before filtering + emit | Serialize state for transmission |
+| `CardLibrary.from_directory(path)` | Server startup (once) | Load card definitions |
+| `CardLibrary.all_cards` / `get_numeric_id()` | Building card catalog for `game_start` | Card definition lookup for client |
+
+### What the Server Never Calls
+
+| Engine Component | Why Not |
+|-----------------|---------|
+| `tensor_engine/` | GPU training only, not for human PvP |
+| `rl/` | RL environment wrapper, not for human PvP |
+| `game_loop.py` `run_game()` | Runs complete AI-vs-AI game -- PvP is event-driven |
+| `rng.choice()` | Server does not choose actions -- players do |
+
+### Existing `to_dict()` Coverage
+
+`GameState.to_dict()` already serializes everything needed for PvP:
+
+- `board`: Cell occupancy (list of 25 values, minion instance IDs or None)
+- `players[i]`: `side`, `hp`, `current_mana`, `max_mana`, `hand` (list of numeric IDs), `deck` (list), `graveyard` (list)
+- `minions`: Each with `instance_id`, `card_numeric_id`, `owner`, `position`, `current_health`, `attack_bonus`
+- `active_player_idx`, `phase` (int), `turn_number`, `seed`
+- `react_stack`, `react_player_idx`, `pending_action`
+- `winner`, `is_game_over`
+
+The ViewFilter strips `hand` and `deck` contents from the opponent. No changes to `to_dict()` are needed.
+
+---
+
+## File Structure
 
 ```
-Input:
-  Board features:  [C, 5, 5] tensor (C = features per cell, ~8-10)
-  Hand features:   [max_hand, F] (F = features per card, ~6)
-  Global features: [G] vector (mana, HP, turn, phase, ~10)
+card game/
+  src/grid_tactics/
+    server/                    # NEW: PvP server package
+      __init__.py
+      app.py                   # Flask app + SocketIO setup + entry point
+      room_manager.py          # Room creation, joining, lifecycle
+      game_session.py          # Per-game state management + action handling
+      view_filter.py           # GameState -> per-player JSON dict
+      timer_manager.py         # Turn timeout background tasks
+      events.py                # Socket.IO event handlers
+    ... (existing engine files unchanged)
 
-Architecture:
-  Board branch:    Conv2d(C, 32, 3, padding=1) -> ReLU -> Conv2d(32, 64, 3, padding=1) -> ReLU -> Flatten
-  Hand branch:     Linear(F, 32) per card -> mean pool -> Linear(32, 32)
-  Global branch:   Linear(G, 32)
-  
-  Merge:           Concat(board_flat, hand_out, global_out) -> Linear(combined, 256) -> ReLU
-  
-  Policy head:     Linear(256, action_space_size) + action masking
-  Value head:      Linear(256, 1)
+  web-pvp/                     # NEW: Game UI (separate from analytics dashboard)
+    index.html                 # Game page
+    css/
+      game.css                 # Board, hand, status styling
+    js/
+      game.js                  # Socket.IO client + main controller
+      board.js                 # 5x5 grid rendering
+      hand.js                  # Hand display + card selection
+      actions.js               # Legal action highlighting + submission
+
+  web-dashboard/               # EXISTING: analytics dashboard (separate)
+  data/cards/                  # EXISTING: card JSON files
+  pvp_server.py                # NEW: entry point (python pvp_server.py)
 ```
 
-Use a **custom feature extractor** with SB3 rather than the default MLP. The CNN over the board captures spatial patterns (tank-in-front-of-ranged, flanking positions), which is the core strategic element of this game.
+**Why separate from `web-dashboard/`:** Different purpose, different deployment, different data source. Dashboard reads Supabase; game UI communicates with Flask-SocketIO server.
+
+---
+
+## Build Order (Recommended)
+
+Build order respects dependency chains and enables testing at each step:
+
+### Step 1: Server Foundation (test with wscat or Python socketio client)
+1. `server/app.py` -- Flask + SocketIO init, CORS, static file serving
+2. `server/room_manager.py` -- Room CRUD, room code generation
+3. `server/game_session.py` -- GameState wrapper, process_action with locking
+4. `server/events.py` -- create_room + join_room handlers only
+5. **Test gate:** Two WebSocket clients create and join a room, receive `game_start`
+
+### Step 2: Core Game Flow (test with Python socketio client)
+1. `server/view_filter.py` -- Per-player state filtering
+2. `server/events.py` -- Add action handler with filtered state emission
+3. `server/events.py` -- Add legal_actions serialization + emission
+4. **Test gate:** Full game playable via raw SocketIO events (two Python clients playing a complete game including react windows)
+
+### Step 3: Turn Management + Resilience
+1. `server/timer_manager.py` -- Background countdown, auto-pass on expiry
+2. `server/events.py` -- Add disconnect/reconnect handling
+3. **Test gate:** Timer expires and auto-passes, disconnect triggers opponent notification
+
+### Step 4: Web UI
+1. `web-pvp/index.html` -- Board grid, hand area, mana/HP display
+2. `web-pvp/js/game.js` -- SocketIO connection, state rendering
+3. `web-pvp/js/actions.js` -- Legal action highlighting, action submission
+4. **Test gate:** Full game playable in two browser windows
+
+### Step 5: Polish
+1. React window UI indicators (highlight reactor, show countdown)
+2. Game over screen with outcome
+3. Card hover/preview with full details
+4. Visual feedback for attacks, deploy, damage numbers
+
+**Rationale:** Server before UI because the server can be fully tested with programmatic WebSocket clients. This catches all logic bugs before any UI complexity. The view filter comes in Step 2 (not Step 1) because you need the action handler to have state worth filtering.
 
 ---
 
 ## Scalability Considerations
 
-| Concern | Initial (dev) | At scale (millions of games) | Notes |
-|---------|--------------|------------------------------|-------|
-| Training speed | Single process, ~100 games/min | Vectorized envs (SubprocVecEnv), ~5000 games/min | SB3 supports vectorized envs natively |
-| State storage | JSON lines, ~1KB/game summary | SQLite for stats, compressed replays only for interesting games | Don't store full replays for all games |
-| Card pool size | 20-30 cards | 100+ cards | Observation encoding scales linearly with hand size, not card pool |
-| Action space | ~400 discrete | Same, just more masking | Masking handles sparsity |
-| Dashboard | Local Flask/FastAPI | Same -- reads aggregated stats | No real scaling concern for analytics |
+| Concern | Dev (2 players) | Target (50 games) | Future (500+ games) |
+|---------|-----------------|---------------------|----------------------|
+| State storage | In-memory dict | In-memory dict | Redis for cross-process state |
+| Async mode | threading | threading (fine <200 conns) | gevent + gunicorn workers |
+| Turn processing | Direct function call | Direct call (<1ms per action) | Same -- game logic is trivially fast |
+| Reconnection | Simple SID re-mapping | SID re-mapping + state resend | Redis pub/sub for cross-process |
+| Persistence | None | Optional Supabase for completed games | Supabase for game history |
+
+**Current target: 50 concurrent games.** In-memory + threading is correct. Do not over-engineer.
+
+---
+
+## Technology Decisions for PvP Layer
+
+| Technology | Version | Purpose | Why |
+|------------|---------|---------|-----|
+| Flask-SocketIO | >=5.6,<6.0 | WebSocket server with room system | Standard Python WebSocket library. 5.6.1 current (Feb 2026). Actively maintained. |
+| simple-websocket | >=1.0 | WebSocket transport for threading mode | Required for real WebSocket protocol (not long-polling fallback) with async_mode='threading'. |
+| Flask | >=3.0 | HTTP framework + static serving | Flask-SocketIO dependency. Also serves web-pvp/ files. |
+| socket.io-client | 4.x | Browser WebSocket client | CDN-loaded. Must match python-socketio v5 protocol. |
+
+**Async mode: `threading`** because:
+1. Game engine is CPU-bound, not I/O-bound -- green threads do not help
+2. Best third-party library compatibility (no monkey-patching)
+3. Target scale (<200 concurrent connections) is well within threading limits
+4. simple-websocket provides real WebSocket transport without gevent/eventlet
+
+**Install:**
+```bash
+pip install flask-socketio>=5.6 simple-websocket>=1.0
+```
+
+---
+
+## Confidence Assessment
+
+| Component | Confidence | Notes |
+|-----------|------------|-------|
+| Engine reuse (zero modifications) | HIGH | Verified: to_dict(), resolve_action(), legal_actions() match PvP needs exactly |
+| Flask-SocketIO room/emit pattern | HIGH | Documented API, standard pattern, version verified on PyPI |
+| View filtering approach | HIGH | Standard TCG hidden-info pattern (opponent hand + both decks hidden) |
+| Threading async mode for target scale | HIGH | Sufficient for <200 connections, documented tradeoffs |
+| Timer via background tasks | MEDIUM | start_background_task() documented but cancellation needs careful testing |
+| Per-SID emit for private state | HIGH | Flask-SocketIO's `to=sid` is the documented private message approach |
+| Vanilla JS for game UI | HIGH | Consistent with existing web-dashboard pattern, no build tools needed |
 
 ---
 
 ## Sources
 
-- [RLCard Architecture Overview](https://rlcard.org/overview.html) -- Three-layer architecture (Environment/Game/Agent)
-- [RLCard Development Guide](https://rlcard.org/development.html) -- Game/Round/Dealer/Judger/Player pattern
-- [PettingZoo AEC API](https://pettingzoo.farama.org/) -- Agent Environment Cycle for turn-based multi-agent games
-- [PettingZoo Custom Environment Tutorial](https://pettingzoo.farama.org/tutorials/custom_environment/2-environment-logic/) -- Implementation pattern
-- [SB3 MaskablePPO](https://sb3-contrib.readthedocs.io/en/master/modules/ppo_mask.html) -- Invalid action masking for PPO
-- [SB3 Connect Four with Action Masking](https://pettingzoo.farama.org/tutorials/sb3/connect_four/) -- Self-play + action masking reference
-- [Benny Cheung: Game Architecture for Card Game AI (Parts 1-3)](https://bennycheung.github.io/game-architecture-card-ai-1) -- Card game engine structure
-- [Mastering Jaipur Through Self-Play RL and Action Masks](https://link.springer.com/chapter/10.1007/978-3-031-47546-7_16) -- Self-play + action masking for card games
-- [GridNet: Grid-Wise Control for Multi-Agent RL](https://proceedings.mlr.press/v97/han19a/han19a.pdf) -- CNN over grid for tactical games
-- [Self-Play Deep RL for Board Games](https://medium.com/applied-data-science/how-to-train-ai-agents-to-play-multiplayer-games-using-self-play-deep-reinforcement-learning-247d0b440717) -- Agent pool, self-play wrapper pattern
-
-### Confidence Assessment
-
-| Component | Confidence | Notes |
-|-----------|------------|-------|
-| 4-layer architecture | HIGH | Matches RLCard, PettingZoo, and multiple implementations |
-| Immutable GameState pattern | HIGH | Standard in game AI, enables replay/search |
-| PettingZoo AEC for react window | HIGH | AEC explicitly designed for sequential turn-taking with interrupts |
-| MaskablePPO for training | HIGH | Proven in card games (Jaipur, Connect Four, poker variants) |
-| CNN + MLP hybrid network | MEDIUM | Standard for grid games but may need tuning for 5x5 (small grid) |
-| Observation vector sizing (~300-500) | MEDIUM | Estimated; actual size depends on card feature count and hand size |
-| Agent pool for self-play stability | HIGH | Well-established technique, prevents strategy cycling |
+- [Flask-SocketIO documentation](https://flask-socketio.readthedocs.io/) -- Room management, emit API, async modes
+- [Flask-SocketIO PyPI](https://pypi.org/project/Flask-SocketIO/) -- Version 5.6.1, Feb 2026, Python >=3.8
+- [Flask-SocketIO GitHub](https://github.com/miguelgrinberg/Flask-SocketIO) -- Changelog, discussions
+- [Flask-SocketIO deployment docs](https://flask-socketio.readthedocs.io/en/latest/deployment.html) -- Gevent vs threading vs eventlet
+- [Flask-SocketIO CORS discussion #1762](https://github.com/miguelgrinberg/Flask-SocketIO/discussions/1762) -- Production CORS config
+- [Flask-SocketIO async mode discussion #1915](https://github.com/miguelgrinberg/Flask-SocketIO/discussions/1915) -- Threading vs gevent selection
+- [Flask-SocketIO timer discussion #1695](https://github.com/miguelgrinberg/Flask-SocketIO/discussions/1695) -- Background task timer pattern
+- [Socket.IO Rooms documentation](https://socket.io/docs/v3/rooms/) -- Room concept
+- [Multiplayer game state sync](https://dev.to/sauravmh/browser-game-design-using-websockets-and-deployments-on-scale-1iaa) -- Server-authoritative architecture
+- Existing codebase: game_state.py (to_dict/from_dict), action_resolver.py (resolve_action), legal_actions.py, game_loop.py, actions.py

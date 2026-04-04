@@ -1,186 +1,199 @@
 # Project Research Summary
 
-**Project:** Grid Tactics TCG
-**Domain:** TCG game engine with reinforcement learning for strategy discovery and balance analysis
-**Researched:** 2026-04-02
+**Project:** Grid Tactics TCG v1.1 — Online PvP Dueling
+**Domain:** Real-time multiplayer turn-based card game over WebSockets
+**Researched:** 2026-04-04
 **Confidence:** HIGH
 
 ## Executive Summary
 
-Grid Tactics TCG is a Python-based tactical card game engine designed for RL self-play, strategy discovery, and card balance analysis. The established pattern for this type of project is a four-layer architecture (Game Engine / RL Environment / Training Pipeline / Dashboard) where each layer has zero knowledge of the layer above it. The game engine is the foundation: it must be correct, deterministic, and completely decoupled from ML dependencies. The RL layer wraps the engine in Gymnasium/PettingZoo interfaces and feeds flat numpy observations to Stable-Baselines3's MaskablePPO. The dashboard reads from SQLite and presents balance insights via Streamlit. This layering is well-proven in projects like RLCard and multiple PettingZoo tutorials.
+Grid Tactics already has a complete, battle-tested game engine (immutable frozen dataclasses, pure functions, 500+ tests). The v1.1 Online PvP Dueling feature is additive — it wraps the existing Python engine without modifying it. The recommended approach is Flask-SocketIO (threading mode + simple-websocket) as a thin orchestration server that holds one `GameState` per room, validates actions against `legal_actions()`, applies them via `resolve_action()`, and emits per-player filtered views over WebSocket. The entire PvP server is 5 new Python modules (`server/`) plus a single-page HTML UI (`web-pvp/`). Zero changes to the existing game engine are needed.
 
-The recommended approach is to build the game engine first with exhaustive testing, then layer RL integration on top, then build the training pipeline, and finally the analytics dashboard. The stack is Python 3.12, NumPy for state representation, PettingZoo AEC for the two-player turn-based interface (including the React interrupt window), MaskablePPO from sb3-contrib for action-masked policy learning, and Streamlit with Plotly for the stats dashboard. All library versions have been verified for mutual compatibility. The React mechanic -- where the opponent can play a counter-card mid-turn -- maps cleanly to PettingZoo's Agent-Environment-Cycle model, which is specifically designed for sequential decision points with interrupts.
+The critical path is short and well-defined: server setup -> room system -> state serialization with hidden-info filtering -> board UI -> action submission -> react window flow -> win detection. Each step is independently testable before the next. The existing engine's pure-function, immutable-state design is a perfect RPC interface for WebSocket-driven game actions — the server layer is genuinely thin and has no novel architecture challenges. Total new dependencies: 3 (Flask, Flask-SocketIO, simple-websocket).
 
-The dominant risk is game engine bugs silently corrupting RL training. Because RL agents explore states humans never would, they will find and exploit every rule gap, producing meaningless balance data. Prevention requires exhaustive unit tests, property-based testing with Hypothesis, random-agent smoke tests (10,000+ games), and assertions on game state invariants. The second major risk is self-play training collapse, where the agent cycles through strategies without converging. An agent pool (league of historical checkpoints) with diversified opponent sampling is the standard mitigation. Both risks must be addressed architecturally before any training begins.
+The primary risks are information leakage (opponent hand visible in WebSocket frames) and react window desync (clients not correctly transitioning between ACTION and REACT phases). Both have clear, well-documented solutions. A secondary risk is turn timer race conditions in threading mode, mitigated by a `threading.Lock` per `GameSession`. Scope is deliberately narrow for v1.1: no accounts, no matchmaking, no deck builder, no AI opponent. This is the right call.
+
+---
 
 ## Key Findings
 
 ### Recommended Stack
 
-The stack splits into three installable layers: core engine (numpy + stdlib only), RL training (SB3 + PettingZoo + SuperSuit), and dashboard (Streamlit + Plotly + pandas). This means you can test the game without PyTorch and run the dashboard without the RL stack. Python 3.12 is the correct target -- all libraries support it, and Python 3.13 would break PettingZoo's upper version bound.
+The PvP server adds exactly 3 new runtime dependencies: `Flask>=3.1`, `Flask-SocketIO>=5.6`, and `simple-websocket>=1.1`. Threading async mode is non-negotiable — eventlet is deprecated (maintainer guidance), gevent-websocket was abandoned in 2017. Threading with simple-websocket provides real WebSocket transport (not long-polling fallback) and is correct for the target scale of ~50 concurrent games. The frontend is vanilla HTML/CSS/JS with socket.io-client 4.8.3 from CDN — consistent with the existing Vercel analytics dashboard pattern, no npm or build tooling needed.
+
+Serialization uses `dataclasses.asdict()` (already in use throughout the codebase), not msgspec or orjson. At one serialization per second per room, stdlib JSON is fast enough. A custom `to_client_dict(viewer_side)` method handles the hidden-information filtering that is the security-critical piece.
 
 **Core technologies:**
-- **Python 3.12**: Runtime -- mature, 10-15% faster than 3.11, compatible with all dependencies
-- **NumPy >=2.2**: Game state arrays, observation encoding -- foundation for all RL data
-- **PettingZoo AEC >=1.25**: Multi-agent environment API -- purpose-built for sequential turn-based games with interrupts
-- **MaskablePPO (sb3-contrib >=2.8)**: RL algorithm with action masking -- prevents agent from wasting training time on illegal actions
-- **SuperSuit >=3.9**: PettingZoo-to-SB3 bridge -- vectorized environment conversion
-- **Streamlit >=1.56**: Stats dashboard -- fastest Python-to-interactive-web path
-- **Plotly >=6.6**: Interactive charts -- heatmaps, board visualization, balance charts
-- **SQLite (stdlib)**: Game results and metrics storage -- zero-config, single-file
-- **JSON files**: Card definitions -- human-readable, version-controllable, enables rapid balance iteration
+- Flask 3.1.3 + Flask-SocketIO 5.6.1: WebSocket server with rooms, events, broadcasting — lowest-friction path to real-time multiplayer for an existing Python project
+- simple-websocket 1.1.0: Required for real WebSocket transport in threading mode — maintained (2024 release), unlike gevent-websocket (2017, abandoned)
+- Socket.IO client 4.8.3 (CDN): Browser-side WebSocket — auto-reconnect, protocol-compatible with Flask-SocketIO 5.x
+- dataclasses.asdict() + custom view filter: State serialization — already the project pattern, zero new deps
+- In-memory Python dict: Room state registry — correct for single-process server at target scale, no Redis needed
 
 ### Expected Features
 
 **Must have (table stakes):**
-- Complete rule enforcement engine with 5x5 grid, mana system, three card types, action-per-turn, draw-costs-action
-- Legal action enumeration from any game state (single source of truth for both validation and masking)
-- Deterministic seeded RNG for full reproducibility
-- Game state serialization/deserialization
-- Gymnasium/PettingZoo-compatible environment interface with observation encoding, action space, and action masking
-- Self-play training loop with MaskablePPO
-- Win rate tracking and card usage statistics
-- Training metrics logging (TensorBoard)
+- Server-authoritative game loop — validates every action against `legal_actions()` before applying; prevents cheating
+- Room code system (create/join) — `secrets.token_urlsafe(6)` + Flask-SocketIO rooms; standard for private casual games
+- Per-player views with hidden information — opponent's hand/deck stripped before emit; game is broken without this
+- Legal action filtering in UI — server sends valid actions with each state update; client highlights them
+- 5x5 grid board visualization — CSS Grid layout; the game is spatial and must render spatially
+- Hand display with playable card indicators — mana cost, stats, dimmed-if-unplayable
+- Turn flow indicator (ACTION vs REACT phase) — must be unambiguous which player acts in which role
+- React window UI — distinct prompt for reactor, prominent pass button; core game differentiator
+- Win detection + game over screen — clear outcome display
 
 **Should have (differentiators):**
-- Reward shaping with potential-based intermediate signals (only if sparse rewards fail to converge)
-- Game replay viewer (web-based turn-by-turn playback)
-- Balance heatmaps and card power rankings
-- Data-driven card definitions (JSON, not hardcoded classes)
-- Configurable mana cap for balance testing
-- Deck composition explorer and archetype clustering
+- Turn timer (45s action / 20s react) — prevents stalling; auto-pass on expiry
+- Game log / action history — scrollable sidebar of events
+- Card hover/inspect preview — full card details on hover
+- Reconnection handling (60s window with session token) — WiFi drops should not end games
+- Rematch button — quick restart in same room
 
 **Defer (v2+):**
-- Automated balance sweep (evolutionary search over card parameters)
-- Vectorized/parallel environment execution (Pgx-style GPU acceleration)
-- Opponent modeling with recurrent policies
-- Human-playable interface
-- Meta-strategy discovery and reporting (requires large-scale data corpus)
-- Tournament bracket system
+- Matchmaking / ELO ranking — requires critical player mass
+- User accounts / authentication — no value for friends playing
+- Deck builder — only 19 cards, not enough variety
+- AI opponent in PvP UI — requires PyTorch model loading
+- Mobile-responsive layout, sound effects, card art, persistent game history
 
 ### Architecture Approach
 
-The architecture follows a strict four-layer model mirroring RLCard's proven pattern. Layer 1 (Game Engine) is pure Python with immutable GameState objects -- actions produce new states rather than mutating in place. Layer 2 (Environment) is a thin adapter translating between rich Python objects and flat numpy arrays. Layer 3 (Training) orchestrates self-play with an agent pool and logs metrics. Layer 4 (Dashboard) reads from SQLite, never touches game state.
+The PvP server is Layer 5 sitting above the existing architecture, wrapping the Python game engine (Layer 1) directly and bypassing RL layers (2-3) and dashboard (Layer 4) entirely. The engine's pure-function signatures — `resolve_action(state, action, library) -> new_state` and `legal_actions(state, library) -> list[Action]` — map perfectly to event-driven WebSocket architecture: receive event, call function, emit result.
 
 **Major components:**
-1. **GameState + ActionResolver** -- Immutable game state with a resolver that validates and applies actions, producing new states. Single `legal_actions()` function serves both the engine and RL masking.
-2. **GridTacticsEnv (PettingZoo AEC)** -- Wraps the game engine. Handles observation encoding (multi-channel 2D grid for board + flat vectors for hand/mana/HP), action decoding, and reward signals. The React window is modeled as a sub-turn where legal actions are restricted to react cards + pass.
-3. **SelfPlayWrapper + AgentPool** -- Converts the 2-player AEC environment into a single-agent Gymnasium environment by auto-stepping the opponent from a pool of historical checkpoints. Prevents strategy cycling.
-4. **StatsAPI + DashboardUI (Streamlit)** -- Reads training logs and game records from SQLite. Computes aggregated balance statistics and renders interactive charts.
+1. `server/app.py` — Flask + SocketIO initialization, static file serving, CORS, entry point
+2. `server/room_manager.py` — Room code generation (6-char alphanumeric), player-to-room mapping, session lifecycle
+3. `server/game_session.py` — Per-game container: holds `GameState`, player SIDs, `threading.Lock`, processes actions via `resolve_action()`
+4. `server/view_filter.py` — Strips opponent hand/deck contents; produces per-player JSON views
+5. `server/timer_manager.py` — Background turn timeout tasks via `start_background_task()`; auto-pass on expiry
+6. `server/events.py` — All Socket.IO event handlers (create_room, join_room, action, disconnect)
+7. `web-pvp/index.html` + JS — CSS Grid board, hand display, legal action highlights, action submission
+
+Zero modifications to existing engine files. All server concerns live in `server/` that imports from `grid_tactics/` but never modifies it.
 
 ### Critical Pitfalls
 
-1. **Game engine bugs corrupt RL training silently** -- RL agents exploit every rule gap. Prevention: exhaustive unit tests, property-based testing, random-agent smoke tests (10K games), `GameState.validate()` after every action, assertions on invariants (mana never negative, dead minions removed, positions in bounds).
-2. **Information leakage in observations** -- Exposing opponent's hand contents teaches the agent a different game. Prevention: separate `GameState` (full truth) from `PlayerObservation` (visible info only) from day one. Unit test that observations contain no private data.
-3. **Action space explosion** -- Thousands of possible actions with only 5-20 legal at any time. Prevention: fixed-size `Discrete(N)` action space with MaskablePPO action masking. Never penalize illegal actions with negative rewards.
-4. **Effect system becomes unmaintainable** -- Adding card 20 requires modifying 5 functions. Prevention: data-driven effect system with composable primitive effects (deal_damage, buff_stat, etc.) and a Command pattern. Effect resolution queue for React stack ordering.
-5. **Self-play training collapse** -- Strategy cycling without convergence. Prevention: agent pool with diversified opponent sampling (50% latest, 30% recent, 20% historical). Monitor exploitability against fixed baselines (random, greedy). Track Elo across pool.
+1. **Information leakage via WebSocket payloads** — Never send raw `dataclasses.asdict(state)` over the wire. Implement `to_client_dict(viewer_side)` server-side: opponent hand becomes count-only, both decks become count-only. Write a test asserting opponent card IDs don't appear in filtered output. Verify with browser DevTools.
+
+2. **Client-submitted actions not validated** — Always reconstruct the Action dataclass from client payload AND check it is in `legal_actions(state, library)` before applying. Emit error event on invalid actions; never crash. Wrap action reconstruction in try/except for malformed dicts.
+
+3. **React window desync** — Client must check BOTH `phase` AND `react_player_idx` (not just `active_player_idx`) to determine who acts during REACT. Include a `decision_player_idx` field in every state update to eliminate client-side ambiguity. Turn timer on react phase prevents freeze if client fails to show prompt.
+
+4. **Session token vs socket ID** — Socket IDs (`request.sid`) change on reconnect. Map players to game slots using a persistent session token (UUID stored in cookie/localStorage), not the socket ID. On reconnect, update the stored SID and re-emit current state.
+
+5. **Turn timer race condition** — `threading.Lock()` per `GameSession` serializes access. Both timer callback and action handler acquire the lock. Timer checks whether state has already advanced before auto-passing.
+
+---
 
 ## Implications for Roadmap
 
-Based on research, suggested phase structure:
+The dependency chain is clear and the build order is prescribed by architecture. FEATURES.md defines a tight critical path. Five phases map directly to it.
 
-### Phase 1: Game Engine Foundation
-**Rationale:** Everything depends on correct game rules. The game engine is the critical path -- no RL training, analytics, or balance analysis works without it. Architecture research strongly emphasizes building and testing the engine in isolation before adding ML dependencies.
-**Delivers:** A complete, tested, deterministic game engine that can run full games between random agents. Includes the card library (small initial pool of 5-8 simple cards), 5x5 grid with positional logic, mana with banking, three card types, React window, action-per-turn, and draw-costs-action.
-**Addresses:** Rule enforcement, legal action enumeration, deterministic RNG, game state serialization, win/loss detection
-**Avoids:** Rule bugs corrupting training (#1), information leakage (#2), effect system spaghetti (#4), incorrect React modeling (#7), non-deterministic RNG (#11), draw-not-an-action (#13)
+### Phase 1: Server Foundation + Room System
 
-### Phase 2: RL Environment Interface
-**Rationale:** Depends on Phase 1 (wraps the engine). The observation encoder and action encoder define what the agent can perceive and do -- getting these wrong means retraining from scratch. This is the second gate before any training can start.
-**Delivers:** A PettingZoo AEC environment that wraps the game engine. Multi-channel 2D observation encoding for the board (CNN-compatible), flat encoding for hand/mana/HP. Fixed-size discrete action space with masking. Sparse reward signal (+1/-1). SelfPlayWrapper for single-agent SB3 compatibility.
-**Uses:** PettingZoo, SuperSuit, Gymnasium, NumPy
-**Implements:** ObservationEncoder, ActionEncoder, GridTacticsEnv, RewardShaper, SelfPlayWrapper
-**Avoids:** Spatial info loss (#8), engine-RL coupling (#9), action space explosion (#3)
+**Rationale:** Nothing else is possible without WebSocket connectivity and room management. Fully testable with programmatic clients (wscat or Python socketio client) — no browser UI needed.
+**Delivers:** Two clients can connect, create a room, and receive a `game_start` event with initial game state.
+**Addresses:** Server-authoritative game loop, room code system (create/join), preset deck definition
+**Stack:** Flask 3.1, Flask-SocketIO 5.6, simple-websocket 1.1
+**Implements:** `server/app.py`, `server/room_manager.py`, `server/game_session.py`, `server/events.py` (create/join handlers only)
+**Avoids:** Pitfall 9 (CORS config from day one — serve HTML from Flask app), Pitfall 4 (session tokens, not socket IDs, established in room join flow), Pitfall 10 (preset deck constant defined at this step)
 
-### Phase 3: Training Pipeline and Self-Play
-**Rationale:** Depends on Phase 2 (needs a working environment). This is where the RL actually runs. The agent pool and self-play infrastructure must be designed from the start to prevent training collapse.
-**Delivers:** A trained agent that beats random play convincingly. Training loop with MaskablePPO, agent pool with checkpoint diversity, TensorBoard logging, game recording, checkpoint management. Baseline evaluation suite (vs random, greedy-aggressive, greedy-defensive).
-**Uses:** SB3, sb3-contrib (MaskablePPO), TensorBoard
-**Implements:** TrainingLoop, AgentPool, MetricsLogger, GameRecorder, CheckpointManager
-**Avoids:** Self-play collapse (#5), reward misalignment (#6), missing metadata (#16), premature architecture optimization (#18)
+### Phase 2: State Serialization + Core Game Flow
 
-### Phase 4: Card Expansion and Balance Tuning
-**Rationale:** With a validated training pipeline, expand the card pool and use RL to discover balance issues. This is where the project delivers on its core promise. Requires fast simulation speed, so performance optimization happens at the start of this phase.
-**Delivers:** Expanded card pool (20-30 cards) with validated RL convergence. Balance metrics per card. Mana cap tuning. Data-driven card definitions in JSON. Performance-optimized engine (target: 10K+ steps/sec).
-**Addresses:** Data-driven card definitions, configurable mana cap, reward shaping (if needed)
-**Avoids:** Card pool too complex (#10), slow engine (#12), mana banking degeneracy (#14), SQLite write contention (#17)
+**Rationale:** Hidden-info filtering is the security-critical foundation for all UI work. The full game must be playable via raw SocketIO before any browser UI is built — this catches all logic bugs before UI complexity is added.
+**Delivers:** Complete game playable via Python/CLI WebSocket client. Both players take turns, react windows work, game ends with correct winner. View filter tested and verified.
+**Addresses:** Per-player views (hidden information), legal action serialization, real-time state sync, react window state machine
+**Implements:** `server/view_filter.py`, action handler in `server/events.py`, legal_actions emission
+**Avoids:** Pitfall 1 (view filter proven before UI ships), Pitfall 2 (action validation always on), Pitfall 3 (decision_player_idx in every state update), Pitfall 6 (json.dumps test on all GameState types), Pitfall 8 (wire format schema documented once here)
 
-### Phase 5: Analytics Dashboard
-**Rationale:** Depends on Phase 3-4 (needs training data and game results to display). The dashboard is a consumer of data, not a producer. Building it after training data exists means real data for development and testing.
-**Delivers:** Streamlit web dashboard with win rate graphs, card power rankings, balance heatmaps, game replay viewer, deck composition explorer. Reads from SQLite.
-**Uses:** Streamlit, Plotly, pandas, SQLite
-**Implements:** StatsAPI, ReplayViewer, BalanceAnalyzer, DashboardUI
+### Phase 3: Browser Game UI
 
-### Phase 6: Advanced Strategy Discovery
-**Rationale:** Requires large-scale training data and a mature pipeline. This is the ambitious research phase -- meta-game analysis, automated balance sweeps, and strategy clustering.
-**Delivers:** Meta-strategy discovery, archetype identification, matchup matrices, automated balance sweep (vary card stats and retrain), Elo ratings across strategy pool.
-**Addresses:** Automated balance sweep, meta-strategy discovery, deck archetype clustering
+**Rationale:** Build UI only after the server is proven correct. This phase is pure rendering — all game logic is server-side. Consistent with existing `web-dashboard/` vanilla JS pattern.
+**Delivers:** Full game playable in two browser windows. 5x5 CSS Grid board, hand display, mana/HP bars, legal action highlights, action submission.
+**Addresses:** 5x5 grid board visualization, hand display with playable indicators, mana/HP display, turn flow indicator
+**Stack:** Vanilla HTML/CSS/JS, Socket.IO client 4.8.3 CDN
+**Implements:** `web-pvp/index.html`, `web-pvp/js/game.js`, `web-pvp/js/board.js`, `web-pvp/js/actions.js`
+**Avoids:** Pitfall 8 (client action construction matches server wire format established in Phase 2)
+
+### Phase 4: React Window UI + Win Detection
+
+**Rationale:** React window is the most complex UI interaction. Separating it from base UI (Phase 3) keeps Phase 3 shippable and focused. Win detection display completes the game loop.
+**Delivers:** React window fully usable in browser. Distinct react prompt, highlight playable react cards, prominent pass button. Win/loss/draw overlay with reason. Game is shippable at this milestone.
+**Addresses:** React window UI, win detection + game over screen
+**Avoids:** Pitfall 3 (client uses `decision_player_idx` to render react role correctly)
+
+### Phase 5: Resilience + Polish
+
+**Rationale:** Turn timer and reconnection handling prevent the most common user-facing failures in online games (stalling, network drops). Deferred because they add implementation complexity that would slow Phases 1-4.
+**Delivers:** Turn timer with auto-pass, reconnection resilience (session tokens already laid in Phase 1), game log sidebar, room cleanup on disconnect, rematch button.
+**Addresses:** Turn timer (45s/20s), reconnection handling, game log, room memory management
+**Implements:** `server/timer_manager.py`, disconnect/reconnect handling in events.py, periodic room cleanup sweep
+**Avoids:** Pitfall 5 (timer race condition — threading.Lock already in GameSession from Phase 1), Pitfall 7 (room memory leak — disconnect timers + cleanup)
 
 ### Phase Ordering Rationale
 
-- **Engine before RL**: The PettingZoo environment wraps the game engine. If the engine API changes, the environment must update. The engine's `legal_actions()` interface is the most critical contract -- it must be stable before Phase 2 depends on it.
-- **Environment before training**: Observation and action space design determines what the agent can learn. A spatial representation mistake (flat vs 2D) would require retraining from scratch.
-- **Training before dashboard**: The dashboard reads data that training produces. Building the dashboard first means developing against fake data, then discovering the schema doesn't match reality.
-- **Card expansion as a separate phase**: Starting with a minimal card pool (5-8 cards) and validating RL convergence before expanding prevents the "too many cards, can't converge" pitfall. This is the curriculum learning principle applied to development itself.
-- **Dashboard after training pipeline**: Parallelizable with Phase 4 if desired, but the data contracts must be defined in Phase 3.
+- Server before UI: server can be fully tested programmatically, catching all rule bugs before any browser complexity
+- View filtering (Phase 2) before UI (Phase 3): the hidden-information guarantee must be established and tested before a UI could inadvertently expose it
+- React window UI (Phase 4) separated from base UI (Phase 3): server already handles react state machine correctly — the UI split keeps Phase 3 scoped and shippable
+- Resilience (Phase 5) last: a game that stalls on WiFi drop is acceptable for early testing; core gameplay comes first
 
 ### Research Flags
 
-Phases likely needing deeper research during planning:
-- **Phase 2 (RL Environment):** Observation space sizing and action space encoding are estimated at ~300-500 features and ~400 discrete actions. Actual sizes depend on card feature count, max hand size, and whether derived channels (threat zones, valid targets) are included. Needs prototyping to finalize.
-- **Phase 3 (Training Pipeline):** Self-play wrapper architecture has reference implementations (PettingZoo Connect Four tutorial) but Grid Tactics' React window adds a wrinkle -- the sub-turn interrupt changes agent alternation patterns. Needs careful implementation and testing.
-- **Phase 4 (Card Expansion):** Performance optimization strategy (numpy arrays vs Cython vs Numba) depends on profiling results from Phase 3. Cannot decide in advance.
-- **Phase 6 (Strategy Discovery):** Meta-strategy clustering and automated balance sweeps are research-grade problems with limited off-the-shelf solutions. Expect experimentation.
+Phases with well-documented patterns (no research-phase needed):
+- **Phase 1:** Flask-SocketIO rooms are a core documented feature; create/join pattern is standard
+- **Phase 2:** State serialization, action validation, and view filtering are fully specified in ARCHITECTURE.md with production-ready code examples
+- **Phase 3:** Vanilla HTML/CSS/JS with Socket.IO CDN — no novel integrations; existing `web-dashboard/` is the template
+- **Phase 4:** React window state machine is handled by the existing engine; client rendering follows from Phase 3 patterns
 
-Phases with standard patterns (skip deep research):
-- **Phase 1 (Game Engine):** Well-documented patterns -- immutable state, Command pattern for effects, dataclasses, unit testing. RLCard provides a direct reference architecture.
-- **Phase 5 (Dashboard):** Streamlit development is straightforward. The only design question is the data schema, which is defined in Phase 3.
+Phases that may benefit from targeted investigation during planning:
+- **Phase 5 (Reconnection):** Session token + reconnect flow has moderate implementation complexity. Cookie vs localStorage, token expiry, and state resend edge cases may surface. Consider a brief investigation before implementation.
+- **Phase 5 (Timer cancellation):** ARCHITECTURE.md explicitly flags `start_background_task()` cancellation as MEDIUM confidence — "needs careful testing." Plan a timer integration test before shipping.
+
+---
 
 ## Confidence Assessment
 
 | Area | Confidence | Notes |
 |------|------------|-------|
-| Stack | HIGH | All versions verified on PyPI. Compatibility matrix confirmed. Python 3.12 validated across all packages. |
-| Features | HIGH | Table stakes well-defined by domain research. Feature dependencies are clear. Differentiators validated by academic papers (Hearthstone RL, Jaipur self-play). |
-| Architecture | HIGH | Four-layer pattern matches RLCard, PettingZoo tutorials, and multiple card game RL implementations. Immutable GameState and AEC for react windows are proven patterns. |
-| Pitfalls | HIGH | All critical pitfalls sourced from multiple references (RLCard, NFSP, SPIRAL, Gymnasium docs). Phase-specific warnings are well-documented in RL training literature. |
+| Stack | HIGH | All versions verified on PyPI as of 2026-04-04. Async mode recommendation is from Flask-SocketIO maintainer, not inference. Only uncertainty: Flask-CORS may not be needed if HTML is served from the same Flask app (recommended). |
+| Features | HIGH | Critical path is unambiguous. Table stakes are established conventions from online card games. Anti-features list prevents scope creep. |
+| Architecture | HIGH | Engine reuse (zero modifications) verified by mapping existing API surface to PvP needs. Flask-SocketIO room/emit patterns are documented. Only MEDIUM area: timer cancellation edge cases. |
+| Pitfalls | HIGH | All 10 pitfalls have concrete prevention strategies. Critical pitfalls (info leakage, action validation, react desync) are well-sourced from multiplayer game development practice and Flask-SocketIO documentation. |
 
 **Overall confidence:** HIGH
 
 ### Gaps to Address
 
-- **Observation space exact sizing:** Estimated at ~300-500 features but depends on card feature count, max hand size, and whether derived spatial channels are worth the complexity. Prototype in Phase 2 and validate with a "does the agent learn basic strategy?" test before finalizing.
-- **CNN vs MLP for 5x5 grid:** A 5x5 grid is small. A CNN may not provide meaningful advantage over a flattened MLP for this grid size. Start with MLP (SB3 default), upgrade to CNN only if spatial strategy learning is poor. MEDIUM confidence on CNN necessity.
-- **React window RL dynamics:** The sub-turn interrupt is well-modeled by PettingZoo AEC in theory, but there is limited published work on react/counter mechanics in RL training specifically. May affect training speed or strategy learning for react cards. Monitor in Phase 3.
-- **Performance targets:** 10K+ steps/sec is the target, but pure Python game engines for tactical games with this state complexity may fall short. Profiling data from Phase 3 will determine whether Cython/Numba optimization is needed in Phase 4.
-- **Agent pool sizing and sampling strategy:** The 50/30/20 split (latest/recent/historical) is a starting point from self-play literature, but optimal values depend on the game's strategy space. Treat as a hyperparameter to tune in Phase 3.
-- **Windows platform:** Gymnasium and PettingZoo note unofficial Windows support. Test the full stack integration early. WSL is a fallback.
+- **Preset deck composition:** The server needs `deck_p1` and `deck_p2` when creating a `GameSession`. With 19 cards and `MIN_DECK_SIZE=30`, the specific card copy counts in the preset deck are not decided. Must be resolved in Phase 1 — it is a game design decision, not a technical one. Suggestion: balanced across attributes (Fire/Dark/Light/Earth/Neutral).
+
+- **Timer cancellation reliability:** ARCHITECTURE.md flags `start_background_task()` cancellation as MEDIUM confidence. Plan a Phase 5 integration test for rapid consecutive actions at timer expiry. The `session.timer_cancelled` flag approach is documented but edge cases may surface.
+
+- **to_dict() completeness:** The existing `GameState.to_dict()` coverage appears complete for PvP needs. Verify during Phase 2 that `react_stack`, `pending_action`, and `react_player_idx` are all present and correctly structured for client rendering.
+
+- **Deployment target:** Where the PvP server runs (same machine as training on a different port vs. Render/Railway/Fly.io) is not yet decided. Does not block Phase 1-4, but must be decided before Phase 5 (reconnection handling depends on whether the server can restart with state intact).
+
+---
 
 ## Sources
 
 ### Primary (HIGH confidence)
-- [PettingZoo AEC API](https://pettingzoo.farama.org/) -- Turn-based multi-agent environment standard
-- [Stable-Baselines3 v2.8](https://github.com/DLR-RM/stable-baselines3/releases/tag/v2.8.0) -- RL algorithm library
-- [MaskablePPO (sb3-contrib)](https://sb3-contrib.readthedocs.io/en/master/modules/ppo_mask.html) -- Action masking for discrete spaces
-- [RLCard Architecture](https://rlcard.org/overview.html) -- Three-layer card game RL architecture reference
-- [Gymnasium Environment API](https://gymnasium.farama.org/api/env/) -- Standard RL environment interface
-- [PettingZoo SB3 Connect Four Tutorial](https://pettingzoo.farama.org/tutorials/sb3/connect_four/) -- Self-play + action masking reference implementation
-- [arXiv:2503.22575](https://arxiv.org/html/2503.22575v2) -- SB3 PPO outperforms RLlib PPO empirically
+- [Flask-SocketIO PyPI](https://pypi.org/project/Flask-SocketIO/) — version 5.6.1 (Feb 2026), async mode guidance
+- [Flask PyPI](https://pypi.org/project/Flask/) — version 3.1.3 (Feb 2026)
+- [simple-websocket PyPI](https://pypi.org/project/simple-websocket/) — version 1.1.0 (Oct 2024)
+- [gevent-websocket PyPI](https://pypi.org/project/gevent-websocket/) — version 0.10.1 (2017), confirmed abandoned
+- [Socket.IO Client CDN](https://www.jsdelivr.com/package/npm/socket.io-client) — version 4.8.3 (Dec 2025)
+- [Flask-SocketIO deployment docs](https://flask-socketio.readthedocs.io/en/latest/deployment.html) — gunicorn config, async mode tradeoffs
+- [Flask-SocketIO async mode discussion #1915](https://github.com/miguelgrinberg/Flask-SocketIO/discussions/1915) — maintainer guidance on threading vs gevent vs eventlet
+- [Flask-SocketIO eventlet deprecation discussion #2037](https://github.com/miguelgrinberg/Flask-SocketIO/discussions/2037) — eventlet maintenance status
+- Existing codebase: `game_state.py`, `action_resolver.py`, `legal_actions.py`, `game_loop.py`, `actions.py`, `enums.py`
 
 ### Secondary (MEDIUM confidence)
-- [Mastering Jaipur Through Self-Play RL](https://link.springer.com/chapter/10.1007/978-3-031-47546-7_16) -- Self-play + action masking for card games
-- [SPIRAL: Self-Play Training Collapse](https://arxiv.org/html/2506.24119v1) -- Variance reduction, thinking collapse
-- [Deep RL from Self-Play (Heinrich & Silver)](https://arxiv.org/pdf/1603.01121) -- NFSP for imperfect information games
-- [Automated Playtesting with Evolutionary Algorithms (Hearthstone)](https://www.researchgate.net/publication/324767888) -- RL for card game balance
-- [Pgx: Hardware-Accelerated Game Simulators](https://arxiv.org/pdf/2303.17503) -- GPU-accelerated environments (deferred option)
-- [GridNet: CNN over Grid for Tactical Games](https://proceedings.mlr.press/v97/han19a/han19a.pdf) -- Spatial encoding validation
-
-### Tertiary (LOW confidence)
-- [Overcooked Training Performance](https://bsarkar321.github.io/blog/overcooked_madrona/index.html) -- Python simulation bottleneck quantification (different domain)
-- [Reward Shaping: Potential-Based Guarantees](https://ar5iv.labs.arxiv.org/html/2311.16339) -- Reward engineering (general, not TCG-specific)
-- [Card Game Design as Systems Architecture](https://critpoints.net/2023/05/26/card-game-design-as-systems-architecture/) -- Effect system design (blog, not peer-reviewed)
+- [Socket.IO Rooms documentation](https://socket.io/docs/v3/rooms/) — room concept and patterns
+- [Flask-SocketIO timer discussion #1695](https://github.com/miguelgrinberg/Flask-SocketIO/discussions/1695) — background task timer pattern (cancellation details need testing)
+- [Building Multiplayer Board Games with WebSockets](https://dev.to/sauravmh/browser-game-design-using-websockets-and-deployments-on-scale-1iaa) — server authority, room management
+- [Mastering Socket.IO Rooms](https://www.videosdk.live/developer-hub/socketio/socketio-rooms) — room management best practices
 
 ---
-*Research completed: 2026-04-02*
+*Research completed: 2026-04-04*
 *Ready for roadmap: yes*
