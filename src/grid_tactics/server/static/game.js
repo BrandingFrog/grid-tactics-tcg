@@ -522,6 +522,7 @@ var KEYWORD_GLOSSARY = {
     'Burn': 'Apply damage over time that triggers each turn.',
     'Dark Matter': 'Buff scales with Dark Matter stacks.',
     'Passive': 'This effect triggers automatically every turn.',
+    'Active': 'This ability can be used once per turn instead of attacking.',
 };
 
 function showCardTooltip(numericId) {
@@ -1219,7 +1220,7 @@ function getEffectDescription(effects, cardData) {
         } else if (type === 10) { // Burn
             desc = prefix + 'Burn ' + amount + ' per turn';
         } else if (type === 11) { // Dark Matter Buff
-            desc = prefix + '+' + amount + ' ATK (Dark Matter)';
+            desc = 'Active: +' + amount + ' ATK (Dark Matter)';
         } else if (type === 12) { // Passive Heal
             desc = 'Passive: Heal ' + amount + ' per turn';
         } else {
