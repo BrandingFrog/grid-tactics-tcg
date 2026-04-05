@@ -96,6 +96,7 @@ class CardLoader:
             summon_sacrifice_tribe=data.get("summon_sacrifice_tribe"),
             transform_options=CardLoader._parse_transform_options(data, card_id),
             deckable=data.get("deckable", True),
+            flavour_text=data.get("flavour_text"),
         )
 
     @staticmethod

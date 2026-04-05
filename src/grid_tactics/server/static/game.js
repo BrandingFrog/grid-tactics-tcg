@@ -554,6 +554,9 @@ function showCardTooltip(numericId) {
     if (cardTextLines.length > 0) {
         keywordsHtml += '<div style="margin-bottom:8px;color:white;font-size:12px;font-weight:700;line-height:1.5;">' + cardTextLines.join('<br>') + '</div>';
     }
+    if (c.flavour_text) {
+        keywordsHtml += '<div style="margin-bottom:8px;color:var(--muted);font-size:11px;font-style:italic;">"' + c.flavour_text + '"</div>';
+    }
     // Match keywords from the effect text and card properties
     var matchedKeywords = [];
     if (c.unique) matchedKeywords.push('Unique');
@@ -680,6 +683,10 @@ function renderDeckBuilderCard(numericId, count) {
             return tName + ' (' + opt.mana_cost + ' mana)';
         });
         html += '<div class="card-effect-full">Transform: ' + transformLines.join(', ') + '</div>';
+    }
+    // Flavour text for cards with no effects
+    if (c.flavour_text && (!c.effects || c.effects.length === 0)) {
+        html += '<div class="card-flavour">' + c.flavour_text + '</div>';
     }
     // Range already shown in bottom center for minions
     html += '</div>';

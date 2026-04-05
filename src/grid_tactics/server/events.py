@@ -68,6 +68,7 @@ def _build_card_defs(library):
                     {"target": t[0], "mana_cost": t[1]}
                     for t in (card.transform_options or ())
                 ] or None,
+                "flavour_text": getattr(card, 'flavour_text', None),
             }
         except (KeyError, IndexError):
             break

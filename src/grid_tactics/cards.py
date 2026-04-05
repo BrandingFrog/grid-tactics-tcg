@@ -97,6 +97,9 @@ class CardDefinition:
     # Whether this card can be included in player decks (False = transform-only, etc.)
     deckable: bool = True
 
+    # Flavour text for cards with no effects
+    flavour_text: Optional[str] = None
+
     @property
     def is_multi_purpose(self) -> bool:
         """True if this card can be deployed OR used as react from hand (D-06)."""
