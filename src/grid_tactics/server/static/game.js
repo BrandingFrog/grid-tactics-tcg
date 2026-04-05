@@ -511,9 +511,11 @@ function renderDeckBuilderCard(numericId, count) {
     html += '<div class="card-art-overlay"></div>';
     html += '<div class="card-name-overlay">' + c.name + '</div>';
     html += '</div>';
-    // Type badge
-    var typeNames = ['Minion', 'Magic', 'React'];
-    html += '<div class="card-type-badge">' + (typeNames[c.card_type] || '') + '</div>';
+    // Tribe badge (replaces type badge per user request)
+    var tribe = c.tribe || '';
+    if (tribe) {
+        html += '<div class="card-type-badge">' + tribe + '</div>';
+    }
     // Stats for minions
     if (c.card_type === 0 && c.attack != null) {
         html += '<div class="card-stats">';
