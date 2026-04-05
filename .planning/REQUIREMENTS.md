@@ -21,10 +21,10 @@ Requirements for online PvP dueling milestone. Each maps to roadmap phases.
 
 ### Game Board UI
 
-- [ ] **UI-01**: User can see the 5x5 grid with minions showing name, ATK/HP, owner, and attribute
-- [ ] **UI-02**: User can see their hand with card details (name, mana cost, ATK/HP, effects, attribute) and unplayable cards dimmed
-- [ ] **UI-03**: User can see both players' current mana and HP
-- [ ] **UI-04**: User can see whose turn it is and the current phase (ACTION vs REACT)
+- [x] **UI-01**: User can see the 5x5 grid with minions showing name, ATK/HP, owner, and attribute
+- [x] **UI-02**: User can see their hand with card details (name, mana cost, ATK/HP, effects, attribute) and unplayable cards dimmed
+- [x] **UI-03**: User can see both players' current mana and HP
+- [x] **UI-04**: User can see whose turn it is and the current phase (ACTION vs REACT)
 
 ### Gameplay Interaction
 
@@ -134,10 +134,10 @@ Which phases cover which requirements. Updated during roadmap creation.
 | VIEW-01 | Phase 12 | Complete |
 | VIEW-02 | Phase 12 | Complete |
 | VIEW-03 | Phase 12 | Complete |
-| UI-01 | Phase 13 | Pending |
-| UI-02 | Phase 13 | Pending |
-| UI-03 | Phase 13 | Pending |
-| UI-04 | Phase 13 | Pending |
+| UI-01 | Phase 13 | Complete |
+| UI-02 | Phase 13 | Complete |
+| UI-03 | Phase 13 | Complete |
+| UI-04 | Phase 13 | Complete |
 | PLAY-01 | Phase 14 | Pending |
 | PLAY-02 | Phase 14 | Pending |
 | PLAY-03 | Phase 14 | Pending |
