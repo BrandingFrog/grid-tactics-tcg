@@ -689,15 +689,14 @@ function renderDeckBuilderCard(numericId, count) {
     // Effect text (all card types)
     if (c.effects && c.effects.length > 0) {
         var desc = getEffectDescription(c.effects, c);
-        var sizeClass = desc.length > 30 ? 'card-effect-full card-effect-autosize' : 'card-effect-full';
-        html += '<div class="' + sizeClass + '">' + desc + '</div>';
+        html += '<div class="card-effect-full">' + desc + '</div>';
     }
     // Transform options (Reanimated Bones) — compact list
     if (c.transform_options && c.transform_options.length > 0) {
         var tLines = c.transform_options.map(function(opt) {
             return '(' + opt.mana_cost + ') ' + findCardNameById(opt.target);
         });
-        html += '<div class="card-effect-full card-effect-autosize">Transform: ' + tLines.join(', ') + '</div>';
+        html += '<div class="card-effect-full">Transform: ' + tLines.join(', ') + '</div>';
     }
     // React ability (multi-purpose cards like Dark Sentinel)
     if (c.react_condition != null && c.react_mana_cost != null) {
