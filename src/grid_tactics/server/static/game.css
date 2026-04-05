@@ -1411,6 +1411,13 @@ body {
   margin-top: 2px;
 }
 
+/* Auto-size effect text for long descriptions */
+.card-effect-autosize {
+  font-size: 9px;
+  font-weight: 400;
+  -webkit-line-clamp: 5;
+}
+
 /* Card Flavour Text */
 .card-flavour {
   text-align: center;

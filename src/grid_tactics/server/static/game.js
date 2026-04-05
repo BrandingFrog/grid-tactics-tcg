@@ -687,15 +687,16 @@ function renderDeckBuilderCard(numericId, count) {
     // Effect text (all card types)
     if (c.effects && c.effects.length > 0) {
         var desc = getEffectDescription(c.effects, c);
-        html += '<div class="card-effect-full">' + desc + '</div>';
+        var sizeClass = desc.length > 30 ? 'card-effect-full card-effect-autosize' : 'card-effect-full';
+        html += '<div class="' + sizeClass + '">' + desc + '</div>';
     }
     // Transform options (Reanimated Bones)
     if (c.transform_options && c.transform_options.length > 0) {
         var transformLines = c.transform_options.map(function(opt) {
             var tName = findCardNameById(opt.target);
-            return tName + ' (' + opt.mana_cost + ' mana)';
+            return tName + ' (' + opt.mana_cost + ')';
         });
-        html += '<div class="card-effect-full">Transform: ' + transformLines.join(', ') + '</div>';
+        html += '<div class="card-effect-full card-effect-autosize">Active: Transform into ' + transformLines.join(', ') + '</div>';
     }
     // Flavour text for cards with no effects
     if (c.flavour_text && (!c.effects || c.effects.length === 0)) {
