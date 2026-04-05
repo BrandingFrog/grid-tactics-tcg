@@ -146,7 +146,16 @@ class GameState:
                 for m in self.minions
             ],
             "next_minion_id": self.next_minion_id,
-            "react_stack": list(self.react_stack),
+            "react_stack": [
+                {
+                    "player_idx": entry.player_idx,
+                    "card_index": entry.card_index,
+                    "card_numeric_id": entry.card_numeric_id,
+                    "target_pos": list(entry.target_pos) if entry.target_pos is not None else None,
+                }
+                if hasattr(entry, "player_idx") else entry
+                for entry in self.react_stack
+            ],
             "react_player_idx": self.react_player_idx,
             "pending_action": None,
             # Phase 4: Win/draw detection
