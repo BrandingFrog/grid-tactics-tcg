@@ -1276,11 +1276,11 @@ body {
   color: white;
   -webkit-text-stroke: 0.5px black;
   paint-order: stroke fill;
-  font-family: 'Luckiest Guy', cursive;
-  font-size: 10px;
-  font-weight: 400;
+  font-family: 'Inter', system-ui, sans-serif;
+  font-size: 12px;
+  font-weight: 700;
   line-height: 1.3;
-  padding: 1px 4%;
+  padding: 2px 6%;
   overflow: hidden;
   text-overflow: ellipsis;
   display: -webkit-box;
@@ -1424,22 +1424,23 @@ body {
 
 /* Auto-size effect text for long descriptions */
 .card-effect-autosize {
-  font-size: 8px;
+  font-size: 9px;
+  font-weight: 700;
   -webkit-line-clamp: 5;
 }
 
-/* Card Flavour Text — same font as effects, just italic */
+/* Card Flavour Text — same as effects but italic */
 .card-flavour {
   text-align: center;
   color: white;
-  font-family: 'Luckiest Guy', cursive;
-  font-size: 9px;
+  font-family: 'Inter', system-ui, sans-serif;
+  font-size: 11px;
   font-style: italic;
-  font-weight: 400;
+  font-weight: 700;
   -webkit-text-stroke: 0.5px black;
   paint-order: stroke fill;
   line-height: 1.3;
-  padding: 1px 4%;
+  padding: 2px 6%;
   overflow: hidden;
   text-overflow: ellipsis;
   display: -webkit-box;
