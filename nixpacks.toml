@@ -1,0 +1,5 @@
+[variables]
+PYTHONPATH = "src"
+
+[phases.setup]
+nixPkgs = ["python312"]
