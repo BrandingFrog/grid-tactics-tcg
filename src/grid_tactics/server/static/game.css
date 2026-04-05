@@ -982,6 +982,38 @@ body {
   border: 2px solid rgb(30, 25, 20);
 }
 
+.attr-text {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-family: 'Luckiest Guy', cursive;
+  font-size: 7px;
+  color: white;
+  -webkit-text-stroke: 0.5px black;
+  paint-order: stroke fill;
+  text-transform: uppercase;
+  z-index: 2;
+  white-space: nowrap;
+}
+
+.card-frame-full .attr-text {
+  font-size: 9px;
+}
+
+.attr-text-sm {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-family: 'Luckiest Guy', cursive;
+  font-size: 6px;
+  color: white;
+  -webkit-text-stroke: 0.5px black;
+  paint-order: stroke fill;
+  z-index: 2;
+}
+
 .attr-circle::after {
   content: '';
   position: absolute;

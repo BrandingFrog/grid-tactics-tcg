@@ -507,7 +507,7 @@ function renderDeckBuilderCard(numericId, count) {
     // Art area with attribute circle and name overlay (YGO CardPreview style)
     var artStyle = c.card_id ? 'background-image:url(/static/art/' + c.card_id + '.png)' : '';
     html += '<div class="card-art card-art-full" style="' + artStyle + '">';
-    html += '<div class="attr-circle ' + elem.css + '"></div>';
+    html += '<div class="attr-circle ' + elem.css + '"><span class="attr-text">' + elem.name + '</span></div>';
     html += '<div class="card-art-overlay"></div>';
     html += '<div class="card-name-overlay">' + c.name + '</div>';
     html += '</div>';
@@ -927,7 +927,7 @@ function renderBoardMinion(minion) {
 
     var boardArtStyle = cardDef.card_id ? 'background-image:url(/static/art/' + cardDef.card_id + '.png);background-size:cover;background-position:center;' : '';
     return '<div class="board-minion ' + ownerClass + '" style="' + boardArtStyle + '">'
-        + '<div class="attr-circle-sm ' + elem.css + '"></div>'
+        + '<div class="attr-circle-sm ' + elem.css + '"><span class="attr-text-sm">' + elem.name[0] + '</span></div>'
         + '<div class="board-minion-name">' + cardDef.name + '</div>'
         + '<div class="board-minion-stats">'
         + '<span class="board-minion-atk">' + atk + '</span>'
@@ -977,7 +977,7 @@ function renderHandCard(numericId, handIndex, currentMana) {
     // Art area with attribute circle
     var handArtStyle = c.card_id ? 'background-image:url(/static/art/' + c.card_id + '.png)' : '';
     html += '<div class="card-art" style="' + handArtStyle + '">';
-    html += '<div class="attr-circle ' + elem.css + '"></div>';
+    html += '<div class="attr-circle ' + elem.css + '"><span class="attr-text">' + elem.name + '</span></div>';
     html += '</div>';
     // Card name
     html += '<div class="card-name">' + c.name + '</div>';
