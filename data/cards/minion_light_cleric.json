@@ -8,5 +8,6 @@
     "range": 1,
     "element": "light",
     "tribe": "Cleric",
-    "effects": []
+    "effects": [],
+    "flavour_text": "Heals the faithful. Smites the wicked."
 }

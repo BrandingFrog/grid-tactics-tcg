@@ -8,5 +8,6 @@
     "range": 2,
     "element": "wood",
     "tribe": "Archer",
-    "effects": []
+    "effects": [],
+    "flavour_text": "The arrow flies before you hear the bow."
 }

@@ -9,9 +9,19 @@
     "element": "earth",
     "tribe": "Undead",
     "transform_options": [
-        {"target": "pyre_archer", "mana_cost": 2},
-        {"target": "grave_caller", "mana_cost": 3},
-        {"target": "fallen_paladin", "mana_cost": 4}
+        {
+            "target": "pyre_archer",
+            "mana_cost": 2
+        },
+        {
+            "target": "grave_caller",
+            "mana_cost": 3
+        },
+        {
+            "target": "fallen_paladin",
+            "mana_cost": 4
+        }
     ],
-    "effects": []
+    "effects": [],
+    "flavour_text": "The dead do not rest here."
 }

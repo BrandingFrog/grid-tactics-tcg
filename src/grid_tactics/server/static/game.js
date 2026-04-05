@@ -667,13 +667,15 @@ function renderDeckBuilderCard(numericId, count) {
     html += '</div>';
     // Bottom section: ATK circle | tribe+range | HP circle
     if (c.card_type === 0 && c.attack != null) {
-        html += '<div class="card-stat-atk">' + c.attack + '</div>';
-        html += '<div class="card-stat-hp">' + c.health + '</div>';
         var tribe = c.tribe || '';
         var rangeText = (c.attack_range != null) ? (c.attack_range <= 1 ? 'MELEE' : 'RANGE ' + c.attack_range) : '';
+        html += '<div class="card-bottom-section">';
+        html += '<div class="card-stat-atk">' + c.attack + '</div>';
         html += '<div class="card-bottom-center">';
         if (tribe) html += '<div class="card-bottom-tribe">' + tribe + '</div>';
         if (rangeText) html += '<div class="card-bottom-range">' + rangeText + '</div>';
+        html += '</div>';
+        html += '<div class="card-stat-hp">' + c.health + '</div>';
         html += '</div>';
     }
     // Summon sacrifice cost
@@ -697,8 +699,14 @@ function renderDeckBuilderCard(numericId, count) {
             html += '<div class="card-effect-full">Active (' + opt.mana_cost + '): Transform ' + tName + '</div>';
         });
     }
+    // React ability (multi-purpose cards like Dark Sentinel)
+    if (c.react_condition != null && c.react_mana_cost != null) {
+        var condMap = {0: 'Enemy attacks', 1: 'Enemy plays magic', 2: 'Enemy summons Light'};
+        var condText = condMap[c.react_condition] || 'Enemy acts';
+        html += '<div class="card-effect-full">React (' + c.react_mana_cost + '): ' + condText + ' — Summon</div>';
+    }
     // Flavour text for cards with no effects
-    if (c.flavour_text && (!c.effects || c.effects.length === 0)) {
+    if (c.flavour_text && (!c.effects || c.effects.length === 0) && c.react_condition == null) {
         html += '<div class="card-flavour">' + c.flavour_text + '</div>';
     }
     // Range already shown in bottom center for minions
