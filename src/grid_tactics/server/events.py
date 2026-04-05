@@ -207,6 +207,11 @@ def register_events(room_manager: RoomManager) -> None:
                     to=session.player_sids[idx],
                 )
 
+    @socketio.on("get_card_defs")
+    def handle_get_card_defs(data=None):
+        defs = _build_card_defs(_room_manager._library)
+        emit("card_defs", {"card_defs": defs})
+
     @socketio.on("submit_action")
     def handle_submit_action(data):
         # Step a: Look up token from SID
