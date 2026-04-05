@@ -21,13 +21,15 @@ The reinforcement learning engine that discovers and validates game strategies �
 - Real-time turn flow: auto-draw → action → react window → turn passes
 - Win detection and game-over screen
 
-## Current State (2026-04-04)
+## Current State (2026-04-05)
 
 **Working end-to-end pipeline:**
 - 3x RTX 4090 pods on RunPod training via GPU-native tensor engine (100K+ FPS)
 - Training data streams to Supabase PostgreSQL in real time
 - Vercel dashboard at https://web-dashboard-bice-eight.vercel.app shows live analytics
-- 19 cards in starter pool, 500+ tests passing
+- 21 cards in starter pool, 500+ tests passing
+
+**Phase 11 complete** — Flask-SocketIO PvP server with room codes, create/join/ready flow, session tokens, preset deck. 22 new tests.
 
 ## Requirements
 
@@ -41,6 +43,7 @@ The reinforcement learning engine that discovers and validates game strategies �
 - RL training pipeline: MaskablePPO, self-play, reward shaping, SQLite persistence — Phase 6
 - GPU tensor engine: batched PyTorch game engine, 32K parallel games, 100K+ FPS — Quick task
 - Live dashboard: Supabase PostgreSQL + Vercel, 5-tab analytics with card tier list — Quick task
+- PvP server foundation: Flask-SocketIO with room codes, session tokens, preset deck — Phase 11
 
 ### Active
 
@@ -165,4 +168,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-04-04*
+*Last updated: 2026-04-05*
