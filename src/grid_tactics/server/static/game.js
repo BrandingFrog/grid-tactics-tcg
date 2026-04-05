@@ -540,7 +540,20 @@ function showCardTooltip(numericId) {
     // Keywords
     var keywordsHtml = '';
     var effectDesc = (c.effects && c.effects.length > 0) ? getEffectDescription(c.effects, c) : '';
-    if (effectDesc) keywordsHtml += '<div style="margin-bottom:6px;color:white;font-size:12px;font-weight:700;">' + effectDesc + '</div>';
+    // Card-specific text lines
+    var cardTextLines = [];
+    if (c.summon_sacrifice_tribe) cardTextLines.push('Sacrifice: ' + c.summon_sacrifice_tribe);
+    if (c.unique) cardTextLines.push('Unique');
+    if (effectDesc) cardTextLines.push(effectDesc);
+    if (c.transform_options && c.transform_options.length > 0) {
+        var tLines = c.transform_options.map(function(opt) {
+            return findCardNameById(opt.target) + ' (' + opt.mana_cost + ' mana)';
+        });
+        cardTextLines.push('Transform: ' + tLines.join(', '));
+    }
+    if (cardTextLines.length > 0) {
+        keywordsHtml += '<div style="margin-bottom:8px;color:white;font-size:12px;font-weight:700;line-height:1.5;">' + cardTextLines.join('<br>') + '</div>';
+    }
     // Match keywords from the effect text and card properties
     var matchedKeywords = [];
     if (c.unique) matchedKeywords.push('Unique');
@@ -599,7 +612,12 @@ function showCardTooltip(numericId) {
             relHtml += '<div class="tooltip-related-name">' + rc.name + '</div>';
             var rStats = rc.mana_cost + ' Mana';
             if (rc.attack != null) rStats += ' | ATK ' + rc.attack + ' | HP ' + rc.health;
+            if (rc.attack_range != null) rStats += ' | ' + (rc.attack_range <= 1 ? 'Melee' : 'Range ' + rc.attack_range);
             relHtml += '<div class="tooltip-related-stats">' + rStats + '</div>';
+            var rEffect = '';
+            if (rc.unique) rEffect += 'Unique. ';
+            if (rc.effects && rc.effects.length > 0) rEffect += getEffectDescription(rc.effects, rc);
+            if (rEffect) relHtml += '<div class="tooltip-related-effect">' + rEffect + '</div>';
             relHtml += '</div></div>';
         });
         relatedContainer.innerHTML = relHtml;

@@ -1397,6 +1397,13 @@ body {
   color: var(--muted);
 }
 
+.tooltip-related-effect {
+  font-size: 9px;
+  color: white;
+  font-weight: 700;
+  margin-top: 2px;
+}
+
 /* Card Unaffordable State */
 .card-dimmed {
   opacity: 0.4;
