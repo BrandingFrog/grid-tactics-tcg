@@ -964,6 +964,8 @@ body {
   aspect-ratio: 1;
   margin: 2% auto 0;
   background: rgba(255, 255, 255, 0.15);
+  background-size: cover;
+  background-position: center;
   border-radius: 3%;
   border: 1px solid rgb(30, 25, 20);
   position: relative;

@@ -505,7 +505,8 @@ function renderDeckBuilderCard(numericId, count) {
     // Mana badge
     html += '<div class="card-mana">' + c.mana_cost + '</div>';
     // Art area with attribute circle and name overlay (YGO CardPreview style)
-    html += '<div class="card-art card-art-full">';
+    var artStyle = c.card_id ? 'background-image:url(/static/art/' + c.card_id + '.png)' : '';
+    html += '<div class="card-art card-art-full" style="' + artStyle + '">';
     html += '<div class="attr-circle ' + elem.css + '"></div>';
     html += '<div class="card-art-overlay"></div>';
     html += '<div class="card-name-overlay">' + c.name + '</div>';
@@ -924,7 +925,8 @@ function renderBoardMinion(minion) {
     var atk = (cardDef.attack || 0) + (minion.attack_bonus || 0);
     var hp = minion.current_health;
 
-    return '<div class="board-minion ' + ownerClass + '">'
+    var boardArtStyle = cardDef.card_id ? 'background-image:url(/static/art/' + cardDef.card_id + '.png);background-size:cover;background-position:center;' : '';
+    return '<div class="board-minion ' + ownerClass + '" style="' + boardArtStyle + '">'
         + '<div class="attr-circle-sm ' + elem.css + '"></div>'
         + '<div class="board-minion-name">' + cardDef.name + '</div>'
         + '<div class="board-minion-stats">'
@@ -973,7 +975,8 @@ function renderHandCard(numericId, handIndex, currentMana) {
     // Mana badge
     html += '<div class="card-mana">' + c.mana_cost + '</div>';
     // Art area with attribute circle
-    html += '<div class="card-art">';
+    var handArtStyle = c.card_id ? 'background-image:url(/static/art/' + c.card_id + '.png)' : '';
+    html += '<div class="card-art" style="' + handArtStyle + '">';
     html += '<div class="attr-circle ' + elem.css + '"></div>';
     html += '</div>';
     // Card name
