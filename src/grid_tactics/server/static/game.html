@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Grid Tactics - Play</title>
+  <link rel="stylesheet" href="/static/game.css">
+  <script src="https://cdn.socket.io/4.7.4/socket.io.min.js" defer></script>
+  <script src="/static/game.js" defer></script>
+</head>
+<body>
+
+  <!-- Header (matching dashboard pattern per D-01) -->
+  <header class="header">
+    <div class="logo">GRID TACTICS</div>
+    <nav class="nav">
+      <button class="nav-btn active" data-screen="lobby">Duel</button>
+      <button class="nav-btn" data-screen="deck-builder">Deck Builder</button>
+    </nav>
+    <div class="header-right">
+      <span class="conn">
+        <span class="dot off" id="conn-dot"></span>
+        <span id="conn-text">Disconnected</span>
+      </span>
+    </div>
+  </header>
+
+  <!-- Screen: Lobby -->
+  <div id="screen-lobby" class="screen active">
+    <div class="lobby-container">
+      <h1 class="lobby-heading">GRID TACTICS</h1>
+      <p class="lobby-subheading">Online PvP Dueling -- Create a room or enter a code to join</p>
+
+      <!-- Display Name -->
+      <div class="lobby-section">
+        <label class="label" for="input-name">Display Name</label>
+        <input type="text" id="input-name" class="input" placeholder="Enter your name" maxlength="20">
+      </div>
+
+      <!-- Create Room -->
+      <div class="lobby-section">
+        <button class="btn btn-primary full-width" id="btn-create-room">Create Room</button>
+      </div>
+
+      <!-- Join Room -->
+      <div class="lobby-section lobby-join">
+        <label class="label" for="input-room-code">Room Code</label>
+        <div class="join-row">
+          <input type="text" id="input-room-code" class="input input-code" placeholder="XXXXXX" maxlength="6">
+          <button class="btn btn-secondary" id="btn-join-room">Join Room</button>
+        </div>
+      </div>
+
+      <!-- Room Panel (hidden until in room) -->
+      <div id="room-panel" class="room-panel" style="display:none;">
+        <div class="room-panel-header">
+          <span class="label">Room Code</span>
+          <span class="room-code-display" id="room-code-display"></span>
+        </div>
+
+        <!-- Player List -->
+        <div class="player-list" id="player-list">
+          <!-- Populated by JS: <div class="player-item"><span class="dot"></span> Name</div> -->
+        </div>
+
+        <!-- Deck Selector -->
+        <div class="lobby-section">
+          <label class="label" for="deck-selector">Select Deck</label>
+          <select id="deck-selector" class="input select">
+            <option value="">Default Deck</option>
+            <!-- Populated from localStorage by JS -->
+          </select>
+        </div>
+
+        <!-- Ready Button -->
+        <button class="btn btn-primary full-width" id="btn-ready">Ready Up</button>
+      </div>
+
+      <!-- Error/Status Messages -->
+      <div id="lobby-status" class="lobby-status"></div>
+    </div>
+  </div>
+
+  <!-- Screen: Deck Builder -->
+  <div id="screen-deck-builder" class="screen">
+    <div class="deck-builder-layout">
+      <!-- Top Bar: Slot Controls -->
+      <div class="deck-topbar">
+        <button class="btn btn-secondary" id="btn-back-lobby">Back to Lobby</button>
+        <div class="slot-controls">
+          <input type="text" id="deck-slot-name" class="input input-slot-name" placeholder="Deck Name" maxlength="20">
+          <button class="btn btn-primary btn-sm" id="btn-save-deck">Save Deck</button>
+          <select id="deck-load-select" class="input select select-sm">
+            <option value="">Load Slot...</option>
+            <!-- 5 slots populated by JS -->
+          </select>
+          <button class="btn btn-danger btn-sm" id="btn-delete-slot">Delete Slot</button>
+        </div>
+      </div>
+
+      <div class="deck-builder-body">
+        <!-- Card Browser (left) -->
+        <div class="card-browser">
+          <h3 class="section-heading">All Cards</h3>
+          <div class="card-browser-grid" id="card-browser-grid">
+            <!-- Cards rendered by JS as YGO-style cards with count badges -->
+          </div>
+        </div>
+
+        <!-- Deck List Sidebar (right) -->
+        <div class="deck-sidebar">
+          <h3 class="section-heading">Current Deck</h3>
+          <div class="deck-validation" id="deck-validation">
+            <span class="deck-count" id="deck-count">0/30 cards</span>
+            <span class="deck-status" id="deck-status">Need 30 cards</span>
+          </div>
+          <div class="deck-list" id="deck-list">
+            <!-- Grouped by type, populated by JS -->
+            <div class="deck-group" data-type="minion">
+              <h4 class="deck-group-title">Minions</h4>
+              <div class="deck-group-items" id="deck-minions"></div>
+            </div>
+            <div class="deck-group" data-type="magic">
+              <h4 class="deck-group-title">Magic</h4>
+              <div class="deck-group-items" id="deck-magic"></div>
+            </div>
+            <div class="deck-group" data-type="react">
+              <h4 class="deck-group-title">React</h4>
+              <div class="deck-group-items" id="deck-react"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Screen: Game -->
+  <div id="screen-game" class="screen">
+    <div class="game-layout">
+      <div class="game-main">
+
+        <!-- Room Bar -->
+        <div class="room-bar">
+          <span class="room-bar-code" id="game-room-code"></span>
+          <div class="turn-banner" id="turn-banner">
+            <span class="turn-dot pulse-dot" id="turn-dot"></span>
+            <span class="turn-text" id="turn-text">WAITING</span>
+          </div>
+          <div class="phase-badge-container">
+            <span class="phase-badge phase-action" id="phase-badge">ACTION</span>
+            <span class="turn-number" id="turn-number">Turn 1</span>
+          </div>
+        </div>
+
+        <!-- Opponent Info Bar -->
+        <div class="info-bar opp-bar">
+          <span class="player-tag opp-tag" id="opp-name">PLAYER 2 (Opponent)</span>
+          <div class="stat-group">
+            <div class="stat">
+              <span class="stat-label">HP</span>
+              <span class="stat-value stat-hp-opp" id="opp-hp">20</span>
+            </div>
+            <div class="stat">
+              <span class="stat-label">MANA</span>
+              <span class="stat-value stat-mana" id="opp-mana">0/0</span>
+            </div>
+            <div class="stat">
+              <span class="stat-label">HAND</span>
+              <span class="stat-value" id="opp-hand">0</span>
+            </div>
+            <div class="stat">
+              <span class="stat-label">DECK</span>
+              <span class="stat-value" id="opp-deck">0</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 5x5 Board -->
+        <div class="board-container">
+          <div id="game-board" class="game-board">
+            <!-- 25 cells rendered by JS -->
+          </div>
+        </div>
+
+        <!-- Self Info Bar -->
+        <div class="info-bar self-bar">
+          <span class="player-tag self-tag" id="self-name">PLAYER 1 (You)</span>
+          <div class="stat-group">
+            <div class="stat">
+              <span class="stat-label">HP</span>
+              <span class="stat-value stat-hp-self" id="self-hp">20</span>
+            </div>
+            <div class="stat">
+              <span class="stat-label">MANA</span>
+              <span class="stat-value stat-mana" id="self-mana">0/0</span>
+            </div>
+            <div class="stat">
+              <span class="stat-label">HAND</span>
+              <span class="stat-value" id="self-hand">0</span>
+            </div>
+            <div class="stat">
+              <span class="stat-label">DECK</span>
+              <span class="stat-value" id="self-deck">0</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Hand Container -->
+        <div id="hand-container" class="hand-container">
+          <!-- Cards rendered by JS as full YGO-style cards -->
+        </div>
+
+      </div>
+
+      <!-- Game Sidebar -->
+      <div class="game-sidebar">
+        <div class="sidebar-section" id="game-log">
+          <h3 class="section-heading">Game Log</h3>
+          <div class="log-entries" id="log-entries">
+            <!-- Log entries populated by JS -->
+          </div>
+        </div>
+        <button class="btn btn-secondary full-width" id="btn-leave">Leave Game</button>
+      </div>
+    </div>
+  </div>
+
+</body>
+</html>

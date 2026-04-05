@@ -1,0 +1,1072 @@
+/* Grid Tactics - Game UI Stylesheet
+   Design system from 13-UI-SPEC.md
+   Matches dashboard dark theme (web-dashboard/index.html) */
+
+@import url('https://fonts.googleapis.com/css2?family=Luckiest+Guy&display=swap');
+
+/* ===== CSS Variables (from dashboard) ===== */
+:root {
+  --bg: #0b0b16;
+  --card: #141428;
+  --card2: #1a1a33;
+  --border: #252545;
+  --cyan: #00d4ff;
+  --green: #4caf50;
+  --red: #f44336;
+  --yellow: #ff9800;
+  --purple: #ce93d8;
+  --text: #e0e0e0;
+  --muted: #777;
+  --dim: #444;
+}
+
+/* ===== Reset ===== */
+*, *::before, *::after {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+/* ===== Typography ===== */
+body {
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.5;
+}
+
+/* ===== Header (52px, matching dashboard) ===== */
+.header {
+  background: linear-gradient(135deg, #0f0f24, #161638);
+  border-bottom: 1px solid var(--border);
+  padding: 0 20px;
+  display: flex;
+  align-items: center;
+  height: 52px;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
+.logo {
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--cyan);
+  letter-spacing: 2px;
+  margin-right: 32px;
+  white-space: nowrap;
+}
+
+.nav {
+  display: flex;
+  gap: 2px;
+  flex: 1;
+}
+
+.nav-btn {
+  background: none;
+  border: none;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 600;
+  padding: 14px 16px;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  transition: all 0.15s;
+}
+
+.nav-btn:hover {
+  color: var(--text);
+}
+
+.nav-btn.active {
+  color: var(--cyan);
+  border-bottom-color: var(--cyan);
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.conn {
+  font-size: 11px;
+  color: var(--muted);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+}
+
+.dot.on {
+  background: var(--green);
+  box-shadow: 0 0 6px var(--green);
+}
+
+.dot.off {
+  background: var(--red);
+}
+
+/* ===== Screen Management ===== */
+.screen {
+  display: none;
+}
+
+.screen.active {
+  display: block;
+}
+
+/* ===== Buttons ===== */
+.btn {
+  padding: 12px 24px;
+  border: none;
+  border-radius: 8px;
+  font-weight: 700;
+  font-size: 14px;
+  cursor: pointer;
+  transition: transform 150ms ease, box-shadow 150ms ease;
+  font-family: inherit;
+}
+
+.btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+}
+
+.btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.btn-primary {
+  background: var(--cyan);
+  color: var(--bg);
+}
+
+.btn-secondary {
+  background: var(--card2);
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+
+.btn-danger {
+  background: var(--card2);
+  color: var(--red);
+  border: 1px solid var(--red);
+}
+
+.btn-sm {
+  padding: 8px 16px;
+  font-size: 12px;
+}
+
+.full-width {
+  width: 100%;
+}
+
+/* ===== Inputs ===== */
+.input {
+  background: var(--card);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 10px 14px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-family: inherit;
+  outline: none;
+  transition: border-color 150ms ease;
+  width: 100%;
+}
+
+.input:focus {
+  border-color: var(--cyan);
+}
+
+.input-code {
+  font-size: 14px;
+  letter-spacing: 8px;
+  text-transform: uppercase;
+  color: var(--cyan);
+  text-align: center;
+  border-width: 2px;
+}
+
+.select {
+  appearance: none;
+  cursor: pointer;
+  padding-right: 32px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%23777'%3E%3Cpath d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+}
+
+.select-sm {
+  padding: 8px 32px 8px 12px;
+  font-size: 12px;
+}
+
+.input-slot-name {
+  width: 160px;
+}
+
+/* ===== Labels ===== */
+.label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  color: var(--muted);
+  display: block;
+  margin-bottom: 6px;
+  line-height: 1.2;
+}
+
+.section-heading {
+  font-size: 11px;
+  color: var(--cyan);
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  font-weight: 700;
+  margin-bottom: 12px;
+}
+
+/* =======================================
+   LOBBY SCREEN
+   ======================================= */
+
+.lobby-container {
+  max-width: 500px;
+  margin: 0 auto;
+  padding: 64px 16px;
+}
+
+.lobby-heading {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--cyan);
+  text-align: center;
+  margin-bottom: 8px;
+  line-height: 1.0;
+}
+
+.lobby-subheading {
+  font-size: 12px;
+  color: var(--muted);
+  text-align: center;
+  margin-bottom: 24px;
+}
+
+.lobby-section {
+  margin-bottom: 16px;
+}
+
+.lobby-join {
+  margin-bottom: 24px;
+}
+
+.join-row {
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+}
+
+.join-row .input-code {
+  flex: 1;
+}
+
+.join-row .btn {
+  flex-shrink: 0;
+}
+
+/* Room Panel */
+.room-panel {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 16px;
+  margin-top: 24px;
+}
+
+.room-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.room-code-display {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--cyan);
+  letter-spacing: 4px;
+  line-height: 1.0;
+}
+
+/* Player List */
+.player-list {
+  margin-bottom: 16px;
+}
+
+.player-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 0;
+  font-size: 14px;
+  font-weight: 700;
+  border-bottom: 1px solid var(--border);
+}
+
+.player-item:last-child {
+  border-bottom: none;
+}
+
+.player-item .dot {
+  flex-shrink: 0;
+}
+
+/* Lobby Status */
+.lobby-status {
+  margin-top: 16px;
+  font-size: 12px;
+  text-align: center;
+  min-height: 20px;
+}
+
+.lobby-status.error {
+  color: var(--red);
+}
+
+.lobby-status.info {
+  color: var(--cyan);
+}
+
+/* =======================================
+   DECK BUILDER SCREEN
+   ======================================= */
+
+.deck-builder-layout {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 16px;
+}
+
+.deck-topbar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.slot-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  flex-wrap: wrap;
+}
+
+.deck-builder-body {
+  display: grid;
+  grid-template-columns: 1fr 260px;
+  gap: 16px;
+}
+
+@media (max-width: 900px) {
+  .deck-builder-body {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Card Browser */
+.card-browser {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 16px;
+}
+
+.card-browser-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+}
+
+@media (max-width: 700px) {
+  .card-browser-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* Card count badge overlay for deck builder */
+.card-browser-item {
+  position: relative;
+  cursor: pointer;
+  transition: transform 150ms ease;
+}
+
+.card-browser-item:hover {
+  transform: scale(1.02);
+}
+
+.card-count-badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--cyan);
+  color: var(--bg);
+  font-size: 12px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 5;
+  border: 2px solid var(--bg);
+}
+
+.card-count-badge.empty {
+  background: var(--dim);
+  color: var(--muted);
+}
+
+/* Deck List Sidebar */
+.deck-sidebar {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 16px;
+}
+
+.deck-validation {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  border-radius: 6px;
+  margin-bottom: 12px;
+  background: var(--card2);
+}
+
+.deck-count {
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.deck-count.valid {
+  color: var(--green);
+}
+
+.deck-count.invalid {
+  color: var(--red);
+}
+
+.deck-status {
+  font-size: 10px;
+  color: var(--muted);
+}
+
+.deck-status.valid {
+  color: var(--green);
+}
+
+.deck-status.invalid {
+  color: var(--red);
+}
+
+.deck-group {
+  margin-bottom: 12px;
+}
+
+.deck-group-title {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--muted);
+  margin-bottom: 6px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--border);
+}
+
+.deck-group-items {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.deck-list-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 8px;
+  background: var(--card2);
+  border-radius: 4px;
+  font-size: 12px;
+}
+
+.deck-list-item-name {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.deck-list-item-count {
+  font-weight: 700;
+  color: var(--cyan);
+  margin-left: 8px;
+}
+
+/* Empty state */
+.deck-empty-state {
+  text-align: center;
+  padding: 32px 16px;
+}
+
+.deck-empty-state h4 {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--muted);
+  margin-bottom: 8px;
+}
+
+.deck-empty-state p {
+  font-size: 12px;
+  color: var(--dim);
+}
+
+/* =======================================
+   GAME SCREEN
+   ======================================= */
+
+.game-layout {
+  display: grid;
+  grid-template-columns: 1fr 260px;
+  gap: 16px;
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 16px;
+}
+
+@media (max-width: 900px) {
+  .game-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+.game-main {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* Room Bar */
+.room-bar {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 16px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.room-bar-code {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--cyan);
+  letter-spacing: 4px;
+}
+
+/* Turn Banner */
+.turn-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+}
+
+.turn-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--green);
+}
+
+.turn-text {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--green);
+}
+
+.turn-text.opp-turn {
+  color: var(--muted);
+}
+
+/* Pulse Animation */
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+.pulse-dot {
+  animation: pulse 1.5s infinite;
+}
+
+.pulse-dot.inactive {
+  animation: none;
+  background: var(--dim);
+}
+
+/* Phase Badge */
+.phase-badge-container {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.phase-badge {
+  padding: 4px 10px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.phase-action {
+  background: var(--cyan);
+  color: var(--bg);
+}
+
+.phase-react {
+  background: var(--yellow);
+  color: var(--bg);
+}
+
+.turn-number {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+/* ===== Info Bars (Opponent & Self) ===== */
+.info-bar {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 16px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.player-tag {
+  font-size: 14px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.self-tag {
+  color: var(--cyan);
+}
+
+.opp-tag {
+  color: var(--red);
+}
+
+.stat-group {
+  display: flex;
+  gap: 24px;
+  flex: 1;
+  justify-content: flex-end;
+}
+
+.stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.stat-label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--muted);
+  line-height: 1.2;
+  letter-spacing: 1px;
+}
+
+.stat-value {
+  font-size: 28px;
+  font-weight: 700;
+  line-height: 1.0;
+}
+
+.stat-hp-self {
+  color: var(--green);
+}
+
+.stat-hp-opp {
+  color: var(--red);
+}
+
+.stat-mana {
+  color: var(--cyan);
+}
+
+/* ===== 5x5 Board Grid ===== */
+.board-container {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.game-board {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 4px;
+}
+
+/* Board Cell */
+.board-cell {
+  aspect-ratio: 1;
+  background: var(--card2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  min-height: 68px;
+  position: relative;
+  transition: border-color 150ms ease, background 150ms ease;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.board-cell:hover {
+  border-color: var(--cyan);
+  background: #1e1e40;
+}
+
+/* Board Zone Tints */
+.zone-self {
+  background: #00d4ff08;
+}
+
+.zone-neutral {
+  background: #ff980008;
+}
+
+.zone-opp {
+  background: #f4433608;
+}
+
+/* ===== Board Minion (Compact Card) ===== */
+.board-minion {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 4px;
+  position: relative;
+  border-radius: 6px;
+}
+
+.board-minion.owner-self {
+  background: rgba(0, 212, 255, 0.1);
+}
+
+.board-minion.owner-opp {
+  background: rgba(244, 67, 54, 0.1);
+}
+
+/* Attribute circle on board minion (small) */
+.board-minion .attr-circle-sm {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 1px solid rgb(30, 25, 20);
+}
+
+/* Board minion name */
+.board-minion-name {
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.1;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 90%;
+  text-align: center;
+}
+
+/* Board minion stats */
+.board-minion-stats {
+  display: flex;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.0;
+}
+
+.board-minion-atk {
+  color: var(--red);
+}
+
+.board-minion-hp {
+  color: var(--green);
+}
+
+/* ===== Hand Container ===== */
+.hand-container {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 8px 0;
+}
+
+.hand-container::-webkit-scrollbar {
+  height: 6px;
+}
+
+.hand-container::-webkit-scrollbar-track {
+  background: var(--card);
+}
+
+.hand-container::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 3px;
+}
+
+/* ===== Card Frame (Full / Hand variant) ===== */
+.card-frame {
+  aspect-ratio: 2/3;
+  width: 120px;
+  border: 2px solid rgb(30, 25, 20);
+  border-radius: 3%;
+  position: relative;
+  font-family: 'Luckiest Guy', cursive;
+  overflow: hidden;
+  cursor: default;
+  transition: transform 150ms ease, box-shadow 150ms ease;
+  flex-shrink: 0;
+}
+
+.card-frame:hover {
+  transform: translateY(-6px);
+  box-shadow: 0 8px 24px rgba(0, 212, 255, 0.2);
+}
+
+/* Card Type Backgrounds */
+.card-type-minion {
+  background: rgb(180, 140, 60);
+}
+
+.card-type-magic {
+  background: rgb(30, 140, 120);
+}
+
+.card-type-react {
+  background: rgb(160, 40, 100);
+}
+
+/* Card Art Area */
+.card-art {
+  width: 96%;
+  aspect-ratio: 1;
+  margin: 2% auto 0;
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 3%;
+  border: 1px solid rgb(30, 25, 20);
+  position: relative;
+}
+
+/* Attribute Circles (all 7 elements + neutral) */
+.attr-circle {
+  position: absolute;
+  top: 4%;
+  right: 4%;
+  width: 18%;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  border: 2px solid rgb(30, 25, 20);
+}
+
+.attr-circle::after {
+  content: '';
+  position: absolute;
+  top: 9%;
+  left: 9%;
+  width: 82%;
+  height: 82%;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.5);
+}
+
+.attr-wood {
+  background: rgb(102, 187, 106);
+}
+
+.attr-fire {
+  background: rgb(220, 40, 30);
+}
+
+.attr-earth {
+  background: rgb(140, 100, 40);
+}
+
+.attr-water {
+  background: rgb(66, 165, 245);
+}
+
+.attr-metal {
+  background: rgb(189, 189, 189);
+}
+
+.attr-dark {
+  background: rgb(130, 50, 180);
+}
+
+.attr-light {
+  background: rgb(240, 220, 40);
+}
+
+.attr-neutral {
+  background: rgb(128, 128, 128);
+}
+
+/* Mana Badge (top-left, blue circle) */
+.card-mana {
+  position: absolute;
+  top: 3%;
+  left: 3%;
+  width: 16%;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: rgb(30, 100, 220);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  border: 2px solid rgb(30, 25, 20);
+  z-index: 2;
+}
+
+/* Card Name */
+.card-name {
+  text-align: center;
+  color: white;
+  -webkit-text-stroke: 1px black;
+  paint-order: stroke fill;
+  font-family: 'Luckiest Guy', cursive;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 1.1;
+  padding: 2px 4%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Card Stats Row */
+.card-stats {
+  display: flex;
+  justify-content: space-between;
+  padding: 0 4%;
+  color: white;
+  -webkit-text-stroke: 1px black;
+  paint-order: stroke fill;
+  font-family: 'Luckiest Guy', cursive;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.0;
+}
+
+/* Card Unaffordable State */
+.card-dimmed {
+  opacity: 0.4;
+  filter: grayscale(60%);
+}
+
+/* Card selected state (deck builder) */
+.card-selected {
+  border-color: var(--green);
+  box-shadow: 0 0 8px rgba(76, 175, 80, 0.3);
+}
+
+/* ===== Game Sidebar ===== */
+.game-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.sidebar-section {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 16px;
+  flex: 1;
+  overflow-y: auto;
+}
+
+.log-entries {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.log-entry {
+  font-size: 12px;
+  color: var(--muted);
+  padding: 4px 8px;
+  border-radius: 4px;
+  background: var(--card2);
+}
+
+/* ===== Animations ===== */
+
+/* Card hover in deck builder */
+.card-browser-item .card-frame:hover {
+  transform: none;
+}
+
+/* ===== Utility Classes ===== */
+.text-cyan { color: var(--cyan); }
+.text-green { color: var(--green); }
+.text-red { color: var(--red); }
+.text-yellow { color: var(--yellow); }
+.text-muted { color: var(--muted); }
+.text-dim { color: var(--dim); }
+.text-center { text-align: center; }
+.mt-8 { margin-top: 8px; }
+.mt-16 { margin-top: 16px; }
+.mb-8 { margin-bottom: 8px; }
+.mb-16 { margin-bottom: 16px; }
+.gap-8 { gap: 8px; }
+.hidden { display: none !important; }
