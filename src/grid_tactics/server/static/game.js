@@ -657,7 +657,7 @@ function renderDeckBuilderCard(numericId, count) {
         html += '<div class="card-stat-atk">' + c.attack + '</div>';
         html += '<div class="card-stat-hp">' + c.health + '</div>';
         var tribe = c.tribe || '';
-        var rangeText = (c.attack_range != null) ? (c.attack_range <= 1 ? 'Melee' : 'Range ' + c.attack_range) : '';
+        var rangeText = (c.attack_range != null) ? (c.attack_range <= 1 ? 'MELEE' : 'RANGE ' + c.attack_range) : '';
         html += '<div class="card-bottom-center">';
         if (tribe) html += '<div class="card-bottom-tribe">' + tribe + '</div>';
         if (rangeText) html += '<div class="card-bottom-range">' + rangeText + '</div>';
