@@ -545,6 +545,8 @@ function showCardTooltip(numericId) {
     var matchedKeywords = [];
     if (c.unique) matchedKeywords.push('Unique');
     if (c.card_type === 0 && c.attack_range != null && c.attack_range <= 1) matchedKeywords.push('Melee');
+    if (c.summon_sacrifice_tribe) matchedKeywords.push('Sacrifice');
+    if (c.transform_options && c.transform_options.length > 0) matchedKeywords.push('Transform');
     for (var kw in KEYWORD_GLOSSARY) {
         if (effectDesc.indexOf(kw) !== -1 && matchedKeywords.indexOf(kw) === -1) {
             matchedKeywords.push(kw);
@@ -642,11 +644,11 @@ function renderDeckBuilderCard(numericId, count) {
     }
     // Summon sacrifice cost
     if (c.summon_sacrifice_tribe) {
-        html += '<div class="card-effect-full" style="color:var(--yellow);">Sacrifice: ' + c.summon_sacrifice_tribe + '</div>';
+        html += '<div class="card-effect-full">Sacrifice: ' + c.summon_sacrifice_tribe + '</div>';
     }
     // Unique tag
     if (c.unique) {
-        html += '<div class="card-effect-full" style="color:var(--yellow);">Unique</div>';
+        html += '<div class="card-effect-full">Unique</div>';
     }
     // Effect text (all card types)
     if (c.effects && c.effects.length > 0) {
@@ -659,7 +661,7 @@ function renderDeckBuilderCard(numericId, count) {
             var tName = findCardNameById(opt.target);
             return tName + ' (' + opt.mana_cost + ' mana)';
         });
-        html += '<div class="card-effect-full" style="color:var(--cyan);">Transform: ' + transformLines.join(', ') + '</div>';
+        html += '<div class="card-effect-full">Transform: ' + transformLines.join(', ') + '</div>';
     }
     // Range already shown in bottom center for minions
     html += '</div>';
