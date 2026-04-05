@@ -211,7 +211,11 @@ Plans:
   3. User can see both players' current mana and HP displayed prominently
   4. User can see whose turn it is and whether the current phase is ACTION or REACT
   5. The board renders correctly with two browser windows connected to the same room, each showing their own perspective
-**Plans**: TBD
+**Plans:** 3 plans
+Plans:
+- [ ] 13-01-PLAN.md -- Server enhancements (Flask static serving, enhanced card_defs, deck ready) + HTML/CSS foundation
+- [ ] 13-02-PLAN.md -- Client JS: Socket.IO client, lobby, deck builder, board/hand/stats rendering
+- [ ] 13-03-PLAN.md -- Integration testing, bug fixes, and visual verification checkpoint
 **UI hint**: yes
 
 ### Phase 14: Gameplay Interaction
@@ -255,6 +259,6 @@ Phases execute in numeric order: 11 -> 12 -> 13 -> 14 -> 15
 | 10. Replay & Balance Visualization | v1.0 | 0/TBD | Not started | - |
 | 11. Server Foundation & Room System | v1.1 | 2/2 | Complete    | 2026-04-05 |
 | 12. State Serialization & Game Flow | v1.1 | 2/2 | Complete    | 2026-04-05 |
-| 13. Board & Hand UI | v1.1 | 0/TBD | Not started | - |
+| 13. Board & Hand UI | v1.1 | 0/3 | Not started | - |
 | 14. Gameplay Interaction | v1.1 | 0/TBD | Not started | - |
 | 15. Resilience & Polish | v1.1 | 0/TBD | Not started | - |
