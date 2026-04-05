@@ -692,21 +692,27 @@ function renderDeckBuilderCard(numericId, count) {
         var sizeClass = desc.length > 30 ? 'card-effect-full card-effect-autosize' : 'card-effect-full';
         html += '<div class="' + sizeClass + '">' + desc + '</div>';
     }
-    // Transform options (Reanimated Bones) — each on its own line
+    // Transform options (Reanimated Bones) — compact list
     if (c.transform_options && c.transform_options.length > 0) {
-        c.transform_options.forEach(function(opt) {
-            var tName = findCardNameById(opt.target);
-            html += '<div class="card-effect-full">Active (' + opt.mana_cost + '): Transform ' + tName + '</div>';
+        var tLines = c.transform_options.map(function(opt) {
+            return '(' + opt.mana_cost + ') ' + findCardNameById(opt.target);
         });
+        html += '<div class="card-effect-full card-effect-autosize">Transform: ' + tLines.join(', ') + '</div>';
     }
     // React ability (multi-purpose cards like Dark Sentinel)
     if (c.react_condition != null && c.react_mana_cost != null) {
-        var condMap = {0: 'Enemy attacks', 1: 'Enemy plays magic', 2: 'Enemy summons Light'};
+        var condMap = {
+            0: 'Enemy plays Magic', 1: 'Enemy summons Minion', 2: 'Enemy attacks',
+            3: 'Enemy plays React', 4: 'Any enemy action',
+            5: 'Enemy plays Wood', 6: 'Enemy plays Fire', 7: 'Enemy plays Earth',
+            8: 'Enemy plays Water', 9: 'Enemy plays Metal', 10: 'Enemy plays Dark',
+            11: 'Enemy plays Light'
+        };
         var condText = condMap[c.react_condition] || 'Enemy acts';
         html += '<div class="card-effect-full">React (' + c.react_mana_cost + '): ' + condText + ' — Summon</div>';
     }
-    // Flavour text for cards with no effects
-    if (c.flavour_text && (!c.effects || c.effects.length === 0) && c.react_condition == null) {
+    // Flavour text for cards with no effects and no transform/react
+    if (c.flavour_text && (!c.effects || c.effects.length === 0) && c.react_condition == null && (!c.transform_options || c.transform_options.length === 0)) {
         html += '<div class="card-flavour">' + c.flavour_text + '</div>';
     }
     // Range already shown in bottom center for minions
