@@ -167,7 +167,7 @@ Plans:
 
 - [x] **Phase 11: Server Foundation & Room System** - Flask-SocketIO server with room code create/join and initial game state emission (completed 2026-04-05)
 - [x] **Phase 12: State Serialization & Game Flow** - Hidden-info view filtering, action validation, legal action emission, complete game playable via WebSocket client (completed 2026-04-05)
-- [ ] **Phase 13: Board & Hand UI** - 5x5 CSS Grid board, hand display, mana/HP bars, and turn phase indicator in the browser
+- [x] **Phase 13: Board & Hand UI** - 5x5 CSS Grid board, hand display, mana/HP bars, and turn phase indicator in the browser (completed 2026-04-05)
 - [ ] **Phase 14: Gameplay Interaction** - Action submission via click targeting, react window UI, and game over screen
 - [ ] **Phase 15: Resilience & Polish** - Reconnection handling, scrollable game log, and rematch flow
 
@@ -211,11 +211,11 @@ Plans:
   3. User can see both players' current mana and HP displayed prominently
   4. User can see whose turn it is and whether the current phase is ACTION or REACT
   5. The board renders correctly with two browser windows connected to the same room, each showing their own perspective
-**Plans:** 2/3 plans executed
+**Plans:** 3/3 plans complete
 Plans:
 - [x] 13-01-PLAN.md -- Server enhancements (Flask static serving, enhanced card_defs, deck ready) + HTML/CSS foundation
 - [x] 13-02-PLAN.md -- Client JS: Socket.IO client, lobby, deck builder, board/hand/stats rendering
-- [ ] 13-03-PLAN.md -- Integration testing, bug fixes, and visual verification checkpoint
+- [x] 13-03-PLAN.md -- Integration testing, bug fixes, and visual verification checkpoint
 **UI hint**: yes
 
 ### Phase 14: Gameplay Interaction
@@ -259,6 +259,6 @@ Phases execute in numeric order: 11 -> 12 -> 13 -> 14 -> 15
 | 10. Replay & Balance Visualization | v1.0 | 0/TBD | Not started | - |
 | 11. Server Foundation & Room System | v1.1 | 2/2 | Complete    | 2026-04-05 |
 | 12. State Serialization & Game Flow | v1.1 | 2/2 | Complete    | 2026-04-05 |
-| 13. Board & Hand UI | v1.1 | 2/3 | In Progress|  |
+| 13. Board & Hand UI | v1.1 | 3/3 | Complete   | 2026-04-05 |
 | 14. Gameplay Interaction | v1.1 | 0/TBD | Not started | - |
 | 15. Resilience & Polish | v1.1 | 0/TBD | Not started | - |
