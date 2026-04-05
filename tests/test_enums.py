@@ -1,7 +1,7 @@
 """Tests for all IntEnum classes in grid_tactics.enums.
 
 Covers both Phase 1 enums (PlayerSide, TurnPhase) and Phase 2 card enums
-(CardType, Attribute, EffectType, TriggerType, TargetType).
+(CardType, Element, EffectType, TriggerType, TargetType).
 """
 
 from enum import IntEnum
@@ -9,9 +9,9 @@ from enum import IntEnum
 import pytest
 
 from grid_tactics.enums import (
-    Attribute,
     CardType,
     EffectType,
+    Element,
     PlayerSide,
     TargetType,
     TriggerType,
@@ -100,30 +100,39 @@ class TestCardType:
         assert CardType["REACT"] is CardType.REACT
 
 
-class TestAttribute:
-    """Attribute IntEnum: NEUTRAL=0, FIRE=1, DARK=2, LIGHT=3 (per D-09)."""
+class TestElement:
+    """Element IntEnum: WOOD=0, FIRE=1, EARTH=2, WATER=3, METAL=4, DARK=5, LIGHT=6."""
 
-    def test_neutral_value(self) -> None:
-        assert Attribute.NEUTRAL == 0
+    def test_wood_value(self) -> None:
+        assert Element.WOOD == 0
 
     def test_fire_value(self) -> None:
-        assert Attribute.FIRE == 1
+        assert Element.FIRE == 1
+
+    def test_earth_value(self) -> None:
+        assert Element.EARTH == 2
+
+    def test_water_value(self) -> None:
+        assert Element.WATER == 3
+
+    def test_metal_value(self) -> None:
+        assert Element.METAL == 4
 
     def test_dark_value(self) -> None:
-        assert Attribute.DARK == 2
+        assert Element.DARK == 5
 
     def test_light_value(self) -> None:
-        assert Attribute.LIGHT == 3
+        assert Element.LIGHT == 6
 
     def test_is_intenum(self) -> None:
-        for member in Attribute:
+        for member in Element:
             assert isinstance(member, IntEnum)
 
     def test_member_count(self) -> None:
-        assert len(Attribute) == 4
+        assert len(Element) == 7
 
     def test_bracket_lookup(self) -> None:
-        assert Attribute["FIRE"] is Attribute.FIRE
+        assert Element["FIRE"] is Element.FIRE
 
 
 class TestEffectType:
@@ -146,7 +155,7 @@ class TestEffectType:
             assert isinstance(member, IntEnum)
 
     def test_member_count(self) -> None:
-        assert len(EffectType) == 6  # DAMAGE, HEAL, BUFF_ATTACK, BUFF_HEALTH, NEGATE, DEPLOY_SELF
+        assert len(EffectType) == 7  # DAMAGE, HEAL, BUFF_ATTACK, BUFF_HEALTH, NEGATE, DEPLOY_SELF, RALLY_FORWARD
 
     def test_bracket_lookup(self) -> None:
         assert EffectType["DAMAGE"] is EffectType.DAMAGE
@@ -172,7 +181,7 @@ class TestTriggerType:
             assert isinstance(member, IntEnum)
 
     def test_member_count(self) -> None:
-        assert len(TriggerType) == 4
+        assert len(TriggerType) == 5  # ON_PLAY, ON_DEATH, ON_ATTACK, ON_DAMAGED, ON_MOVE
 
     def test_bracket_lookup(self) -> None:
         assert TriggerType["ON_PLAY"] is TriggerType.ON_PLAY

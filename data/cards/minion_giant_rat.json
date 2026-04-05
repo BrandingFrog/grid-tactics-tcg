@@ -1,0 +1,21 @@
+{
+    "card_id": "giant_rat",
+    "name": "Giant Rat",
+    "card_type": "minion",
+    "mana_cost": 3,
+    "attack": 30,
+    "health": 30,
+    "range": 0,
+    "element": "earth",
+    "tribe": "Rat",
+    "effects": [
+        {
+            "type": "promote",
+            "trigger": "on_death",
+            "target": "self_owner",
+            "amount": 10
+        }
+    ],
+    "promote_target": "rat",
+    "unique": true
+}

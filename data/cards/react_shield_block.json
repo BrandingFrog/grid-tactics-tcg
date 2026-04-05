@@ -3,14 +3,14 @@
     "name": "Shield Block",
     "card_type": "react",
     "mana_cost": 1,
-    "attribute": "light",
+    "element": "light",
     "react_condition": "opponent_attacks",
     "effects": [
         {
             "type": "buff_health",
             "trigger": "on_play",
             "target": "single_target",
-            "amount": 2
+            "amount": 20
         }
     ]
 }

@@ -3,20 +3,20 @@
     "name": "Dark Mirror",
     "card_type": "react",
     "mana_cost": 1,
-    "attribute": "dark",
+    "element": "dark",
     "react_condition": "opponent_plays_minion",
     "effects": [
         {
             "type": "damage",
             "trigger": "on_play",
             "target": "single_target",
-            "amount": 1
+            "amount": 10
         },
         {
             "type": "heal",
             "trigger": "on_play",
             "target": "self_owner",
-            "amount": 1
+            "amount": 10
         }
     ]
 }

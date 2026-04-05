@@ -1,0 +1,20 @@
+{
+    "card_id": "blue_diodebot",
+    "name": "Blue Diodebot",
+    "card_type": "minion",
+    "mana_cost": 2,
+    "attack": 14,
+    "health": 8,
+    "range": 0,
+    "element": "metal",
+    "tribe": "Robot",
+    "tutor_target": "red_diodebot",
+    "effects": [
+        {
+            "type": "tutor",
+            "trigger": "on_play",
+            "target": "self_owner",
+            "amount": 1
+        }
+    ]
+}

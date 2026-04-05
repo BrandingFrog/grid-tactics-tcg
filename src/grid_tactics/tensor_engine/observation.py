@@ -26,6 +26,27 @@ OBSERVATION_SIZE: int = 292
 FEATURES_PER_CELL: int = 10
 HAND_FEATURES: int = 2
 
+# Dynamic normalization constants -- computed once from card_table at first call
+_norm_cache = {}
+
+def _get_norms(card_table, device):
+    """Compute normalization constants from card_table. Cached per device."""
+    key = id(card_table)
+    if key not in _norm_cache:
+        max_atk = max(card_table.attack.max().item(), 1)
+        max_hp = max(card_table.health.max().item(), 1)
+        max_cost = max(card_table.mana_cost.max().item(), 1)
+        max_range = max(card_table.attack_range.max().item(), 1)
+        num_elems = max(card_table.element.max().item(), 1)
+        _norm_cache[key] = {
+            'atk': float(max_atk),
+            'hp': float(max_hp),
+            'cost': float(max_cost),
+            'range': float(max_range),
+            'elem': float(num_elems),
+        }
+    return _norm_cache[key]
+
 
 def encode_observations_batch(
     state,
@@ -37,11 +58,15 @@ def encode_observations_batch(
     Perspective-relative: observer's own resources in MY_RESOURCES,
     opponent's in OPPONENT_VISIBLE. Board minion ownership is +1/-1
     relative to observer.
+
+    Normalization is dynamic -- derived from card_table, not hardcoded.
+    Scales to any number of cards or stat ranges.
     """
     N = state.board.shape[0]
     device = state.board.device
     obs = torch.zeros(N, OBSERVATION_SIZE, dtype=torch.float32, device=device)
     arange_n = torch.arange(N, device=device)
+    norms = _get_norms(card_table, device)
 
     # --- Board encoding: 25 cells x 10 features [0:250] ---
     for row in range(GRID_ROWS):
@@ -67,7 +92,7 @@ def encode_observations_batch(
             # Card properties
             c_attack = card_table.attack[safe_cid].float()
             c_range = card_table.attack_range[safe_cid].float()
-            c_attr = card_table.attribute[safe_cid].float()
+            c_elem = card_table.element[safe_cid].float()
 
             # Owner encoding: +1 if mine, -1 if opponent
             is_mine = (m_owner == observer_idx).float()
@@ -93,12 +118,12 @@ def encode_observations_batch(
             occ_f = occupied.float()
             obs[:, base + 0] = occ_f                                        # is_occupied
             obs[:, base + 1] = torch.where(occupied, owner_val, torch.tensor(0.0, device=device))
-            obs[:, base + 2] = torch.where(occupied, c_attack / MAX_STAT, torch.tensor(0.0, device=device))
-            obs[:, base + 3] = torch.where(occupied, m_health.float() / MAX_STAT, torch.tensor(0.0, device=device))
-            obs[:, base + 4] = torch.where(occupied, c_range / 2.0, torch.tensor(0.0, device=device))
-            obs[:, base + 5] = torch.where(occupied, m_atk_bonus.float() / MAX_STAT, torch.tensor(0.0, device=device))
+            obs[:, base + 2] = torch.where(occupied, c_attack / norms['atk'], torch.tensor(0.0, device=device))
+            obs[:, base + 3] = torch.where(occupied, m_health.float() / norms['hp'], torch.tensor(0.0, device=device))
+            obs[:, base + 4] = torch.where(occupied, c_range / max(norms['range'], 1), torch.tensor(0.0, device=device))
+            obs[:, base + 5] = torch.where(occupied, m_atk_bonus.float() / norms['atk'], torch.tensor(0.0, device=device))
             obs[:, base + 6] = 0.0  # card_type (reserved)
-            obs[:, base + 7] = torch.where(occupied, c_attr / 3.0, torch.tensor(0.0, device=device))
+            obs[:, base + 7] = torch.where(occupied, c_elem / max(norms['elem'], 1), torch.tensor(0.0, device=device))
             obs[:, base + 8] = torch.where(occupied, has_on_death, torch.tensor(0.0, device=device))
             obs[:, base + 9] = torch.where(occupied, has_on_damaged, torch.tensor(0.0, device=device))
 
@@ -112,7 +137,7 @@ def encode_observations_batch(
         obs[:, slot_base + 0] = has_card.float()
         obs[:, slot_base + 1] = torch.where(
             has_card,
-            card_table.mana_cost[safe_cid].float() / MAX_STAT,
+            card_table.mana_cost[safe_cid].float() / norms['cost'],
             torch.tensor(0.0, device=device),
         )
 
@@ -126,9 +151,9 @@ def encode_observations_batch(
 
     obs[:, res_offset + 0] = my_mana.float() / MAX_MANA_CAP
     obs[:, res_offset + 1] = my_max_mana.float() / MAX_MANA_CAP
-    obs[:, res_offset + 2] = my_hp.float() / STARTING_HP
-    obs[:, res_offset + 3] = my_deck_remaining.float() / MIN_DECK_SIZE
-    obs[:, res_offset + 4] = my_graveyard_size.float() / MIN_DECK_SIZE
+    obs[:, res_offset + 2] = my_hp.float() / max(STARTING_HP, 1)
+    obs[:, res_offset + 3] = my_deck_remaining.float() / max(MIN_DECK_SIZE, 1)
+    obs[:, res_offset + 4] = my_graveyard_size.float() / max(MIN_DECK_SIZE, 1)
 
     # --- Opponent visible [275:279] ---
     opp_offset = 275
@@ -138,10 +163,10 @@ def encode_observations_batch(
     opp_hand_size = state.hand_sizes[arange_n, opp_idx]
     opp_deck_remaining = state.deck_sizes[arange_n, opp_idx] - state.deck_tops[arange_n, opp_idx]
 
-    obs[:, opp_offset + 0] = opp_hp.float() / STARTING_HP
+    obs[:, opp_offset + 0] = opp_hp.float() / max(STARTING_HP, 1)
     obs[:, opp_offset + 1] = opp_mana.float() / MAX_MANA_CAP
     obs[:, opp_offset + 2] = opp_hand_size.float() / MAX_HAND
-    obs[:, opp_offset + 3] = opp_deck_remaining.float() / MIN_DECK_SIZE
+    obs[:, opp_offset + 3] = opp_deck_remaining.float() / max(MIN_DECK_SIZE, 1)
 
     # --- Game context [279:282] ---
     gc_offset = 279

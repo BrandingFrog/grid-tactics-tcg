@@ -135,7 +135,7 @@ def _encode_board(
       [4] attack_range / 2.0
       [5] attack_bonus / MAX_STAT
       [6] card_type (reserved, always 0.0 for minions on board)
-      [7] attribute / 3.0
+      [7] element / 6.0
       [8] has_on_death_effect: 1.0 if card has ON_DEATH trigger
       [9] has_on_damaged_effect: 1.0 if card has ON_DAMAGED trigger
     """
@@ -164,9 +164,9 @@ def _encode_board(
             obs[base + 5] = minion.attack_bonus / MAX_STAT  # attack_bonus
             obs[base + 6] = 0.0  # card_type (reserved)
 
-            # Attribute: encode as value / 3.0 (Attribute enum 0-3)
-            if card_def.attribute is not None:
-                obs[base + 7] = card_def.attribute.value / 3.0
+            # Element: encode as value / 6.0 (Element enum 0-6)
+            if card_def.element is not None:
+                obs[base + 7] = card_def.element.value / 6.0
             # else remains 0.0
 
             # Effect triggers

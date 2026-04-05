@@ -12,9 +12,9 @@ from pathlib import Path
 
 from grid_tactics.cards import CardDefinition, EffectDefinition
 from grid_tactics.enums import (
-    Attribute,
     CardType,
     EffectType,
+    Element,
     ReactCondition,
     TargetType,
     TriggerType,
@@ -59,12 +59,12 @@ class CardLoader:
         if react_data:
             react_effect = CardLoader._parse_single_effect(react_data, card_id, "react_effect")
 
-        # Parse optional attribute
-        attribute = None
-        attr_str = data.get("attribute")
-        if attr_str is not None:
-            attribute = CardLoader._parse_enum(
-                Attribute, attr_str, "attribute", card_id
+        # Parse optional element
+        element = None
+        elem_str = data.get("element")
+        if elem_str is not None:
+            element = CardLoader._parse_enum(
+                Element, elem_str, "element", card_id
             )
 
         # Parse optional react_condition
@@ -84,12 +84,16 @@ class CardLoader:
             attack=data.get("attack"),
             health=data.get("health"),
             attack_range=data.get("range"),  # JSON "range" -> CardDefinition "attack_range"
-            attribute=attribute,
+            element=element,
             tribe=data.get("tribe"),
             effects=effects,
             react_condition=react_condition,
             react_effect=react_effect,
             react_mana_cost=data.get("react_mana_cost"),
+            promote_target=data.get("promote_target"),
+            unique=data.get("unique", False),
+            tutor_target=data.get("tutor_target"),
+            summon_sacrifice_tribe=data.get("summon_sacrifice_tribe"),
         )
 
     @staticmethod

@@ -3,14 +3,14 @@
     "name": "Counter Spell",
     "card_type": "react",
     "mana_cost": 2,
-    "attribute": "neutral",
+    "element": "water",
     "react_condition": "opponent_plays_magic",
     "effects": [
         {
             "type": "negate",
             "trigger": "on_play",
             "target": "single_target",
-            "amount": 1
+            "amount": 10
         }
     ]
 }

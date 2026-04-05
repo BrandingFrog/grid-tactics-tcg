@@ -3,234 +3,1201 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Grid Tactics — Training Dashboard</title>
+<title>Grid Tactics Analytics</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4" defer></script>
 <style>
-:root{--bg:#0f0f1a;--card:#1a1a2e;--border:#2a2a4a;--cyan:#00d4ff;--green:#4caf50;--red:#f44336;--yellow:#ff9800;--text:#e0e0e0;--muted:#888}
+:root{--bg:#0b0b16;--card:#141428;--card2:#1a1a33;--border:#252545;--cyan:#00d4ff;--green:#4caf50;--red:#f44336;--yellow:#ff9800;--purple:#ce93d8;--text:#e0e0e0;--muted:#777;--dim:#444}
 *{margin:0;padding:0;box-sizing:border-box}
-body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
-.header{background:linear-gradient(135deg,#1a1a2e,#16213e);border-bottom:2px solid #0f3460;padding:16px 20px;display:flex;align-items:center;justify-content:space-between}
-.header h1{font-size:18px;color:var(--cyan);letter-spacing:1px}
-.header .status{font-size:12px;color:var(--muted)}
-.container{max-width:1200px;margin:0 auto;padding:16px}
-.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin-bottom:16px}
-.stat{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:12px}
-.stat .label{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:1px}
-.stat .value{font-size:24px;font-weight:700;margin-top:2px}
-.stat .value.c{color:var(--cyan)}.stat .value.g{color:var(--green)}.stat .value.y{color:var(--yellow)}.stat .value.r{color:var(--red)}
-.chart-box{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:16px;margin-bottom:16px}
-.chart-box h3{font-size:12px;color:var(--cyan);text-transform:uppercase;letter-spacing:1px;margin-bottom:10px}
-canvas{width:100%!important;height:250px!important}
-.pods{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:12px;margin-bottom:16px}
+body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
+
+/* Header */
+.header{background:linear-gradient(135deg,#0f0f24,#161638);border-bottom:1px solid var(--border);padding:0 20px;display:flex;align-items:center;height:52px;position:sticky;top:0;z-index:100}
+.logo{font-size:15px;font-weight:800;color:var(--cyan);letter-spacing:2px;margin-right:32px;white-space:nowrap}
+.nav{display:flex;gap:2px;flex:1}
+.nav-btn{background:none;border:none;color:var(--muted);font-size:13px;font-weight:600;padding:14px 16px;cursor:pointer;border-bottom:2px solid transparent;transition:all .15s}
+.nav-btn:hover{color:var(--text)}
+.nav-btn.active{color:var(--cyan);border-bottom-color:var(--cyan)}
+.header-right{display:flex;align-items:center;gap:12px}
+.conn{font-size:11px;color:var(--muted);display:flex;align-items:center;gap:6px}
+.patch-select{background:var(--card);border:1px solid var(--border);color:var(--cyan);padding:4px 10px;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer}
+.patch-select option{background:var(--bg);color:var(--text)}
+.axis-toggle{display:flex;gap:2px;background:var(--card);border:1px solid var(--border);border-radius:6px;overflow:hidden}
+.axis-btn{background:none;border:none;color:var(--muted);padding:4px 10px;font-size:11px;cursor:pointer;font-weight:600}
+.axis-btn.active{background:var(--cyan);color:var(--bg)}
+.dot{width:7px;height:7px;border-radius:50%}
+.dot.on{background:var(--green);box-shadow:0 0 6px var(--green)}
+.dot.off{background:var(--red)}
+
+/* Layout */
+.page{display:none;max-width:1400px;margin:0 auto;padding:16px 20px}
+.page.active{display:block}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
+.grid4{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px}
+@media(max-width:900px){.grid2,.grid3{grid-template-columns:1fr}}
+
+/* Cards */
+.card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:16px;margin-bottom:12px}
+.card h3{font-size:11px;color:var(--cyan);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:12px;font-weight:700}
+.card.full{grid-column:1/-1}
+
+/* Stats row */
+.kpi{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:14px 16px}
+.kpi .label{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;font-weight:600}
+.kpi .val{font-size:26px;font-weight:800;margin-top:4px;line-height:1}
+.kpi .sub{font-size:11px;color:var(--dim);margin-top:4px}
+.c{color:var(--cyan)}.g{color:var(--green)}.y{color:var(--yellow)}.r{color:var(--red)}.p{color:var(--purple)}
+
+/* Charts */
+canvas{width:100%!important;height:260px!important}
+
+/* Table */
+.tbl{width:100%;border-collapse:collapse;font-size:13px}
+.tbl th{text-align:left;color:var(--muted);font-size:10px;text-transform:uppercase;letter-spacing:1px;padding:8px 10px;border-bottom:1px solid var(--border);font-weight:700}
+.tbl td{padding:8px 10px;border-bottom:1px solid #1a1a30}
+.tbl tr:hover td{background:#1a1a35}
+.tbl .num{text-align:right;font-variant-numeric:tabular-nums}
+.tbl .bar-cell{width:100px}
+.bar-bg{background:var(--border);border-radius:3px;height:16px;overflow:hidden;position:relative}
+.bar-fg{height:100%;border-radius:3px;min-width:2px}
+
+/* Pod cards */
 .pod{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:16px}
-.pod h3{font-size:15px;color:var(--cyan);margin-bottom:4px}
-.pod .meta{font-size:12px;color:var(--muted);margin-bottom:12px}
-.pod .row{display:flex;justify-content:space-between;padding:4px 0;font-size:13px;border-bottom:1px solid #1e1e35}
-.pod .row:last-child{border:none}
-.pod .row .l{color:var(--muted)}.pod .row .v{font-weight:600}
-.gpu-bar{background:#2a2a4a;border-radius:4px;height:24px;overflow:hidden;margin:8px 0;position:relative}
-.gpu-fill{height:100%;border-radius:4px;display:flex;align-items:center;padding:0 8px;font-size:11px;font-weight:600;color:#fff;transition:width 0.5s}
-.gpu-low{background:linear-gradient(90deg,#f44336,#ff5722)}
-.gpu-mid{background:linear-gradient(90deg,#ff9800,#ffc107)}
-.gpu-high{background:linear-gradient(90deg,#4caf50,#66bb6a)}
-.info{text-align:center;color:var(--muted);font-size:11px;margin-top:12px}
-.info a{color:var(--cyan)}
-.loading{text-align:center;padding:60px;color:var(--muted)}
-.dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px}
-.dot.live{background:var(--green);animation:pulse 2s infinite}
-.dot.dead{background:var(--red)}
-@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.4}}
-@media(max-width:600px){.stats{grid-template-columns:repeat(2,1fr)}.stat .value{font-size:18px}}
+.pod-name{font-size:15px;font-weight:700;color:var(--cyan);display:flex;align-items:center;gap:8px}
+.pod-meta{font-size:12px;color:var(--muted);margin:4px 0 12px}
+.pod-row{display:flex;justify-content:space-between;padding:5px 0;font-size:13px;border-bottom:1px solid #1a1a30}
+.pod-row:last-child{border:none}
+.pod-row .k{color:var(--muted)}
+.pod-row .v{font-weight:700}
+
+/* GPU bar */
+.gpu-bar{background:#1e1e38;border-radius:4px;height:22px;overflow:hidden;margin:8px 0}
+.gpu-fill{height:100%;border-radius:4px;display:flex;align-items:center;padding:0 8px;font-size:11px;font-weight:700;color:#fff;transition:width .5s}
+
+/* Empty state */
+.empty{text-align:center;padding:40px 20px;color:var(--dim)}
+.empty h4{color:var(--muted);margin-bottom:8px}
+
+/* Tier badges */
+.tier{display:inline-block;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:700}
+.tier.s{background:#4caf5030;color:#4caf50}
+.tier.a{background:#00d4ff30;color:#00d4ff}
+.tier.b{background:#ff980030;color:#ff9800}
+.tier.c{background:#f4433630;color:#f44336}
+
+/* Footer */
+.footer{text-align:center;color:var(--dim);font-size:11px;padding:20px}
+.footer a{color:var(--cyan)}
+
+/* Card tooltip */
+.card-hover{position:relative;cursor:pointer;border-bottom:1px dashed var(--dim)}
+.card-tip{display:none;position:absolute;z-index:999;left:0;top:calc(100% + 8px);width:240px;background:linear-gradient(135deg,#1a1a38,#12122a);border:1px solid var(--cyan);border-radius:12px;padding:0;overflow:hidden;box-shadow:0 8px 32px rgba(0,0,0,.6);pointer-events:none}
+.card-hover:hover .card-tip{display:block}
+.card-tip-header{padding:10px 14px;border-bottom:1px solid #2a2a55;display:flex;justify-content:space-between;align-items:center}
+.card-tip-name{font-size:14px;font-weight:800;color:#fff}
+.card-tip-cost{background:var(--cyan);color:#0a0a1a;width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:900}
+.card-tip-type{padding:4px 14px;font-size:10px;text-transform:uppercase;letter-spacing:1px;font-weight:700}
+.card-tip-type.minion{color:#ff9800;background:#ff980015}.card-tip-type.magic{color:#ce93d8;background:#ce93d815}.card-tip-type.react{color:#00d4ff;background:#00d4ff15}
+.card-tip-stats{padding:8px 14px;display:flex;gap:16px;border-bottom:1px solid #1e1e40}
+.card-tip-stat{text-align:center}
+.card-tip-stat .sv{font-size:18px;font-weight:900}
+.card-tip-stat .sl{font-size:9px;color:var(--muted);text-transform:uppercase}
+.card-tip-stat .atk{color:var(--red)}.card-tip-stat .hp{color:var(--green)}.card-tip-stat .rng{color:var(--yellow)}
+.card-tip-effects{padding:8px 14px 10px;font-size:11px;color:var(--muted)}
+.card-tip-effect{padding:2px 0;display:flex;gap:6px}
+.card-tip-effect .tag{background:#2a2a55;color:var(--cyan);padding:1px 6px;border-radius:3px;font-size:9px;font-weight:700;text-transform:uppercase}
+.card-tip-elem{padding:4px 14px 10px;font-size:10px}
+.card-tip-elem span{padding:2px 8px;border-radius:4px;font-weight:700;text-transform:uppercase}
+.elem-wood{background:#4caf5020;color:#66bb6a}.elem-fire{background:#f4433620;color:#f44336}.elem-earth{background:#8d6e6320;color:#bcaaa4}.elem-water{background:#2196f320;color:#42a5f5}.elem-metal{background:#9e9e9e20;color:#bdbdbd}.elem-dark{background:#9c27b020;color:#ce93d8}.elem-light{background:#ffc10720;color:#ffc107}
+
+/* Collection & Deck Builder */
+.coll-filters{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px}
+.coll-filter{background:var(--card);border:1px solid var(--border);color:var(--text);padding:6px 12px;border-radius:6px;font-size:12px;cursor:pointer}
+.coll-filter.active{border-color:var(--cyan);color:var(--cyan)}
+.coll-search{background:var(--card);border:1px solid var(--border);color:var(--text);padding:8px 14px;border-radius:8px;font-size:13px;width:250px}
+.coll-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px}
+.card-preview{background:linear-gradient(135deg,#1a1a38,#12122a);border:1px solid var(--border);border-radius:12px;overflow:hidden;cursor:pointer;transition:all .15s}
+.card-preview:hover{border-color:var(--cyan);transform:translateY(-2px);box-shadow:0 6px 24px rgba(0,212,255,.15)}
+.card-preview.in-deck{border-color:var(--green);box-shadow:0 0 0 2px var(--green)40}
+.cp-header{padding:10px 14px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #2a2a55}
+.cp-name{font-size:14px;font-weight:800;color:#fff}
+.cp-cost{background:var(--cyan);color:#0a0a1a;width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:900}
+.cp-type{padding:4px 14px;font-size:10px;text-transform:uppercase;letter-spacing:1px;font-weight:700}
+.cp-body{padding:10px 14px}
+.cp-stats{display:flex;gap:14px;margin-bottom:8px}
+.cp-stat{text-align:center}
+.cp-stat .v{font-size:20px;font-weight:900}.cp-stat .l{font-size:9px;color:var(--muted);text-transform:uppercase}
+.cp-effects{font-size:11px;color:var(--muted)}
+.cp-effect{padding:2px 0}
+.cp-elem{padding:6px 14px 10px}
+.cp-tribe{font-size:10px;color:var(--dim);padding:0 14px 6px}
+.cp-deck-count{position:absolute;top:6px;right:6px;background:var(--green);color:#fff;width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:900}
+
+/* Deck panel */
+.deck-panel{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:16px;position:sticky;top:68px}
+.deck-title{font-size:13px;color:var(--cyan);text-transform:uppercase;letter-spacing:1.5px;font-weight:700;margin-bottom:10px}
+.deck-count{font-size:11px;color:var(--muted);margin-bottom:12px}
+.deck-list{max-height:400px;overflow-y:auto}
+.deck-item{display:flex;justify-content:space-between;align-items:center;padding:4px 8px;font-size:12px;border-bottom:1px solid #1a1a30}
+.deck-item .qty{color:var(--cyan);font-weight:700;min-width:20px}
+.deck-item .dn{flex:1}
+.deck-item .dc{color:var(--muted);font-size:11px}
+.deck-item .rm{color:var(--red);cursor:pointer;font-size:14px;padding:0 4px}
+.deck-item .rm:hover{color:#fff}
+.deck-export{margin-top:12px;width:100%;padding:8px;background:var(--cyan);color:var(--bg);border:none;border-radius:6px;font-weight:700;cursor:pointer;font-size:12px}
+.deck-export:hover{opacity:.9}
+.coll-layout{display:grid;grid-template-columns:1fr 280px;gap:16px}
+@media(max-width:900px){.coll-layout{grid-template-columns:1fr}.deck-panel{position:static}}
+
+/* ===== DUEL TAB ===== */
+.duel-layout{display:grid;grid-template-columns:1fr 260px;gap:16px;max-width:1100px;margin:0 auto}
+@media(max-width:900px){.duel-layout{grid-template-columns:1fr}}
+
+.duel-lobby{text-align:center;padding:60px 20px}
+.duel-lobby h2{font-size:28px;font-weight:900;color:var(--cyan);margin-bottom:8px}
+.duel-lobby p{color:var(--muted);margin-bottom:24px}
+.duel-lobby-actions{display:flex;gap:12px;justify-content:center;margin-bottom:24px}
+.duel-btn{padding:12px 28px;border:none;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;transition:all .15s}
+.duel-btn:hover{transform:translateY(-1px);box-shadow:0 4px 16px rgba(0,0,0,.3)}
+.duel-btn-primary{background:var(--cyan);color:var(--bg)}
+.duel-btn-secondary{background:var(--card2);color:var(--text);border:1px solid var(--border)}
+.duel-code-input{background:var(--card);border:2px solid var(--border);color:var(--cyan);padding:12px 18px;border-radius:8px;font-size:20px;font-weight:900;letter-spacing:8px;text-transform:uppercase;text-align:center;width:180px}
+.duel-code-input:focus{border-color:var(--cyan);outline:none}
+
+.duel-room-bar{display:flex;justify-content:space-between;align-items:center;background:var(--card);border:1px solid var(--border);border-radius:10px;padding:10px 16px;margin-bottom:12px}
+.duel-room-code{font-size:18px;font-weight:900;letter-spacing:4px;color:var(--cyan)}
+.duel-player-tag{padding:4px 12px;border-radius:6px;font-size:12px;font-weight:700}
+.duel-p1{background:#00d4ff20;color:var(--cyan)}
+.duel-p2{background:#f4433620;color:var(--red)}
+.duel-turn-indicator{font-size:12px;font-weight:700;color:var(--green);display:flex;align-items:center;gap:6px}
+.duel-turn-indicator .pulse{width:8px;height:8px;border-radius:50%;background:var(--green);animation:pulse 1.5s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+
+/* Opponent bar */
+.duel-opponent{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:12px 16px;margin-bottom:12px;display:flex;justify-content:space-between;align-items:center}
+.duel-opp-name{font-size:14px;font-weight:700;color:var(--red)}
+.duel-stat{text-align:center;min-width:50px}
+.duel-stat .sv{font-size:18px;font-weight:900}
+.duel-stat .sl{font-size:9px;color:var(--muted);text-transform:uppercase}
+
+/* Board */
+.duel-board{display:grid;grid-template-columns:repeat(5,1fr);gap:4px;margin-bottom:12px;background:var(--card);border:1px solid var(--border);border-radius:10px;padding:12px}
+.duel-board-label{grid-column:1/-1;font-size:10px;color:var(--dim);text-transform:uppercase;letter-spacing:1px;padding:2px 4px}
+.duel-cell{aspect-ratio:1;background:var(--card2);border:1px solid var(--border);border-radius:8px;display:flex;flex-direction:column;align-items:center;justify-content:center;position:relative;cursor:pointer;transition:all .15s;min-height:68px}
+.duel-cell:hover{border-color:var(--cyan);background:#1e1e40}
+.duel-cell.highlight{border-color:var(--green);box-shadow:0 0 8px rgba(76,175,80,.3);animation:cellPulse 1s infinite}
+@keyframes cellPulse{0%,100%{box-shadow:0 0 8px rgba(76,175,80,.2)}50%{box-shadow:0 0 16px rgba(76,175,80,.5)}}
+.duel-cell.p2-zone{background:#f4433608}
+.duel-cell.neutral-zone{background:#ff980008}
+.duel-cell.p1-zone{background:#00d4ff08}
+.duel-minion-name{font-size:9px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:90%}
+.duel-minion-stats{font-size:11px;font-weight:800;display:flex;gap:4px}
+.duel-minion-owner{position:absolute;top:3px;right:5px;font-size:8px;font-weight:900;padding:1px 4px;border-radius:3px}
+
+/* Your info bar */
+.duel-self{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:12px 16px;margin-bottom:12px;display:flex;justify-content:space-between;align-items:center}
+.duel-self-name{font-size:14px;font-weight:700;color:var(--cyan)}
+
+/* Hand */
+.duel-hand{display:flex;gap:8px;overflow-x:auto;padding:8px 0;margin-bottom:12px}
+.duel-hand-card{background:linear-gradient(135deg,#1a1a38,#12122a);border:1px solid var(--border);border-radius:10px;min-width:130px;max-width:150px;cursor:pointer;transition:all .15s;flex-shrink:0}
+.duel-hand-card:hover{border-color:var(--cyan);transform:translateY(-6px);box-shadow:0 8px 24px rgba(0,212,255,.2)}
+.duel-hand-card.selected{border-color:var(--green);box-shadow:0 0 0 2px var(--green)40;transform:translateY(-8px)}
+.dhc-header{padding:8px 10px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #2a2a55}
+.dhc-name{font-size:11px;font-weight:800;color:#fff}
+.dhc-cost{background:var(--cyan);color:#0a0a1a;width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:900}
+.dhc-type{padding:3px 10px;font-size:9px;text-transform:uppercase;letter-spacing:1px;font-weight:700}
+.dhc-stats{padding:6px 10px;display:flex;gap:10px}
+.dhc-stat{text-align:center}
+.dhc-stat .v{font-size:16px;font-weight:900}.dhc-stat .l{font-size:8px;color:var(--muted);text-transform:uppercase}
+.dhc-effect{padding:4px 10px 8px;font-size:9px;color:var(--muted)}
+
+/* Action bar */
+.duel-actions{display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap}
+.duel-action-btn{padding:10px 20px;border:1px solid var(--border);border-radius:8px;background:var(--card);color:var(--text);font-size:13px;font-weight:700;cursor:pointer;transition:all .15s}
+.duel-action-btn:hover{border-color:var(--cyan);color:var(--cyan)}
+.duel-action-btn.active{background:var(--cyan);color:var(--bg);border-color:var(--cyan)}
+.duel-action-btn:disabled{opacity:.3;cursor:not-allowed}
+
+/* React prompt */
+.duel-react-prompt{background:linear-gradient(135deg,#2a1a00,#1a1000);border:1px solid var(--yellow);border-radius:10px;padding:14px 16px;margin-bottom:12px;display:flex;justify-content:space-between;align-items:center}
+.duel-react-prompt .label{color:var(--yellow);font-weight:700;font-size:13px}
+
+/* Game log */
+.duel-log{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:12px;max-height:500px;overflow-y:auto}
+.duel-log h3{font-size:11px;color:var(--cyan);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:8px;font-weight:700}
+.duel-log-entry{padding:4px 0;font-size:12px;border-bottom:1px solid #1a1a30;display:flex;gap:8px}
+.duel-log-entry:last-child{border:none}
+.duel-log-turn{color:var(--dim);font-size:10px;min-width:28px}
+.duel-log-msg{flex:1}
 </style>
 </head>
 <body>
+
 <div class="header">
-  <h1>GRID TACTICS TCG</h1>
-  <div class="status" id="conn-status">Connecting...</div>
+  <div class="logo">GRID TACTICS</div>
+  <div class="nav">
+    <button class="nav-btn active" onclick="showTab('overview')">Overview</button>
+    <button class="nav-btn" onclick="showTab('training')">Training</button>
+    <button class="nav-btn" onclick="showTab('cards')">Cards</button>
+    <button class="nav-btn" onclick="showTab('collection')">Collection</button>
+    <button class="nav-btn" onclick="showTab('games')">Games</button>
+    <button class="nav-btn" onclick="showTab('models')">Models</button>
+    <button class="nav-btn" onclick="showTab('duel')" style="color:var(--green)">Duel</button>
+  </div>
+  <div class="header-right">
+    <div class="axis-toggle">
+      <button class="axis-btn active" onclick="setAxis('steps')">Steps</button>
+      <button class="axis-btn" onclick="setAxis('time')">Time</button>
+    </div>
+    <select class="patch-select" id="patch-select" onchange="onPatchChange()">
+      <option value="all">All Patches</option>
+    </select>
+    <div id="pod-health" style="display:flex;gap:4px;align-items:center;font-size:11px;color:var(--muted)"></div>
+    <div class="conn" id="conn"><span class="dot off"></span>Connecting</div>
+  </div>
 </div>
-<div class="container" id="app">
-  <div class="loading">Connecting to database...</div>
-</div>
+
+<div class="page active" id="page-overview"></div>
+<div class="page" id="page-training"></div>
+<div class="page" id="page-cards"></div>
+<div class="page" id="page-collection"></div>
+<div class="page" id="page-games"></div>
+<div class="page" id="page-models"></div>
+<div class="page" id="page-duel"></div>
 
 <script>
-// Config — filled at deploy time or via env
-const SUPABASE_URL = window.__SUPABASE_URL__ || localStorage.getItem('sb_url') || '';
-const SUPABASE_KEY = window.__SUPABASE_KEY__ || localStorage.getItem('sb_key') || '';
+const SUPABASE_URL = 'https://ubplotqycykvuhokegnj.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_IJ4wXHAtcc3QJjhHGY1VxA_ZdqN_J-U';
+const COLORS = ['#00d4ff','#4caf50','#ff9800','#f44336','#ce93d8','#ffeb3b','#29b6f6','#ef5350'];
 
-let sb = null;
-let chart = null;
+// Card definitions for tooltip previews
+const CARD_DB = {
+  fire_imp:{name:"Fire Imp",type:"minion",cost:1,atk:20,hp:10,range:0,elem:"fire",tribe:"Imp",effects:[]},
+  dark_assassin:{name:"Dark Assassin",type:"minion",cost:2,atk:30,hp:10,range:0,elem:"dark",tribe:"Assassin",effects:[]},
+  shadow_stalker:{name:"Shadow Stalker",type:"minion",cost:1,atk:10,hp:20,range:0,elem:"dark",tribe:"Assassin",effects:[]},
+  shadow_knight:{name:"Shadow Knight",type:"minion",cost:3,atk:30,hp:30,range:0,elem:"dark",tribe:"Knight",effects:[]},
+  dark_sentinel:{name:"Dark Sentinel",type:"minion",cost:3,atk:20,hp:30,range:0,elem:"dark",tribe:"Dark Mage",effects:[],react:"opponent_plays_light",react_cost:1},
+  holy_paladin:{name:"Holy Paladin",type:"minion",cost:3,atk:20,hp:40,range:0,elem:"light",tribe:"Paladin",effects:[]},
+  light_cleric:{name:"Light Cleric",type:"minion",cost:2,atk:10,hp:30,range:1,elem:"light",tribe:"Cleric",effects:[]},
+  flame_wyrm:{name:"Flame Wyrm",type:"minion",cost:5,atk:40,hp:40,range:1,elem:"fire",tribe:"Dragon",effects:[]},
+  stone_golem:{name:"Stone Golem",type:"minion",cost:4,atk:20,hp:50,range:0,elem:"earth",tribe:"Golem",effects:[]},
+  iron_guardian:{name:"Iron Guardian",type:"minion",cost:3,atk:10,hp:50,range:0,elem:"metal",tribe:"Golem",effects:[]},
+  wind_archer:{name:"Wind Archer",type:"minion",cost:2,atk:20,hp:20,range:2,elem:"wood",tribe:"Archer",effects:[]},
+  fireball:{name:"Fireball",type:"magic",cost:3,elem:"fire",effects:[{type:"damage",trigger:"on_play",target:"single_target",amount:40}]},
+  dark_drain:{name:"Dark Drain",type:"magic",cost:2,elem:"dark",effects:[{type:"damage",trigger:"on_play",target:"single_target",amount:20},{type:"heal",trigger:"on_play",target:"self_owner",amount:20}]},
+  holy_light:{name:"Holy Light",type:"magic",cost:2,elem:"light",effects:[{type:"heal",trigger:"on_play",target:"self_owner",amount:30}]},
+  inferno:{name:"Inferno",type:"magic",cost:7,elem:"fire",effects:[{type:"damage",trigger:"on_play",target:"all_enemies",amount:20}]},
+  counter_spell:{name:"Counter Spell",type:"react",cost:2,elem:"water",react:"opponent_plays_magic",effects:[{type:"negate",trigger:"on_play",target:"single_target",amount:10}]},
+  shield_block:{name:"Shield Block",type:"react",cost:1,elem:"light",react:"opponent_attacks",effects:[{type:"buff_health",trigger:"on_play",target:"single_target",amount:20}]},
+  dark_mirror:{name:"Dark Mirror",type:"react",cost:1,elem:"dark",react:"opponent_plays_minion",effects:[{type:"damage",trigger:"on_play",target:"single_target",amount:10},{type:"heal",trigger:"on_play",target:"self_owner",amount:10}]},
+  furryroach:{name:"Furryroach",type:"minion",cost:1,atk:10,hp:10,range:0,elem:"earth",tribe:"Insect",effects:[{type:"rally_forward",trigger:"on_move",target:"self_owner",amount:10}]},
+  rat:{name:"Rat",type:"minion",cost:1,atk:10,hp:10,range:0,elem:"earth",tribe:"Rat",effects:[]},
+  giant_rat:{name:"Giant Rat",type:"minion",cost:3,atk:30,hp:30,range:0,elem:"earth",tribe:"Rat",effects:[{type:"promote",trigger:"on_death",target:"self_owner",amount:10}],unique:true,promote_target:"rat"},
+  red_diodebot:{name:"Red Diodebot",type:"minion",cost:2,atk:12,hp:12,range:0,elem:"metal",tribe:"Robot",effects:[{type:"tutor",trigger:"on_play",target:"self_owner",amount:1}],tutor_target:"green_diodebot"},
+  green_diodebot:{name:"Green Diodebot",type:"minion",cost:2,atk:13,hp:15,range:0,elem:"metal",tribe:"Robot",effects:[{type:"tutor",trigger:"on_play",target:"self_owner",amount:1}],tutor_target:"blue_diodebot"},
+  blue_diodebot:{name:"Blue Diodebot",type:"minion",cost:2,atk:14,hp:8,range:0,elem:"metal",tribe:"Robot",effects:[{type:"tutor",trigger:"on_play",target:"self_owner",amount:1}],tutor_target:"red_diodebot"},
+  rgb_lasercannon:{name:"RGB Lasercannon",type:"minion",cost:3,atk:25,hp:16,range:1,elem:"metal",tribe:"Robot",effects:[{type:"destroy",trigger:"on_death",target:"single_target",amount:1}],summon_sacrifice_tribe:"Robot"},
+};
 
-// Check config
-function checkConfig() {
-  if (!SUPABASE_URL || !SUPABASE_KEY) {
-    document.getElementById('app').innerHTML = `
-      <div style="max-width:500px;margin:40px auto;background:#1a1a2e;border:1px solid #2a2a4a;border-radius:12px;padding:24px">
-        <h3 style="color:#00d4ff;margin-bottom:16px">Configure Supabase</h3>
-        <p style="color:#888;font-size:14px;margin-bottom:16px">Enter your Supabase project credentials:</p>
-        <input id="sb-url" placeholder="https://xxxxx.supabase.co" style="width:100%;padding:10px;margin-bottom:10px;background:#12121f;border:1px solid #2a2a4a;border-radius:6px;color:#fff;font-size:14px">
-        <input id="sb-key" placeholder="anon key (eyJ...)" style="width:100%;padding:10px;margin-bottom:16px;background:#12121f;border:1px solid #2a2a4a;border-radius:6px;color:#fff;font-size:14px">
-        <button onclick="saveConfig()" style="width:100%;padding:10px;background:#00d4ff;color:#0f0f1a;border:none;border-radius:6px;font-weight:700;cursor:pointer;font-size:14px">Connect</button>
-      </div>`;
-    return false;
+function cardTooltip(cardId) {
+  const c = CARD_DB[cardId];
+  if (!c) return `<span>${cardId}</span>`;
+  let h = `<span class="card-hover">${c.name}<div class="card-tip">`;
+  h += `<div class="card-tip-header"><span class="card-tip-name">${c.name}</span><span class="card-tip-cost">${c.cost}</span></div>`;
+  h += `<div class="card-tip-type ${c.type}">${c.type}${c.tribe ? ' — ' + c.tribe : ''}${c.react ? ' — ' + c.react.replace(/_/g,' ') : ''}</div>`;
+  if (c.type === 'minion') {
+    h += '<div class="card-tip-stats">';
+    h += `<div class="card-tip-stat"><div class="sv atk">${c.atk}</div><div class="sl">ATK</div></div>`;
+    h += `<div class="card-tip-stat"><div class="sv hp">${c.hp}</div><div class="sl">HP</div></div>`;
+    h += `<div class="card-tip-stat"><div class="sv rng">${c.range > 0 ? c.range : 'M'}</div><div class="sl">${c.range > 0 ? 'Range' : 'Melee'}</div></div>`;
+    h += '</div>';
   }
-  return true;
+  if (c.effects.length) {
+    h += '<div class="card-tip-effects">';
+    c.effects.forEach(e => {
+      h += `<div class="card-tip-effect"><span class="tag">${e.trigger.replace('on_','')}</span> ${e.type} ${e.amount} (${e.target.replace(/_/g,' ')})</div>`;
+    });
+    h += '</div>';
+  }
+  if (c.react_cost) h += `<div class="card-tip-effects"><div class="card-tip-effect"><span class="tag">react</span> Deploy self for ${c.react_cost} mana</div></div>`;
+  if (c.promote_target) h += `<div class="card-tip-effects"><div class="card-tip-effect"><span class="tag" style="background:#4caf5040;color:#4caf50">promote</span> ${c.promote_target} becomes ${c.name}</div></div>`;
+  if (c.unique) h += `<div class="card-tip-effects" style="color:var(--yellow)"><div class="card-tip-effect">Unique — only 1 on board at a time</div></div>`;
+  h += `<div class="card-tip-elem"><span class="elem-${c.elem}">${c.elem}</span></div>`;
+  h += '</div></span>';
+  return h;
 }
 
-function saveConfig() {
-  const url = document.getElementById('sb-url').value.trim();
-  const key = document.getElementById('sb-key').value.trim();
-  if (url && key) {
-    localStorage.setItem('sb_url', url);
-    localStorage.setItem('sb_key', key);
-    location.reload();
-  }
+let sb, charts = {}, DATA = { runs: [], snapshots: [], snByRun: {}, cardStats: [], gameResults: [] };
+let selectedPatch = 'all';
+let xAxisMode = 'steps'; // 'steps' or 'time'
+
+function setAxis(mode) {
+  xAxisMode = mode;
+  document.querySelectorAll('.axis-btn').forEach(b => b.classList.toggle('active', b.textContent.toLowerCase() === mode));
+  render(activeTab());
 }
 
+function onPatchChange() {
+  selectedPatch = document.getElementById('patch-select').value;
+  render(activeTab());
+}
+
+function filterByPatch(items) {
+  if (selectedPatch === 'all') return items;
+  return items.filter(i => (i.patch_version || '1.0') === selectedPatch);
+}
+
+// --- Tab navigation ---
+function showTab(id) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('page-' + id).classList.add('active');
+  event.target.classList.add('active');
+  render(id);
+}
+
+// --- Init ---
 async function init() {
-  if (!checkConfig()) return;
-
-  // Wait for Supabase JS to load
-  while (typeof supabase === 'undefined') await new Promise(r => setTimeout(r, 100));
-
+  while (typeof supabase === 'undefined') await new Promise(r => setTimeout(r, 50));
   sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-  document.getElementById('conn-status').innerHTML = '<span class="dot live"></span>Connected';
+  document.getElementById('conn').innerHTML = '<span class="dot on"></span>Connected';
 
-  // Initial load
-  await loadDashboard();
+  await fetchAll();
+  render('overview');
 
-  // Subscribe to realtime updates
-  sb.channel('training_snapshots')
-    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'training_snapshots' }, () => {
-      loadDashboard();
-    })
-    .subscribe();
+  updatePodHealth();
+  setInterval(updatePodHealth, 30000);
 
-  // Fallback polling every 30s
-  setInterval(loadDashboard, 30000);
+  sb.channel('live').on('postgres_changes', { event: '*', schema: 'public', table: 'training_snapshots' }, () => fetchAll().then(() => render(activeTab()))).subscribe();
+  sb.channel('live2').on('postgres_changes', { event: '*', schema: 'public', table: 'training_runs' }, () => fetchAll().then(() => render(activeTab()))).subscribe();
+  setInterval(() => fetchAll().then(() => render(activeTab())), 30000);
 }
 
-async function loadDashboard() {
-  const app = document.getElementById('app');
+function activeTab() { const el = document.querySelector('.nav-btn.active'); return el ? el.textContent.toLowerCase() : 'overview'; }
 
-  // Fetch active runs
-  const { data: runs, error: runsErr } = await sb
-    .from('training_runs')
-    .select('*')
-    .order('started_at', { ascending: false })
-    .limit(10);
+async function fetchAll() {
+  const [r1, r2, r3, r4] = await Promise.all([
+    sb.from('training_runs').select('*').order('started_at', { ascending: false }).limit(20),
+    sb.from('training_snapshots').select('*').order('timestep', { ascending: true }).limit(5000),
+    sb.from('card_stats').select('*').order('updated_at', { ascending: false }).limit(2000),
+    sb.from('game_results').select('*').order('created_at', { ascending: false }).limit(5000),
+  ]);
+  DATA.runs = r1.data || [];
+  DATA.snapshots = r2.data || [];
+  DATA.cardStats = r3.data || [];
+  DATA.gameResults = r4.data || [];
 
-  if (runsErr || !runs || runs.length === 0) {
-    app.innerHTML = '<div class="loading">No training data yet. Pods will write here once connected.</div>';
-    return;
-  }
+  DATA.snByRun = {};
+  DATA.snapshots.forEach(s => {
+    if (!DATA.snByRun[s.run_id]) DATA.snByRun[s.run_id] = [];
+    DATA.snByRun[s.run_id].push(s);
+  });
 
-  // Fetch snapshots for active runs
-  const runIds = runs.map(r => r.run_id);
-  const { data: snapshots } = await sb
-    .from('training_snapshots')
-    .select('*')
-    .in('run_id', runIds)
-    .order('timestep', { ascending: true });
+  // Populate patch dropdown
+  const patches = new Set();
+  DATA.runs.forEach(r => patches.add(r.patch_version || '1.0'));
+  DATA.snapshots.forEach(s => patches.add(s.patch_version || '1.0'));
+  const sel = document.getElementById('patch-select');
+  const prev = sel.value;
+  sel.innerHTML = '<option value="all">All Patches</option>';
+  [...patches].sort().reverse().forEach(p => {
+    sel.innerHTML += `<option value="${p}"${p === prev ? ' selected' : ''}>Patch ${p}</option>`;
+  });
+  sel.value = prev || 'all';
+  selectedPatch = sel.value;
+}
 
-  // Summary stats
-  let totalSteps = 0, bestWR = 0, bestRun = '-', totalFPS = 0, activeCount = 0;
+// --- Render dispatcher ---
+function render(tab) {
+  const fn = { overview: renderOverview, training: renderTraining, cards: renderCards, collection: renderCollection, games: renderGames, models: renderModels, duel: renderDuel };
+  if (fn[tab]) fn[tab]();
+}
+
+// --- OVERVIEW TAB ---
+function renderOverview() {
+  const el = document.getElementById('page-overview');
+  const runs = filterByPatch(DATA.runs);
+  const snByRun = {};
+  filterByPatch(DATA.snapshots).forEach(s => { if (!snByRun[s.run_id]) snByRun[s.run_id] = []; snByRun[s.run_id].push(s); });
+  if (!runs.length) { el.innerHTML = '<div class="empty"><h4>No Training Data</h4>Launch a training run to see analytics here.</div>'; return; }
+
+  let totalSteps = 0, bestWR = 0, totalFPS = 0, activeCount = 0, totalGames = 0;
   runs.forEach(r => {
     if (!r.ended_at) activeCount++;
     totalSteps += r.current_steps || 0;
     totalFPS += r.current_fps || 0;
   });
+  Object.values(snByRun).flat().forEach(s => { if (s.win_rate > bestWR) bestWR = s.win_rate; });
+  totalGames = DATA.gameResults.length;
 
+  let h = '<div class="grid4" style="margin-bottom:12px">';
+  h += kpi('Active Runs', activeCount, 'c');
+  h += kpi('Total Steps', fmtN(totalSteps), '');
+  h += kpi('Best Win Rate', (bestWR*100).toFixed(1)+'%', 'g');
+  h += kpi('Combined FPS', fmtN(totalFPS), 'c');
+  h += kpi('Training Runs', runs.length, 'p');
+  h += kpi('Games Logged', fmtN(totalGames) || '0', '');
+  h += '</div>';
+
+  h += '<div class="card"><h3>Win Rate Over Training</h3><canvas id="ch-wr"></canvas></div>';
+
+  h += '<div class="grid3">';
+  runs.forEach((r, i) => {
+    const sn = snByRun[r.run_id] || [];
+    const latest = sn.length ? sn[sn.length-1] : null;
+    const wr = latest ? (latest.win_rate*100).toFixed(1)+'%' : '-';
+    const wrC = latest && latest.win_rate >= .5 ? 'g' : latest && latest.win_rate >= .25 ? 'y' : 'r';
+    const isLive = !r.ended_at;
+    h += `<div class="pod"><div class="pod-name"><span class="dot ${isLive?'on':'off'}"></span>${r.run_name||r.run_id}</div>`;
+    h += `<div class="pod-meta">${r.gpu_name||'?'} | ${r.method||'?'} | seed ${r.seed||'?'}</div>`;
+    if (r.gpu_util > 0) {
+      const gc = r.gpu_util >= 50 ? 'background:#4caf50' : r.gpu_util >= 20 ? 'background:#ff9800' : 'background:#f44336';
+      h += `<div class="gpu-bar"><div class="gpu-fill" style="${gc};width:${Math.max(r.gpu_util,5)}%">${r.gpu_util}% GPU</div></div>`;
+    }
+    h += podRow('Win Rate', `<span class="${wrC}">${wr}</span>`);
+    h += podRow('Steps', fmtN(r.current_steps||0));
+    h += podRow('FPS', `<span class="c">${r.current_fps ? fmtN(r.current_fps) : '-'}</span>`);
+    h += podRow('Evals', sn.length);
+    h += '</div>';
+  });
+  h += '</div>';
+
+  el.innerHTML = h;
+  drawLineChart('ch-wr', runs, snByRun, s => s.win_rate*100, 'Win %', 0, 100);
+}
+
+// --- TRAINING TAB ---
+function renderTraining() {
+  const el = document.getElementById('page-training');
+  const runs = filterByPatch(DATA.runs);
   const snByRun = {};
-  (snapshots || []).forEach(s => {
-    if (!snByRun[s.run_id]) snByRun[s.run_id] = [];
-    snByRun[s.run_id].push(s);
-    if (s.win_rate > bestWR) { bestWR = s.win_rate; bestRun = s.run_id; }
+  filterByPatch(DATA.snapshots).forEach(s => { if (!snByRun[s.run_id]) snByRun[s.run_id] = []; snByRun[s.run_id].push(s); });
+  if (!runs.length) { el.innerHTML = '<div class="empty"><h4>No Training Data</h4></div>'; return; }
+
+  let h = '<div class="grid2">';
+  h += '<div class="card"><h3>Policy Loss</h3><canvas id="ch-pg"></canvas></div>';
+  h += '<div class="card"><h3>Value Loss</h3><canvas id="ch-vl"></canvas></div>';
+  h += '<div class="card"><h3>Entropy</h3><canvas id="ch-ent"></canvas></div>';
+  h += '<div class="card"><h3>Steps/Second (FPS)</h3><canvas id="ch-fps"></canvas></div>';
+  h += '</div>';
+
+  h += '<div class="card"><h3>Win Rate Convergence</h3><canvas id="ch-wr2"></canvas></div>';
+
+  // Learning dynamics table
+  h += '<div class="card"><h3>Run Diagnostics</h3><table class="tbl"><thead><tr>';
+  h += '<th>Run</th><th>GPU</th><th>Seed</th><th class="num">Steps</th><th class="num">Latest WR</th><th class="num">Pg Loss</th><th class="num">V Loss</th><th class="num">Entropy</th><th class="num">FPS</th>';
+  h += '</tr></thead><tbody>';
+  runs.forEach(r => {
+    const sn = snByRun[r.run_id] || [];
+    const last = sn.length ? sn[sn.length-1] : {};
+    h += `<tr><td style="color:var(--cyan)">${r.run_name||r.run_id}</td><td>${r.gpu_name||'?'}</td><td>${r.seed||'?'}</td>`;
+    h += `<td class="num">${fmtN(r.current_steps||0)}</td>`;
+    h += `<td class="num ${last.win_rate>=.5?'g':last.win_rate>=.25?'y':'r'}">${last.win_rate?(last.win_rate*100).toFixed(1)+'%':'-'}</td>`;
+    h += `<td class="num">${last.pg_loss!=null?last.pg_loss.toFixed(4):'-'}</td>`;
+    h += `<td class="num">${last.v_loss!=null?last.v_loss.toFixed(4):'-'}</td>`;
+    h += `<td class="num">${last.entropy!=null?last.entropy.toFixed(3):'-'}</td>`;
+    h += `<td class="num c">${last.fps?fmtN(last.fps):'-'}</td></tr>`;
+  });
+  h += '</tbody></table></div>';
+
+  el.innerHTML = h;
+
+  drawLineChart('ch-pg', runs, snByRun, s => s.pg_loss, 'Policy Loss');
+  drawLineChart('ch-vl', runs, snByRun, s => s.v_loss, 'Value Loss');
+  drawLineChart('ch-ent', runs, snByRun, s => s.entropy, 'Entropy');
+  drawLineChart('ch-fps', runs, snByRun, s => s.fps, 'FPS');
+  drawLineChart('ch-wr2', runs, snByRun, s => s.win_rate*100, 'Win %', 0, 100);
+}
+
+// --- CARDS TAB ---
+function renderCards() {
+  const el = document.getElementById('page-cards');
+  const cardStats = filterByPatch(DATA.cardStats);
+  const runs = filterByPatch(DATA.runs);
+
+  if (!cardStats.length) {
+    // Show card pool info from what we know
+    el.innerHTML = `<div class="empty" style="padding:60px">
+      <h4>Card Analytics</h4>
+      <p style="margin:12px 0;color:var(--muted)">Card stats will populate as training runs report per-card data.</p>
+      <p style="color:var(--dim);font-size:12px">The tensor engine needs to track card play events — coming in the next training update.</p>
+      <div class="card" style="max-width:700px;margin:24px auto;text-align:left">
+        <h3>Starter Card Pool (18 Cards)</h3>
+        <table class="tbl"><thead><tr><th>Type</th><th class="num">Count</th><th>Role</th></tr></thead><tbody>
+        <tr><td style="color:#ff9800">Minions</td><td class="num">10</td><td>Board presence, combat, sacrifice win-con</td></tr>
+        <tr><td style="color:#ce93d8">Magic</td><td class="num">4</td><td>Direct damage, healing, buffs</td></tr>
+        <tr><td style="color:#00d4ff">React</td><td class="num">3</td><td>Counter spells, shields, mirrors</td></tr>
+        <tr><td style="color:#4caf50">Multi-purpose</td><td class="num">1</td><td>Deploy or react</td></tr>
+        </tbody></table>
+        <p style="margin-top:12px;font-size:12px;color:var(--dim)">Mana curve: 1-cost(2) 2-cost(6) 3-cost(5) 4-cost(3) 5-cost(2)</p>
+      </div>
+    </div>`;
+    return;
+  }
+
+  // Group by card, aggregate across runs
+  const byCard = {};
+  cardStats.forEach(cs => {
+    if (!byCard[cs.card_id]) byCard[cs.card_id] = { card_id: cs.card_id, total_played: 0, wr_sum: 0, wr_count: 0, pick_sum: 0, dmg_sum: 0, runs: 0 };
+    const c = byCard[cs.card_id];
+    c.total_played += cs.times_played || 0;
+    if (cs.win_rate != null) { c.wr_sum += cs.win_rate; c.wr_count++; }
+    if (cs.pick_rate != null) c.pick_sum += cs.pick_rate;
+    if (cs.avg_damage != null) c.dmg_sum += cs.avg_damage;
+    c.runs++;
+  });
+
+  const cards = Object.values(byCard).sort((a,b) => (b.wr_count ? b.wr_sum/b.wr_count : 0) - (a.wr_count ? a.wr_sum/a.wr_count : 0));
+  const maxPlayed = Math.max(...cards.map(c => c.total_played), 1);
+
+  let h = '<div class="grid4" style="margin-bottom:12px">';
+  h += kpi('Cards Tracked', cards.length, 'c');
+  h += kpi('Top Card', cards[0]?.card_id || '-', 'g');
+  h += kpi('Highest WR', cards[0]?.wr_count ? (cards[0].wr_sum/cards[0].wr_count*100).toFixed(1)+'%' : '-', 'g');
+  h += kpi('Total Plays', fmtN(cards.reduce((s,c)=>s+c.total_played,0)), '');
+  h += '</div>';
+
+  h += '<div class="card"><h3>Card Tier List</h3><table class="tbl"><thead><tr>';
+  h += '<th>Card</th><th>Tier</th><th class="num">Win Rate</th><th class="num">Play Rate</th><th class="bar-cell">Popularity</th><th class="num">Avg Dmg</th><th class="num">Times Played</th>';
+  h += '</tr></thead><tbody>';
+  cards.forEach(c => {
+    const wr = c.wr_count ? c.wr_sum / c.wr_count : 0;
+    const tier = wr >= .55 ? 's' : wr >= .50 ? 'a' : wr >= .45 ? 'b' : 'c';
+    const pct = c.total_played / maxPlayed * 100;
+    h += `<tr><td style="font-weight:600">${cardTooltip(c.card_id)}</td>`;
+    h += `<td><span class="tier ${tier}">${tier.toUpperCase()}</span></td>`;
+    h += `<td class="num ${wr>=.5?'g':'r'}">${(wr*100).toFixed(1)}%</td>`;
+    h += `<td class="num">${c.pick_sum ? (c.pick_sum/c.runs*100).toFixed(1)+'%' : '-'}</td>`;
+    h += `<td class="bar-cell"><div class="bar-bg"><div class="bar-fg" style="width:${pct}%;background:var(--cyan)"></div></div></td>`;
+    h += `<td class="num">${c.dmg_sum ? (c.dmg_sum/c.runs).toFixed(1) : '-'}</td>`;
+    h += `<td class="num">${fmtN(c.total_played)}</td></tr>`;
+  });
+  h += '</tbody></table></div>';
+  el.innerHTML = h;
+}
+
+// --- COLLECTION & DECK BUILDER TAB ---
+let deckList = {}; // card_id -> count
+let collFilter = { type: 'all', elem: 'all', search: '' };
+
+function renderCollection() {
+  const el = document.getElementById('page-collection');
+  const allCards = Object.entries(CARD_DB).sort((a,b) => a[1].cost - b[1].cost || a[1].name.localeCompare(b[1].name));
+  const types = ['all', 'minion', 'magic', 'react'];
+  const attrs = ['all', 'wood', 'fire', 'earth', 'water', 'metal', 'dark', 'light'];
+  const attrColors = { wood: '#66bb6a', fire: 'var(--red)', earth: '#bcaaa4', water: '#42a5f5', metal: '#bdbdbd', dark: 'var(--purple)', light: 'var(--yellow)' };
+
+  // Filter cards
+  const filtered = allCards.filter(([id, c]) => {
+    if (collFilter.type !== 'all' && c.type !== collFilter.type) return false;
+    if (collFilter.elem !== 'all' && c.elem !== collFilter.elem) return false;
+    if (collFilter.search && !c.name.toLowerCase().includes(collFilter.search.toLowerCase())) return false;
+    return true;
   });
 
   let h = '';
 
-  // Top stats
-  h += '<div class="stats">';
-  h += `<div class="stat"><div class="label">Active Runs</div><div class="value c">${activeCount}</div></div>`;
-  h += `<div class="stat"><div class="label">Total Steps</div><div class="value">${formatNum(totalSteps)}</div></div>`;
-  h += `<div class="stat"><div class="label">Best Win Rate</div><div class="value g">${(bestWR*100).toFixed(1)}%</div></div>`;
-  h += `<div class="stat"><div class="label">Combined FPS</div><div class="value c">${formatNum(totalFPS)}</div></div>`;
-  h += '</div>';
-
-  // Chart
-  h += '<div class="chart-box"><h3>Win Rate Over Training</h3><canvas id="wr-chart"></canvas></div>';
-
-  // Pod cards
-  h += '<div class="pods">';
-  const colors = ['#00d4ff','#4caf50','#ff9800','#f44336','#ce93d8','#ffeb3b'];
-  runs.forEach((r, i) => {
-    const sn = snByRun[r.run_id] || [];
-    const latest = sn.length ? sn[sn.length - 1] : null;
-    const wr = latest ? (latest.win_rate * 100).toFixed(1) + '%' : '-';
-    const wrClass = latest && latest.win_rate >= 0.5 ? 'g' : latest && latest.win_rate >= 0.25 ? 'y' : 'r';
-    const fps = r.current_fps ? formatNum(r.current_fps) : '-';
-    const gpu = r.gpu_util || 0;
-    const gpuClass = gpu >= 50 ? 'gpu-high' : gpu >= 20 ? 'gpu-mid' : 'gpu-low';
-    const isLive = !r.ended_at;
-    const steps = r.current_steps || (latest ? latest.timestep : 0);
-
-    h += `<div class="pod">`;
-    h += `<h3><span class="dot ${isLive ? 'live' : 'dead'}"></span>${r.run_name || r.run_id}</h3>`;
-    h += `<div class="meta">${r.gpu_name || '?'} | ${r.method || 'default'} | seed ${r.seed || '?'}</div>`;
-    if (gpu > 0) h += `<div class="gpu-bar"><div class="gpu-fill ${gpuClass}" style="width:${Math.max(gpu,5)}%">${gpu}% GPU</div></div>`;
-    h += `<div class="row"><span class="l">Win Rate</span><span class="v ${wrClass}">${wr}</span></div>`;
-    h += `<div class="row"><span class="l">Steps</span><span class="v">${formatNum(steps)}</span></div>`;
-    h += `<div class="row"><span class="l">FPS</span><span class="v c">${fps}</span></div>`;
-    h += `<div class="row"><span class="l">Evals</span><span class="v">${sn.length}</span></div>`;
-    h += `</div>`;
+  // Filters
+  h += '<div class="coll-filters">';
+  h += `<input class="coll-search" id="coll-search-input" placeholder="Search cards..." value="${collFilter.search}" oninput="collFilter.search=this.value;clearTimeout(window._searchTimer);window._searchTimer=setTimeout(()=>{const i=document.getElementById('coll-search-input');const pos=i?.selectionStart;renderCollection();const i2=document.getElementById('coll-search-input');if(i2){i2.focus();i2.setSelectionRange(pos,pos)}},200)">`;
+  types.forEach(t => {
+    h += `<button class="coll-filter ${collFilter.type===t?'active':''}" onclick="collFilter.type='${t}';renderCollection()">${t === 'all' ? 'All Types' : t}</button>`;
+  });
+  attrs.forEach(a => {
+    const color = a !== 'all' ? `style="border-color:${attrColors[a] || 'var(--border)'}"` : '';
+    h += `<button class="coll-filter ${collFilter.elem===a?'active':''}" ${color} onclick="collFilter.elem='${a}';renderCollection()">${a === 'all' ? 'All Elements' : a}</button>`;
   });
   h += '</div>';
 
-  h += '<div class="info">Auto-updates via Supabase Realtime | <a href="#" onclick="loadDashboard();return false">Refresh</a> | <a href="#" onclick="localStorage.clear();location.reload()">Reset config</a></div>';
+  // Layout: cards grid + deck panel
+  h += '<div class="coll-layout">';
 
-  app.innerHTML = h;
+  // Cards grid
+  h += '<div class="coll-grid">';
+  filtered.forEach(([id, c]) => {
+    const inDeck = deckList[id] || 0;
+    h += `<div class="card-preview ${inDeck ? 'in-deck' : ''}" onclick="addToDeck('${id}')">`;
+    if (inDeck) h += `<div style="position:relative"><div class="cp-deck-count">${inDeck}</div></div>`;
+    h += `<div class="cp-header"><span class="cp-name">${c.name}</span><span class="cp-cost">${c.cost}</span></div>`;
+    h += `<div class="cp-type ${c.type}">${c.type}${c.tribe ? ' — ' + c.tribe : ''}</div>`;
+    if (c.tribe) h += `<div class="cp-tribe">${c.tribe}</div>`;
+    h += '<div class="cp-body">';
+    if (c.type === 'minion') {
+      h += '<div class="cp-stats">';
+      h += `<div class="cp-stat"><div class="v" style="color:var(--red)">${c.atk}</div><div class="l">ATK</div></div>`;
+      h += `<div class="cp-stat"><div class="v" style="color:var(--green)">${c.hp}</div><div class="l">HP</div></div>`;
+      h += `<div class="cp-stat"><div class="v" style="color:var(--yellow)">${c.range > 0 ? c.range : 'M'}</div><div class="l">${c.range > 0 ? 'Range' : 'Melee'}</div></div>`;
+      h += '</div>';
+    }
+    if (c.effects && c.effects.length) {
+      h += '<div class="cp-effects">';
+      c.effects.forEach(e => {
+        h += `<div class="cp-effect"><span class="tag" style="background:#2a2a55;color:var(--cyan);padding:1px 6px;border-radius:3px;font-size:9px;font-weight:700">${e.trigger.replace('on_','')}</span> ${e.type} ${e.amount} (${e.target.replace(/_/g,' ')})</div>`;
+      });
+      h += '</div>';
+    }
+    if (c.react) h += `<div class="cp-effects"><div class="cp-effect" style="color:var(--cyan)">React: ${c.react.replace(/_/g,' ')}</div></div>`;
+    if (c.promote_target) h += `<div class="cp-effects"><div class="cp-effect" style="color:var(--green)">On death: promote ${c.promote_target} to ${c.name}</div></div>`;
+    if (c.unique) h += `<div class="cp-effects"><div class="cp-effect" style="color:var(--yellow)">Unique — 1 per board</div></div>`;
+    h += '</div>';
+    h += `<div class="cp-elem"><span class="elem-${c.elem}" style="padding:2px 8px;border-radius:4px;font-weight:700;text-transform:uppercase;font-size:10px">${c.elem}</span></div>`;
+    h += '</div>';
+  });
+  h += '</div>';
 
-  // Draw chart
-  const canvas = document.getElementById('wr-chart');
-  if (canvas && typeof Chart !== 'undefined') {
+  // Deck panel
+  const deckTotal = Object.values(deckList).reduce((s, n) => s + n, 0);
+  const deckEntries = Object.entries(deckList).sort((a,b) => {
+    const ca = CARD_DB[a[0]], cb = CARD_DB[b[0]];
+    return (ca?.cost || 0) - (cb?.cost || 0);
+  });
+
+  h += '<div class="deck-panel">';
+  h += '<div class="deck-title">Deck Builder</div>';
+  h += `<div class="deck-count">${deckTotal}/40 cards${deckTotal === 40 ? ' <span style="color:var(--green)">READY</span>' : deckTotal > 40 ? ' <span style="color:var(--red)">OVER LIMIT</span>' : ''}</div>`;
+
+  // Mana curve mini bar
+  const manaCurve = {};
+  deckEntries.forEach(([id, qty]) => {
+    const cost = CARD_DB[id]?.cost || 0;
+    manaCurve[cost] = (manaCurve[cost] || 0) + qty;
+  });
+  const maxCurve = Math.max(...Object.values(manaCurve), 1);
+  h += '<div style="display:flex;gap:3px;align-items:flex-end;height:40px;margin-bottom:12px">';
+  for (let i = 1; i <= 6; i++) {
+    const count = manaCurve[i] || 0;
+    const pct = count / maxCurve * 100;
+    h += `<div style="flex:1;text-align:center"><div style="background:var(--cyan);height:${Math.max(pct, 2)}%;min-height:2px;border-radius:2px"></div><div style="font-size:9px;color:var(--dim);margin-top:2px">${i}</div></div>`;
+  }
+  h += '</div>';
+
+  h += '<div class="deck-list">';
+  if (!deckEntries.length) {
+    h += '<div style="color:var(--dim);font-size:12px;text-align:center;padding:20px">Click cards to add them to your deck</div>';
+  }
+  deckEntries.forEach(([id, qty]) => {
+    const c = CARD_DB[id];
+    h += `<div class="deck-item"><span class="qty">${qty}x</span><span class="dn">${c?.name || id}</span><span class="dc">${c?.cost || '?'}m</span><span class="rm" onclick="event.stopPropagation();removeFromDeck('${id}')">x</span></div>`;
+  });
+  h += '</div>';
+
+  h += `<button class="deck-export" onclick="exportDeck()">Copy Deck Code</button>`;
+  h += `<button class="deck-export" style="background:var(--red);margin-top:6px" onclick="deckList={};renderCollection()">Clear Deck</button>`;
+  h += '</div>';
+
+  h += '</div>'; // coll-layout
+  el.innerHTML = h;
+}
+
+function addToDeck(cardId) {
+  const current = deckList[cardId] || 0;
+  if (current >= 3) return; // max 3 copies
+  const total = Object.values(deckList).reduce((s, n) => s + n, 0);
+  if (total >= 40) return; // deck full
+  deckList[cardId] = current + 1;
+  renderCollection();
+}
+
+function removeFromDeck(cardId) {
+  if (!deckList[cardId]) return;
+  deckList[cardId]--;
+  if (deckList[cardId] <= 0) delete deckList[cardId];
+  renderCollection();
+}
+
+function exportDeck() {
+  const lines = Object.entries(deckList).sort((a,b) => {
+    const ca = CARD_DB[a[0]], cb = CARD_DB[b[0]];
+    return (ca?.cost || 0) - (cb?.cost || 0);
+  }).map(([id, qty]) => `${qty}x ${CARD_DB[id]?.name || id}`);
+  const code = 'Grid Tactics Deck (' + Object.values(deckList).reduce((s,n)=>s+n,0) + '/40)\n' + lines.join('\n');
+  navigator.clipboard.writeText(code).then(() => {
+    alert('Deck copied to clipboard!');
+  }).catch(() => {
+    prompt('Copy deck code:', code);
+  });
+}
+
+// --- GAMES TAB ---
+function renderGames() {
+  const el = document.getElementById('page-games');
+  const games = filterByPatch(DATA.gameResults || []);
+
+  if (!games.length) {
+    el.innerHTML = '<div class="empty"><h4>No Game Data</h4><p style="color:var(--muted)">Waiting for training data...</p></div>';
+    return;
+  }
+
+  let p1w = 0, p2w = 0, draws = 0, totalTurns = 0, timeouts = 0, hpKills = 0;
+  let totalPassDmg = 0, totalCombatDmg = 0, totalSacDmg = 0;
+  games.forEach(g => {
+    if (g.winner === 0) p1w++;
+    else if (g.winner === 1) p2w++;
+    else draws++;
+    totalTurns += g.turn_count || 0;
+    if (g.turn_count >= 200) timeouts++;
+    if (g.p1_hp <= 0 || g.p2_hp <= 0) hpKills++;
+    totalPassDmg += (g.p1_pass_dmg||0) + (g.p2_pass_dmg||0);
+    totalCombatDmg += (g.p1_combat_dmg||0) + (g.p2_combat_dmg||0);
+    totalSacDmg += (g.p1_sacrifice_dmg||0) + (g.p2_sacrifice_dmg||0);
+  });
+  const total = games.length;
+  const avgTurns = totalTurns / total;
+  const avgP1HP = games.reduce((s,g) => s + (g.p1_hp||0), 0) / total;
+  const avgP2HP = games.reduce((s,g) => s + (g.p2_hp||0), 0) / total;
+  const totalDmg = totalPassDmg + totalCombatDmg + totalSacDmg;
+  const passPct = totalDmg > 0 ? (totalPassDmg/totalDmg*100).toFixed(0) : '?';
+  const combatPct = totalDmg > 0 ? (totalCombatDmg/totalDmg*100).toFixed(0) : '?';
+  const sacPct = totalDmg > 0 ? (totalSacDmg/totalDmg*100).toFixed(0) : '?';
+
+  let h = '<div class="grid4" style="margin-bottom:12px">';
+  h += kpi('Games Sampled', fmtN(total), 'c');
+  h += kpi('P1 Win Rate', (p1w/total*100).toFixed(1)+'%', 'g');
+  h += kpi('P2 Win Rate', (p2w/total*100).toFixed(1)+'%', 'r');
+  h += kpi('Draw Rate', (draws/total*100).toFixed(1)+'%', 'y');
+  h += kpi('Avg Length', avgTurns.toFixed(0)+' turns', '');
+  h += kpi('HP Kills', (hpKills/total*100).toFixed(0)+'%', hpKills > 0 ? 'g' : 'r');
+  h += kpi('Avg HP', avgP1HP.toFixed(0)+' / '+avgP2HP.toFixed(0), '');
+  h += kpi('Timeouts', (timeouts/total*100).toFixed(0)+'%', timeouts/total > 0.5 ? 'r' : 'g');
+  h += '</div>';
+
+  // Damage breakdown
+  h += '<div class="card"><h3>Damage Source Breakdown</h3>';
+  if (totalDmg > 0) {
+    h += '<div style="display:flex;height:36px;border-radius:6px;overflow:hidden;margin:12px 0">';
+    if (Number(passPct) > 0) h += `<div style="width:${passPct}%;background:var(--red);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:#fff">${passPct}% Pass</div>`;
+    if (Number(combatPct) > 0) h += `<div style="width:${combatPct}%;background:var(--green);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:#fff">${combatPct}% Combat</div>`;
+    if (Number(sacPct) > 0) h += `<div style="width:${sacPct}%;background:var(--cyan);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:#fff">${sacPct}% Sacrifice</div>`;
+    h += '</div>';
+    h += `<div style="display:flex;gap:24px;font-size:12px;color:var(--muted)">`;
+    h += `<span style="color:var(--red)">Pass: ${fmtN(totalPassDmg)} dmg</span>`;
+    h += `<span style="color:var(--green)">Combat: ${fmtN(totalCombatDmg)} dmg</span>`;
+    h += `<span style="color:var(--cyan)">Sacrifice: ${fmtN(totalSacDmg)} dmg</span>`;
+    h += '</div>';
+    if (Number(passPct) > 80) h += `<p style="color:var(--red);font-size:12px;margin-top:8px">Most player damage is from pass penalty. The AI is passing too much.</p>`;
+    else if (Number(sacPct) > 20) h += `<p style="color:var(--cyan);font-size:12px;margin-top:8px">Sacrifice contributing ${sacPct}% of player damage. Minions crossing the board.</p>`;
+  } else {
+    h += '<p style="color:var(--dim);margin:12px 0">Damage tracking data will appear with new training runs.</p>';
+  }
+  h += '</div>';
+
+  // Minion combat stats
+  let totalMinionDmg = 0, totalKills = 0;
+  games.forEach(g => {
+    totalMinionDmg += (g.p1_minion_dmg_dealt||0) + (g.p2_minion_dmg_dealt||0);
+    totalKills += (g.p1_minions_killed||0) + (g.p2_minions_killed||0);
+  });
+  if (totalMinionDmg > 0 || totalKills > 0) {
+    h += '<div class="card"><h3>Minion Combat</h3>';
+    h += '<div style="display:flex;gap:32px;margin:12px 0">';
+    h += `<div><div style="font-size:28px;font-weight:800;color:var(--yellow)">${fmtN(totalMinionDmg)}</div><div style="font-size:11px;color:var(--muted)">Minion Damage Dealt</div></div>`;
+    h += `<div><div style="font-size:28px;font-weight:800;color:var(--red)">${fmtN(totalKills)}</div><div style="font-size:11px;color:var(--muted)">Minions Killed</div></div>`;
+    h += `<div><div style="font-size:28px;font-weight:800;color:var(--cyan)">${total > 0 ? (totalKills/total).toFixed(1) : '0'}</div><div style="font-size:11px;color:var(--muted)">Avg Kills/Game</div></div>`;
+    h += `<div><div style="font-size:28px;font-weight:800;color:var(--green)">${total > 0 ? (totalMinionDmg/total).toFixed(0) : '0'}</div><div style="font-size:11px;color:var(--muted)">Avg Dmg/Game</div></div>`;
+    h += '</div></div>';
+  }
+
+  h += '<div class="grid2">';
+  h += '<div class="card"><h3>Game Length Distribution</h3><canvas id="ch-turns"></canvas></div>';
+  h += '<div class="card"><h3>Outcome Distribution</h3><canvas id="ch-outcomes"></canvas></div>';
+  h += '</div>';
+
+  // Recent games table
+  h += '<div class="card"><h3>Recent Games</h3><table class="tbl"><thead><tr>';
+  h += '<th class="num">#</th><th class="num">Winner</th><th class="num">Turns</th><th class="num">P1 HP</th><th class="num">P2 HP</th><th class="num">Kills</th><th class="num">Minion Dmg</th><th>How</th>';
+  h += '</tr></thead><tbody>';
+  games.slice(0, 100).forEach((g, i) => {
+    const wC = g.winner===0 ? 'g' : g.winner===1 ? 'r' : 'y';
+    const wT = g.winner===0 ? 'P1' : g.winner===1 ? 'P2' : 'Draw';
+    const how = g.turn_count >= 200 ? 'Timeout' : (g.p1_hp <= 0 || g.p2_hp <= 0) ? 'HP Kill' : 'No Actions';
+    h += `<tr><td class="num">${g.episode_num||i+1}</td>`;
+    h += `<td class="num ${wC}">${wT}</td><td class="num">${g.turn_count||'-'}</td>`;
+    const kills = (g.p1_minions_killed||0) + (g.p2_minions_killed||0);
+    const mDmg = (g.p1_minion_dmg_dealt||0) + (g.p2_minion_dmg_dealt||0);
+    h += `<td class="num">${g.p1_hp??'-'}</td><td class="num">${g.p2_hp??'-'}</td>`;
+    h += `<td class="num">${kills||'-'}</td><td class="num">${mDmg||'-'}</td>`;
+    h += `<td>${how}</td></tr>`;
+  });
+  h += '</tbody></table></div>';
+
+  el.innerHTML = h;
+
+  // Turn length histogram
+  const turnLengths = games.map(g => g.turn_count).filter(Boolean);
+  if (turnLengths.length) {
+    const bins = Array(20).fill(0);
+    const maxT = Math.max(...turnLengths);
+    const binW = Math.max(Math.ceil(maxT/20), 1);
+    turnLengths.forEach(t => { const idx = Math.min(Math.floor(t/binW), 19); bins[idx]++; });
+    const labels = bins.map((_, i) => i*binW);
+    drawBarChart('ch-turns', labels, bins, 'Games', '#00d4ff');
+  }
+
+  drawBarChart('ch-outcomes', ['P1 Wins', 'P2 Wins', 'Draws'], [p1w, p2w, draws], 'Games', '#4caf50');
+}
+
+// --- MODELS TAB ---
+function renderModels() {
+  const el = document.getElementById('page-models');
+  const runs = filterByPatch(DATA.runs);
+  const snByRun = {};
+  filterByPatch(DATA.snapshots).forEach(s => { if (!snByRun[s.run_id]) snByRun[s.run_id] = []; snByRun[s.run_id].push(s); });
+  if (!runs.length) { el.innerHTML = '<div class="empty"><h4>No Models</h4></div>'; return; }
+
+  // Compute rankings
+  const ranked = runs.map(r => {
+    const sn = snByRun[r.run_id] || [];
+    const last = sn.length ? sn[sn.length-1] : {};
+    const peakWR = Math.max(...sn.map(s => s.win_rate || 0), 0);
+    const recent5 = sn.slice(-5);
+    const avgRecentWR = recent5.length ? recent5.reduce((s,x) => s+x.win_rate, 0) / recent5.length : 0;
+    const improvementRate = sn.length >= 2 ? (sn[sn.length-1].win_rate - sn[0].win_rate) / sn.length : 0;
+    return { ...r, sn, last, peakWR, avgRecentWR, improvementRate, snCount: sn.length };
+  }).sort((a,b) => b.avgRecentWR - a.avgRecentWR);
+
+  let h = '<div class="card"><h3>Model Leaderboard</h3><table class="tbl"><thead><tr>';
+  h += '<th>#</th><th>Model</th><th>GPU</th><th>Seed</th><th class="num">Steps</th><th class="num">Current WR</th><th class="num">Peak WR</th><th class="num">Avg Recent WR</th><th class="num">Improvement</th><th class="num">FPS</th><th>Status</th>';
+  h += '</tr></thead><tbody>';
+  ranked.forEach((r, i) => {
+    const wr = r.last.win_rate ? (r.last.win_rate*100).toFixed(1)+'%' : '-';
+    const wrC = r.last.win_rate >= .5 ? 'g' : r.last.win_rate >= .25 ? 'y' : 'r';
+    const status = r.ended_at ? '<span class="r">Done</span>' : '<span class="g">Live</span>';
+    const impDir = r.improvementRate > 0 ? 'g' : r.improvementRate < 0 ? 'r' : '';
+    h += `<tr><td style="color:var(--cyan);font-weight:800">${i+1}</td>`;
+    h += `<td style="font-weight:700">${r.run_name||r.run_id}</td>`;
+    h += `<td>${r.gpu_name||'?'}</td><td>${r.seed||'?'}</td>`;
+    h += `<td class="num">${fmtN(r.current_steps||0)}</td>`;
+    h += `<td class="num ${wrC}">${wr}</td>`;
+    h += `<td class="num g">${(r.peakWR*100).toFixed(1)}%</td>`;
+    h += `<td class="num">${(r.avgRecentWR*100).toFixed(1)}%</td>`;
+    h += `<td class="num ${impDir}">${r.improvementRate > 0 ? '+' : ''}${(r.improvementRate*1000).toFixed(2)}/eval</td>`;
+    h += `<td class="num c">${r.last.fps ? fmtN(r.last.fps) : '-'}</td>`;
+    h += `<td>${status}</td></tr>`;
+  });
+  h += '</tbody></table></div>';
+
+  h += '<div class="card"><h3>Head-to-Head Win Rate Comparison</h3><canvas id="ch-compare"></canvas></div>';
+
+  h += '<div class="grid2">';
+  h += '<div class="card"><h3>Learning Efficiency (WR/Step)</h3><canvas id="ch-efficiency"></canvas></div>';
+  h += '<div class="card"><h3>FPS Comparison</h3><canvas id="ch-fpscomp"></canvas></div>';
+  h += '</div>';
+
+  el.innerHTML = h;
+
+  drawLineChart('ch-compare', runs, snByRun, s => s.win_rate*100, 'Win %', 0, 100);
+
+  // Efficiency: win_rate / steps normalized
+  const effCanvas = document.getElementById('ch-efficiency');
+  if (effCanvas && typeof Chart !== 'undefined') {
     const datasets = [];
-    runs.forEach((r, i) => {
-      const sn = snByRun[r.run_id] || [];
-      if (!sn.length) return;
+    ranked.forEach((r, i) => {
+      if (!r.sn.length) return;
       datasets.push({
-        label: (r.run_name || r.run_id) + ' (' + (r.method || '?') + ')',
-        data: sn.map(s => ({ x: s.timestep, y: s.win_rate * 100 })),
-        borderColor: colors[i % colors.length],
+        label: r.run_name || r.run_id,
+        data: r.sn.map(s => ({ x: s.timestep, y: s.win_rate ? s.win_rate * 100 : 0 })),
+        borderColor: COLORS[i % COLORS.length],
         backgroundColor: 'transparent',
-        borderWidth: 2, pointRadius: 2, tension: 0.3,
+        borderWidth: 2, pointRadius: 1, tension: 0.3,
       });
     });
-    if (chart) chart.destroy();
-    if (datasets.length) {
-      chart = new Chart(canvas, {
-        type: 'line', data: { datasets },
-        options: {
-          responsive: true, maintainAspectRatio: false,
-          scales: {
-            x: { type: 'linear', title: { display: true, text: 'Steps', color: '#888' }, ticks: { color: '#666', callback: v => formatNum(v) }, grid: { color: '#1e1e35' } },
-            y: { min: 0, max: 100, title: { display: true, text: 'Win %', color: '#888' }, ticks: { color: '#666' }, grid: { color: '#1e1e35' } },
-          },
-          plugins: { legend: { labels: { color: '#ccc' } } },
-        }
-      });
+    charts['ch-efficiency'] = new Chart(effCanvas, {
+      type: 'line', data: { datasets },
+      options: chartOpts('Win %', 0, 100),
+    });
+  }
+
+  // FPS comparison bar
+  const fpsLabels = ranked.map(r => r.run_name || r.run_id);
+  const fpsData = ranked.map(r => r.last.fps || 0);
+  drawBarChart('ch-fpscomp', fpsLabels, fpsData, 'FPS', '#00d4ff');
+}
+
+// --- DUEL TAB ---
+let duelView = 'lobby'; // 'lobby' or 'game'
+
+function renderDuel() {
+  const el = document.getElementById('page-duel');
+  if (duelView === 'lobby') { renderDuelLobby(el); return; }
+  renderDuelGame(el);
+}
+
+function renderDuelLobby(el) {
+  let h = '<div class="duel-lobby">';
+  h += '<h2>1v1 DUEL</h2>';
+  h += '<p>Play Grid Tactics against a friend in real time</p>';
+  h += '<div class="duel-lobby-actions">';
+  h += '<button class="duel-btn duel-btn-primary" onclick="duelView=\'game\';renderDuel()">Create Room</button>';
+  h += '</div>';
+  h += '<div style="margin:20px auto;max-width:300px">';
+  h += '<div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">Or join with room code</div>';
+  h += '<div style="display:flex;gap:8px;justify-content:center">';
+  h += '<input class="duel-code-input" maxlength="4" placeholder="XXXX">';
+  h += '<button class="duel-btn duel-btn-secondary" onclick="duelView=\'game\';renderDuel()">Join</button>';
+  h += '</div>';
+  h += '</div>';
+
+  h += '<div style="margin-top:48px;max-width:500px;margin-left:auto;margin-right:auto">';
+  h += '<div class="card"><h3>How It Works</h3>';
+  h += '<div style="text-align:left;font-size:13px;color:var(--muted);line-height:1.8">';
+  h += '<div style="margin-bottom:6px"><span style="color:var(--cyan);font-weight:700">1.</span> Create a room or join with a code</div>';
+  h += '<div style="margin-bottom:6px"><span style="color:var(--cyan);font-weight:700">2.</span> Build your deck from the card pool</div>';
+  h += '<div style="margin-bottom:6px"><span style="color:var(--cyan);font-weight:700">3.</span> Take turns deploying minions, casting magic, and attacking</div>';
+  h += '<div><span style="color:var(--cyan);font-weight:700">4.</span> Reduce your opponent to 0 HP to win</div>';
+  h += '</div></div>';
+  h += '</div>';
+
+  h += '</div>';
+  el.innerHTML = h;
+}
+
+function renderDuelGame(el) {
+  // Sample game state for mockup
+  const board = Array(5).fill(null).map(() => Array(5).fill(null));
+  board[1][2] = { name: 'Dark Assassin', atk: 30, hp: 10, owner: 2, attr: 'dark' };
+  board[1][4] = { name: 'Wind Archer', atk: 20, hp: 15, owner: 2, attr: 'neutral' };
+  board[2][1] = { name: 'Shadow Stalker', atk: 10, hp: 20, owner: 2, attr: 'dark' };
+  board[2][3] = { name: 'Fire Imp', atk: 20, hp: 5, owner: 1, attr: 'fire' };
+  board[3][0] = { name: 'Stone Golem', atk: 20, hp: 50, owner: 1, attr: 'neutral' };
+  board[3][2] = { name: 'Holy Paladin', atk: 20, hp: 35, owner: 1, attr: 'light' };
+
+  const myHand = [
+    { id: 'fireball', ...CARD_DB.fireball },
+    { id: 'iron_guardian', ...CARD_DB.iron_guardian },
+    { id: 'counter_spell', ...CARD_DB.counter_spell },
+    { id: 'fire_imp', ...CARD_DB.fire_imp },
+    { id: 'dark_drain', ...CARD_DB.dark_drain },
+  ];
+
+  const log = [
+    { turn: 7, msg: '<span style="color:var(--cyan)">P1</span> deploys <span style="color:var(--red)">Fire Imp</span> at (2,3)' },
+    { turn: 7, msg: '<span style="color:var(--red)">P2</span> passes react window' },
+    { turn: 6, msg: '<span style="color:var(--red)">P2</span> moves <span style="color:var(--purple)">Shadow Stalker</span> to (2,1)' },
+    { turn: 6, msg: '<span style="color:var(--cyan)">P1</span> passes react window' },
+    { turn: 5, msg: '<span style="color:var(--cyan)">P1</span> <span style="color:var(--red)">attacks</span> Wind Archer with Holy Paladin' },
+    { turn: 5, msg: '<span style="color:var(--yellow)">[REACT]</span> <span style="color:var(--red)">P2</span> plays <span style="color:var(--cyan)">Shield Block</span> on Wind Archer' },
+    { turn: 4, msg: '<span style="color:var(--red)">P2</span> deploys <span style="color:var(--purple)">Dark Assassin</span> at (1,2)' },
+    { turn: 4, msg: '<span style="color:var(--cyan)">P1</span> passes react window' },
+    { turn: 3, msg: '<span style="color:var(--cyan)">P1</span> deploys <span style="color:var(--green)">Stone Golem</span> at (3,0)' },
+    { turn: 3, msg: '<span style="color:var(--red)">P2</span> passes react window' },
+    { turn: 2, msg: '<span style="color:var(--red)">P2</span> deploys <span style="color:var(--muted)">Wind Archer</span> at (0,4)' },
+    { turn: 1, msg: '<span style="color:var(--cyan)">P1</span> draws a card' },
+    { turn: 1, msg: '<span style="color:var(--red)">P2</span> draws a card' },
+  ];
+
+  const attrColors = { wood: '#66bb6a', fire: 'var(--red)', earth: '#bcaaa4', water: '#42a5f5', metal: '#bdbdbd', dark: 'var(--purple)', light: 'var(--yellow)' };
+
+  let h = '<div class="duel-layout"><div>';
+
+  // Room bar
+  h += '<div class="duel-room-bar">';
+  h += '<div class="duel-room-code">XKCD</div>';
+  h += '<div class="duel-turn-indicator"><div class="pulse"></div>YOUR TURN &mdash; Turn 8</div>';
+  h += '<div><span class="duel-player-tag duel-p1">YOU: PLAYER 1</span></div>';
+  h += '</div>';
+
+  // Opponent bar
+  h += '<div class="duel-opponent">';
+  h += '<div class="duel-opp-name">PLAYER 2 (Opponent)</div>';
+  h += '<div style="display:flex;gap:16px">';
+  h += '<div class="duel-stat"><div class="sv" style="color:var(--red)">14</div><div class="sl">HP</div></div>';
+  h += '<div class="duel-stat"><div class="sv" style="color:var(--cyan)">3/4</div><div class="sl">Mana</div></div>';
+  h += '<div class="duel-stat"><div class="sv">4</div><div class="sl">Hand</div></div>';
+  h += '<div class="duel-stat"><div class="sv">28</div><div class="sl">Deck</div></div>';
+  h += '</div></div>';
+
+  // Board
+  h += '<div class="duel-board">';
+  for (let row = 0; row < 5; row++) {
+    const zone = row <= 1 ? 'p2-zone' : row === 2 ? 'neutral-zone' : 'p1-zone';
+    const label = row <= 1 ? 'P2 TERRITORY' : row === 2 ? 'NO MAN\'S LAND' : 'P1 TERRITORY';
+    if (row === 0 || row === 2 || row === 3) {
+      h += `<div class="duel-board-label">${label}</div>`;
+    }
+    for (let col = 0; col < 5; col++) {
+      const m = board[row][col];
+      const isHighlight = (row === 3 && col === 2) ? '' : // Holy Paladin can move forward
+                          (row === 4 && col === 2) ? 'highlight' : ''; // Valid move target
+      h += `<div class="duel-cell ${zone} ${isHighlight}">`;
+      if (m) {
+        const ownerTag = m.owner === 1 ? 'duel-p1' : 'duel-p2';
+        const ac = attrColors[m.elem] || 'var(--text)';
+        h += `<div class="duel-minion-owner ${ownerTag}">P${m.owner}</div>`;
+        h += `<div class="duel-minion-name" style="color:${ac}">${m.name}</div>`;
+        h += `<div class="duel-minion-stats"><span style="color:var(--red)">${m.atk}</span><span style="color:var(--dim)">/</span><span style="color:var(--green)">${m.hp}</span></div>`;
+      }
+      h += '</div>';
     }
   }
+  h += '</div>';
+
+  // Your info bar
+  h += '<div class="duel-self">';
+  h += '<div class="duel-self-name">PLAYER 1 (You)</div>';
+  h += '<div style="display:flex;gap:16px">';
+  h += '<div class="duel-stat"><div class="sv" style="color:var(--green)">18</div><div class="sl">HP</div></div>';
+  h += '<div class="duel-stat"><div class="sv" style="color:var(--cyan)">4/4</div><div class="sl">Mana</div></div>';
+  h += '<div class="duel-stat"><div class="sv">5</div><div class="sl">Hand</div></div>';
+  h += '<div class="duel-stat"><div class="sv">30</div><div class="sl">Deck</div></div>';
+  h += '</div></div>';
+
+  // React prompt (shown as example)
+  h += '<div class="duel-react-prompt" style="display:none">';
+  h += '<div class="label">OPPONENT PLAYED A CARD &mdash; React?</div>';
+  h += '<div style="display:flex;gap:8px">';
+  h += '<button class="duel-btn duel-btn-secondary" style="padding:8px 16px;font-size:12px">Pass</button>';
+  h += '<button class="duel-btn duel-btn-primary" style="padding:8px 16px;font-size:12px">Play React</button>';
+  h += '</div></div>';
+
+  // Action bar
+  h += '<div class="duel-actions">';
+  h += '<button class="duel-action-btn active">Deploy</button>';
+  h += '<button class="duel-action-btn">Move</button>';
+  h += '<button class="duel-action-btn">Attack</button>';
+  h += '<button class="duel-action-btn">Draw</button>';
+  h += '<button class="duel-action-btn" style="color:var(--red);border-color:var(--red)30">Sacrifice</button>';
+  h += '<button class="duel-action-btn" style="margin-left:auto;color:var(--dim)">Pass Turn</button>';
+  h += '</div>';
+
+  // Hand
+  h += '<div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px">Your Hand</div>';
+  h += '<div class="duel-hand">';
+  myHand.forEach((c, i) => {
+    const sel = i === 0 ? ' selected' : '';
+    const typeColor = c.type === 'minion' ? 'color:#ff9800' : c.type === 'magic' ? 'color:#ce93d8' : 'color:#00d4ff';
+    h += `<div class="duel-hand-card${sel}">`;
+    h += `<div class="dhc-header"><span class="dhc-name">${c.name}</span><span class="dhc-cost">${c.cost}</span></div>`;
+    h += `<div class="dhc-type" style="${typeColor}">${c.type}</div>`;
+    if (c.type === 'minion') {
+      h += '<div class="dhc-stats">';
+      h += `<div class="dhc-stat"><div class="v" style="color:var(--red)">${c.atk}</div><div class="l">ATK</div></div>`;
+      h += `<div class="dhc-stat"><div class="v" style="color:var(--green)">${c.hp}</div><div class="l">HP</div></div>`;
+      h += `<div class="dhc-stat"><div class="v" style="color:var(--yellow)">${c.range > 0 ? c.range : 'M'}</div><div class="l">${c.range > 0 ? 'RNG' : 'MEL'}</div></div>`;
+      h += '</div>';
+    }
+    if (c.effects && c.effects.length) {
+      h += '<div class="dhc-effect">';
+      c.effects.forEach(e => { h += `${e.type} ${e.amount}<br>`; });
+      h += '</div>';
+    }
+    h += '</div>';
+  });
+  h += '</div>';
+
+  h += '</div>'; // end main column
+
+  // Right column: game log
+  h += '<div>';
+  h += '<div class="duel-log">';
+  h += '<h3>Game Log</h3>';
+  log.forEach(l => {
+    h += `<div class="duel-log-entry"><span class="duel-log-turn">T${l.turn}</span><span class="duel-log-msg">${l.msg}</span></div>`;
+  });
+  h += '</div>';
+
+  // Quick stats
+  h += '<div class="card" style="margin-top:12px"><h3>Match Stats</h3>';
+  h += '<div class="pod-row"><span class="k">Minions on Board</span><span class="v">6</span></div>';
+  h += '<div class="pod-row"><span class="k">Cards Played</span><span class="v">9</span></div>';
+  h += '<div class="pod-row"><span class="k">Reacts Triggered</span><span class="v">1</span></div>';
+  h += '<div class="pod-row"><span class="k">Total Damage</span><span class="v" style="color:var(--red)">12</span></div>';
+  h += '</div>';
+
+  h += '<button class="duel-btn duel-btn-secondary" style="width:100%;margin-top:12px;padding:10px" onclick="duelView=\'lobby\';renderDuel()">Leave Game</button>';
+
+  h += '</div>'; // end right column
+  h += '</div>'; // end duel-layout
+  el.innerHTML = h;
 }
 
-function formatNum(n) {
-  if (n >= 1e9) return (n/1e9).toFixed(1) + 'B';
-  if (n >= 1e6) return (n/1e6).toFixed(1) + 'M';
-  if (n >= 1e3) return (n/1e3).toFixed(1) + 'K';
-  return n.toString();
+// --- Chart helpers ---
+function chartOpts(xLabel, yLabel, yMin, yMax, isTime) {
+  const opts = {
+    responsive: true, maintainAspectRatio: false,
+    scales: {
+      x: { type: 'linear', title: { display: true, text: xLabel, color: '#666' }, ticks: { color: '#555', callback: v => isTime ? v.toFixed(0) + 'm' : fmtN(v) }, grid: { color: '#1a1a30' } },
+      y: { title: { display: true, text: yLabel, color: '#666' }, ticks: { color: '#555' }, grid: { color: '#1a1a30' } },
+    },
+    plugins: { legend: { labels: { color: '#999', boxWidth: 12 } } },
+  };
+  if (yMin != null) opts.scales.y.min = yMin;
+  if (yMax != null) opts.scales.y.max = yMax;
+  return opts;
 }
 
-// Boot
+function drawLineChart(id, runs, snByRun, valueFn, yLabel, yMin, yMax) {
+  const canvas = document.getElementById(id);
+  if (!canvas || typeof Chart === 'undefined') return;
+  if (charts[id]) charts[id].destroy();
+  const useTime = xAxisMode === 'time';
+  const datasets = [];
+  runs.forEach((r, i) => {
+    const sn = snByRun[r.run_id] || [];
+    if (!sn.length) return;
+    const startTime = sn[0].created_at ? new Date(sn[0].created_at).getTime() : 0;
+    const pts = sn.map(s => {
+      const xVal = useTime
+        ? (s.created_at ? (new Date(s.created_at).getTime() - startTime) / 60000 : s.timestep)
+        : s.timestep;
+      return { x: xVal, y: valueFn(s) };
+    }).filter(p => p.y != null && !isNaN(p.y));
+    if (!pts.length) return;
+    datasets.push({ label: r.run_name || r.run_id, data: pts, borderColor: COLORS[i%COLORS.length], backgroundColor: 'transparent', borderWidth: 2, pointRadius: 1, tension: 0.3 });
+  });
+  if (!datasets.length) return;
+  const xLabel = useTime ? 'Minutes' : 'Steps';
+  const opts = chartOpts(xLabel, yLabel, yMin, yMax, useTime);
+  charts[id] = new Chart(canvas, { type: 'line', data: { datasets }, options: opts });
+}
+
+function drawBarChart(id, labels, data, yLabel, color) {
+  const canvas = document.getElementById(id);
+  if (!canvas || typeof Chart === 'undefined') return;
+  if (charts[id]) charts[id].destroy();
+  charts[id] = new Chart(canvas, {
+    type: 'bar',
+    data: { labels, datasets: [{ data, backgroundColor: color + '80', borderColor: color, borderWidth: 1 }] },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      scales: { x: { ticks: { color: '#555' }, grid: { display: false } }, y: { title: { display: true, text: yLabel, color: '#666' }, ticks: { color: '#555' }, grid: { color: '#1a1a30' } } },
+      plugins: { legend: { display: false } },
+    },
+  });
+}
+
+// --- Helpers ---
+async function updatePodHealth() {
+  if (!sb) return;
+  const { data: runs } = await sb.from('training_runs').select('run_id, run_name, current_steps, current_fps, gpu_util, ended_at, started_at, patch_version').order('started_at', { ascending: false }).limit(10);
+  if (!runs) return;
+
+  const el = document.getElementById('pod-health');
+  const activeRuns = runs.filter(r => !r.ended_at && r.current_steps > 0);
+
+  if (!activeRuns.length) {
+    el.innerHTML = '<span style="color:var(--red)">No active pods</span>';
+    return;
+  }
+
+  let h = '';
+  activeRuns.forEach((r, i) => {
+    const gpu = r.gpu_util || 0;
+    const color = gpu >= 50 ? 'var(--green)' : gpu >= 20 ? 'var(--yellow)' : 'var(--red)';
+    const name = (r.run_name || '').replace(/v[\d.]+-/, '').replace('-32768env','');
+    h += `<div style="display:flex;align-items:center;gap:3px;padding:2px 6px;background:#1a1a30;border-radius:4px" title="${r.run_name}\nSteps: ${fmtN(r.current_steps)}\nFPS: ${fmtN(r.current_fps)}\nGPU: ${gpu}%">`;
+    h += `<span class="dot" style="background:${color};width:6px;height:6px"></span>`;
+    h += `<span style="font-size:10px;color:${color}">${gpu}%</span>`;
+    h += '</div>';
+  });
+  el.innerHTML = h;
+}
+
+function kpi(label, value, cls) { return `<div class="kpi"><div class="label">${label}</div><div class="val ${cls}">${value}</div></div>`; }
+function podRow(k, v) { return `<div class="pod-row"><span class="k">${k}</span><span class="v">${v}</span></div>`; }
+function fmtN(n) { if (n==null) return '0'; if (n>=1e9) return (n/1e9).toFixed(1)+'B'; if (n>=1e6) return (n/1e6).toFixed(1)+'M'; if (n>=1e3) return (n/1e3).toFixed(1)+'K'; return n.toString(); }
+
 init();
 </script>
 </body>

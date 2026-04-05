@@ -11,7 +11,9 @@ import torch
 
 from grid_tactics.tensor_engine.constants import (
     GRID_COLS,
+    MAX_DECK,
     MAX_EFFECTS_PER_CARD,
+    MAX_HAND,
     MAX_MINIONS,
     STARTING_HP,
 )
@@ -55,6 +57,9 @@ def apply_effects_batch(
         _apply_heal(state, active & (etype == 1), etarget, eamount, caster_owners, caster_slots, target_flat_pos, card_table)
         _apply_buff_attack(state, active & (etype == 2), etarget, eamount, caster_owners, caster_slots)
         _apply_buff_health(state, active & (etype == 3), etarget, eamount, caster_owners, caster_slots)
+        _apply_promote(state, active & (etype == 7), card_ids, caster_owners, card_table)
+        _apply_tutor(state, active & (etype == 8), card_ids, caster_owners, card_table)
+        _apply_destroy(state, active & (etype == 9), etarget, target_flat_pos)
 
 
 def _find_minion_slot_at_pos(state, flat_pos: torch.Tensor) -> torch.Tensor:
@@ -225,3 +230,157 @@ def _apply_to_adjacent(state, active, eamount, caster_slots, card_table, damage=
                 base_hp = card_table.health[minion_cid]
                 new_hp = torch.min(state.minion_health[:, s] + eamount, base_hp)
                 state.minion_health[:, s] = torch.where(hit, new_hp, state.minion_health[:, s])
+
+
+def _apply_promote(state, active, card_ids, caster_owners, card_table):
+    """PROMOTE: Transform a friendly minion of promote_target type into the dying card.
+
+    Giant Rat dies -> one friendly Rat becomes a Giant Rat (3/3, same position).
+    Unique constraint: only promotes if no other copy of this card is alive on board.
+    Picks the most advanced friendly target (closest to enemy back row).
+    """
+    if not active.any():
+        return
+    N = active.shape[0]
+    device = active.device
+    arange_n = torch.arange(N, device=device)
+
+    safe_ids = card_ids.clamp(min=0).long()
+    promote_target_cid = card_table.promote_target_id[safe_ids]  # [N]
+    is_unique = card_table.is_unique[safe_ids]  # [N]
+
+    # Check unique constraint: skip if another copy of this card already alive on board
+    has_existing = torch.zeros(N, dtype=torch.bool, device=device)
+    for s in range(MAX_MINIONS):
+        has_existing |= (
+            active
+            & state.minion_alive[:, s]
+            & (state.minion_owner[:, s] == caster_owners)
+            & (state.minion_card_id[:, s] == card_ids)
+        )
+    can_promote = active & (promote_target_cid >= 0) & ~(is_unique & has_existing)
+
+    if not can_promote.any():
+        return
+
+    # Find the best candidate: friendly, alive, matching promote_target_cid
+    # Pick most advanced (highest row for P0, lowest row for P1)
+    best_slot = torch.full((N,), -1, dtype=torch.long, device=device)
+    best_score = torch.full((N,), -1, dtype=torch.int32, device=device)
+
+    for s in range(MAX_MINIONS):
+        is_candidate = (
+            can_promote
+            & state.minion_alive[:, s]
+            & (state.minion_owner[:, s] == caster_owners)
+            & (state.minion_card_id[:, s] == promote_target_cid)
+        )
+        if not is_candidate.any():
+            continue
+        # Score: P0 wants high row (forward = toward row 4), P1 wants low row (toward row 0)
+        row = state.minion_row[:, s]
+        score = torch.where(caster_owners == 0, row, 4 - row)
+        better = is_candidate & (score > best_score)
+        best_slot = torch.where(better, torch.tensor(s, device=device, dtype=torch.long), best_slot)
+        best_score = torch.where(better, score, best_score)
+
+    # Apply promotion: transform the target minion into the dying card's type
+    do_promote = can_promote & (best_slot >= 0)
+    if not do_promote.any():
+        return
+
+    safe_slot = best_slot.clamp(min=0)
+    new_hp = card_table.health[safe_ids]
+
+    # Transform: change card_id (base attack comes from card_table lookup), reset HP and bonus
+    state.minion_card_id[arange_n, safe_slot] = torch.where(
+        do_promote, card_ids, state.minion_card_id[arange_n, safe_slot]
+    )
+    state.minion_health[arange_n, safe_slot] = torch.where(
+        do_promote, new_hp, state.minion_health[arange_n, safe_slot]
+    )
+    state.minion_atk_bonus[arange_n, safe_slot] = torch.where(
+        do_promote, torch.tensor(0, device=device, dtype=torch.int32),
+        state.minion_atk_bonus[arange_n, safe_slot]
+    )
+
+
+def _apply_tutor(state, active, card_ids, caster_owners, card_table):
+    """TUTOR: Search deck for tutor_target card and add to hand."""
+    if not active.any():
+        return
+    N = active.shape[0]
+    device = active.device
+    arange_n = torch.arange(N, device=device)
+
+    safe_ids = card_ids.clamp(0).long()
+    target_cid = card_table.tutor_target_id[safe_ids]  # [N]
+    valid = active & (target_cid >= 0)
+
+    if not valid.any():
+        return
+
+    player_idx = caster_owners.long()
+    deck_top = state.deck_tops[arange_n, player_idx]  # [N]
+    deck_size = state.deck_sizes[arange_n, player_idx]  # [N]
+
+    # Search deck for target card (loop over fixed MAX_DECK positions)
+    found_pos = torch.full((N,), -1, dtype=torch.long, device=device)
+    for d in range(MAX_DECK):
+        d_card = state.decks[arange_n, player_idx, d]  # [N]
+        in_deck = (d >= deck_top) & (d < deck_size)
+        is_match = valid & in_deck & (d_card == target_cid) & (found_pos < 0)
+        found_pos = torch.where(is_match, torch.tensor(d, device=device, dtype=torch.long), found_pos)
+
+    found = valid & (found_pos >= 0)
+    if not found.any():
+        return
+
+    safe_found = found_pos.clamp(0).long()
+    tutored_card = state.decks[arange_n, player_idx, safe_found]
+
+    # Remove from deck: swap with last card, shrink size
+    last_idx = (deck_size - 1).clamp(0).long()
+    last_card = state.decks[arange_n, player_idx, last_idx]
+    state.decks[arange_n, player_idx, safe_found] = torch.where(
+        found, last_card, state.decks[arange_n, player_idx, safe_found]
+    )
+    state.decks[arange_n, player_idx, last_idx] = torch.where(
+        found, torch.tensor(-1, device=device, dtype=state.decks.dtype),
+        state.decks[arange_n, player_idx, last_idx]
+    )
+    state.deck_sizes[arange_n, player_idx] = torch.where(
+        found, deck_size - 1, state.deck_sizes[arange_n, player_idx]
+    )
+
+    # Add to hand (if hand not full)
+    hand_size = state.hand_sizes[arange_n, player_idx]
+    safe_hs = hand_size.clamp(0, MAX_HAND - 1).long()
+    can_add = found & (hand_size < MAX_HAND)
+    state.hands[arange_n, player_idx, safe_hs] = torch.where(
+        can_add, tutored_card, state.hands[arange_n, player_idx, safe_hs]
+    )
+    state.hand_sizes[arange_n, player_idx] = torch.where(
+        can_add, hand_size + 1, state.hand_sizes[arange_n, player_idx]
+    )
+
+
+def _apply_destroy(state, active, etarget, target_flat_pos):
+    """DESTROY: Set target minion health to 0 (cleanup handles removal)."""
+    if not active.any():
+        return
+    N = active.shape[0]
+    device = active.device
+    arange_n = torch.arange(N, device=device)
+
+    # SINGLE_TARGET (0): destroy minion at target position
+    single = active & (etarget == 0)
+    if single.any():
+        slot = _find_minion_slot_at_pos(state, target_flat_pos)
+        valid = single & (slot >= 0)
+        if valid.any():
+            safe_slot = slot.clamp(min=0)
+            state.minion_health[arange_n, safe_slot] = torch.where(
+                valid, torch.tensor(0, device=device, dtype=torch.int32),
+                state.minion_health[arange_n, safe_slot]
+            )

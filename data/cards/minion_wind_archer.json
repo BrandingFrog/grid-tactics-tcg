@@ -3,10 +3,10 @@
     "name": "Wind Archer",
     "card_type": "minion",
     "mana_cost": 2,
-    "attack": 2,
-    "health": 2,
+    "attack": 20,
+    "health": 20,
     "range": 2,
-    "attribute": "neutral",
+    "element": "wood",
     "tribe": "Archer",
     "effects": []
 }

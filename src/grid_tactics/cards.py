@@ -17,9 +17,9 @@ from dataclasses import dataclass
 from typing import Optional
 
 from grid_tactics.enums import (
-    Attribute,
     CardType,
     EffectType,
+    Element,
     ReactCondition,
     TargetType,
     TriggerType,
@@ -66,8 +66,8 @@ class CardDefinition:
     health: Optional[int] = None
     attack_range: Optional[int] = None  # named attack_range to avoid shadowing builtin range()
 
-    # Attributes/tribes (D-09, D-10)
-    attribute: Optional[Attribute] = None
+    # Element/tribes (D-09, D-10)
+    element: Optional[Element] = None
     tribe: Optional[str] = None
 
     # Effects list (D-01 through D-05)
@@ -79,6 +79,16 @@ class CardDefinition:
     # Multi-purpose react from hand (D-06, D-07, D-08)
     react_effect: Optional[EffectDefinition] = None
     react_mana_cost: Optional[int] = None
+
+    # Promote mechanic (Patch 1.2)
+    promote_target: Optional[str] = None  # card_id of the minion type that can be promoted into this
+    unique: bool = False  # only 1 can exist on board per player at a time
+
+    # Tutor mechanic (Diodebot chain)
+    tutor_target: Optional[str] = None  # card_id to search deck for and add to hand
+
+    # Summoning cost: sacrifice a card of this tribe from hand
+    summon_sacrifice_tribe: Optional[str] = None
 
     @property
     def is_multi_purpose(self) -> bool:

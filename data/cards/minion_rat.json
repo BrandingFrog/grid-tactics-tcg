@@ -1,0 +1,12 @@
+{
+    "card_id": "rat",
+    "name": "Rat",
+    "card_type": "minion",
+    "mana_cost": 1,
+    "attack": 10,
+    "health": 10,
+    "range": 0,
+    "element": "earth",
+    "tribe": "Rat",
+    "effects": []
+}

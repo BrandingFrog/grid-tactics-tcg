@@ -144,8 +144,8 @@ def apply_draw_batch(state, mask, card_table):
     )
 
 
-def apply_move_batch(state, mask, action_type, source_flat, direction):
-    """Move minion from source to adjacent cell."""
+def apply_move_batch(state, mask, action_type, source_flat, direction, card_table=None):
+    """Move minion from source to adjacent cell. Triggers ON_MOVE effects."""
     is_move = mask & (action_type == 1)
     if not is_move.any():
         return
@@ -187,6 +187,151 @@ def apply_move_batch(state, mask, action_type, source_flat, direction):
     state.minion_col[arange_n, safe_slot] = torch.where(
         valid, dst_col, state.minion_col[arange_n, safe_slot]
     )
+
+    # --- ON_MOVE: RALLY_FORWARD effect ---
+    # Check if moved minion has ON_MOVE trigger (trigger=4) with RALLY_FORWARD (type=6)
+    if card_table is not None:
+        moved_card_id = state.minion_card_id[arange_n, safe_slot]  # [N]
+        for eff_i in range(3):  # MAX_EFFECTS_PER_CARD
+            has_rally = (
+                valid
+                & (card_table.effect_trigger[moved_card_id.clamp(0).long(), eff_i] == 4)  # ON_MOVE
+                & (card_table.effect_type[moved_card_id.clamp(0).long(), eff_i] == 6)     # RALLY_FORWARD
+            )
+            if has_rally.any():
+                _apply_rally_forward(state, has_rally, moved_card_id, safe_slot)
+                break
+
+        # --- Move + Attack: auto-attack nearest enemy in range after moving ---
+        _auto_attack_after_move(state, valid, safe_slot, dst_row, dst_col, card_table)
+
+
+def _auto_attack_after_move(state, mask, attacker_slot, atk_row, atk_col, card_table):
+    """After moving, auto-attack the first enemy in range (melee=adjacent ortho, ranged=2 ortho/1 diag)."""
+    if not mask.any():
+        return
+    N = mask.shape[0]
+    device = mask.device
+    arange_n = torch.arange(N, device=device)
+
+    atk_cid = state.minion_card_id[arange_n, attacker_slot].clamp(0).long()
+    atk_range = card_table.attack_range[atk_cid]  # [N] 0=melee, 1+=ranged
+    atk_owner = state.minion_owner[arange_n, attacker_slot]
+    base_atk = card_table.attack[atk_cid]
+    bonus = state.minion_atk_bonus[arange_n, attacker_slot]
+    total_atk = base_atk + bonus
+
+    # Find first enemy in range (iterate slots, pick first valid)
+    best_target = torch.full((N,), -1, dtype=torch.long, device=device)
+    best_dist = torch.full((N,), 999, dtype=torch.int32, device=device)
+
+    for s in range(25):
+        is_enemy = mask & state.minion_alive[:, s] & (state.minion_owner[:, s] != atk_owner)
+        if not is_enemy.any():
+            continue
+        t_row = state.minion_row[:, s]
+        t_col = state.minion_col[:, s]
+        dr = (atk_row - t_row).abs()
+        dc = (atk_col - t_col).abs()
+        manhattan = dr + dc
+        chebyshev = torch.max(dr, dc)
+        is_ortho = (dr == 0) | (dc == 0)
+
+        # Melee (range 0): adjacent orthogonal (manhattan == 1 and ortho)
+        melee_ok = (atk_range == 0) & (manhattan == 1) & is_ortho
+        # Ranged: ortho up to range, or diagonal at 1
+        ranged_ok = (atk_range > 0) & ((is_ortho & (manhattan <= atk_range)) | (~is_ortho & (chebyshev == 1)))
+
+        in_range = is_enemy & (melee_ok | ranged_ok)
+        closer = in_range & (manhattan < best_dist)
+        best_target = torch.where(closer, torch.tensor(s, dtype=torch.long, device=device), best_target)
+        best_dist = torch.where(closer, manhattan, best_dist)
+
+    do_attack = mask & (best_target >= 0)
+    if not do_attack.any():
+        return
+
+    safe_target = best_target.clamp(0)
+
+    # Range combat with first-strike rules
+    defender_cid = state.minion_card_id[arange_n, safe_target].clamp(0).long()
+    def_range = card_table.attack_range[defender_cid]
+    defender_base_atk = card_table.attack[defender_cid]
+    defender_bonus = state.minion_atk_bonus[arange_n, safe_target]
+    defender_total = defender_base_atk + defender_bonus
+
+    t_row = state.minion_row[arange_n, safe_target]
+    t_col = state.minion_col[arange_n, safe_target]
+    dist = (atk_row - t_row).abs() + (atk_col - t_col).abs()
+
+    # Can defender reach attacker at this distance?
+    def_can_reach = ((def_range == 0) & (dist <= 1)) | ((def_range > 0) & (dist <= def_range))
+
+    # Attacker has first strike if shorter/equal range (faster unit)
+    attacker_first = do_attack & (atk_range < def_range) & def_can_reach
+    simultaneous = do_attack & def_can_reach & ~attacker_first
+    no_retaliate = do_attack & ~def_can_reach
+
+    # Attacker always hits
+    state.minion_health[arange_n, safe_target] -= total_atk * do_attack.int()
+
+    # First strike: defender retaliates only if alive after attacker's hit
+    defender_alive_after = state.minion_health[arange_n, safe_target] > 0
+    first_strike_retaliate = attacker_first & defender_alive_after
+    state.minion_health[arange_n, attacker_slot] -= defender_total * first_strike_retaliate.int()
+
+    # Simultaneous: defender always retaliates
+    state.minion_health[arange_n, attacker_slot] -= defender_total * simultaneous.int()
+
+
+def _apply_rally_forward(state, mask, card_id, moved_slot):
+    """Move all other friendly minions with same card_id forward 1 space."""
+    N = mask.shape[0]
+    device = mask.device
+
+    owner = state.minion_owner[torch.arange(N, device=device), moved_slot]  # [N]
+    # Forward direction: P0 = +1 row, P1 = -1 row
+    forward = torch.where(owner == 0, torch.tensor(1, device=device), torch.tensor(-1, device=device))  # [N]
+
+    # For each minion slot, check if it's a rally candidate
+    for s in range(25):  # MAX_MINIONS
+        is_candidate = (
+            mask
+            & state.minion_alive[:, s]
+            & (state.minion_owner[:, s] == owner)
+            & (state.minion_card_id[:, s] == card_id)
+            & (s != moved_slot)  # not the minion that just moved
+        )
+        if not is_candidate.any():
+            continue
+
+        cur_row = state.minion_row[:, s]
+        cur_col = state.minion_col[:, s]
+        new_row = (cur_row + forward).clamp(0, 4)
+
+        # Check destination is in bounds and empty
+        can_rally = is_candidate & (new_row >= 0) & (new_row < 5) & (new_row != cur_row)
+        if not can_rally.any():
+            continue
+
+        # Check board empty at destination
+        arange_n = torch.arange(N, device=device)
+        dest_occupied = state.board[arange_n, new_row, cur_col] >= 0
+        can_rally = can_rally & ~dest_occupied
+
+        if not can_rally.any():
+            continue
+
+        # Move the minion
+        state.board[arange_n, cur_row, cur_col] = torch.where(
+            can_rally, torch.tensor(-1, device=device, dtype=torch.int32),
+            state.board[arange_n, cur_row, cur_col]
+        )
+        state.board[arange_n, new_row, cur_col] = torch.where(
+            can_rally, torch.tensor(s, device=device, dtype=torch.int32),
+            state.board[arange_n, new_row, cur_col]
+        )
+        state.minion_row[:, s] = torch.where(can_rally, new_row, state.minion_row[:, s])
 
 
 def apply_play_card_batch(state, mask, action_type, hand_idx, target_flat, card_table):
@@ -230,6 +375,12 @@ def apply_play_card_batch(state, mask, action_type, hand_idx, target_flat, card_
 
     # Add to graveyard (batched)
     _add_to_graveyard_batch(state, valid, ap, card_id, arange_n)
+
+    # --- SUMMON SACRIFICE: destroy a tribe card from hand ---
+    sac_tribe = card_table.summon_sacrifice_tribe_id[safe_cid]  # [N]
+    needs_sac = valid & (sac_tribe > 0)
+    if needs_sac.any():
+        _apply_summon_sacrifice_batch(state, needs_sac, ap, sac_tribe, card_table, arange_n)
 
     # --- MINION DEPLOY ---
     is_minion = valid & (ctype == 0)
@@ -340,14 +491,34 @@ def apply_attack_batch(state, mask, action_type, source_flat, target_flat, card_
     a_eff = card_table.attack[a_cid] + state.minion_atk_bonus[arange_n, safe_a_slot]
     d_eff = card_table.attack[d_cid] + state.minion_atk_bonus[arange_n, safe_d_slot]
 
-    # Simultaneous damage (batched)
-    state.minion_health[arange_n, safe_a_slot] = torch.where(
-        valid, state.minion_health[arange_n, safe_a_slot] - d_eff,
-        state.minion_health[arange_n, safe_a_slot]
-    )
+    # Range combat with first-strike rules
+    a_range = card_table.attack_range[a_cid]
+    d_range = card_table.attack_range[d_cid]
+    dist = (src_row - tgt_row).abs() + (src_col - tgt_col).abs()
+
+    def_can_reach = ((d_range == 0) & (dist <= 1)) | ((d_range > 0) & (dist <= d_range))
+    attacker_first = valid & (a_range <= d_range) & ~((a_range == d_range) & def_can_reach)
+    simultaneous = valid & def_can_reach & ~attacker_first
+    no_retaliate = valid & ~def_can_reach
+
+    # Attacker always hits defender
     state.minion_health[arange_n, safe_d_slot] = torch.where(
         valid, state.minion_health[arange_n, safe_d_slot] - a_eff,
         state.minion_health[arange_n, safe_d_slot]
+    )
+
+    # First strike: defender retaliates only if alive
+    def_alive_after = state.minion_health[arange_n, safe_d_slot] > 0
+    first_strike_ret = attacker_first & def_alive_after
+    state.minion_health[arange_n, safe_a_slot] = torch.where(
+        first_strike_ret, state.minion_health[arange_n, safe_a_slot] - d_eff,
+        state.minion_health[arange_n, safe_a_slot]
+    )
+
+    # Simultaneous: defender always retaliates
+    state.minion_health[arange_n, safe_a_slot] = torch.where(
+        simultaneous, state.minion_health[arange_n, safe_a_slot] - d_eff,
+        state.minion_health[arange_n, safe_a_slot]
     )
 
     # --- Trigger ON_ATTACK for attacker ---
@@ -490,6 +661,42 @@ def apply_react_batch(state, mask, action_type, hand_idx, target_flat, card_tabl
     state.react_player = torch.where(
         valid, (1 - rp).int(), rp
     )
+
+
+# ---------------------------------------------------------------------------
+# Summon sacrifice -- fully batched
+# ---------------------------------------------------------------------------
+
+
+def _apply_summon_sacrifice_batch(state, mask, player, req_tribe_id, card_table, arange_n):
+    """Sacrifice the first card of matching tribe from hand -- batched.
+
+    Finds the first hand slot with a card whose tribe_id matches req_tribe_id,
+    removes it from hand, and adds it to graveyard.
+    """
+    N = mask.shape[0]
+    device = mask.device
+
+    hand_size = state.hand_sizes[arange_n, player]  # [N]
+    found_idx = torch.full((N,), -1, dtype=torch.long, device=device)
+
+    for hi in range(MAX_HAND):
+        in_range = hi < hand_size
+        cid = state.hands[arange_n, player, hi]
+        safe_cid = cid.clamp(0).long()
+        tribe = card_table.tribe_id[safe_cid]
+        is_match = mask & in_range & (cid >= 0) & (tribe == req_tribe_id) & (found_idx < 0)
+        found_idx = torch.where(is_match, torch.tensor(hi, device=device, dtype=torch.long), found_idx)
+
+    found = mask & (found_idx >= 0)
+    if not found.any():
+        return
+
+    safe_idx = found_idx.clamp(0).long()
+    sac_card = state.hands[arange_n, player, safe_idx]
+
+    _remove_from_hand_batch(state, found, player, safe_idx, arange_n)
+    _add_to_graveyard_batch(state, found, player, sac_card, arange_n)
 
 
 # ---------------------------------------------------------------------------

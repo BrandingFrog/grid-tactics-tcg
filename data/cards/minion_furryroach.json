@@ -1,0 +1,19 @@
+{
+    "card_id": "furryroach",
+    "name": "Furryroach",
+    "card_type": "minion",
+    "mana_cost": 1,
+    "attack": 10,
+    "health": 10,
+    "range": 0,
+    "element": "earth",
+    "tribe": "Insect",
+    "effects": [
+        {
+            "type": "rally_forward",
+            "trigger": "on_move",
+            "target": "self_owner",
+            "amount": 10
+        }
+    ]
+}

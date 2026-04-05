@@ -28,13 +28,16 @@ class CardType(IntEnum):
     REACT = 2   # Played during opponent's action window
 
 
-class Attribute(IntEnum):
-    """Elemental attribute for future synergy mechanics (D-09)."""
+class Element(IntEnum):
+    """Elemental type for synergy mechanics (D-09)."""
 
-    NEUTRAL = 0
+    WOOD = 0
     FIRE = 1
-    DARK = 2
-    LIGHT = 3
+    EARTH = 2
+    WATER = 3
+    METAL = 4
+    DARK = 5
+    LIGHT = 6
 
 
 class EffectType(IntEnum):
@@ -46,6 +49,10 @@ class EffectType(IntEnum):
     BUFF_HEALTH = 3
     NEGATE = 4       # Cancel the triggering action (react-only)
     DEPLOY_SELF = 5  # Deploy this card as a minion (react-only, for multi-purpose discount deploy)
+    RALLY_FORWARD = 6  # Move all other friendly minions with same card_id forward 1 space
+    PROMOTE = 7        # On death: promote a friendly minion of promote_target type into this card
+    TUTOR = 8          # Search deck for card matching tutor_target and add to hand
+    DESTROY = 9        # Destroy target minion (remove regardless of health)
 
 
 class ReactCondition(IntEnum):
@@ -60,10 +67,13 @@ class ReactCondition(IntEnum):
     OPPONENT_ATTACKS = 2        # Opponent attacked with a minion
     OPPONENT_PLAYS_REACT = 3    # Opponent played a react card (counter-react)
     ANY_ACTION = 4              # Reacts to any opponent action
-    OPPONENT_PLAYS_FIRE = 5     # Opponent played a card with FIRE attribute
-    OPPONENT_PLAYS_DARK = 6     # Opponent played a card with DARK attribute
-    OPPONENT_PLAYS_LIGHT = 7    # Opponent played a card with LIGHT attribute
-    OPPONENT_PLAYS_NEUTRAL = 8  # Opponent played a card with NEUTRAL attribute
+    OPPONENT_PLAYS_WOOD = 5     # Opponent played a card with WOOD element
+    OPPONENT_PLAYS_FIRE = 6     # Opponent played a card with FIRE element
+    OPPONENT_PLAYS_EARTH = 7    # Opponent played a card with EARTH element
+    OPPONENT_PLAYS_WATER = 8    # Opponent played a card with WATER element
+    OPPONENT_PLAYS_METAL = 9    # Opponent played a card with METAL element
+    OPPONENT_PLAYS_DARK = 10    # Opponent played a card with DARK element
+    OPPONENT_PLAYS_LIGHT = 11   # Opponent played a card with LIGHT element
 
 
 class TriggerType(IntEnum):
@@ -73,6 +83,7 @@ class TriggerType(IntEnum):
     ON_DEATH = 1    # When the minion dies
     ON_ATTACK = 2   # When the minion attacks
     ON_DAMAGED = 3  # When the minion takes damage
+    ON_MOVE = 4     # When the minion moves
 
 
 class TargetType(IntEnum):

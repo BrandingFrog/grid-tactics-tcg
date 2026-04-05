@@ -33,7 +33,7 @@ from grid_tactics.actions import (
 from grid_tactics.board import Board
 from grid_tactics.card_library import CardLibrary
 from grid_tactics.enums import (
-    ActionType, Attribute, CardType, EffectType, PlayerSide, ReactCondition,
+    ActionType, CardType, EffectType, Element, PlayerSide, ReactCondition,
     TargetType, TriggerType, TurnPhase,
 )
 from grid_tactics.game_state import GameState
@@ -41,6 +41,7 @@ from grid_tactics.types import (
     BACK_ROW_P1,
     BACK_ROW_P2,
     GRID_COLS,
+    GRID_ROWS,
     MAX_REACT_STACK_DEPTH,
     PLAYER_1_ROWS,
     PLAYER_2_ROWS,
@@ -95,6 +96,15 @@ def _action_phase_actions(
         if player.current_mana < card_def.mana_cost:
             continue
 
+        # Summon sacrifice check: must have another card of required tribe in hand
+        if card_def.summon_sacrifice_tribe:
+            has_sacrifice = any(
+                library.get_by_id(player.hand[j]).tribe == card_def.summon_sacrifice_tribe
+                for j in range(len(player.hand)) if j != idx
+            )
+            if not has_sacrifice:
+                continue
+
         if card_def.card_type == CardType.MINION:
             deploy_positions = _valid_deploy_positions(state, card_def, player_side)
             for pos in deploy_positions:
@@ -136,14 +146,16 @@ def _action_phase_actions(
 
         # Skip CardType.REACT during ACTION phase
 
-    # MOVE enumeration
+    # MOVE enumeration (forward only in lane)
     owned_minions = state.get_minions_for_side(player_side)
     for minion in owned_minions:
-        adjacent_positions = Board.get_orthogonal_adjacent(minion.position)
-        for adj_pos in adjacent_positions:
-            if state.board.get(adj_pos[0], adj_pos[1]) is None:
+        row, col = minion.position
+        # Forward: P1 moves down (+1 row), P2 moves up (-1 row)
+        fwd_row = row + (1 if player_side == PlayerSide.PLAYER_1 else -1)
+        if 0 <= fwd_row < GRID_ROWS:
+            if state.board.get(fwd_row, col) is None:
                 actions.append(move_action(
-                    minion_id=minion.instance_id, position=adj_pos,
+                    minion_id=minion.instance_id, position=(fwd_row, col),
                 ))
 
     # ATTACK enumeration
@@ -166,12 +178,11 @@ def _action_phase_actions(
         elif player_side == PlayerSide.PLAYER_2 and row == BACK_ROW_P1:
             actions.append(sacrifice_action(minion_id=minion.instance_id))
 
-    # DRAW
-    if player.deck:
+    # DRAW as an action (in addition to auto-draw at turn start)
+    if player.deck and len(player.hand) < 10:
         actions.append(draw_action())
 
-    # No PASS in ACTION phase — player must act.
-    # If no legal actions, empty tuple signals auto-lose.
+    # No PASS -- if no actions available, fatigue bleed handles it
     return tuple(actions)
 
 
@@ -232,29 +243,32 @@ def _check_react_condition(
     if condition == ReactCondition.ANY_ACTION:
         return True
 
-    # Attribute-based conditions
-    _ATTR_CONDITIONS = {
-        ReactCondition.OPPONENT_PLAYS_FIRE: Attribute.FIRE,
-        ReactCondition.OPPONENT_PLAYS_DARK: Attribute.DARK,
-        ReactCondition.OPPONENT_PLAYS_LIGHT: Attribute.LIGHT,
-        ReactCondition.OPPONENT_PLAYS_NEUTRAL: Attribute.NEUTRAL,
+    # Element-based conditions
+    _ELEM_CONDITIONS = {
+        ReactCondition.OPPONENT_PLAYS_WOOD: Element.WOOD,
+        ReactCondition.OPPONENT_PLAYS_FIRE: Element.FIRE,
+        ReactCondition.OPPONENT_PLAYS_EARTH: Element.EARTH,
+        ReactCondition.OPPONENT_PLAYS_WATER: Element.WATER,
+        ReactCondition.OPPONENT_PLAYS_METAL: Element.METAL,
+        ReactCondition.OPPONENT_PLAYS_DARK: Element.DARK,
+        ReactCondition.OPPONENT_PLAYS_LIGHT: Element.LIGHT,
     }
-    if condition in _ATTR_CONDITIONS:
-        required_attr = _ATTR_CONDITIONS[condition]
+    if condition in _ELEM_CONDITIONS:
+        required_elem = _ELEM_CONDITIONS[condition]
         if pending.action_type == ActionType.PLAY_CARD:
-            # Check attribute of the card that was just played
+            # Check element of the card that was just played
             acting_player = state.players[state.active_player_idx]
             if acting_player.graveyard:
                 last_played_id = acting_player.graveyard[-1]
                 card_def = library.get_by_id(last_played_id)
-                return card_def.attribute == required_attr
+                return card_def.element == required_elem
             # Check newly deployed minions (minion cards go to board, not graveyard)
             if pending.position is not None and state.minions:
                 # Find minion at the deploy position
                 for m in state.minions:
                     if m.position == pending.position:
                         card_def = library.get_by_id(m.card_numeric_id)
-                        return card_def.attribute == required_attr
+                        return card_def.element == required_elem
         return False
 
     return False

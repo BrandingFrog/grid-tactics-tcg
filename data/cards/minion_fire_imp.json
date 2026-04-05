@@ -3,17 +3,10 @@
     "name": "Fire Imp",
     "card_type": "minion",
     "mana_cost": 1,
-    "attack": 2,
-    "health": 1,
+    "attack": 20,
+    "health": 10,
     "range": 0,
-    "attribute": "fire",
+    "element": "fire",
     "tribe": "Imp",
-    "effects": [
-        {
-            "type": "damage",
-            "trigger": "on_play",
-            "target": "single_target",
-            "amount": 1
-        }
-    ]
+    "effects": []
 }

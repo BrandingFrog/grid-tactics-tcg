@@ -3,19 +3,19 @@
     "name": "Dark Drain",
     "card_type": "magic",
     "mana_cost": 2,
-    "attribute": "dark",
+    "element": "dark",
     "effects": [
         {
             "type": "damage",
             "trigger": "on_play",
             "target": "single_target",
-            "amount": 2
+            "amount": 20
         },
         {
             "type": "heal",
             "trigger": "on_play",
             "target": "self_owner",
-            "amount": 2
+            "amount": 20
         }
     ]
 }

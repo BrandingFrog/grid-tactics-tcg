@@ -3,17 +3,10 @@
     "name": "Dark Assassin",
     "card_type": "minion",
     "mana_cost": 2,
-    "attack": 3,
-    "health": 1,
+    "attack": 30,
+    "health": 10,
     "range": 0,
-    "attribute": "dark",
+    "element": "dark",
     "tribe": "Assassin",
-    "effects": [
-        {
-            "type": "damage",
-            "trigger": "on_attack",
-            "target": "single_target",
-            "amount": 1
-        }
-    ]
+    "effects": []
 }

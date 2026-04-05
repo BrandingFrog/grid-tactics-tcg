@@ -3,13 +3,13 @@
     "name": "Fireball",
     "card_type": "magic",
     "mana_cost": 3,
-    "attribute": "fire",
+    "element": "fire",
     "effects": [
         {
             "type": "damage",
             "trigger": "on_play",
             "target": "single_target",
-            "amount": 4
+            "amount": 40
         }
     ]
 }

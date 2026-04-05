@@ -1,7 +1,7 @@
 """Tests for CardLoader -- JSON file to CardDefinition conversion.
 
 Covers: valid loading for all card types, validation error messages,
-edge cases (no effects, no attribute, multi-purpose cards).
+edge cases (no effects, no element, multi-purpose cards).
 """
 
 from __future__ import annotations
@@ -14,7 +14,7 @@ import pytest
 from grid_tactics.card_loader import CardLoader
 from grid_tactics.cards import CardDefinition, EffectDefinition
 from grid_tactics.enums import (
-    Attribute,
+    Element,
     CardType,
     EffectType,
     TargetType,
@@ -38,7 +38,7 @@ def valid_minion_json() -> dict:
         "attack": 3,
         "health": 2,
         "range": 1,
-        "attribute": "fire",
+        "element": "fire",
         "tribe": "Imp",
         "effects": [
             {
@@ -59,7 +59,7 @@ def valid_magic_json() -> dict:
         "name": "Test Magic",
         "card_type": "magic",
         "mana_cost": 3,
-        "attribute": "fire",
+        "element": "fire",
         "effects": [
             {
                 "type": "damage",
@@ -79,7 +79,7 @@ def valid_react_json() -> dict:
         "name": "Test React",
         "card_type": "react",
         "mana_cost": 1,
-        "attribute": "light",
+        "element": "light",
         "react_condition": "any_action",
         "effects": [
             {
@@ -103,7 +103,7 @@ def valid_multi_purpose_json() -> dict:
         "attack": 2,
         "health": 3,
         "range": 0,
-        "attribute": "dark",
+        "element": "dark",
         "tribe": "Dark Mage",
         "effects": [],
         "react_effect": {
@@ -143,7 +143,7 @@ class TestLoadValidCards:
         assert card.attack == 3
         assert card.health == 2
         assert card.attack_range == 1
-        assert card.attribute == Attribute.FIRE
+        assert card.element == Element.FIRE
         assert card.tribe == "Imp"
         assert len(card.effects) == 1
         assert card.effects[0].effect_type == EffectType.DAMAGE
@@ -161,7 +161,7 @@ class TestLoadValidCards:
         assert card.attack is None
         assert card.health is None
         assert card.attack_range is None
-        assert card.attribute == Attribute.FIRE
+        assert card.element == Element.FIRE
         assert len(card.effects) == 1
         assert card.effects[0].amount == 4
 
@@ -172,7 +172,7 @@ class TestLoadValidCards:
         assert card.card_id == "test_react"
         assert card.card_type == CardType.REACT
         assert card.mana_cost == 1
-        assert card.attribute == Attribute.LIGHT
+        assert card.element == Element.LIGHT
         assert len(card.effects) == 1
         assert card.effects[0].effect_type == EffectType.BUFF_HEALTH
 
@@ -230,10 +230,10 @@ class TestLoaderValidation:
         with pytest.raises(ValueError, match="effect.*type.*explode"):
             CardLoader.load_card(path)
 
-    def test_invalid_attribute(self, tmp_path: Path, valid_minion_json: dict) -> None:
-        valid_minion_json["attribute"] = "ice"
+    def test_invalid_element(self, tmp_path: Path, valid_minion_json: dict) -> None:
+        valid_minion_json["element"] = "ice"
         path = _write_card_json(tmp_path, valid_minion_json)
-        with pytest.raises(ValueError, match="attribute.*ice"):
+        with pytest.raises(ValueError, match="element.*ice"):
             CardLoader.load_card(path)
 
 
@@ -251,17 +251,17 @@ class TestLoaderEdgeCases:
         card = CardLoader.load_card(path)
         assert card.effects == ()
 
-    def test_no_attribute(self, tmp_path: Path, valid_minion_json: dict) -> None:
-        del valid_minion_json["attribute"]
+    def test_no_element(self, tmp_path: Path, valid_minion_json: dict) -> None:
+        del valid_minion_json["element"]
         path = _write_card_json(tmp_path, valid_minion_json)
         card = CardLoader.load_card(path)
-        assert card.attribute is None
+        assert card.element is None
 
-    def test_null_attribute(self, tmp_path: Path, valid_minion_json: dict) -> None:
-        valid_minion_json["attribute"] = None
+    def test_null_element(self, tmp_path: Path, valid_minion_json: dict) -> None:
+        valid_minion_json["element"] = None
         path = _write_card_json(tmp_path, valid_minion_json)
         card = CardLoader.load_card(path)
-        assert card.attribute is None
+        assert card.element is None
 
     def test_missing_effects_key(
         self, tmp_path: Path, valid_minion_json: dict
@@ -281,11 +281,11 @@ class TestLoaderEdgeCases:
         card = CardLoader.load_card(path)
         assert card.card_type == CardType.MINION
 
-    def test_case_insensitive_attribute(
+    def test_case_insensitive_element(
         self, tmp_path: Path, valid_minion_json: dict
     ) -> None:
-        """attribute should be case-insensitive."""
-        valid_minion_json["attribute"] = "Fire"
+        """element should be case-insensitive."""
+        valid_minion_json["element"] = "Fire"
         path = _write_card_json(tmp_path, valid_minion_json)
         card = CardLoader.load_card(path)
-        assert card.attribute == Attribute.FIRE
+        assert card.element == Element.FIRE

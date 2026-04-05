@@ -31,7 +31,7 @@ class CardTable:
         attack: torch.Tensor,
         health: torch.Tensor,
         attack_range: torch.Tensor,
-        attribute: torch.Tensor,
+        element: torch.Tensor,
         effect_type: torch.Tensor,
         effect_trigger: torch.Tensor,
         effect_target: torch.Tensor,
@@ -48,6 +48,11 @@ class CardTable:
         distance_manhattan: torch.Tensor,
         distance_chebyshev: torch.Tensor,
         is_orthogonal: torch.Tensor,
+        promote_target_id: torch.Tensor,
+        is_unique: torch.Tensor,
+        tutor_target_id: torch.Tensor,
+        tribe_id: torch.Tensor,
+        summon_sacrifice_tribe_id: torch.Tensor,
         _num_cards: int,
         device: torch.device,
     ):
@@ -56,7 +61,7 @@ class CardTable:
         self.attack = attack
         self.health = health
         self.attack_range = attack_range
-        self.attribute = attribute
+        self.element = element
         self.effect_type = effect_type
         self.effect_trigger = effect_trigger
         self.effect_target = effect_target
@@ -73,6 +78,11 @@ class CardTable:
         self.distance_manhattan = distance_manhattan
         self.distance_chebyshev = distance_chebyshev
         self.is_orthogonal = is_orthogonal
+        self.promote_target_id = promote_target_id  # [num_cards] int32, -1 if no promote
+        self.is_unique = is_unique                  # [num_cards] bool
+        self.tutor_target_id = tutor_target_id      # [num_cards] int32, -1 if no tutor
+        self.tribe_id = tribe_id                    # [num_cards] int32, 0 if no tribe
+        self.summon_sacrifice_tribe_id = summon_sacrifice_tribe_id  # [num_cards] int32, 0 if none
         self._num_cards = _num_cards
         self.device = device
 
@@ -91,7 +101,7 @@ class CardTable:
         attack = torch.zeros(n, dtype=torch.int32)
         health = torch.zeros(n, dtype=torch.int32)
         attack_range = torch.zeros(n, dtype=torch.int32)
-        attribute = torch.zeros(n, dtype=torch.int32)
+        element = torch.zeros(n, dtype=torch.int32)
         effect_type = torch.full((n, MAX_EFFECTS_PER_CARD), -1, dtype=torch.int32)
         effect_trigger = torch.full((n, MAX_EFFECTS_PER_CARD), -1, dtype=torch.int32)
         effect_target = torch.full((n, MAX_EFFECTS_PER_CARD), -1, dtype=torch.int32)
@@ -104,6 +114,20 @@ class CardTable:
         react_effect_type = torch.full((n,), -1, dtype=torch.int32)
         react_effect_target = torch.full((n,), -1, dtype=torch.int32)
         react_effect_amount = torch.zeros(n, dtype=torch.int32)
+        promote_target_id = torch.full((n,), -1, dtype=torch.int32)
+        is_unique = torch.zeros(n, dtype=torch.bool)
+        tutor_target_id = torch.full((n,), -1, dtype=torch.int32)
+        tribe_id = torch.zeros(n, dtype=torch.int32)
+        summon_sacrifice_tribe_id = torch.zeros(n, dtype=torch.int32)
+
+        # Build tribe string -> int mapping
+        tribe_map: dict[str, int] = {}
+        next_tribe_id = 1
+        for i in range(n):
+            card = library.get_by_id(i)
+            if card.tribe and card.tribe not in tribe_map:
+                tribe_map[card.tribe] = next_tribe_id
+                next_tribe_id += 1
 
         for i in range(n):
             card = library.get_by_id(i)
@@ -112,7 +136,7 @@ class CardTable:
             attack[i] = card.attack if card.attack is not None else 0
             health[i] = card.health if card.health is not None else 0
             attack_range[i] = card.attack_range if card.attack_range is not None else 0
-            attribute[i] = card.attribute.value if card.attribute is not None else 0
+            element[i] = card.element.value if card.element is not None else 0
 
             for j, eff in enumerate(card.effects[:MAX_EFFECTS_PER_CARD]):
                 effect_type[i, j] = eff.effect_type.value
@@ -126,6 +150,30 @@ class CardTable:
 
             if card.card_type == CardType.REACT or card.is_multi_purpose:
                 is_react_eligible[i] = True
+
+            # Promote / unique
+            if card.promote_target is not None:
+                try:
+                    promote_target_id[i] = library.get_numeric_id(card.promote_target)
+                except KeyError:
+                    pass  # promote target card not in library
+            is_unique[i] = card.unique
+
+            # Tutor target
+            if card.tutor_target is not None:
+                try:
+                    tutor_target_id[i] = library.get_numeric_id(card.tutor_target)
+                except KeyError:
+                    pass  # tutor target card not in library
+
+            # Tribe
+            if card.tribe:
+                tribe_id[i] = tribe_map[card.tribe]
+
+            # Summon sacrifice tribe
+            if card.summon_sacrifice_tribe:
+                tid = tribe_map.get(card.summon_sacrifice_tribe, 0)
+                summon_sacrifice_tribe_id[i] = tid
 
             if card.card_type == CardType.REACT:
                 react_mana_cost[i] = card.mana_cost
@@ -149,7 +197,7 @@ class CardTable:
             attack=attack.to(device),
             health=health.to(device),
             attack_range=attack_range.to(device),
-            attribute=attribute.to(device),
+            element=element.to(device),
             effect_type=effect_type.to(device),
             effect_trigger=effect_trigger.to(device),
             effect_target=effect_target.to(device),
@@ -166,6 +214,11 @@ class CardTable:
             distance_manhattan=distance_manhattan.to(device),
             distance_chebyshev=distance_chebyshev.to(device),
             is_orthogonal=is_ortho.to(device),
+            promote_target_id=promote_target_id.to(device),
+            is_unique=is_unique.to(device),
+            tutor_target_id=tutor_target_id.to(device),
+            tribe_id=tribe_id.to(device),
+            summon_sacrifice_tribe_id=summon_sacrifice_tribe_id.to(device),
             _num_cards=n,
             device=device,
         )

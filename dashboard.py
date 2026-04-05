@@ -308,10 +308,13 @@ TEMPLATE = """
         .tag-minion { background: rgba(76,175,80,0.15); color: #4caf50; }
         .tag-magic { background: rgba(156,39,176,0.15); color: #ce93d8; }
         .tag-react { background: rgba(255,152,0,0.15); color: #ff9800; }
+        .tag-wood { background: rgba(76,175,80,0.15); color: #66bb6a; }
         .tag-fire { background: rgba(244,67,54,0.15); color: #f44336; }
+        .tag-earth { background: rgba(141,110,99,0.15); color: #bcaaa4; }
+        .tag-water { background: rgba(33,150,243,0.15); color: #42a5f5; }
+        .tag-metal { background: rgba(158,158,158,0.15); color: #bdbdbd; }
         .tag-dark { background: rgba(156,39,176,0.15); color: #ce93d8; }
         .tag-light { background: rgba(255,193,7,0.15); color: #ffc107; }
-        .tag-neutral { background: rgba(136,136,136,0.15); color: #aaa; }
         .card-tile-stats {
             padding: 0 20px 12px;
             display: flex;
@@ -452,7 +455,7 @@ TEMPLATE = """
         let chartBars = '';
         if (winHistory.length > 0) {
             winHistory.forEach((s, i) => {
-                const wr = ((s.win_rate_100 || 0) * 100);
+                const wr = ((s.win_rate || 0) * 100);
                 const h = Math.max(4, wr * 2);
                 const color = wr >= 60 ? '#4caf50' : wr >= 40 ? '#ff9800' : '#f44336';
                 chartBars += '<div class="chart-bar" style="height:' + h + 'px;background:' + color + '">' +
@@ -571,7 +574,7 @@ TEMPLATE = """
         const cards = await resp.json();
 
         const typeTag = { MINION: 'tag-minion', MAGIC: 'tag-magic', REACT: 'tag-react' };
-        const attrTag = { FIRE: 'tag-fire', DARK: 'tag-dark', LIGHT: 'tag-light', NEUTRAL: 'tag-neutral' };
+        const elemTag = { WOOD: 'tag-wood', FIRE: 'tag-fire', EARTH: 'tag-earth', WATER: 'tag-water', METAL: 'tag-metal', DARK: 'tag-dark', LIGHT: 'tag-light' };
 
         const effectTypeLabels = {
             DAMAGE: 'Damage', HEAL: 'Heal', BUFF_ATTACK: 'Buff ATK', BUFF_HEALTH: 'Buff HP'
@@ -635,6 +638,18 @@ TEMPLATE = """
                 tribeHtml = `<h4>Tribe</h4><div style="color:#e0e0e0;font-size:14px">${c.tribe}</div>`;
             }
 
+            // Tutor target
+            let tutorHtml = '';
+            if (c.tutor_target) {
+                tutorHtml = `<div style="color:#42a5f5;font-size:13px;margin-top:4px">On Summon: Add <strong>${c.tutor_target}</strong> from deck to hand</div>`;
+            }
+
+            // Summon sacrifice
+            let sacHtml = '';
+            if (c.summon_sacrifice_tribe) {
+                sacHtml = `<div style="color:#ff7043;font-size:13px;margin-top:4px">Summon Cost: Destroy a <strong>${c.summon_sacrifice_tribe}</strong> in hand</div>`;
+            }
+
             tiles += `
             <div class="card-tile" onclick="this.classList.toggle('expanded')" id="card-${i}">
                 <div class="card-tile-header">
@@ -643,12 +658,14 @@ TEMPLATE = """
                 </div>
                 <div class="card-tile-tags">
                     <span class="card-tag ${typeTag[c.card_type] || ''}">${c.card_type}</span>
-                    ${c.attribute ? '<span class="card-tag ' + (attrTag[c.attribute]||'') + '">' + c.attribute + '</span>' : ''}
+                    ${c.element ? '<span class="card-tag ' + (elemTag[c.element]||'') + '">' + c.element + '</span>' : ''}
                     ${c.is_multi_purpose ? '<span class="card-tag tag-react">MULTI-PURPOSE</span>' : ''}
                 </div>
                 ${statsHtml}
                 <div class="card-detail">
                     ${effectsHtml}
+                    ${tutorHtml}
+                    ${sacHtml}
                     ${reactHtml}
                     ${tribeHtml}
                     <div class="card-id-text">ID: ${c.card_id}</div>
@@ -751,7 +768,7 @@ def api_cards():
             'card_id': card_def.card_id,
             'name': card_def.name,
             'card_type': card_def.card_type.name,
-            'attribute': card_def.attribute.name if card_def.attribute else None,
+            'element': card_def.element.name if card_def.element else None,
             'tribe': card_def.tribe,
             'mana_cost': card_def.mana_cost,
             'attack': card_def.attack,
@@ -768,6 +785,8 @@ def api_cards():
                 for e in card_def.effects
             ],
             'react_mana_cost': card_def.react_mana_cost,
+            'tutor_target': card_def.tutor_target,
+            'summon_sacrifice_tribe': card_def.summon_sacrifice_tribe,
         })
     return jsonify(cards)
 
@@ -827,99 +846,155 @@ def _ssh_cmd(ip, port, cmd, timeout=15):
         return ""
 
 
-def _pull_db(pod):
-    """Download training.db from a pod. Returns local path or None."""
+def _pull_snapshots(pod):
+    """Download snapshots.json from a pod (tensor engine format). Returns data or None."""
     if not pod.get("ssh_ip"):
         return None
-    local = CLOUD_DB_DIR / f"{pod['id']}.db"
+    local = CLOUD_DB_DIR / f"{pod['id']}_snapshots.json"
     try:
         subprocess.run(
             ["scp", "-o", "StrictHostKeyChecking=no", "-o", "ConnectTimeout=10",
              "-P", str(pod["ssh_port"]),
-             f"root@{pod['ssh_ip']}:/root/output/training.db", str(local)],
+             f"root@{pod['ssh_ip']}:/root/output/snapshots.json", str(local)],
             capture_output=True, timeout=30,
         )
         if local.exists() and local.stat().st_size > 0:
-            return local
+            return json.loads(local.read_text())
     except Exception:
         pass
-    return local if local.exists() else None
+    # Fallback: try training.db (old Python engine format)
+    local_db = CLOUD_DB_DIR / f"{pod['id']}.db"
+    try:
+        subprocess.run(
+            ["scp", "-o", "StrictHostKeyChecking=no", "-o", "ConnectTimeout=10",
+             "-P", str(pod["ssh_port"]),
+             f"root@{pod['ssh_ip']}:/root/output/training.db", str(local_db)],
+            capture_output=True, timeout=30,
+        )
+        if local_db.exists() and local_db.stat().st_size > 0:
+            return _read_old_db(local_db)
+    except Exception:
+        pass
+    return None
 
 
-def _read_cloud_db(path):
-    """Read training stats from a downloaded SQLite file."""
-    data = {"runs": [], "snapshots": [], "stats": {}}
+def _read_old_db(path):
+    """Read snapshots from old SQLite format, return as list of dicts."""
     try:
         conn = sqlite3.connect(str(path))
         conn.row_factory = sqlite3.Row
-        data["runs"] = [dict(r) for r in conn.execute(
-            "SELECT * FROM training_runs ORDER BY started_at DESC").fetchall()]
-        data["snapshots"] = [dict(r) for r in conn.execute(
-            "SELECT * FROM win_rate_snapshots ORDER BY timestep").fetchall()]
-        for run in data["runs"]:
-            rid = run["run_id"]
-            row = conn.execute(
-                """SELECT COUNT(*) as total_games,
-                    AVG(CASE WHEN training_player IS NOT NULL AND winner = training_player
-                        THEN 1.0 WHEN winner IS NULL THEN 0.5 ELSE 0.0 END) as win_rate,
-                    AVG(turn_count) as avg_game_length
-                FROM game_results WHERE run_id = ?""", (rid,)).fetchone()
-            if row:
-                data["stats"][rid] = dict(row)
+        rows = conn.execute("SELECT * FROM win_rate_snapshots ORDER BY timestep").fetchall()
         conn.close()
+        return [{"timestep": r["timestep"], "win_rate": r["win_rate"]} for r in rows]
     except Exception:
-        pass
-    return data
+        return None
+
+
+# Background data cache — page loads instantly, data fetched async
+_cloud_cache = {"data": [], "updated": 0, "fetching": False}
+_cache_lock = threading.Lock()
+
+
+def _fetch_cloud_data_bg():
+    """Background worker: fetch data from all pods, update cache."""
+    with _cache_lock:
+        if _cloud_cache["fetching"]:
+            return
+        _cloud_cache["fetching"] = True
+
+    try:
+        pods = _discover_pods()
+        results = []
+
+        def fetch_pod_data(pod):
+            info = dict(pod)
+            gpu_raw = _ssh_cmd(
+                pod["ssh_ip"], pod["ssh_port"],
+                "nvidia-smi --query-gpu=utilization.gpu,memory.used,memory.total,temperature.gpu --format=csv,noheader,nounits"
+            )
+            if gpu_raw:
+                try:
+                    parts = gpu_raw.split(", ")
+                    info["gpu_util"] = int(parts[0])
+                    info["mem_used_mb"] = int(parts[1])
+                    info["mem_total_mb"] = int(parts[2])
+                    info["temp_c"] = int(parts[3])
+                except (ValueError, IndexError):
+                    pass
+
+            # Pull snapshots (tensor engine or old DB format)
+            snapshots = _pull_snapshots(pod)
+            if snapshots:
+                latest = snapshots[-1] if snapshots else {}
+                # Estimate games from steps (avg ~100 steps per game with 2 players)
+                total_steps = latest.get("timestep", 0)
+                est_games = total_steps // 100
+                info["data"] = {
+                    "snapshots": snapshots,
+                    "stats": {"run": {
+                        "total_games": est_games,
+                        "win_rate": latest.get("win_rate", 0),
+                        "fps": latest.get("fps", 0),
+                    }},
+                }
+            else:
+                info["data"] = {"snapshots": [], "stats": {}}
+
+            # Try both log filenames
+            log = _ssh_cmd(
+                pod["ssh_ip"], pod["ssh_port"],
+                "tail -n 3 /root/output/tensor_train.log 2>/dev/null || tail -n 3 /root/output/train.log 2>/dev/null"
+            )
+            info["log_tail"] = log
+
+            # Get FPS from log
+            fps_line = _ssh_cmd(
+                pod["ssh_ip"], pod["ssh_port"],
+                "grep 'fps' /root/output/tensor_train.log 2>/dev/null | tail -1"
+            )
+            if fps_line and "fps" in fps_line:
+                try:
+                    fps_str = fps_line.split("fps")[1].split("|")[0].strip().replace(",", "")
+                    info["fps"] = int(float(fps_str))
+                except (ValueError, IndexError):
+                    pass
+
+            results.append(info)
+
+        threads = [threading.Thread(target=fetch_pod_data, args=(p,)) for p in pods]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join(timeout=30)
+
+        with _cache_lock:
+            _cloud_cache["data"] = results
+            _cloud_cache["updated"] = time.time()
+    finally:
+        with _cache_lock:
+            _cloud_cache["fetching"] = False
 
 
 @app.route('/cloud')
 def cloud_page():
+    # Kick off background fetch on first visit
+    if _cloud_cache["updated"] == 0:
+        threading.Thread(target=_fetch_cloud_data_bg, daemon=True).start()
     return render_template_string(CLOUD_TEMPLATE)
 
 
 @app.route('/api/cloud/pods')
 def api_cloud_pods():
-    """Return all active pods with GPU stats and training progress."""
-    pods = _discover_pods()
-    results = []
-
-    def fetch_pod_data(pod):
-        info = dict(pod)
-        # GPU stats
-        gpu_raw = _ssh_cmd(
-            pod["ssh_ip"], pod["ssh_port"],
-            "nvidia-smi --query-gpu=utilization.gpu,memory.used,memory.total,temperature.gpu --format=csv,noheader,nounits"
-        )
-        if gpu_raw:
-            parts = gpu_raw.split(", ")
-            info["gpu_util"] = int(parts[0])
-            info["mem_used_mb"] = int(parts[1])
-            info["mem_total_mb"] = int(parts[2])
-            info["temp_c"] = int(parts[3])
-
-        # Training data
-        db_path = _pull_db(pod)
-        if db_path:
-            data = _read_cloud_db(db_path)
-            info["data"] = data
-        else:
-            info["data"] = {"runs": [], "snapshots": [], "stats": {}}
-
-        # Log tail
-        info["log_tail"] = _ssh_cmd(
-            pod["ssh_ip"], pod["ssh_port"],
-            "tail -n 3 /root/output/train.log 2>/dev/null"
-        )
-        results.append(info)
-
-    # Fetch in parallel
-    threads = [threading.Thread(target=fetch_pod_data, args=(p,)) for p in pods]
-    for t in threads:
-        t.start()
-    for t in threads:
-        t.join(timeout=30)
-
-    return jsonify(results)
+    """Return cached pod data instantly, trigger background refresh."""
+    age = time.time() - _cloud_cache["updated"]
+    # Refresh if cache is older than 45 seconds
+    if age > 45 and not _cloud_cache["fetching"]:
+        threading.Thread(target=_fetch_cloud_data_bg, daemon=True).start()
+    return jsonify({
+        "pods": _cloud_cache["data"],
+        "cache_age_s": int(age),
+        "fetching": _cloud_cache["fetching"],
+    })
 
 
 CLOUD_TEMPLATE = """
@@ -969,7 +1044,7 @@ CLOUD_TEMPLATE = """
         .loading .spinner { border: 3px solid #2a2a4a; border-top: 3px solid #00d4ff; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; margin: 0 auto 16px; }
         @keyframes spin { to { transform: rotate(360deg); } }
     </style>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4" async></script>
 </head>
 <body>
     <div class="header">
@@ -991,13 +1066,26 @@ CLOUD_TEMPLATE = """
 
     async function loadCloud() {
         const app = document.getElementById('app');
-        let pods;
+        let result, pods;
         try {
             const resp = await fetch('/api/cloud/pods');
-            pods = await resp.json();
+            result = await resp.json();
+            pods = result.pods || [];
         } catch(e) {
             app.innerHTML = '<div class="loading">Failed to connect. Retrying...</div>';
             setTimeout(loadCloud, 10000);
+            return;
+        }
+
+        const cacheAge = result.cache_age_s || 0;
+        const fetching = result.fetching || false;
+
+        if (pods.length === 0 && cacheAge < 5) {
+            app.innerHTML = `<div class="loading">
+                <div class="spinner"></div>
+                Fetching data from pods... (first load takes ~15s)
+            </div>`;
+            setTimeout(loadCloud, 3000);
             return;
         }
 
@@ -1053,7 +1141,7 @@ CLOUD_TEMPLATE = """
 
             let latestWR = '-', totalG = 0, avgLen = '-';
             if (snapshots.length > 0) {
-                latestWR = ((snapshots[snapshots.length-1].win_rate_100 || 0) * 100).toFixed(1) + '%';
+                latestWR = ((snapshots[snapshots.length-1].win_rate || 0) * 100).toFixed(1) + '%';
             }
             Object.values(stats).forEach(s => {
                 totalG += s.total_games || 0;
@@ -1077,20 +1165,22 @@ CLOUD_TEMPLATE = """
         });
         html += '</div>';
 
-        html += '<div class="refresh-info">Auto-refreshes every 60 seconds | <a href="#" onclick="loadCloud();return false" style="color:#00d4ff">Refresh now</a></div>';
+        const ageStr = cacheAge < 60 ? cacheAge + 's ago' : Math.floor(cacheAge/60) + 'm ago';
+        const fetchStr = fetching ? ' | <span style="color:#ff9800">updating...</span>' : '';
+        html += '<div class="refresh-info">Data: ' + ageStr + fetchStr + ' | Auto-refreshes every 15s | <a href="#" onclick="loadCloud();return false" style="color:#00d4ff">Refresh now</a></div>';
 
         app.innerHTML = html;
 
         // Draw chart
         drawWinRateChart(pods);
 
-        // Auto-refresh
-        setTimeout(loadCloud, 60000);
+        // Auto-refresh (fast since it reads from cache)
+        setTimeout(loadCloud, 15000);
     }
 
     function drawWinRateChart(pods) {
         const canvas = document.getElementById('winRateCanvas');
-        if (!canvas) return;
+        if (!canvas || typeof Chart === 'undefined') return;
 
         const datasets = [];
         const colors = ['#00d4ff', '#4caf50', '#ff9800', '#f44336', '#ce93d8', '#ffeb3b'];
@@ -1100,7 +1190,7 @@ CLOUD_TEMPLATE = """
             if (snapshots.length === 0) return;
             datasets.push({
                 label: p.name + ' (' + p.method + ')',
-                data: snapshots.map(s => ({ x: s.timestep, y: (s.win_rate_100 || 0) * 100 })),
+                data: snapshots.map(s => ({ x: s.timestep, y: (s.win_rate || 0) * 100 })),
                 borderColor: colors[i % colors.length],
                 backgroundColor: 'transparent',
                 borderWidth: 2,

@@ -1,0 +1,20 @@
+{
+    "card_id": "rgb_lasercannon",
+    "name": "RGB Lasercannon",
+    "card_type": "minion",
+    "mana_cost": 3,
+    "attack": 25,
+    "health": 16,
+    "range": 1,
+    "element": "metal",
+    "tribe": "Robot",
+    "summon_sacrifice_tribe": "Robot",
+    "effects": [
+        {
+            "type": "destroy",
+            "trigger": "on_death",
+            "target": "single_target",
+            "amount": 1
+        }
+    ]
+}

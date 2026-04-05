@@ -3,17 +3,10 @@
     "name": "Iron Guardian",
     "card_type": "minion",
     "mana_cost": 3,
-    "attack": 1,
-    "health": 5,
+    "attack": 10,
+    "health": 50,
     "range": 0,
-    "attribute": "neutral",
+    "element": "metal",
     "tribe": "Golem",
-    "effects": [
-        {
-            "type": "buff_health",
-            "trigger": "on_damaged",
-            "target": "self_owner",
-            "amount": 1
-        }
-    ]
+    "effects": []
 }

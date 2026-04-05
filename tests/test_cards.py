@@ -8,7 +8,7 @@ import pytest
 
 from grid_tactics.cards import CardDefinition, EffectDefinition
 from grid_tactics.enums import (
-    Attribute,
+    Element,
     CardType,
     EffectType,
     ReactCondition,
@@ -225,9 +225,9 @@ class TestCardTypes:
         assert len(card.effects) == 1
         assert card.effects[0].effect_type == EffectType.DAMAGE
 
-    def test_minion_with_attribute_and_tribe(self) -> None:
-        card = _minion_card(attribute=Attribute.FIRE, tribe="Imp")
-        assert card.attribute == Attribute.FIRE
+    def test_minion_with_element_and_tribe(self) -> None:
+        card = _minion_card(element=Element.FIRE, tribe="Imp")
+        assert card.element == Element.FIRE
         assert card.tribe == "Imp"
 
     def test_magic_with_attack_raises(self) -> None:

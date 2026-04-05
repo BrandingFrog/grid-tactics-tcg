@@ -3,10 +3,10 @@
     "name": "Shadow Knight",
     "card_type": "minion",
     "mana_cost": 3,
-    "attack": 3,
-    "health": 3,
+    "attack": 30,
+    "health": 30,
     "range": 0,
-    "attribute": "dark",
+    "element": "dark",
     "tribe": "Knight",
     "effects": []
 }

@@ -286,6 +286,21 @@ def _apply_play_card(
     # Spend mana and remove card from hand (discard to graveyard)
     new_player = player.spend_mana(card_def.mana_cost)
     new_player = new_player.discard_from_hand(card_numeric_id)
+
+    # Summon sacrifice: destroy a card of the required tribe from hand
+    if card_def.summon_sacrifice_tribe:
+        sacrifice_id = None
+        for hand_card_id in new_player.hand:
+            hand_card_def = library.get_by_id(hand_card_id)
+            if hand_card_def.tribe == card_def.summon_sacrifice_tribe:
+                sacrifice_id = hand_card_id
+                break
+        if sacrifice_id is None:
+            raise ValueError(
+                f"No {card_def.summon_sacrifice_tribe} card in hand to sacrifice"
+            )
+        new_player = new_player.discard_from_hand(sacrifice_id)
+
     new_players = _replace_player(state.players, active_idx, new_player)
     state = replace(state, players=new_players)
 

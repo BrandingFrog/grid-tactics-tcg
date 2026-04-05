@@ -3,17 +3,10 @@
     "name": "Flame Wyrm",
     "card_type": "minion",
     "mana_cost": 5,
-    "attack": 4,
-    "health": 4,
+    "attack": 40,
+    "health": 40,
     "range": 1,
-    "attribute": "fire",
+    "element": "fire",
     "tribe": "Dragon",
-    "effects": [
-        {
-            "type": "damage",
-            "trigger": "on_play",
-            "target": "all_enemies",
-            "amount": 1
-        }
-    ]
+    "effects": []
 }

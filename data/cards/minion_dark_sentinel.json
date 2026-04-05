@@ -3,10 +3,10 @@
     "name": "Dark Sentinel",
     "card_type": "minion",
     "mana_cost": 3,
-    "attack": 2,
-    "health": 3,
+    "attack": 20,
+    "health": 30,
     "range": 0,
-    "attribute": "dark",
+    "element": "dark",
     "tribe": "Dark Mage",
     "effects": [],
     "react_condition": "opponent_plays_light",
@@ -14,7 +14,7 @@
         "type": "deploy_self",
         "trigger": "on_play",
         "target": "self_owner",
-        "amount": 1
+        "amount": 10
     },
     "react_mana_cost": 1
 }

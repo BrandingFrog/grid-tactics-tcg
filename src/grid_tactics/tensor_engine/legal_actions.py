@@ -86,10 +86,11 @@ def _compute_action_phase_mask(mask, state, card_table, phase_mask):
 
     minion_flat = (state.minion_row * GRID_COLS + state.minion_col).clamp(0, GRID_SIZE - 1).long()
 
-    # --- DRAW ---
+    # --- DRAW (as action, in addition to auto-draw at turn start) ---
     deck_top = state.deck_tops[arange_n, ap]
     deck_size = state.deck_sizes[arange_n, ap]
-    mask[phase_mask & (deck_top < deck_size), DRAW_IDX] = True
+    hand_full = hand_sizes >= MAX_HAND
+    mask[phase_mask & (deck_top < deck_size) & ~hand_full, DRAW_IDX] = True
 
     # --- PLAY_CARD ---
     _compute_play_card_mask(
@@ -153,7 +154,37 @@ def _compute_play_card_mask(mask, state, card_table, phase_mask, ap, arange_n,
     # Valid playable: not react, enough mana
     playable = slot_valid & (ct_vals != 2) & (player_mana.unsqueeze(1) >= costs)
 
-    is_minion = playable & (ct_vals == 0)
+    # Unique constraint: can't deploy if unique card already on board for this player
+    is_unique_card = card_table.is_unique[card_ids_flat].reshape(N, MAX_HAND)
+    has_unique_on_board = torch.zeros(N, MAX_HAND, dtype=torch.bool, device=device)
+    for s in range(25):  # MAX_MINIONS
+        slot_alive = state.minion_alive[:, s]
+        slot_owner = state.minion_owner[:, s]
+        slot_cid = state.minion_card_id[:, s]
+        # For each hand slot, check if board has same card_id owned by active player
+        match = slot_alive.unsqueeze(1) & (slot_owner.unsqueeze(1) == ap.unsqueeze(1)) & (slot_cid.unsqueeze(1) == card_ids_safe)
+        has_unique_on_board |= match
+    unique_blocked = is_unique_card & has_unique_on_board
+
+    # Summon sacrifice tribe: need another card of matching tribe in hand
+    sac_tribe = card_table.summon_sacrifice_tribe_id[card_ids_flat].reshape(N, MAX_HAND)
+    has_sac_req = sac_tribe > 0  # [N, MAX_HAND]
+    if has_sac_req.any():
+        hand_tribes = card_table.tribe_id[card_ids_flat].reshape(N, MAX_HAND)
+        has_sacrifice = torch.zeros(N, MAX_HAND, dtype=torch.bool, device=device)
+        for hi in range(MAX_HAND):
+            needs = has_sac_req[:, hi]
+            if not needs.any():
+                continue
+            req = sac_tribe[:, hi]
+            for other in range(MAX_HAND):
+                if other == hi:
+                    continue
+                has_sacrifice[:, hi] |= slot_valid[:, other] & (hand_tribes[:, other] == req)
+        sac_blocked = has_sac_req & ~has_sacrifice
+        playable = playable & ~sac_blocked
+
+    is_minion = playable & (ct_vals == 0) & ~unique_blocked
     is_magic = playable & (ct_vals == 1)
 
     # Build output mask: [N, MAX_HAND, 25]
@@ -186,7 +217,11 @@ def _compute_play_card_mask(mask, state, card_table, phase_mask, ap, arange_n,
 
 
 def _compute_move_mask(mask, state, phase_mask, friendly_alive, board_flat):
-    """Compute MOVE legal actions -- fully vectorized."""
+    """Compute MOVE legal actions -- forward only in lane.
+
+    Player 0 moves forward = DOWN (dir 1), Player 1 moves forward = UP (dir 0).
+    No lateral movement. Units stay in their column (lane).
+    """
     N = mask.shape[0]
     device = mask.device
 
@@ -194,7 +229,7 @@ def _compute_move_mask(mask, state, phase_mask, friendly_alive, board_flat):
     minion_col = state.minion_col
     src_flat = minion_row * GRID_COLS + minion_col  # [N, MAX_MINIONS]
 
-    # All 4 destinations: [N, MAX_MINIONS, 4]
+    # All 4 directions still computed, but only forward is allowed
     dr = torch.tensor(_DR, device=device)
     dc = torch.tensor(_DC, device=device)
     nr = minion_row.unsqueeze(2) + dr
@@ -208,7 +243,17 @@ def _compute_move_mask(mask, state, phase_mask, friendly_alive, board_flat):
     board_at_dest = torch.gather(board_flat, 1, dest_flat_2d).reshape(N, MAX_MINIONS, 4)
     dest_empty = board_at_dest == -1
 
-    can_move = friendly_alive.unsqueeze(2) & in_bounds & dest_empty
+    # Forward-only: P0 can only use dir 1 (DOWN), P1 can only use dir 0 (UP)
+    # Minion owner: state.minion_owner [N, MAX_MINIONS]
+    owner = state.minion_owner  # [N, MAX_MINIONS]
+    # dir_allowed[N, MAX_MINIONS, 4]: True only for forward direction
+    dir_allowed = torch.zeros(N, MAX_MINIONS, 4, dtype=torch.bool, device=device)
+    p0_owned = (owner == 0).unsqueeze(2)
+    p1_owned = (owner == 1).unsqueeze(2)
+    dir_allowed[:, :, 1] |= p0_owned.squeeze(2)  # P0 forward = DOWN (dir 1)
+    dir_allowed[:, :, 0] |= p1_owned.squeeze(2)  # P1 forward = UP (dir 0)
+
+    can_move = friendly_alive.unsqueeze(2) & in_bounds & dest_empty & dir_allowed
 
     # Action indices and scatter
     d_range = torch.arange(4, device=device)
@@ -417,7 +462,7 @@ def _batch_check_react_condition(state, card_table, can_react):
     pending_cid = state.pending_action_card_id
     pending_cid_safe = pending_cid.clamp(0).long()
     pending_ct = card_table.card_type[pending_cid_safe]
-    pending_attr = card_table.attribute[pending_cid_safe]
+    pending_elem = card_table.element[pending_cid_safe]
     pending_had_pos = state.pending_action_had_position
 
     results = {}
@@ -439,12 +484,12 @@ def _batch_check_react_condition(state, card_table, can_react):
     # 4: ANY_ACTION
     results[4] = can_react
 
-    # 5-8: attribute conditions
-    attr_map = {5: 1, 6: 2, 7: 3, 8: 0}
-    for rc_val, required_attr in attr_map.items():
+    # 5-11: element conditions (ReactCondition value maps to Element value = rc_val - 5)
+    for rc_val in range(5, 12):
+        required_elem = rc_val - 5
         results[rc_val] = (
             can_react & ~has_stack & (pending_type == 0) &
-            (pending_cid >= 0) & (pending_attr == required_attr)
+            (pending_cid >= 0) & (pending_elem == required_elem)
         )
 
     return results

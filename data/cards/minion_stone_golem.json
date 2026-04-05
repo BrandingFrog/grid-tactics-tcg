@@ -3,10 +3,10 @@
     "name": "Stone Golem",
     "card_type": "minion",
     "mana_cost": 4,
-    "attack": 2,
-    "health": 5,
+    "attack": 20,
+    "health": 50,
     "range": 0,
-    "attribute": "neutral",
+    "element": "earth",
     "tribe": "Golem",
     "effects": []
 }

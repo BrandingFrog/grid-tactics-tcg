@@ -16,7 +16,7 @@ from typing import Optional
 
 from grid_tactics.board import Board
 from grid_tactics.card_library import CardLibrary
-from grid_tactics.cards import EffectDefinition
+from grid_tactics.cards import CardDefinition, EffectDefinition
 from grid_tactics.enums import EffectType, PlayerSide, TargetType, TriggerType
 from grid_tactics.game_state import GameState
 from grid_tactics.minion import MinionInstance
@@ -127,6 +127,10 @@ def _apply_effect_to_minion(
         return _apply_buff_attack_to_minion(state, minion, effect.amount)
     elif effect.effect_type == EffectType.BUFF_HEALTH:
         return _apply_buff_health_to_minion(state, minion, effect.amount)
+    elif effect.effect_type == EffectType.DESTROY:
+        new_minion = replace(minion, current_health=0)
+        new_minions = _replace_minion(state.minions, minion.instance_id, new_minion)
+        return replace(state, minions=new_minions)
     else:
         raise ValueError(f"Unknown effect type: {effect.effect_type}")
 
@@ -224,6 +228,39 @@ def _resolve_self_owner(
 
 
 # ---------------------------------------------------------------------------
+# Tutor (deck search)
+# ---------------------------------------------------------------------------
+
+
+def _resolve_tutor(
+    state: GameState,
+    card_def: CardDefinition,
+    caster_owner: PlayerSide,
+    library: CardLibrary,
+) -> GameState:
+    """Search the caster's deck for tutor_target card and add to hand."""
+    if not card_def.tutor_target:
+        return state
+    try:
+        target_numeric_id = library.get_numeric_id(card_def.tutor_target)
+    except KeyError:
+        return state  # tutor target card not in library
+    player_idx = _player_index_for_side(caster_owner)
+    player = state.players[player_idx]
+    if target_numeric_id not in player.deck:
+        return state  # card not in deck
+    deck_list = list(player.deck)
+    deck_list.remove(target_numeric_id)
+    new_player = replace(
+        player,
+        deck=tuple(deck_list),
+        hand=player.hand + (target_numeric_id,),
+    )
+    new_players = _replace_player(state.players, player_idx, new_player)
+    return replace(state, players=new_players)
+
+
+# ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
 
@@ -296,7 +333,10 @@ def resolve_effects_for_trigger(
         return state  # no matching effects, return unchanged
 
     for effect in matching_effects:
-        state = resolve_effect(
-            state, effect, minion.position, minion.owner, library, target_pos,
-        )
+        if effect.effect_type == EffectType.TUTOR:
+            state = _resolve_tutor(state, card_def, minion.owner, library)
+        else:
+            state = resolve_effect(
+                state, effect, minion.position, minion.owner, library, target_pos,
+            )
     return state

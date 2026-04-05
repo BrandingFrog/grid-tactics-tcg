@@ -2,14 +2,14 @@
     "card_id": "inferno",
     "name": "Inferno",
     "card_type": "magic",
-    "mana_cost": 4,
-    "attribute": "fire",
+    "mana_cost": 7,
+    "element": "fire",
     "effects": [
         {
             "type": "damage",
             "trigger": "on_play",
             "target": "all_enemies",
-            "amount": 2
+            "amount": 20
         }
     ]
 }

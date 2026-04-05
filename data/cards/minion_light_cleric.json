@@ -3,17 +3,10 @@
     "name": "Light Cleric",
     "card_type": "minion",
     "mana_cost": 2,
-    "attack": 1,
-    "health": 3,
+    "attack": 10,
+    "health": 30,
     "range": 1,
-    "attribute": "light",
+    "element": "light",
     "tribe": "Cleric",
-    "effects": [
-        {
-            "type": "heal",
-            "trigger": "on_play",
-            "target": "adjacent",
-            "amount": 1
-        }
-    ]
+    "effects": []
 }

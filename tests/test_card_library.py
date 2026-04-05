@@ -41,7 +41,7 @@ def sample_cards() -> list[dict]:
             "attack": 2,
             "health": 3,
             "range": 0,
-            "attribute": "neutral",
+            "element": "wood",
             "effects": [],
         },
         {
@@ -49,7 +49,7 @@ def sample_cards() -> list[dict]:
             "name": "Beta Bolt",
             "card_type": "magic",
             "mana_cost": 1,
-            "attribute": "fire",
+            "element": "fire",
             "effects": [
                 {
                     "type": "damage",
@@ -64,7 +64,7 @@ def sample_cards() -> list[dict]:
             "name": "Gamma Guard",
             "card_type": "react",
             "mana_cost": 1,
-            "attribute": "light",
+            "element": "light",
             "react_condition": "any_action",
             "effects": [
                 {
@@ -322,9 +322,9 @@ class TestStarterPool:
         assert starter_lib.card_count >= 15
 
     def test_all_cards_load_without_errors(self, starter_lib: CardLibrary) -> None:
-        """All 18 cards load successfully -- no validation errors."""
+        """All cards load successfully -- no validation errors."""
         all_cards = starter_lib.all_cards
-        assert len(all_cards) == 18
+        assert len(all_cards) == 19
         for card in all_cards:
             assert isinstance(card, CardDefinition)
 
@@ -390,10 +390,10 @@ class TestManaDistribution:
             assert cost in costs, f"No card at mana cost {cost}"
 
 
-class TestAttributeDistribution:
-    """At least 3 distinct attributes used in starter pool."""
+class TestElementDistribution:
+    """At least 3 distinct elements used in starter pool."""
 
-    def test_at_least_three_attributes(self) -> None:
+    def test_at_least_three_elements(self) -> None:
         lib = CardLibrary.from_directory(_STARTER_CARDS_DIR)
-        attributes = {c.attribute for c in lib.all_cards if c.attribute is not None}
-        assert len(attributes) >= 3
+        elements = {c.element for c in lib.all_cards if c.element is not None}
+        assert len(elements) >= 3
