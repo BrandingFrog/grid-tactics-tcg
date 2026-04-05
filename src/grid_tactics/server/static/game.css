@@ -1092,6 +1092,8 @@ body {
   align-items: center;
   justify-content: center;
   font-size: 14px;
+  -webkit-text-stroke: 1px black;
+  paint-order: stroke fill;
   border: 2px solid rgb(30, 25, 20);
   z-index: 2;
 }
@@ -1187,13 +1189,17 @@ body {
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 1px;
-  color: rgba(255, 255, 255, 0.8);
+  color: rgba(255, 255, 255, 0.9);
+  -webkit-text-stroke: 0.5px black;
+  paint-order: stroke fill;
   padding: 2px 0;
 }
 
 .card-effect-full {
   text-align: center;
   color: white;
+  -webkit-text-stroke: 0.5px black;
+  paint-order: stroke fill;
   font-family: 'Inter', system-ui, sans-serif;
   font-size: 9px;
   font-weight: 400;
@@ -1210,7 +1216,9 @@ body {
   text-align: center;
   font-family: 'Inter', system-ui, sans-serif;
   font-size: 8px;
-  color: rgba(255, 255, 255, 0.7);
+  color: rgba(255, 255, 255, 0.8);
+  -webkit-text-stroke: 0.5px black;
+  paint-order: stroke fill;
   padding: 1px 0;
 }
 

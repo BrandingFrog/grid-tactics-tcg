@@ -1007,12 +1007,45 @@ function getEffectDescription(effects) {
     if (!effects || effects.length === 0) return '';
     var parts = [];
     effects.forEach(function(eff) {
-        var trigger = TRIGGER_NAMES[eff.trigger] || '?';
-        var effectType = EFFECT_TYPE_NAMES[eff.type] || '?';
-        var target = TARGET_NAMES[eff.target] || '?';
+        var trigger = TRIGGER_NAMES[eff.trigger] || 'On Play';
         var amount = eff.amount || 0;
-        var desc = trigger + ': ' + effectType + ' ' + amount + ' to ' + target;
+        var type = eff.type;
+        var target = eff.target;
+        var desc = '';
+
+        // Target descriptions
+        var targetText = {
+            0: 'an enemy',        // Single Target
+            1: 'all enemies',     // All Enemies
+            2: 'adjacent units',  // Adjacent
+            3: 'itself',          // Self/Owner
+        }[target] || 'a target';
+
+        // Build natural English
+        if (type === 0) { // Damage
+            desc = trigger + ': Deal ' + amount + ' damage to ' + targetText;
+        } else if (type === 1) { // Heal
+            desc = trigger + ': Restore ' + amount + ' HP to ' + (target === 3 ? 'your hero' : targetText);
+        } else if (type === 2) { // Buff ATK
+            desc = trigger + ': Give ' + (target === 3 ? 'this minion' : targetText) + ' +' + amount + ' ATK';
+        } else if (type === 3) { // Buff HP
+            desc = trigger + ': Give ' + (target === 3 ? 'this minion' : targetText) + ' +' + amount + ' HP';
+        } else if (type === 4) { // Negate
+            desc = trigger + ': Negate ' + (target === 0 ? 'a spell' : 'an effect');
+        } else if (type === 5) { // Deploy Self
+            desc = trigger + ': Deploy this card to the field';
+        } else if (type === 6) { // Rally Forward
+            desc = trigger + ': All friendly units of this type advance forward';
+        } else if (type === 7) { // Promote
+            desc = trigger + ': Promote ' + (target === 3 ? 'itself' : targetText) + ' (' + amount + ')';
+        } else if (type === 8) { // Tutor
+            desc = trigger + ': Search your deck for a card and add it to your hand';
+        } else if (type === 9) { // Destroy
+            desc = trigger + ': Destroy ' + targetText;
+        } else {
+            desc = trigger + ': Special effect';
+        }
         parts.push(desc);
     });
-    return parts.join('; ');
+    return parts.join('. ');
 }
