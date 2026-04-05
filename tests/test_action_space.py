@@ -465,10 +465,13 @@ class TestMaskMatchesLegal:
             mask = build_action_mask(state, library, encoder)
             actions = legal_actions(state, library)
 
-            # Count of True bits should match number of legal actions
-            assert mask.sum() == len(actions), (
+            # Count of unique encoded actions should match mask True bits
+            # (multiple legal actions can map to same slot for targeted deploys)
+            unique_encoded = set(encoder.encode(a, state) for a in actions)
+            assert mask.sum() == len(unique_encoded), (
                 f"Seed {seed}: mask has {mask.sum()} True bits "
-                f"but {len(actions)} legal actions"
+                f"but {len(unique_encoded)} unique encoded actions "
+                f"({len(actions)} raw legal actions)"
             )
 
             # Every legal action should have mask[encode(action)] == True

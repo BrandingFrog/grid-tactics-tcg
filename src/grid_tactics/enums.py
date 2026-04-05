@@ -53,6 +53,9 @@ class EffectType(IntEnum):
     PROMOTE = 7        # On death: promote a friendly minion of promote_target type into this card
     TUTOR = 8          # Search deck for card matching tutor_target and add to hand
     DESTROY = 9        # Destroy target minion (remove regardless of health)
+    BURN = 10          # Apply burn DoT to target (amount damage per action, non-stacking)
+    DARK_MATTER_BUFF = 11  # Buff attack by amount + player's Dark Matter stacks
+    PASSIVE_HEAL = 12  # Heal self by amount (fires on PASSIVE trigger each turn)
 
 
 class ReactCondition(IntEnum):
@@ -84,6 +87,7 @@ class TriggerType(IntEnum):
     ON_ATTACK = 2   # When the minion attacks
     ON_DAMAGED = 3  # When the minion takes damage
     ON_MOVE = 4     # When the minion moves
+    PASSIVE = 5     # Fires every turn (passive effects)
 
 
 class TargetType(IntEnum):
@@ -114,3 +118,4 @@ class ActionType(IntEnum):
     PASS = 4        # Pass turn (always legal per D-16)
     PLAY_REACT = 5  # Play a react card during react window
     SACRIFICE = 6   # Sacrifice minion on opponent's back row for player damage
+    TRANSFORM = 7   # Transform an on-board minion into a different card (costs mana)

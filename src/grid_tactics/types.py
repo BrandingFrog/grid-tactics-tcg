@@ -19,8 +19,10 @@ MANA_REGEN_PER_TURN: int = 1
 MAX_MANA_CAP: int = 10
 
 # Player constants (per D-09, D-10)
-STARTING_HP: int = 20
-STARTING_HAND_SIZE: int = 5
+STARTING_HP: int = 100
+STARTING_HAND_SIZE: int = 5  # legacy default
+STARTING_HAND_P1: int = 3    # Player 1 (goes first) draws fewer
+STARTING_HAND_P2: int = 4    # Player 2 (goes second) draws more to compensate
 
 # ---------------------------------------------------------------------------
 # Phase 2: Card system constants
@@ -28,14 +30,14 @@ STARTING_HAND_SIZE: int = 5
 
 # Card deck constraints (per D-12, D-13)
 MAX_COPIES_PER_DECK: int = 3
-MIN_DECK_SIZE: int = 40
+MIN_DECK_SIZE: int = 30
 
 # Card stat ranges (per D-19: stats in 1-5 range)
 MIN_STAT: int = 1
-MAX_STAT: int = 5
+MAX_STAT: int = 50
 
 # Effect amount range (starter 1-5, extensible to 10 for Phase 8)
-MAX_EFFECT_AMOUNT: int = 10
+MAX_EFFECT_AMOUNT: int = 100
 
 # ---------------------------------------------------------------------------
 # Phase 3: Action system constants
@@ -57,4 +59,4 @@ BACK_ROW_P2: int = 4  # Player 2's back row
 # ---------------------------------------------------------------------------
 
 # Maximum turns before game is declared a draw (D-11)
-DEFAULT_TURN_LIMIT: int = 500
+DEFAULT_TURN_LIMIT: int = 100

@@ -299,6 +299,10 @@ const CARD_DB = {
   green_diodebot:{name:"Green Diodebot",type:"minion",cost:2,atk:13,hp:15,range:0,elem:"metal",tribe:"Robot",effects:[{type:"tutor",trigger:"on_play",target:"self_owner",amount:1}],tutor_target:"blue_diodebot"},
   blue_diodebot:{name:"Blue Diodebot",type:"minion",cost:2,atk:14,hp:8,range:0,elem:"metal",tribe:"Robot",effects:[{type:"tutor",trigger:"on_play",target:"self_owner",amount:1}],tutor_target:"red_diodebot"},
   rgb_lasercannon:{name:"RGB Lasercannon",type:"minion",cost:3,atk:25,hp:16,range:1,elem:"metal",tribe:"Robot",effects:[{type:"destroy",trigger:"on_death",target:"single_target",amount:1}],summon_sacrifice_tribe:"Robot"},
+  reanimated_bones:{name:"Reanimated Bones",type:"minion",cost:1,atk:5,hp:5,range:0,elem:"earth",tribe:"Undead",effects:[],transform_options:[{target:"pyre_archer",cost:2},{target:"grave_caller",cost:3},{target:"fallen_paladin",cost:4}]},
+  pyre_archer:{name:"Pyre Archer",type:"minion",cost:2,atk:9,hp:5,range:2,elem:"fire",tribe:"Undead",deckable:false,effects:[{type:"burn",trigger:"on_attack",target:"single_target",amount:5}]},
+  grave_caller:{name:"Grave Caller",type:"minion",cost:3,atk:5,hp:13,range:1,elem:"dark",tribe:"Undead",deckable:false,effects:[{type:"dark_matter_buff",trigger:"on_play",target:"single_target",amount:5}]},
+  fallen_paladin:{name:"Fallen Paladin",type:"minion",cost:4,atk:16,hp:42,range:0,elem:"light",tribe:"Undead",deckable:false,effects:[{type:"passive_heal",trigger:"passive",target:"self_owner",amount:2}]},
 };
 
 function cardTooltip(cardId) {
@@ -317,10 +321,30 @@ function cardTooltip(cardId) {
   if (c.effects.length) {
     h += '<div class="card-tip-effects">';
     c.effects.forEach(e => {
-      h += `<div class="card-tip-effect"><span class="tag">${e.trigger.replace('on_','')}</span> ${e.type} ${e.amount} (${e.target.replace(/_/g,' ')})</div>`;
+      if (e.type === 'tutor' && c.tutor_target) {
+        const tn = CARD_DB[c.tutor_target]?.name || c.tutor_target;
+        h += `<div class="card-tip-effect"><span class="tag">${e.trigger.replace('on_','')}</span> Add <strong>${tn}</strong> from deck to hand</div>`;
+      } else if (e.type === 'destroy') {
+        h += `<div class="card-tip-effect"><span class="tag">${e.trigger.replace('on_','')}</span> Destroy a minion (${e.target.replace(/_/g,' ')})</div>`;
+      } else if (e.type === 'burn') {
+        h += `<div class="card-tip-effect"><span class="tag">${e.trigger.replace('on_','')}</span> Apply Burn (${e.amount} dmg/action, no stack)</div>`;
+      } else if (e.type === 'dark_matter_buff') {
+        h += `<div class="card-tip-effect"><span class="tag">${e.trigger.replace('on_','')}</span> Give ally +${e.amount} + Dark Matter ATK</div>`;
+      } else if (e.type === 'passive_heal') {
+        h += `<div class="card-tip-effect"><span class="tag">passive</span> Heal self ${e.amount} every action</div>`;
+      } else {
+        h += `<div class="card-tip-effect"><span class="tag">${e.trigger.replace('on_','')}</span> ${e.type} ${e.amount} (${e.target.replace(/_/g,' ')})</div>`;
+      }
     });
     h += '</div>';
   }
+  if (c.transform_options) {
+    h += '<div class="card-tip-effects">';
+    c.transform_options.forEach(t => { const tn = CARD_DB[t.target]?.name || t.target; h += `<div class="card-tip-effect" style="color:#ab47bc"><span class="tag" style="background:#ab47bc30;color:#ab47bc">transform</span> ${tn} (${t.cost} mana)</div>`; });
+    h += '</div>';
+  }
+  if (c.deckable === false) h += `<div class="card-tip-effects" style="color:#ff7043"><div class="card-tip-effect">Transform only — cannot be added to deck</div></div>`;
+  if (c.summon_sacrifice_tribe) h += `<div class="card-tip-effects"><div class="card-tip-effect" style="color:#ff7043">Summon cost: Destroy a <strong>${c.summon_sacrifice_tribe}</strong> in hand</div></div>`;
   if (c.react_cost) h += `<div class="card-tip-effects"><div class="card-tip-effect"><span class="tag">react</span> Deploy self for ${c.react_cost} mana</div></div>`;
   if (c.promote_target) h += `<div class="card-tip-effects"><div class="card-tip-effect"><span class="tag" style="background:#4caf5040;color:#4caf50">promote</span> ${c.promote_target} becomes ${c.name}</div></div>`;
   if (c.unique) h += `<div class="card-tip-effects" style="color:var(--yellow)"><div class="card-tip-effect">Unique — only 1 on board at a time</div></div>`;
@@ -634,10 +658,31 @@ function renderCollection() {
     if (c.effects && c.effects.length) {
       h += '<div class="cp-effects">';
       c.effects.forEach(e => {
-        h += `<div class="cp-effect"><span class="tag" style="background:#2a2a55;color:var(--cyan);padding:1px 6px;border-radius:3px;font-size:9px;font-weight:700">${e.trigger.replace('on_','')}</span> ${e.type} ${e.amount} (${e.target.replace(/_/g,' ')})</div>`;
+        const tag = `<span class="tag" style="background:#2a2a55;color:var(--cyan);padding:1px 6px;border-radius:3px;font-size:9px;font-weight:700">${e.trigger.replace('on_','')}</span>`;
+        if (e.type === 'tutor' && c.tutor_target) {
+          const tn = CARD_DB[c.tutor_target]?.name || c.tutor_target;
+          h += `<div class="cp-effect">${tag} Add <strong>${tn}</strong> from deck to hand</div>`;
+        } else if (e.type === 'destroy') {
+          h += `<div class="cp-effect">${tag} Destroy a minion</div>`;
+        } else if (e.type === 'burn') {
+          h += `<div class="cp-effect">${tag} Apply Burn (${e.amount} dmg/action, no stack)</div>`;
+        } else if (e.type === 'dark_matter_buff') {
+          h += `<div class="cp-effect">${tag} Give ally +${e.amount} + Dark Matter ATK</div>`;
+        } else if (e.type === 'passive_heal') {
+          h += `<div class="cp-effect"><span class="tag" style="background:#2a2a55;color:var(--cyan);padding:1px 6px;border-radius:3px;font-size:9px;font-weight:700">passive</span> Heal self ${e.amount} every action</div>`;
+        } else {
+          h += `<div class="cp-effect">${tag} ${e.type} ${e.amount} (${e.target.replace(/_/g,' ')})</div>`;
+        }
       });
       h += '</div>';
     }
+    if (c.transform_options) {
+      h += '<div class="cp-effects">';
+      c.transform_options.forEach(t => { const tn = CARD_DB[t.target]?.name || t.target; h += `<div class="cp-effect" style="color:#ab47bc"><span class="tag" style="background:#ab47bc30;color:#ab47bc;padding:1px 6px;border-radius:3px;font-size:9px;font-weight:700">transform</span> ${tn} (${t.cost} mana)</div>`; });
+      h += '</div>';
+    }
+    if (c.deckable === false) h += `<div class="cp-effects"><div class="cp-effect" style="color:#ff7043;font-size:11px">Transform only — not deckable</div></div>`;
+    if (c.summon_sacrifice_tribe) h += `<div class="cp-effects"><div class="cp-effect" style="color:#ff7043">Summon cost: Destroy a <strong>${c.summon_sacrifice_tribe}</strong> in hand</div></div>`;
     if (c.react) h += `<div class="cp-effects"><div class="cp-effect" style="color:var(--cyan)">React: ${c.react.replace(/_/g,' ')}</div></div>`;
     if (c.promote_target) h += `<div class="cp-effects"><div class="cp-effect" style="color:var(--green)">On death: promote ${c.promote_target} to ${c.name}</div></div>`;
     if (c.unique) h += `<div class="cp-effects"><div class="cp-effect" style="color:var(--yellow)">Unique — 1 per board</div></div>`;

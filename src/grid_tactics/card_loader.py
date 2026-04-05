@@ -94,6 +94,8 @@ class CardLoader:
             unique=data.get("unique", False),
             tutor_target=data.get("tutor_target"),
             summon_sacrifice_tribe=data.get("summon_sacrifice_tribe"),
+            transform_options=CardLoader._parse_transform_options(data, card_id),
+            deckable=data.get("deckable", True),
         )
 
     @staticmethod
@@ -145,4 +147,17 @@ class CardLoader:
             trigger=trigger,
             target=target,
             amount=data["amount"],
+        )
+
+    @staticmethod
+    def _parse_transform_options(
+        data: dict, card_id: str,
+    ) -> tuple[tuple[str, int], ...]:
+        """Parse transform_options list from JSON."""
+        raw = data.get("transform_options")
+        if not raw:
+            return ()
+        return tuple(
+            (opt["target"], opt["mana_cost"])
+            for opt in raw
         )

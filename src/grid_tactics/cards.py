@@ -90,6 +90,13 @@ class CardDefinition:
     # Summoning cost: sacrifice a card of this tribe from hand
     summon_sacrifice_tribe: Optional[str] = None
 
+    # Transform: on-board minion can be transformed into these cards (costs mana)
+    # Each entry is (card_id, mana_cost)
+    transform_options: tuple[tuple[str, int], ...] = ()
+
+    # Whether this card can be included in player decks (False = transform-only, etc.)
+    deckable: bool = True
+
     @property
     def is_multi_purpose(self) -> bool:
         """True if this card can be deployed OR used as react from hand (D-06)."""

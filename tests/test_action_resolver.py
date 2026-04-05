@@ -204,13 +204,13 @@ class TestMoveAction:
             position=(1, 0), current_health=5,
         )
         state = _make_state(minions=[minion])
-        action = Action(action_type=ActionType.MOVE, minion_id=0, position=(1, 1))
+        action = Action(action_type=ActionType.MOVE, minion_id=0, position=(2, 0))
         new_state = resolve_action(state, action, lib)
 
         moved = new_state.get_minion(0)
-        assert moved.position == (1, 1)
+        assert moved.position == (2, 0)
         assert new_state.board.get(1, 0) is None  # old cell empty
-        assert new_state.board.get(1, 1) == 0     # new cell has minion
+        assert new_state.board.get(2, 0) == 0     # new cell has minion
 
     def test_move_to_occupied_cell_raises(self):
         from grid_tactics.action_resolver import resolve_action
@@ -222,10 +222,10 @@ class TestMoveAction:
         )
         m2 = MinionInstance(
             instance_id=1, card_numeric_id=1, owner=PlayerSide.PLAYER_1,
-            position=(1, 1), current_health=5,
+            position=(2, 0), current_health=5,
         )
         state = _make_state(minions=[m1, m2])
-        action = Action(action_type=ActionType.MOVE, minion_id=0, position=(1, 1))
+        action = Action(action_type=ActionType.MOVE, minion_id=0, position=(2, 0))
         with pytest.raises(ValueError, match="[Oo]ccupied|[Ee]mpty|[Bb]locked"):
             resolve_action(state, action, lib)
 
@@ -239,7 +239,7 @@ class TestMoveAction:
         )
         state = _make_state(minions=[minion])
         action = Action(action_type=ActionType.MOVE, minion_id=0, position=(3, 0))
-        with pytest.raises(ValueError, match="[Aa]djacent|[Nn]ot.*valid"):
+        with pytest.raises(ValueError, match="[Ff]orward|[Aa]djacent|[Nn]ot.*valid"):
             resolve_action(state, action, lib)
 
     def test_move_opponent_minion_raises(self):
@@ -251,8 +251,34 @@ class TestMoveAction:
             position=(3, 0), current_health=5,
         )
         state = _make_state(minions=[minion])
-        action = Action(action_type=ActionType.MOVE, minion_id=0, position=(3, 1))
+        action = Action(action_type=ActionType.MOVE, minion_id=0, position=(4, 0))
         with pytest.raises(ValueError, match="[Oo]wn|[Cc]ontrol|[Bb]elong"):
+            resolve_action(state, action, lib)
+
+    def test_move_lateral_raises(self):
+        from grid_tactics.action_resolver import resolve_action
+
+        lib = _make_test_library()
+        minion = MinionInstance(
+            instance_id=0, card_numeric_id=1, owner=PlayerSide.PLAYER_1,
+            position=(1, 0), current_health=5,
+        )
+        state = _make_state(minions=[minion])
+        action = Action(action_type=ActionType.MOVE, minion_id=0, position=(1, 1))
+        with pytest.raises(ValueError, match="[Ll]ane"):
+            resolve_action(state, action, lib)
+
+    def test_move_backward_raises(self):
+        from grid_tactics.action_resolver import resolve_action
+
+        lib = _make_test_library()
+        minion = MinionInstance(
+            instance_id=0, card_numeric_id=1, owner=PlayerSide.PLAYER_1,
+            position=(2, 0), current_health=5,
+        )
+        state = _make_state(minions=[minion])
+        action = Action(action_type=ActionType.MOVE, minion_id=0, position=(1, 0))
+        with pytest.raises(ValueError, match="[Ff]orward"):
             resolve_action(state, action, lib)
 
 

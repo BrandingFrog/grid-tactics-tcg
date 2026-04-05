@@ -67,6 +67,7 @@ class TensorGameState:
     turn_number: torch.Tensor     # [N] int32
     is_game_over: torch.Tensor    # [N] bool
     winner: torch.Tensor          # [N] int32 (-1=none/draw, 0=p1, 1=p2)
+    fatigue_count: torch.Tensor   # [N, 2] int32 -- escalating bleed counter per player
 
     # React state
     react_player: torch.Tensor      # [N] int32
@@ -110,6 +111,7 @@ class TensorGameState:
             pending_action_type=self.pending_action_type.clone(),
             pending_action_card_id=self.pending_action_card_id.clone(),
             pending_action_had_position=self.pending_action_had_position.clone(),
+            fatigue_count=self.fatigue_count.clone(),
         )
 
 
@@ -149,4 +151,5 @@ def create_initial_state(
         pending_action_type=torch.full((n_envs,), EMPTY, dtype=torch.int32, device=device),
         pending_action_card_id=torch.full((n_envs,), EMPTY, dtype=torch.int32, device=device),
         pending_action_had_position=torch.zeros(n_envs, dtype=torch.bool, device=device),
+        fatigue_count=torch.zeros((n_envs, 2), dtype=torch.int32, device=device),
     )

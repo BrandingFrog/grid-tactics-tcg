@@ -277,33 +277,38 @@ EXCLUDED_CARDS: set[str] = {
 }
 
 
+# Per-card copy overrides (default is 3 copies)
+CARD_COPIES: dict[str, int] = {
+    "counter_spell": 1,  # 1 copy (reactive niche)
+    "giant_rat": 1,      # unique — only 1 on board, 1 in deck
+}
+
+
 def _build_standard_deck(library: CardLibrary) -> tuple[int, ...]:
-    """Build a balanced 40-card deck from the active card pool.
+    """Build exactly 40-card deck from the active card pool.
 
-    Excludes cards in EXCLUDED_CARDS. Uses 3 copies of each remaining
-    card, trimmed to reach exactly 40.
-
-    Args:
-        library: CardLibrary with all card definitions.
+    Excludes cards in EXCLUDED_CARDS. Uses CARD_COPIES overrides
+    (default 3 copies per card). Trims most expensive cards if over 40,
+    pads cheapest if under 40.
 
     Returns:
-        Tuple of 40 numeric card IDs.
+        Tuple of exactly 40 numeric card IDs.
     """
     from grid_tactics.types import MIN_DECK_SIZE
 
-    # Filter out excluded cards
     card_ids = sorted(
         cid for cid in library._card_id_to_id.keys()
         if cid not in EXCLUDED_CARDS
     )
 
-    # Build deck: 3 copies of each active card, pad with cheapest to reach 40
+    # Build deck with per-card copy counts
     deck_ids: list[int] = []
     for cid in card_ids:
         nid = library.get_numeric_id(cid)
-        deck_ids.extend([nid] * 3)
+        copies = CARD_COPIES.get(cid, 3)
+        deck_ids.extend([nid] * copies)
 
-    # Pad if under 40 (13 cards * 3 = 39)
+    # Pad if under 40 (add cheapest cards)
     if len(deck_ids) < MIN_DECK_SIZE:
         cards_by_cost = sorted(card_ids, key=lambda c: library.get_by_card_id(c).mana_cost)
         for cid in cards_by_cost:
@@ -311,9 +316,10 @@ def _build_standard_deck(library: CardLibrary) -> tuple[int, ...]:
                 break
             deck_ids.append(library.get_numeric_id(cid))
 
-    # Trim if over 40
+    # Trim if over 40 (drop from the end — highest cost cards added last alphabetically)
     deck_ids = deck_ids[:MIN_DECK_SIZE]
 
+    assert len(deck_ids) == MIN_DECK_SIZE, f"Deck has {len(deck_ids)} cards, expected {MIN_DECK_SIZE}"
     return tuple(deck_ids)
 
 

@@ -345,10 +345,9 @@ class TestWinMechanism:
         assert state.is_game_over
         assert state.winner == PlayerSide.PLAYER_1
 
-        # legal_actions on a game_over state should only return PASS
+        # legal_actions on a game_over state should return empty
         actions = legal_actions(state, library)
-        assert len(actions) == 1
-        assert actions[0].action_type == ActionType.PASS
+        assert len(actions) == 0
 
 
 # ---------------------------------------------------------------------------

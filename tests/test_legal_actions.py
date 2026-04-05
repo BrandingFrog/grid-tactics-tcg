@@ -124,20 +124,20 @@ class TestBasicLegalActions:
         pass_actions = [a for a in actions if a.action_type == ActionType.PASS]
         assert len(pass_actions) == 1
 
-    def test_deck_nonempty_draw_present(self, library):
-        """If deck is non-empty, DRAW is legal."""
+    def test_draw_not_action(self, library):
+        """DRAW is no longer a player action (auto-draw at turn start)."""
         fire_imp_id = library.get_numeric_id("fire_imp")
         state = _make_state(p1_deck=(fire_imp_id,))
         actions = legal_actions(state, library)
         draw_actions = [a for a in actions if a.action_type == ActionType.DRAW]
-        assert len(draw_actions) == 1
+        assert len(draw_actions) == 0
 
-    def test_deck_empty_no_draw(self, library):
-        """If deck is empty, DRAW is not legal."""
+    def test_pass_always_available(self, library):
+        """PASS is always available in ACTION phase."""
         state = _make_state()
         actions = legal_actions(state, library)
-        draw_actions = [a for a in actions if a.action_type == ActionType.DRAW]
-        assert len(draw_actions) == 0
+        pass_actions = [a for a in actions if a.action_type == ActionType.PASS]
+        assert len(pass_actions) == 1
 
 
 # ---------------------------------------------------------------------------
@@ -269,8 +269,8 @@ class TestMagicCardPlay:
 
 
 class TestMoveEnumeration:
-    def test_minion_can_move_to_adjacent_empty(self, library):
-        """Minion can move to all orthogonally adjacent empty cells."""
+    def test_minion_can_move_forward_in_lane(self, library):
+        """Minion can move forward one cell in its lane (same column)."""
         fire_imp_id = library.get_numeric_id("fire_imp")
         minion = MinionInstance(
             instance_id=0, card_numeric_id=fire_imp_id,
@@ -280,13 +280,13 @@ class TestMoveEnumeration:
         actions = legal_actions(state, library)
 
         move_actions = [a for a in actions if a.action_type == ActionType.MOVE]
-        # Center of board has 4 adjacent cells
-        assert len(move_actions) == 4
+        # Forward only in lane: P1 at (2,2) can only move to (3,2)
+        assert len(move_actions) == 1
         positions = {a.position for a in move_actions}
-        assert positions == {(1, 2), (3, 2), (2, 1), (2, 3)}
+        assert positions == {(3, 2)}
 
     def test_minion_cannot_move_to_occupied(self, library):
-        """Minion cannot move to an occupied adjacent cell."""
+        """Minion cannot move forward if the cell is occupied."""
         fire_imp_id = library.get_numeric_id("fire_imp")
         m1 = MinionInstance(
             instance_id=0, card_numeric_id=fire_imp_id,
@@ -294,19 +294,17 @@ class TestMoveEnumeration:
         )
         m2 = MinionInstance(
             instance_id=1, card_numeric_id=fire_imp_id,
-            owner=PlayerSide.PLAYER_1, position=(1, 3), current_health=2,
+            owner=PlayerSide.PLAYER_1, position=(2, 2), current_health=2,
         )
         state = _make_state(minions=(m1, m2))
         actions = legal_actions(state, library)
 
         move_m1 = [a for a in actions if a.action_type == ActionType.MOVE and a.minion_id == 0]
-        # (1,2) has 4 adjacent: (0,2), (2,2), (1,1), (1,3). (1,3) is occupied -> 3 moves
-        assert len(move_m1) == 3
-        positions = {a.position for a in move_m1}
-        assert (1, 3) not in positions
+        # Forward cell (2,2) is occupied -> 0 moves for m1
+        assert len(move_m1) == 0
 
-    def test_corner_minion_fewer_moves(self, library):
-        """Minion in corner has only 2 adjacent positions."""
+    def test_corner_minion_one_forward_move(self, library):
+        """Minion in corner can only move forward in its lane."""
         fire_imp_id = library.get_numeric_id("fire_imp")
         minion = MinionInstance(
             instance_id=0, card_numeric_id=fire_imp_id,
@@ -316,7 +314,23 @@ class TestMoveEnumeration:
         actions = legal_actions(state, library)
 
         move_actions = [a for a in actions if a.action_type == ActionType.MOVE]
-        assert len(move_actions) == 2
+        # P1 at (0,0) moves forward to (1,0)
+        assert len(move_actions) == 1
+        assert move_actions[0].position == (1, 0)
+
+    def test_back_row_minion_no_moves(self, library):
+        """P1 minion on P2's back row (row 4) cannot move further forward."""
+        fire_imp_id = library.get_numeric_id("fire_imp")
+        minion = MinionInstance(
+            instance_id=0, card_numeric_id=fire_imp_id,
+            owner=PlayerSide.PLAYER_1, position=(4, 2), current_health=2,
+        )
+        state = _make_state(minions=(minion,))
+        actions = legal_actions(state, library)
+
+        move_actions = [a for a in actions if a.action_type == ActionType.MOVE]
+        # Row 4 is the last row, forward would be row 5 (out of bounds)
+        assert len(move_actions) == 0
 
 
 # ---------------------------------------------------------------------------

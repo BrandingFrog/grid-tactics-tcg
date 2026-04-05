@@ -14,6 +14,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 from grid_tactics.action_resolver import resolve_action
+from grid_tactics.actions import pass_action
 from grid_tactics.card_library import CardLibrary
 from grid_tactics.enums import PlayerSide
 from grid_tactics.game_state import GameState
@@ -68,17 +69,14 @@ def run_game(
     while not state.is_game_over and state.turn_number <= turn_limit:
         actions = legal_actions(state, library)
 
-        # No legal actions = auto-lose for the active player
+        # No legal actions = fatigue bleed (escalating 10/20/30...)
         if len(actions) == 0:
-            loser_idx = state.active_player_idx
-            winner_side = PlayerSide(1 - loser_idx)
-            return GameResult(
-                winner=winner_side,
-                turn_count=state.turn_number,
-                final_hp=(state.players[0].hp, state.players[1].hp),
-                is_draw=False,
-                reason="no_actions",
-            )
+            action = pass_action()
+            state = resolve_action(state, action, library)
+            # Check if fatigue killed the player
+            if state.players[state.active_player_idx].hp <= 0 or state.players[1 - state.active_player_idx].hp <= 0:
+                break
+            continue
 
         action = rng.choice(actions)
         state = resolve_action(state, action, library)

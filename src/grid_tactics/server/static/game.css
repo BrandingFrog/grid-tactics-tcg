@@ -555,11 +555,13 @@ body {
 
 .game-layout {
   display: grid;
-  grid-template-columns: 1fr 260px;
-  gap: 16px;
+  grid-template-columns: 1fr 220px;
+  gap: 8px;
   max-width: 1100px;
   margin: 0 auto;
-  padding: 16px;
+  padding: 8px;
+  height: calc(100vh - 52px);
+  overflow: hidden;
 }
 
 @media (max-width: 900px) {
@@ -571,7 +573,9 @@ body {
 .game-main {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 4px;
+  min-height: 0;
+  overflow: hidden;
 }
 
 /* Room Bar */
@@ -579,10 +583,11 @@ body {
   background: var(--card);
   border: 1px solid var(--border);
   border-radius: 8px;
-  padding: 10px 16px;
+  padding: 6px 12px;
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 12px;
+  flex-shrink: 0;
 }
 
 .room-bar-code {
@@ -668,10 +673,11 @@ body {
   background: var(--card);
   border: 1px solid var(--border);
   border-radius: 8px;
-  padding: 10px 16px;
+  padding: 6px 12px;
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 12px;
+  flex-shrink: 0;
 }
 
 .player-tag {
@@ -711,7 +717,7 @@ body {
 }
 
 .stat-value {
-  font-size: 28px;
+  font-size: 18px;
   font-weight: 700;
   line-height: 1.0;
 }
@@ -733,13 +739,20 @@ body {
   background: var(--card);
   border: 1px solid var(--border);
   border-radius: 8px;
-  padding: 16px;
+  padding: 8px;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .game-board {
   display: grid;
   grid-template-columns: repeat(5, 1fr);
   gap: 4px;
+  width: 100%;
+  max-height: 100%;
 }
 
 /* Board Cell */
@@ -748,7 +761,6 @@ body {
   background: var(--card2);
   border: 1px solid var(--border);
   border-radius: 8px;
-  min-height: 68px;
   position: relative;
   transition: border-color 150ms ease, background 150ms ease;
   display: flex;
@@ -842,9 +854,11 @@ body {
 /* ===== Hand Container ===== */
 .hand-container {
   display: flex;
-  gap: 8px;
+  gap: 4px;
   overflow-x: auto;
-  padding: 8px 0;
+  padding: 4px 0;
+  flex-shrink: 0;
+  max-height: 140px;
 }
 
 .hand-container::-webkit-scrollbar {
@@ -863,7 +877,7 @@ body {
 /* ===== Card Frame (Full / Hand variant) ===== */
 .card-frame {
   aspect-ratio: 2/3;
-  width: 120px;
+  width: 90px;
   border: 2px solid rgb(30, 25, 20);
   border-radius: 3%;
   position: relative;
@@ -1039,7 +1053,9 @@ body {
 .game-sidebar {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 8px;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .sidebar-section {

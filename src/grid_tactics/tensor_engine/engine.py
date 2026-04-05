@@ -166,19 +166,18 @@ class TensorGameEngine:
             s.deck_sizes[mask_indices, 0] = self.deck_size
             s.deck_sizes[mask_indices, 1] = self.deck_size
 
-            # --- Deal starting hands (batched) ---
-            # For each of the STARTING_HAND_SIZE cards, deal from deck to hand
-            for h in range(STARTING_HAND_SIZE):
-                for p in range(2):
-                    # Read card at deck_tops position
-                    dt = s.deck_tops[mask_indices, p]  # [M]
-                    card_id = s.decks[mask_indices, p, dt.long()]  # [M] -- dt < deck_size guaranteed
+            # --- Deal starting hands (P1=3, P2=4) ---
+            from grid_tactics.types import STARTING_HAND_P1, STARTING_HAND_P2
+            hand_sizes_per_player = [STARTING_HAND_P1, STARTING_HAND_P2]
+            for p in range(2):
+                for h in range(hand_sizes_per_player[p]):
+                    dt = s.deck_tops[mask_indices, p]
+                    card_id = s.decks[mask_indices, p, dt.long()]
                     s.hands[mask_indices, p, h] = card_id
                     s.deck_tops[mask_indices, p] = dt + 1
-
-            # Set hand sizes
-            s.hand_sizes[mask_indices, 0] = STARTING_HAND_SIZE
-            s.hand_sizes[mask_indices, 1] = STARTING_HAND_SIZE
+            s.hand_sizes[mask_indices, 0] = STARTING_HAND_P1
+            s.hand_sizes[mask_indices, 1] = STARTING_HAND_P2
+            s.fatigue_count[mask_indices] = 0
 
     def step_batch(self, action_ints: torch.Tensor):
         """Apply one action per game. Handles both ACTION and REACT phases.
@@ -232,11 +231,21 @@ class TensorGameEngine:
 
         # Apply each action type
         apply_draw_batch(s, mask & (action_type == 3), self.card_table)
-        apply_move_batch(s, mask, action_type, source_flat, direction)
+        apply_move_batch(s, mask, action_type, source_flat, direction, self.card_table)
         apply_play_card_batch(s, mask, action_type, hand_idx, target_flat, self.card_table)
         apply_attack_batch(s, mask, action_type, source_flat, target_flat, self.card_table)
         apply_sacrifice_batch(s, mask, action_type, source_flat, self.card_table)
-        # PASS (type 4) is a no-op on state
+        # PASS (type 4) -- only happens when no other actions available (fatigue)
+        # Escalating fatigue damage: 10, 20, 30, 40...
+        is_pass_action = mask & (action_type == 4)
+        if is_pass_action.any():
+            ap = s.active_player
+            for p in range(2):
+                is_p_pass = is_pass_action & (ap == p)
+                if is_p_pass.any():
+                    s.fatigue_count[:, p] += is_p_pass.int()
+                    fatigue_dmg = s.fatigue_count[:, p] * 10  # 10, 20, 30...
+                    s.player_hp[:, p] -= fatigue_dmg * is_p_pass.int()
 
         # Record pending action info for react condition checking (batched)
         ap = s.active_player
@@ -369,6 +378,9 @@ class TensorGameEngine:
                 if regen_p1.any():
                     new_mana_p1 = (s.player_mana[:, 1] + 1).clamp(max=10)
                     s.player_mana[:, 1] = torch.where(regen_p1, new_mana_p1, s.player_mana[:, 1])
+
+                # Auto-draw for new active player at turn start
+                apply_draw_batch(s, should_advance, self.card_table)
 
     def cleanup_dead_minions_batch(self):
         """Remove minions with health <= 0. Trigger ON_DEATH effects.
