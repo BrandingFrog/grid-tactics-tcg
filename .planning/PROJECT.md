@@ -30,6 +30,7 @@ The reinforcement learning engine that discovers and validates game strategies �
 - 21 cards in starter pool, 500+ tests passing
 
 **Phase 11 complete** — Flask-SocketIO PvP server with room codes, create/join/ready flow, session tokens, preset deck. 22 new tests.
+**Phase 12 complete** — Complete game playable via raw WebSocket. View filter (hidden info), action validation, submit_action handler, auto-draw fix. 44 new tests (66 total for PvP).
 
 ## Requirements
 
