@@ -250,7 +250,7 @@ Phases execute in numeric order: 11 -> 12 -> 13 -> 14 -> 15
 | 8. Card Expansion & Balance | v1.0 | 0/TBD | Not started | - |
 | 9. Analytics Dashboard Core | v1.0 | 0/TBD | Not started | - |
 | 10. Replay & Balance Visualization | v1.0 | 0/TBD | Not started | - |
-| 11. Server Foundation & Room System | v1.1 | 2/2 | Complete   | 2026-04-05 |
+| 11. Server Foundation & Room System | v1.1 | 2/2 | Complete    | 2026-04-05 |
 | 12. State Serialization & Game Flow | v1.1 | 0/TBD | Not started | - |
 | 13. Board & Hand UI | v1.1 | 0/TBD | Not started | - |
 | 14. Gameplay Interaction | v1.1 | 0/TBD | Not started | - |
