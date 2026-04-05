@@ -35,44 +35,68 @@ Declared values (must be multiples of 4):
 |-------|-------|-------|
 | xs | 4px | Grid cell gaps, inline icon padding, attribute circle border |
 | sm | 8px | Hand card gap, compact stat padding, log entry padding |
-| md | 12px | Board padding, card section padding, button gap (matches dashboard .card padding=16 but board is denser) |
-| lg | 16px | Section padding (stat bars, room bar, opponent/self info bars) |
-| xl | 24px | Lobby section margins, deck builder section breaks |
-| 2xl | 32px | Page-level content padding |
-| 3xl | 60px | Lobby vertical centering padding |
+| md | 16px | Board padding, card section padding, button gap, section padding (stat bars, room bar, opponent/self info bars) |
+| lg | 24px | Lobby section margins, deck builder section breaks |
+| xl | 32px | Page-level content padding |
+| 2xl | 48px | Major section vertical separation |
+| 3xl | 64px | Lobby vertical centering padding |
 
 Exceptions:
-- Board cell minimum height: 68px (matches existing `.duel-cell` min-height)
-- Touch/click target minimum: 44px for all interactive buttons (deck builder add/remove, lobby buttons)
+- Board cell minimum height: 68px (matches existing `.duel-cell` min-height; cell dimension, not a spacing token)
+- Touch/click target minimum: 44px for all interactive buttons (deck builder add/remove, lobby buttons; accessibility minimum, not a spacing token)
 
-**Source:** Dashboard uses 4/8/12/16/20px increments. Board density demands tighter spacing (4px cell gap) than typical UI.
+**Source:** Dashboard uses 4/8/16/24px increments. Board density demands tighter spacing (4px cell gap) than typical UI.
+
+---
+
+## Visual Focal Point
+
+**Primary visual anchor:** The 5x5 game board grid. All other elements (info bars, hand, sidebar) are arranged to frame and support the board. The board occupies the vertical center of the main column and receives the highest-contrast treatment (zone tinting, cyan hover borders, minion cards with owner tint). The eye should travel: board first, then hand below, then stat bars above/below the board, then sidebar last.
 
 ---
 
 ## Typography
 
+**Exactly 4 size tokens shared across both fonts. Exactly 2 weight tokens.**
+
+### Size Tokens
+
+| Token | Value |
+|-------|-------|
+| size-sm | 10px |
+| size-base | 12px |
+| size-lg | 14px |
+| size-xl | 28px |
+
+### Weight Tokens
+
+| Token | Value |
+|-------|-------|
+| weight-normal | 400 |
+| weight-bold | 700 |
+
 ### UI Chrome (Inter / system-ui)
 
-| Role | Size | Weight | Line Height | Usage |
-|------|------|--------|-------------|-------|
-| Body | 13px | 400 | 1.5 | Log entries, descriptions, tooltip text |
-| Label | 10px | 700 | 1.2 | Section headers (uppercase, 1.5px letter-spacing), stat labels ("HP", "MANA") |
-| Heading | 14px | 700 | 1.2 | Player names, section titles |
-| Display | 18px-28px | 900 | 1.0 | Stat values (HP/Mana numbers), room code, lobby heading |
+| Role | Size Token | Weight Token | Line Height | Usage |
+|------|-----------|-------------|-------------|-------|
+| Body | size-base (12px) | weight-normal (400) | 1.5 | Log entries, descriptions, tooltip text, turn number label |
+| Label | size-sm (10px) | weight-bold (700) | 1.2 | Section headers (uppercase, 1.5px letter-spacing), stat labels ("HP", "MANA") |
+| Heading | size-lg (14px) | weight-bold (700) | 1.2 | Player names, section titles |
+| Display | size-xl (28px) | weight-bold (700) | 1.0 | Stat values (HP/Mana numbers), room code, lobby heading |
 
 ### Card Text (LuckiestGuy)
 
-| Role | Size | Weight | Line Height | Usage |
-|------|------|--------|-------------|-------|
-| Card Name (hand) | 14px | 400 | 1.1 | Full-size hand card name, white with 1px black text-stroke |
-| Card Stats (hand) | 12px | 400 | 1.0 | ATK/HP labels on hand cards, white with 1px black text-stroke |
-| Card Mana (hand) | 14px | 400 | 1.0 | Mana cost badge number |
-| Card Name (board) | 9px | 700 | 1.1 | Compact minion name on board (truncated with ellipsis) |
-| Card Stats (board) | 11px | 800 | 1.0 | ATK/HP on board minions |
+| Role | Size Token | Weight Token | Line Height | Usage |
+|------|-----------|-------------|-------------|-------|
+| Card Name (hand) | size-lg (14px) | weight-normal (400) | 1.1 | Full-size hand card name, white with 1px black text-stroke |
+| Card Stats (hand) | size-base (12px) | weight-normal (400) | 1.0 | ATK/HP labels on hand cards, white with 1px black text-stroke |
+| Card Mana (hand) | size-lg (14px) | weight-normal (400) | 1.0 | Mana cost badge number |
+| Card Name (board) | size-sm (10px) | weight-bold (700) | 1.1 | Compact minion name on board (truncated with ellipsis, uses Inter for readability at small sizes) |
+| Card Stats (board) | size-base (12px) | weight-bold (700) | 1.0 | ATK/HP on board minions |
 
-**Note:** LuckiestGuy only comes in weight 400. "Bold" appearance is achieved via text-stroke and the font's inherent thick letterforms. Board minion names use Inter at 9px/700 for readability at small sizes.
+**Note:** LuckiestGuy only comes in weight 400. For roles marked weight-bold (700) that use LuckiestGuy, the bold appearance is achieved via `text-stroke: 1px black` and the font's inherent thick letterforms. Board minion names use Inter at 10px/700 for readability at small sizes. No other font sizes or weights are permitted.
 
-**Source:** D-05/D-06 (LuckiestGuy from YGO reference). Dashboard uses 9-26px range with Inter. Font import: `@import url('https://fonts.googleapis.com/css2?family=Luckiest+Guy&display=swap');`
+**Source:** D-05/D-06 (LuckiestGuy from YGO reference). Font import: `@import url('https://fonts.googleapis.com/css2?family=Luckiest+Guy&display=swap');`
 
 ---
 
@@ -155,11 +179,11 @@ Accent `--cyan` reserved for: active turn banner, Player 1 identity, room code d
 
 | Component | Description |
 |-----------|-------------|
-| Lobby container | Centered content, 60px vertical padding, max-width 500px |
-| Heading | "GRID TACTICS" in 28px/900 cyan, 8px margin-bottom |
-| Subheading | "Online PvP Dueling" in 13px muted, 24px margin-bottom |
-| Create Room button | Primary style: cyan bg, dark text, 12px 28px padding, 8px radius |
-| Join section | Code input (6-char, 20px font, 8px letter-spacing, uppercase, cyan text on card bg, 2px border) + Join button (secondary: card2 bg, border) |
+| Lobby container | Centered content, 64px vertical padding, max-width 500px |
+| Heading | "GRID TACTICS" in size-xl (28px) / weight-bold (700) cyan, 8px margin-bottom |
+| Subheading | "Online PvP Dueling" in size-base (12px) muted, 24px margin-bottom |
+| Create Room button | Primary style: cyan bg, dark text, 16px 32px padding, 8px radius |
+| Join section | Code input (6-char, size-lg (14px) font, 8px letter-spacing, uppercase, cyan text on card bg, 2px border) + Join Room button (secondary: card2 bg, border) |
 | Deck selector | Dropdown of saved deck slots (populated from localStorage). Label: "Select Deck". Fallback text: "Default Deck" when no saved decks |
 | Ready button | Primary style, disabled until deck selected. Label: "Ready Up" |
 | Player list | Shows connected players with ready state indicators (green dot = ready, dim dot = waiting) |
@@ -171,7 +195,7 @@ Accent `--cyan` reserved for: active turn banner, Player 1 identity, room code d
 | Card browser | Grid of all available cards (from server card_defs), 4-column layout. Each card rendered as full YGO-style card |
 | Card count badge | Overlay on card showing "x0/x1/x2/x3" copies in deck. Click to increment, right-click/shift-click to decrement |
 | Deck list sidebar | Right panel (260px). Lists cards in current deck grouped by type. Shows count per card. Total: "N/30" |
-| Slot controls | Top bar: slot name input (editable), Save button, Load dropdown (5 slots), Delete button |
+| Slot controls | Top bar: slot name input (editable), Save button, Load dropdown (5 slots), Delete Slot button (with confirmation -- see Destructive Actions below) |
 | Validation indicator | Bottom bar: "30/30 cards" in green when valid, "N/30 cards" in red when invalid. Minimum 30 required |
 | Back button | Returns to lobby. Label: "Back to Lobby" |
 
@@ -179,16 +203,16 @@ Accent `--cyan` reserved for: active turn banner, Player 1 identity, room code d
 
 | Component | Description |
 |-----------|-------------|
-| Room bar | Full-width, card bg. Shows: room code (cyan, 18px, 4px letter-spacing), turn indicator, player tag |
+| Room bar | Full-width, card bg. Shows: room code (cyan, size-lg (14px), 4px letter-spacing), turn indicator, player tag |
 | Opponent info bar | Card bg panel. Shows: "PLAYER 2 (Opponent)" in red, HP stat, Mana stat (current/max), Hand count, Deck count |
-| Game board | 5x5 CSS Grid, 4px gap, card bg container, 12px padding, 10px radius. Zone tinting per row |
+| Game board | 5x5 CSS Grid, 4px gap, card bg container, 16px padding, 8px radius. Zone tinting per row. **Primary visual anchor** -- all layout flows around this element. |
 | Board cell | Aspect-ratio 1:1, card2 bg, 1px border, 8px radius, 68px min-height. Hover: cyan border + darker bg |
-| Board minion | Compact card inside cell. Owner tint bg, attribute circle (small), name (9px truncated), ATK/HP stats (ATK in red, HP in green) |
+| Board minion | Compact card inside cell. Owner tint bg, attribute circle (small), name (size-sm 10px truncated), ATK/HP stats (ATK in red, HP in green) |
 | Self info bar | Card bg panel. Shows: "PLAYER 1 (You)" in cyan, HP stat, Mana stat, Hand count, Deck count |
 | Hand | Horizontal scrolling flex container, 8px gap. Cards are full YGO-style, 120px wide (180px tall from 2:3 ratio) |
 | Hand card | YGO-style: type-colored bg, mana badge (top-left blue circle), art area (attribute-tinted placeholder), attribute circle (top-right with inner ring), name (text-stroke), ATK/HP bottom. Hover: translateY(-6px), cyan border glow |
 | Turn banner | Inside room bar. "YOUR TURN" in green with pulsing dot, or "OPPONENT'S TURN" in muted. Phase badge: "ACTION" (cyan bg) or "REACT" (yellow bg) |
-| Turn number | "Turn N" label beside phase badge, 12px muted text |
+| Turn number | "Turn N" label beside phase badge, size-base (12px) muted text |
 | Game sidebar | Right column (260px). Contains: game log (Phase 15), leave button |
 | Leave button | Secondary style, full-width. Label: "Leave Game" |
 
@@ -248,7 +272,7 @@ Accent `--cyan` reserved for: active turn banner, Player 1 identity, room code d
 - Max-width: 1100px, centered (`margin: 0 auto`)
 - Layout: CSS Grid `grid-template-columns: 1fr 260px`, 16px gap
 - At `<=900px`: single column (sidebar below main)
-- Board container: 12px padding, full width of main column
+- Board container: 16px padding, full width of main column
 - Board cells: equal 1fr columns, 4px gap
 
 ### Board Grid
@@ -280,7 +304,7 @@ CSS: display: flex; gap: 8px; overflow-x: auto; padding: 8px 0;
 | Element | Copy |
 |---------|------|
 | Primary CTA (lobby) | "Create Room" |
-| Secondary CTA (lobby) | "Join" |
+| Secondary CTA (lobby) | "Join Room" |
 | Ready CTA | "Ready Up" |
 | Room code label | "Room Code" |
 | Room code input placeholder | "XXXXXX" (6 chars) |
@@ -296,20 +320,27 @@ CSS: display: flex; gap: 8px; overflow-x: auto; padding: 8px 0;
 | Phase badge (react) | "REACT" |
 | Opponent label | "PLAYER 2 (Opponent)" |
 | Self label | "PLAYER 1 (You)" |
-| Stat labels | "HP", "MANA", "HAND", "DECK" (uppercase, 9-10px) |
+| Stat labels | "HP", "MANA", "HAND", "DECK" (uppercase, size-sm 10px) |
 | Mana display format | "N/M" (current/max) |
 | Card stat format | "ATK/N" and "HP/N" |
 | Deck count format | "N/30 cards" |
 | Deck valid | "30/30 cards -- Ready to play" |
 | Deck invalid | "N/30 cards -- Need 30 cards" |
 | Deck slot save | "Save Deck" |
-| Deck slot delete | "Delete" |
+| Deck slot delete | "Delete Slot" |
 | Back button (deck builder) | "Back to Lobby" |
 | Leave button (game) | "Leave Game" |
 | Error: room not found | "Room not found. Check the code and try again." |
 | Error: room full | "Room is full. Create a new room instead." |
 | Error: connection lost | "Connection lost. Reconnecting..." |
 | Error: invalid deck | "Invalid deck. Must contain exactly 30 cards." |
+
+### Destructive Actions
+
+| Action | Button Label | Confirmation Approach |
+|--------|-------------|----------------------|
+| Delete deck slot | "Delete Slot" | Inline confirm: button text changes to "Confirm Delete?" for 3 seconds. If not clicked again within 3 seconds, reverts to "Delete Slot". No modal dialog. |
+| Leave game | "Leave Game" | No confirmation required (non-destructive -- game can be rejoined, and leaving a casual match is low-stakes). |
 
 ---
 
