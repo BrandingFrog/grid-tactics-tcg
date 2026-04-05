@@ -16,7 +16,7 @@ from grid_tactics.enums import PlayerSide, TurnPhase
 from grid_tactics.minion import MinionInstance
 from grid_tactics.player import Player
 from grid_tactics.rng import GameRNG
-from grid_tactics.types import STARTING_HAND_SIZE
+from grid_tactics.types import STARTING_HAND_P1, STARTING_HAND_P2
 
 
 @dataclass(frozen=True, slots=True)
@@ -46,6 +46,9 @@ class GameState:
     # Phase 4: Win/draw detection
     winner: Optional[PlayerSide] = None  # which player won (None = no winner yet, or draw)
     is_game_over: bool = False  # True when game has ended (win or draw)
+
+    # Phase 11: Fatigue tracking (moved from action_resolver module global)
+    fatigue_counts: tuple[int, int] = (0, 0)  # (p0_pass_count, p1_pass_count)
 
     @property
     def active_player(self) -> Player:
@@ -91,9 +94,10 @@ class GameState:
         p1 = Player.new(PlayerSide.PLAYER_1, shuffled_p1)
         p2 = Player.new(PlayerSide.PLAYER_2, shuffled_p2)
 
-        # Draw starting hands (D-10: 5 cards each)
-        for _ in range(STARTING_HAND_SIZE):
+        # Draw starting hands (P1=3, P2=4)
+        for _ in range(STARTING_HAND_P1):
             p1, _ = p1.draw_card()
+        for _ in range(STARTING_HAND_P2):
             p2, _ = p2.draw_card()
 
         state = cls(
@@ -148,6 +152,8 @@ class GameState:
             # Phase 4: Win/draw detection
             "winner": int(self.winner) if self.winner is not None else None,
             "is_game_over": self.is_game_over,
+            # Phase 11: Fatigue tracking
+            "fatigue_counts": list(self.fatigue_counts),
         }
 
         # Serialize pending_action if present
@@ -232,4 +238,5 @@ class GameState:
             pending_action=pending_action,
             winner=winner,
             is_game_over=is_game_over,
+            fatigue_counts=tuple(d.get("fatigue_counts", (0, 0))),
         )

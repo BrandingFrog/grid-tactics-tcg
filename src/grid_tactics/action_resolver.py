@@ -108,8 +108,20 @@ def _can_attack(
 
 
 def _apply_pass(state: GameState) -> GameState:
-    """Apply PASS action. Returns state unchanged (react transition in resolve_action)."""
-    return state
+    """Apply PASS action. Only triggers when no other actions available.
+
+    Applies escalating fatigue damage: 10, 20, 30...
+    Fatigue counts are stored in GameState.fatigue_counts (per-player tuple)
+    instead of a module-level dict, ensuring concurrent game safety.
+    """
+    active_idx = state.active_player_idx
+    player = state.players[active_idx]
+    counts = list(state.fatigue_counts)
+    counts[active_idx] += 1
+    dmg = counts[active_idx] * 10
+    new_player = replace(player, hp=player.hp - dmg)
+    new_players = _replace_player(state.players, active_idx, new_player)
+    return replace(state, players=new_players, fatigue_counts=tuple(counts))
 
 
 def _apply_draw(state: GameState) -> GameState:
@@ -125,12 +137,12 @@ def _apply_draw(state: GameState) -> GameState:
     return replace(state, players=new_players)
 
 
-def _apply_move(state: GameState, action: Action) -> GameState:
-    """Apply MOVE action. Moves minion to adjacent empty cell.
+def _apply_move(state: GameState, action: Action, library: CardLibrary = None) -> GameState:
+    """Apply MOVE action. Moves minion forward one cell in its lane.
 
     Validates:
       - Minion exists and belongs to active player
-      - Target position is orthogonally adjacent
+      - Target position is forward-only in the same column (lane-locked)
       - Target cell is empty
     """
     active_side = _get_active_side(state)
@@ -148,11 +160,20 @@ def _apply_move(state: GameState, action: Action) -> GameState:
     if target_pos is None:
         raise ValueError("Move action requires a target position")
 
-    # Check orthogonal adjacency
-    adjacent = Board.get_orthogonal_adjacent(minion.position)
-    if target_pos not in adjacent:
+    # Lane-locked: must stay in the same column
+    src_row, src_col = minion.position
+    tgt_row, tgt_col = target_pos
+    if tgt_col != src_col:
         raise ValueError(
-            f"Position {target_pos} is not adjacent to minion at {minion.position}"
+            f"Lane-locked: cannot move laterally from col {src_col} to col {tgt_col}"
+        )
+
+    # Forward-only: P1 moves down (+1 row), P2 moves up (-1 row)
+    expected_row = src_row + (1 if active_side == PlayerSide.PLAYER_1 else -1)
+    if tgt_row != expected_row:
+        raise ValueError(
+            f"Forward-only: {active_side.name} at row {src_row} must move to row "
+            f"{expected_row}, not row {tgt_row}"
         )
 
     # Check target cell is empty
@@ -168,8 +189,67 @@ def _apply_move(state: GameState, action: Action) -> GameState:
     # Update minion position
     new_minion = replace(minion, position=target_pos)
     new_minions = _replace_minion(state.minions, minion.instance_id, new_minion)
+    state = replace(state, board=new_board, minions=new_minions)
 
-    return replace(state, board=new_board, minions=new_minions)
+    # --- Auto-attack after move: hit nearest enemy in range ---
+    if library is not None:
+        state = _auto_attack_after_move(state, new_minion, library)
+
+    return state
+
+
+def _auto_attack_after_move(
+    state: GameState, moved_minion: MinionInstance, library: CardLibrary,
+) -> GameState:
+    """After moving, auto-attack the closest enemy in range if one exists."""
+    attacker_card = library.get_by_id(moved_minion.card_numeric_id)
+    best_target = None
+    best_dist = 999
+
+    for m in state.minions:
+        if m.owner == moved_minion.owner:
+            continue
+        if not _can_attack(moved_minion, m, attacker_card):
+            continue
+        dist = Board.manhattan_distance(moved_minion.position, m.position)
+        if dist < best_dist:
+            best_dist = dist
+            best_target = m
+
+    if best_target is None:
+        return state
+
+    # Range combat with first strike rules
+    defender_card = library.get_by_id(best_target.card_numeric_id)
+    atk_eff = attacker_card.attack + moved_minion.attack_bonus
+    def_eff = defender_card.attack + best_target.attack_bonus
+
+    atk_range = attacker_card.attack_range or 0
+    def_range = defender_card.attack_range or 0
+    def_can_reach = (def_range == 0 and best_dist <= 1) or (def_range > 0 and best_dist <= def_range)
+
+    # Moving unit with shorter range = faster, strikes first
+    attacker_first = atk_range < def_range and def_can_reach
+
+    if not def_can_reach:
+        new_defender = replace(best_target, current_health=best_target.current_health - atk_eff)
+        new_minions = _replace_minion(state.minions, moved_minion.instance_id, moved_minion)
+        new_minions = _replace_minion(new_minions, best_target.instance_id, new_defender)
+    elif attacker_first:
+        new_defender = replace(best_target, current_health=best_target.current_health - atk_eff)
+        if new_defender.current_health > 0:
+            new_attacker = replace(moved_minion, current_health=moved_minion.current_health - def_eff)
+        else:
+            new_attacker = moved_minion
+        new_minions = _replace_minion(state.minions, new_attacker.instance_id, new_attacker)
+        new_minions = _replace_minion(new_minions, new_defender.instance_id, new_defender)
+    else:
+        new_attacker = replace(moved_minion, current_health=moved_minion.current_health - def_eff)
+        new_defender = replace(best_target, current_health=best_target.current_health - atk_eff)
+        new_minions = _replace_minion(state.minions, new_attacker.instance_id, new_attacker)
+        new_minions = _replace_minion(new_minions, new_defender.instance_id, new_defender)
+
+    return replace(state, minions=new_minions)
 
 
 def _apply_play_card(
@@ -428,12 +508,38 @@ def _apply_attack(
     attacker_effective = attacker_card.attack + attacker.attack_bonus
     defender_effective = defender_card.attack + defender.attack_bonus
 
-    # Simultaneous damage (D-01)
-    new_attacker = replace(attacker, current_health=attacker.current_health - defender_effective)
-    new_defender = replace(defender, current_health=defender.current_health - attacker_effective)
+    # Range combat: shorter range at current distance = first strike
+    dist = Board.manhattan_distance(attacker.position, defender.position)
+    atk_range = attacker_card.attack_range or 0
+    def_range = defender_card.attack_range or 0
 
-    new_minions = _replace_minion(state.minions, attacker.instance_id, new_attacker)
-    new_minions = _replace_minion(new_minions, defender.instance_id, new_defender)
+    # Can defender retaliate at this distance?
+    def_can_reach = (def_range == 0 and dist <= 1) or (def_range > 0 and dist <= def_range)
+
+    # First strike: attacker has strictly shorter range = faster/closer unit
+    attacker_strikes_first = atk_range < def_range and def_can_reach
+
+    if not def_can_reach:
+        # Defender can't reach: attacker hits, no retaliation
+        new_defender = replace(defender, current_health=defender.current_health - attacker_effective)
+        new_minions = _replace_minion(state.minions, attacker.instance_id, attacker)
+        new_minions = _replace_minion(new_minions, defender.instance_id, new_defender)
+    elif attacker_strikes_first:
+        # Attacker hits first, defender retaliates if alive
+        new_defender = replace(defender, current_health=defender.current_health - attacker_effective)
+        if new_defender.current_health > 0:
+            new_attacker = replace(attacker, current_health=attacker.current_health - defender_effective)
+        else:
+            new_attacker = attacker  # defender died, no retaliation
+        new_minions = _replace_minion(state.minions, attacker.instance_id, new_attacker)
+        new_minions = _replace_minion(new_minions, new_defender.instance_id, new_defender)
+    else:
+        # Simultaneous damage
+        new_attacker = replace(attacker, current_health=attacker.current_health - defender_effective)
+        new_defender = replace(defender, current_health=defender.current_health - attacker_effective)
+        new_minions = _replace_minion(state.minions, attacker.instance_id, new_attacker)
+        new_minions = _replace_minion(new_minions, defender.instance_id, new_defender)
+
     state = replace(state, minions=new_minions)
 
     # Trigger ON_ATTACK effects for attacker
@@ -589,7 +695,7 @@ def resolve_action(
     elif action.action_type == ActionType.DRAW:
         state = _apply_draw(state)
     elif action.action_type == ActionType.MOVE:
-        state = _apply_move(state, action)
+        state = _apply_move(state, action, library)
     elif action.action_type == ActionType.PLAY_CARD:
         state = _apply_play_card(state, action, library)
     elif action.action_type == ActionType.ATTACK:
