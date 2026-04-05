@@ -530,7 +530,8 @@ function renderDeckBuilderCard(numericId, count) {
     }
     // Range for minions
     if (c.card_type === 0 && c.attack_range != null) {
-        html += '<div class="card-range">Range: ' + c.attack_range + '</div>';
+        var rangeText = c.attack_range <= 1 ? 'Melee' : 'Range ' + c.attack_range;
+        html += '<div class="card-range">' + rangeText + '</div>';
     }
     html += '</div>';
     // Count badge
