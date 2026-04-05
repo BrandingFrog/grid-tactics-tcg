@@ -81,6 +81,10 @@ function showScreen(screenId) {
             btn.classList.remove('active');
         }
     });
+    // Render deck builder when switching to it
+    if (screenId === 'screen-deck-builder' && allCardDefs) {
+        renderDeckBuilder();
+    }
 }
 window.showScreen = showScreen;
 
