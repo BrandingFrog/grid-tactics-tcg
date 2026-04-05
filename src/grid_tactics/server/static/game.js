@@ -60,8 +60,10 @@ let myName = '';             // display name entered in lobby
 let currentDeck = {};        // { numericId: count }
 let currentSlotIdx = 0;
 let allCardDefs = null;      // set from server on game_start or card_defs event
-let deckFilterType = 'all';  // 'all', 'minion', 'magic', 'react'
-let deckSearchQuery = '';    // search text
+let deckFilterType = 'all';     // 'all', 'minion', 'magic', 'react'
+let deckFilterElement = 'all';  // 'all', or element int as string
+let deckFilterMana = 'all';     // 'all', '1', '2', '3', '4', '5+'
+let deckSearchQuery = '';       // search text
 
 // =============================================
 // Section 3: Screen Manager
@@ -414,6 +416,20 @@ function renderCardBrowser() {
         var c = defs[numId];
         // Type filter
         if (deckFilterType !== 'all' && typeMap[c.card_type] !== deckFilterType) return;
+        // Element filter
+        if (deckFilterElement !== 'all') {
+            var cardElem = (c.attribute !== undefined && c.attribute !== null) ? String(c.attribute) : '-1';
+            if (deckFilterElement !== cardElem) return;
+        }
+        // Mana filter
+        if (deckFilterMana !== 'all') {
+            var manaCost = c.mana_cost || 0;
+            if (deckFilterMana === '5+') {
+                if (manaCost < 5) return;
+            } else {
+                if (manaCost !== parseInt(deckFilterMana)) return;
+            }
+        }
         // Search filter
         if (query) {
             var searchable = (c.name || '').toLowerCase() + ' ' + (c.card_id || '').toLowerCase();
@@ -449,10 +465,29 @@ function setupDeckFilters() {
             renderCardBrowser();
         });
     }
-    document.querySelectorAll('.filter-btn').forEach(function(btn) {
+    // Type filters
+    document.querySelectorAll('#type-filters .filter-btn').forEach(function(btn) {
         btn.addEventListener('click', function() {
             deckFilterType = btn.dataset.filter;
-            document.querySelectorAll('.filter-btn').forEach(function(b) { b.classList.remove('active'); });
+            document.querySelectorAll('#type-filters .filter-btn').forEach(function(b) { b.classList.remove('active'); });
+            btn.classList.add('active');
+            renderCardBrowser();
+        });
+    });
+    // Element filters
+    document.querySelectorAll('#element-filters .filter-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            deckFilterElement = btn.dataset.filter;
+            document.querySelectorAll('#element-filters .filter-btn').forEach(function(b) { b.classList.remove('active'); });
+            btn.classList.add('active');
+            renderCardBrowser();
+        });
+    });
+    // Mana filters
+    document.querySelectorAll('#mana-filters .filter-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            deckFilterMana = btn.dataset.filter;
+            document.querySelectorAll('#mana-filters .filter-btn').forEach(function(b) { b.classList.remove('active'); });
             btn.classList.add('active');
             renderCardBrowser();
         });

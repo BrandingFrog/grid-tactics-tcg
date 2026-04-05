@@ -399,15 +399,30 @@ body {
 
 .card-browser-filters {
   display: flex;
-  gap: 8px;
+  flex-direction: column;
+  gap: 6px;
   margin-bottom: 12px;
+}
+
+.filter-row {
+  display: flex;
   align-items: center;
-  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.filter-label {
+  font-size: 9px;
+  font-weight: 700;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  min-width: 50px;
 }
 
 .filter-btns {
   display: flex;
-  gap: 4px;
+  gap: 3px;
+  flex-wrap: wrap;
 }
 
 .filter-btn {

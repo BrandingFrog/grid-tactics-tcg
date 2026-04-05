@@ -104,11 +104,37 @@
           <h3 class="section-heading">All Cards</h3>
           <div class="card-browser-filters">
             <input type="text" id="card-search" class="input" placeholder="Search cards..." style="flex:1;min-width:120px;">
-            <div class="filter-btns">
-              <button class="filter-btn active" data-filter="all">All</button>
-              <button class="filter-btn" data-filter="minion" style="border-color:rgb(180,140,60);color:rgb(180,140,60);">Minion</button>
-              <button class="filter-btn" data-filter="magic" style="border-color:rgb(30,140,120);color:rgb(30,140,120);">Magic</button>
-              <button class="filter-btn" data-filter="react" style="border-color:rgb(160,40,100);color:rgb(160,40,100);">React</button>
+            <div class="filter-row">
+              <span class="filter-label">TYPE</span>
+              <div class="filter-btns" id="type-filters">
+                <button class="filter-btn active" data-filter="all">All</button>
+                <button class="filter-btn" data-filter="minion" style="border-color:rgb(180,140,60);color:rgb(180,140,60);">Minion</button>
+                <button class="filter-btn" data-filter="magic" style="border-color:rgb(30,140,120);color:rgb(30,140,120);">Magic</button>
+                <button class="filter-btn" data-filter="react" style="border-color:rgb(160,40,100);color:rgb(160,40,100);">React</button>
+              </div>
+            </div>
+            <div class="filter-row">
+              <span class="filter-label">ELEMENT</span>
+              <div class="filter-btns" id="element-filters">
+                <button class="filter-btn active" data-filter="all">All</button>
+                <button class="filter-btn" data-filter="1" style="border-color:rgb(220,40,30);color:rgb(220,40,30);">Fire</button>
+                <button class="filter-btn" data-filter="5" style="border-color:rgb(130,50,180);color:rgb(130,50,180);">Dark</button>
+                <button class="filter-btn" data-filter="6" style="border-color:rgb(240,220,40);color:rgb(240,220,40);">Light</button>
+                <button class="filter-btn" data-filter="2" style="border-color:rgb(140,100,40);color:rgb(140,100,40);">Earth</button>
+                <button class="filter-btn" data-filter="0" style="border-color:rgb(102,187,106);color:rgb(102,187,106);">Wood</button>
+                <button class="filter-btn" data-filter="-1" style="border-color:rgb(128,128,128);color:rgb(128,128,128);">Neutral</button>
+              </div>
+            </div>
+            <div class="filter-row">
+              <span class="filter-label">MANA</span>
+              <div class="filter-btns" id="mana-filters">
+                <button class="filter-btn active" data-filter="all">All</button>
+                <button class="filter-btn" data-filter="1">1</button>
+                <button class="filter-btn" data-filter="2">2</button>
+                <button class="filter-btn" data-filter="3">3</button>
+                <button class="filter-btn" data-filter="4">4</button>
+                <button class="filter-btn" data-filter="5+">5+</button>
+              </div>
             </div>
           </div>
           <div class="card-browser-grid" id="card-browser-grid">
