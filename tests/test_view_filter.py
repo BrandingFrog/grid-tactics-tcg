@@ -318,3 +318,69 @@ class TestActionCodec:
         data = serialize_action(action)
         assert data["position"] == [1, 2]
         assert data["target_pos"] == [3, 4]
+
+
+# ---------------------------------------------------------------------------
+# Auto-draw bug fix test (D-04/D-05)
+# ---------------------------------------------------------------------------
+
+
+class TestNoAutoDraw:
+    """Verify auto-draw is guarded by AUTO_DRAW_ENABLED."""
+
+    def test_no_auto_draw_on_turn_transition(self):
+        """After turn transition, hand size does NOT increase when AUTO_DRAW_ENABLED=False.
+
+        D-04/D-05: The auto-draw code in react_stack.resolve_react_stack must
+        be guarded by AUTO_DRAW_ENABLED. With it False (default), no card is
+        drawn at turn start during react resolution.
+        """
+        from pathlib import Path
+
+        from grid_tactics import types as game_types
+        from grid_tactics.actions import Action
+        from grid_tactics.card_library import CardLibrary
+        from grid_tactics.enums import ActionType, TurnPhase
+        from grid_tactics.game_state import GameState
+        from grid_tactics.react_stack import resolve_react_stack
+
+        # Ensure AUTO_DRAW_ENABLED is False (the default)
+        assert game_types.AUTO_DRAW_ENABLED is False
+
+        library = CardLibrary.from_directory(Path("data/cards"))
+
+        # Create a game and set up for react resolution
+        deck = tuple(range(21)) * 2  # 42 cards for safety
+        state, _rng = GameState.new_game(seed=99, deck_p1=deck, deck_p2=deck)
+
+        # Record hand sizes BEFORE react resolution (which does the turn transition)
+        # P0 is active. After resolve_react_stack, P1 becomes active.
+        p1_hand_before = len(state.players[1].hand)
+        p1_deck_before = len(state.players[1].deck)
+
+        # Put state into REACT phase with empty stack (just a PASS resolve)
+        from dataclasses import replace
+        state = replace(
+            state,
+            phase=TurnPhase.REACT,
+            react_player_idx=1,
+            react_stack=(),
+            pending_action=Action(action_type=ActionType.PASS),
+        )
+
+        # Resolve (PASS on empty stack -> advance turn)
+        new_state = resolve_react_stack(state, library)
+
+        # New active player should be P1 (was P0)
+        assert new_state.active_player_idx == 1
+
+        # P1's hand size should NOT have increased (no auto-draw)
+        p1_hand_after = len(new_state.players[1].hand)
+        assert p1_hand_after == p1_hand_before, (
+            f"Hand grew from {p1_hand_before} to {p1_hand_after} -- "
+            f"auto-draw fired when AUTO_DRAW_ENABLED=False"
+        )
+
+        # Deck size also unchanged (no card drawn)
+        p1_deck_after = len(new_state.players[1].deck)
+        assert p1_deck_after == p1_deck_before

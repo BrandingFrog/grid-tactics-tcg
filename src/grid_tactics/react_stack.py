@@ -20,7 +20,7 @@ from grid_tactics.actions import Action
 from grid_tactics.card_library import CardLibrary
 from grid_tactics.enums import ActionType, CardType, EffectType, TriggerType, TurnPhase
 from grid_tactics.game_state import GameState
-from grid_tactics.types import MAX_REACT_STACK_DEPTH
+from grid_tactics.types import AUTO_DRAW_ENABLED, MAX_REACT_STACK_DEPTH
 
 
 @dataclass(frozen=True, slots=True)
@@ -276,5 +276,13 @@ def resolve_react_stack(
     new_active_player = state.players[new_active_idx].regenerate_mana()
     new_players = _replace_player(state.players, new_active_idx, new_active_player)
     state = replace(state, players=new_players)
+
+    # Auto-draw for the new active player at turn start (only if enabled)
+    if AUTO_DRAW_ENABLED:
+        active_player = state.players[new_active_idx]
+        if active_player.deck:
+            drawn_player, _card_id = active_player.draw_card()
+            new_players = _replace_player(state.players, new_active_idx, drawn_player)
+            state = replace(state, players=new_players)
 
     return state
