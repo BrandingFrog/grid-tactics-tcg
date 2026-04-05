@@ -1,0 +1,20 @@
+{
+    "card_id": "grave_caller",
+    "name": "Grave Caller",
+    "card_type": "minion",
+    "mana_cost": 3,
+    "attack": 5,
+    "health": 13,
+    "range": 1,
+    "element": "dark",
+    "tribe": "Undead",
+    "deckable": false,
+    "effects": [
+        {
+            "type": "dark_matter_buff",
+            "trigger": "on_play",
+            "target": "single_target",
+            "amount": 5
+        }
+    ]
+}

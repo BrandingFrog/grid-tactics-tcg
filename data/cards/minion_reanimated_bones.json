@@ -1,0 +1,17 @@
+{
+    "card_id": "reanimated_bones",
+    "name": "Reanimated Bones",
+    "card_type": "minion",
+    "mana_cost": 1,
+    "attack": 5,
+    "health": 5,
+    "range": 0,
+    "element": "earth",
+    "tribe": "Undead",
+    "transform_options": [
+        {"target": "pyre_archer", "mana_cost": 2},
+        {"target": "grave_caller", "mana_cost": 3},
+        {"target": "fallen_paladin", "mana_cost": 4}
+    ],
+    "effects": []
+}

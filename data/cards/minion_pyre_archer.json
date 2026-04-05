@@ -1,0 +1,20 @@
+{
+    "card_id": "pyre_archer",
+    "name": "Pyre Archer",
+    "card_type": "minion",
+    "mana_cost": 2,
+    "attack": 9,
+    "health": 5,
+    "range": 2,
+    "element": "fire",
+    "tribe": "Undead",
+    "deckable": false,
+    "effects": [
+        {
+            "type": "burn",
+            "trigger": "on_attack",
+            "target": "single_target",
+            "amount": 5
+        }
+    ]
+}

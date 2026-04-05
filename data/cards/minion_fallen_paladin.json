@@ -1,0 +1,20 @@
+{
+    "card_id": "fallen_paladin",
+    "name": "Fallen Paladin",
+    "card_type": "minion",
+    "mana_cost": 4,
+    "attack": 16,
+    "health": 42,
+    "range": 0,
+    "element": "light",
+    "tribe": "Undead",
+    "deckable": false,
+    "effects": [
+        {
+            "type": "passive_heal",
+            "trigger": "passive",
+            "target": "self_owner",
+            "amount": 2
+        }
+    ]
+}
