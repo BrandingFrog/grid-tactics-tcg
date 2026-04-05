@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Online PvP Dueling
-status: executing
-stopped_at: Completed 12-01-PLAN.md
-last_updated: "2026-04-05T10:24:56.257Z"
+status: verifying
+stopped_at: Completed 12-02-PLAN.md
+last_updated: "2026-04-05T10:34:10.816Z"
 last_activity: 2026-04-05
 progress:
   total_phases: 5
-  completed_phases: 1
+  completed_phases: 2
   total_plans: 4
-  completed_plans: 3
+  completed_plans: 4
   percent: 0
 ---
 
@@ -27,7 +27,7 @@ See: .planning/PROJECT.md (updated 2026-04-04)
 
 Phase: 12 (state-serialization-game-flow) — EXECUTING
 Plan: 2 of 2
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-04-05
 
 Progress: [░░░░░░░░░░] 0%
@@ -55,6 +55,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 11 P01 | 4min | 2 tasks | 7 files |
 | Phase 11 P02 | 22min | 2 tasks | 5 files |
 | Phase 12-state-serialization-game-flow P01 | 3min | 2 tasks | 4 files |
+| Phase 12-state-serialization-game-flow P02 | 5min | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -77,6 +78,9 @@ Recent decisions affecting current work:
 - [Phase 11]: Two-level locking: global RoomManager lock + per-WaitingRoom lock for ready race condition
 - [Phase 12-state-serialization-game-flow]: Deep copy state dict before filtering for view security
 - [Phase 12-state-serialization-game-flow]: Compact action JSON: omit None fields, convert tuples to lists
+- [Phase 12-state-serialization-game-flow]: Auto-pass loop in submit_action handles zero-legal-action fatigue bleed server-side
+- [Phase 12-state-serialization-game-flow]: Decision-maker routing: REACT phase uses react_player_idx, ACTION uses active_player_idx
+- [Phase 12-state-serialization-game-flow]: card_defs sent at game_start so clients can render card names without separate API call
 
 ### Pending Todos
 
@@ -90,6 +94,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-04-05T10:24:56.254Z
-Stopped at: Completed 12-01-PLAN.md
+Last session: 2026-04-05T10:34:10.812Z
+Stopped at: Completed 12-02-PLAN.md
 Resume file: None
