@@ -1185,11 +1185,11 @@ body {
 .card-type-badge {
   text-align: center;
   font-family: 'Inter', system-ui, sans-serif;
-  font-size: 8px;
+  font-size: 10px;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 1px;
-  color: rgba(255, 255, 255, 0.9);
+  color: white;
   -webkit-text-stroke: 0.5px black;
   paint-order: stroke fill;
   padding: 2px 0;
@@ -1201,8 +1201,8 @@ body {
   -webkit-text-stroke: 0.5px black;
   paint-order: stroke fill;
   font-family: 'Inter', system-ui, sans-serif;
-  font-size: 9px;
-  font-weight: 400;
+  font-size: 12px;
+  font-weight: 700;
   line-height: 1.3;
   padding: 2px 6%;
   overflow: hidden;
@@ -1215,11 +1215,12 @@ body {
 .card-range {
   text-align: center;
   font-family: 'Inter', system-ui, sans-serif;
-  font-size: 8px;
-  color: rgba(255, 255, 255, 0.8);
+  font-size: 11px;
+  font-weight: 700;
+  color: white;
   -webkit-text-stroke: 0.5px black;
   paint-order: stroke fill;
-  padding: 1px 0;
+  padding: 2px 0;
 }
 
 /* Card Unaffordable State */
