@@ -165,7 +165,7 @@ Plans:
 
 **Milestone Goal:** Two human players can play Grid Tactics against each other in real-time through a web UI, with the Python game engine enforcing all rules server-side.
 
-- [ ] **Phase 11: Server Foundation & Room System** - Flask-SocketIO server with room code create/join and initial game state emission
+- [x] **Phase 11: Server Foundation & Room System** - Flask-SocketIO server with room code create/join and initial game state emission (completed 2026-04-05)
 - [ ] **Phase 12: State Serialization & Game Flow** - Hidden-info view filtering, action validation, legal action emission, complete game playable via WebSocket client
 - [ ] **Phase 13: Board & Hand UI** - 5x5 CSS Grid board, hand display, mana/HP bars, and turn phase indicator in the browser
 - [ ] **Phase 14: Gameplay Interaction** - Action submission via click targeting, react window UI, and game over screen
@@ -182,10 +182,10 @@ Plans:
   2. User can join an existing room by entering the room code, and both players receive a game_start event with initial game state
   3. A programmatic WebSocket client (Python or wscat) can complete the full create-join-receive flow without any browser UI
   4. Room codes are unique and rooms are tracked in-memory with player session tokens (not socket IDs) for reconnection readiness
-**Plans:** 1/2 plans executed
+**Plans:** 2/2 plans complete
 Plans:
 - [x] 11-01-PLAN.md -- Fix _fatigue global, install Flask-SocketIO, server package skeleton with preset deck
-- [ ] 11-02-PLAN.md -- Room manager, game session, event handlers, entry point, and full test suite
+- [x] 11-02-PLAN.md -- Room manager, game session, event handlers, entry point, and full test suite
 
 ### Phase 12: State Serialization & Game Flow
 **Goal**: A complete game is playable via raw WebSocket messages -- both players take turns, react windows work, actions are validated, opponent hand is hidden, and the game ends with a correct winner
@@ -250,7 +250,7 @@ Phases execute in numeric order: 11 -> 12 -> 13 -> 14 -> 15
 | 8. Card Expansion & Balance | v1.0 | 0/TBD | Not started | - |
 | 9. Analytics Dashboard Core | v1.0 | 0/TBD | Not started | - |
 | 10. Replay & Balance Visualization | v1.0 | 0/TBD | Not started | - |
-| 11. Server Foundation & Room System | v1.1 | 1/2 | In Progress|  |
+| 11. Server Foundation & Room System | v1.1 | 2/2 | Complete   | 2026-04-05 |
 | 12. State Serialization & Game Flow | v1.1 | 0/TBD | Not started | - |
 | 13. Board & Hand UI | v1.1 | 0/TBD | Not started | - |
 | 14. Gameplay Interaction | v1.1 | 0/TBD | Not started | - |

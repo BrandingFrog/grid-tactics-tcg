@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Online PvP Dueling
-status: executing
-stopped_at: Completed 11-01-PLAN.md
-last_updated: "2026-04-05T07:39:32.571Z"
+status: verifying
+stopped_at: Completed 11-02-PLAN.md
+last_updated: "2026-04-05T08:05:31.380Z"
 last_activity: 2026-04-05
 progress:
   total_phases: 5
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 2
-  completed_plans: 1
+  completed_plans: 2
   percent: 0
 ---
 
@@ -27,7 +27,7 @@ See: .planning/PROJECT.md (updated 2026-04-04)
 
 Phase: 11 (server-foundation-room-system) — EXECUTING
 Plan: 2 of 2
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-04-05
 
 Progress: [░░░░░░░░░░] 0%
@@ -53,6 +53,7 @@ Progress: [░░░░░░░░░░] 0%
 
 *Updated after each plan completion*
 | Phase 11 P01 | 4min | 2 tasks | 7 files |
+| Phase 11 P02 | 22min | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -69,6 +70,10 @@ Recent decisions affecting current work:
 - [Phase 11]: Fatigue counts stored as tuple[int,int] in frozen GameState for concurrent game safety
 - [Phase 11]: Flask-SocketIO async_mode=threading (no eventlet/gevent)
 - [Phase 11]: Preset deck uses all 21 cards: 9 at 2 copies + 12 at 1 copy = 30 total
+- [Phase 11]: 6-char uppercase alphanumeric room codes via secrets.choice (36^6 combos)
+- [Phase 11]: UUID4 session tokens for player identity (not socket IDs) for Phase 15 reconnection
+- [Phase 11]: register_events() pattern: module-level room_manager, closures for Socket.IO handlers
+- [Phase 11]: Two-level locking: global RoomManager lock + per-WaitingRoom lock for ready race condition
 
 ### Pending Todos
 
@@ -82,6 +87,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-04-05T07:39:32.566Z
-Stopped at: Completed 11-01-PLAN.md
+Last session: 2026-04-05T08:05:31.374Z
+Stopped at: Completed 11-02-PLAN.md
 Resume file: None
