@@ -1347,7 +1347,7 @@ body {
 }
 
 .tooltip-keyword-desc {
-  color: var(--muted);
+  color: white;
   font-size: 10px;
 }
 

@@ -564,7 +564,7 @@ function showCardTooltip(numericId) {
         keywordsHtml += '<div style="margin-bottom:8px;color:white;font-size:12px;font-weight:700;line-height:1.5;">' + cardTextLines.join('<br>') + '</div>';
     }
     if (c.flavour_text) {
-        keywordsHtml += '<div style="margin-bottom:8px;color:var(--muted);font-size:11px;font-style:italic;">"' + c.flavour_text + '"</div>';
+        keywordsHtml += '<div style="margin-bottom:8px;color:var(--cyan);font-size:11px;font-style:italic;">"' + c.flavour_text + '"</div>';
     }
     // Match keywords from the effect text and card properties
     var matchedKeywords = [];
