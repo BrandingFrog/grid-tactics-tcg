@@ -1220,7 +1220,7 @@ function getEffectDescription(effects, cardData) {
         } else if (type === 10) { // Burn
             desc = prefix + 'Burn ' + amount + ' per turn';
         } else if (type === 11) { // Dark Matter Buff
-            desc = 'Active: +' + amount + ' ATK (Dark Matter)';
+            desc = 'Active: +' + amount + ' ATK (+Dark Matter*1)';
         } else if (type === 12) { // Passive Heal
             desc = 'Passive: Heal ' + amount + ' per turn';
         } else {
