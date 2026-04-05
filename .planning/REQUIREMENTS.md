@@ -15,7 +15,7 @@ Requirements for online PvP dueling milestone. Each maps to roadmap phases.
 
 ### Game State & Security
 
-- [ ] **VIEW-01**: User can only see their own hand and deck count — opponent's hand contents and deck order are hidden
+- [x] **VIEW-01**: User can only see their own hand and deck count — opponent's hand contents and deck order are hidden
 - [ ] **VIEW-02**: Server validates all actions against legal_actions() before applying — illegal actions are rejected
 - [ ] **VIEW-03**: User receives their legal actions list with every state update
 
@@ -131,7 +131,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | SERVER-01 | Phase 11 | Complete |
 | SERVER-02 | Phase 11 | Complete |
 | SERVER-03 | Phase 12 | Pending |
-| VIEW-01 | Phase 12 | Pending |
+| VIEW-01 | Phase 12 | Complete |
 | VIEW-02 | Phase 12 | Pending |
 | VIEW-03 | Phase 12 | Pending |
 | UI-01 | Phase 13 | Pending |
