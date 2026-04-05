@@ -1005,6 +1005,24 @@ body {
   line-height: 1.0;
 }
 
+/* Card Effect Text (magic/react) */
+.card-effect {
+  text-align: center;
+  color: white;
+  -webkit-text-stroke: 0.5px black;
+  paint-order: stroke fill;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  font-size: 9px;
+  font-weight: 400;
+  line-height: 1.2;
+  padding: 2px 4%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
 /* Card Unaffordable State */
 .card-dimmed {
   opacity: 0.4;

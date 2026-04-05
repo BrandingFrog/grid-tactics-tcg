@@ -604,3 +604,326 @@ document.addEventListener('DOMContentLoaded', function() {
     setupDeckBuilderHandlers();
     setupNavHandlers();
 });
+
+// =============================================
+// Section 9: Game Start / State Update Handlers
+// =============================================
+
+function onGameStart(data) {
+    cardDefs = data.card_defs;
+    allCardDefs = data.card_defs;
+    gameState = data.state;
+    myPlayerIdx = data.your_player_idx;
+    legalActions = data.legal_actions;
+    opponentName = data.opponent_name;
+    showScreen('screen-game');
+    // Set room code in game screen
+    var roomCodeEl = document.getElementById('game-room-code');
+    if (roomCodeEl && roomCode) {
+        roomCodeEl.textContent = roomCode;
+    }
+    renderGame();
+}
+
+function onStateUpdate(data) {
+    gameState = data.state;
+    legalActions = data.legal_actions;
+    renderGame();
+}
+
+function onGameOver(data) {
+    // Phase 14 scope -- for now just log and keep showing final state
+    console.log('Game over:', data);
+    gameState = data.final_state;
+    legalActions = [];
+    renderGame();
+}
+
+// =============================================
+// Section 10: renderGame() -- Master Render Function
+// =============================================
+
+function renderGame() {
+    if (!gameState || !cardDefs) return;
+    renderRoomBar();
+    renderOpponentInfo();
+    renderBoard();
+    renderSelfInfo();
+    renderHand();
+}
+
+// =============================================
+// Section 11: renderRoomBar() (UI-04)
+// =============================================
+
+function renderRoomBar() {
+    // Turn indicator: determine if it's my turn
+    var isMyTurn = legalActions && legalActions.length > 0;
+    var turnDot = document.getElementById('turn-dot');
+    var turnText = document.getElementById('turn-text');
+
+    if (turnDot) {
+        if (isMyTurn) {
+            turnDot.className = 'turn-dot pulse-dot';
+        } else {
+            turnDot.className = 'turn-dot pulse-dot inactive';
+        }
+    }
+    if (turnText) {
+        if (isMyTurn) {
+            turnText.textContent = 'YOUR TURN';
+            turnText.className = 'turn-text';
+        } else {
+            turnText.textContent = "OPPONENT'S TURN";
+            turnText.className = 'turn-text opp-turn';
+        }
+    }
+
+    // Phase badge
+    var phaseBadge = document.getElementById('phase-badge');
+    if (phaseBadge && gameState.phase !== undefined) {
+        var phaseInfo = PHASE_DISPLAY[gameState.phase] || PHASE_DISPLAY[0];
+        phaseBadge.textContent = phaseInfo.label;
+        phaseBadge.className = 'phase-badge ' + phaseInfo.cssClass;
+    }
+
+    // Turn number
+    var turnNum = document.getElementById('turn-number');
+    if (turnNum && gameState.turn_number !== undefined) {
+        turnNum.textContent = 'Turn ' + gameState.turn_number;
+    }
+}
+
+// =============================================
+// Section 12: renderOpponentInfo() (UI-03)
+// =============================================
+
+function renderOpponentInfo() {
+    var oppIdx = 1 - myPlayerIdx;
+    var oppPlayer = gameState.players[oppIdx];
+
+    // Name
+    var oppNameEl = document.getElementById('opp-name');
+    if (oppNameEl) {
+        oppNameEl.textContent = opponentName || 'PLAYER 2 (Opponent)';
+    }
+
+    // HP
+    var oppHp = document.getElementById('opp-hp');
+    if (oppHp) {
+        oppHp.textContent = oppPlayer.hp;
+    }
+
+    // Mana
+    var oppMana = document.getElementById('opp-mana');
+    if (oppMana) {
+        oppMana.textContent = oppPlayer.current_mana + '/' + oppPlayer.max_mana;
+    }
+
+    // Hand count
+    var oppHand = document.getElementById('opp-hand');
+    if (oppHand) {
+        oppHand.textContent = oppPlayer.hand_count;
+    }
+
+    // Deck count
+    var oppDeck = document.getElementById('opp-deck');
+    if (oppDeck) {
+        oppDeck.textContent = oppPlayer.deck_count;
+    }
+}
+
+// =============================================
+// Section 13: renderSelfInfo() (UI-03)
+// =============================================
+
+function renderSelfInfo() {
+    var myPlayer = gameState.players[myPlayerIdx];
+
+    // Name
+    var selfNameEl = document.getElementById('self-name');
+    if (selfNameEl) {
+        selfNameEl.textContent = myName || 'PLAYER 1 (You)';
+    }
+
+    // HP
+    var selfHp = document.getElementById('self-hp');
+    if (selfHp) {
+        selfHp.textContent = myPlayer.hp;
+    }
+
+    // Mana
+    var selfMana = document.getElementById('self-mana');
+    if (selfMana) {
+        selfMana.textContent = myPlayer.current_mana + '/' + myPlayer.max_mana;
+    }
+
+    // Hand count
+    var selfHand = document.getElementById('self-hand');
+    if (selfHand) {
+        selfHand.textContent = myPlayer.hand.length;
+    }
+
+    // Deck count
+    var selfDeck = document.getElementById('self-deck');
+    if (selfDeck) {
+        selfDeck.textContent = myPlayer.deck_count;
+    }
+}
+
+// =============================================
+// Section 14: renderBoard() (UI-01, D-03, D-10)
+// =============================================
+
+function renderBoard() {
+    var boardEl = document.getElementById('game-board');
+    if (!boardEl) return;
+    boardEl.innerHTML = '';
+
+    // Build minion lookup: "row,col" -> minion object (Pitfall 6)
+    var minionMap = {};
+    (gameState.minions || []).forEach(function(m) {
+        minionMap[m.position[0] + ',' + m.position[1]] = m;
+    });
+
+    // Display order depends on perspective (D-03)
+    // P1 (idx 0): rows 0,1,2,3,4 top-to-bottom (opponent zone at top)
+    // P2 (idx 1): rows 4,3,2,1,0 top-to-bottom (opponent zone at top)
+    var rowOrder = myPlayerIdx === 0
+        ? [0, 1, 2, 3, 4]
+        : [4, 3, 2, 1, 0];
+
+    // Zone classification from player's perspective
+    // P1: rows 0-1 = opp zone, row 2 = neutral, rows 3-4 = self zone
+    // P2: rows 3-4 = opp zone, row 2 = neutral, rows 0-1 = self zone
+    var selfRows = myPlayerIdx === 0 ? [3, 4] : [0, 1];
+    var oppRows = myPlayerIdx === 0 ? [0, 1] : [3, 4];
+
+    rowOrder.forEach(function(row) {
+        for (var col = 0; col < 5; col++) {
+            var cell = document.createElement('div');
+            cell.className = 'board-cell';
+            cell.dataset.row = row;
+            cell.dataset.col = col;
+
+            // Zone tinting
+            if (selfRows.indexOf(row) !== -1) {
+                cell.classList.add('zone-self');
+            } else if (row === 2) {
+                cell.classList.add('zone-neutral');
+            } else if (oppRows.indexOf(row) !== -1) {
+                cell.classList.add('zone-opp');
+            }
+
+            // Check for minion at this position
+            var minion = minionMap[row + ',' + col];
+            if (minion) {
+                cell.innerHTML = renderBoardMinion(minion);
+            }
+
+            boardEl.appendChild(cell);
+        }
+    });
+}
+
+// =============================================
+// renderBoardMinion() -- Compact card (D-10)
+// =============================================
+
+function renderBoardMinion(minion) {
+    var cardDef = cardDefs[minion.card_numeric_id];
+    if (!cardDef) return '';
+    var isOwn = minion.owner === myPlayerIdx;
+    var ownerClass = isOwn ? 'owner-self' : 'owner-opp';
+    var elem = (cardDef.element !== null && cardDef.element !== undefined)
+        ? ELEMENT_MAP[cardDef.element] : NEUTRAL_ELEMENT;
+
+    var atk = (cardDef.attack || 0) + (minion.attack_bonus || 0);
+    var hp = minion.current_health;
+
+    return '<div class="board-minion ' + ownerClass + '">'
+        + '<div class="attr-circle-sm ' + elem.css + '"></div>'
+        + '<div class="board-minion-name">' + cardDef.name + '</div>'
+        + '<div class="board-minion-stats">'
+        + '<span class="board-minion-atk">' + atk + '</span>'
+        + '<span class="board-minion-hp">' + hp + '</span>'
+        + '</div>'
+        + '</div>';
+}
+
+// =============================================
+// Section 15: renderHand() (UI-02, D-05)
+// =============================================
+
+function renderHand() {
+    var handEl = document.getElementById('hand-container');
+    if (!handEl) return;
+    handEl.innerHTML = '';
+
+    var myPlayer = gameState.players[myPlayerIdx];
+    var myMana = myPlayer.current_mana;
+
+    myPlayer.hand.forEach(function(numericId, handIndex) {
+        var cardHtml = renderHandCard(numericId, handIndex, myMana);
+        var wrapper = document.createElement('div');
+        wrapper.innerHTML = cardHtml;
+        if (wrapper.firstChild) {
+            handEl.appendChild(wrapper.firstChild);
+        }
+    });
+}
+
+// =============================================
+// renderHandCard() -- Full YGO-style (D-05, D-06)
+// =============================================
+
+function renderHandCard(numericId, handIndex, currentMana) {
+    var c = cardDefs[numericId];
+    if (!c) return '';
+    var typeClass = TYPE_CSS[c.card_type] || '';
+    var canAfford = currentMana >= c.mana_cost;
+    var dimClass = canAfford ? '' : ' card-dimmed';
+    var elem = (c.element !== null && c.element !== undefined)
+        ? ELEMENT_MAP[c.element] : NEUTRAL_ELEMENT;
+
+    var html = '<div class="card-frame ' + typeClass + dimClass + '" data-hand-idx="' + handIndex + '" data-numeric-id="' + numericId + '">';
+    // Mana badge
+    html += '<div class="card-mana">' + c.mana_cost + '</div>';
+    // Art area with attribute circle
+    html += '<div class="card-art">';
+    html += '<div class="attr-circle ' + elem.css + '"></div>';
+    html += '</div>';
+    // Card name
+    html += '<div class="card-name">' + c.name + '</div>';
+    // Stats or effect text
+    if (c.card_type === 0 && c.attack != null) {
+        html += '<div class="card-stats">';
+        html += '<span class="card-atk">ATK/' + c.attack + '</span>';
+        html += '<span class="card-hp">HP/' + c.health + '</span>';
+        html += '</div>';
+    } else if (c.effects && c.effects.length > 0) {
+        var desc = getEffectDescription(c.effects);
+        html += '<div class="card-effect">' + desc + '</div>';
+    }
+    html += '</div>';
+    return html;
+}
+
+// =============================================
+// Section 16: renderDeckBuilderCard (already defined above in Section 7)
+// Section 17: Helper -- getEffectDescription()
+// =============================================
+
+function getEffectDescription(effects) {
+    if (!effects || effects.length === 0) return '';
+    var parts = [];
+    effects.forEach(function(eff) {
+        var trigger = TRIGGER_NAMES[eff.trigger] || '?';
+        var effectType = EFFECT_TYPE_NAMES[eff.type] || '?';
+        var target = TARGET_NAMES[eff.target] || '?';
+        var amount = eff.amount || 0;
+        var desc = trigger + ': ' + effectType + ' ' + amount + ' to ' + target;
+        parts.push(desc);
+    });
+    return parts.join('; ');
+}
