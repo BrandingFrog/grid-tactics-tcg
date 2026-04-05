@@ -414,6 +414,8 @@ function renderCardBrowser() {
     });
     ids.forEach(function(numId) {
         var c = defs[numId];
+        // Hide non-deckable cards (transform targets like Fallen Paladin, Grave Caller, Pyre Archer)
+        if (c.deckable === false) return;
         // Type filter
         if (deckFilterType !== 'all' && typeMap[c.card_type] !== deckFilterType) return;
         // Element filter
@@ -506,6 +508,8 @@ var KEYWORD_GLOSSARY = {
     'Negate': 'Cancel the effect of an opponent\'s spell or ability.',
     'Deploy': 'Place this card onto the battlefield from your hand during a React window.',
     'Destroy': 'Remove a target minion from the board regardless of its HP.',
+    'Transform': 'Pay mana to transform this minion into a more powerful form.',
+    'Sacrifice': 'You must sacrifice a minion of the required tribe from your hand to summon this card.',
 };
 
 function showCardTooltip(numericId) {
@@ -555,6 +559,11 @@ function showCardTooltip(numericId) {
     var relatedIds = [];
     if (c.tutor_target) relatedIds.push(c.tutor_target);
     if (c.promote_target) relatedIds.push(c.promote_target);
+    if (c.transform_options) {
+        c.transform_options.forEach(function(opt) {
+            if (relatedIds.indexOf(opt.target) === -1) relatedIds.push(opt.target);
+        });
+    }
     if (c.summon_sacrifice_tribe) {
         // Find cards with matching tribe
         for (var nid in defs) {
@@ -625,21 +634,31 @@ function renderDeckBuilderCard(numericId, count) {
     if (tribe) {
         html += '<div class="card-type-badge">' + tribe + '</div>';
     }
-    // Stats for minions
+    // Stats for minions — corner badges like Hearthstone
     if (c.card_type === 0 && c.attack != null) {
-        html += '<div class="card-stats">';
-        html += '<span class="card-atk">ATK/' + c.attack + '</span>';
-        html += '<span class="card-hp">HP/' + c.health + '</span>';
-        html += '</div>';
+        html += '<div class="card-stat-atk">' + c.attack + '</div>';
+        html += '<div class="card-stat-hp">' + c.health + '</div>';
+    }
+    // Summon sacrifice cost
+    if (c.summon_sacrifice_tribe) {
+        html += '<div class="card-effect-full" style="color:var(--yellow);">Sacrifice: ' + c.summon_sacrifice_tribe + '</div>';
     }
     // Unique tag
     if (c.unique) {
-        html += '<div class="card-effect-full" style="color:var(--yellow);font-weight:700;">Unique</div>';
+        html += '<div class="card-effect-full" style="color:var(--yellow);">Unique</div>';
     }
     // Effect text (all card types)
     if (c.effects && c.effects.length > 0) {
         var desc = getEffectDescription(c.effects, c);
         html += '<div class="card-effect-full">' + desc + '</div>';
+    }
+    // Transform options (Reanimated Bones)
+    if (c.transform_options && c.transform_options.length > 0) {
+        var transformLines = c.transform_options.map(function(opt) {
+            var tName = findCardNameById(opt.target);
+            return tName + ' (' + opt.mana_cost + ' mana)';
+        });
+        html += '<div class="card-effect-full" style="color:var(--cyan);">Transform: ' + transformLines.join(', ') + '</div>';
     }
     // Range for minions
     if (c.card_type === 0 && c.attack_range != null) {

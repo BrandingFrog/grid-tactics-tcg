@@ -1114,7 +1114,7 @@ body {
   text-overflow: ellipsis;
 }
 
-/* Card Stats Row */
+/* Card Stats Row (legacy) */
 .card-stats {
   display: flex;
   justify-content: space-between;
@@ -1126,6 +1126,35 @@ body {
   font-size: 12px;
   font-weight: 400;
   line-height: 1.0;
+}
+
+/* Card Corner Stats (Hearthstone style) */
+.card-stat-atk, .card-stat-hp {
+  position: absolute;
+  bottom: 2%;
+  width: 20%;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'Luckiest Guy', cursive;
+  font-size: 16px;
+  color: white;
+  -webkit-text-stroke: 1.5px black;
+  paint-order: stroke fill;
+  border: 2px solid rgb(30, 25, 20);
+  z-index: 3;
+}
+
+.card-stat-atk {
+  left: 2%;
+  background: rgb(200, 50, 30);
+}
+
+.card-stat-hp {
+  right: 2%;
+  background: rgb(40, 160, 60);
 }
 
 /* Card Effect Text (magic/react) */

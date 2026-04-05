@@ -63,6 +63,11 @@ def _build_card_defs(library):
                 "tutor_target": card.tutor_target,
                 "summon_sacrifice_tribe": card.summon_sacrifice_tribe,
                 "unique": getattr(card, 'unique', False),
+                "deckable": getattr(card, 'deckable', True),
+                "transform_options": [
+                    {"target": t[0], "mana_cost": t[1]}
+                    for t in (card.transform_options or ())
+                ] or None,
             }
         except (KeyError, IndexError):
             break
