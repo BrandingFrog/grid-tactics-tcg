@@ -60,6 +60,8 @@ let myName = '';             // display name entered in lobby
 let currentDeck = {};        // { numericId: count }
 let currentSlotIdx = 0;
 let allCardDefs = null;      // set from server on game_start or card_defs event
+let deckFilterType = 'all';  // 'all', 'minion', 'magic', 'react'
+let deckSearchQuery = '';    // search text
 
 // =============================================
 // Section 3: Screen Manager
@@ -399,6 +401,9 @@ function renderCardBrowser() {
         return;
     }
     grid.innerHTML = '';
+    // Type filter map: card_type int -> filter name
+    var typeMap = {0: 'minion', 1: 'magic', 2: 'react'};
+    var query = deckSearchQuery.toLowerCase().trim();
     // Sort by card_type then name
     var ids = Object.keys(defs).map(Number).sort(function(a, b) {
         var ca = defs[a], cb = defs[b];
@@ -406,6 +411,14 @@ function renderCardBrowser() {
         return (ca.name || '').localeCompare(cb.name || '');
     });
     ids.forEach(function(numId) {
+        var c = defs[numId];
+        // Type filter
+        if (deckFilterType !== 'all' && typeMap[c.card_type] !== deckFilterType) return;
+        // Search filter
+        if (query) {
+            var searchable = (c.name || '').toLowerCase() + ' ' + (c.card_id || '').toLowerCase();
+            if (searchable.indexOf(query) === -1) return;
+        }
         var count = currentDeck[numId] || 0;
         var wrapper = document.createElement('div');
         wrapper.className = 'card-browser-item';
@@ -425,6 +438,24 @@ function renderCardBrowser() {
             removeCardFromDeck(numId);
         });
         grid.appendChild(wrapper);
+    });
+}
+
+function setupDeckFilters() {
+    var searchInput = document.getElementById('card-search');
+    if (searchInput) {
+        searchInput.addEventListener('input', function() {
+            deckSearchQuery = searchInput.value;
+            renderCardBrowser();
+        });
+    }
+    document.querySelectorAll('.filter-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            deckFilterType = btn.dataset.filter;
+            document.querySelectorAll('.filter-btn').forEach(function(b) { b.classList.remove('active'); });
+            btn.classList.add('active');
+            renderCardBrowser();
+        });
     });
 }
 
@@ -609,6 +640,7 @@ document.addEventListener('DOMContentLoaded', function() {
     initSocket();
     setupLobbyHandlers();
     setupDeckBuilderHandlers();
+    setupDeckFilters();
     setupNavHandlers();
 });
 

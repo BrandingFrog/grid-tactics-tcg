@@ -397,6 +397,43 @@ body {
   padding: 16px;
 }
 
+.card-browser-filters {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.filter-btns {
+  display: flex;
+  gap: 4px;
+}
+
+.filter-btn {
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--muted);
+  padding: 4px 10px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  cursor: pointer;
+  transition: all 150ms ease;
+}
+
+.filter-btn:hover {
+  background: var(--card2);
+}
+
+.filter-btn.active {
+  background: var(--card2);
+  color: var(--text);
+  border-color: var(--text);
+}
+
 .card-browser-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);

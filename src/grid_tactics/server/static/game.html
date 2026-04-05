@@ -102,6 +102,15 @@
         <!-- Card Browser (left) -->
         <div class="card-browser">
           <h3 class="section-heading">All Cards</h3>
+          <div class="card-browser-filters">
+            <input type="text" id="card-search" class="input" placeholder="Search cards..." style="flex:1;min-width:120px;">
+            <div class="filter-btns">
+              <button class="filter-btn active" data-filter="all">All</button>
+              <button class="filter-btn" data-filter="minion" style="border-color:rgb(180,140,60);color:rgb(180,140,60);">Minion</button>
+              <button class="filter-btn" data-filter="magic" style="border-color:rgb(30,140,120);color:rgb(30,140,120);">Magic</button>
+              <button class="filter-btn" data-filter="react" style="border-color:rgb(160,40,100);color:rgb(160,40,100);">React</button>
+            </div>
+          </div>
           <div class="card-browser-grid" id="card-browser-grid">
             <!-- Cards rendered by JS as YGO-style cards with count badges -->
           </div>
