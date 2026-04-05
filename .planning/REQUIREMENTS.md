@@ -9,8 +9,8 @@ Requirements for online PvP dueling milestone. Each maps to roadmap phases.
 
 ### Server & Networking
 
-- [ ] **SERVER-01**: User can create a new game room and receive a shareable room code
-- [ ] **SERVER-02**: User can join an existing game room by entering a room code
+- [x] **SERVER-01**: User can create a new game room and receive a shareable room code
+- [x] **SERVER-02**: User can join an existing game room by entering a room code
 - [ ] **SERVER-03**: Both players receive real-time state updates after each action resolves
 
 ### Game State & Security
@@ -128,8 +128,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| SERVER-01 | Phase 11 | Pending |
-| SERVER-02 | Phase 11 | Pending |
+| SERVER-01 | Phase 11 | Complete |
+| SERVER-02 | Phase 11 | Complete |
 | SERVER-03 | Phase 12 | Pending |
 | VIEW-01 | Phase 12 | Pending |
 | VIEW-02 | Phase 12 | Pending |

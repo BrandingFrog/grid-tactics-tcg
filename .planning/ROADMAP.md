@@ -182,9 +182,9 @@ Plans:
   2. User can join an existing room by entering the room code, and both players receive a game_start event with initial game state
   3. A programmatic WebSocket client (Python or wscat) can complete the full create-join-receive flow without any browser UI
   4. Room codes are unique and rooms are tracked in-memory with player session tokens (not socket IDs) for reconnection readiness
-**Plans:** 2 plans
+**Plans:** 1/2 plans executed
 Plans:
-- [ ] 11-01-PLAN.md -- Fix _fatigue global, install Flask-SocketIO, server package skeleton with preset deck
+- [x] 11-01-PLAN.md -- Fix _fatigue global, install Flask-SocketIO, server package skeleton with preset deck
 - [ ] 11-02-PLAN.md -- Room manager, game session, event handlers, entry point, and full test suite
 
 ### Phase 12: State Serialization & Game Flow
@@ -250,7 +250,7 @@ Phases execute in numeric order: 11 -> 12 -> 13 -> 14 -> 15
 | 8. Card Expansion & Balance | v1.0 | 0/TBD | Not started | - |
 | 9. Analytics Dashboard Core | v1.0 | 0/TBD | Not started | - |
 | 10. Replay & Balance Visualization | v1.0 | 0/TBD | Not started | - |
-| 11. Server Foundation & Room System | v1.1 | 0/2 | Planning | - |
+| 11. Server Foundation & Room System | v1.1 | 1/2 | In Progress|  |
 | 12. State Serialization & Game Flow | v1.1 | 0/TBD | Not started | - |
 | 13. Board & Hand UI | v1.1 | 0/TBD | Not started | - |
 | 14. Gameplay Interaction | v1.1 | 0/TBD | Not started | - |

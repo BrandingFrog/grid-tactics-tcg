@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Online PvP Dueling
-status: planning
-stopped_at: Phase 11 context gathered
-last_updated: "2026-04-04T23:59:07.974Z"
-last_activity: 2026-04-04 — Roadmap created for v1.1 Online PvP Dueling
+status: executing
+stopped_at: Completed 11-01-PLAN.md
+last_updated: "2026-04-05T07:39:32.571Z"
+last_activity: 2026-04-05
 progress:
   total_phases: 5
   completed_phases: 0
-  total_plans: 0
-  completed_plans: 0
+  total_plans: 2
+  completed_plans: 1
   percent: 0
 ---
 
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-04)
 
 **Core value:** The reinforcement learning engine that discovers and validates game strategies
-**Current focus:** Phase 11 — Server Foundation & Room System
+**Current focus:** Phase 11 — server-foundation-room-system
 
 ## Current Position
 
-Phase: 11 of 15 (Server Foundation & Room System)
-Plan: 0 of TBD in current phase
-Status: Ready to plan
-Last activity: 2026-04-04 — Roadmap created for v1.1 Online PvP Dueling
+Phase: 11 (server-foundation-room-system) — EXECUTING
+Plan: 2 of 2
+Status: Ready to execute
+Last activity: 2026-04-05
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -52,6 +52,7 @@ Progress: [░░░░░░░░░░] 0%
 - Trend: Variable (UI/integration plans take longer)
 
 *Updated after each plan completion*
+| Phase 11 P01 | 4min | 2 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -65,6 +66,9 @@ Recent decisions affecting current work:
 - [v1.1 Roadmap]: View filtering in Phase 12 before UI in Phase 13 -- security guarantee before rendering
 - [v1.1 Roadmap]: React window UI separated from base board UI (Phase 14 vs 13) to keep Phase 13 scoped
 - [v1.1 Roadmap]: Session tokens (not socket IDs) established in Phase 11 for Phase 15 reconnection
+- [Phase 11]: Fatigue counts stored as tuple[int,int] in frozen GameState for concurrent game safety
+- [Phase 11]: Flask-SocketIO async_mode=threading (no eventlet/gevent)
+- [Phase 11]: Preset deck uses all 21 cards: 9 at 2 copies + 12 at 1 copy = 30 total
 
 ### Pending Todos
 
@@ -78,6 +82,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-04-04T23:59:07.971Z
-Stopped at: Phase 11 context gathered
-Resume file: .planning/phases/11-server-foundation-room-system/11-CONTEXT.md
+Last session: 2026-04-05T07:39:32.566Z
+Stopped at: Completed 11-01-PLAN.md
+Resume file: None
