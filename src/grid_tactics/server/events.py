@@ -15,12 +15,38 @@ _room_manager: RoomManager | None = None
 
 
 def _build_card_defs(library):
-    """Build a dict mapping numeric_id to card info for client rendering."""
+    """Build a dict mapping numeric_id to card info for client rendering.
+
+    Includes ALL CardDefinition fields needed for UI rendering:
+    card_id, name, card_type, mana_cost, attack, health, attack_range,
+    element, tribe, effects, react_condition, react_effect, react_mana_cost,
+    promote_target.
+    """
     defs = {}
     for nid in range(library.card_count):
         try:
             card = library.get_by_id(nid)
+            # Serialize effects as list of dicts
+            effects_list = [
+                {
+                    "type": int(e.effect_type),
+                    "trigger": int(e.trigger),
+                    "target": int(e.target),
+                    "amount": e.amount,
+                }
+                for e in card.effects
+            ]
+            # Serialize react_effect as dict if present
+            react_effect_dict = None
+            if card.react_effect is not None:
+                react_effect_dict = {
+                    "type": int(card.react_effect.effect_type),
+                    "trigger": int(card.react_effect.trigger),
+                    "target": int(card.react_effect.target),
+                    "amount": card.react_effect.amount,
+                }
             defs[nid] = {
+                "card_id": card.card_id,
                 "name": card.name,
                 "card_type": int(card.card_type),
                 "mana_cost": card.mana_cost,
@@ -28,6 +54,12 @@ def _build_card_defs(library):
                 "health": card.health,
                 "attack_range": card.attack_range,
                 "element": int(card.element) if card.element is not None else None,
+                "tribe": card.tribe,
+                "effects": effects_list,
+                "react_condition": int(card.react_condition) if card.react_condition is not None else None,
+                "react_effect": react_effect_dict,
+                "react_mana_cost": card.react_mana_cost,
+                "promote_target": card.promote_target,
             }
         except (KeyError, IndexError):
             break
@@ -126,6 +158,19 @@ def register_events(room_manager: RoomManager) -> None:
         if token is None:
             emit("error", {"msg": "Not in a room"})
             return
+
+        # Extract optional deck from payload before marking ready
+        deck_data = data.get("deck") if isinstance(data, dict) else None
+        if deck_data and isinstance(deck_data, list) and len(deck_data) == 30:
+            deck_tuple = tuple(int(x) for x in deck_data)
+            room_code_lookup = _room_manager.get_room_code_by_token(token)
+            room_for_deck = _room_manager.get_room(room_code_lookup) if room_code_lookup else None
+            if room_for_deck:
+                if room_for_deck.creator.token == token:
+                    room_for_deck.creator.deck = deck_tuple
+                elif room_for_deck.joiner and room_for_deck.joiner.token == token:
+                    room_for_deck.joiner.deck = deck_tuple
+
         try:
             room_code, room, both_ready = _room_manager.set_ready(token)
         except ValueError as e:
