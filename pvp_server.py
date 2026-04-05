@@ -20,7 +20,7 @@ def main():
     port = int(os.environ.get("PORT", 5000))
     debug = os.environ.get("RAILWAY_ENVIRONMENT") is None  # debug only locally
     print(f"Grid Tactics PvP Server starting on http://0.0.0.0:{port}")
-    socketio.run(app, host="0.0.0.0", port=port, debug=debug)
+    socketio.run(app, host="0.0.0.0", port=port, debug=debug, allow_unsafe_werkzeug=True)
 
 
 if __name__ == "__main__":
