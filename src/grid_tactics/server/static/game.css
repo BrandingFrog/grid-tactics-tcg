@@ -1414,7 +1414,7 @@ body {
 /* Card Flavour Text */
 .card-flavour {
   text-align: center;
-  color: rgba(255, 255, 255, 0.6);
+  color: white;
   font-family: 'Inter', system-ui, sans-serif;
   font-size: 9px;
   font-style: italic;
