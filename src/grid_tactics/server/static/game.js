@@ -519,6 +519,9 @@ var KEYWORD_GLOSSARY = {
     'Sacrifice': 'You must sacrifice a minion of the required tribe from your hand to summon this card.',
     'Heal': 'Restore HP to a target.',
     'Deal': 'Deal damage to a target.',
+    'Burn': 'Apply damage over time that triggers each turn.',
+    'Dark Matter': 'Buff scales with Dark Matter stacks.',
+    'Passive': 'This effect triggers automatically every turn.',
 };
 
 function showCardTooltip(numericId) {
@@ -1171,7 +1174,7 @@ function renderHandCard(numericId, handIndex, currentMana) {
 function getEffectDescription(effects, cardData) {
     if (!effects || effects.length === 0) return '';
     var isMinion = cardData && cardData.card_type === 0;
-    var triggerMap = {0: isMinion ? 'Summon' : '', 1: 'Death', 2: 'Attack', 3: 'Damaged', 4: 'Move'};
+    var triggerMap = {0: isMinion ? 'Summon' : '', 1: 'Death', 2: 'Attack', 3: 'Damaged', 4: 'Move', 5: 'Passive'};
     var parts = [];
     effects.forEach(function(eff) {
         var trigger = triggerMap[eff.trigger];
@@ -1213,6 +1216,12 @@ function getEffectDescription(effects, cardData) {
             }
         } else if (type === 9) { // Destroy
             desc = prefix + 'Destroy target';
+        } else if (type === 10) { // Burn
+            desc = prefix + 'Burn ' + amount + ' per turn';
+        } else if (type === 11) { // Dark Matter Buff
+            desc = prefix + '+' + amount + ' ATK (Dark Matter)';
+        } else if (type === 12) { // Passive Heal
+            desc = 'Passive: Heal ' + amount + ' per turn';
         } else {
             desc = prefix + 'Effect';
         }
