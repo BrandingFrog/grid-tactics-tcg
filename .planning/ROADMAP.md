@@ -196,7 +196,10 @@ Plans:
   2. Server validates every submitted action against legal_actions() and rejects illegal actions with an error event (never crashes)
   3. Each state update includes the player's current legal actions list so the client knows what moves are available
   4. A complete game can be played to conclusion via two programmatic WebSocket clients taking alternating turns through action and react phases
-**Plans**: TBD
+**Plans:** 2 plans
+Plans:
+- [ ] 12-01-PLAN.md -- View filter module, action codec, and auto-draw bug fix
+- [ ] 12-02-PLAN.md -- submit_action handler, game_start filter fix, integration tests for complete game flow
 
 ### Phase 13: Board & Hand UI
 **Goal**: The game is fully rendered in the browser -- users see the 5x5 grid with minions, their hand with card details, both players' mana/HP, and whose turn it is
@@ -251,7 +254,7 @@ Phases execute in numeric order: 11 -> 12 -> 13 -> 14 -> 15
 | 9. Analytics Dashboard Core | v1.0 | 0/TBD | Not started | - |
 | 10. Replay & Balance Visualization | v1.0 | 0/TBD | Not started | - |
 | 11. Server Foundation & Room System | v1.1 | 2/2 | Complete    | 2026-04-05 |
-| 12. State Serialization & Game Flow | v1.1 | 0/TBD | Not started | - |
+| 12. State Serialization & Game Flow | v1.1 | 0/2 | In progress | - |
 | 13. Board & Hand UI | v1.1 | 0/TBD | Not started | - |
 | 14. Gameplay Interaction | v1.1 | 0/TBD | Not started | - |
 | 15. Resilience & Polish | v1.1 | 0/TBD | Not started | - |
