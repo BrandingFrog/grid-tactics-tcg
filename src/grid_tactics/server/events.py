@@ -60,6 +60,9 @@ def _build_card_defs(library):
                 "react_effect": react_effect_dict,
                 "react_mana_cost": card.react_mana_cost,
                 "promote_target": card.promote_target,
+                "tutor_target": card.tutor_target,
+                "summon_sacrifice_tribe": card.summon_sacrifice_tribe,
+                "unique": getattr(card, 'unique', False),
             }
         except (KeyError, IndexError):
             break

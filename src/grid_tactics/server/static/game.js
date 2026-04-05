@@ -523,9 +523,13 @@ function renderDeckBuilderCard(numericId, count) {
         html += '<span class="card-hp">HP/' + c.health + '</span>';
         html += '</div>';
     }
+    // Unique tag
+    if (c.unique) {
+        html += '<div class="card-effect-full" style="color:var(--yellow);font-weight:700;">Unique</div>';
+    }
     // Effect text (all card types)
     if (c.effects && c.effects.length > 0) {
-        var desc = getEffectDescription(c.effects);
+        var desc = getEffectDescription(c.effects, c);
         html += '<div class="card-effect-full">' + desc + '</div>';
     }
     // Range for minions
@@ -991,7 +995,7 @@ function renderHandCard(numericId, handIndex, currentMana) {
         html += '<span class="card-hp">HP/' + c.health + '</span>';
         html += '</div>';
     } else if (c.effects && c.effects.length > 0) {
-        var desc = getEffectDescription(c.effects);
+        var desc = getEffectDescription(c.effects, c);
         html += '<div class="card-effect">' + desc + '</div>';
     }
     html += '</div>';
@@ -1003,49 +1007,59 @@ function renderHandCard(numericId, handIndex, currentMana) {
 // Section 17: Helper -- getEffectDescription()
 // =============================================
 
-function getEffectDescription(effects) {
+function getEffectDescription(effects, cardData) {
     if (!effects || effects.length === 0) return '';
+    var triggerMap = {0: 'Summon', 1: 'Death', 2: 'Attack', 3: 'Damaged', 4: 'Move'};
     var parts = [];
     effects.forEach(function(eff) {
-        var trigger = TRIGGER_NAMES[eff.trigger] || 'On Play';
+        var trigger = triggerMap[eff.trigger] || 'Play';
         var amount = eff.amount || 0;
         var type = eff.type;
-        var target = eff.target;
         var desc = '';
 
-        // Target descriptions
-        var targetText = {
-            0: 'an enemy',        // Single Target
-            1: 'all enemies',     // All Enemies
-            2: 'adjacent units',  // Adjacent
-            3: 'itself',          // Self/Owner
-        }[target] || 'a target';
-
-        // Build natural English
         if (type === 0) { // Damage
-            desc = trigger + ': Deal ' + amount + ' damage to ' + targetText;
+            desc = trigger + ': Deal ' + amount + ' damage';
+            if (eff.target === 1) desc += ' to all enemies';
         } else if (type === 1) { // Heal
-            desc = trigger + ': Restore ' + amount + ' HP to ' + (target === 3 ? 'your hero' : targetText);
+            desc = trigger + ': Heal ' + amount;
         } else if (type === 2) { // Buff ATK
-            desc = trigger + ': Give ' + (target === 3 ? 'this minion' : targetText) + ' +' + amount + ' ATK';
+            desc = trigger + ': +' + amount + ' ATK';
         } else if (type === 3) { // Buff HP
-            desc = trigger + ': Give ' + (target === 3 ? 'this minion' : targetText) + ' +' + amount + ' HP';
+            desc = trigger + ': +' + amount + ' HP';
         } else if (type === 4) { // Negate
-            desc = trigger + ': Negate ' + (target === 0 ? 'a spell' : 'an effect');
+            desc = trigger + ': Negate';
         } else if (type === 5) { // Deploy Self
-            desc = trigger + ': Deploy this card to the field';
+            desc = trigger + ': Deploy';
         } else if (type === 6) { // Rally Forward
-            desc = trigger + ': All friendly units of this type advance forward';
+            desc = 'Move: Rally all friendly forward';
         } else if (type === 7) { // Promote
-            desc = trigger + ': Promote ' + (target === 3 ? 'itself' : targetText) + ' (' + amount + ')';
+            if (cardData && cardData.promote_target) {
+                var targetName = findCardNameById(cardData.promote_target);
+                desc = trigger + ': Promote to ' + targetName;
+            } else {
+                desc = trigger + ': Promote';
+            }
         } else if (type === 8) { // Tutor
-            desc = trigger + ': Search your deck for a card and add it to your hand';
+            if (cardData && cardData.tutor_target) {
+                var tutorName = findCardNameById(cardData.tutor_target);
+                desc = trigger + ': Tutor ' + tutorName;
+            } else {
+                desc = trigger + ': Tutor';
+            }
         } else if (type === 9) { // Destroy
-            desc = trigger + ': Destroy ' + targetText;
+            desc = trigger + ': Destroy target';
         } else {
-            desc = trigger + ': Special effect';
+            desc = trigger + ': Effect';
         }
         parts.push(desc);
     });
     return parts.join('. ');
+}
+
+function findCardNameById(cardId) {
+    var defs = allCardDefs || cardDefs;
+    for (var nid in defs) {
+        if (defs[nid].card_id === cardId) return defs[nid].name;
+    }
+    return cardId; // fallback to raw id
 }
