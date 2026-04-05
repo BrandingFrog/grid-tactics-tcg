@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Online PvP Dueling
 status: verifying
-stopped_at: Phase 13 context gathered
-last_updated: "2026-04-05T12:48:32.158Z"
+stopped_at: Phase 13 UI-SPEC approved
+last_updated: "2026-04-05T13:57:29.802Z"
 last_activity: 2026-04-05
 progress:
   total_phases: 5
@@ -94,6 +94,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-04-05T12:48:32.155Z
-Stopped at: Phase 13 context gathered
-Resume file: .planning/phases/13-board-hand-ui/13-CONTEXT.md
+Last session: 2026-04-05T13:57:29.799Z
+Stopped at: Phase 13 UI-SPEC approved
+Resume file: .planning/phases/13-board-hand-ui/13-UI-SPEC.md
