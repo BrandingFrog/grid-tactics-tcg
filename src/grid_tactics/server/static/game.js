@@ -418,7 +418,7 @@ function renderCardBrowser() {
         if (deckFilterType !== 'all' && typeMap[c.card_type] !== deckFilterType) return;
         // Element filter
         if (deckFilterElement !== 'all') {
-            var cardElem = (c.attribute !== undefined && c.attribute !== null) ? String(c.attribute) : '-1';
+            var cardElem = (c.element !== undefined && c.element !== null) ? String(c.element) : '-1';
             if (deckFilterElement !== cardElem) return;
         }
         // Mana filter
@@ -453,6 +453,9 @@ function renderCardBrowser() {
             e.preventDefault();
             removeCardFromDeck(numId);
         });
+        // Hover for tooltip
+        wrapper.addEventListener('mouseenter', function() { showCardTooltip(numId); });
+        wrapper.addEventListener('mouseleave', function() { hideCardTooltip(); });
         grid.appendChild(wrapper);
     });
 }
@@ -492,6 +495,112 @@ function setupDeckFilters() {
             renderCardBrowser();
         });
     });
+}
+
+var KEYWORD_GLOSSARY = {
+    'Unique': 'Only one copy of this minion can exist on the board per player at a time.',
+    'Melee': 'Attacks adjacent targets (orthogonal only).',
+    'Tutor': 'Search your deck for a specific card and add it to your hand.',
+    'Promote': 'When this minion dies, a weaker minion transforms into this card.',
+    'Rally': 'When this minion moves, all other friendly copies of it also advance forward.',
+    'Negate': 'Cancel the effect of an opponent\'s spell or ability.',
+    'Deploy': 'Place this card onto the battlefield from your hand during a React window.',
+    'Destroy': 'Remove a target minion from the board regardless of its HP.',
+};
+
+function showCardTooltip(numericId) {
+    var defs = allCardDefs || cardDefs;
+    var c = defs[numericId];
+    if (!c) return;
+    var tooltip = document.getElementById('card-tooltip');
+    tooltip.style.display = '';
+
+    // Name
+    document.getElementById('tooltip-name').textContent = c.name;
+
+    // Stats line
+    var statsHtml = '';
+    var typeNames = ['Minion', 'Magic', 'React'];
+    statsHtml += '<span style="color:var(--cyan)">' + (typeNames[c.card_type] || '') + '</span>';
+    if (c.tribe) statsHtml += '<span>' + c.tribe + '</span>';
+    var elem = (c.element !== null && c.element !== undefined) ? ELEMENT_MAP[c.element] : NEUTRAL_ELEMENT;
+    statsHtml += '<span style="color:' + elem.color + '">' + elem.name + '</span>';
+    statsHtml += '<span style="color:var(--cyan)">' + c.mana_cost + ' Mana</span>';
+    if (c.attack != null) statsHtml += '<span style="color:var(--red)">ATK ' + c.attack + '</span>';
+    if (c.health != null) statsHtml += '<span style="color:var(--green)">HP ' + c.health + '</span>';
+    if (c.card_type === 0 && c.attack_range != null) {
+        statsHtml += '<span>' + (c.attack_range <= 1 ? 'Melee' : 'Range ' + c.attack_range) + '</span>';
+    }
+    document.getElementById('tooltip-stats').innerHTML = statsHtml;
+
+    // Keywords
+    var keywordsHtml = '';
+    var effectDesc = (c.effects && c.effects.length > 0) ? getEffectDescription(c.effects, c) : '';
+    if (effectDesc) keywordsHtml += '<div style="margin-bottom:6px;color:white;font-size:12px;font-weight:700;">' + effectDesc + '</div>';
+    // Match keywords from the effect text and card properties
+    var matchedKeywords = [];
+    if (c.unique) matchedKeywords.push('Unique');
+    if (c.card_type === 0 && c.attack_range != null && c.attack_range <= 1) matchedKeywords.push('Melee');
+    for (var kw in KEYWORD_GLOSSARY) {
+        if (effectDesc.indexOf(kw) !== -1 && matchedKeywords.indexOf(kw) === -1) {
+            matchedKeywords.push(kw);
+        }
+    }
+    matchedKeywords.forEach(function(kw) {
+        keywordsHtml += '<div class="tooltip-keyword"><span class="tooltip-keyword-name">' + kw + '</span> <span class="tooltip-keyword-desc">— ' + KEYWORD_GLOSSARY[kw] + '</span></div>';
+    });
+    document.getElementById('tooltip-keywords').innerHTML = keywordsHtml;
+
+    // Related cards
+    var relatedIds = [];
+    if (c.tutor_target) relatedIds.push(c.tutor_target);
+    if (c.promote_target) relatedIds.push(c.promote_target);
+    if (c.summon_sacrifice_tribe) {
+        // Find cards with matching tribe
+        for (var nid in defs) {
+            if (defs[nid].tribe === c.summon_sacrifice_tribe && defs[nid].card_id !== c.card_id) {
+                relatedIds.push(defs[nid].card_id);
+            }
+        }
+    }
+    // Also find cards that tutor/promote TO this card
+    for (var nid2 in defs) {
+        var d = defs[nid2];
+        if (d.tutor_target === c.card_id && relatedIds.indexOf(d.card_id) === -1) relatedIds.push(d.card_id);
+        if (d.promote_target === c.card_id && relatedIds.indexOf(d.card_id) === -1) relatedIds.push(d.card_id);
+    }
+
+    var relatedLabel = document.getElementById('tooltip-related-label');
+    var relatedContainer = document.getElementById('tooltip-related');
+    if (relatedIds.length > 0) {
+        relatedLabel.style.display = '';
+        var relHtml = '';
+        relatedIds.forEach(function(rid) {
+            var rc = null;
+            for (var nid3 in defs) {
+                if (defs[nid3].card_id === rid) { rc = defs[nid3]; break; }
+            }
+            if (!rc) return;
+            var artBg = 'background-image:url(/static/art/' + rc.card_id + '.png)';
+            relHtml += '<div class="tooltip-related-card">';
+            relHtml += '<div class="tooltip-related-art" style="' + artBg + '"></div>';
+            relHtml += '<div class="tooltip-related-info">';
+            relHtml += '<div class="tooltip-related-name">' + rc.name + '</div>';
+            var rStats = rc.mana_cost + ' Mana';
+            if (rc.attack != null) rStats += ' | ATK ' + rc.attack + ' | HP ' + rc.health;
+            relHtml += '<div class="tooltip-related-stats">' + rStats + '</div>';
+            relHtml += '</div></div>';
+        });
+        relatedContainer.innerHTML = relHtml;
+    } else {
+        relatedLabel.style.display = 'none';
+        relatedContainer.innerHTML = '';
+    }
+}
+
+function hideCardTooltip() {
+    var tooltip = document.getElementById('card-tooltip');
+    if (tooltip) tooltip.style.display = 'none';
 }
 
 function renderDeckBuilderCard(numericId, count) {

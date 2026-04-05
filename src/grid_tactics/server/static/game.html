@@ -122,6 +122,7 @@
                 <button class="filter-btn" data-filter="6" style="border-color:rgb(240,220,40);color:rgb(240,220,40);">Light</button>
                 <button class="filter-btn" data-filter="2" style="border-color:rgb(140,100,40);color:rgb(140,100,40);">Earth</button>
                 <button class="filter-btn" data-filter="0" style="border-color:rgb(102,187,106);color:rgb(102,187,106);">Wood</button>
+                <button class="filter-btn" data-filter="4" style="border-color:rgb(189,189,189);color:rgb(189,189,189);">Metal</button>
               </div>
             </div>
             <div class="filter-row">
@@ -139,6 +140,15 @@
           <div class="card-browser-grid" id="card-browser-grid">
             <!-- Cards rendered by JS as YGO-style cards with count badges -->
           </div>
+        </div>
+
+        <!-- Card Tooltip (hover preview) -->
+        <div class="card-tooltip" id="card-tooltip" style="display:none;">
+          <div class="tooltip-header" id="tooltip-name"></div>
+          <div class="tooltip-stats" id="tooltip-stats"></div>
+          <div class="tooltip-section" id="tooltip-keywords"></div>
+          <div class="tooltip-section tooltip-related-label" id="tooltip-related-label" style="display:none;">Related Cards</div>
+          <div class="tooltip-related" id="tooltip-related"></div>
         </div>
 
         <!-- Deck List Sidebar (right) -->
