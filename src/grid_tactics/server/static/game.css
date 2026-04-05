@@ -1157,6 +1157,41 @@ body {
   background: rgb(40, 160, 60);
 }
 
+.card-bottom-center {
+  position: absolute;
+  bottom: 2%;
+  left: 24%;
+  right: 24%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  z-index: 3;
+  gap: 0;
+}
+
+.card-bottom-tribe {
+  font-family: 'Inter', system-ui, sans-serif;
+  font-size: 10px;
+  font-weight: 700;
+  color: white;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  -webkit-text-stroke: 0.5px black;
+  paint-order: stroke fill;
+  line-height: 1.2;
+}
+
+.card-bottom-range {
+  font-family: 'Inter', system-ui, sans-serif;
+  font-size: 9px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.8);
+  -webkit-text-stroke: 0.5px black;
+  paint-order: stroke fill;
+  line-height: 1.2;
+}
+
 /* Card Effect Text (magic/react) */
 .card-effect {
   text-align: center;

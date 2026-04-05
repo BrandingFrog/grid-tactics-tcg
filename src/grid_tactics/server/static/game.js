@@ -629,15 +629,16 @@ function renderDeckBuilderCard(numericId, count) {
     html += '<div class="card-art-overlay"></div>';
     html += '<div class="card-name-overlay">' + c.name + '</div>';
     html += '</div>';
-    // Tribe badge (replaces type badge per user request)
-    var tribe = c.tribe || '';
-    if (tribe) {
-        html += '<div class="card-type-badge">' + tribe + '</div>';
-    }
-    // Stats for minions — corner badges like Hearthstone
+    // Bottom section: ATK circle | tribe+range | HP circle
     if (c.card_type === 0 && c.attack != null) {
         html += '<div class="card-stat-atk">' + c.attack + '</div>';
         html += '<div class="card-stat-hp">' + c.health + '</div>';
+        var tribe = c.tribe || '';
+        var rangeText = (c.attack_range != null) ? (c.attack_range <= 1 ? 'Melee' : 'Range ' + c.attack_range) : '';
+        html += '<div class="card-bottom-center">';
+        if (tribe) html += '<div class="card-bottom-tribe">' + tribe + '</div>';
+        if (rangeText) html += '<div class="card-bottom-range">' + rangeText + '</div>';
+        html += '</div>';
     }
     // Summon sacrifice cost
     if (c.summon_sacrifice_tribe) {
@@ -660,11 +661,7 @@ function renderDeckBuilderCard(numericId, count) {
         });
         html += '<div class="card-effect-full" style="color:var(--cyan);">Transform: ' + transformLines.join(', ') + '</div>';
     }
-    // Range for minions
-    if (c.card_type === 0 && c.attack_range != null) {
-        var rangeText = c.attack_range <= 1 ? 'Melee' : 'Range ' + c.attack_range;
-        html += '<div class="card-range">' + rangeText + '</div>';
-    }
+    // Range already shown in bottom center for minions
     html += '</div>';
     // Count badge
     var badgeClass = count > 0 ? 'card-count-badge' : 'card-count-badge empty';
