@@ -500,6 +500,13 @@ function setupDeckFilters() {
 }
 
 var KEYWORD_GLOSSARY = {
+    // Trigger keywords
+    'Summon': 'This effect activates when the minion is played onto the board.',
+    'Death': 'This effect activates when the minion is destroyed.',
+    'Move': 'This effect activates when the minion moves forward.',
+    'Attack': 'This effect activates when the minion attacks.',
+    'Damaged': 'This effect activates when the minion takes damage.',
+    // Mechanic keywords
     'Unique': 'Only one copy of this minion can exist on the board per player at a time.',
     'Melee': 'Attacks adjacent targets (orthogonal only).',
     'Tutor': 'Search your deck for a specific card and add it to your hand.',
@@ -510,6 +517,8 @@ var KEYWORD_GLOSSARY = {
     'Destroy': 'Remove a target minion from the board regardless of its HP.',
     'Transform': 'Pay mana to transform this minion into a more powerful form.',
     'Sacrifice': 'You must sacrifice a minion of the required tribe from your hand to summon this card.',
+    'Heal': 'Restore HP to a target.',
+    'Deal': 'Deal damage to a target.',
 };
 
 function showCardTooltip(numericId) {
