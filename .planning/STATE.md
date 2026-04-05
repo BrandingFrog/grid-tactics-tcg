@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Online PvP Dueling
 status: executing
-stopped_at: Completed 13-01-PLAN.md
-last_updated: "2026-04-05T16:22:34.385Z"
+stopped_at: Completed 13-02-PLAN.md
+last_updated: "2026-04-05T16:30:52.108Z"
 last_activity: 2026-04-05
 progress:
   total_phases: 5
   completed_phases: 2
   total_plans: 7
-  completed_plans: 5
+  completed_plans: 6
   percent: 0
 ---
 
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-04-04)
 ## Current Position
 
 Phase: 13 (board-hand-ui) — EXECUTING
-Plan: 2 of 3
+Plan: 3 of 3
 Status: Ready to execute
 Last activity: 2026-04-05
 
@@ -57,6 +57,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 12-state-serialization-game-flow P01 | 3min | 2 tasks | 4 files |
 | Phase 12-state-serialization-game-flow P02 | 5min | 2 tasks | 3 files |
 | Phase 13-board-hand-ui P01 | 5min | 2 tasks | 4 files |
+| Phase 13-board-hand-ui P02 | 5min | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -85,6 +86,8 @@ Recent decisions affecting current work:
 - [Phase 13-board-hand-ui]: Flask static_folder set relative to app.py via os.path for portable path resolution
 - [Phase 13-board-hand-ui]: All CardDefinition fields serialized in card_defs for full UI rendering including effects as list of dicts
 - [Phase 13-board-hand-ui]: Deck extraction in handle_ready placed before set_ready() to ensure deck stored before start_game
+- [Phase 13-board-hand-ui]: get_card_defs Socket.IO handler added to events.py for deck builder pre-game card loading
+- [Phase 13-board-hand-ui]: Perspective flip reverses display row iteration order only, never modifies data coordinates
 
 ### Pending Todos
 
@@ -98,6 +101,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-04-05T16:22:34.381Z
-Stopped at: Completed 13-01-PLAN.md
+Last session: 2026-04-05T16:30:52.103Z
+Stopped at: Completed 13-02-PLAN.md
 Resume file: None
