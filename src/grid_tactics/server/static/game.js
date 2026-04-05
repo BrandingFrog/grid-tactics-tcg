@@ -501,24 +501,33 @@ function renderDeckBuilderCard(numericId, count) {
     var elem = (c.element !== null && c.element !== undefined)
         ? ELEMENT_MAP[c.element] : NEUTRAL_ELEMENT;
 
-    var html = '<div class="card-frame ' + typeClass + '">';
+    var html = '<div class="card-frame card-frame-full ' + typeClass + '">';
     // Mana badge
     html += '<div class="card-mana">' + c.mana_cost + '</div>';
-    // Art area with attribute circle
-    html += '<div class="card-art">';
+    // Art area with attribute circle and name overlay (YGO CardPreview style)
+    html += '<div class="card-art card-art-full">';
     html += '<div class="attr-circle ' + elem.css + '"></div>';
+    html += '<div class="card-art-overlay"></div>';
+    html += '<div class="card-name-overlay">' + c.name + '</div>';
     html += '</div>';
-    // Card name
-    html += '<div class="card-name">' + c.name + '</div>';
-    // Stats or effect text
+    // Type badge
+    var typeNames = ['Minion', 'Magic', 'React'];
+    html += '<div class="card-type-badge">' + (typeNames[c.card_type] || '') + '</div>';
+    // Stats for minions
     if (c.card_type === 0 && c.attack != null) {
         html += '<div class="card-stats">';
         html += '<span class="card-atk">ATK/' + c.attack + '</span>';
         html += '<span class="card-hp">HP/' + c.health + '</span>';
         html += '</div>';
-    } else if (c.effects && c.effects.length > 0) {
+    }
+    // Effect text (all card types)
+    if (c.effects && c.effects.length > 0) {
         var desc = getEffectDescription(c.effects);
-        html += '<div class="card-effect">' + desc + '</div>';
+        html += '<div class="card-effect-full">' + desc + '</div>';
+    }
+    // Range for minions
+    if (c.card_type === 0 && c.attack_range != null) {
+        html += '<div class="card-range">Range: ' + c.attack_range + '</div>';
     }
     html += '</div>';
     // Count badge
