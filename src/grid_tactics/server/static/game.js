@@ -30,9 +30,12 @@ const PHASE_DISPLAY = {
     1: { label: 'REACT',  cssClass: 'phase-react',  bg: 'var(--yellow)' },
 };
 
-const EFFECT_TYPE_NAMES = ['Damage', 'Heal', 'Buff ATK', 'Buff HP', 'Negate'];
-const TRIGGER_NAMES = ['On Play', 'On Death', 'On Attack', 'React'];
-const TARGET_NAMES = ['Enemy Player', 'All Enemies', 'Self/Owner', 'Single Enemy', 'Self Minion'];
+const EFFECT_TYPE_NAMES = [
+    'Damage', 'Heal', 'Buff ATK', 'Buff HP', 'Negate',
+    'Deploy Self', 'Rally Forward', 'Promote', 'Tutor', 'Destroy'
+];
+const TRIGGER_NAMES = ['On Play', 'On Death', 'On Attack', 'On Damaged', 'On Move'];
+const TARGET_NAMES = ['Single Target', 'All Enemies', 'Adjacent', 'Self/Owner'];
 
 const MAX_DECK_SIZE = 30;
 const MAX_COPIES = 3;
