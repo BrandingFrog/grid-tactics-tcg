@@ -1309,7 +1309,7 @@ function getEffectDescription(effects, cardData) {
             desc = prefix + 'Deploy';
         } else if (type === 6) { // Rally Forward
             var rallyName = (cardData && cardData.name) || 'this unit';
-            desc = 'Move: Rally all friendly ' + rallyName + ' forward';
+            desc = 'Move: Rally friendly ' + rallyName;
         } else if (type === 7) { // Promote
             if (cardData && cardData.promote_target) {
                 var promoFrom = findCardNameById(cardData.promote_target);
