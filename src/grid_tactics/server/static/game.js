@@ -2161,10 +2161,10 @@ function renderOpponentInfo() {
         oppHp.textContent = oppPlayer.hp;
     }
 
-    // Mana
+    // Mana (banking pool — single number, not X/Y)
     var oppMana = document.getElementById('opp-mana');
     if (oppMana) {
-        oppMana.textContent = oppPlayer.current_mana + '/' + oppPlayer.max_mana;
+        oppMana.textContent = oppPlayer.current_mana;
     }
 
     // Hand count
@@ -2199,10 +2199,10 @@ function renderSelfInfo() {
         selfHp.textContent = myPlayer.hp;
     }
 
-    // Mana
+    // Mana (banking pool — single number, not X/Y)
     var selfMana = document.getElementById('self-mana');
     if (selfMana) {
-        selfMana.textContent = myPlayer.current_mana + '/' + myPlayer.max_mana;
+        selfMana.textContent = myPlayer.current_mana;
     }
 
     // Hand count

@@ -372,16 +372,12 @@ class TensorGameEngine:
                 if regen_p0.any():
                     new_mana_p0 = (s.player_mana[:, 0] + 1).clamp(max=10)
                     s.player_mana[:, 0] = torch.where(regen_p0, new_mana_p0, s.player_mana[:, 0])
-                    new_max_p0 = (s.player_max_mana[:, 0] + 1).clamp(max=10)
-                    s.player_max_mana[:, 0] = torch.where(regen_p0, new_max_p0, s.player_max_mana[:, 0])
 
                 # Regen for player 1 (where should_advance and new active == 1)
                 regen_p1 = should_advance & (ap_new == 1)
                 if regen_p1.any():
                     new_mana_p1 = (s.player_mana[:, 1] + 1).clamp(max=10)
                     s.player_mana[:, 1] = torch.where(regen_p1, new_mana_p1, s.player_mana[:, 1])
-                    new_max_p1 = (s.player_max_mana[:, 1] + 1).clamp(max=10)
-                    s.player_max_mana[:, 1] = torch.where(regen_p1, new_max_p1, s.player_max_mana[:, 1])
 
                 # Auto-draw for new active player at turn start
                 apply_draw_batch(s, should_advance, self.card_table)
