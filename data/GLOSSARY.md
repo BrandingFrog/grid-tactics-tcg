@@ -26,6 +26,7 @@ Update this file and the matching `KEYWORD_GLOSSARY` in `src/grid_tactics/server
 | Promote | When this minion dies, specified minion transforms into this card. |
 | Rally | When this minion moves, all other friendly copies of it also advance forward. |
 | Negate | Cancel the effect of an opponent's spell or ability. |
+| React | This card can be played during the opponent's turn in response to their action. |
 | Deploy | Place this card onto the battlefield from your hand during a React window. |
 | Destroy | Remove a target minion from the board regardless of its HP. |
 | Transform | Pay mana to transform this minion into another form. |

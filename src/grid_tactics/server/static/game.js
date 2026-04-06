@@ -567,6 +567,7 @@ var KEYWORD_GLOSSARY = {
     'Promote': 'When this minion dies, specified minion transforms into this card.',
     'Rally': 'When this minion moves, all other friendly copies of it also advance forward.',
     'Negate': 'Cancel the effect of an opponent\'s spell or ability.',
+    'React': 'This card can be played during the opponent\'s turn in response to their action.',
     'Deploy': 'Place this card onto the battlefield from your hand during a React window.',
     'Destroy': 'Remove a target minion from the board regardless of its HP.',
     'Transform': 'Pay mana to transform this minion into another form.',
@@ -633,6 +634,7 @@ function showCardTooltip(numericId) {
     if (c.card_type === 0 && c.attack_range != null && c.attack_range > 0) matchedKeywords.push('Range');
     if (c.summon_sacrifice_tribe) { matchedKeywords.push('Cost'); matchedKeywords.push('Discard'); }
     if (c.transform_options && c.transform_options.length > 0) matchedKeywords.push('Transform');
+    if (c.react_condition != null) { matchedKeywords.push('React'); }
     if (c.react_condition != null && c.react_effect && c.react_effect.type === 5) { matchedKeywords.push('Deploy'); }
     // From effects
     // Check if any effect overrides Summon trigger (e.g. Active abilities use on_play trigger but aren't Summon)
