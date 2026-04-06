@@ -1,0 +1,19 @@
+{
+    "card_id": "emberplague_rat",
+    "name": "Emberplague Rat",
+    "card_type": "minion",
+    "mana_cost": 2,
+    "attack": 0,
+    "health": 24,
+    "range": 0,
+    "element": "fire",
+    "tribe": "Rat",
+    "effects": [
+        {
+            "type": "burn",
+            "trigger": "passive",
+            "target": "adjacent",
+            "amount": 5
+        }
+    ]
+}
