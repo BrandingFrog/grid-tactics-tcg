@@ -792,9 +792,9 @@ function renderDeckBuilderCard(numericId, count) {
         var condMap = {
             0: 'Enemy plays Magic', 1: 'Enemy summons Minion', 2: 'Enemy attacks',
             3: 'Enemy plays React', 4: 'Any enemy action',
-            5: 'Enemy summons any Wood', 6: 'Enemy summons any Fire', 7: 'Enemy summons any Earth',
-            8: 'Enemy summons any Water', 9: 'Enemy summons any Metal', 10: 'Enemy summons any Dark',
-            11: 'Enemy summons any Light', 12: 'Enemy sacrifices'
+            5: 'Enemy plays any Wood', 6: 'Enemy plays any Fire', 7: 'Enemy plays any Earth',
+            8: 'Enemy plays any Water', 9: 'Enemy plays any Metal', 10: 'Enemy plays any Dark',
+            11: 'Enemy plays any Light', 12: 'Enemy sacrifices'
         };
         var condText = condMap[c.react_condition] || 'Enemy acts';
         var extraCond = c.react_requires_no_friendly_minions ? ' + No friendly minions' : '';
