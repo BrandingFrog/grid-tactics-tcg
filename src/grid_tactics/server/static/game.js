@@ -576,6 +576,7 @@ var KEYWORD_GLOSSARY = {
     'Deal': 'Deal damage to a target.',
     'Burn': 'Apply damage over time that triggers each turn.',
     'Dark Matter': 'Buff scales with Dark Matter stacks.',
+    'Leap': 'If blocked by an enemy, advance to the next available tile instead.',
 };
 
 function showCardTooltip(numericId) {
@@ -658,6 +659,7 @@ function showCardTooltip(numericId) {
             if (eff.type === 10) { if (matchedKeywords.indexOf('Burn') === -1) matchedKeywords.push('Burn'); }
             if (eff.type === 11) { if (matchedKeywords.indexOf('Active') === -1) matchedKeywords.push('Active'); if (matchedKeywords.indexOf('Dark Matter') === -1) matchedKeywords.push('Dark Matter'); }
             if (eff.type === 12) { if (matchedKeywords.indexOf('Passive') === -1) matchedKeywords.push('Passive'); if (matchedKeywords.indexOf('Heal') === -1) matchedKeywords.push('Heal'); }
+            if (eff.type === 13) { if (matchedKeywords.indexOf('Leap') === -1) matchedKeywords.push('Leap'); }
         });
     }
     matchedKeywords.forEach(function(kw) {
@@ -1326,6 +1328,8 @@ function getEffectDescription(effects, cardData) {
             desc = 'Active: +' + amount + ' ATK (+Dark Matter*1)';
         } else if (type === 12) { // Passive Heal
             desc = 'Passive: Heal ' + amount + ' per turn';
+        } else if (type === 13) { // Leap
+            desc = 'Move: Leap over enemies';
         } else {
             desc = prefix + 'Effect';
         }

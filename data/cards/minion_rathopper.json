@@ -1,0 +1,19 @@
+{
+    "card_id": "rathopper",
+    "name": "Rathopper",
+    "card_type": "minion",
+    "mana_cost": 3,
+    "attack": 19,
+    "health": 13,
+    "range": 0,
+    "element": "earth",
+    "tribe": "Rat",
+    "effects": [
+        {
+            "type": "leap",
+            "trigger": "on_move",
+            "target": "self_owner",
+            "amount": 1
+        }
+    ]
+}

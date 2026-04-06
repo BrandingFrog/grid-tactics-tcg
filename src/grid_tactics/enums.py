@@ -56,6 +56,7 @@ class EffectType(IntEnum):
     BURN = 10          # Apply burn DoT to target (amount damage per action, non-stacking)
     DARK_MATTER_BUFF = 11  # Buff attack by amount + player's Dark Matter stacks
     PASSIVE_HEAL = 12  # Heal self by amount (fires on PASSIVE trigger each turn)
+    LEAP = 13          # On move: if blocked by enemy, advance to next available tile instead
 
 
 class ReactCondition(IntEnum):

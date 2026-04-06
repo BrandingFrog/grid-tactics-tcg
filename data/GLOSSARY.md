@@ -35,3 +35,4 @@ Update this file and the matching `KEYWORD_GLOSSARY` in `src/grid_tactics/server
 | Deal | Deal damage to a target. |
 | Burn | Apply damage over time that triggers each turn. |
 | Dark Matter | Buff scales with Dark Matter stacks. |
+| Leap | If blocked by an enemy, advance to the next available tile instead. |
