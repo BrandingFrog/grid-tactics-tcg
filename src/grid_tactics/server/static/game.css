@@ -1011,9 +1011,9 @@ body {
 /* Attribute Circles (all 7 elements + neutral) */
 .attr-circle {
   position: absolute;
-  top: 4%;
-  right: 4%;
-  width: 18%;
+  top: 3%;
+  right: 3%;
+  width: 16%;
   aspect-ratio: 1;
   border-radius: 50%;
   border: 2px solid rgb(30, 25, 20);
