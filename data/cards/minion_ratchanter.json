@@ -10,7 +10,7 @@
     "tribe": "Mage/Rat",
     "effects": [
         {
-            "type": "summon_token",
+            "type": "conjure",
             "trigger": "on_play",
             "target": "self_owner",
             "amount": 2
