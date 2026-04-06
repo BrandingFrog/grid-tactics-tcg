@@ -63,6 +63,7 @@ let allCardDefs = null;      // set from server on game_start or card_defs event
 let deckFilterType = 'all';     // 'all', 'minion', 'magic', 'react'
 let deckFilterElement = 'all';  // 'all', or element int as string
 let deckFilterMana = 'all';     // 'all', '1', '2', '3', '4', '5+'
+let deckFilterKeyword = 'all';  // 'all', 'tutor', 'promote', etc.
 let deckSearchQuery = '';       // search text
 
 // =============================================
@@ -432,6 +433,22 @@ function renderCardBrowser() {
                 if (manaCost !== parseInt(deckFilterMana)) return;
             }
         }
+        // Keyword filter
+        if (deckFilterKeyword !== 'all') {
+            var hasKeyword = false;
+            var kw = deckFilterKeyword;
+            if (kw === 'tutor' && c.tutor_target) hasKeyword = true;
+            else if (kw === 'promote' && c.promote_target) hasKeyword = true;
+            else if (kw === 'rally' && c.effects && c.effects.some(function(e) { return e.type === 6; })) hasKeyword = true;
+            else if (kw === 'transform' && c.transform_options && c.transform_options.length > 0) hasKeyword = true;
+            else if (kw === 'discard' && c.summon_sacrifice_tribe) hasKeyword = true;
+            else if (kw === 'react' && c.react_condition != null) hasKeyword = true;
+            else if (kw === 'unique' && c.unique) hasKeyword = true;
+            else if (kw === 'negate' && c.effects && c.effects.some(function(e) { return e.type === 4; })) hasKeyword = true;
+            else if (kw === 'burn' && c.effects && c.effects.some(function(e) { return e.type === 10; })) hasKeyword = true;
+            else if (kw === 'passive' && c.effects && c.effects.some(function(e) { return e.type === 12; })) hasKeyword = true;
+            if (!hasKeyword) return;
+        }
         // Search filter
         if (query) {
             var searchable = (c.name || '').toLowerCase() + ' ' + (c.card_id || '').toLowerCase();
@@ -484,6 +501,15 @@ function setupDeckFilters() {
         btn.addEventListener('click', function() {
             deckFilterElement = btn.dataset.filter;
             document.querySelectorAll('#element-filters .filter-btn').forEach(function(b) { b.classList.remove('active'); });
+            btn.classList.add('active');
+            renderCardBrowser();
+        });
+    });
+    // Keyword filters
+    document.querySelectorAll('#keyword-filters .filter-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            deckFilterKeyword = btn.dataset.filter;
+            document.querySelectorAll('#keyword-filters .filter-btn').forEach(function(b) { b.classList.remove('active'); });
             btn.classList.add('active');
             renderCardBrowser();
         });
