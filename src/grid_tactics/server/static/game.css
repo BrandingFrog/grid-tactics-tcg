@@ -1526,3 +1526,62 @@ body {
 .mb-16 { margin-bottom: 16px; }
 .gap-8 { gap: 8px; }
 .hidden { display: none !important; }
+
+/* ===== Mobile Responsive (max-width 600px) ===== */
+@media (max-width: 600px) {
+  /* Header */
+  .header { padding: 0 8px; height: 44px; }
+  .logo { font-size: 12px; margin-right: 12px; }
+  .nav-btn { padding: 10px 8px; font-size: 11px; }
+
+  /* Lobby */
+  .lobby-container { padding: 16px 8px; }
+  .lobby-heading { font-size: 24px; }
+
+  /* Deck Builder */
+  .deck-builder-layout { padding: 4px 8px; height: calc(100vh - 44px); }
+  .deck-topbar { gap: 4px; margin-bottom: 4px; }
+  .deck-topbar .btn { padding: 6px 10px; font-size: 10px; }
+  .deck-topbar .input { font-size: 10px; padding: 6px 8px; }
+  .deck-topbar .select { font-size: 10px; }
+
+  .deck-builder-body { grid-template-columns: 1fr; }
+  .card-browser { padding: 8px; }
+  .card-browser-filters { gap: 4px; }
+  .filter-label { min-width: 40px; font-size: 8px; }
+  .filter-btn { padding: 3px 6px; font-size: 8px; }
+  .filter-checkbox { font-size: 8px; }
+
+  .card-browser-grid {
+    grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+    gap: 6px;
+  }
+
+  .card-frame-full { width: 100px; }
+  .card-name-overlay { font-size: 10px; }
+  .card-effect-full { font-size: 8px; }
+  .card-flavour { font-size: 8px; }
+  .card-stat-atk, .card-stat-hp { font-size: 12px; }
+  .card-mana { font-size: 12px; }
+  .card-bottom-tribe { font-size: 7px; }
+  .card-bottom-range { font-size: 7px; }
+
+  /* Deck sidebar on mobile = collapsed below */
+  .deck-sidebar { padding: 8px; max-height: 150px; }
+
+  /* Tooltip */
+  .card-tooltip { width: 100%; position: fixed; bottom: 0; top: auto; right: 0; left: 0; max-height: 40vh; border-radius: 10px 10px 0 0; }
+
+  /* Game Layout */
+  .game-layout { grid-template-columns: 1fr; height: calc(100vh - 44px); padding: 4px; gap: 4px; }
+  .game-sidebar { display: none; }
+  .room-bar { padding: 4px 8px; }
+  .info-bar { padding: 4px 8px; gap: 8px; }
+  .player-tag { font-size: 10px; }
+  .stat-label { font-size: 8px; }
+  .stat-value { font-size: 14px; }
+  .stat-group { gap: 12px; }
+  .board-container { padding: 4px; }
+  .hand-container { max-height: 100px; }
+  .card-frame { width: 70px; }
+}
