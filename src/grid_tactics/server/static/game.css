@@ -1098,7 +1098,8 @@ body {
   white-space: nowrap;
 }
 
-.card-frame-full .attr-text {
+.card-frame-full .attr-text,
+.card-frame-hand .attr-text {
   font-size: 7px;
   -webkit-text-stroke: 1px black;
 }
