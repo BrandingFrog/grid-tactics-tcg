@@ -278,6 +278,8 @@ function setupLobbyHandlers() {
 function showRoomPanel() {
     var panel = document.getElementById('room-panel');
     if (panel) panel.style.display = '';
+    // Refresh deck selector in case decks were saved after page load
+    populateDeckSelector();
 }
 
 function addPlayerToList(name, ready) {
@@ -305,16 +307,33 @@ function showLobbyStatus(message, type) {
 function populateDeckSelector() {
     var selector = document.getElementById('deck-selector');
     if (!selector) return;
+    // Preserve current selection if possible
+    var prevValue = selector.value;
     // Clear existing options except the default
-    selector.innerHTML = '<option value="">Default Deck</option>';
+    selector.innerHTML = '<option value="">Default Deck (Starter)</option>';
     var slots = loadDeckSlots();
     slots.forEach(function(slot, idx) {
         var totalCards = getDeckTotal(slot.cards);
         var opt = document.createElement('option');
         opt.value = idx;
-        opt.textContent = slot.name + ' (' + totalCards + '/30)';
+        var ready = totalCards === 30;
+        opt.textContent = (ready ? '' : '⚠ ') + slot.name + ' (' + totalCards + '/30)';
+        if (!ready) {
+            opt.disabled = true;
+        }
         selector.appendChild(opt);
     });
+    // Restore previous selection if still valid
+    if (prevValue !== '') {
+        var stillValid = false;
+        for (var i = 0; i < selector.options.length; i++) {
+            if (selector.options[i].value === prevValue && !selector.options[i].disabled) {
+                stillValid = true;
+                break;
+            }
+        }
+        if (stillValid) selector.value = prevValue;
+    }
 }
 
 // =============================================
@@ -1043,6 +1062,7 @@ function setupDeckBuilderHandlers() {
             if (!name) name = 'Deck ' + (currentSlotIdx + 1);
             saveDeckSlot(currentSlotIdx, name, Object.assign({}, currentDeck));
             refreshLoadDropdown();
+            populateDeckSelector();  // refresh lobby dropdown too
             showLobbyStatus('Deck saved!', 'info');
         });
     }
