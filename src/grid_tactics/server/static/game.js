@@ -769,7 +769,7 @@ function renderDeckBuilderCard(numericId, count) {
     }
     // Summon sacrifice cost
     if (c.summon_sacrifice_tribe) {
-        html += '<div class="card-effect-full">Cost: Discard ' + c.summon_sacrifice_tribe + '</div>';
+        html += '<div class="card-effect-full">Cost: Discard any ' + c.summon_sacrifice_tribe + '</div>';
     }
     // Unique tag
     if (c.unique) {
@@ -1313,7 +1313,8 @@ function getEffectDescription(effects, cardData) {
         } else if (type === 7) { // Promote
             if (cardData && cardData.promote_target) {
                 var promoFrom = findCardNameById(cardData.promote_target);
-                desc = prefix + 'Promote ' + promoFrom + ' to ' + (cardData.name || '?');
+                var promoteTribe = cardData.tribe || promoFrom;
+                desc = prefix + 'Promote any ' + promoteTribe + ' to ' + (cardData.name || '?');
             } else {
                 desc = prefix + 'Promote';
             }
