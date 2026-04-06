@@ -2,7 +2,7 @@
     "card_id": "fallen_paladin",
     "name": "Fallen Paladin",
     "card_type": "minion",
-    "mana_cost": 4,
+    "mana_cost": 5,
     "attack": 16,
     "health": 42,
     "range": 0,

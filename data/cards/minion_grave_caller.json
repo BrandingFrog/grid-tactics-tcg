@@ -2,7 +2,7 @@
     "card_id": "grave_caller",
     "name": "Grave Caller",
     "card_type": "minion",
-    "mana_cost": 3,
+    "mana_cost": 4,
     "attack": 5,
     "health": 13,
     "range": 1,
