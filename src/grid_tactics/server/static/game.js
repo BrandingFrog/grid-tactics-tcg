@@ -555,7 +555,8 @@ var KEYWORD_GLOSSARY = {
     'Deploy': 'Place this card onto the battlefield from your hand during a React window.',
     'Destroy': 'Remove a target minion from the board regardless of its HP.',
     'Transform': 'Pay mana to transform this minion into a more powerful form.',
-    'Discard': 'You must discard a minion of the required tribe from your hand to summon this card.',
+    'Cost': 'An additional cost that must be paid to play this card.',
+    'Discard': 'Remove a card of the required tribe from your hand.',
     'Heal': 'Restore HP to a target.',
     'Deal': 'Deal damage to a target.',
     'Burn': 'Apply damage over time that triggers each turn.',
@@ -719,7 +720,7 @@ function renderDeckBuilderCard(numericId, count) {
     }
     // Summon sacrifice cost
     if (c.summon_sacrifice_tribe) {
-        html += '<div class="card-effect-full">Discard ' + c.summon_sacrifice_tribe + ' to Summon</div>';
+        html += '<div class="card-effect-full">Cost: Discard ' + c.summon_sacrifice_tribe + '</div>';
     }
     // Unique tag
     if (c.unique) {
