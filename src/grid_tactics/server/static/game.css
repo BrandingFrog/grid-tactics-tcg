@@ -1444,7 +1444,6 @@ body {
 
 /* Non-deckable card */
 .card-nondeckable {
-  opacity: 0.7;
   cursor: default;
 }
 
