@@ -1,0 +1,21 @@
+{
+    "card_id": "ratchanter",
+    "name": "Ratchanter",
+    "card_type": "minion",
+    "mana_cost": 4,
+    "attack": 15,
+    "health": 30,
+    "range": 0,
+    "element": "dark",
+    "tribe": "Mage/Rat",
+    "effects": [
+        {
+            "type": "summon_token",
+            "trigger": "on_play",
+            "target": "self_owner",
+            "amount": 2
+        }
+    ],
+    "summon_token_target": "rat",
+    "summon_token_cost": 2
+}

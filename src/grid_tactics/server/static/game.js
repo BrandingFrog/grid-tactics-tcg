@@ -577,6 +577,7 @@ var KEYWORD_GLOSSARY = {
     'Burn': 'Apply damage over time that triggers each turn.',
     'Dark Matter': 'Buff scales with Dark Matter stacks.',
     'Leap': 'If blocked by an enemy, advance to the next available tile instead.',
+    'Summon Token': 'Summon a minion token with stats buffed by Dark Matter stacks.',
 };
 
 function showCardTooltip(numericId) {
@@ -660,6 +661,7 @@ function showCardTooltip(numericId) {
             if (eff.type === 11) { if (matchedKeywords.indexOf('Active') === -1) matchedKeywords.push('Active'); if (matchedKeywords.indexOf('Dark Matter') === -1) matchedKeywords.push('Dark Matter'); }
             if (eff.type === 12) { if (matchedKeywords.indexOf('Passive') === -1) matchedKeywords.push('Passive'); if (matchedKeywords.indexOf('Heal') === -1) matchedKeywords.push('Heal'); }
             if (eff.type === 13) { if (matchedKeywords.indexOf('Leap') === -1) matchedKeywords.push('Leap'); }
+            if (eff.type === 14) { if (matchedKeywords.indexOf('Summon Token') === -1) matchedKeywords.push('Summon Token'); if (matchedKeywords.indexOf('Dark Matter') === -1) matchedKeywords.push('Dark Matter'); }
         });
     }
     matchedKeywords.forEach(function(kw) {
@@ -1330,6 +1332,10 @@ function getEffectDescription(effects, cardData) {
             desc = 'Passive: Heal ' + amount + ' per turn';
         } else if (type === 13) { // Leap
             desc = 'Move: Leap over enemies';
+        } else if (type === 14) { // Summon Token
+            var tokenName = (cardData && cardData.summon_token_target) ? findCardNameById(cardData.summon_token_target) : 'token';
+            var tokenCost = (cardData && cardData.summon_token_cost) ? ' (' + cardData.summon_token_cost + ')' : '';
+            desc = prefix + tokenCost + ': Summon ' + tokenName + ' (+Dark Matter*1)';
         } else {
             desc = prefix + 'Effect';
         }

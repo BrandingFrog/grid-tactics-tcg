@@ -70,6 +70,8 @@ def _build_card_defs(library):
                 ] or None,
                 "flavour_text": getattr(card, 'flavour_text', None),
                 "react_requires_no_friendly_minions": getattr(card, 'react_requires_no_friendly_minions', False),
+                "summon_token_target": getattr(card, 'summon_token_target', None),
+                "summon_token_cost": getattr(card, 'summon_token_cost', None),
             }
         except (KeyError, IndexError):
             break
