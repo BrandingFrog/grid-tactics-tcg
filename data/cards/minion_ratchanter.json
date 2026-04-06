@@ -10,18 +10,13 @@
     "tribe": "Mage/Rat",
     "effects": [
         {
-            "type": "tutor",
+            "type": "conjure",
             "trigger": "on_play",
             "target": "self_owner",
             "amount": 1
-        },
-        {
-            "type": "dark_matter_buff",
-            "trigger": "on_play",
-            "target": "adjacent",
-            "amount": 1
         }
     ],
-    "tutor_target": "rat",
-    "summon_token_cost": 1
+    "summon_token_target": "rat",
+    "summon_token_cost": 1,
+    "conjure_buff": "dark_matter"
 }

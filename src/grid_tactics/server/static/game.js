@@ -1338,7 +1338,10 @@ function getEffectDescription(effects, cardData) {
         } else if (type === 14) { // Conjure
             var conjureName = (cardData && cardData.summon_token_target) ? findCardNameById(cardData.summon_token_target) : 'a card';
             var conjureCost = (cardData && cardData.summon_token_cost) ? ' (' + cardData.summon_token_cost + ')' : '';
-            desc = prefix + conjureCost + ': Conjure ' + conjureName;
+            desc = 'Effect' + conjureCost + ': Summon ' + conjureName + ' from deck';
+            if (cardData && cardData.conjure_buff === 'dark_matter') {
+                desc += '. Buff all ' + conjureName + ' by Dark Matter';
+            }
         } else {
             desc = prefix + 'Effect';
         }
