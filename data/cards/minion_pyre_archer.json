@@ -2,7 +2,7 @@
     "card_id": "pyre_archer",
     "name": "Pyre Archer",
     "card_type": "minion",
-    "mana_cost": 2,
+    "mana_cost": 3,
     "attack": 9,
     "health": 5,
     "range": 2,
