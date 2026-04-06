@@ -547,24 +547,25 @@ var KEYWORD_GLOSSARY = {
     'Move': 'This effect activates when the minion moves forward.',
     'Attack': 'This effect activates when the minion attacks.',
     'Damaged': 'This effect activates when the minion takes damage.',
+    'Passive': 'This effect triggers automatically every turn.',
+    'Active': 'This ability can be used once per turn instead of attacking.',
     // Mechanic keywords
     'Unique': 'Only one copy of this minion can exist on the board per player at a time.',
     'Melee': 'Attacks adjacent targets (orthogonal only).',
+    'Range': 'Attacks targets up to X tiles away.',
     'Tutor': 'Search your deck for a specific card and add it to your hand.',
-    'Promote': 'When this minion dies, a weaker minion transforms into this card.',
+    'Promote': 'When this minion dies, specified minion transforms into this card.',
     'Rally': 'When this minion moves, all other friendly copies of it also advance forward.',
     'Negate': 'Cancel the effect of an opponent\'s spell or ability.',
     'Deploy': 'Place this card onto the battlefield from your hand during a React window.',
     'Destroy': 'Remove a target minion from the board regardless of its HP.',
-    'Transform': 'Pay mana to transform this minion into a more powerful form.',
+    'Transform': 'Pay mana to transform this minion into another form.',
     'Cost': 'An additional cost that must be paid to play this card.',
-    'Discard': 'Remove a card of the required tribe from your hand.',
+    'Discard': 'Remove a card from your hand.',
     'Heal': 'Restore HP to a target.',
     'Deal': 'Deal damage to a target.',
     'Burn': 'Apply damage over time that triggers each turn.',
     'Dark Matter': 'Buff scales with Dark Matter stacks.',
-    'Passive': 'This effect triggers automatically every turn.',
-    'Active': 'This ability can be used once per turn instead of attacking.',
 };
 
 function showCardTooltip(numericId) {
@@ -616,6 +617,7 @@ function showCardTooltip(numericId) {
     var matchedKeywords = [];
     if (c.unique) matchedKeywords.push('Unique');
     if (c.card_type === 0 && c.attack_range != null && c.attack_range <= 1) matchedKeywords.push('Melee');
+    if (c.card_type === 0 && c.attack_range != null && c.attack_range > 1) matchedKeywords.push('Range');
     if (c.summon_sacrifice_tribe) { matchedKeywords.push('Cost'); matchedKeywords.push('Discard'); }
     if (c.transform_options && c.transform_options.length > 0) matchedKeywords.push('Transform');
     for (var kw in KEYWORD_GLOSSARY) {
