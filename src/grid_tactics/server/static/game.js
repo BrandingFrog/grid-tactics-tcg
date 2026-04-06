@@ -1658,6 +1658,10 @@ function renderGame() {
     renderHand();
     renderActionBar();
     renderReactBanner();
+    // Always refresh highlights — even when it's not my turn — so stale
+    // .card-playable classes from the previous render are cleared.
+    highlightBoard();
+    updateHandHighlights();
     updateNavLockState();
 }
 
@@ -1730,7 +1734,7 @@ function describePendingAction(pa) {
     if (t === 2) {
         if (pa.target_id != null && gameState && gameState.minions) {
             var tgt = null;
-            gameState.minions.forEach(function(m) { if (m.minion_id === pa.target_id) tgt = m; });
+            gameState.minions.forEach(function(m) { if (m.instance_id === pa.target_id) tgt = m; });
             if (tgt) {
                 var tgtName = (cardDefs[tgt.card_numeric_id]) ? cardDefs[tgt.card_numeric_id].name : 'minion';
                 if (tgt.owner === myPlayerIdx) {
@@ -1753,7 +1757,7 @@ function describePendingAction(pa) {
     if (t === 6) {
         if (pa.minion_id != null && gameState && gameState.minions) {
             var src = null;
-            gameState.minions.forEach(function(m) { if (m.minion_id === pa.minion_id) src = m; });
+            gameState.minions.forEach(function(m) { if (m.instance_id === pa.minion_id) src = m; });
             if (src) {
                 var sName = (cardDefs[src.card_numeric_id]) ? cardDefs[src.card_numeric_id].name : 'minion';
                 return 'Opponent is sacrificing their ' + sName + ' for damage';
@@ -2019,8 +2023,8 @@ function onBoardMinionClick(minion) {
     // If in attack mode and clicking an enemy — attack it
     if ((interactionMode === 'attack' || interactionMode === 'move_attack') && selectedMinionId !== null && minion.owner !== myPlayerIdx) {
         var targets = getAttackTargets(selectedMinionId);
-        if (targets.indexOf(minion.minion_id) !== -1) {
-            submitAction({ action_type: 2, minion_id: selectedMinionId, target_id: minion.minion_id });
+        if (targets.indexOf(minion.instance_id) !== -1) {
+            submitAction({ action_type: 2, minion_id: selectedMinionId, target_id: minion.instance_id });
             return;
         }
     }
@@ -2028,18 +2032,18 @@ function onBoardMinionClick(minion) {
     // If clicking own minion — select it
     if (minion.owner === myPlayerIdx) {
         // If already selected, deselect
-        if (selectedMinionId === minion.minion_id) {
+        if (selectedMinionId === minion.instance_id) {
             clearSelection();
             highlightBoard();
             updateHandHighlights();
             return;
         }
 
-        selectedMinionId = minion.minion_id;
+        selectedMinionId = minion.instance_id;
         selectedHandIdx = null;
 
-        var moves = getMovePositions(minion.minion_id);
-        var attacks = getAttackTargets(minion.minion_id);
+        var moves = getMovePositions(minion.instance_id);
+        var attacks = getAttackTargets(minion.instance_id);
 
         if (moves.length > 0 || attacks.length > 0) {
             interactionMode = (attacks.length > 0) ? 'attack' : 'move';
@@ -2091,7 +2095,7 @@ function highlightBoard() {
     if (selectedMinionId !== null) {
         // Highlight minion's cell as selected
         var minion = null;
-        (gameState.minions || []).forEach(function(m) { if (m.minion_id === selectedMinionId) minion = m; });
+        (gameState.minions || []).forEach(function(m) { if (m.instance_id === selectedMinionId) minion = m; });
         if (minion) {
             var mCell = document.querySelector('.board-cell[data-row="' + minion.position[0] + '"][data-col="' + minion.position[1] + '"]');
             if (mCell) mCell.classList.add('cell-selected');
@@ -2108,7 +2112,7 @@ function highlightBoard() {
         if (interactionMode === 'attack' || interactionMode === 'move_attack') {
             var atkTargets = getAttackTargets(selectedMinionId);
             (gameState.minions || []).forEach(function(m) {
-                if (atkTargets.indexOf(m.minion_id) !== -1) {
+                if (atkTargets.indexOf(m.instance_id) !== -1) {
                     var cell = document.querySelector('.board-cell[data-row="' + m.position[0] + '"][data-col="' + m.position[1] + '"]');
                     if (cell) cell.classList.add('cell-attack');
                 }
@@ -2155,11 +2159,18 @@ function renderActionBar() {
         return;
     }
 
-    // Action bar: show Draw Card / Skip React / Pass button
-    // Reactions are shown explicitly — never auto-skipped.
+    // Auto-skip empty react: when in REACT phase and the only legal action is PASS
+    // (no react cards in hand can react to this trigger), submit PASS automatically
+    if (gameState.phase === 1 && legalActions.length === 1
+            && legalActions[0].action_type === 4) {
+        submitAction({ action_type: 4 });
+        return;
+    }
+
+    // Action bar: show Draw Card / Skip React button
     if (slot) {
         if (gameState.phase === 1) {
-            // REACT phase: show Skip React button
+            // REACT phase: show Skip React button (only when player has react cards available)
             var canPass = legalActions.some(function(a) { return a.action_type === 4; });
             if (canPass) {
                 var skipBtn = document.createElement('button');
@@ -2195,9 +2206,6 @@ function renderActionBar() {
             hint.style.display = '';
         }
     }
-
-    highlightBoard();
-    updateHandHighlights();
 }
 
 // =============================================
@@ -2482,10 +2490,25 @@ function renderHandCard(numericId, handIndex, currentMana) {
         html += '<div class="card-stat-hp">' + c.health + '</div>';
         html += '</div>';
     }
+    // Summon sacrifice cost
+    if (c.summon_sacrifice_tribe) {
+        html += '<div class="card-effect-full">Cost: Discard any ' + c.summon_sacrifice_tribe + '</div>';
+    }
+    // Unique tag
+    if (c.unique) {
+        html += '<div class="card-effect-full">Unique</div>';
+    }
     // Effect text (all card types)
     if (c.effects && c.effects.length > 0) {
         var desc = getEffectDescription(c.effects, c);
         html += '<div class="card-effect-full">' + desc + '</div>';
+    }
+    // Transform options
+    if (c.transform_options && c.transform_options.length > 0) {
+        var tLines = c.transform_options.map(function(opt) {
+            return '(' + opt.mana_cost + ') ' + findCardNameById(opt.target);
+        });
+        html += '<div class="card-effect-full">Transform: ' + tLines.join(', ') + '</div>';
     }
     // React ability for multi-purpose cards
     if (c.react_condition != null && c.react_mana_cost != null) {
@@ -2497,8 +2520,13 @@ function renderHandCard(numericId, handIndex, currentMana) {
             11: 'Enemy plays any Light', 12: 'Enemy sacrifices'
         };
         var condText = condMap[c.react_condition] || 'Enemy acts';
+        var extraCond = c.react_requires_no_friendly_minions ? ' & No friendly minions' : '';
         var costText = c.react_mana_cost > 0 ? ' (' + c.react_mana_cost + ')' : '';
-        html += '<div class="card-effect-full">React' + costText + ': ' + condText + '</div>';
+        html += '<div class="card-effect-full">React' + costText + ': ' + condText + extraCond + '</div>';
+    }
+    // Flavour text for cards with no effects and no transform/react
+    if (c.flavour_text && (!c.effects || c.effects.length === 0) && c.react_condition == null && (!c.transform_options || c.transform_options.length === 0)) {
+        html += '<div class="card-flavour">' + c.flavour_text + '</div>';
     }
     html += '</div>';
     return html;
