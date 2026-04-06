@@ -19,6 +19,8 @@ boolean mask that prevents the agent from selecting invalid actions (D-19).
 
 from __future__ import annotations
 
+from typing import Optional
+
 from grid_tactics.action_resolver import _can_attack, _is_orthogonal
 from grid_tactics.actions import (
     Action,
@@ -29,6 +31,7 @@ from grid_tactics.actions import (
     play_card_action,
     play_react_action,
     sacrifice_action,
+    transform_action,
 )
 from grid_tactics.board import Board
 from grid_tactics.card_library import CardLibrary
@@ -96,53 +99,71 @@ def _action_phase_actions(
         if player.current_mana < card_def.mana_cost:
             continue
 
-        # Summon sacrifice check: must have another card of required tribe in hand
+        # Summon sacrifice check: enumerate one action per valid sacrifice choice
+        sacrifice_choices: list[Optional[int]] = [None]
         if card_def.summon_sacrifice_tribe:
-            has_sacrifice = any(
-                library.get_by_id(player.hand[j]).tribe == card_def.summon_sacrifice_tribe
-                for j in range(len(player.hand)) if j != idx
-            )
-            if not has_sacrifice:
-                continue
+            sacrifice_choices = []
+            for j in range(len(player.hand)):
+                if j == idx:
+                    continue
+                hand_card = library.get_by_id(player.hand[j])
+                if hand_card.tribe == card_def.summon_sacrifice_tribe:
+                    sacrifice_choices.append(j)
+            if not sacrifice_choices:
+                continue  # no valid sacrifice card -> can't play
 
-        if card_def.card_type == CardType.MINION:
-            deploy_positions = _valid_deploy_positions(state, card_def, player_side)
-            for pos in deploy_positions:
-                # Check if card has ON_PLAY effects with SINGLE_TARGET
-                has_single_target_on_play = any(
+        for sac_idx in sacrifice_choices:
+            if card_def.card_type == CardType.MINION:
+                deploy_positions = _valid_deploy_positions(state, card_def, player_side)
+                for pos in deploy_positions:
+                    # Check if card has ON_PLAY effects with SINGLE_TARGET
+                    has_single_target_on_play = any(
+                        e.trigger == TriggerType.ON_PLAY and e.target == TargetType.SINGLE_TARGET
+                        for e in card_def.effects
+                    )
+                    if has_single_target_on_play:
+                        # Enumerate target positions (enemy minions)
+                        enemy_positions = _get_enemy_minion_positions(state, player_side)
+                        if enemy_positions:
+                            for target_pos in enemy_positions:
+                                actions.append(Action(
+                                    action_type=ActionType.PLAY_CARD,
+                                    card_index=idx, position=pos, target_pos=target_pos,
+                                    sacrifice_card_index=sac_idx,
+                                ))
+                        else:
+                            actions.append(Action(
+                                action_type=ActionType.PLAY_CARD,
+                                card_index=idx, position=pos,
+                                sacrifice_card_index=sac_idx,
+                            ))
+                    else:
+                        actions.append(Action(
+                            action_type=ActionType.PLAY_CARD,
+                            card_index=idx, position=pos,
+                            sacrifice_card_index=sac_idx,
+                        ))
+
+            elif card_def.card_type == CardType.MAGIC:
+                # Check if any ON_PLAY effect has SINGLE_TARGET
+                has_single_target = any(
                     e.trigger == TriggerType.ON_PLAY and e.target == TargetType.SINGLE_TARGET
                     for e in card_def.effects
                 )
-                if has_single_target_on_play:
-                    # Enumerate target positions (enemy minions)
+                if has_single_target:
                     enemy_positions = _get_enemy_minion_positions(state, player_side)
-                    if enemy_positions:
-                        for target_pos in enemy_positions:
-                            actions.append(play_card_action(
-                                card_index=idx, position=pos, target_pos=target_pos,
-                            ))
-                    else:
-                        # Deploy without target — on_play effect skipped (no valid targets)
-                        actions.append(play_card_action(card_index=idx, position=pos))
+                    for target_pos in enemy_positions:
+                        actions.append(Action(
+                            action_type=ActionType.PLAY_CARD,
+                            card_index=idx, target_pos=target_pos,
+                            sacrifice_card_index=sac_idx,
+                        ))
                 else:
-                    actions.append(play_card_action(card_index=idx, position=pos))
-
-        elif card_def.card_type == CardType.MAGIC:
-            # Check if any ON_PLAY effect has SINGLE_TARGET
-            has_single_target = any(
-                e.trigger == TriggerType.ON_PLAY and e.target == TargetType.SINGLE_TARGET
-                for e in card_def.effects
-            )
-            if has_single_target:
-                enemy_positions = _get_enemy_minion_positions(state, player_side)
-                for target_pos in enemy_positions:
-                    actions.append(play_card_action(
-                        card_index=idx, target_pos=target_pos,
+                    actions.append(Action(
+                        action_type=ActionType.PLAY_CARD,
+                        card_index=idx,
+                        sacrifice_card_index=sac_idx,
                     ))
-                # Single-target magic with no valid targets: cannot play
-            else:
-                # Area/self effects: single play action, no target needed
-                actions.append(play_card_action(card_index=idx))
 
         # Skip CardType.REACT during ACTION phase
 
@@ -177,6 +198,19 @@ def _action_phase_actions(
             actions.append(sacrifice_action(minion_id=minion.instance_id))
         elif player_side == PlayerSide.PLAYER_2 and row == BACK_ROW_P1:
             actions.append(sacrifice_action(minion_id=minion.instance_id))
+
+    # TRANSFORM enumeration: minions with transform_options can transform on the board
+    # for the listed mana cost into the target card form.
+    for minion in owned_minions:
+        card_def = library.get_by_id(minion.card_numeric_id)
+        if not card_def.transform_options:
+            continue
+        for target_card_id, mana_cost in card_def.transform_options:
+            if player.current_mana >= mana_cost:
+                actions.append(transform_action(
+                    minion_id=minion.instance_id,
+                    transform_target=target_card_id,
+                ))
 
     # DRAW as an action (in addition to auto-draw at turn start)
     if player.deck and len(player.hand) < 10:

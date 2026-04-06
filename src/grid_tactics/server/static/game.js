@@ -1454,6 +1454,23 @@ function logStateDiff(prev, next) {
     } else if (nextMinions < prevMinions) {
         addLogEntry((prevMinions - nextMinions) + ' minion(s) destroyed');
     }
+
+    // Detect tutored/conjured cards (hand grew without a draw action by us)
+    if (myPlayerIdx != null && prev.players?.[myPlayerIdx]?.hand && next.players?.[myPlayerIdx]?.hand) {
+        var prevHand = prev.players[myPlayerIdx].hand;
+        var nextHand = next.players[myPlayerIdx].hand;
+        if (nextHand.length > prevHand.length + 1) {
+            // More than one new card — probably tutor/conjure
+            var newCards = nextHand.slice(prevHand.length);
+            newCards.forEach(function(nid) {
+                var c = cardDefs[nid];
+                if (c) {
+                    addLogEntry('Tutored/Conjured: ' + c.name, 'heal');
+                    showTutorToast(c.name);
+                }
+            });
+        }
+    }
 }
 
 function describeAction(pa, prevState, nextState, actor) {
@@ -1674,6 +1691,7 @@ function clearSelection() {
     selectedMinionId = null;
     selectedDeployPos = null;
     interactionMode = null;
+    hideMinionActionMenu();
 }
 
 function submitAction(actionData) {
@@ -1860,6 +1878,27 @@ function findCardAction(handIdx, deployPos, targetPos) {
     return null;
 }
 
+// Get unique sacrifice card indices for this card (for cards with summon_sacrifice_tribe)
+function getSacrificeChoices(handIdx, deployPos, targetPos) {
+    var seen = {};
+    var choices = [];
+    legalActions.forEach(function(a) {
+        if (a.action_type !== 0 || a.card_index !== handIdx) return;
+        if (a.sacrifice_card_index == null) return;
+        if (deployPos != null && a.position) {
+            if (a.position[0] !== deployPos[0] || a.position[1] !== deployPos[1]) return;
+        }
+        if (targetPos != null && a.target_pos) {
+            if (a.target_pos[0] !== targetPos[0] || a.target_pos[1] !== targetPos[1]) return;
+        }
+        if (!seen[a.sacrifice_card_index]) {
+            seen[a.sacrifice_card_index] = true;
+            choices.push(a.sacrifice_card_index);
+        }
+    });
+    return choices;
+}
+
 // Get valid move positions for a minion
 function getMovePositions(minionId) {
     var positions = [];
@@ -1869,6 +1908,17 @@ function getMovePositions(minionId) {
         }
     });
     return positions;
+}
+
+// Get available transform actions for a minion
+function getTransformActions(minionId) {
+    var transforms = [];
+    legalActions.forEach(function(a) {
+        if (a.action_type === 7 && a.minion_id === minionId && a.transform_target) {
+            transforms.push(a);
+        }
+    });
+    return transforms;
 }
 
 // Get valid attack targets for a minion
@@ -1972,8 +2022,17 @@ function onBoardCellClick(row, col) {
                 highlightBoard();
                 return;
             }
-            // No targeting needed — submit now
-            submitAction({ action_type: 0, card_index: selectedHandIdx, position: [row, col] });
+            // Check for sacrifice choices (summon_sacrifice_tribe card)
+            var sacChoices = getSacrificeChoices(selectedHandIdx, [row, col], null);
+            if (sacChoices.length > 1) {
+                selectedDeployPos = [row, col];
+                showSacrificePicker(selectedHandIdx, [row, col], null, sacChoices);
+                return;
+            }
+            // No targeting/sacrifice needed — submit now
+            var payload = { action_type: 0, card_index: selectedHandIdx, position: [row, col] };
+            if (sacChoices.length === 1) payload.sacrifice_card_index = sacChoices[0];
+            submitAction(payload);
         }
         return;
     }
@@ -1984,8 +2043,15 @@ function onBoardCellClick(row, col) {
             return p[0] === row && p[1] === col;
         });
         if (validTarget) {
+            // Check for sacrifice choices at this combo
+            var sacChoices2 = getSacrificeChoices(selectedHandIdx, selectedDeployPos, [row, col]);
+            if (sacChoices2.length > 1) {
+                showSacrificePicker(selectedHandIdx, selectedDeployPos, [row, col], sacChoices2);
+                return;
+            }
             var payload = { action_type: 0, card_index: selectedHandIdx, target_pos: [row, col] };
             if (selectedDeployPos) payload.position = selectedDeployPos;
+            if (sacChoices2.length === 1) payload.sacrifice_card_index = sacChoices2[0];
             submitAction(payload);
         }
         return;
@@ -2034,6 +2100,7 @@ function onBoardMinionClick(minion) {
         // If already selected, deselect
         if (selectedMinionId === minion.instance_id) {
             clearSelection();
+            hideMinionActionMenu();
             highlightBoard();
             updateHandHighlights();
             return;
@@ -2044,15 +2111,140 @@ function onBoardMinionClick(minion) {
 
         var moves = getMovePositions(minion.instance_id);
         var attacks = getAttackTargets(minion.instance_id);
+        var transforms = getTransformActions(minion.instance_id);
+        var canSac = canSacrifice(minion.instance_id);
 
         if (moves.length > 0 || attacks.length > 0) {
             interactionMode = (attacks.length > 0) ? 'attack' : 'move';
-            // If both available, show both
             if (moves.length > 0 && attacks.length > 0) interactionMode = 'move_attack';
         }
+
+        // Show action menu if minion has transforms or sacrifice option
+        if (transforms.length > 0 || canSac) {
+            showMinionActionMenu(minion, transforms, canSac);
+        } else {
+            hideMinionActionMenu();
+        }
+
         highlightBoard();
         updateHandHighlights();
     }
+}
+
+// Show a popup menu near a selected minion with transform/sacrifice options
+function showMinionActionMenu(minion, transforms, canSac) {
+    hideMinionActionMenu();
+    var cell = document.querySelector('.board-cell[data-row="' + minion.position[0] + '"][data-col="' + minion.position[1] + '"]');
+    if (!cell) return;
+
+    var menu = document.createElement('div');
+    menu.id = 'minion-action-menu';
+    menu.className = 'minion-action-menu';
+
+    // Sacrifice button
+    if (canSac) {
+        var sacBtn = document.createElement('button');
+        sacBtn.className = 'minion-action-btn sacrifice';
+        sacBtn.textContent = 'Sacrifice for damage';
+        sacBtn.addEventListener('click', function(e) {
+            e.stopPropagation();
+            submitAction({ action_type: 6, minion_id: minion.instance_id });
+        });
+        menu.appendChild(sacBtn);
+    }
+
+    // Transform buttons
+    transforms.forEach(function(t) {
+        var btn = document.createElement('button');
+        btn.className = 'minion-action-btn transform';
+        // Look up target card name + cost
+        var targetCard = null;
+        for (var nid in cardDefs) {
+            if (cardDefs[nid].card_id === t.transform_target) { targetCard = cardDefs[nid]; break; }
+        }
+        var name = targetCard ? targetCard.name : t.transform_target;
+        var cost = targetCard ? targetCard.mana_cost : '?';
+        btn.textContent = 'Transform → ' + name + ' (' + cost + ')';
+        btn.addEventListener('click', function(e) {
+            e.stopPropagation();
+            submitAction({
+                action_type: 7,
+                minion_id: minion.instance_id,
+                transform_target: t.transform_target,
+            });
+        });
+        menu.appendChild(btn);
+    });
+
+    cell.appendChild(menu);
+}
+
+function hideMinionActionMenu() {
+    var existing = document.getElementById('minion-action-menu');
+    if (existing) existing.remove();
+}
+
+// Sacrifice picker — shown when a card requires a tribe sacrifice and there are multiple candidates
+function showSacrificePicker(handIdx, deployPos, targetPos, sacChoices) {
+    hideSacrificePicker();
+    var myPlayer = gameState.players[myPlayerIdx];
+    var modal = document.createElement('div');
+    modal.id = 'sacrifice-picker';
+    modal.className = 'sacrifice-picker-overlay';
+    var inner = document.createElement('div');
+    inner.className = 'sacrifice-picker-modal';
+    var title = document.createElement('div');
+    title.className = 'sacrifice-picker-title';
+    title.textContent = 'Choose card to discard';
+    inner.appendChild(title);
+    var row = document.createElement('div');
+    row.className = 'sacrifice-picker-row';
+    sacChoices.forEach(function(sacIdx) {
+        var cardId = myPlayer.hand[sacIdx];
+        var c = cardDefs[cardId];
+        if (!c) return;
+        var btn = document.createElement('button');
+        btn.className = 'sacrifice-picker-card';
+        btn.innerHTML = '<div class="sp-name">' + c.name + '</div><div class="sp-meta">' + (c.tribe || '') + '</div>';
+        btn.addEventListener('click', function() {
+            var payload = { action_type: 0, card_index: handIdx, sacrifice_card_index: sacIdx };
+            if (deployPos) payload.position = deployPos;
+            if (targetPos) payload.target_pos = targetPos;
+            hideSacrificePicker();
+            submitAction(payload);
+        });
+        row.appendChild(btn);
+    });
+    inner.appendChild(row);
+    var cancel = document.createElement('button');
+    cancel.className = 'btn btn-secondary';
+    cancel.textContent = 'Cancel';
+    cancel.addEventListener('click', function() {
+        hideSacrificePicker();
+        clearSelection();
+        highlightBoard();
+        updateHandHighlights();
+    });
+    inner.appendChild(cancel);
+    modal.appendChild(inner);
+    document.body.appendChild(modal);
+}
+
+function hideSacrificePicker() {
+    var existing = document.getElementById('sacrifice-picker');
+    if (existing) existing.remove();
+}
+
+// Tutor toast — show a brief popup when a card was tutored to your hand
+function showTutorToast(cardName) {
+    var toast = document.createElement('div');
+    toast.className = 'tutor-toast';
+    toast.textContent = 'Tutored: ' + cardName;
+    document.body.appendChild(toast);
+    setTimeout(function() {
+        toast.classList.add('fade-out');
+        setTimeout(function() { toast.remove(); }, 500);
+    }, 2500);
 }
 
 function getMinionAt(row, col) {
@@ -2431,9 +2623,10 @@ function renderHand() {
 
     var myPlayer = gameState.players[myPlayerIdx];
     var myMana = myPlayer.current_mana;
+    var isMyTurn = legalActions && legalActions.length > 0;
 
     myPlayer.hand.forEach(function(numericId, handIndex) {
-        var cardHtml = renderHandCard(numericId, handIndex, myMana);
+        var cardHtml = renderHandCard(numericId, handIndex, myMana, isMyTurn);
         var wrapper = document.createElement('div');
         wrapper.innerHTML = cardHtml;
         if (wrapper.firstChild) {
@@ -2457,12 +2650,13 @@ function renderHand() {
 // renderHandCard() -- Full YGO-style (D-05, D-06)
 // =============================================
 
-function renderHandCard(numericId, handIndex, currentMana) {
+function renderHandCard(numericId, handIndex, currentMana, isMyTurn) {
     var c = cardDefs[numericId];
     if (!c) return '';
     var typeClass = TYPE_CSS[c.card_type] || '';
     var canAfford = currentMana >= c.mana_cost;
-    var dimClass = canAfford ? '' : ' card-dimmed';
+    // Dim if can't afford OR not my turn (cards aren't playable when not active)
+    var dimClass = (canAfford && isMyTurn) ? '' : ' card-dimmed';
     var elem = (c.element !== null && c.element !== undefined)
         ? ELEMENT_MAP[c.element] : NEUTRAL_ELEMENT;
 

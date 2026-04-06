@@ -36,6 +36,8 @@ class Action:
     minion_id: Optional[int] = None        # which minion to move/attack with
     target_id: Optional[int] = None        # target minion ID for attack
     target_pos: Optional[tuple[int, int]] = None  # target position for effects
+    sacrifice_card_index: Optional[int] = None  # for PLAY_CARD with summon_sacrifice_tribe
+    transform_target: Optional[str] = None  # for TRANSFORM action: target card_id
 
 
 # ---------------------------------------------------------------------------
@@ -103,4 +105,21 @@ def play_react_action(
         action_type=ActionType.PLAY_REACT,
         card_index=card_index,
         target_pos=target_pos,
+    )
+
+
+def transform_action(
+    minion_id: int,
+    transform_target: str,
+) -> Action:
+    """Create a TRANSFORM action: pay mana to transform a board minion into another card.
+
+    minion_id: instance_id of the minion to transform.
+    transform_target: card_id of the target form (must be in the source minion's
+                      transform_options list).
+    """
+    return Action(
+        action_type=ActionType.TRANSFORM,
+        minion_id=minion_id,
+        transform_target=transform_target,
     )

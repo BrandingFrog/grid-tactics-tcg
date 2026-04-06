@@ -44,6 +44,12 @@ def serialize_action(action: Action) -> dict:
     if action.target_pos is not None:
         result["target_pos"] = list(action.target_pos)
 
+    if action.sacrifice_card_index is not None:
+        result["sacrifice_card_index"] = action.sacrifice_card_index
+
+    if action.transform_target is not None:
+        result["transform_target"] = action.transform_target
+
     return result
 
 
@@ -89,6 +95,9 @@ def reconstruct_action(data) -> Action:
         if target_pos is not None:
             target_pos = tuple(target_pos)
 
+        sacrifice_card_index = data.get("sacrifice_card_index")
+        transform_target = data.get("transform_target")
+
         return Action(
             action_type=action_type,
             card_index=card_index,
@@ -96,6 +105,8 @@ def reconstruct_action(data) -> Action:
             minion_id=minion_id,
             target_id=target_id,
             target_pos=target_pos,
+            sacrifice_card_index=sacrifice_card_index,
+            transform_target=transform_target,
         )
     except (KeyError, TypeError) as e:
         raise ValueError(f"Invalid action data: {e}") from e

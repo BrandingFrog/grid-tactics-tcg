@@ -118,7 +118,13 @@ def _apply_effect_to_minion(
     minion: MinionInstance,
     library: CardLibrary,
 ) -> GameState:
-    """Apply an effect to a single minion based on effect_type."""
+    """Apply an effect to a single minion based on effect_type.
+
+    Effect types that don't apply to a minion (BURN, CONJURE, TUTOR, RALLY,
+    PROMOTE, NEGATE, DEPLOY_SELF, LEAP, PASSIVE_HEAL, DARK_MATTER_BUFF) are
+    silently skipped here — they're handled by other code paths or are
+    informational/state markers that don't mutate minion stats directly.
+    """
     if effect.effect_type == EffectType.DAMAGE:
         return _apply_damage_to_minion(state, minion, effect.amount)
     elif effect.effect_type == EffectType.HEAL:
@@ -131,8 +137,8 @@ def _apply_effect_to_minion(
         new_minion = replace(minion, current_health=0)
         new_minions = _replace_minion(state.minions, minion.instance_id, new_minion)
         return replace(state, minions=new_minions)
-    else:
-        raise ValueError(f"Unknown effect type: {effect.effect_type}")
+    # Unimplemented or non-minion-targeting effect types: skip gracefully
+    return state
 
 
 def _apply_effect_to_player(
@@ -335,8 +341,40 @@ def resolve_effects_for_trigger(
     for effect in matching_effects:
         if effect.effect_type == EffectType.TUTOR:
             state = _resolve_tutor(state, card_def, minion.owner, library)
+        elif effect.effect_type == EffectType.CONJURE:
+            state = _resolve_conjure(state, card_def, minion.owner, library)
         else:
             state = resolve_effect(
                 state, effect, minion.position, minion.owner, library, target_pos,
             )
     return state
+
+
+def _resolve_conjure(
+    state: GameState,
+    card_def: CardDefinition,
+    caster_owner: PlayerSide,
+    library: CardLibrary,
+) -> GameState:
+    """Conjure: add a copy of summon_token_target card to the caster's hand.
+
+    Unlike tutor (which searches the deck), conjure creates a card from outside
+    the deck. Used by Ratchanter and similar 'summoner' minions.
+    """
+    if not card_def.summon_token_target:
+        return state
+    try:
+        target_numeric_id = library.get_numeric_id(card_def.summon_token_target)
+    except KeyError:
+        return state
+    player_idx = _player_index_for_side(caster_owner)
+    player = state.players[player_idx]
+    # Hand cap: skip if hand is full
+    if len(player.hand) >= 10:
+        return state
+    new_player = replace(
+        player,
+        hand=player.hand + (target_numeric_id,),
+    )
+    new_players = _replace_player(state.players, player_idx, new_player)
+    return replace(state, players=new_players)

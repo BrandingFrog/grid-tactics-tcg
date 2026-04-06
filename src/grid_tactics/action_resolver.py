@@ -287,14 +287,29 @@ def _apply_play_card(
     new_player = player.spend_mana(card_def.mana_cost)
     new_player = new_player.discard_from_hand(card_numeric_id)
 
-    # Summon sacrifice: destroy a card of the required tribe from hand
+    # Summon sacrifice: discard a card of the required tribe from hand.
+    # Use the user's chosen sacrifice_card_index if provided; otherwise auto-pick first.
     if card_def.summon_sacrifice_tribe:
         sacrifice_id = None
-        for hand_card_id in new_player.hand:
-            hand_card_def = library.get_by_id(hand_card_id)
-            if hand_card_def.tribe == card_def.summon_sacrifice_tribe:
-                sacrifice_id = hand_card_id
-                break
+        if action.sacrifice_card_index is not None:
+            # Note: action.sacrifice_card_index references the ORIGINAL hand
+            # (before this card was discarded). We recompute the index
+            # by using the original `player.hand`, since `new_player.hand`
+            # has the played card removed.
+            sac_idx = action.sacrifice_card_index
+            if 0 <= sac_idx < len(player.hand):
+                candidate_id = player.hand[sac_idx]
+                # Verify it's still in new_player.hand and tribe matches
+                cand_def = library.get_by_id(candidate_id)
+                if cand_def.tribe == card_def.summon_sacrifice_tribe and candidate_id in new_player.hand:
+                    sacrifice_id = candidate_id
+        if sacrifice_id is None:
+            # Fallback: auto-pick first matching card
+            for hand_card_id in new_player.hand:
+                hand_card_def = library.get_by_id(hand_card_id)
+                if hand_card_def.tribe == card_def.summon_sacrifice_tribe:
+                    sacrifice_id = hand_card_id
+                    break
         if sacrifice_id is None:
             raise ValueError(
                 f"No {card_def.summon_sacrifice_tribe} card in hand to sacrifice"
@@ -477,6 +492,81 @@ def _apply_sacrifice(
     new_players = _replace_player(new_players, opponent_idx, new_opponent)
 
     return replace(state, board=new_board, minions=new_minions, players=new_players)
+
+
+def _apply_transform(
+    state: GameState, action: Action, library: CardLibrary,
+) -> GameState:
+    """Apply TRANSFORM action: convert a board minion into a different card form.
+
+    Validates:
+      - Minion exists and belongs to active player
+      - Source card has transform_options containing the requested transform_target
+      - Active player has enough mana for the transform cost
+
+    Effect:
+      - Spends mana
+      - Replaces the minion's card_numeric_id with the target form
+      - Resets current_health to the new form's max HP
+      - Resets attack_bonus to 0
+    """
+    active_side = _get_active_side(state)
+    active_idx = state.active_player_idx
+
+    minion = state.get_minion(action.minion_id)
+    if minion is None:
+        raise ValueError(f"Minion {action.minion_id} not found")
+    if minion.owner != active_side:
+        raise ValueError(
+            f"Cannot transform opponent's minion (belongs to {minion.owner.name})"
+        )
+
+    source_card = library.get_by_id(minion.card_numeric_id)
+    if not source_card.transform_options:
+        raise ValueError(f"Minion {source_card.card_id} has no transform options")
+
+    if action.transform_target is None:
+        raise ValueError("TRANSFORM action missing transform_target")
+
+    # Find the target in the source's transform_options
+    matched_cost = None
+    for target_card_id, mana_cost in source_card.transform_options:
+        if target_card_id == action.transform_target:
+            matched_cost = mana_cost
+            break
+    if matched_cost is None:
+        raise ValueError(
+            f"{source_card.card_id} cannot transform into {action.transform_target}"
+        )
+
+    # Mana check
+    player = state.players[active_idx]
+    if player.current_mana < matched_cost:
+        raise ValueError(
+            f"Insufficient mana to transform: have {player.current_mana}, need {matched_cost}"
+        )
+
+    # Look up target card
+    try:
+        target_numeric_id = library.get_numeric_id(action.transform_target)
+    except KeyError:
+        raise ValueError(f"Transform target card '{action.transform_target}' not in library")
+    target_card = library.get_by_id(target_numeric_id)
+
+    # Spend mana
+    new_player = player.spend_mana(matched_cost)
+    new_players = _replace_player(state.players, active_idx, new_player)
+
+    # Replace minion stats
+    new_minion = replace(
+        minion,
+        card_numeric_id=target_numeric_id,
+        current_health=target_card.health,
+        attack_bonus=0,
+    )
+    new_minions = _replace_minion(state.minions, minion.instance_id, new_minion)
+
+    return replace(state, players=new_players, minions=new_minions)
 
 
 def _apply_attack(
@@ -717,6 +807,8 @@ def resolve_action(
         state = _apply_attack(state, action, library)
     elif action.action_type == ActionType.SACRIFICE:
         state = _apply_sacrifice(state, action, library)
+    elif action.action_type == ActionType.TRANSFORM:
+        state = _apply_transform(state, action, library)
     else:
         raise ValueError(f"Unsupported action type for main phase: {action.action_type}")
 

@@ -375,16 +375,27 @@ def register_events(room_manager: RoomManager) -> None:
                 emit("error", {"msg": "Illegal action"})
                 return
 
-            session.state = resolve_action(session.state, action, session.library)
+            saved_state = session.state
+            try:
+                session.state = resolve_action(session.state, action, session.library)
 
-            # Auto-pass loop: when player has zero legal actions (fatigue bleed)
-            while not session.state.is_game_over:
-                next_actions = legal_actions(session.state, session.library)
-                if len(next_actions) > 0:
-                    break
-                session.state = resolve_action(
-                    session.state, pass_action(), session.library
-                )
+                # Auto-pass loop: when player has zero legal actions (fatigue bleed)
+                while not session.state.is_game_over:
+                    next_actions = legal_actions(session.state, session.library)
+                    if len(next_actions) > 0:
+                        break
+                    session.state = resolve_action(
+                        session.state, pass_action(), session.library
+                    )
+            except Exception as e:
+                # Safety net: roll back state and surface the error so a single
+                # broken effect doesn't crash the server or leave a partial state
+                session.state = saved_state
+                import traceback
+                print(f"[ERROR] resolve_action raised: {e}", flush=True)
+                traceback.print_exc()
+                emit("error", {"msg": f"Server error resolving action: {e}"})
+                return
 
             new_state = session.state
 
