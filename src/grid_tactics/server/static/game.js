@@ -666,7 +666,10 @@ function showCardTooltip(numericId) {
             relHtml += '<div class="tooltip-related-art" style="' + artBg + '"></div>';
             relHtml += '<div class="tooltip-related-info">';
             relHtml += '<div class="tooltip-related-name">' + rc.name + '</div>';
+            var rElem = (rc.element !== null && rc.element !== undefined) ? ELEMENT_MAP[rc.element] : NEUTRAL_ELEMENT;
             var rStats = rc.mana_cost + ' Mana';
+            if (rc.tribe) rStats += ' | ' + rc.tribe;
+            rStats += ' | ' + rElem.name;
             if (rc.attack != null) rStats += ' | ATK ' + rc.attack + ' | HP ' + rc.health;
             if (rc.attack_range != null) rStats += ' | ' + (rc.attack_range <= 1 ? 'Melee' : 'Range ' + rc.attack_range);
             relHtml += '<div class="tooltip-related-stats">' + rStats + '</div>';
