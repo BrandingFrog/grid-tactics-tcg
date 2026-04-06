@@ -135,6 +135,96 @@ function initSocket() {
     socket.on('game_over', onGameOver);
     socket.on('error', onError);
     socket.on('card_defs', onCardDefs);
+    socket.on('chat_message', onChatMessage);
+}
+
+// =============================================
+// Section 5b: Chat & Activity Tabs
+// =============================================
+
+let chatActiveTab = 'log'; // 'log' or 'chat'
+let chatUnreadCount = 0;
+
+function setupActivityTabs() {
+    document.querySelectorAll('.activity-tab').forEach(function(tab) {
+        tab.addEventListener('click', function() {
+            var tabName = tab.dataset.tab;
+            switchActivityTab(tabName);
+        });
+    });
+
+    var chatInput = document.getElementById('chat-input');
+    var btnSend = document.getElementById('btn-chat-send');
+    if (btnSend && chatInput) {
+        btnSend.addEventListener('click', sendChatMessage);
+        chatInput.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                sendChatMessage();
+            }
+        });
+    }
+}
+
+function switchActivityTab(tabName) {
+    chatActiveTab = tabName;
+    document.querySelectorAll('.activity-tab').forEach(function(tab) {
+        if (tab.dataset.tab === tabName) {
+            tab.classList.add('active');
+        } else {
+            tab.classList.remove('active');
+        }
+    });
+    document.querySelectorAll('.activity-tab-content').forEach(function(content) {
+        content.style.display = 'none';
+    });
+    var active = document.getElementById('tab-' + tabName);
+    if (active) active.style.display = '';
+
+    if (tabName === 'chat') {
+        chatUnreadCount = 0;
+        var unreadDot = document.getElementById('chat-unread');
+        if (unreadDot) unreadDot.style.display = 'none';
+        // Focus the input
+        var input = document.getElementById('chat-input');
+        if (input) setTimeout(function() { input.focus(); }, 50);
+    }
+}
+
+function sendChatMessage() {
+    var input = document.getElementById('chat-input');
+    if (!input) return;
+    var text = input.value.trim();
+    if (!text) return;
+    if (socket) {
+        socket.emit('chat_message', { text: text });
+    }
+    input.value = '';
+}
+
+function onChatMessage(data) {
+    var msgs = document.getElementById('chat-messages');
+    if (!msgs) return;
+    var msg = document.createElement('div');
+    var isOwn = data.author === myName;
+    msg.className = 'chat-message ' + (isOwn ? 'own' : 'opp');
+    var authorSpan = document.createElement('span');
+    authorSpan.className = 'chat-message-author';
+    authorSpan.textContent = data.author + ':';
+    var textSpan = document.createElement('span');
+    textSpan.className = 'chat-message-text';
+    textSpan.textContent = ' ' + data.text;
+    msg.appendChild(authorSpan);
+    msg.appendChild(textSpan);
+    msgs.appendChild(msg);
+    msgs.scrollTop = msgs.scrollHeight;
+
+    // Show unread indicator if not on chat tab and not from self
+    if (chatActiveTab !== 'chat' && !isOwn) {
+        chatUnreadCount++;
+        var unreadDot = document.getElementById('chat-unread');
+        if (unreadDot) unreadDot.style.display = '';
+    }
 }
 
 // =============================================
@@ -1140,6 +1230,7 @@ document.addEventListener('DOMContentLoaded', function() {
     setupDeckBuilderHandlers();
     setupDeckFilters();
     setupNavHandlers();
+    setupActivityTabs();
 });
 
 // =============================================

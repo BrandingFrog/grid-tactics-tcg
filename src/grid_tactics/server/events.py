@@ -225,6 +225,44 @@ def register_events(room_manager: RoomManager) -> None:
         defs = _build_card_defs(_room_manager._library)
         emit("card_defs", {"card_defs": defs})
 
+    @socketio.on("chat_message")
+    def handle_chat_message(data):
+        """Broadcast a chat message to both players in the room (works in lobby and active game)."""
+        token = _room_manager.get_token_by_sid(request.sid)
+        if token is None:
+            return
+        room_code = _room_manager.get_room_code_by_token(token)
+        if room_code is None:
+            return
+        # Validate and trim message first
+        if not isinstance(data, dict):
+            return
+        text = data.get("text", "")
+        if not isinstance(text, str):
+            return
+        text = text.strip()[:200]
+        if not text:
+            return
+        # Determine sender name from active game or waiting room
+        sender_name = "Unknown"
+        session = _room_manager.get_game(room_code)
+        if session is not None:
+            player_idx = session.get_player_idx(token)
+            if player_idx is not None:
+                sender_name = session.player_names[player_idx]
+        else:
+            room = _room_manager.get_room(room_code)
+            if room is not None:
+                if room.creator and room.creator.token == token:
+                    sender_name = room.creator.name
+                elif room.joiner and room.joiner.token == token:
+                    sender_name = room.joiner.name
+        emit(
+            "chat_message",
+            {"author": sender_name, "text": text},
+            to=room_code,
+        )
+
     @socketio.on("submit_action")
     def handle_submit_action(data):
         # Step a: Look up token from SID

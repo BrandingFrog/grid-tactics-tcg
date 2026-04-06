@@ -226,7 +226,10 @@ Plans:
   1. User can submit an action by clicking a card in hand and then clicking a valid board target, with valid targets highlighted after card selection
   2. During the react window, the user can see the pending action, play a react card from hand to counter it, or click a pass button to let it resolve
   3. When the game ends, user sees a game over overlay showing victory or defeat, the reason (HP depletion / sacrifice / timeout), and final HP for both players
-**Plans**: TBD
+**Plans:** 2 plans
+Plans:
+- [ ] 14-01-PLAN.md -- React window UI: pending action banner, react card highlighting, click-to-play-react (PLAY-02)
+- [ ] 14-02-PLAN.md -- Game over modal: VICTORY/DEFEAT overlay with reason, final HP, back-to-lobby flow (PLAY-03)
 **UI hint**: yes
 
 ### Phase 15: Resilience & Polish

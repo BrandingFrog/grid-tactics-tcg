@@ -287,10 +287,24 @@
           <div class="gtt-body"></div>
         </div>
 
-        <div class="sidebar-section" id="game-log">
-          <h3 class="section-heading">Game Log</h3>
-          <div class="log-entries" id="log-entries">
-            <!-- Log entries populated by JS -->
+        <div class="sidebar-section" id="activity-panel">
+          <div class="activity-tabs">
+            <button class="activity-tab active" data-tab="log">Log</button>
+            <button class="activity-tab" data-tab="chat">Chat<span class="chat-unread" id="chat-unread" style="display:none;"></span></button>
+          </div>
+          <div class="activity-tab-content" id="tab-log">
+            <div class="log-entries" id="log-entries">
+              <!-- Log entries populated by JS -->
+            </div>
+          </div>
+          <div class="activity-tab-content" id="tab-chat" style="display:none;">
+            <div class="chat-messages" id="chat-messages">
+              <!-- Chat messages populated by JS -->
+            </div>
+            <div class="chat-input-row">
+              <input type="text" id="chat-input" class="chat-input" placeholder="Type a message..." maxlength="200">
+              <button class="btn btn-primary btn-chat-send" id="btn-chat-send">Send</button>
+            </div>
           </div>
         </div>
         <button class="btn btn-secondary full-width" id="btn-leave">Leave Game</button>
