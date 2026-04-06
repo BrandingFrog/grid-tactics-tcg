@@ -394,6 +394,18 @@ function renderDeckBuilder() {
     renderCardBrowser();
     renderDeckSidebar();
     fitCardNames();
+    fitCardEffects();
+}
+
+function fitCardEffects() {
+    document.querySelectorAll('.card-effect-full').forEach(function(el) {
+        el.style.fontSize = '12px';
+        var size = 12;
+        while (el.scrollHeight > el.clientHeight && size > 7) {
+            size--;
+            el.style.fontSize = size + 'px';
+        }
+    });
 }
 
 function fitCardNames() {
