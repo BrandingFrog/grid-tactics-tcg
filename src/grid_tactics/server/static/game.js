@@ -1328,7 +1328,8 @@ function getEffectDescription(effects, cardData) {
         } else if (type === 9) { // Destroy
             desc = prefix + 'Destroy target';
         } else if (type === 10) { // Burn
-            desc = prefix + 'Burn';
+            var burnTarget = {0: '', 1: ' all enemies', 2: ' adjacent enemies', 3: ''}[eff.target] || '';
+            desc = prefix + 'Burn' + burnTarget;
         } else if (type === 11) { // Dark Matter Buff
             desc = 'Active: +' + amount + ' ATK (+Dark Matter*1)';
         } else if (type === 12) { // Passive Heal
