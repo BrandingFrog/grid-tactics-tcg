@@ -575,7 +575,7 @@ var KEYWORD_GLOSSARY = {
     'Discard': 'Remove a card from your hand.',
     'Heal': 'Restore HP to a target.',
     'Deal': 'Deal damage to a target.',
-    'Burn': 'Apply damage over time that triggers each turn.',
+    'Burn': 'A permanent passive debuff that deals damage each turn.',
     'Dark Matter': 'Buff scales with Dark Matter stacks.',
     'Leap': 'If blocked by an enemy, advance to the next available tile instead.',
     'Conjure': 'Summon a card from outside your deck directly to the board.',
