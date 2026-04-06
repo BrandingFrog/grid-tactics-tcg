@@ -393,6 +393,19 @@ function removeCardFromDeck(numericId) {
 function renderDeckBuilder() {
     renderCardBrowser();
     renderDeckSidebar();
+    fitCardNames();
+}
+
+function fitCardNames() {
+    document.querySelectorAll('.card-name-overlay').forEach(function(el) {
+        el.style.fontSize = '16px';
+        var maxWidth = el.parentElement ? el.parentElement.offsetWidth * 0.92 : 150;
+        var size = 16;
+        while (el.scrollWidth > maxWidth && size > 8) {
+            size--;
+            el.style.fontSize = size + 'px';
+        }
+    });
 }
 
 function renderCardBrowser() {

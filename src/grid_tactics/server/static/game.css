@@ -1241,8 +1241,6 @@ body {
   paint-order: stroke fill;
   text-align: center;
   z-index: 2;
-  overflow: hidden;
-  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
