@@ -1592,6 +1592,17 @@ body {
   box-shadow: 0 0 12px rgba(255, 152, 0, 0.3);
 }
 
+.btn-draw {
+  background: rgba(0, 212, 255, 0.15);
+  border-color: var(--cyan);
+  color: var(--cyan);
+}
+
+.btn-draw:hover {
+  background: rgba(0, 212, 255, 0.3);
+  box-shadow: 0 0 12px rgba(0, 212, 255, 0.3);
+}
+
 /* How-to-play hint banner shown on the player's turn */
 .how-to-play-hint {
   background: rgba(0, 212, 255, 0.08);
@@ -1701,11 +1712,26 @@ body {
 }
 
 .log-entry {
-  font-size: 12px;
-  color: var(--muted);
+  font-size: 11px;
+  color: var(--text);
   padding: 4px 8px;
   border-radius: 4px;
   background: var(--card2);
+  line-height: 1.4;
+}
+
+.log-entry.log-damage {
+  border-left: 2px solid var(--red);
+}
+
+.log-entry.log-heal {
+  border-left: 2px solid var(--green);
+}
+
+.log-time {
+  color: var(--muted);
+  font-size: 9px;
+  margin-right: 4px;
 }
 
 /* Chat messages */

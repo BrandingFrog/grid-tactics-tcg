@@ -1269,6 +1269,9 @@ function onGameStart(data) {
     myPlayerIdx = data.your_player_idx;
     legalActions = data.legal_actions;
     opponentName = data.opponent_name;
+    // Reset log for a new game
+    clearGameLog();
+    addLogEntry('Game started. ' + (opponentName || 'Opponent') + ' joined.');
     // If we're coming from a rematch, hide the game over modal
     hideGameOver();
     resetRematchUI();
@@ -1282,9 +1285,91 @@ function onGameStart(data) {
 }
 
 function onStateUpdate(data) {
+    var prevState = gameState;
     gameState = data.state;
     legalActions = data.legal_actions;
+    logStateDiff(prevState, gameState);
     renderGame();
+}
+
+// Game log helpers
+function clearGameLog() {
+    var entries = document.getElementById('log-entries');
+    if (entries) entries.innerHTML = '';
+}
+
+function addLogEntry(text, type) {
+    var entries = document.getElementById('log-entries');
+    if (!entries) return;
+    var entry = document.createElement('div');
+    entry.className = 'log-entry' + (type ? ' log-' + type : '');
+    var time = new Date();
+    var timeStr = String(time.getHours()).padStart(2, '0') + ':' + String(time.getMinutes()).padStart(2, '0') + ':' + String(time.getSeconds()).padStart(2, '0');
+    entry.innerHTML = '<span class="log-time">' + timeStr + '</span> ' + text;
+    entries.appendChild(entry);
+    entries.scrollTop = entries.scrollHeight;
+}
+
+// Log differences between previous and new state
+function logStateDiff(prev, next) {
+    if (!prev || !next) return;
+    var myName = (gameState && myPlayerIdx != null && gameState.players && gameState.players[myPlayerIdx]) ? 'You' : 'You';
+    var oppName = opponentName || 'Opponent';
+
+    // Turn change
+    if (prev.turn_number !== next.turn_number) {
+        var who = next.active_player_idx === myPlayerIdx ? 'Your' : oppName + "'s";
+        addLogEntry('Turn ' + next.turn_number + ' — ' + who + ' turn');
+    }
+
+    // Phase change to REACT (someone took an action)
+    if (prev.phase !== next.phase && next.phase === 1 && next.pending_action) {
+        var pa = next.pending_action;
+        var actor = next.active_player_idx === myPlayerIdx ? 'You' : oppName;
+        var msg = describeAction(pa, prev, next, actor);
+        if (msg) addLogEntry(msg);
+    }
+
+    // HP changes
+    for (var i = 0; i < 2; i++) {
+        var prevHp = prev.players?.[i]?.hp;
+        var nextHp = next.players?.[i]?.hp;
+        if (prevHp != null && nextHp != null && prevHp !== nextHp) {
+            var diff = nextHp - prevHp;
+            var who = i === myPlayerIdx ? 'You' : oppName;
+            if (diff < 0) {
+                addLogEntry(who + ' took ' + (-diff) + ' damage (' + nextHp + ' HP)', 'damage');
+            } else {
+                addLogEntry(who + ' healed +' + diff + ' (' + nextHp + ' HP)', 'heal');
+            }
+        }
+    }
+
+    // Minion count change
+    var prevMinions = prev.minions?.length || 0;
+    var nextMinions = next.minions?.length || 0;
+    if (nextMinions > prevMinions) {
+        addLogEntry((nextMinions - prevMinions) + ' minion(s) deployed');
+    } else if (nextMinions < prevMinions) {
+        addLogEntry((prevMinions - nextMinions) + ' minion(s) destroyed');
+    }
+}
+
+function describeAction(pa, prevState, nextState, actor) {
+    if (!pa) return null;
+    var t = pa.action_type;
+    if (t === 0) {
+        // PLAY_CARD — try to find what was played
+        if (pa.position) {
+            return actor + ' played a card at row ' + (pa.position[0] + 1) + ' col ' + (pa.position[1] + 1);
+        }
+        return actor + ' cast a magic card';
+    }
+    if (t === 1) return actor + ' moved a minion';
+    if (t === 2) return actor + ' attacked';
+    if (t === 3) return actor + ' drew a card';
+    if (t === 6) return actor + ' sacrificed a minion for damage';
+    return null;
 }
 
 function onGameOver(data) {
@@ -1969,38 +2054,34 @@ function renderActionBar() {
         return;
     }
 
-    // Auto-skip empty react: in REACT phase with only PASS available (no react cards)
-    if (gameState && gameState.phase === 1 && legalActions.length === 1
-            && legalActions[0].action_type === 4) {
-        submitAction({ action_type: 4 });
-        return;
-    }
-
-    // End Turn button — during ACTION phase, submitting DRAW acts as "end turn"
-    // (game design: you must take 1 action per turn; DRAW is the do-nothing option).
-    // During REACT phase, the button submits PASS to skip the react window.
+    // Action bar: show Draw Card / Skip React / Pass button
+    // Reactions are shown explicitly — never auto-skipped.
     if (slot) {
-        var btn = document.createElement('button');
-        btn.className = 'btn btn-action btn-pass';
         if (gameState.phase === 1) {
-            // REACT phase
+            // REACT phase: show Skip React button
             var canPass = legalActions.some(function(a) { return a.action_type === 4; });
             if (canPass) {
-                btn.textContent = 'Skip React';
-                btn.addEventListener('click', function() {
+                var skipBtn = document.createElement('button');
+                skipBtn.className = 'btn btn-action btn-pass';
+                skipBtn.textContent = 'Skip React';
+                skipBtn.addEventListener('click', function() {
                     submitAction({ action_type: 4 });
                 });
-                slot.appendChild(btn);
+                slot.appendChild(skipBtn);
             }
         } else {
-            // ACTION phase: DRAW = end turn
+            // ACTION phase: show Draw Card button
+            // Drawing IS the action — it counts as your turn's action and ends your turn.
             var canDraw = legalActions.some(function(a) { return a.action_type === 3; });
             if (canDraw) {
-                btn.textContent = 'End Turn (Draw)';
-                btn.addEventListener('click', function() {
+                var drawBtn = document.createElement('button');
+                drawBtn.className = 'btn btn-action btn-draw';
+                drawBtn.textContent = 'Draw Card';
+                drawBtn.title = 'Draw a card (uses your turn action)';
+                drawBtn.addEventListener('click', function() {
                     submitAction({ action_type: 3 });
                 });
-                slot.appendChild(btn);
+                slot.appendChild(drawBtn);
             }
         }
     }
