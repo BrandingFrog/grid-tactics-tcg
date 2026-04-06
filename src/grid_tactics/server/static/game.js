@@ -797,7 +797,7 @@ function renderDeckBuilderCard(numericId, count) {
             11: 'Enemy plays any Light', 12: 'Enemy sacrifices'
         };
         var condText = condMap[c.react_condition] || 'Enemy acts';
-        var extraCond = c.react_requires_no_friendly_minions ? ' + No friendly minions' : '';
+        var extraCond = c.react_requires_no_friendly_minions ? ' & No friendly minions' : '';
         var costText = c.react_mana_cost > 0 ? ' (' + c.react_mana_cost + ')' : '';
         html += '<div class="card-effect-full">React' + costText + ': ' + condText + extraCond + '</div>';
         html += '<div class="card-effect-full">▶ Deploy</div>';
