@@ -757,7 +757,8 @@ function renderDeckBuilderCard(numericId, count) {
         var condText = condMap[c.react_condition] || 'Enemy acts';
         var extraCond = c.react_requires_no_friendly_minions ? ' + No friendly minions' : '';
         var costText = c.react_mana_cost > 0 ? ' (' + c.react_mana_cost + ')' : '';
-        html += '<div class="card-effect-full">React' + costText + ': ' + condText + extraCond + ' ▶ Summon</div>';
+        html += '<div class="card-effect-full">React' + costText + ': ' + condText + extraCond + '</div>';
+        html += '<div class="card-effect-full">▶ Summon</div>';
     }
     // Flavour text for cards with no effects and no transform/react
     if (c.flavour_text && (!c.effects || c.effects.length === 0) && c.react_condition == null && (!c.transform_options || c.transform_options.length === 0)) {
