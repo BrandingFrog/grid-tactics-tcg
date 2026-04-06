@@ -652,7 +652,9 @@ function showCardTooltip(numericId) {
     document.getElementById('tooltip-keywords').innerHTML = keywordsHtml;
 
     // Related cards
+    // Related cards: only direct references (this card mentions them or they mention this card)
     var relatedIds = [];
+    // This card references:
     if (c.tutor_target) relatedIds.push(c.tutor_target);
     if (c.promote_target) relatedIds.push(c.promote_target);
     if (c.transform_options) {
@@ -660,19 +662,17 @@ function showCardTooltip(numericId) {
             if (relatedIds.indexOf(opt.target) === -1) relatedIds.push(opt.target);
         });
     }
-    if (c.summon_sacrifice_tribe) {
-        // Find cards with matching tribe
-        for (var nid in defs) {
-            if (defs[nid].tribe === c.summon_sacrifice_tribe && defs[nid].card_id !== c.card_id) {
-                relatedIds.push(defs[nid].card_id);
-            }
-        }
-    }
-    // Also find cards that tutor/promote TO this card
+    // Other cards that reference this card:
     for (var nid2 in defs) {
         var d = defs[nid2];
+        if (d.card_id === c.card_id) continue;
         if (d.tutor_target === c.card_id && relatedIds.indexOf(d.card_id) === -1) relatedIds.push(d.card_id);
         if (d.promote_target === c.card_id && relatedIds.indexOf(d.card_id) === -1) relatedIds.push(d.card_id);
+        if (d.transform_options) {
+            d.transform_options.forEach(function(opt) {
+                if (opt.target === c.card_id && relatedIds.indexOf(d.card_id) === -1) relatedIds.push(d.card_id);
+            });
+        }
     }
 
     var relatedLabel = document.getElementById('tooltip-related-label');
