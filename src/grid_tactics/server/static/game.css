@@ -444,6 +444,22 @@ body {
   flex-wrap: wrap;
 }
 
+.filter-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  cursor: pointer;
+}
+
+.filter-checkbox input {
+  cursor: pointer;
+}
+
 .filter-btn {
   background: none;
   border: 1px solid var(--border);
@@ -1422,6 +1438,23 @@ body {
   display: -webkit-box;
   -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
+}
+
+/* Non-deckable card */
+.card-nondeckable {
+  opacity: 0.7;
+  cursor: default;
+}
+
+.card-nondeckable:hover {
+  transform: none;
+}
+
+.card-count-badge.prohibited {
+  background: var(--card2);
+  border-color: var(--red);
+  font-size: 12px;
+  line-height: 24px;
 }
 
 /* Card Unaffordable State */

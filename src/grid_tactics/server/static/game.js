@@ -430,8 +430,9 @@ function renderCardBrowser() {
     });
     ids.forEach(function(numId) {
         var c = defs[numId];
-        // Hide non-deckable cards (transform targets like Fallen Paladin, Grave Caller, Pyre Archer)
-        if (c.deckable === false) return;
+        // Hide non-deckable cards unless checkbox is checked
+        var showNonDeckable = document.getElementById('show-nondeckable') && document.getElementById('show-nondeckable').checked;
+        if (c.deckable === false && !showNonDeckable) return;
         // Type filter
         if (deckFilterType !== 'all' && typeMap[c.card_type] !== deckFilterType) return;
         // Element filter
@@ -469,24 +470,28 @@ function renderCardBrowser() {
             var searchable = (c.name || '').toLowerCase() + ' ' + (c.card_id || '').toLowerCase();
             if (searchable.indexOf(query) === -1) return;
         }
-        var count = currentDeck[numId] || 0;
+        var isNonDeckable = c.deckable === false;
+        var count = isNonDeckable ? -1 : (currentDeck[numId] || 0);
         var wrapper = document.createElement('div');
         wrapper.className = 'card-browser-item';
+        if (isNonDeckable) wrapper.classList.add('card-nondeckable');
         if (count > 0) wrapper.classList.add('card-selected');
         wrapper.innerHTML = renderDeckBuilderCard(numId, count);
-        // Click to add
-        wrapper.addEventListener('click', function(e) {
-            if (e.shiftKey) {
+        // Click to add (disabled for non-deckable)
+        if (!isNonDeckable) {
+            wrapper.addEventListener('click', function(e) {
+                if (e.shiftKey) {
+                    removeCardFromDeck(numId);
+                } else {
+                    addCardToDeck(numId);
+                }
+            });
+            // Right-click to remove
+            wrapper.addEventListener('contextmenu', function(e) {
+                e.preventDefault();
                 removeCardFromDeck(numId);
-            } else {
-                addCardToDeck(numId);
-            }
-        });
-        // Right-click to remove
-        wrapper.addEventListener('contextmenu', function(e) {
-            e.preventDefault();
-            removeCardFromDeck(numId);
-        });
+            });
+        }
         // Hover for tooltip
         wrapper.addEventListener('mouseenter', function() { showCardTooltip(numId); });
         wrapper.addEventListener('mouseleave', function() { hideCardTooltip(); });
@@ -520,6 +525,11 @@ function setupDeckFilters() {
             renderCardBrowser();
         });
     });
+    // Non-deckable checkbox
+    var nonDeckCheckbox = document.getElementById('show-nondeckable');
+    if (nonDeckCheckbox) {
+        nonDeckCheckbox.addEventListener('change', function() { renderCardBrowser(); });
+    }
     // Keyword filters
     document.querySelectorAll('#keyword-filters .filter-btn').forEach(function(btn) {
         btn.addEventListener('click', function() {
@@ -792,8 +802,12 @@ function renderDeckBuilderCard(numericId, count) {
     // Range already shown in bottom center for minions
     html += '</div>';
     // Count badge
-    var badgeClass = count > 0 ? 'card-count-badge' : 'card-count-badge empty';
-    html += '<div class="' + badgeClass + '">x' + count + '</div>';
+    if (count === -1) {
+        html += '<div class="card-count-badge prohibited">🚫</div>';
+    } else {
+        var badgeClass = count > 0 ? 'card-count-badge' : 'card-count-badge empty';
+        html += '<div class="' + badgeClass + '">x' + count + '</div>';
+    }
     return html;
 }
 
