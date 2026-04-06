@@ -56,6 +56,11 @@ let roomCode = null;         // current room code
 let opponentName = '';       // from game_start
 let myName = '';             // display name entered in lobby
 
+// Game interaction state
+let selectedHandIdx = null;  // index of selected hand card (for PLAY_CARD)
+let selectedMinionId = null; // id of selected board minion (for MOVE/ATTACK)
+let interactionMode = null;  // 'play', 'move', 'attack', or null
+
 // Deck builder state
 let currentDeck = {};        // { numericId: count }
 let currentSlotIdx = 0;
@@ -748,6 +753,141 @@ function hideCardTooltip() {
     if (tooltip) tooltip.style.display = 'none';
 }
 
+// =============================================
+// Game Tooltip (for hand cards and board minions)
+// =============================================
+
+function showGameTooltip(numericId, anchorEl) {
+    var c = cardDefs[numericId];
+    if (!c) return;
+    var tooltip = document.getElementById('game-tooltip');
+    if (!tooltip) return;
+    tooltip.style.display = '';
+
+    // Name
+    tooltip.querySelector('.gtt-name').textContent = c.name;
+
+    // Stats line
+    var statsHtml = '';
+    var typeNames = ['Minion', 'Magic', 'React'];
+    statsHtml += '<span style="color:var(--cyan)">' + (typeNames[c.card_type] || '') + '</span>';
+    if (c.tribe) statsHtml += '<span>' + c.tribe + '</span>';
+    var elem = (c.element !== null && c.element !== undefined) ? ELEMENT_MAP[c.element] : NEUTRAL_ELEMENT;
+    statsHtml += '<span style="color:' + elem.color + '">' + elem.name + '</span>';
+    statsHtml += '<span style="color:var(--cyan)">' + c.mana_cost + ' Mana</span>';
+    if (c.attack != null) statsHtml += '<span style="color:var(--red)">ATK ' + c.attack + '</span>';
+    if (c.health != null) statsHtml += '<span style="color:var(--green)">HP ' + c.health + '</span>';
+    if (c.card_type === 0 && c.attack_range != null) {
+        statsHtml += '<span>' + (c.attack_range <= 1 ? 'Melee' : 'Range ' + c.attack_range) + '</span>';
+    }
+    tooltip.querySelector('.gtt-stats').innerHTML = statsHtml;
+
+    // Card text + keywords
+    var bodyHtml = '';
+    var effectDesc = (c.effects && c.effects.length > 0) ? getEffectDescription(c.effects, c) : '';
+    var cardTextLines = [];
+    if (c.summon_sacrifice_tribe) cardTextLines.push('Sacrifice: ' + c.summon_sacrifice_tribe);
+    if (c.unique) cardTextLines.push('Unique');
+    if (effectDesc) cardTextLines.push(effectDesc);
+    if (c.transform_options && c.transform_options.length > 0) {
+        var tLines = c.transform_options.map(function(opt) {
+            return findCardNameById(opt.target) + ' (' + opt.mana_cost + ' mana)';
+        });
+        cardTextLines.push('Transform: ' + tLines.join(', '));
+    }
+    if (c.react_condition != null && c.react_mana_cost != null) {
+        var condMap = {
+            0: 'Enemy plays Magic', 1: 'Enemy summons Minion', 2: 'Enemy attacks',
+            3: 'Enemy plays React', 4: 'Any enemy action',
+            5: 'Enemy plays any Wood', 6: 'Enemy plays any Fire', 7: 'Enemy plays any Earth',
+            8: 'Enemy plays any Water', 9: 'Enemy plays any Metal', 10: 'Enemy plays any Dark',
+            11: 'Enemy plays any Light', 12: 'Enemy sacrifices'
+        };
+        var condText = condMap[c.react_condition] || 'Enemy acts';
+        var extraCond = c.react_requires_no_friendly_minions ? ' & No friendly minions' : '';
+        var costText = c.react_mana_cost > 0 ? ' (' + c.react_mana_cost + ')' : '';
+        cardTextLines.push('React' + costText + ': ' + condText + extraCond + ' ▶ Deploy');
+    }
+    if (cardTextLines.length > 0) {
+        bodyHtml += '<div class="gtt-text">' + cardTextLines.join('<br>') + '</div>';
+    }
+    if (c.flavour_text) {
+        bodyHtml += '<div class="gtt-flavour">"' + c.flavour_text + '"</div>';
+    }
+
+    // Keywords
+    var matchedKeywords = [];
+    if (c.unique) matchedKeywords.push('Unique');
+    if (c.card_type === 0 && c.attack_range != null && c.attack_range === 0) matchedKeywords.push('Melee');
+    if (c.card_type === 0 && c.attack_range != null && c.attack_range > 0) matchedKeywords.push('Range');
+    if (c.summon_sacrifice_tribe) { matchedKeywords.push('Cost'); matchedKeywords.push('Discard'); }
+    if (c.transform_options && c.transform_options.length > 0) matchedKeywords.push('Transform');
+    if (c.react_condition != null) matchedKeywords.push('React');
+    if (c.react_condition != null && c.react_effect && c.react_effect.type === 5) matchedKeywords.push('Deploy');
+    var skipSummon = false;
+    if (c.effects) { c.effects.forEach(function(eff) { if (eff.type === 11) skipSummon = true; }); }
+    if (c.effects && c.effects.length > 0) {
+        c.effects.forEach(function(eff) {
+            if (eff.trigger === 0 && c.card_type === 0 && !skipSummon) { if (matchedKeywords.indexOf('Summon') === -1) matchedKeywords.push('Summon'); }
+            if (eff.trigger === 1) { if (matchedKeywords.indexOf('Death') === -1) matchedKeywords.push('Death'); }
+            if (eff.trigger === 2) { if (matchedKeywords.indexOf('Attack') === -1) matchedKeywords.push('Attack'); }
+            if (eff.trigger === 3) { if (matchedKeywords.indexOf('Damaged') === -1) matchedKeywords.push('Damaged'); }
+            if (eff.trigger === 4) { if (matchedKeywords.indexOf('Move') === -1) matchedKeywords.push('Move'); }
+            if (eff.trigger === 5) { if (matchedKeywords.indexOf('Passive') === -1) matchedKeywords.push('Passive'); }
+            if (eff.type === 0) { if (matchedKeywords.indexOf('Deal') === -1) matchedKeywords.push('Deal'); }
+            if (eff.type === 1) { if (matchedKeywords.indexOf('Heal') === -1) matchedKeywords.push('Heal'); }
+            if (eff.type === 3) { if (matchedKeywords.indexOf('Heal') === -1) matchedKeywords.push('Heal'); }
+            if (eff.type === 4) { if (matchedKeywords.indexOf('Negate') === -1) matchedKeywords.push('Negate'); }
+            if (eff.type === 5) { if (matchedKeywords.indexOf('Deploy') === -1) matchedKeywords.push('Deploy'); }
+            if (eff.type === 6) { if (matchedKeywords.indexOf('Rally') === -1) matchedKeywords.push('Rally'); }
+            if (eff.type === 7) { if (matchedKeywords.indexOf('Promote') === -1) matchedKeywords.push('Promote'); }
+            if (eff.type === 8) { if (matchedKeywords.indexOf('Tutor') === -1) matchedKeywords.push('Tutor'); }
+            if (eff.type === 9) { if (matchedKeywords.indexOf('Destroy') === -1) matchedKeywords.push('Destroy'); }
+            if (eff.type === 10) { if (matchedKeywords.indexOf('Burn') === -1) matchedKeywords.push('Burn'); }
+            if (eff.type === 11) { if (matchedKeywords.indexOf('Active') === -1) matchedKeywords.push('Active'); if (matchedKeywords.indexOf('Dark Matter') === -1) matchedKeywords.push('Dark Matter'); }
+            if (eff.type === 12) { if (matchedKeywords.indexOf('Passive') === -1) matchedKeywords.push('Passive'); if (matchedKeywords.indexOf('Heal') === -1) matchedKeywords.push('Heal'); }
+            if (eff.type === 13) { if (matchedKeywords.indexOf('Leap') === -1) matchedKeywords.push('Leap'); }
+            if (eff.type === 14) { if (matchedKeywords.indexOf('Conjure') === -1) matchedKeywords.push('Conjure'); }
+        });
+    }
+    matchedKeywords.forEach(function(kw) {
+        bodyHtml += '<div class="gtt-keyword"><span class="gtt-kw-name">' + kw + '</span> <span class="gtt-kw-desc">— ' + (KEYWORD_GLOSSARY[kw] || '') + '</span></div>';
+    });
+
+    tooltip.querySelector('.gtt-body').innerHTML = bodyHtml;
+}
+
+function hideGameTooltip() {
+    var tooltip = document.getElementById('game-tooltip');
+    if (tooltip) tooltip.style.display = 'none';
+}
+
+// Auto-fit for hand card names (scaleX for overflow)
+function fitHandCardNames() {
+    document.querySelectorAll('.card-frame-hand .card-name-overlay').forEach(function(el) {
+        el.style.transform = 'none';
+        var containerWidth = el.offsetWidth;
+        var textWidth = el.scrollWidth;
+        if (textWidth > containerWidth && containerWidth > 0) {
+            var scale = containerWidth / textWidth;
+            if (scale < 0.5) scale = 0.5;
+            el.style.transform = 'scaleX(' + scale + ')';
+        }
+    });
+}
+
+// Auto-fit for hand card effects (shrink font)
+function fitHandCardEffects() {
+    document.querySelectorAll('.card-frame-hand .card-effect-full').forEach(function(el) {
+        el.style.fontSize = '10px';
+        var size = 10;
+        while (el.scrollHeight > el.clientHeight && size > 6) {
+            size--;
+            el.style.fontSize = size + 'px';
+        }
+    });
+}
+
 function renderDeckBuilderCard(numericId, count) {
     var c = allCardDefs ? allCardDefs[numericId] : cardDefs[numericId];
     if (!c) return '';
@@ -1022,11 +1162,303 @@ function onGameOver(data) {
 
 function renderGame() {
     if (!gameState || !cardDefs) return;
+    clearSelection();
     renderRoomBar();
     renderOpponentInfo();
     renderBoard();
     renderSelfInfo();
     renderHand();
+    renderActionBar();
+}
+
+// =============================================
+// Section 10b: Game Interaction System
+// =============================================
+
+function clearSelection() {
+    selectedHandIdx = null;
+    selectedMinionId = null;
+    interactionMode = null;
+}
+
+function submitAction(actionData) {
+    if (socket) {
+        socket.emit('submit_action', actionData);
+    }
+    clearSelection();
+}
+
+// Get legal actions filtered by type
+function getLegalByType(actionType) {
+    return legalActions.filter(function(a) { return a.action_type === actionType; });
+}
+
+// Check if a specific hand card can be played to a specific position
+function canPlayCardAt(handIdx, row, col) {
+    return legalActions.some(function(a) {
+        return a.action_type === 0 && a.card_index === handIdx
+            && a.position && a.position[0] === row && a.position[1] === col;
+    });
+}
+
+// Get valid deploy positions for a hand card
+function getDeployPositions(handIdx) {
+    var positions = [];
+    legalActions.forEach(function(a) {
+        if (a.action_type === 0 && a.card_index === handIdx && a.position) {
+            positions.push(a.position);
+        }
+    });
+    return positions;
+}
+
+// Get valid move positions for a minion
+function getMovePositions(minionId) {
+    var positions = [];
+    legalActions.forEach(function(a) {
+        if (a.action_type === 1 && a.minion_id === minionId && a.position) {
+            positions.push(a.position);
+        }
+    });
+    return positions;
+}
+
+// Get valid attack targets for a minion
+function getAttackTargets(minionId) {
+    var targets = [];
+    legalActions.forEach(function(a) {
+        if (a.action_type === 2 && a.minion_id === minionId && a.target_id != null) {
+            targets.push(a.target_id);
+        }
+    });
+    return targets;
+}
+
+// Can this minion be sacrificed?
+function canSacrifice(minionId) {
+    return legalActions.some(function(a) {
+        return a.action_type === 6 && a.minion_id === minionId;
+    });
+}
+
+// Can this hand card be played (any legal PLAY_CARD with this index)?
+function canPlayCard(handIdx) {
+    return legalActions.some(function(a) {
+        return a.action_type === 0 && a.card_index === handIdx;
+    });
+}
+
+// Can this hand card be played as a magic spell (no position needed)?
+function canPlayMagic(handIdx) {
+    return legalActions.some(function(a) {
+        return a.action_type === 0 && a.card_index === handIdx && !a.position;
+    });
+}
+
+// Handle clicking a hand card
+function onHandCardClick(handIdx) {
+    var isMyTurn = legalActions && legalActions.length > 0;
+    if (!isMyTurn) return;
+
+    // If already selected, deselect
+    if (selectedHandIdx === handIdx && interactionMode === 'play') {
+        clearSelection();
+        highlightBoard();
+        updateHandHighlights();
+        return;
+    }
+
+    // Check if this card can be played as magic (no position)
+    if (canPlayMagic(handIdx)) {
+        submitAction({ action_type: 0, card_index: handIdx });
+        return;
+    }
+
+    // Check if card has deploy positions
+    if (canPlayCard(handIdx)) {
+        selectedHandIdx = handIdx;
+        selectedMinionId = null;
+        interactionMode = 'play';
+        highlightBoard();
+        updateHandHighlights();
+    }
+}
+
+// Handle clicking a board cell
+function onBoardCellClick(row, col) {
+    var isMyTurn = legalActions && legalActions.length > 0;
+    if (!isMyTurn) return;
+
+    // If we have a hand card selected, try to play it here
+    if (interactionMode === 'play' && selectedHandIdx !== null) {
+        if (canPlayCardAt(selectedHandIdx, row, col)) {
+            submitAction({ action_type: 0, card_index: selectedHandIdx, position: [row, col] });
+        }
+        return;
+    }
+
+    // If we have a minion selected for move, try to move here
+    if (interactionMode === 'move' && selectedMinionId !== null) {
+        var movePositions = getMovePositions(selectedMinionId);
+        var validMove = movePositions.some(function(p) { return p[0] === row && p[1] === col; });
+        if (validMove) {
+            submitAction({ action_type: 1, minion_id: selectedMinionId, position: [row, col] });
+        }
+        return;
+    }
+
+    // Check if clicking on own minion to select it
+    var minion = getMinionAt(row, col);
+    if (minion && minion.owner === myPlayerIdx) {
+        onBoardMinionClick(minion);
+    }
+}
+
+// Handle clicking a board minion
+function onBoardMinionClick(minion) {
+    var isMyTurn = legalActions && legalActions.length > 0;
+    if (!isMyTurn) return;
+
+    // If in attack mode and clicking an enemy — attack it
+    if (interactionMode === 'attack' && selectedMinionId !== null && minion.owner !== myPlayerIdx) {
+        var targets = getAttackTargets(selectedMinionId);
+        if (targets.indexOf(minion.minion_id) !== -1) {
+            submitAction({ action_type: 2, minion_id: selectedMinionId, target_id: minion.minion_id });
+            return;
+        }
+    }
+
+    // If clicking own minion — select it
+    if (minion.owner === myPlayerIdx) {
+        // If already selected, deselect
+        if (selectedMinionId === minion.minion_id) {
+            clearSelection();
+            highlightBoard();
+            updateHandHighlights();
+            return;
+        }
+
+        selectedMinionId = minion.minion_id;
+        selectedHandIdx = null;
+
+        var moves = getMovePositions(minion.minion_id);
+        var attacks = getAttackTargets(minion.minion_id);
+
+        if (moves.length > 0 || attacks.length > 0) {
+            interactionMode = (attacks.length > 0) ? 'attack' : 'move';
+            // If both available, show both
+            if (moves.length > 0 && attacks.length > 0) interactionMode = 'move_attack';
+        }
+        highlightBoard();
+        updateHandHighlights();
+    }
+}
+
+function getMinionAt(row, col) {
+    if (!gameState || !gameState.minions) return null;
+    for (var i = 0; i < gameState.minions.length; i++) {
+        var m = gameState.minions[i];
+        if (m.position[0] === row && m.position[1] === col) return m;
+    }
+    return null;
+}
+
+// Highlight valid board cells based on current selection
+function highlightBoard() {
+    document.querySelectorAll('.board-cell').forEach(function(cell) {
+        cell.classList.remove('cell-valid', 'cell-attack', 'cell-selected');
+    });
+
+    if (interactionMode === 'play' && selectedHandIdx !== null) {
+        var positions = getDeployPositions(selectedHandIdx);
+        positions.forEach(function(p) {
+            var cell = document.querySelector('.board-cell[data-row="' + p[0] + '"][data-col="' + p[1] + '"]');
+            if (cell) cell.classList.add('cell-valid');
+        });
+    }
+
+    if (selectedMinionId !== null) {
+        // Highlight minion's cell as selected
+        var minion = null;
+        (gameState.minions || []).forEach(function(m) { if (m.minion_id === selectedMinionId) minion = m; });
+        if (minion) {
+            var mCell = document.querySelector('.board-cell[data-row="' + minion.position[0] + '"][data-col="' + minion.position[1] + '"]');
+            if (mCell) mCell.classList.add('cell-selected');
+        }
+
+        if (interactionMode === 'move' || interactionMode === 'move_attack') {
+            var movePos = getMovePositions(selectedMinionId);
+            movePos.forEach(function(p) {
+                var cell = document.querySelector('.board-cell[data-row="' + p[0] + '"][data-col="' + p[1] + '"]');
+                if (cell) cell.classList.add('cell-valid');
+            });
+        }
+
+        if (interactionMode === 'attack' || interactionMode === 'move_attack') {
+            var atkTargets = getAttackTargets(selectedMinionId);
+            (gameState.minions || []).forEach(function(m) {
+                if (atkTargets.indexOf(m.minion_id) !== -1) {
+                    var cell = document.querySelector('.board-cell[data-row="' + m.position[0] + '"][data-col="' + m.position[1] + '"]');
+                    if (cell) cell.classList.add('cell-attack');
+                }
+            });
+        }
+    }
+}
+
+// Highlight playable hand cards
+function updateHandHighlights() {
+    document.querySelectorAll('.card-frame-hand').forEach(function(card) {
+        var idx = parseInt(card.dataset.handIdx, 10);
+        card.classList.remove('card-playable', 'card-selected-hand');
+        if (selectedHandIdx === idx && interactionMode === 'play') {
+            card.classList.add('card-selected-hand');
+        } else if (canPlayCard(idx)) {
+            card.classList.add('card-playable');
+        }
+    });
+}
+
+// Render action bar (pass / draw buttons)
+function renderActionBar() {
+    var existing = document.getElementById('action-bar');
+    if (existing) existing.remove();
+
+    var isMyTurn = legalActions && legalActions.length > 0;
+    if (!isMyTurn) return;
+
+    // Auto-draw: if DRAW is the only legal action, submit it automatically
+    var drawActions = getLegalByType(3);
+    if (drawActions.length > 0 && legalActions.length === 1) {
+        submitAction({ action_type: 3 });
+        return;
+    }
+
+    var bar = document.createElement('div');
+    bar.id = 'action-bar';
+    bar.className = 'action-bar';
+
+    // Pass button
+    var canPass = legalActions.some(function(a) { return a.action_type === 4; });
+    if (canPass) {
+        var passBtn = document.createElement('button');
+        passBtn.className = 'btn btn-action btn-pass';
+        passBtn.textContent = gameState.phase === 1 ? 'Skip React' : 'Pass Turn';
+        passBtn.addEventListener('click', function() {
+            submitAction({ action_type: 4 });
+        });
+        bar.appendChild(passBtn);
+    }
+
+    // Insert after hand container
+    var handEl = document.getElementById('hand-container');
+    if (handEl && handEl.parentNode) {
+        handEl.parentNode.insertBefore(bar, handEl.nextSibling);
+    }
+
+    // Initial highlights
+    highlightBoard();
+    updateHandHighlights();
 }
 
 // =============================================
@@ -1196,7 +1628,17 @@ function renderBoard() {
             var minion = minionMap[row + ',' + col];
             if (minion) {
                 cell.innerHTML = renderBoardMinion(minion);
+                // Hover tooltip for board minions
+                (function(m) {
+                    cell.addEventListener('mouseenter', function() { showGameTooltip(m.card_numeric_id, this); });
+                    cell.addEventListener('mouseleave', function() { hideGameTooltip(); });
+                })(minion);
             }
+
+            // Click handler for board cell
+            (function(r, c) {
+                cell.addEventListener('click', function() { onBoardCellClick(r, c); });
+            })(row, col);
 
             boardEl.appendChild(cell);
         }
@@ -1212,6 +1654,7 @@ function renderBoardMinion(minion) {
     if (!cardDef) return '';
     var isOwn = minion.owner === myPlayerIdx;
     var ownerClass = isOwn ? 'owner-self' : 'owner-opp';
+    var typeClass = TYPE_CSS[cardDef.card_type] || '';
     var elem = (cardDef.element !== null && cardDef.element !== undefined)
         ? ELEMENT_MAP[cardDef.element] : NEUTRAL_ELEMENT;
 
@@ -1219,7 +1662,8 @@ function renderBoardMinion(minion) {
     var hp = minion.current_health;
 
     var boardArtStyle = cardDef.card_id ? 'background-image:url(/static/art/' + cardDef.card_id + '.png);background-size:cover;background-position:center;' : '';
-    return '<div class="board-minion ' + ownerClass + '" style="' + boardArtStyle + '">'
+    return '<div class="board-minion ' + ownerClass + ' ' + typeClass + '" data-numeric-id="' + minion.card_numeric_id + '" style="' + boardArtStyle + '">'
+        + '<div class="board-minion-overlay"></div>'
         + '<div class="attr-circle-sm ' + elem.css + '"><span class="attr-text-sm">' + elem.name[0] + '</span></div>'
         + '<div class="board-minion-name">' + cardDef.name + '</div>'
         + '<div class="board-minion-stats">'
@@ -1246,9 +1690,20 @@ function renderHand() {
         var wrapper = document.createElement('div');
         wrapper.innerHTML = cardHtml;
         if (wrapper.firstChild) {
-            handEl.appendChild(wrapper.firstChild);
+            var cardEl = wrapper.firstChild;
+            // Hover tooltip
+            cardEl.addEventListener('mouseenter', function() { showGameTooltip(numericId, this); });
+            cardEl.addEventListener('mouseleave', function() { hideGameTooltip(); });
+            // Click to select/play
+            (function(idx) {
+                cardEl.addEventListener('click', function() { onHandCardClick(idx); });
+            })(handIndex);
+            handEl.appendChild(cardEl);
         }
     });
+    // Auto-fit names and effects for hand cards
+    fitHandCardNames();
+    fitHandCardEffects();
 }
 
 // =============================================
@@ -1264,25 +1719,47 @@ function renderHandCard(numericId, handIndex, currentMana) {
     var elem = (c.element !== null && c.element !== undefined)
         ? ELEMENT_MAP[c.element] : NEUTRAL_ELEMENT;
 
-    var html = '<div class="card-frame ' + typeClass + dimClass + '" data-hand-idx="' + handIndex + '" data-numeric-id="' + numericId + '">';
-    // Mana badge
+    var html = '<div class="card-frame card-frame-hand ' + typeClass + dimClass + '" data-hand-idx="' + handIndex + '" data-numeric-id="' + numericId + '">';
+    // Mana badge (top-left)
     html += '<div class="card-mana">' + c.mana_cost + '</div>';
-    // Art area with attribute circle
-    var handArtStyle = c.card_id ? 'background-image:url(/static/art/' + c.card_id + '.png)' : '';
-    html += '<div class="card-art" style="' + handArtStyle + '">';
+    // Element circle (top-right)
     html += '<div class="attr-circle ' + elem.css + '"><span class="attr-text">' + elem.name + '</span></div>';
+    // Art area with overlay + name (YGO style matching deck builder)
+    var handArtStyle = c.card_id ? 'background-image:url(/static/art/' + c.card_id + '.png)' : '';
+    html += '<div class="card-art card-art-hand" style="' + handArtStyle + '">';
+    html += '<div class="card-art-overlay"></div>';
+    html += '<div class="card-name-overlay">' + c.name + '</div>';
     html += '</div>';
-    // Card name
-    html += '<div class="card-name">' + c.name + '</div>';
-    // Stats or effect text
+    // Bottom section: ATK circle | tribe+range | HP circle (minions)
     if (c.card_type === 0 && c.attack != null) {
-        html += '<div class="card-stats">';
-        html += '<span class="card-atk">ATK/' + c.attack + '</span>';
-        html += '<span class="card-hp">HP/' + c.health + '</span>';
+        var tribe = c.tribe || '';
+        var rangeText = (c.attack_range != null) ? (c.attack_range === 0 ? 'MELEE' : 'RANGE ' + c.attack_range) : '';
+        html += '<div class="card-bottom-section">';
+        html += '<div class="card-stat-atk">' + c.attack + '</div>';
+        html += '<div class="card-bottom-center">';
+        if (tribe) html += '<div class="card-bottom-tribe">' + tribe + '</div>';
+        if (rangeText) html += '<div class="card-bottom-range">' + rangeText + '</div>';
         html += '</div>';
-    } else if (c.effects && c.effects.length > 0) {
+        html += '<div class="card-stat-hp">' + c.health + '</div>';
+        html += '</div>';
+    }
+    // Effect text (all card types)
+    if (c.effects && c.effects.length > 0) {
         var desc = getEffectDescription(c.effects, c);
-        html += '<div class="card-effect">' + desc + '</div>';
+        html += '<div class="card-effect-full">' + desc + '</div>';
+    }
+    // React ability for multi-purpose cards
+    if (c.react_condition != null && c.react_mana_cost != null) {
+        var condMap = {
+            0: 'Enemy plays Magic', 1: 'Enemy summons Minion', 2: 'Enemy attacks',
+            3: 'Enemy plays React', 4: 'Any enemy action',
+            5: 'Enemy plays any Wood', 6: 'Enemy plays any Fire', 7: 'Enemy plays any Earth',
+            8: 'Enemy plays any Water', 9: 'Enemy plays any Metal', 10: 'Enemy plays any Dark',
+            11: 'Enemy plays any Light', 12: 'Enemy sacrifices'
+        };
+        var condText = condMap[c.react_condition] || 'Enemy acts';
+        var costText = c.react_mana_cost > 0 ? ' (' + c.react_mana_cost + ')' : '';
+        html += '<div class="card-effect-full">React' + costText + ': ' + condText + '</div>';
     }
     html += '</div>';
     return html;

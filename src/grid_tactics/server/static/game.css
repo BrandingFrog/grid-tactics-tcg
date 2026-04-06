@@ -841,7 +841,9 @@ body {
   grid-template-columns: repeat(5, 1fr);
   gap: 4px;
   width: 100%;
+  max-width: 500px;
   max-height: 100%;
+  margin: 0 auto;
 }
 
 /* Board Cell */
@@ -864,6 +866,38 @@ body {
   background: #1e1e40;
 }
 
+/* Valid deploy/move target */
+.board-cell.cell-valid {
+  border-color: var(--green);
+  background: rgba(76, 175, 80, 0.15);
+  box-shadow: inset 0 0 12px rgba(76, 175, 80, 0.3);
+  cursor: pointer;
+}
+
+.board-cell.cell-valid:hover {
+  background: rgba(76, 175, 80, 0.3);
+  box-shadow: inset 0 0 20px rgba(76, 175, 80, 0.5);
+}
+
+/* Valid attack target */
+.board-cell.cell-attack {
+  border-color: var(--red);
+  background: rgba(244, 67, 54, 0.15);
+  box-shadow: inset 0 0 12px rgba(244, 67, 54, 0.3);
+  cursor: pointer;
+}
+
+.board-cell.cell-attack:hover {
+  background: rgba(244, 67, 54, 0.3);
+  box-shadow: inset 0 0 20px rgba(244, 67, 54, 0.5);
+}
+
+/* Selected minion cell */
+.board-cell.cell-selected {
+  border-color: var(--cyan);
+  box-shadow: inset 0 0 12px rgba(0, 212, 255, 0.4), 0 0 8px rgba(0, 212, 255, 0.3);
+}
+
 /* Board Zone Tints */
 .zone-self {
   background: #00d4ff08;
@@ -884,18 +918,34 @@ body {
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
-  padding: 4px;
+  justify-content: flex-end;
+  padding: 0;
   position: relative;
   border-radius: 6px;
+  overflow: hidden;
+  background-size: cover;
+  background-position: center;
+  cursor: pointer;
 }
 
 .board-minion.owner-self {
-  background: rgba(0, 212, 255, 0.1);
+  box-shadow: inset 0 0 0 2px rgba(0, 212, 255, 0.5);
 }
 
 .board-minion.owner-opp {
-  background: rgba(244, 67, 54, 0.1);
+  box-shadow: inset 0 0 0 2px rgba(244, 67, 54, 0.5);
+}
+
+/* Dark overlay on board minion for text readability */
+.board-minion-overlay {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 65%;
+  background: linear-gradient(transparent, rgba(0,0,0,0.7));
+  z-index: 1;
+  pointer-events: none;
 }
 
 /* Attribute circle on board minion (small) */
@@ -903,51 +953,62 @@ body {
   position: absolute;
   top: 3px;
   right: 3px;
-  width: 12px;
-  height: 12px;
+  width: 14px;
+  height: 14px;
   border-radius: 50%;
   border: 1px solid rgb(30, 25, 20);
+  z-index: 3;
 }
 
 /* Board minion name */
 .board-minion-name {
-  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  font-family: 'Source Sans 3', 'Source Sans Pro', sans-serif;
   font-size: 10px;
   font-weight: 700;
   line-height: 1.1;
-  color: var(--text);
+  color: white;
+  -webkit-text-stroke: 1.5px black;
+  paint-order: stroke fill;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 90%;
+  max-width: 95%;
   text-align: center;
+  z-index: 2;
+  padding: 0 2px;
 }
 
 /* Board minion stats */
 .board-minion-stats {
   display: flex;
-  gap: 8px;
-  font-size: 12px;
-  font-weight: 700;
+  gap: 6px;
+  font-family: 'Luckiest Guy', cursive;
+  font-size: 13px;
+  font-weight: 400;
+  -webkit-text-stroke: 1px black;
+  paint-order: stroke fill;
   line-height: 1.0;
+  z-index: 2;
+  padding-bottom: 2px;
 }
 
 .board-minion-atk {
-  color: var(--red);
+  color: rgb(255, 100, 80);
 }
 
 .board-minion-hp {
-  color: var(--green);
+  color: rgb(80, 220, 100);
 }
 
 /* ===== Hand Container ===== */
 .hand-container {
   display: flex;
-  gap: 4px;
+  gap: 6px;
   overflow-x: auto;
-  padding: 4px 0;
+  padding: 6px 4px;
   flex-shrink: 0;
-  max-height: 140px;
+  max-height: 170px;
+  justify-content: center;
 }
 
 .hand-container::-webkit-scrollbar {
@@ -1106,34 +1167,20 @@ body {
   z-index: 2;
 }
 
-/* Card Name */
+/* Card Name (legacy fallback — hand/game cards now use card-name-overlay) */
 .card-name {
   text-align: center;
   color: white;
   -webkit-text-stroke: 1px black;
   paint-order: stroke fill;
-  font-family: 'Luckiest Guy', cursive;
+  font-family: 'Source Sans 3', 'Source Sans Pro', sans-serif;
   font-size: 14px;
-  font-weight: 400;
+  font-weight: 700;
   line-height: 1.1;
   padding: 2px 4%;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-}
-
-/* Card Stats Row (legacy) */
-.card-stats {
-  display: flex;
-  justify-content: space-between;
-  padding: 0 4%;
-  color: white;
-  -webkit-text-stroke: 1px black;
-  paint-order: stroke fill;
-  font-family: 'Luckiest Guy', cursive;
-  font-size: 12px;
-  font-weight: 400;
-  line-height: 1.0;
 }
 
 /* Card Bottom Section (stats + tribe/range) */
@@ -1209,17 +1256,17 @@ body {
   line-height: 1.2;
 }
 
-/* Card Effect Text (magic/react) */
+/* Card Effect Text (legacy fallback — hand cards now use card-effect-full) */
 .card-effect {
   text-align: center;
   color: white;
-  -webkit-text-stroke: 1px black;
+  -webkit-text-stroke: 1.5px black;
   paint-order: stroke fill;
-  font-family: 'Inter', system-ui, -apple-system, sans-serif;
-  font-size: 9px;
-  font-weight: 400;
+  font-family: 'Inter', system-ui, sans-serif;
+  font-size: 10px;
+  font-weight: 700;
   line-height: 1.2;
-  padding: 2px 4%;
+  padding: 1px 3%;
   overflow: hidden;
   text-overflow: ellipsis;
   display: -webkit-box;
@@ -1464,6 +1511,113 @@ body {
   line-height: 24px;
 }
 
+/* ===== Hand Card Overrides (scaled-down deck builder style) ===== */
+.card-frame-hand {
+  width: 100px;
+  display: flex;
+  flex-direction: column;
+}
+
+.card-frame-hand .attr-circle {
+  width: 18%;
+}
+
+.card-frame-hand .attr-text {
+  font-size: 4px;
+  -webkit-text-stroke: 0.5px black;
+}
+
+.card-frame-hand .card-mana {
+  font-size: 12px;
+  width: 18%;
+}
+
+.card-art-hand {
+  height: 52%;
+}
+
+.card-frame-hand .card-name-overlay {
+  font-size: 11px;
+  -webkit-text-stroke: 2px black;
+}
+
+.card-frame-hand .card-bottom-section {
+  height: 16%;
+}
+
+.card-frame-hand .card-stat-atk,
+.card-frame-hand .card-stat-hp {
+  width: 18%;
+  font-size: 12px;
+  -webkit-text-stroke: 1px black;
+}
+
+.card-frame-hand .card-bottom-tribe {
+  font-size: 7px;
+}
+
+.card-frame-hand .card-bottom-range {
+  font-size: 7px;
+}
+
+.card-frame-hand .card-effect-full {
+  font-size: 10px;
+  -webkit-line-clamp: 3;
+  padding: 1px 3%;
+}
+
+/* Playable hand card glow */
+.card-frame-hand.card-playable {
+  cursor: pointer;
+  box-shadow: 0 0 8px rgba(76, 175, 80, 0.5);
+  border-color: var(--green);
+}
+
+.card-frame-hand.card-playable:hover {
+  box-shadow: 0 0 16px rgba(76, 175, 80, 0.7);
+  transform: translateY(-8px);
+}
+
+/* Selected hand card */
+.card-frame-hand.card-selected-hand {
+  cursor: pointer;
+  box-shadow: 0 0 16px rgba(0, 212, 255, 0.7);
+  border-color: var(--cyan);
+  transform: translateY(-10px);
+}
+
+/* Action bar (pass/skip buttons) */
+.action-bar {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  padding: 4px 0;
+  flex-shrink: 0;
+}
+
+.btn-action {
+  padding: 6px 20px;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  border-radius: 6px;
+  cursor: pointer;
+  border: 1px solid;
+  transition: background 150ms ease, box-shadow 150ms ease;
+}
+
+.btn-pass {
+  background: rgba(255, 152, 0, 0.15);
+  border-color: rgb(255, 152, 0);
+  color: rgb(255, 152, 0);
+}
+
+.btn-pass:hover {
+  background: rgba(255, 152, 0, 0.3);
+  box-shadow: 0 0 12px rgba(255, 152, 0, 0.3);
+}
+
 /* Card Unaffordable State */
 .card-dimmed {
   opacity: 0.4;
@@ -1532,6 +1686,77 @@ body {
 .gap-8 { gap: 8px; }
 .hidden { display: none !important; }
 
+/* ===== Game Tooltip (sidebar hover preview) ===== */
+.game-tooltip {
+  background: var(--card);
+  border: 1px solid var(--cyan);
+  border-radius: 10px;
+  padding: 12px;
+  overflow-y: auto;
+  max-height: 50vh;
+  box-shadow: 0 0 20px rgba(0, 212, 255, 0.15);
+  flex-shrink: 0;
+}
+
+.gtt-name {
+  font-family: 'Source Sans 3', 'Source Sans Pro', sans-serif;
+  font-size: 16px;
+  font-weight: 700;
+  color: white;
+  -webkit-text-stroke: 1px black;
+  paint-order: stroke fill;
+  margin-bottom: 6px;
+}
+
+.gtt-stats {
+  font-family: 'Inter', system-ui, sans-serif;
+  font-size: 11px;
+  color: var(--text);
+  margin-bottom: 8px;
+  line-height: 1.6;
+}
+
+.gtt-stats span {
+  display: inline-block;
+  margin-right: 10px;
+}
+
+.gtt-text {
+  color: white;
+  font-family: 'Inter', system-ui, sans-serif;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.5;
+  margin-bottom: 8px;
+}
+
+.gtt-flavour {
+  color: var(--cyan);
+  font-family: 'Inter', system-ui, sans-serif;
+  font-size: 10px;
+  font-style: italic;
+  margin-bottom: 8px;
+}
+
+.gtt-keyword {
+  margin-bottom: 4px;
+}
+
+.gtt-kw-name {
+  color: var(--cyan);
+  font-family: 'Inter', system-ui, sans-serif;
+  font-weight: 700;
+  text-transform: uppercase;
+  font-size: 9px;
+  letter-spacing: 0.5px;
+}
+
+.gtt-kw-desc {
+  color: white;
+  font-family: 'Inter', system-ui, sans-serif;
+  font-size: 9px;
+}
+
 /* ===== Mobile Responsive (max-width 600px) ===== */
 @media (max-width: 600px) {
   /* Header */
@@ -1587,6 +1812,11 @@ body {
   .stat-value { font-size: 14px; }
   .stat-group { gap: 12px; }
   .board-container { padding: 4px; }
-  .hand-container { max-height: 100px; }
+  .hand-container { max-height: 110px; }
   .card-frame { width: 70px; }
+  .card-frame-hand { width: 75px; }
+  .card-frame-hand .card-name-overlay { font-size: 8px; -webkit-text-stroke: 1.5px black; }
+  .card-frame-hand .card-effect-full { font-size: 7px; -webkit-line-clamp: 2; }
+  .card-frame-hand .card-stat-atk, .card-frame-hand .card-stat-hp { font-size: 10px; }
+  .card-frame-hand .card-mana { font-size: 10px; }
 }
