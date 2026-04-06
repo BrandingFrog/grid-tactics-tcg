@@ -41,6 +41,7 @@ const MAX_DECK_SIZE = 30;
 const MAX_COPIES = 3;
 const MAX_SLOTS = 5;
 const STORAGE_KEY = 'gt_deck_slots';
+const NAME_STORAGE_KEY = 'gt_display_name';
 
 // =============================================
 // Section 2: Client State Variables
@@ -320,11 +321,67 @@ function onError(data) {
 // Section 6: Lobby UI Handlers
 // =============================================
 
+function loadSavedName() {
+    try {
+        return localStorage.getItem(NAME_STORAGE_KEY) || '';
+    } catch (e) {
+        return '';
+    }
+}
+
+function saveDisplayName(name) {
+    try {
+        if (name) localStorage.setItem(NAME_STORAGE_KEY, name);
+        else localStorage.removeItem(NAME_STORAGE_KEY);
+    } catch (e) {}
+}
+
+function showSavedNameUI(name) {
+    var inputSection = document.getElementById('name-input-section');
+    var savedSection = document.getElementById('name-saved-section');
+    var display = document.getElementById('saved-name-display');
+    if (display) display.textContent = name;
+    if (inputSection) inputSection.style.display = 'none';
+    if (savedSection) savedSection.style.display = '';
+}
+
+function showNameInputUI() {
+    var inputSection = document.getElementById('name-input-section');
+    var savedSection = document.getElementById('name-saved-section');
+    if (inputSection) inputSection.style.display = '';
+    if (savedSection) savedSection.style.display = 'none';
+    var nameInput = document.getElementById('input-name');
+    if (nameInput) {
+        nameInput.focus();
+        nameInput.select();
+    }
+}
+
+function getCurrentDisplayName() {
+    // Check if saved-name section is visible — return that, else read input
+    var savedSection = document.getElementById('name-saved-section');
+    if (savedSection && savedSection.style.display !== 'none') {
+        var display = document.getElementById('saved-name-display');
+        return display ? display.textContent.trim() : '';
+    }
+    var nameInput = document.getElementById('input-name');
+    return nameInput ? nameInput.value.trim() : '';
+}
+
 function setupLobbyHandlers() {
-    // Create Room
-    var btnCreate = document.getElementById('btn-create-room');
-    if (btnCreate) {
-        btnCreate.addEventListener('click', function() {
+    // Initialize name UI from localStorage
+    var savedName = loadSavedName();
+    if (savedName) {
+        myName = savedName;
+        showSavedNameUI(savedName);
+    } else {
+        showNameInputUI();
+    }
+
+    // Save name button (when input is shown)
+    var btnSaveName = document.getElementById('btn-save-name');
+    if (btnSaveName) {
+        btnSaveName.addEventListener('click', function() {
             var nameInput = document.getElementById('input-name');
             var name = nameInput ? nameInput.value.trim() : '';
             if (!name) {
@@ -332,6 +389,50 @@ function setupLobbyHandlers() {
                 return;
             }
             myName = name;
+            saveDisplayName(name);
+            showSavedNameUI(name);
+            showLobbyStatus('', '');
+        });
+    }
+
+    // Change name button
+    var btnChangeName = document.getElementById('btn-change-name');
+    if (btnChangeName) {
+        btnChangeName.addEventListener('click', function() {
+            var savedName = loadSavedName();
+            var nameInput = document.getElementById('input-name');
+            if (nameInput) nameInput.value = savedName;
+            showNameInputUI();
+        });
+    }
+
+    // Show Save button only when input is non-empty (auto-save on Enter too)
+    var nameInputEl = document.getElementById('input-name');
+    if (nameInputEl) {
+        var updateSaveBtn = function() {
+            if (btnSaveName) btnSaveName.style.display = nameInputEl.value.trim() ? '' : 'none';
+        };
+        nameInputEl.addEventListener('input', updateSaveBtn);
+        nameInputEl.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' && btnSaveName) {
+                e.preventDefault();
+                btnSaveName.click();
+            }
+        });
+        updateSaveBtn();
+    }
+
+    // Create Room
+    var btnCreate = document.getElementById('btn-create-room');
+    if (btnCreate) {
+        btnCreate.addEventListener('click', function() {
+            var name = getCurrentDisplayName();
+            if (!name) {
+                showLobbyStatus('Please enter a display name.', 'error');
+                return;
+            }
+            myName = name;
+            saveDisplayName(name);
             socket.emit('create_room', { display_name: name });
         });
     }
@@ -340,9 +441,8 @@ function setupLobbyHandlers() {
     var btnJoin = document.getElementById('btn-join-room');
     if (btnJoin) {
         btnJoin.addEventListener('click', function() {
-            var nameInput = document.getElementById('input-name');
             var codeInput = document.getElementById('input-room-code');
-            var name = nameInput ? nameInput.value.trim() : '';
+            var name = getCurrentDisplayName();
             var code = codeInput ? codeInput.value.trim().toUpperCase() : '';
             if (!name) {
                 showLobbyStatus('Please enter a display name.', 'error');
@@ -353,6 +453,7 @@ function setupLobbyHandlers() {
                 return;
             }
             myName = name;
+            saveDisplayName(name);
             socket.emit('join_room', { display_name: name, room_code: code });
         });
     }

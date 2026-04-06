@@ -32,9 +32,18 @@
       <p class="lobby-subheading">Online PvP Dueling -- Create a room or enter a code to join</p>
 
       <!-- Display Name -->
-      <div class="lobby-section">
+      <div class="lobby-section" id="name-input-section">
         <label class="label" for="input-name">Display Name</label>
-        <input type="text" id="input-name" class="input" placeholder="Enter your name" maxlength="20">
+        <div class="join-row">
+          <input type="text" id="input-name" class="input" placeholder="Enter your name" maxlength="20" style="flex:1;">
+          <button class="btn btn-secondary" id="btn-save-name" style="display:none;">Save</button>
+        </div>
+      </div>
+      <div class="lobby-section" id="name-saved-section" style="display:none;">
+        <div class="name-saved-row">
+          <span class="name-saved-greeting">Playing as <strong id="saved-name-display"></strong></span>
+          <button class="btn btn-secondary btn-sm" id="btn-change-name">Change</button>
+        </div>
       </div>
 
       <!-- Create Room -->

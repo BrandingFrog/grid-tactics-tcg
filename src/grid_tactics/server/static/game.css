@@ -1533,6 +1533,32 @@ body {
   height: 58%;
 }
 
+/* Saved display name greeting in lobby */
+.name-saved-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--card2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 10px 14px;
+}
+
+.name-saved-greeting {
+  font-size: 13px;
+  color: var(--text);
+}
+
+.name-saved-greeting strong {
+  color: var(--cyan);
+  font-weight: 700;
+}
+
+.btn-sm {
+  padding: 4px 12px;
+  font-size: 11px;
+}
+
 /* Playable hand card glow */
 .card-frame-hand.card-playable {
   cursor: pointer;
