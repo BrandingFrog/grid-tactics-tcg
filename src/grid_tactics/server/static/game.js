@@ -615,15 +615,36 @@ function showCardTooltip(numericId) {
     }
     // Match keywords from the effect text and card properties
     var matchedKeywords = [];
+    // From card data
     if (c.unique) matchedKeywords.push('Unique');
     if (c.card_type === 0 && c.attack_range != null && c.attack_range <= 1) matchedKeywords.push('Melee');
     if (c.card_type === 0 && c.attack_range != null && c.attack_range > 1) matchedKeywords.push('Range');
     if (c.summon_sacrifice_tribe) { matchedKeywords.push('Cost'); matchedKeywords.push('Discard'); }
     if (c.transform_options && c.transform_options.length > 0) matchedKeywords.push('Transform');
-    for (var kw in KEYWORD_GLOSSARY) {
-        if (effectDesc.indexOf(kw) !== -1 && matchedKeywords.indexOf(kw) === -1) {
-            matchedKeywords.push(kw);
-        }
+    if (c.react_condition != null) { matchedKeywords.push('Deploy'); }
+    // From effects
+    if (c.effects && c.effects.length > 0) {
+        c.effects.forEach(function(eff) {
+            // Triggers
+            if (eff.trigger === 0 && c.card_type === 0) { if (matchedKeywords.indexOf('Summon') === -1) matchedKeywords.push('Summon'); }
+            if (eff.trigger === 1) { if (matchedKeywords.indexOf('Death') === -1) matchedKeywords.push('Death'); }
+            if (eff.trigger === 2) { if (matchedKeywords.indexOf('Attack') === -1) matchedKeywords.push('Attack'); }
+            if (eff.trigger === 3) { if (matchedKeywords.indexOf('Damaged') === -1) matchedKeywords.push('Damaged'); }
+            if (eff.trigger === 4) { if (matchedKeywords.indexOf('Move') === -1) matchedKeywords.push('Move'); }
+            if (eff.trigger === 5) { if (matchedKeywords.indexOf('Passive') === -1) matchedKeywords.push('Passive'); }
+            // Effect types
+            if (eff.type === 0) { if (matchedKeywords.indexOf('Deal') === -1) matchedKeywords.push('Deal'); }
+            if (eff.type === 1) { if (matchedKeywords.indexOf('Heal') === -1) matchedKeywords.push('Heal'); }
+            if (eff.type === 4) { if (matchedKeywords.indexOf('Negate') === -1) matchedKeywords.push('Negate'); }
+            if (eff.type === 5) { if (matchedKeywords.indexOf('Deploy') === -1) matchedKeywords.push('Deploy'); }
+            if (eff.type === 6) { if (matchedKeywords.indexOf('Rally') === -1) matchedKeywords.push('Rally'); }
+            if (eff.type === 7) { if (matchedKeywords.indexOf('Promote') === -1) matchedKeywords.push('Promote'); }
+            if (eff.type === 8) { if (matchedKeywords.indexOf('Tutor') === -1) matchedKeywords.push('Tutor'); }
+            if (eff.type === 9) { if (matchedKeywords.indexOf('Destroy') === -1) matchedKeywords.push('Destroy'); }
+            if (eff.type === 10) { if (matchedKeywords.indexOf('Burn') === -1) matchedKeywords.push('Burn'); }
+            if (eff.type === 11) { if (matchedKeywords.indexOf('Active') === -1) matchedKeywords.push('Active'); if (matchedKeywords.indexOf('Dark Matter') === -1) matchedKeywords.push('Dark Matter'); }
+            if (eff.type === 12) { if (matchedKeywords.indexOf('Passive') === -1) matchedKeywords.push('Passive'); if (matchedKeywords.indexOf('Heal') === -1) matchedKeywords.push('Heal'); }
+        });
     }
     matchedKeywords.forEach(function(kw) {
         keywordsHtml += '<div class="tooltip-keyword"><span class="tooltip-keyword-name">' + kw + '</span> <span class="tooltip-keyword-desc">— ' + KEYWORD_GLOSSARY[kw] + '</span></div>';
