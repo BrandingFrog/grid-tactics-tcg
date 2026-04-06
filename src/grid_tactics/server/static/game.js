@@ -616,7 +616,7 @@ function showCardTooltip(numericId) {
     var matchedKeywords = [];
     if (c.unique) matchedKeywords.push('Unique');
     if (c.card_type === 0 && c.attack_range != null && c.attack_range <= 1) matchedKeywords.push('Melee');
-    if (c.summon_sacrifice_tribe) matchedKeywords.push('Discard');
+    if (c.summon_sacrifice_tribe) { matchedKeywords.push('Cost'); matchedKeywords.push('Discard'); }
     if (c.transform_options && c.transform_options.length > 0) matchedKeywords.push('Transform');
     for (var kw in KEYWORD_GLOSSARY) {
         if (effectDesc.indexOf(kw) !== -1 && matchedKeywords.indexOf(kw) === -1) {
