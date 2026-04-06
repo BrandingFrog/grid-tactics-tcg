@@ -516,7 +516,7 @@ var KEYWORD_GLOSSARY = {
     'Deploy': 'Place this card onto the battlefield from your hand during a React window.',
     'Destroy': 'Remove a target minion from the board regardless of its HP.',
     'Transform': 'Pay mana to transform this minion into a more powerful form.',
-    'Sacrifice': 'You must sacrifice a minion of the required tribe from your hand to summon this card.',
+    'Discard': 'You must discard a minion of the required tribe from your hand to summon this card.',
     'Heal': 'Restore HP to a target.',
     'Deal': 'Deal damage to a target.',
     'Burn': 'Apply damage over time that triggers each turn.',
@@ -574,7 +574,7 @@ function showCardTooltip(numericId) {
     var matchedKeywords = [];
     if (c.unique) matchedKeywords.push('Unique');
     if (c.card_type === 0 && c.attack_range != null && c.attack_range <= 1) matchedKeywords.push('Melee');
-    if (c.summon_sacrifice_tribe) matchedKeywords.push('Sacrifice');
+    if (c.summon_sacrifice_tribe) matchedKeywords.push('Discard');
     if (c.transform_options && c.transform_options.length > 0) matchedKeywords.push('Transform');
     for (var kw in KEYWORD_GLOSSARY) {
         if (effectDesc.indexOf(kw) !== -1 && matchedKeywords.indexOf(kw) === -1) {
