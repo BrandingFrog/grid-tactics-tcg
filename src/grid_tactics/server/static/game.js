@@ -623,10 +623,13 @@ function showCardTooltip(numericId) {
     if (c.transform_options && c.transform_options.length > 0) matchedKeywords.push('Transform');
     if (c.react_condition != null && c.react_effect && c.react_effect.type === 5) { matchedKeywords.push('Deploy'); }
     // From effects
+    // Check if any effect overrides Summon trigger (e.g. Active abilities use on_play trigger but aren't Summon)
+    var skipSummon = false;
+    if (c.effects) { c.effects.forEach(function(eff) { if (eff.type === 11) skipSummon = true; }); }
     if (c.effects && c.effects.length > 0) {
         c.effects.forEach(function(eff) {
             // Triggers
-            if (eff.trigger === 0 && c.card_type === 0) { if (matchedKeywords.indexOf('Summon') === -1) matchedKeywords.push('Summon'); }
+            if (eff.trigger === 0 && c.card_type === 0 && !skipSummon) { if (matchedKeywords.indexOf('Summon') === -1) matchedKeywords.push('Summon'); }
             if (eff.trigger === 1) { if (matchedKeywords.indexOf('Death') === -1) matchedKeywords.push('Death'); }
             if (eff.trigger === 2) { if (matchedKeywords.indexOf('Attack') === -1) matchedKeywords.push('Attack'); }
             if (eff.trigger === 3) { if (matchedKeywords.indexOf('Damaged') === -1) matchedKeywords.push('Damaged'); }
@@ -635,6 +638,7 @@ function showCardTooltip(numericId) {
             // Effect types
             if (eff.type === 0) { if (matchedKeywords.indexOf('Deal') === -1) matchedKeywords.push('Deal'); }
             if (eff.type === 1) { if (matchedKeywords.indexOf('Heal') === -1) matchedKeywords.push('Heal'); }
+            if (eff.type === 3) { if (matchedKeywords.indexOf('Heal') === -1) matchedKeywords.push('Heal'); } // buff_health
             if (eff.type === 4) { if (matchedKeywords.indexOf('Negate') === -1) matchedKeywords.push('Negate'); }
             if (eff.type === 5) { if (matchedKeywords.indexOf('Deploy') === -1) matchedKeywords.push('Deploy'); }
             if (eff.type === 6) { if (matchedKeywords.indexOf('Rally') === -1) matchedKeywords.push('Rally'); }
