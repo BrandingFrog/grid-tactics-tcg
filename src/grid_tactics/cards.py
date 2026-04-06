@@ -181,9 +181,9 @@ class CardDefinition:
                 f"Card '{self.card_id}': Only minions can be multi-purpose"
             )
 
-        # react_mana_cost range (D-19)
+        # react_mana_cost range (D-19) — 0 allowed for free react abilities
         if self.react_mana_cost is not None and not (
-            MIN_STAT <= self.react_mana_cost <= MAX_STAT
+            0 <= self.react_mana_cost <= MAX_STAT
         ):
             raise ValueError(
                 f"Card '{self.card_id}': react_mana_cost={self.react_mana_cost} "
