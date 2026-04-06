@@ -1,0 +1,21 @@
+{
+    "card_id": "surgefed_sparkbot",
+    "name": "Surgefed Sparkbot",
+    "card_type": "minion",
+    "mana_cost": 5,
+    "attack": 27,
+    "health": 25,
+    "range": 0,
+    "element": "metal",
+    "tribe": "Robot",
+    "effects": [],
+    "react_condition": "opponent_sacrifices",
+    "react_effect": {
+        "type": "deploy_self",
+        "trigger": "on_play",
+        "target": "self_owner",
+        "amount": 10
+    },
+    "react_mana_cost": 0,
+    "react_requires_no_friendly_minions": true
+}

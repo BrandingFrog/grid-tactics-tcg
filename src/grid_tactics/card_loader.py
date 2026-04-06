@@ -97,6 +97,7 @@ class CardLoader:
             transform_options=CardLoader._parse_transform_options(data, card_id),
             deckable=data.get("deckable", True),
             flavour_text=data.get("flavour_text"),
+            react_requires_no_friendly_minions=data.get("react_requires_no_friendly_minions", False),
         )
 
     @staticmethod

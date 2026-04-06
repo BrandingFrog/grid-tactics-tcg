@@ -100,6 +100,9 @@ class CardDefinition:
     # Flavour text for cards with no effects
     flavour_text: Optional[str] = None
 
+    # Extra react condition: requires no friendly minions on board
+    react_requires_no_friendly_minions: bool = False
+
     @property
     def is_multi_purpose(self) -> bool:
         """True if this card can be deployed OR used as react from hand (D-06)."""

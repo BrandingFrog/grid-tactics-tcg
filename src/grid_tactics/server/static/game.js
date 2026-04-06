@@ -731,10 +731,12 @@ function renderDeckBuilderCard(numericId, count) {
             3: 'Enemy plays React', 4: 'Any enemy action',
             5: 'Enemy plays Wood', 6: 'Enemy plays Fire', 7: 'Enemy plays Earth',
             8: 'Enemy plays Water', 9: 'Enemy plays Metal', 10: 'Enemy plays Dark',
-            11: 'Enemy plays Light'
+            11: 'Enemy plays Light', 12: 'Enemy sacrifices'
         };
         var condText = condMap[c.react_condition] || 'Enemy acts';
-        html += '<div class="card-effect-full">React (' + c.react_mana_cost + '): ' + condText + ' — Summon</div>';
+        var extraCond = c.react_requires_no_friendly_minions ? ' + No friendly minions' : '';
+        var costText = c.react_mana_cost > 0 ? ' (' + c.react_mana_cost + ')' : '';
+        html += '<div class="card-effect-full">React' + costText + ': ' + condText + extraCond + ' — Summon</div>';
     }
     // Flavour text for cards with no effects and no transform/react
     if (c.flavour_text && (!c.effects || c.effects.length === 0) && c.react_condition == null && (!c.transform_options || c.transform_options.length === 0)) {

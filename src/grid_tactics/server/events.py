@@ -69,6 +69,7 @@ def _build_card_defs(library):
                     for t in (card.transform_options or ())
                 ] or None,
                 "flavour_text": getattr(card, 'flavour_text', None),
+                "react_requires_no_friendly_minions": getattr(card, 'react_requires_no_friendly_minions', False),
             }
         except (KeyError, IndexError):
             break
