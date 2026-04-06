@@ -16,5 +16,5 @@
         "target": "self_owner",
         "amount": 10
     },
-    "react_mana_cost": 1
+    "react_mana_cost": 2
 }
