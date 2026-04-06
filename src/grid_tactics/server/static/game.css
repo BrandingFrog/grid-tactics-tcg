@@ -2,7 +2,7 @@
    Design system from 13-UI-SPEC.md
    Matches dashboard dark theme (web-dashboard/index.html) */
 
-@import url('https://fonts.googleapis.com/css2?family=Luckiest+Guy&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Luckiest+Guy&family=Source+Sans+3:wght@700&display=swap');
 
 /* ===== CSS Variables (from dashboard) ===== */
 :root {
@@ -1254,7 +1254,7 @@ body {
   left: 4%;
   right: 4%;
   color: white;
-  font-family: 'Garamond', 'EB Garamond', 'Times New Roman', serif;
+  font-family: 'Source Sans Pro', 'Source Sans 3', sans-serif;
   font-size: 16px;
   font-weight: 700;
   -webkit-text-stroke: 2px black;
