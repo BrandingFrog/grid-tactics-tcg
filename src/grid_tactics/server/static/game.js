@@ -680,7 +680,7 @@ function renderDeckBuilderCard(numericId, count) {
     }
     // Summon sacrifice cost
     if (c.summon_sacrifice_tribe) {
-        html += '<div class="card-effect-full">Discard: ' + c.summon_sacrifice_tribe + '</div>';
+        html += '<div class="card-effect-full">Discard ' + c.summon_sacrifice_tribe + ' to Summon</div>';
     }
     // Unique tag
     if (c.unique) {
