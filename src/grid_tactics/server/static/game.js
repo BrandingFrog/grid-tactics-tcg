@@ -617,8 +617,8 @@ function showCardTooltip(numericId) {
     var matchedKeywords = [];
     // From card data
     if (c.unique) matchedKeywords.push('Unique');
-    if (c.card_type === 0 && c.attack_range != null && c.attack_range <= 1) matchedKeywords.push('Melee');
-    if (c.card_type === 0 && c.attack_range != null && c.attack_range > 1) matchedKeywords.push('Range');
+    if (c.card_type === 0 && c.attack_range != null && c.attack_range === 0) matchedKeywords.push('Melee');
+    if (c.card_type === 0 && c.attack_range != null && c.attack_range > 0) matchedKeywords.push('Range');
     if (c.summon_sacrifice_tribe) { matchedKeywords.push('Cost'); matchedKeywords.push('Discard'); }
     if (c.transform_options && c.transform_options.length > 0) matchedKeywords.push('Transform');
     if (c.react_condition != null) { matchedKeywords.push('Deploy'); }
@@ -736,7 +736,7 @@ function renderDeckBuilderCard(numericId, count) {
     // Bottom section: ATK circle | tribe+range | HP circle
     if (c.card_type === 0 && c.attack != null) {
         var tribe = c.tribe || '';
-        var rangeText = (c.attack_range != null) ? (c.attack_range <= 1 ? 'MELEE' : 'RANGE ' + c.attack_range) : '';
+        var rangeText = (c.attack_range != null) ? (c.attack_range === 0 ? 'MELEE' : 'RANGE ' + c.attack_range) : '';
         html += '<div class="card-bottom-section">';
         html += '<div class="card-stat-atk">' + c.attack + '</div>';
         html += '<div class="card-bottom-center">';
