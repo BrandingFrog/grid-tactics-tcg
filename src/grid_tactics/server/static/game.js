@@ -621,7 +621,7 @@ function showCardTooltip(numericId) {
     if (c.card_type === 0 && c.attack_range != null && c.attack_range > 0) matchedKeywords.push('Range');
     if (c.summon_sacrifice_tribe) { matchedKeywords.push('Cost'); matchedKeywords.push('Discard'); }
     if (c.transform_options && c.transform_options.length > 0) matchedKeywords.push('Transform');
-    if (c.react_condition != null) { matchedKeywords.push('Deploy'); }
+    if (c.react_condition != null && c.react_effect && c.react_effect.type === 5) { matchedKeywords.push('Deploy'); }
     // From effects
     if (c.effects && c.effects.length > 0) {
         c.effects.forEach(function(eff) {
