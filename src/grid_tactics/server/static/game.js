@@ -551,8 +551,8 @@ var KEYWORD_GLOSSARY = {
     'Active': 'This ability can be used once per turn instead of attacking.',
     // Mechanic keywords
     'Unique': 'Only one copy of this minion can exist on the board per player at a time.',
-    'Melee': 'Attacks adjacent targets (orthogonal only).',
-    'Range': 'Attacks up to X+1 tiles orthogonally or X tiles diagonally.',
+    'Melee': 'Attacks adjacent orthogonal tiles (1 tile).',
+    'Range': 'Attacks X+1 tiles orthogonally, X tiles diagonally.',
     'Tutor': 'Search your deck for a specific card and add it to your hand.',
     'Promote': 'When this minion dies, specified minion transforms into this card.',
     'Rally': 'When this minion moves, all other friendly copies of it also advance forward.',
