@@ -577,7 +577,7 @@ var KEYWORD_GLOSSARY = {
     'Burn': 'Apply damage over time that triggers each turn.',
     'Dark Matter': 'Buff scales with Dark Matter stacks.',
     'Leap': 'If blocked by an enemy, advance to the next available tile instead.',
-    'Conjure': 'Create a card from outside your deck and add it to your hand.',
+    'Conjure': 'Summon a card from outside your deck directly to the board.',
 };
 
 function showCardTooltip(numericId) {
