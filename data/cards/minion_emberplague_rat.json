@@ -3,7 +3,7 @@
     "name": "Emberplague Rat",
     "card_type": "minion",
     "mana_cost": 2,
-    "attack": 0,
+    "attack": 1,
     "health": 24,
     "range": 0,
     "element": "fire",
