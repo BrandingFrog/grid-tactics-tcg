@@ -28,9 +28,9 @@ Requirements for online PvP dueling milestone. Each maps to roadmap phases.
 
 ### Gameplay Interaction
 
-- [ ] **PLAY-01**: User can submit an action by clicking cards and board positions, with valid targets highlighted
-- [ ] **PLAY-02**: User can see the pending action during react window and choose to play a react card or pass
-- [ ] **PLAY-03**: User sees a game over screen with victory/defeat result and final HP when the game ends
+- [x] **PLAY-01**: User can submit an action by clicking cards and board positions, with valid targets highlighted
+- [x] **PLAY-02**: User can see the pending action during react window and choose to play a react card or pass
+- [x] **PLAY-03**: User sees a game over screen with victory/defeat result and final HP when the game ends
 
 ### Polish & Resilience
 

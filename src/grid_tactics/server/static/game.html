@@ -309,6 +309,25 @@
         </div>
         <button class="btn btn-secondary full-width" id="btn-leave">Leave Game</button>
       </div>
+
+      <!-- Phase 14 PLAY-03: Game Over Overlay (hidden by default) -->
+      <div id="game-over-overlay" class="game-over-overlay" style="display:none;">
+        <div class="game-over-modal">
+          <div class="game-over-result" id="game-over-result">VICTORY</div>
+          <div class="game-over-reason" id="game-over-reason">HP depleted</div>
+          <div class="game-over-hp-rows">
+            <div class="game-over-hp-row">
+              <span class="game-over-hp-label" id="game-over-self-name">You</span>
+              <span class="game-over-hp-value" id="game-over-self-hp">0</span>
+            </div>
+            <div class="game-over-hp-row">
+              <span class="game-over-hp-label" id="game-over-opp-name">Opponent</span>
+              <span class="game-over-hp-value" id="game-over-opp-hp">0</span>
+            </div>
+          </div>
+          <button class="btn btn-primary full-width" id="btn-back-to-lobby">Back to Lobby</button>
+        </div>
+      </div>
     </div>
   </div>
 

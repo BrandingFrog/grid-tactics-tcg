@@ -1231,6 +1231,7 @@ document.addEventListener('DOMContentLoaded', function() {
     setupDeckFilters();
     setupNavHandlers();
     setupActivityTabs();
+    setupGameHandlers();
 });
 
 // =============================================
@@ -1260,11 +1261,129 @@ function onStateUpdate(data) {
 }
 
 function onGameOver(data) {
-    // Phase 14 scope -- for now just log and keep showing final state
-    console.log('Game over:', data);
     gameState = data.final_state;
     legalActions = [];
     renderGame();
+    showGameOver(data);
+}
+
+// Phase 14 PLAY-03: game over modal
+
+function deriveGameOverReason(finalState) {
+    if (finalState == null || finalState.winner == null) {
+        return 'Draw';
+    }
+    var winner = finalState.winner;
+    var loser = 1 - winner;
+    var loserHp = (finalState.players && finalState.players[loser]) ? finalState.players[loser].hp : null;
+    if (loserHp != null && loserHp <= 0) {
+        return 'HP depleted';
+    }
+    return 'Sacrifice damage';
+}
+
+function showGameOver(data) {
+    var overlay = document.getElementById('game-over-overlay');
+    if (!overlay) return;
+
+    var finalState = data.final_state;
+    var winner = (data.winner != null) ? data.winner : (finalState ? finalState.winner : null);
+    var iWon = (winner != null) && (winner === myPlayerIdx);
+    var isDraw = (winner == null);
+
+    var resultEl = document.getElementById('game-over-result');
+    if (resultEl) {
+        if (isDraw) {
+            resultEl.textContent = 'DRAW';
+            resultEl.className = 'game-over-result draw';
+        } else if (iWon) {
+            resultEl.textContent = 'VICTORY';
+            resultEl.className = 'game-over-result victory';
+        } else {
+            resultEl.textContent = 'DEFEAT';
+            resultEl.className = 'game-over-result defeat';
+        }
+    }
+
+    var reasonEl = document.getElementById('game-over-reason');
+    if (reasonEl) {
+        reasonEl.textContent = deriveGameOverReason(finalState);
+    }
+
+    if (finalState && finalState.players && myPlayerIdx != null) {
+        var selfPlayer = finalState.players[myPlayerIdx];
+        var oppPlayer  = finalState.players[1 - myPlayerIdx];
+        var selfNameEl = document.getElementById('game-over-self-name');
+        var selfHpEl   = document.getElementById('game-over-self-hp');
+        var oppNameEl  = document.getElementById('game-over-opp-name');
+        var oppHpEl    = document.getElementById('game-over-opp-hp');
+        if (selfNameEl) selfNameEl.textContent = (myName || 'You');
+        if (selfHpEl)   selfHpEl.textContent   = selfPlayer ? selfPlayer.hp : '?';
+        if (oppNameEl)  oppNameEl.textContent  = (opponentName || 'Opponent');
+        if (oppHpEl)    oppHpEl.textContent    = oppPlayer ? oppPlayer.hp : '?';
+    }
+
+    overlay.style.display = 'flex';
+}
+
+function hideGameOver() {
+    var overlay = document.getElementById('game-over-overlay');
+    if (overlay) overlay.style.display = 'none';
+}
+
+function resetGameClientState() {
+    gameState = null;
+    legalActions = [];
+    myPlayerIdx = null;
+    opponentName = '';
+    roomCode = null;
+    sessionToken = null;
+    selectedHandIdx = null;
+    selectedMinionId = null;
+    interactionMode = null;
+
+    var roomPanel = document.getElementById('room-panel');
+    if (roomPanel) roomPanel.style.display = 'none';
+    var roomCodeDisplay = document.getElementById('room-code-display');
+    if (roomCodeDisplay) roomCodeDisplay.textContent = '';
+    var playerList = document.getElementById('player-list');
+    if (playerList) playerList.innerHTML = '';
+    var lobbyStatus = document.getElementById('lobby-status');
+    if (lobbyStatus) {
+        lobbyStatus.textContent = '';
+        lobbyStatus.className = 'lobby-status';
+    }
+    var gameRoomCode = document.getElementById('game-room-code');
+    if (gameRoomCode) gameRoomCode.textContent = '';
+
+    var reactBanner = document.getElementById('react-banner');
+    if (reactBanner) reactBanner.remove();
+    var actionBar = document.getElementById('action-bar');
+    if (actionBar) actionBar.remove();
+
+    // Reset ready button
+    var btnReady = document.getElementById('btn-ready');
+    if (btnReady) {
+        btnReady.disabled = false;
+        btnReady.textContent = 'Ready Up';
+    }
+}
+
+function returnToLobby() {
+    hideGameOver();
+    resetGameClientState();
+    showScreen('screen-lobby');
+}
+
+function setupGameHandlers() {
+    var btnLeave = document.getElementById('btn-leave');
+    if (btnLeave) {
+        btnLeave.addEventListener('click', returnToLobby);
+    }
+    var btnBackToLobby = document.getElementById('btn-back-to-lobby');
+    if (btnBackToLobby) {
+        btnBackToLobby.addEventListener('click', returnToLobby);
+    }
 }
 
 // =============================================
@@ -1280,6 +1399,7 @@ function renderGame() {
     renderSelfInfo();
     renderHand();
     renderActionBar();
+    renderReactBanner();
 }
 
 // =============================================
@@ -1302,6 +1422,113 @@ function submitAction(actionData) {
 // Get legal actions filtered by type
 function getLegalByType(actionType) {
     return legalActions.filter(function(a) { return a.action_type === actionType; });
+}
+
+// Phase 14 PLAY-02: react window helpers
+
+// True when the server has put us in a react window
+function isReactWindow() {
+    return gameState
+        && gameState.phase === 1
+        && gameState.react_player_idx === myPlayerIdx
+        && legalActions
+        && legalActions.length > 0;
+}
+
+// Hand indices that are legal as PLAY_REACT (action_type 5)
+function getLegalReactCardIndices() {
+    var indices = {};
+    legalActions.forEach(function(a) {
+        if (a.action_type === 5 && a.card_index != null) {
+            indices[a.card_index] = true;
+        }
+    });
+    return indices;
+}
+
+// Describe the pending opponent action for the react banner
+function describePendingAction(pa) {
+    if (!pa) {
+        if (gameState && gameState.react_stack && gameState.react_stack.length > 0) {
+            var top = gameState.react_stack[gameState.react_stack.length - 1];
+            var topName = (top.card_numeric_id != null && cardDefs[top.card_numeric_id])
+                ? cardDefs[top.card_numeric_id].name : 'a react card';
+            return 'Opponent is responding with ' + topName;
+        }
+        return 'Opponent action pending';
+    }
+    var t = pa.action_type;
+    if (t === 0) {
+        if (pa.position) {
+            return 'Opponent is playing a card at row ' + (pa.position[0] + 1) + ' col ' + (pa.position[1] + 1);
+        }
+        return 'Opponent is casting a card';
+    }
+    if (t === 1) {
+        return 'Opponent is moving a minion';
+    }
+    if (t === 2) {
+        if (pa.target_id != null && gameState && gameState.minions) {
+            var tgt = null;
+            gameState.minions.forEach(function(m) { if (m.minion_id === pa.target_id) tgt = m; });
+            if (tgt) {
+                var tgtName = (cardDefs[tgt.card_numeric_id]) ? cardDefs[tgt.card_numeric_id].name : 'minion';
+                if (tgt.owner === myPlayerIdx) {
+                    return 'Opponent is attacking your ' + tgtName;
+                }
+                return 'Opponent is attacking their own ' + tgtName;
+            }
+        }
+        return 'Opponent is attacking';
+    }
+    if (t === 5) {
+        if (gameState && gameState.react_stack && gameState.react_stack.length > 0) {
+            var entry = gameState.react_stack[gameState.react_stack.length - 1];
+            var rname = (entry.card_numeric_id != null && cardDefs[entry.card_numeric_id])
+                ? cardDefs[entry.card_numeric_id].name : 'a react card';
+            return 'Opponent is responding with ' + rname;
+        }
+        return 'Opponent is responding with a react card';
+    }
+    if (t === 6) {
+        if (pa.minion_id != null && gameState && gameState.minions) {
+            var src = null;
+            gameState.minions.forEach(function(m) { if (m.minion_id === pa.minion_id) src = m; });
+            if (src) {
+                var sName = (cardDefs[src.card_numeric_id]) ? cardDefs[src.card_numeric_id].name : 'minion';
+                return 'Opponent is sacrificing their ' + sName + ' for damage';
+            }
+        }
+        return 'Opponent is sacrificing for damage';
+    }
+    return 'Opponent action pending';
+}
+
+// Render the react banner above the action bar
+function renderReactBanner() {
+    var existing = document.getElementById('react-banner');
+    if (existing) existing.remove();
+    if (!isReactWindow()) return;
+
+    var banner = document.createElement('div');
+    banner.id = 'react-banner';
+    banner.className = 'react-banner';
+    var label = document.createElement('span');
+    label.className = 'react-banner-label';
+    label.textContent = 'REACT WINDOW';
+    var desc = document.createElement('span');
+    desc.className = 'react-banner-desc';
+    desc.textContent = describePendingAction(gameState.pending_action);
+    banner.appendChild(label);
+    banner.appendChild(desc);
+
+    var actionBar = document.getElementById('action-bar');
+    var handEl = document.getElementById('hand-container');
+    if (actionBar && actionBar.parentNode) {
+        actionBar.parentNode.insertBefore(banner, actionBar);
+    } else if (handEl && handEl.parentNode) {
+        handEl.parentNode.insertBefore(banner, handEl.nextSibling);
+    }
 }
 
 // Check if a specific hand card can be played to a specific position
@@ -1368,6 +1595,19 @@ function canPlayMagic(handIdx) {
 
 // Handle clicking a hand card
 function onHandCardClick(handIdx) {
+    // Phase 14 PLAY-02: react window has its own click semantics
+    if (isReactWindow()) {
+        var reactAction = null;
+        legalActions.forEach(function(a) {
+            if (a.action_type === 5 && a.card_index === handIdx) reactAction = a;
+        });
+        if (reactAction) {
+            var payload = { action_type: 5, card_index: handIdx };
+            if (reactAction.target_pos) payload.target_pos = reactAction.target_pos;
+            submitAction(payload);
+        }
+        return;
+    }
     var isMyTurn = legalActions && legalActions.length > 0;
     if (!isMyTurn) return;
 
@@ -1397,6 +1637,7 @@ function onHandCardClick(handIdx) {
 
 // Handle clicking a board cell
 function onBoardCellClick(row, col) {
+    if (isReactWindow()) return;  // board clicks are inert during react window
     var isMyTurn = legalActions && legalActions.length > 0;
     if (!isMyTurn) return;
 
@@ -1427,6 +1668,7 @@ function onBoardCellClick(row, col) {
 
 // Handle clicking a board minion
 function onBoardMinionClick(minion) {
+    if (isReactWindow()) return;  // board clicks are inert during react window
     var isMyTurn = legalActions && legalActions.length > 0;
     if (!isMyTurn) return;
 
@@ -1519,9 +1761,22 @@ function highlightBoard() {
 
 // Highlight playable hand cards
 function updateHandHighlights() {
+    if (isReactWindow()) {
+        var reactIdxMap = getLegalReactCardIndices();
+        document.querySelectorAll('.card-frame-hand').forEach(function(card) {
+            var idx = parseInt(card.dataset.handIdx, 10);
+            card.classList.remove('card-playable', 'card-selected-hand');
+            if (reactIdxMap[idx]) {
+                card.classList.add('card-react-playable');
+            } else {
+                card.classList.remove('card-react-playable');
+            }
+        });
+        return;
+    }
     document.querySelectorAll('.card-frame-hand').forEach(function(card) {
         var idx = parseInt(card.dataset.handIdx, 10);
-        card.classList.remove('card-playable', 'card-selected-hand');
+        card.classList.remove('card-playable', 'card-selected-hand', 'card-react-playable');
         if (selectedHandIdx === idx && interactionMode === 'play') {
             card.classList.add('card-selected-hand');
         } else if (canPlayCard(idx)) {

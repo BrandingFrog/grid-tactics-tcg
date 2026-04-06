@@ -168,7 +168,7 @@ Plans:
 - [x] **Phase 11: Server Foundation & Room System** - Flask-SocketIO server with room code create/join and initial game state emission (completed 2026-04-05)
 - [x] **Phase 12: State Serialization & Game Flow** - Hidden-info view filtering, action validation, legal action emission, complete game playable via WebSocket client (completed 2026-04-05)
 - [x] **Phase 13: Board & Hand UI** - 5x5 CSS Grid board, hand display, mana/HP bars, and turn phase indicator in the browser (completed 2026-04-05)
-- [ ] **Phase 14: Gameplay Interaction** - Action submission via click targeting, react window UI, and game over screen
+- [x] **Phase 14: Gameplay Interaction** - Action submission via click targeting, react window UI, and game over screen (completed 2026-04-06)
 - [ ] **Phase 15: Resilience & Polish** - Reconnection handling, scrollable game log, and rematch flow
 
 ## Phase Details
@@ -263,5 +263,5 @@ Phases execute in numeric order: 11 -> 12 -> 13 -> 14 -> 15
 | 11. Server Foundation & Room System | v1.1 | 2/2 | Complete    | 2026-04-05 |
 | 12. State Serialization & Game Flow | v1.1 | 2/2 | Complete    | 2026-04-05 |
 | 13. Board & Hand UI | v1.1 | 3/3 | Complete   | 2026-04-05 |
-| 14. Gameplay Interaction | v1.1 | 0/TBD | Not started | - |
+| 14. Gameplay Interaction | v1.1 | 2/2 | Complete | 2026-04-06 |
 | 15. Resilience & Polish | v1.1 | 0/TBD | Not started | - |
