@@ -136,6 +136,7 @@ function initSocket() {
     socket.on('error', onError);
     socket.on('card_defs', onCardDefs);
     socket.on('chat_message', onChatMessage);
+    socket.on('rematch_waiting', onRematchWaiting);
 }
 
 // =============================================
@@ -1245,6 +1246,9 @@ function onGameStart(data) {
     myPlayerIdx = data.your_player_idx;
     legalActions = data.legal_actions;
     opponentName = data.opponent_name;
+    // If we're coming from a rematch, hide the game over modal
+    hideGameOver();
+    resetRematchUI();
     showScreen('screen-game');
     // Set room code in game screen
     var roomCodeEl = document.getElementById('game-room-code');
@@ -1285,6 +1289,7 @@ function deriveGameOverReason(finalState) {
 function showGameOver(data) {
     var overlay = document.getElementById('game-over-overlay');
     if (!overlay) return;
+    resetRematchUI();
 
     var finalState = data.final_state;
     var winner = (data.winner != null) ? data.winner : (finalState ? finalState.winner : null);
@@ -1383,6 +1388,49 @@ function setupGameHandlers() {
     var btnBackToLobby = document.getElementById('btn-back-to-lobby');
     if (btnBackToLobby) {
         btnBackToLobby.addEventListener('click', returnToLobby);
+    }
+    var btnRematch = document.getElementById('btn-rematch');
+    if (btnRematch) {
+        btnRematch.addEventListener('click', requestRematch);
+    }
+}
+
+// POLISH-03 Rematch
+function requestRematch() {
+    if (!socket) return;
+    socket.emit('request_rematch', {});
+    var btnRematch = document.getElementById('btn-rematch');
+    if (btnRematch) {
+        btnRematch.disabled = true;
+        btnRematch.textContent = 'Waiting...';
+    }
+    var statusEl = document.getElementById('game-over-status');
+    if (statusEl) {
+        statusEl.textContent = 'Waiting for opponent...';
+        statusEl.className = 'game-over-status waiting';
+    }
+}
+
+function onRematchWaiting(data) {
+    var statusEl = document.getElementById('game-over-status');
+    if (!statusEl) return;
+    if (data.requester === 'opponent') {
+        var name = data.name || 'Opponent';
+        statusEl.textContent = name + ' wants a rematch — click Rematch to accept';
+        statusEl.className = 'game-over-status incoming';
+    }
+}
+
+function resetRematchUI() {
+    var btnRematch = document.getElementById('btn-rematch');
+    if (btnRematch) {
+        btnRematch.disabled = false;
+        btnRematch.textContent = 'Rematch';
+    }
+    var statusEl = document.getElementById('game-over-status');
+    if (statusEl) {
+        statusEl.textContent = '';
+        statusEl.className = 'game-over-status';
     }
 }
 

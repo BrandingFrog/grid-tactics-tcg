@@ -17,6 +17,7 @@ class GameSession:
         player_tokens: tuple[str, str],   # (p0_token, p1_token)
         player_names: tuple[str, str],     # (p0_name, p1_name)
         player_sids: list[str | None],     # [p0_sid, p1_sid] -- mutable for reconnect
+        player_decks: tuple[tuple[int, ...] | None, tuple[int, ...] | None] = (None, None),
     ):
         self.state = state
         self.rng = rng
@@ -24,6 +25,8 @@ class GameSession:
         self.player_tokens = player_tokens
         self.player_names = player_names
         self.player_sids = player_sids
+        self.player_decks = player_decks  # original decks for rematch
+        self.rematch_requested = [False, False]  # per-player rematch flag
         self.lock = threading.Lock()
 
     def get_player_idx(self, token: str) -> int | None:

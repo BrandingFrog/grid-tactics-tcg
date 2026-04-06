@@ -225,6 +225,62 @@ def register_events(room_manager: RoomManager) -> None:
         defs = _build_card_defs(_room_manager._library)
         emit("card_defs", {"card_defs": defs})
 
+    @socketio.on("request_rematch")
+    def handle_request_rematch(data=None):
+        """Handle a player requesting a rematch after game over."""
+        token = _room_manager.get_token_by_sid(request.sid)
+        if token is None:
+            emit("error", {"msg": "Not in a game"})
+            return
+        room_code = _room_manager.get_room_code_by_token(token)
+        if room_code is None:
+            emit("error", {"msg": "Room not found"})
+            return
+
+        status, old_session, new_session = _room_manager.request_rematch(token)
+
+        if status == 'no_game':
+            emit("error", {"msg": "No active game to rematch"})
+            return
+
+        if status == 'waiting':
+            # Tell the requester they're waiting
+            emit("rematch_waiting", {"requester": "self"})
+            # Tell the opponent that the other player wants a rematch
+            requester_idx = old_session.get_player_idx(token)
+            opponent_idx = 1 - requester_idx
+            opponent_sid = old_session.player_sids[opponent_idx]
+            if opponent_sid:
+                emit(
+                    "rematch_waiting",
+                    {"requester": "opponent", "name": old_session.player_names[requester_idx]},
+                    to=opponent_sid,
+                )
+            return
+
+        # status == 'started' -- emit game_start to both players with the fresh state
+        state_dict = new_session.state.to_dict()
+        card_defs = _build_card_defs(new_session.library)
+        initial_actions = legal_actions(new_session.state, new_session.library)
+        serialized_actions = [serialize_action(a) for a in initial_actions]
+        for idx in (0, 1):
+            opponent_idx = 1 - idx
+            filtered = filter_state_for_player(state_dict, idx)
+            sid = new_session.player_sids[idx]
+            if sid is None:
+                continue
+            emit(
+                "game_start",
+                {
+                    "your_player_idx": idx,
+                    "state": filtered,
+                    "legal_actions": serialized_actions if idx == new_session.state.active_player_idx else [],
+                    "opponent_name": new_session.player_names[opponent_idx],
+                    "card_defs": card_defs,
+                },
+                to=sid,
+            )
+
     @socketio.on("chat_message")
     def handle_chat_message(data):
         """Broadcast a chat message to both players in the room (works in lobby and active game)."""

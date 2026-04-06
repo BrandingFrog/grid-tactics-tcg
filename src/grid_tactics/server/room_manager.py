@@ -144,11 +144,82 @@ class RoomManager:
             player_tokens=(p0_slot.token, p1_slot.token),
             player_names=(p0_slot.name, p1_slot.name),
             player_sids=[p0_slot.sid, p1_slot.sid],
+            player_decks=(deck_p0, deck_p1),
         )
 
         with self._lock:
             self._games[room_code] = session
         return session
+
+    def request_rematch(self, token: str) -> tuple[str, GameSession | None, GameSession | None]:
+        """Mark player as wanting a rematch. Returns (status, old_session, new_session).
+
+        status:
+          - 'waiting'  : recorded the request, waiting for opponent. new_session=None
+          - 'started'  : both players requested, new game started. new_session is the fresh GameSession
+          - 'no_game'  : token not in any active game. Both sessions=None
+
+        Re-uses the same room code so clients don't need to rejoin.
+        """
+        with self._lock:
+            room_code = self._token_to_room.get(token)
+            if room_code is None:
+                return ('no_game', None, None)
+            session = self._games.get(room_code)
+            if session is None:
+                return ('no_game', None, None)
+
+        with session.lock:
+            player_idx = session.get_player_idx(token)
+            if player_idx is None:
+                return ('no_game', None, None)
+            session.rematch_requested[player_idx] = True
+            both = all(session.rematch_requested)
+            if not both:
+                return ('waiting', session, None)
+
+        # Both requested -- create a fresh game with the same players
+        seed = secrets.randbelow(2**31)
+        coin = secrets.randbelow(2)  # re-flip P1/P2 assignment
+
+        # Original session p0 / p1 info
+        p0_token, p1_token = session.player_tokens
+        p0_name, p1_name = session.player_names
+        p0_sid, p1_sid = session.player_sids
+        p0_deck, p1_deck = session.player_decks
+
+        # Re-flip: with 50% chance, swap who is P1 vs P2
+        if coin == 0:
+            new_tokens = (p0_token, p1_token)
+            new_names  = (p0_name, p1_name)
+            new_sids   = [p0_sid, p1_sid]
+            new_decks  = (p0_deck, p1_deck)
+        else:
+            new_tokens = (p1_token, p0_token)
+            new_names  = (p1_name, p0_name)
+            new_sids   = [p1_sid, p0_sid]
+            new_decks  = (p1_deck, p0_deck)
+
+        preset = get_preset_deck(self._library)
+        d0 = new_decks[0] if new_decks[0] else preset
+        d1 = new_decks[1] if new_decks[1] else preset
+
+        state, rng = GameState.new_game(seed, d0, d1)
+
+        new_session = GameSession(
+            state=state,
+            rng=rng,
+            library=self._library,
+            player_tokens=new_tokens,
+            player_names=new_names,
+            player_sids=new_sids,
+            player_decks=new_decks,
+        )
+
+        with self._lock:
+            self._games[room_code] = new_session
+
+        return ('started', session, new_session)
 
     def get_token_by_sid(self, sid: str) -> str | None:
         """Look up session token by socket ID."""
