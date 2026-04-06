@@ -1410,7 +1410,7 @@ body {
 /* Card Flavour Text — same as effects but italic */
 .card-flavour {
   text-align: center;
-  color: rgba(255, 255, 255, 0.5);
+  color: rgba(255, 255, 255, 0.85);
   font-family: 'Inter', system-ui, sans-serif;
   font-size: 10px;
   font-style: italic;
