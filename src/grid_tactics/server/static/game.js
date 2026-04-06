@@ -398,12 +398,14 @@ function renderDeckBuilder() {
 
 function fitCardNames() {
     document.querySelectorAll('.card-name-overlay').forEach(function(el) {
+        el.style.transform = 'none';
         el.style.fontSize = '16px';
-        var maxWidth = el.parentElement ? el.parentElement.offsetWidth * 0.92 : 150;
-        var size = 16;
-        while (el.scrollWidth > maxWidth && size > 8) {
-            size--;
-            el.style.fontSize = size + 'px';
+        var containerWidth = el.offsetWidth;
+        var textWidth = el.scrollWidth;
+        if (textWidth > containerWidth && containerWidth > 0) {
+            var scale = containerWidth / textWidth;
+            if (scale < 0.5) scale = 0.5;
+            el.style.transform = 'scaleX(' + scale + ')';
         }
     });
 }
