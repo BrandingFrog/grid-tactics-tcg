@@ -1017,6 +1017,7 @@ body {
   aspect-ratio: 1;
   border-radius: 50%;
   border: 2px solid rgb(30, 25, 20);
+  z-index: 4;
 }
 
 .attr-text, .attr-text-sm {
@@ -1084,7 +1085,7 @@ body {
   background: rgb(128, 128, 128);
 }
 
-/* Mana Badge (top-left, blue circle — mirrors ATK/HP sizing) */
+/* Mana Badge (top-left, mirrors ATK bottom-left) */
 .card-mana {
   position: absolute;
   top: 2%;

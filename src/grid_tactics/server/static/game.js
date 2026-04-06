@@ -738,12 +738,13 @@ function renderDeckBuilderCard(numericId, count) {
         ? ELEMENT_MAP[c.element] : NEUTRAL_ELEMENT;
 
     var html = '<div class="card-frame card-frame-full ' + typeClass + '">';
-    // Mana badge
+    // Mana badge (top-left, direct child of card-frame)
     html += '<div class="card-mana">' + c.mana_cost + '</div>';
-    // Art area with attribute circle and name overlay (YGO CardPreview style)
+    // Element circle (top-right, direct child of card-frame)
+    html += '<div class="attr-circle ' + elem.css + '"><span class="attr-text">' + elem.name + '</span></div>';
+    // Art area with name overlay (YGO CardPreview style)
     var artStyle = c.card_id ? 'background-image:url(/static/art/' + c.card_id + '.png)' : '';
     html += '<div class="card-art card-art-full" style="' + artStyle + '">';
-    html += '<div class="attr-circle ' + elem.css + '"><span class="attr-text">' + elem.name + '</span></div>';
     html += '<div class="card-art-overlay"></div>';
     html += '<div class="card-name-overlay">' + c.name + '</div>';
     html += '</div>';
