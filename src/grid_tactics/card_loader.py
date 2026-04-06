@@ -100,6 +100,7 @@ class CardLoader:
             react_requires_no_friendly_minions=data.get("react_requires_no_friendly_minions", False),
             summon_token_target=data.get("summon_token_target"),
             summon_token_cost=data.get("summon_token_cost"),
+            conjure_buff=data.get("conjure_buff"),
         )
 
     @staticmethod

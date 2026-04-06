@@ -106,6 +106,7 @@ class CardDefinition:
     # Conjure mechanic
     summon_token_target: Optional[str] = None  # card_id to conjure
     summon_token_cost: Optional[int] = None    # mana cost for the conjure ability
+    conjure_buff: Optional[str] = None         # buff type applied on conjure (e.g. 'dark_matter')
 
     @property
     def is_multi_purpose(self) -> bool:
