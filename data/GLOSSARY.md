@@ -21,7 +21,7 @@ Update this file and the matching `KEYWORD_GLOSSARY` in `src/grid_tactics/server
 |---------|-------------|
 | Unique | Only one copy of this minion can exist on the board per player at a time. |
 | Melee | Attacks adjacent targets (orthogonal only). |
-| Range | Attacks targets up to X tiles away. |
+| Range X | Attacks up to X+1 tiles orthogonally or X tiles diagonally. |
 | Tutor | Search your deck for a specific card and add it to your hand. |
 | Promote | When this minion dies, specified minion transforms into this card. |
 | Rally | When this minion moves, all other friendly copies of it also advance forward. |
