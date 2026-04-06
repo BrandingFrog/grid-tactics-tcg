@@ -103,6 +103,10 @@ class CardDefinition:
     # Extra react condition: requires no friendly minions on board
     react_requires_no_friendly_minions: bool = False
 
+    # Conjure mechanic
+    summon_token_target: Optional[str] = None  # card_id to conjure
+    summon_token_cost: Optional[int] = None    # mana cost for the conjure ability
+
     @property
     def is_multi_purpose(self) -> bool:
         """True if this card can be deployed OR used as react from hand (D-06)."""
