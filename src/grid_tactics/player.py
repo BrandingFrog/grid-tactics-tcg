@@ -54,14 +54,14 @@ class Player:
     def regenerate_mana(self) -> Player:
         """Regenerate mana per turn.
 
-        Interpretation B (simple +1 to current, capped):
-          new_current = min(current + MANA_REGEN_PER_TURN, MAX_MANA_CAP)
-
-        Banking (D-08): unspent mana persists as part of current_mana.
+        Both current and max grow by +1 per turn (capped at MAX_MANA_CAP).
+        Max grows so the display "X/Y" reflects the player's max capacity.
+        Current grows so unspent mana banks (D-08).
         Cap (D-07): never exceeds MAX_MANA_CAP.
         """
+        new_max = min(self.max_mana + MANA_REGEN_PER_TURN, MAX_MANA_CAP)
         new_current = min(self.current_mana + MANA_REGEN_PER_TURN, MAX_MANA_CAP)
-        return replace(self, current_mana=new_current)
+        return replace(self, current_mana=new_current, max_mana=new_max)
 
     def spend_mana(self, cost: int) -> Player:
         """Spend mana. Raises ValueError if insufficient or negative."""

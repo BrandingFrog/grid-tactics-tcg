@@ -59,7 +59,8 @@ let myName = '';             // display name entered in lobby
 // Game interaction state
 let selectedHandIdx = null;  // index of selected hand card (for PLAY_CARD)
 let selectedMinionId = null; // id of selected board minion (for MOVE/ATTACK)
-let interactionMode = null;  // 'play', 'move', 'attack', or null
+let selectedDeployPos = null; // [row, col] when picking target for a minion with on-play effect
+let interactionMode = null;  // 'play', 'move', 'attack', 'move_attack', 'target', or null
 
 // Deck builder state
 let currentDeck = {};        // { numericId: count }
@@ -101,11 +102,33 @@ window.showScreen = showScreen;
 function setupNavHandlers() {
     document.querySelectorAll('.nav-btn').forEach(function(btn) {
         btn.addEventListener('click', function() {
+            // Block navigation while in an active game
+            if (isInActiveGame()) {
+                return;
+            }
             var screenName = btn.dataset.screen;
             if (screenName) {
                 showScreen('screen-' + screenName);
             }
         });
+    });
+}
+
+function isInActiveGame() {
+    return gameState && !gameState.is_game_over
+        && document.getElementById('screen-game')?.classList.contains('active');
+}
+
+function updateNavLockState() {
+    var inGame = isInActiveGame();
+    document.querySelectorAll('.nav-btn').forEach(function(btn) {
+        if (inGame) {
+            btn.classList.add('nav-btn-locked');
+            btn.title = 'Locked while in game';
+        } else {
+            btn.classList.remove('nav-btn-locked');
+            btn.title = '';
+        }
     });
 }
 
@@ -1378,6 +1401,7 @@ function returnToLobby() {
     hideGameOver();
     resetGameClientState();
     showScreen('screen-lobby');
+    updateNavLockState();
 }
 
 function setupGameHandlers() {
@@ -1448,6 +1472,7 @@ function renderGame() {
     renderHand();
     renderActionBar();
     renderReactBanner();
+    updateNavLockState();
 }
 
 // =============================================
@@ -1457,6 +1482,7 @@ function renderGame() {
 function clearSelection() {
     selectedHandIdx = null;
     selectedMinionId = null;
+    selectedDeployPos = null;
     interactionMode = null;
 }
 
@@ -1570,12 +1596,10 @@ function renderReactBanner() {
     banner.appendChild(label);
     banner.appendChild(desc);
 
-    var actionBar = document.getElementById('action-bar');
+    // Insert banner above the hand container
     var handEl = document.getElementById('hand-container');
-    if (actionBar && actionBar.parentNode) {
-        actionBar.parentNode.insertBefore(banner, actionBar);
-    } else if (handEl && handEl.parentNode) {
-        handEl.parentNode.insertBefore(banner, handEl.nextSibling);
+    if (handEl && handEl.parentNode) {
+        handEl.parentNode.insertBefore(banner, handEl);
     }
 }
 
@@ -1587,15 +1611,63 @@ function canPlayCardAt(handIdx, row, col) {
     });
 }
 
-// Get valid deploy positions for a hand card
+// Get unique deploy positions for a hand card (deduped)
 function getDeployPositions(handIdx) {
+    var seen = {};
     var positions = [];
     legalActions.forEach(function(a) {
         if (a.action_type === 0 && a.card_index === handIdx && a.position) {
-            positions.push(a.position);
+            var key = a.position[0] + ',' + a.position[1];
+            if (!seen[key]) {
+                seen[key] = true;
+                positions.push(a.position);
+            }
         }
     });
     return positions;
+}
+
+// Get unique target positions for a hand card. If deployPos is provided,
+// only return targets that go with that deploy position (for minions with on-play targeting).
+function getTargetPositions(handIdx, deployPos) {
+    var seen = {};
+    var positions = [];
+    legalActions.forEach(function(a) {
+        if (a.action_type !== 0 || a.card_index !== handIdx) return;
+        if (!a.target_pos) return;
+        if (deployPos != null) {
+            if (!a.position) return;
+            if (a.position[0] !== deployPos[0] || a.position[1] !== deployPos[1]) return;
+        }
+        var key = a.target_pos[0] + ',' + a.target_pos[1];
+        if (!seen[key]) {
+            seen[key] = true;
+            positions.push(a.target_pos);
+        }
+    });
+    return positions;
+}
+
+// Find a legal action for this card matching position+target_pos
+function findCardAction(handIdx, deployPos, targetPos) {
+    for (var i = 0; i < legalActions.length; i++) {
+        var a = legalActions[i];
+        if (a.action_type !== 0 || a.card_index !== handIdx) continue;
+        if (deployPos != null) {
+            if (!a.position) continue;
+            if (a.position[0] !== deployPos[0] || a.position[1] !== deployPos[1]) continue;
+        } else {
+            if (a.position) continue;
+        }
+        if (targetPos != null) {
+            if (!a.target_pos) continue;
+            if (a.target_pos[0] !== targetPos[0] || a.target_pos[1] !== targetPos[1]) continue;
+        } else {
+            if (a.target_pos) continue;
+        }
+        return a;
+    }
+    return null;
 }
 
 // Get valid move positions for a minion
@@ -1634,13 +1706,6 @@ function canPlayCard(handIdx) {
     });
 }
 
-// Can this hand card be played as a magic spell (no position needed)?
-function canPlayMagic(handIdx) {
-    return legalActions.some(function(a) {
-        return a.action_type === 0 && a.card_index === handIdx && !a.position;
-    });
-}
-
 // Handle clicking a hand card
 function onHandCardClick(handIdx) {
     // Phase 14 PLAY-02: react window has its own click semantics
@@ -1660,23 +1725,39 @@ function onHandCardClick(handIdx) {
     if (!isMyTurn) return;
 
     // If already selected, deselect
-    if (selectedHandIdx === handIdx && interactionMode === 'play') {
+    if (selectedHandIdx === handIdx && (interactionMode === 'play' || interactionMode === 'target')) {
         clearSelection();
         highlightBoard();
         updateHandHighlights();
         return;
     }
 
-    // Check if this card can be played as magic (no position)
-    if (canPlayMagic(handIdx)) {
+    var deployPositions = getDeployPositions(handIdx);
+    var targetOnly = getTargetPositions(handIdx, null); // for magics with no deploy
+
+    // Untargeted magic: find action with no position and no target
+    var untargeted = findCardAction(handIdx, null, null);
+    if (deployPositions.length === 0 && targetOnly.length === 0 && untargeted) {
         submitAction({ action_type: 0, card_index: handIdx });
         return;
     }
 
-    // Check if card has deploy positions
-    if (canPlayCard(handIdx)) {
+    // Magic with target selection: no deploy positions, only target_pos
+    if (deployPositions.length === 0 && targetOnly.length > 0) {
         selectedHandIdx = handIdx;
         selectedMinionId = null;
+        selectedDeployPos = null;
+        interactionMode = 'target';
+        highlightBoard();
+        updateHandHighlights();
+        return;
+    }
+
+    // Minion deployment (with or without on-play targets)
+    if (deployPositions.length > 0) {
+        selectedHandIdx = handIdx;
+        selectedMinionId = null;
+        selectedDeployPos = null;
         interactionMode = 'play';
         highlightBoard();
         updateHandHighlights();
@@ -1689,10 +1770,33 @@ function onBoardCellClick(row, col) {
     var isMyTurn = legalActions && legalActions.length > 0;
     if (!isMyTurn) return;
 
-    // If we have a hand card selected, try to play it here
+    // If we have a hand card selected for deploy
     if (interactionMode === 'play' && selectedHandIdx !== null) {
         if (canPlayCardAt(selectedHandIdx, row, col)) {
+            // Check if this card has on-play targeting at this deploy position
+            var targetsForDeploy = getTargetPositions(selectedHandIdx, [row, col]);
+            if (targetsForDeploy.length > 0) {
+                // Two-stage: deploy now locked, ask for target
+                selectedDeployPos = [row, col];
+                interactionMode = 'target';
+                highlightBoard();
+                return;
+            }
+            // No targeting needed — submit now
             submitAction({ action_type: 0, card_index: selectedHandIdx, position: [row, col] });
+        }
+        return;
+    }
+
+    // Target selection mode (magic targeting OR minion on-play target after deploy was picked)
+    if (interactionMode === 'target' && selectedHandIdx !== null) {
+        var validTarget = getTargetPositions(selectedHandIdx, selectedDeployPos).some(function(p) {
+            return p[0] === row && p[1] === col;
+        });
+        if (validTarget) {
+            var payload = { action_type: 0, card_index: selectedHandIdx, target_pos: [row, col] };
+            if (selectedDeployPos) payload.position = selectedDeployPos;
+            submitAction(payload);
         }
         return;
     }
@@ -1720,8 +1824,14 @@ function onBoardMinionClick(minion) {
     var isMyTurn = legalActions && legalActions.length > 0;
     if (!isMyTurn) return;
 
+    // If in target-selection mode (magic with target), use this minion's position as target
+    if (interactionMode === 'target' && selectedHandIdx !== null) {
+        onBoardCellClick(minion.position[0], minion.position[1]);
+        return;
+    }
+
     // If in attack mode and clicking an enemy — attack it
-    if (interactionMode === 'attack' && selectedMinionId !== null && minion.owner !== myPlayerIdx) {
+    if ((interactionMode === 'attack' || interactionMode === 'move_attack') && selectedMinionId !== null && minion.owner !== myPlayerIdx) {
         var targets = getAttackTargets(selectedMinionId);
         if (targets.indexOf(minion.minion_id) !== -1) {
             submitAction({ action_type: 2, minion_id: selectedMinionId, target_id: minion.minion_id });
@@ -1778,6 +1888,20 @@ function highlightBoard() {
         });
     }
 
+    if (interactionMode === 'target' && selectedHandIdx !== null) {
+        // Highlight locked deploy position (if any) as selected
+        if (selectedDeployPos) {
+            var depCell = document.querySelector('.board-cell[data-row="' + selectedDeployPos[0] + '"][data-col="' + selectedDeployPos[1] + '"]');
+            if (depCell) depCell.classList.add('cell-selected');
+        }
+        // Highlight target candidates in red
+        var targets = getTargetPositions(selectedHandIdx, selectedDeployPos);
+        targets.forEach(function(p) {
+            var cell = document.querySelector('.board-cell[data-row="' + p[0] + '"][data-col="' + p[1] + '"]');
+            if (cell) cell.classList.add('cell-attack');
+        });
+    }
+
     if (selectedMinionId !== null) {
         // Highlight minion's cell as selected
         var minion = null;
@@ -1825,7 +1949,7 @@ function updateHandHighlights() {
     document.querySelectorAll('.card-frame-hand').forEach(function(card) {
         var idx = parseInt(card.dataset.handIdx, 10);
         card.classList.remove('card-playable', 'card-selected-hand', 'card-react-playable');
-        if (selectedHandIdx === idx && interactionMode === 'play') {
+        if (selectedHandIdx === idx && (interactionMode === 'play' || interactionMode === 'target')) {
             card.classList.add('card-selected-hand');
         } else if (canPlayCard(idx)) {
             card.classList.add('card-playable');
@@ -1835,42 +1959,61 @@ function updateHandHighlights() {
 
 // Render action bar (pass / draw buttons)
 function renderActionBar() {
-    var existing = document.getElementById('action-bar');
-    if (existing) existing.remove();
+    var slot = document.getElementById('action-bar-slot');
+    if (slot) slot.innerHTML = '';
+    var hint = document.getElementById('how-to-play-hint');
 
     var isMyTurn = legalActions && legalActions.length > 0;
-    if (!isMyTurn) return;
-
-    // Auto-draw: if DRAW is the only legal action, submit it automatically
-    var drawActions = getLegalByType(3);
-    if (drawActions.length > 0 && legalActions.length === 1) {
-        submitAction({ action_type: 3 });
+    if (!isMyTurn) {
+        if (hint) hint.style.display = 'none';
         return;
     }
 
-    var bar = document.createElement('div');
-    bar.id = 'action-bar';
-    bar.className = 'action-bar';
-
-    // Pass button
-    var canPass = legalActions.some(function(a) { return a.action_type === 4; });
-    if (canPass) {
-        var passBtn = document.createElement('button');
-        passBtn.className = 'btn btn-action btn-pass';
-        passBtn.textContent = gameState.phase === 1 ? 'Skip React' : 'Pass Turn';
-        passBtn.addEventListener('click', function() {
-            submitAction({ action_type: 4 });
-        });
-        bar.appendChild(passBtn);
+    // Auto-skip empty react: in REACT phase with only PASS available (no react cards)
+    if (gameState && gameState.phase === 1 && legalActions.length === 1
+            && legalActions[0].action_type === 4) {
+        submitAction({ action_type: 4 });
+        return;
     }
 
-    // Insert after hand container
-    var handEl = document.getElementById('hand-container');
-    if (handEl && handEl.parentNode) {
-        handEl.parentNode.insertBefore(bar, handEl.nextSibling);
+    // End Turn button — during ACTION phase, submitting DRAW acts as "end turn"
+    // (game design: you must take 1 action per turn; DRAW is the do-nothing option).
+    // During REACT phase, the button submits PASS to skip the react window.
+    if (slot) {
+        var btn = document.createElement('button');
+        btn.className = 'btn btn-action btn-pass';
+        if (gameState.phase === 1) {
+            // REACT phase
+            var canPass = legalActions.some(function(a) { return a.action_type === 4; });
+            if (canPass) {
+                btn.textContent = 'Skip React';
+                btn.addEventListener('click', function() {
+                    submitAction({ action_type: 4 });
+                });
+                slot.appendChild(btn);
+            }
+        } else {
+            // ACTION phase: DRAW = end turn
+            var canDraw = legalActions.some(function(a) { return a.action_type === 3; });
+            if (canDraw) {
+                btn.textContent = 'End Turn (Draw)';
+                btn.addEventListener('click', function() {
+                    submitAction({ action_type: 3 });
+                });
+                slot.appendChild(btn);
+            }
+        }
     }
 
-    // Initial highlights
+    // Show the hint during ACTION phase only (not during react)
+    if (hint) {
+        if (gameState.phase === 1) {
+            hint.style.display = 'none';
+        } else {
+            hint.style.display = '';
+        }
+    }
+
     highlightBoard();
     updateHandHighlights();
 }
