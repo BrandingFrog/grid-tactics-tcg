@@ -57,7 +57,7 @@ class EffectType(IntEnum):
     DARK_MATTER_BUFF = 11  # Buff attack by amount + player's Dark Matter stacks
     PASSIVE_HEAL = 12  # Heal self by amount (fires on PASSIVE trigger each turn)
     LEAP = 13          # On move: if blocked by enemy, advance to next available tile instead
-    SUMMON_TOKEN = 14  # Summon a token minion (specified by summon_token_target) with Dark Matter scaling
+    CONJURE = 14       # Create a card from outside the deck (specified by summon_token_target)
 
 
 class ReactCondition(IntEnum):
