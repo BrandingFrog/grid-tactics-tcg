@@ -1360,6 +1360,86 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 // =============================================
+// Section: AnimationQueue (Phase 14.3)
+// =============================================
+//
+// Serializes state-update application behind animations so pending UIs
+// (react window, tutor modal, post-move-attack pick) never open mid-animation.
+//
+// Job shape: { type: 'summon'|'move'|'attack'|'noop', payload: {...},
+//              stateAfter: <frame>, legalActionsAfter: <list>, durationMs: <int> }
+//
+// Contract:
+//   enqueueAnimation(job)  — push + kick the queue
+//   runQueue()             — shifts next job, runs playAnimation, then
+//                            applyStateFrame(job.stateAfter, job.legalActionsAfter)
+//   playAnimation(job,done)— Wave 1: all branches are setTimeout(done,0) no-ops.
+//                            Waves 2-4 replace branches with real visuals.
+//   applyStateFrame(frame,legal) — single point of state application; calls
+//                            renderGame() which drives all pending UI sync.
+//   isAnimating()          — true while a job is running OR queue has pending jobs
+
+var animQueue = [];
+var animRunning = false;
+
+function enqueueAnimation(job) {
+    animQueue.push(job);
+    runQueue();
+}
+
+function runQueue() {
+    if (animRunning) return;
+    if (animQueue.length === 0) return;
+    var job = animQueue.shift();
+    animRunning = true;
+    playAnimation(job, function onAnimDone() {
+        // Apply the buffered state frame AFTER the animation completes.
+        applyStateFrame(job.stateAfter, job.legalActionsAfter);
+        animRunning = false;
+        runQueue();
+    });
+}
+
+function playAnimation(job, done) {
+    // Wave 1: all animations are 0ms no-op stubs. Waves 2-4 will replace
+    // individual branches (summon/move/attack) with real visuals.
+    switch (job && job.type) {
+        case 'summon':
+        case 'move':
+        case 'attack':
+        case 'noop':
+        default:
+            setTimeout(done, 0);
+            return;
+    }
+}
+
+// Single point of state application. Called directly for non-action frames
+// (initial join, react open/close, lobby) and from runQueue() for queued
+// action frames. All pending-UI sync lives downstream in renderGame() so
+// it automatically runs post-animation.
+function applyStateFrame(frame, legal) {
+    var prevState = gameState;
+    gameState = frame;
+    if (legal !== undefined) legalActions = legal;
+    logStateDiff(prevState, gameState);
+    renderGame();
+}
+
+function isAnimating() {
+    return animRunning || animQueue.length > 0;
+}
+
+// Temporary debug hook (Phase 14.3). Safe to leave — no side effects.
+if (typeof window !== 'undefined') {
+    window.__animDebug = {
+        get animQueue() { return animQueue; },
+        get animRunning() { return animRunning; },
+        isAnimating: isAnimating,
+    };
+}
+
+// =============================================
 // Section 9: Game Start / State Update Handlers
 // =============================================
 
