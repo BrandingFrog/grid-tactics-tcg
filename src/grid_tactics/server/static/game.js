@@ -1465,12 +1465,68 @@ function onGameStart(data) {
     renderGame();
 }
 
+// Phase 14.3: onStateUpdate no longer applies state directly. It diffs
+// prev vs next to derive an animation job, enqueues it, and lets the
+// AnimationQueue call applyStateFrame() when the animation completes.
+// Non-action frames (initial join, react open/close, lobby/meta frames)
+// bypass the queue and apply immediately so UIs stay responsive.
 function onStateUpdate(data) {
-    var prevState = gameState;
-    gameState = data.state;
-    legalActions = data.legal_actions;
-    logStateDiff(prevState, gameState);
-    renderGame();
+    var next = data.state;
+    var nextLegal = data.legal_actions;
+    var prev = gameState;
+
+    // First frame or no prior state: apply immediately, no animation.
+    if (!prev) {
+        applyStateFrame(next, nextLegal);
+        return;
+    }
+
+    // Derive a job from the prev->next diff.
+    var job = deriveAnimationJob(prev, next);
+
+    // Non-action transitions (noop with no meaningful diff) bypass the queue
+    // entirely. This keeps react-window open/close, tutor-modal open/close,
+    // turn-change banners, and passive state refreshes instantaneous.
+    if (!job || job.type === 'noop') {
+        applyStateFrame(next, nextLegal);
+        return;
+    }
+
+    job.stateAfter = next;
+    job.legalActionsAfter = nextLegal;
+    enqueueAnimation(job);
+}
+
+// Derive an animation job from a prev->next state diff. Wave 1 is
+// deliberately conservative: it only tags summon/move/attack from
+// pending_action when present, and returns noop otherwise. Later waves
+// will sharpen the diff (damage numbers, kill detection, etc.).
+function deriveAnimationJob(prev, next) {
+    var pa = next && next.pending_action;
+    if (!pa) return { type: 'noop', payload: {} };
+
+    var t = pa.action_type;
+    // ActionType: 0=PLAY_CARD, 1=MOVE, 2=ATTACK
+    if (t === 0) {
+        // Only minion deploys get a summon animation; magic/tutor -> noop.
+        if (pa.position) {
+            return { type: 'summon', payload: { pos: pa.position } };
+        }
+        return { type: 'noop', payload: {} };
+    }
+    if (t === 1) {
+        return { type: 'move', payload: {
+            from: pa.source_position || null,
+            to: pa.target_position || pa.position || null,
+        } };
+    }
+    if (t === 2) {
+        return { type: 'attack', payload: {
+            attackerPos: pa.source_position || null,
+            targetPos: pa.target_position || pa.position || null,
+        } };
+    }
+    return { type: 'noop', payload: {} };
 }
 
 // Game log helpers
