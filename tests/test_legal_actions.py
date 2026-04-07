@@ -751,3 +751,196 @@ class TestPendingPostMoveAttackMask:
 
         # Total True == 3 (2 attacks + 1 decline)
         assert int(mask.sum()) == 3
+
+
+# ---------------------------------------------------------------------------
+# Phase 14.2: Pending tutor mask
+# ---------------------------------------------------------------------------
+
+
+class TestPendingTutorMask:
+    """While pending_tutor is set, only TUTOR_SELECT[0..n) + DECLINE_TUTOR legal."""
+
+    def _state_with_pending_tutor(self, library, num_matches, *, p1_extras=()):
+        """Construct a state with ``num_matches`` pending tutor matches.
+
+        The actual deck contents don't matter for legal_actions(); only the
+        length of pending_tutor_matches drives slot enumeration. We still
+        place a believable deck so deck indices don't look insane.
+        """
+        fire_imp_id = library.get_numeric_id("fire_imp")
+        # Build a deck of fire_imps long enough to host the match indices.
+        deck = tuple([fire_imp_id] * max(num_matches, 1))
+        # Use a few hand cards to prove they get masked out.
+        p1_hand = tuple(p1_extras) or (fire_imp_id, fire_imp_id)
+        state = _make_state(
+            p1_hand=p1_hand, p1_mana=5, p1_deck=deck,
+        )
+        return replace(
+            state,
+            pending_tutor_player_idx=0,
+            pending_tutor_matches=tuple(range(num_matches)),
+        )
+
+    def test_pending_tutor_restricts_to_select_and_decline(self, library):
+        """3 matches -> exactly TUTOR_SELECT(0..2) + DECLINE_TUTOR, nothing else."""
+        state = self._state_with_pending_tutor(library, num_matches=3)
+        actions = legal_actions(state, library)
+
+        # Every action must be TUTOR_SELECT or DECLINE_TUTOR
+        for a in actions:
+            assert a.action_type in (
+                ActionType.TUTOR_SELECT, ActionType.DECLINE_TUTOR,
+            ), f"Forbidden action type in pending_tutor: {a}"
+
+        selects = [a for a in actions if a.action_type == ActionType.TUTOR_SELECT]
+        declines = [a for a in actions if a.action_type == ActionType.DECLINE_TUTOR]
+        assert len(selects) == 3
+        assert len(declines) == 1
+        assert {a.card_index for a in selects} == {0, 1, 2}
+
+        # No PLAY_CARD / MOVE / ATTACK / SACRIFICE / DRAW / PASS / REACT
+        forbidden = {
+            ActionType.PLAY_CARD, ActionType.MOVE, ActionType.ATTACK,
+            ActionType.SACRIFICE, ActionType.DRAW, ActionType.PASS,
+            ActionType.PLAY_REACT, ActionType.DECLINE_POST_MOVE_ATTACK,
+        }
+        for a in actions:
+            assert a.action_type not in forbidden
+
+    def test_pending_tutor_single_match(self, library):
+        """1 match -> exactly one TUTOR_SELECT(0) and one DECLINE_TUTOR."""
+        state = self._state_with_pending_tutor(library, num_matches=1)
+        actions = legal_actions(state, library)
+        assert len(actions) == 2
+        kinds = sorted(a.action_type for a in actions)
+        assert kinds == sorted([ActionType.TUTOR_SELECT, ActionType.DECLINE_TUTOR])
+
+    def test_pending_tutor_masks_out_play_move_attack_sacrifice_pass(self, library):
+        """Even with playable cards + a movable owned minion + an enemy in
+        range + a back-row sacrifice candidate, ONLY tutor actions appear."""
+        fire_imp_id = library.get_numeric_id("fire_imp")
+        # P1 melee on enemy back row -> would normally be a SACRIFICE candidate
+        sac_minion = MinionInstance(
+            instance_id=1, card_numeric_id=fire_imp_id,
+            owner=PlayerSide.PLAYER_1, position=(BACK_ROW_P2, 0), current_health=2,
+        )
+        # Adjacent enemy -> would normally be ATTACK candidate
+        enemy = MinionInstance(
+            instance_id=2, card_numeric_id=fire_imp_id,
+            owner=PlayerSide.PLAYER_2, position=(BACK_ROW_P2, 1), current_health=2,
+        )
+        state = _make_state(
+            p1_hand=(fire_imp_id, fire_imp_id),  # would normally PLAY_CARD
+            p1_mana=5, p1_deck=(fire_imp_id, fire_imp_id),
+            minions=(sac_minion, enemy),
+        )
+        state = replace(
+            state,
+            pending_tutor_player_idx=0,
+            pending_tutor_matches=(0, 1),
+        )
+        actions = legal_actions(state, library)
+        kinds = {a.action_type for a in actions}
+        assert kinds == {ActionType.TUTOR_SELECT, ActionType.DECLINE_TUTOR}
+        # And the count is exactly 2 selects + 1 decline
+        assert len(actions) == 3
+
+    def test_no_pending_unchanged(self, library):
+        """Non-pending state must enumerate the same actions as the pre-tutor
+        baseline (validated indirectly: same as TestMinionDeployment)."""
+        fire_imp_id = library.get_numeric_id("fire_imp")
+        state = _make_state(p1_hand=(fire_imp_id,), p1_mana=5)
+        assert state.pending_tutor_player_idx is None
+        assert state.pending_post_move_attacker_id is None
+        actions = legal_actions(state, library)
+        play = [a for a in actions if a.action_type == ActionType.PLAY_CARD]
+        assert len(play) == 10  # 10 friendly deploy positions
+        # No tutor actions in non-pending state
+        for a in actions:
+            assert a.action_type not in (
+                ActionType.TUTOR_SELECT, ActionType.DECLINE_TUTOR,
+            )
+
+    def test_mutex_assertion(self, library):
+        """Both pending flavours set simultaneously -> AssertionError."""
+        fire_imp_id = library.get_numeric_id("fire_imp")
+        attacker = MinionInstance(
+            instance_id=10, card_numeric_id=fire_imp_id,
+            owner=PlayerSide.PLAYER_1, position=(1, 2), current_health=2,
+        )
+        state = _make_state(
+            p1_hand=(fire_imp_id,), p1_mana=5, p1_deck=(fire_imp_id,),
+            minions=(attacker,),
+        )
+        bad = replace(
+            state,
+            pending_tutor_player_idx=0,
+            pending_tutor_matches=(0,),
+            pending_post_move_attacker_id=10,
+        )
+        with pytest.raises(AssertionError):
+            legal_actions(bad, library)
+
+    def test_pending_post_move_attack_still_works_regression(self, library):
+        """14.1 regression: pending_post_move_attack path still emits ATTACK
+        + DECLINE_POST_MOVE_ATTACK when pending_tutor is None."""
+        fire_imp_id = library.get_numeric_id("fire_imp")
+        attacker = MinionInstance(
+            instance_id=10, card_numeric_id=fire_imp_id,
+            owner=PlayerSide.PLAYER_1, position=(1, 2), current_health=2,
+        )
+        enemy = MinionInstance(
+            instance_id=20, card_numeric_id=fire_imp_id,
+            owner=PlayerSide.PLAYER_2, position=(0, 2), current_health=2,
+        )
+        state = _make_state(
+            p1_hand=(fire_imp_id,), p1_mana=5, minions=(attacker, enemy),
+        )
+        state = replace(state, pending_post_move_attacker_id=10)
+        # pending_tutor_player_idx is still None here -> mutex satisfied
+        actions = legal_actions(state, library)
+        kinds = {a.action_type for a in actions}
+        assert ActionType.ATTACK in kinds
+        assert ActionType.DECLINE_POST_MOVE_ATTACK in kinds
+        # And pending_tutor types should NOT appear
+        assert ActionType.TUTOR_SELECT not in kinds
+        assert ActionType.DECLINE_TUTOR not in kinds
+
+    def test_action_encoder_pending_tutor_roundtrip(self, library):
+        """Encoder maps TUTOR_SELECT -> PLAY_CARD slot space and DECLINE_TUTOR
+        -> slot 1001; decoder disambiguates via pending_tutor_player_idx."""
+        pytest.importorskip("stable_baselines3")  # rl pkg __init__ imports SB3
+        from grid_tactics.rl.action_space import (
+            ActionEncoder, PASS_IDX, PLAY_CARD_BASE, build_action_mask,
+        )
+        from grid_tactics.actions import (
+            decline_tutor_action, tutor_select_action,
+        )
+        from grid_tactics.types import GRID_SIZE
+
+        encoder = ActionEncoder()
+        state = self._state_with_pending_tutor(library, num_matches=3)
+
+        # TUTOR_SELECT(2) -> PLAY_CARD_BASE + 2*GRID_SIZE
+        encoded = encoder.encode(tutor_select_action(match_index=2), state)
+        assert encoded == PLAY_CARD_BASE + 2 * GRID_SIZE
+
+        # DECLINE_TUTOR -> slot 1001
+        assert encoder.encode(decline_tutor_action(), state) == PASS_IDX
+
+        # Decode round-trips
+        decoded_select = encoder.decode(encoded, state, library)
+        assert decoded_select.action_type == ActionType.TUTOR_SELECT
+        assert decoded_select.card_index == 2
+
+        decoded_decline = encoder.decode(PASS_IDX, state, library)
+        assert decoded_decline.action_type == ActionType.DECLINE_TUTOR
+
+        # build_action_mask round-trip: every legal action encodes within
+        # bounds and the mask covers exactly 4 slots (3 selects + decline).
+        mask = build_action_mask(state, library, encoder)
+        assert mask[PASS_IDX]
+        for i in range(3):
+            assert mask[PLAY_CARD_BASE + i * GRID_SIZE]
+        assert int(mask.sum()) == 4
