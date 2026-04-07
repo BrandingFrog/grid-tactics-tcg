@@ -1,6 +1,6 @@
 # Pyre Archer
 
-| Cost | 🗡️ | 🛡️ | Range | Element | Tribe |
+| Cost | 🗡️ | ❤️ | Range | Element | Tribe |
 |------|--------|--------|-------|---------|-------|
 | 3 | 9 | 5 | 2 | [[Elements/Fire\|Fire]] | [[Tribes/Undead\|Undead]] |
 

@@ -1,6 +1,6 @@
 # Emberplague Rat
 
-| Cost | 🗡️ | 🛡️ | Range | Element | Tribe |
+| Cost | 🗡️ | ❤️ | Range | Element | Tribe |
 |------|--------|--------|-------|---------|-------|
 | 2 | 0 | 24 | 0 | [[Elements/Fire\|Fire]] | [[Tribes/Rat\|Rat]] |
 

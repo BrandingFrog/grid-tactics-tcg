@@ -1,6 +1,6 @@
 # Surgefed Sparkbot
 
-| Cost | 🗡️ | 🛡️ | Range | Element | Tribe |
+| Cost | 🗡️ | ❤️ | Range | Element | Tribe |
 |------|--------|--------|-------|---------|-------|
 | 5 | 27 | 25 | 0 | [[Elements/Metal\|Metal]] | [[Tribes/Robot\|Robot]] |
 

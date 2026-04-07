@@ -924,11 +924,11 @@ var KEYWORD_GLOSSARY = {
     'Negate': 'Cancel the effect of an opponent\'s spell or ability.',
     'React': 'This card can be played during the opponent\'s turn in response to their action.',
     'Deploy': 'Place this card onto the battlefield from your hand during a React window.',
-    'Destroy': 'Remove a target minion from the board regardless of its 🛡️.',
+    'Destroy': 'Remove a target minion from the board regardless of its ❤️.',
     'Transform': 'Pay mana to transform this minion into another form.',
     'Cost': 'An additional cost that must be paid to play this card.',
     'Discard': 'Remove a card from your hand.',
-    'Heal': 'Restore 🛡️ to a target.',
+    'Heal': 'Restore ❤️ to a target.',
     'Deal': 'Deal damage to a target.',
     'Burn': 'A permanent passive debuff that deals damage each turn.',
     'Burning': 'A burning minion takes 5 damage at the start of its owner\'s turn. Burning persists until the minion dies.',
@@ -956,7 +956,7 @@ function showCardTooltip(numericId) {
     statsHtml += '<span style="color:' + elem.color + '">' + elem.name + '</span>';
     statsHtml += '<span style="color:var(--cyan)">' + c.mana_cost + ' Mana</span>';
     if (c.attack != null) statsHtml += '<span style="color:var(--red)">' + c.attack + '🗡️</span>';
-    if (c.health != null) statsHtml += '<span style="color:var(--green)">' + c.health + '🛡️</span>';
+    if (c.health != null) statsHtml += '<span style="color:var(--green)">' + c.health + '❤️</span>';
     if (c.card_type === 0 && c.attack_range != null) {
         statsHtml += '<span>' + (c.attack_range === 0 ? 'Melee' : 'Range ' + c.attack_range) + '</span>';
     }
@@ -1071,7 +1071,7 @@ function showCardTooltip(numericId) {
             var rStats = rc.mana_cost + ' Mana';
             if (rc.tribe) rStats += ' | ' + rc.tribe;
             rStats += ' | ' + rElem.name;
-            if (rc.attack != null) rStats += ' | ' + rc.attack + '🗡️ | ' + rc.health + '🛡️';
+            if (rc.attack != null) rStats += ' | ' + rc.attack + '🗡️ | ' + rc.health + '❤️';
             if (rc.attack_range != null) rStats += ' | ' + (rc.attack_range === 0 ? 'Melee' : 'Range ' + rc.attack_range);
             relHtml += '<div class="tooltip-related-stats">' + rStats + '</div>';
             var rEffect = '';
@@ -1115,7 +1115,7 @@ function showGameTooltip(numericId, anchorEl) {
     statsHtml += '<span style="color:' + elem.color + '">' + elem.name + '</span>';
     statsHtml += '<span style="color:var(--cyan)">' + c.mana_cost + ' Mana</span>';
     if (c.attack != null) statsHtml += '<span style="color:var(--red)">' + c.attack + '🗡️</span>';
-    if (c.health != null) statsHtml += '<span style="color:var(--green)">' + c.health + '🛡️</span>';
+    if (c.health != null) statsHtml += '<span style="color:var(--green)">' + c.health + '❤️</span>';
     if (c.card_type === 0 && c.attack_range != null) {
         statsHtml += '<span>' + (c.attack_range === 0 ? 'Melee' : 'Range ' + c.attack_range) + '</span>';
     }
@@ -4105,7 +4105,7 @@ function getEffectDescription(effects, cardData) {
         } else if (type === 2) { // Buff ATK
             desc = prefix + '+' + amount + '🗡️';
         } else if (type === 3) { // Buff HP
-            desc = prefix + '+' + amount + '🛡️';
+            desc = prefix + '+' + amount + '❤️';
         } else if (type === 4) { // Negate
             desc = prefix + 'Negate';
         } else if (type === 5) { // Deploy Self

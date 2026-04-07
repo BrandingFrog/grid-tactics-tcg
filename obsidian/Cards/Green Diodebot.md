@@ -1,6 +1,6 @@
 # Green Diodebot
 
-| Cost | 🗡️ | 🛡️ | Range | Element | Tribe |
+| Cost | 🗡️ | ❤️ | Range | Element | Tribe |
 |------|--------|--------|-------|---------|-------|
 | 2 | 13 | 15 | 0 | [[Elements/Metal\|Metal]] | [[Tribes/Robot\|Robot]] |
 

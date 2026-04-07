@@ -1,6 +1,6 @@
 # Grave Caller
 
-| Cost | 🗡️ | 🛡️ | Range | Element | Tribe |
+| Cost | 🗡️ | ❤️ | Range | Element | Tribe |
 |------|--------|--------|-------|---------|-------|
 | 4 | 5 | 13 | 1 | [[Elements/Dark\|Dark]] | [[Tribes/Undead\|Undead]] |
 

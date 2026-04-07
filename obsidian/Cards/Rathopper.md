@@ -1,6 +1,6 @@
 # Rathopper
 
-| Cost | 🗡️ | 🛡️ | Range | Element | Tribe |
+| Cost | 🗡️ | ❤️ | Range | Element | Tribe |
 |------|--------|--------|-------|---------|-------|
 | 3 | 19 | 13 | 0 | [[Elements/Earth\|Earth]] | [[Tribes/Rat\|Rat]] |
 

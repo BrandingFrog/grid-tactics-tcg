@@ -1,6 +1,6 @@
 # Giant Rat
 
-| Cost | 🗡️ | 🛡️ | Range | Element | Tribe |
+| Cost | 🗡️ | ❤️ | Range | Element | Tribe |
 |------|--------|--------|-------|---------|-------|
 | 3 | 30 | 30 | 0 | [[Elements/Earth\|Earth]] | [[Tribes/Rat\|Rat]] |
 
