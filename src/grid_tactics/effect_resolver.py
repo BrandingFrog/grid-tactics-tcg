@@ -137,6 +137,19 @@ def _apply_effect_to_minion(
         new_minion = replace(minion, current_health=0)
         new_minions = _replace_minion(state.minions, minion.instance_id, new_minion)
         return replace(state, minions=new_minions)
+    elif effect.effect_type == EffectType.BURN:
+        # Legacy BURN aura: re-routed to APPLY_BURNING semantics so passive
+        # adjacency-burn cards (Emberplague Rat) actually do something.
+        # Stacks 1 burning_stack per tick (regardless of legacy `amount`,
+        # which historically encoded raw damage per action).
+        new_minion = replace(
+            minion, burning_stacks=minion.burning_stacks + 1,
+        )
+        new_minions = _replace_minion(state.minions, minion.instance_id, new_minion)
+        return replace(state, minions=new_minions)
+    elif effect.effect_type == EffectType.PASSIVE_HEAL:
+        # Heal self by `amount`, capped at base health.
+        return _apply_heal_to_minion(state, minion, effect.amount, library)
     elif effect.effect_type == EffectType.APPLY_BURNING:
         # Phase 14.3: stack additively. Default amount=1 if zero/missing.
         amount = effect.amount if effect.amount else 1
@@ -208,12 +221,24 @@ def _resolve_adjacent(
     effect: EffectDefinition,
     caster_pos: tuple[int, int],
     library: CardLibrary,
+    caster_owner: Optional[PlayerSide] = None,
 ) -> GameState:
-    """Resolve effect on all minions adjacent (orthogonal + diagonal) to caster_pos."""
+    """Resolve effect on all minions adjacent (orthogonal + diagonal) to caster_pos.
+
+    Burn-aura effects (EffectType.BURN) are restricted to enemies of the
+    caster -- they should not stack burning_stacks on friendlies.
+    """
     adjacent_positions = Board.get_all_adjacent(caster_pos)
     for minion in state.minions:
-        if minion.position in adjacent_positions:
-            state = _apply_effect_to_minion(state, effect, minion, library)
+        if minion.position not in adjacent_positions:
+            continue
+        if (
+            effect.effect_type == EffectType.BURN
+            and caster_owner is not None
+            and minion.owner == caster_owner
+        ):
+            continue
+        state = _apply_effect_to_minion(state, effect, minion, library)
     return state
 
 
@@ -340,7 +365,7 @@ def resolve_effect(
     elif effect.target == TargetType.ALL_ENEMIES:
         return _resolve_all_enemies(state, effect, caster_owner, library)
     elif effect.target == TargetType.ADJACENT:
-        return _resolve_adjacent(state, effect, caster_pos, library)
+        return _resolve_adjacent(state, effect, caster_pos, library, caster_owner)
     elif effect.target == TargetType.SELF_OWNER:
         return _resolve_self_owner(state, effect, caster_pos, caster_owner, library)
     else:

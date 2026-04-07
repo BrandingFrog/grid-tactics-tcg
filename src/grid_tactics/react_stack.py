@@ -107,6 +107,44 @@ def tick_status_effects(state: GameState, library: CardLibrary) -> GameState:
     return state
 
 
+def _fire_passive_effects(
+    state: GameState, library: CardLibrary,
+) -> GameState:
+    """Fire PASSIVE-trigger effects on every minion currently on the board.
+
+    Called once per turn flip from `resolve_react_stack`, after status ticks
+    but before the new active player draws/regens. Iteration order is
+    (row, col) for determinism.
+
+    Handles, among others:
+      - Emberplague Rat's burn aura (BURN, target=ADJACENT)
+      - Fallen Paladin's passive_heal (PASSIVE_HEAL, target=SELF_OWNER)
+
+    Newly-dead minions (e.g. from a future damaging passive) are routed
+    through the standard cleanup path.
+    """
+    from grid_tactics.effect_resolver import resolve_effects_for_trigger
+    from grid_tactics.action_resolver import (
+        _check_game_over, _cleanup_dead_minions,
+    )
+
+    ordered_ids = [
+        m.instance_id
+        for m in sorted(state.minions, key=lambda m: (m.position[0], m.position[1]))
+    ]
+    for inst_id in ordered_ids:
+        m = state.get_minion(inst_id)
+        if m is None:
+            continue  # died from a previous passive earlier in this pass
+        state = resolve_effects_for_trigger(
+            state, TriggerType.PASSIVE, m, library, target_pos=None,
+        )
+
+    state = _cleanup_dead_minions(state, library)
+    state = _check_game_over(state)
+    return state
+
+
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
@@ -329,6 +367,13 @@ def resolve_react_stack(
     # Phase 14.3: tick per-minion status effects (burning) AFTER turn flip
     # but BEFORE mana regen / draw for the new active player.
     state = tick_status_effects(state, library)
+    if state.is_game_over:
+        return state
+
+    # Fire PASSIVE-trigger effects for every minion on the board (e.g.
+    # Emberplague Rat's burn aura, Fallen Paladin's passive_heal). One pass
+    # per turn flip, processed in (row, col) order for determinism.
+    state = _fire_passive_effects(state, library)
     if state.is_game_over:
         return state
 
