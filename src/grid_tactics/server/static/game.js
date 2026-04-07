@@ -2808,6 +2808,7 @@ function showDeclinePostMoveAttackButton() {
     if (document.getElementById('decline-post-move-attack-btn')) return;
     var btn = document.createElement('button');
     btn.id = 'decline-post-move-attack-btn';
+    btn.className = 'btn btn-action btn-decline-attack';
     btn.textContent = 'Decline Attack';
     btn.title = 'End the action without attacking';
     btn.addEventListener('click', function(e) {
@@ -2815,7 +2816,8 @@ function showDeclinePostMoveAttackButton() {
         // ActionType.DECLINE_POST_MOVE_ATTACK = 8 (Phase 14.1)
         submitAction({ action_type: 8 });
     });
-    document.body.appendChild(btn);
+    var bar = document.getElementById('hand-action-bar');
+    (bar || document.body).appendChild(btn);
 }
 
 function hideDeclinePostMoveAttackButton() {
@@ -3070,10 +3072,17 @@ function updateHandHighlights() {
     });
 }
 
-// Render action bar (pass / draw buttons)
+// Render action bar (pass / draw buttons) — lives ABOVE the hand so all
+// player actions (cards, draw, skip, decline) are grouped together.
 function renderActionBar() {
-    var slot = document.getElementById('action-bar-slot');
-    if (slot) slot.innerHTML = '';
+    var slot = document.getElementById('hand-action-bar');
+    // Preserve the decline-post-move-attack button if present (managed
+    // separately); rebuild only the draw/skip buttons.
+    if (slot) {
+        var keep = document.getElementById('decline-post-move-attack-btn');
+        slot.innerHTML = '';
+        if (keep) slot.appendChild(keep);
+    }
     var hint = document.getElementById('how-to-play-hint');
 
     var isMyTurn = legalActions && legalActions.length > 0;

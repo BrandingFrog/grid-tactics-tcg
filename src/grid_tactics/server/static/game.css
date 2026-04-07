@@ -2539,21 +2539,32 @@ body {
 }
 
 /* Phase 14.1: Decline post-move attack button */
+/* Hand action bar — groups Draw Card / Skip React / Decline Attack
+   directly above the hand so all player actions live in one place. */
+.hand-action-bar {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 6px 0;
+  min-height: 0;
+}
+.hand-action-bar:empty {
+  display: none;
+}
+
 #decline-post-move-attack-btn {
-  position: fixed;
-  top: 16px;
-  right: 16px;
-  z-index: 1500;
-  padding: 12px 22px;
+  padding: 10px 20px;
   background: rgba(40, 0, 0, 0.85);
   color: #ffdcdc;
   border: 2px solid rgba(255, 60, 60, 0.95);
   border-radius: 6px;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: bold;
   letter-spacing: 1px;
   cursor: pointer;
-  box-shadow: 0 4px 18px rgba(255, 30, 30, 0.4);
+  box-shadow: 0 2px 10px rgba(255, 30, 30, 0.35);
 }
 #decline-post-move-attack-btn:hover {
   background: rgba(80, 0, 0, 0.95);
