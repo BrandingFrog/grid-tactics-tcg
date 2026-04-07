@@ -379,18 +379,21 @@ class TensorGameEngine:
                     should_advance, torch.tensor(0, device=device, dtype=torch.int32), s.phase
                 )
 
-                # Mana regen for new active player (batched)
-                # After advancing, s.active_player holds the NEW active player
+                # Mana regen for new active player (batched).
+                # Skip regen when entering turn 2 (P2's first action) so both
+                # players start their first action with STARTING_MANA. After
+                # advancing, s.turn_number holds the NEW turn number.
+                regen_allowed = should_advance & (s.turn_number > 2)
                 ap_new = s.active_player  # [N]
 
-                # Regen for player 0 (where should_advance and new active == 0)
-                regen_p0 = should_advance & (ap_new == 0)
+                # Regen for player 0 (where regen_allowed and new active == 0)
+                regen_p0 = regen_allowed & (ap_new == 0)
                 if regen_p0.any():
                     new_mana_p0 = (s.player_mana[:, 0] + 1).clamp(max=10)
                     s.player_mana[:, 0] = torch.where(regen_p0, new_mana_p0, s.player_mana[:, 0])
 
-                # Regen for player 1 (where should_advance and new active == 1)
-                regen_p1 = should_advance & (ap_new == 1)
+                # Regen for player 1 (where regen_allowed and new active == 1)
+                regen_p1 = regen_allowed & (ap_new == 1)
                 if regen_p1.any():
                     new_mana_p1 = (s.player_mana[:, 1] + 1).clamp(max=10)
                     s.player_mana[:, 1] = torch.where(regen_p1, new_mana_p1, s.player_mana[:, 1])

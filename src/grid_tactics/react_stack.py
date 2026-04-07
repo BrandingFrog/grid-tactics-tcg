@@ -272,10 +272,13 @@ def resolve_react_stack(
         turn_number=state.turn_number + 1,
     )
 
-    # Regenerate mana for the new active player at turn start
-    new_active_player = state.players[new_active_idx].regenerate_mana()
-    new_players = _replace_player(state.players, new_active_idx, new_active_player)
-    state = replace(state, players=new_players)
+    # Regenerate mana for the new active player at turn start.
+    # Skip on turn 2: P2's first action must start at STARTING_MANA to
+    # match P1's first action (turn 1). Regen applies from turn 3 onward.
+    if state.turn_number > 2:
+        new_active_player = state.players[new_active_idx].regenerate_mana()
+        new_players = _replace_player(state.players, new_active_idx, new_active_player)
+        state = replace(state, players=new_players)
 
     # Auto-draw for the new active player at turn start (only if enabled)
     if AUTO_DRAW_ENABLED:

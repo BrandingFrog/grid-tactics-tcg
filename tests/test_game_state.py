@@ -25,17 +25,16 @@ class TestNewGame:
     def test_new_game_creates_valid_state(self):
         """new_game creates a state with empty board, correct HP and mana.
 
-        P1 receives a turn-start regen at game creation so both players get the
-        same mana on their first turn (P2 regens on turn flip at start of turn 2).
+        Both players start their first action with STARTING_MANA. P2's
+        first-turn regen is suppressed in react_stack so both players
+        get the same mana on their first action (P1 turn 1, P2 turn 2).
         """
         state, rng = GameState.new_game(42, DECK_P1, DECK_P2)
         assert state.board == Board.empty()
         for player in state.players:
             assert player.hp == STARTING_HP
             assert player.max_mana == STARTING_MANA
-        # P1 got the turn-1 regen already; P2 will regen on turn flip.
-        assert state.players[0].current_mana == STARTING_MANA + 1
-        assert state.players[1].current_mana == STARTING_MANA
+            assert player.current_mana == STARTING_MANA
 
     def test_new_game_starting_hands(self):
         """Each player has STARTING_HAND_SIZE (5) cards in hand."""
