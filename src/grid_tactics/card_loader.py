@@ -92,7 +92,7 @@ class CardLoader:
             react_mana_cost=data.get("react_mana_cost"),
             promote_target=data.get("promote_target"),
             unique=data.get("unique", False),
-            tutor_target=data.get("tutor_target"),
+            tutor_target=CardLoader._parse_tutor_target(data, card_id),
             summon_sacrifice_tribe=data.get("summon_sacrifice_tribe"),
             transform_options=CardLoader._parse_transform_options(data, card_id),
             deckable=data.get("deckable", True),
@@ -152,6 +152,36 @@ class CardLoader:
             trigger=trigger,
             target=target,
             amount=data["amount"],
+        )
+
+    _TUTOR_SELECTOR_KEYS = frozenset({"tribe", "element", "card_type"})
+
+    @staticmethod
+    def _parse_tutor_target(data: dict, card_id: str):
+        """Phase 14.2: Accept str (card_id shorthand) OR selector dict.
+
+        Selector dict keys must be a subset of {tribe, element, card_type}.
+        Unknown keys raise ValueError referencing the card.
+        """
+        raw = data.get("tutor_target")
+        if raw is None:
+            return None
+        if isinstance(raw, str):
+            return raw
+        if isinstance(raw, dict):
+            unknown = set(raw.keys()) - CardLoader._TUTOR_SELECTOR_KEYS
+            if unknown:
+                raise ValueError(
+                    f"Card '{card_id}': tutor_target has unknown selector key(s) "
+                    f"{sorted(unknown)}. Allowed: {sorted(CardLoader._TUTOR_SELECTOR_KEYS)}"
+                )
+            if not raw:
+                raise ValueError(
+                    f"Card '{card_id}': tutor_target dict cannot be empty"
+                )
+            return dict(raw)
+        raise ValueError(
+            f"Card '{card_id}': tutor_target must be str or dict, got {type(raw).__name__}"
         )
 
     @staticmethod

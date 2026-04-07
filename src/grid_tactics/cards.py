@@ -14,7 +14,7 @@ actions are Phase 3.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Optional
+from typing import Dict, Optional, Union
 
 from grid_tactics.enums import (
     CardType,
@@ -84,8 +84,11 @@ class CardDefinition:
     promote_target: Optional[str] = None  # card_id of the minion type that can be promoted into this
     unique: bool = False  # only 1 can exist on board per player at a time
 
-    # Tutor mechanic (Diodebot chain)
-    tutor_target: Optional[str] = None  # card_id to search deck for and add to hand
+    # Tutor mechanic (Diodebot chain).
+    # Phase 14.2: Accepts EITHER a string (card_id shorthand, back-compat) OR
+    # a selector dict with keys from {tribe, element, card_type}. ALL provided
+    # selector keys must match (AND), case-insensitive string compare.
+    tutor_target: Optional[Union[str, Dict[str, str]]] = None
 
     # Summoning cost: sacrifice a card of this tribe from hand
     summon_sacrifice_tribe: Optional[str] = None
@@ -107,6 +110,39 @@ class CardDefinition:
     summon_token_target: Optional[str] = None  # card_id to conjure
     summon_token_cost: Optional[int] = None    # mana cost for the conjure ability
     conjure_buff: Optional[str] = None         # buff type applied on conjure (e.g. 'dark_matter')
+
+    def tutor_matches(self, candidate: "CardDefinition") -> bool:
+        """Phase 14.2: True if `candidate` matches this card's tutor_target.
+
+        - None: never matches.
+        - str: exact card_id equality (back-compat).
+        - dict: ALL provided keys must match (AND). Allowed keys:
+          {tribe, element, card_type}. Comparisons are case-insensitive
+          string compares against the candidate's stringified attribute.
+        """
+        tt = self.tutor_target
+        if tt is None:
+            return False
+        if isinstance(tt, str):
+            return candidate.card_id == tt
+        if isinstance(tt, dict):
+            for key, expected in tt.items():
+                if key == "tribe":
+                    actual = candidate.tribe
+                elif key == "element":
+                    actual = candidate.element.name if candidate.element is not None else None
+                elif key == "card_type":
+                    actual = candidate.card_type.name if candidate.card_type is not None else None
+                else:
+                    raise ValueError(
+                        f"Card '{self.card_id}': unknown tutor_target selector key '{key}'"
+                    )
+                if actual is None:
+                    return False
+                if str(actual).lower() != str(expected).lower():
+                    return False
+            return True
+        return False
 
     @property
     def is_multi_purpose(self) -> bool:

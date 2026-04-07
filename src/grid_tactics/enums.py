@@ -123,3 +123,5 @@ class ActionType(IntEnum):
     SACRIFICE = 6   # Sacrifice minion on opponent's back row for player damage
     TRANSFORM = 7   # Transform an on-board minion into a different card (costs mana)
     DECLINE_POST_MOVE_ATTACK = 8  # Decline the post-move attack offered to a melee minion
+    TUTOR_SELECT = 9        # Pick a specific deck card during pending_tutor (Phase 14.2)
+    DECLINE_TUTOR = 10      # Decline a pending tutor; matched cards remain in deck (Phase 14.2)
