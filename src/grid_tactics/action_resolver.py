@@ -565,6 +565,87 @@ def _apply_transform(
     return replace(state, players=new_players, minions=new_minions)
 
 
+def _apply_activate_ability(
+    state: GameState, action: Action, library: CardLibrary,
+) -> GameState:
+    """Apply ACTIVATE_ABILITY: pay mana, resolve effect, counts as turn action.
+
+    Currently supports effect_type 'summon_token' with target 'own_side_empty':
+    creates a fresh MinionInstance from the referenced card_id at target_pos.
+    """
+    active_idx = state.active_player_idx
+    active_side = _get_active_side(state)
+    player = state.players[active_idx]
+
+    minion = state.get_minion(action.minion_id)
+    if minion is None:
+        raise ValueError(f"Minion {action.minion_id} not found")
+    if minion.owner != active_side:
+        raise ValueError("Cannot activate opponent's minion ability")
+
+    card_def = library.get_by_id(minion.card_numeric_id)
+    ability = card_def.activated_ability
+    if ability is None:
+        raise ValueError(f"{card_def.card_id} has no activated ability")
+
+    if player.current_mana < ability.mana_cost:
+        raise ValueError(
+            f"Insufficient mana: have {player.current_mana}, need {ability.mana_cost}"
+        )
+
+    target_pos = action.target_pos
+    if target_pos is None:
+        raise ValueError("ACTIVATE_ABILITY requires a target_pos")
+
+    # Validate target tile per ability.target rule
+    if ability.target == "own_side_empty":
+        own_rows = PLAYER_1_ROWS if active_side == PlayerSide.PLAYER_1 else PLAYER_2_ROWS
+        if target_pos[0] not in own_rows:
+            raise ValueError(
+                f"Target {target_pos} not on activator's own side"
+            )
+        if state.board.get(target_pos[0], target_pos[1]) is not None:
+            raise ValueError(f"Target tile {target_pos} is occupied")
+    else:
+        raise ValueError(f"Unsupported activated_ability target '{ability.target}'")
+
+    # Spend mana
+    new_player = player.spend_mana(ability.mana_cost)
+    new_players = _replace_player(state.players, active_idx, new_player)
+    state = replace(state, players=new_players)
+
+    # Resolve effect
+    if ability.effect_type == "summon_token":
+        if not ability.summon_card_id:
+            raise ValueError("summon_token ability missing summon_card_id")
+        try:
+            token_numeric_id = library.get_numeric_id(ability.summon_card_id)
+        except KeyError:
+            raise ValueError(
+                f"summon_token target '{ability.summon_card_id}' not in library"
+            )
+        token_def = library.get_by_id(token_numeric_id)
+        token = MinionInstance(
+            instance_id=state.next_minion_id,
+            card_numeric_id=token_numeric_id,
+            owner=active_side,
+            position=target_pos,
+            current_health=token_def.health,
+        )
+        new_board = state.board.place(target_pos[0], target_pos[1], token.instance_id)
+        new_minions = state.minions + (token,)
+        state = replace(
+            state,
+            board=new_board,
+            minions=new_minions,
+            next_minion_id=state.next_minion_id + 1,
+        )
+    else:
+        raise ValueError(f"Unsupported activated_ability effect_type '{ability.effect_type}'")
+
+    return state
+
+
 def _apply_attack(
     state: GameState, action: Action, library: CardLibrary,
 ) -> GameState:
@@ -918,6 +999,8 @@ def resolve_action(
         state = _apply_sacrifice(state, action, library)
     elif action.action_type == ActionType.TRANSFORM:
         state = _apply_transform(state, action, library)
+    elif action.action_type == ActionType.ACTIVATE_ABILITY:
+        state = _apply_activate_ability(state, action, library)
     else:
         raise ValueError(f"Unsupported action type for main phase: {action.action_type}")
 

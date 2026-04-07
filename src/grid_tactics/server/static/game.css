@@ -1604,6 +1604,16 @@ body {
   color: var(--bg);
 }
 
+.minion-action-btn.ability {
+  border-color: var(--purple, #b266ff);
+  color: var(--purple, #b266ff);
+}
+
+.minion-action-btn.ability:hover {
+  background: var(--purple, #b266ff);
+  color: var(--bg);
+}
+
 .minion-action-btn.move {
   border-color: var(--cyan);
   color: var(--cyan);

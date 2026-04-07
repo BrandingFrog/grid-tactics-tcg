@@ -126,3 +126,4 @@ class ActionType(IntEnum):
     DECLINE_POST_MOVE_ATTACK = 8  # Decline the post-move attack offered to a melee minion
     TUTOR_SELECT = 9        # Pick a specific deck card during pending_tutor (Phase 14.2)
     DECLINE_TUTOR = 10      # Decline a pending tutor; matched cards remain in deck (Phase 14.2)
+    ACTIVATE_ABILITY = 11   # Use a minion's activated ability (mana + turn action)

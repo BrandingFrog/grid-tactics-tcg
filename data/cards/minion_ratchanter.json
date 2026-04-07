@@ -8,15 +8,11 @@
     "range": 0,
     "element": "dark",
     "tribe": "Mage/Rat",
-    "effects": [
-        {
-            "type": "conjure",
-            "trigger": "on_play",
-            "target": "self_owner",
-            "amount": 1
-        }
-    ],
-    "summon_token_target": "rat",
-    "summon_token_cost": 1,
-    "conjure_buff": "dark_matter"
+    "activated_ability": {
+        "name": "Summon Rat",
+        "mana_cost": 1,
+        "effect_type": "summon_token",
+        "summon_card_id": "rat",
+        "target": "own_side_empty"
+    }
 }

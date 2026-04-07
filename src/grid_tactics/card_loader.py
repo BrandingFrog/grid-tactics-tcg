@@ -10,7 +10,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from grid_tactics.cards import CardDefinition, EffectDefinition
+from grid_tactics.cards import ActivatedAbility, CardDefinition, EffectDefinition
 from grid_tactics.enums import (
     CardType,
     EffectType,
@@ -101,6 +101,29 @@ class CardLoader:
             summon_token_target=data.get("summon_token_target"),
             summon_token_cost=data.get("summon_token_cost"),
             conjure_buff=data.get("conjure_buff"),
+            activated_ability=CardLoader._parse_activated_ability(data, card_id),
+        )
+
+    @staticmethod
+    def _parse_activated_ability(data: dict, card_id: str):
+        raw = data.get("activated_ability")
+        if raw is None:
+            return None
+        if not isinstance(raw, dict):
+            raise ValueError(
+                f"Card '{card_id}': activated_ability must be a dict"
+            )
+        for key in ("name", "mana_cost", "effect_type"):
+            if key not in raw:
+                raise ValueError(
+                    f"Card '{card_id}': activated_ability missing '{key}'"
+                )
+        return ActivatedAbility(
+            name=raw["name"],
+            mana_cost=int(raw["mana_cost"]),
+            effect_type=raw["effect_type"],
+            summon_card_id=raw.get("summon_card_id"),
+            target=raw.get("target", "own_side_empty"),
         )
 
     @staticmethod

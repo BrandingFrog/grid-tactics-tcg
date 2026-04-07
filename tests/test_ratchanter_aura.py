@@ -60,7 +60,13 @@ def _put(state: GameState, m: MinionInstance) -> GameState:
 # ---------------------------------------------------------------------------
 
 
-def test_ratchanter_conjure_adds_rat_to_hand():
+def test_ratchanter_on_play_no_longer_conjures_to_hand():
+    """Ratchanter's on_play conjure was replaced with an activated ability.
+
+    Deploying Ratchanter must NOT add a rat card to the owner's hand any
+    more — the rat is now summoned directly to the board via the activated
+    ability (see test_activated_abilities.py).
+    """
     lib = _lib()
     rat_id = lib.get_numeric_id("rat")
     rc_id = lib.get_numeric_id("ratchanter")
@@ -75,28 +81,9 @@ def test_ratchanter_conjure_adds_rat_to_hand():
     state = resolve_effects_for_trigger(
         state, TriggerType.ON_PLAY, rc, lib, target_pos=None,
     )
-    assert rat_id in state.players[0].hand
-    assert state.players[1].hand == ()  # opponent unaffected
-
-
-def test_ratchanter_conjure_respects_hand_cap():
-    lib = _lib()
-    rc_id = lib.get_numeric_id("ratchanter")
-    state = _empty_state(lib)
-    full_hand = tuple([0] * 10)
-    state = replace(
-        state,
-        players=(replace(state.players[0], hand=full_hand), state.players[1]),
-    )
-    rc = MinionInstance(
-        instance_id=1, card_numeric_id=rc_id,
-        owner=PlayerSide.PLAYER_1, position=(4, 2), current_health=30,
-    )
-    state = _put(state, rc)
-    state = resolve_effects_for_trigger(
-        state, TriggerType.ON_PLAY, rc, lib, target_pos=None,
-    )
-    assert len(state.players[0].hand) == 10  # unchanged
+    assert rat_id not in state.players[0].hand
+    assert state.players[0].hand == ()
+    assert state.players[1].hand == ()
 
 
 # ---------------------------------------------------------------------------

@@ -48,6 +48,23 @@ class EffectDefinition:
 
 
 @dataclass(frozen=True, slots=True)
+class ActivatedAbility:
+    """A mana-paid, turn-action ability granted by a minion's card definition.
+
+    The minion stays on the board; activating spends the active player's
+    turn action and pays the listed mana cost. Currently the only
+    effect_type is "summon_token" with target "own_side_empty", but the
+    schema is intentionally extensible.
+    """
+
+    name: str
+    mana_cost: int
+    effect_type: str
+    summon_card_id: Optional[str] = None
+    target: str = "own_side_empty"
+
+
+@dataclass(frozen=True, slots=True)
 class CardDefinition:
     """Immutable card template. NOT a runtime instance (per D-01, D-14, D-15).
 
@@ -110,6 +127,10 @@ class CardDefinition:
     summon_token_target: Optional[str] = None  # card_id to conjure
     summon_token_cost: Optional[int] = None    # mana cost for the conjure ability
     conjure_buff: Optional[str] = None         # buff type applied on conjure (e.g. 'dark_matter')
+
+    # Activated ability: spend mana + turn action to trigger an effect
+    # while the minion is on the board. See ActivatedAbility.
+    activated_ability: Optional[ActivatedAbility] = None
 
     def tutor_matches(self, candidate: "CardDefinition") -> bool:
         """Phase 14.2: True if `candidate` matches this card's tutor_target.

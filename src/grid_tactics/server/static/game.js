@@ -61,7 +61,8 @@ let myName = '';             // display name entered in lobby
 let selectedHandIdx = null;  // index of selected hand card (for PLAY_CARD)
 let selectedMinionId = null; // id of selected board minion (for MOVE/ATTACK)
 let selectedDeployPos = null; // [row, col] when picking target for a minion with on-play effect
-let interactionMode = null;  // 'play', 'move', 'attack', 'move_attack', 'target', or null
+let interactionMode = null;  // 'play', 'move', 'attack', 'move_attack', 'target', 'activate_target', or null
+let selectedAbilityMinionId = null; // minion whose activated ability is being targeted
 
 // Deck builder state
 let currentDeck = {};        // { numericId: count }
@@ -2509,6 +2510,7 @@ function clearSelection() {
     selectedHandIdx = null;
     selectedMinionId = null;
     selectedDeployPos = null;
+    selectedAbilityMinionId = null;
     interactionMode = null;
     hideMinionActionMenu();
     hideDeclinePostMoveAttackButton();
@@ -2855,6 +2857,25 @@ function onBoardCellClick(row, col) {
         return;
     }
 
+    // Activated ability target picking (e.g. Ratchanter Summon Rat)
+    if (interactionMode === 'activate_target' && selectedAbilityMinionId !== null) {
+        var isLegal = (legalActions || []).some(function(a) {
+            return a.action_type === 11
+                && a.minion_id === selectedAbilityMinionId
+                && a.target_pos && a.target_pos[0] === row && a.target_pos[1] === col;
+        });
+        if (isLegal) {
+            submitAction({
+                action_type: 11,
+                minion_id: selectedAbilityMinionId,
+                target_pos: [row, col],
+            });
+            selectedAbilityMinionId = null;
+            interactionMode = null;
+        }
+        return;
+    }
+
     // If we have a hand card selected for deploy
     if (interactionMode === 'play' && selectedHandIdx !== null) {
         if (canPlayCardAt(selectedHandIdx, row, col)) {
@@ -3030,6 +3051,25 @@ function showMinionActionMenu(minion, moves, attacks, transforms, canSac) {
             highlightBoard();
             renderActionBar();
         });
+    }
+
+    // Activated ability (e.g. Ratchanter "Summon Rat (1)")
+    var minionCard = cardDefs[minion.card_numeric_id];
+    var ability = minionCard && minionCard.activated_ability;
+    if (ability) {
+        var myMana = (gameState && gameState.players && gameState.players[myPlayerIdx])
+            ? gameState.players[myPlayerIdx].current_mana : 0;
+        var abilityActions = (legalActions || []).filter(function(a) {
+            return a.action_type === 11 && a.minion_id === minion.instance_id;
+        });
+        var canActivate = myMana >= ability.mana_cost && abilityActions.length > 0;
+        addBtn(ability.name + ' (' + ability.mana_cost + ')', 'ability', function() {
+            selectedAbilityMinionId = minion.instance_id;
+            interactionMode = 'activate_target';
+            hideMinionActionMenu();
+            highlightBoard();
+            renderActionBar();
+        }, !canActivate);
     }
 
     // Effects: Sacrifice + Transform options (only if any apply)
@@ -3367,6 +3407,23 @@ function highlightBoard() {
         positions.forEach(function(p) {
             var cell = document.querySelector('.board-cell[data-row="' + p[0] + '"][data-col="' + p[1] + '"]');
             if (cell) cell.classList.add('cell-valid');
+        });
+    }
+
+    if (interactionMode === 'activate_target' && selectedAbilityMinionId !== null) {
+        // Highlight the activator's tile as selected, plus every legal target
+        // tile from ACTIVATE_ABILITY actions for this minion.
+        (gameState.minions || []).forEach(function(m) {
+            if (m.instance_id === selectedAbilityMinionId) {
+                var ac = document.querySelector('.board-cell[data-row="' + m.position[0] + '"][data-col="' + m.position[1] + '"]');
+                if (ac) ac.classList.add('cell-selected');
+            }
+        });
+        (legalActions || []).forEach(function(a) {
+            if (a.action_type === 11 && a.minion_id === selectedAbilityMinionId && a.target_pos) {
+                var tc = document.querySelector('.board-cell[data-row="' + a.target_pos[0] + '"][data-col="' + a.target_pos[1] + '"]');
+                if (tc) tc.classList.add('cell-valid');
+            }
         });
     }
 

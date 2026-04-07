@@ -278,6 +278,26 @@ def _action_phase_actions(
                     transform_target=target_card_id,
                 ))
 
+    # ACTIVATED ABILITY enumeration: minions with an activated_ability whose
+    # owner can pay the cost and has at least one valid target tile.
+    for minion in owned_minions:
+        card_def = library.get_by_id(minion.card_numeric_id)
+        ability = card_def.activated_ability
+        if ability is None:
+            continue
+        if player.current_mana < ability.mana_cost:
+            continue
+        if ability.target == "own_side_empty":
+            own_rows = PLAYER_1_ROWS if player_side == PlayerSide.PLAYER_1 else PLAYER_2_ROWS
+            for r in own_rows:
+                for c in range(GRID_COLS):
+                    if state.board.get(r, c) is None:
+                        actions.append(Action(
+                            action_type=ActionType.ACTIVATE_ABILITY,
+                            minion_id=minion.instance_id,
+                            target_pos=(r, c),
+                        ))
+
     # DRAW as an action (in addition to auto-draw at turn start)
     if player.deck and len(player.hand) < 10:
         actions.append(draw_action())

@@ -78,6 +78,17 @@ def _build_card_defs(library):
                 "summon_token_target": getattr(card, 'summon_token_target', None),
                 "summon_token_cost": getattr(card, 'summon_token_cost', None),
                 "conjure_buff": getattr(card, 'conjure_buff', None),
+                "activated_ability": (
+                    {
+                        "name": card.activated_ability.name,
+                        "mana_cost": card.activated_ability.mana_cost,
+                        "effect_type": card.activated_ability.effect_type,
+                        "summon_card_id": card.activated_ability.summon_card_id,
+                        "target": card.activated_ability.target,
+                    }
+                    if getattr(card, 'activated_ability', None) is not None
+                    else None
+                ),
             }
         except (KeyError, IndexError):
             break
