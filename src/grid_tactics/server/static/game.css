@@ -2990,3 +2990,39 @@ body {
   animation: cinder-ember-rise 950ms ease-out forwards;
 }
 
+/* ============================================================
+   Phase 14.4: Spectator Mode
+   ============================================================ */
+#spectating-badge {
+  display: none;
+  background: #ffd700;
+  color: #1a1a1a;
+  font-weight: bold;
+  padding: 4px 10px;
+  border-radius: 4px;
+  margin-left: 12px;
+  letter-spacing: 0.05em;
+  font-size: 0.85em;
+}
+#spectating-badge.visible { display: inline-block; }
+
+.god-mode-label {
+  display: block;
+  margin-top: 8px;
+  font-size: 0.9em;
+  color: #aaa;
+  cursor: pointer;
+}
+.god-mode-label input { margin-right: 6px; vertical-align: middle; }
+
+.spectator-hand-label {
+  width: 100%;
+  font-size: 0.75em;
+  font-weight: bold;
+  letter-spacing: 0.1em;
+  color: #ffd700;
+  text-transform: uppercase;
+  padding: 4px 8px;
+  opacity: 0.8;
+}
+

@@ -2091,6 +2091,13 @@ function _applyStateFrameImmediate(frame, legal, prevState) {
 
     gameState = frame;
     if (legal !== undefined) legalActions = legal;
+    // Phase 14.4: keep spectator flags in sync with authoritative frame.
+    if (frame && frame.is_spectator) {
+        isSpectator = true;
+        if (typeof frame.spectator_god_mode === 'boolean') {
+            spectatorGodMode = frame.spectator_god_mode;
+        }
+    }
     logStateDiff(prevState, gameState);
     renderGame();
 }
@@ -2119,6 +2126,15 @@ function onGameStart(data) {
     myPlayerIdx = data.your_player_idx;
     legalActions = data.legal_actions;
     opponentName = data.opponent_name;
+    // Phase 14.4: spectators receive is_spectator=true on game_start and in
+    // every state frame. Pick it up from the game_start payload too so the
+    // first render is already gated correctly.
+    if (data.is_spectator || (data.state && data.state.is_spectator)) {
+        isSpectator = true;
+        if (data.state && typeof data.state.spectator_god_mode === 'boolean') {
+            spectatorGodMode = data.state.spectator_god_mode;
+        }
+    }
     // Reset log for a new game
     clearGameLog();
     addLogEntry('Game started. ' + (opponentName || 'Opponent') + ' joined.');
@@ -2558,6 +2574,7 @@ function clearSelection() {
 }
 
 function submitAction(actionData) {
+    if (isSpectator) { console.warn('spectator cannot submit action'); return; }
     if (socket) {
         socket.emit('submit_action', actionData);
     }
@@ -2811,6 +2828,7 @@ function canPlayCard(handIdx) {
 
 // Handle clicking a hand card
 function onHandCardClick(handIdx) {
+    if (isSpectator) return;  // spectators cannot play cards
     // Phase 14 PLAY-02: react window has its own click semantics
     if (isReactWindow()) {
         var reactAction = null;
@@ -2869,6 +2887,7 @@ function onHandCardClick(handIdx) {
 
 // Handle clicking a board cell
 function onBoardCellClick(row, col) {
+    if (isSpectator) return;  // spectators are read-only
     if (isReactWindow()) return;  // board clicks are inert during react window
     var isMyTurn = legalActions && legalActions.length > 0;
     if (!isMyTurn) return;
@@ -2989,6 +3008,7 @@ function onBoardCellClick(row, col) {
 
 // Handle clicking a board minion
 function onBoardMinionClick(minion) {
+    if (isSpectator) return;  // spectators are read-only
     if (isReactWindow()) return;  // board clicks are inert during react window
     var isMyTurn = legalActions && legalActions.length > 0;
     if (!isMyTurn) return;
@@ -3582,6 +3602,13 @@ function updateHandHighlights() {
 // player actions (cards, draw, skip, decline) are grouped together.
 function renderActionBar() {
     var slot = document.getElementById('hand-action-bar');
+    // Phase 14.4: spectators have no action bar whatsoever.
+    if (isSpectator) {
+        if (slot) slot.innerHTML = '';
+        var hintSpec = document.getElementById('how-to-play-hint');
+        if (hintSpec) hintSpec.style.display = 'none';
+        return;
+    }
     // Preserve the decline-post-move-attack button if present (managed
     // separately); rebuild only the draw/skip buttons.
     if (slot) {
@@ -3711,6 +3738,17 @@ function renderRoomBar() {
     if (turnNum && gameState.turn_number !== undefined) {
         turnNum.textContent = 'Turn ' + gameState.turn_number;
     }
+
+    // Phase 14.4: SPECTATING badge visibility + god-mode label.
+    var specBadge = document.getElementById('spectating-badge');
+    if (specBadge) {
+        if (isSpectator) {
+            specBadge.textContent = spectatorGodMode ? 'SPECTATING (GOD MODE)' : 'SPECTATING';
+            specBadge.classList.add('visible');
+        } else {
+            specBadge.classList.remove('visible');
+        }
+    }
 }
 
 // =============================================
@@ -3739,10 +3777,13 @@ function renderOpponentInfo() {
         oppMana.textContent = oppPlayer.current_mana;
     }
 
-    // Hand count
+    // Hand count (god-mode spectator has the full hand array instead of a count)
     var oppHand = document.getElementById('opp-hand');
     if (oppHand) {
-        oppHand.textContent = oppPlayer.hand_count;
+        var hc = (oppPlayer.hand_count != null)
+            ? oppPlayer.hand_count
+            : (oppPlayer.hand ? oppPlayer.hand.length : 0);
+        oppHand.textContent = hc;
     }
 
     // Deck count
@@ -3919,22 +3960,40 @@ function renderHand() {
     var myMana = myPlayer.current_mana;
     var isMyTurn = legalActions && legalActions.length > 0;
 
-    myPlayer.hand.forEach(function(numericId, handIndex) {
-        var cardHtml = renderHandCard(numericId, handIndex, myMana, isMyTurn);
-        var wrapper = document.createElement('div');
-        wrapper.innerHTML = cardHtml;
-        if (wrapper.firstChild) {
-            var cardEl = wrapper.firstChild;
-            // Hover tooltip
-            cardEl.addEventListener('mouseenter', function() { showGameTooltip(numericId, this); });
-            cardEl.addEventListener('mouseleave', function() { hideGameTooltip(); });
-            // Click to select/play
-            (function(idx) {
-                cardEl.addEventListener('click', function() { onHandCardClick(idx); });
-            })(handIndex);
-            handEl.appendChild(cardEl);
+    function appendHand(playerObj, label) {
+        if (!playerObj || !playerObj.hand) return;
+        if (label) {
+            var lbl = document.createElement('div');
+            lbl.className = 'spectator-hand-label';
+            lbl.textContent = label;
+            handEl.appendChild(lbl);
         }
-    });
+        playerObj.hand.forEach(function(numericId, handIndex) {
+            var mana = playerObj.current_mana;
+            var cardHtml = renderHandCard(numericId, handIndex, mana, isMyTurn && !isSpectator);
+            var wrapper = document.createElement('div');
+            wrapper.innerHTML = cardHtml;
+            if (wrapper.firstChild) {
+                var cardEl = wrapper.firstChild;
+                cardEl.addEventListener('mouseenter', function() { showGameTooltip(numericId, this); });
+                cardEl.addEventListener('mouseleave', function() { hideGameTooltip(); });
+                (function(idx) {
+                    cardEl.addEventListener('click', function() { onHandCardClick(idx); });
+                })(handIndex);
+                handEl.appendChild(cardEl);
+            }
+        });
+    }
+
+    // Phase 14.4: god-mode spectators see BOTH hands; non-god spectators
+    // see only the perspective player (server sends the opponent as count).
+    if (isSpectator && spectatorGodMode) {
+        var oppIdx = 1 - myPlayerIdx;
+        appendHand(gameState.players[oppIdx], 'Player ' + (oppIdx + 1) + ' hand');
+        appendHand(myPlayer, 'Player ' + (myPlayerIdx + 1) + ' hand');
+    } else {
+        appendHand(myPlayer, null);
+    }
     // Auto-fit names and effects for hand cards
     fitHandCardNames();
     fitHandCardEffects();
