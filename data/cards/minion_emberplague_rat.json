@@ -14,6 +14,12 @@
             "trigger": "passive",
             "target": "adjacent",
             "amount": 5
+        },
+        {
+            "type": "apply_burning",
+            "trigger": "on_attack",
+            "target": "single_target",
+            "amount": 1
         }
     ]
 }

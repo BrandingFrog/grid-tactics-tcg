@@ -35,6 +35,7 @@ Update this file and the matching `KEYWORD_GLOSSARY` in `src/grid_tactics/server
 | Heal | Restore HP to a target. |
 | Deal | Deal damage to a target. |
 | Burn | A permanent passive debuff that deals damage each turn. |
+| Burning | When this minion is burning, it takes 1 damage at the start of each turn and burning decreases by 1. |
 | Dark Matter | Buff scales with Dark Matter stacks. |
 | Leap | If blocked by an enemy, advance to the next available tile instead. |
 | Conjure | Summon a card from outside your deck directly to the board. |
