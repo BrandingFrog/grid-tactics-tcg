@@ -172,6 +172,7 @@ Plans:
 - [x] **Phase 14.1: Melee Move-and-Attack** - Player-driven Advance-Wars-style melee chain (move then choose attack target or decline); ranged minions get no chain (completed 2026-04-07)
 - [x] **Phase 14.2: Tutor Choice Prompt** - Replace auto-tutor with player-facing selection modal; extend tutor_target to support selector dicts (completed 2026-04-07)
 - [x] **Phase 14.3: Game Juice (Animation Layer)** - Client-side AnimationQueue serializing summon / move / attack / burn / floating-popup visuals; pending UIs (react, tutor, post-move-attack) gate behind queue drain via applyStateFrame (completed 2026-04-07)
+- [x] **Phase 14.4: Spectator Mode** - Lobby Spectate button + optional God Mode, server-side join_as_spectator + spectator fanout + action gating, dual-hand god view and P1-perspective non-god view (completed 2026-04-07)
 - [ ] **Phase 15: Resilience & Polish** - Reconnection handling, scrollable game log, and rematch flow
 
 ## Phase Details
@@ -259,6 +260,17 @@ Plans:
 - [x] 14.3-06-PLAN.md -- Burning status engine tick (added mid-phase)
 - [x] 14.3-07-PLAN.md -- Floating popups (heal/burn/buff/debuff) + persistent status badges + Luckiest Guy font (added mid-phase)
 
+### Phase 14.4: Spectator Mode
+**Goal:** Any third-party client can join a room as a spectator (with optional God Mode to see both hands), watch a live game end-to-end, chat in the room, and never affect game state. Spectator perspective in non-god mode is fixed to the Player 1 seat; a perspective toggle is deferred.
+**Depends on**: Phase 14.3
+**Plans:** 5/5 plans complete
+Plans:
+- [x] 14.4-01-PLAN.md -- Spectator data model + join API in RoomManager
+- [x] 14.4-02-PLAN.md -- filter_state_for_spectator (god + non-god)
+- [x] 14.4-03-PLAN.md -- events.py spectator wiring (join, fanout, gating, chat, disconnect)
+- [x] 14.4-04-PLAN.md -- Frontend spectator UI (lobby button, god-mode checkbox, dual-hand render, badge)
+- [x] 14.4-05-PLAN.md -- Tests + roadmap/STATE closeout + smoke test
+
 ### Phase 14.2: Tutor Choice Prompt
 **Goal:** Replace auto-tutor with player-facing selection modal; extend tutor_target to support selector dicts (tribe/element/card_type AND semantics) instead of only card_id strings.
 **Depends on**: Phase 14.1
@@ -305,4 +317,5 @@ Phases execute in numeric order: 11 -> 12 -> 13 -> 14 -> 15
 | 14.1 Melee Move-and-Attack | v1.1 | 5/5 | Complete | 2026-04-07 |
 | 14.2 Tutor Choice Prompt | v1.1 | 5/5 | Complete | 2026-04-07 |
 | 14.3 Game Juice (Animation Layer) | v1.1 | 7/7 | Complete | 2026-04-07 |
+| 14.4 Spectator Mode | v1.1 | 5/5 | Complete | 2026-04-07 |
 | 15. Resilience & Polish | v1.1 | 0/TBD | Not started | - |

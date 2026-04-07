@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Online PvP Dueling
 status: verifying
-stopped_at: "Phase 14.3 game-juice arc feature-complete (waves 1-7). Wave 5 closeout landed: ROADMAP/STATE updated, melee chain integration verified (natural 2-frame pipeline), smoke test deferred to post-deploy Playwright E2E."
-last_updated: "2026-04-07T20:45:00.000Z"
+stopped_at: "Phase 14.4 spectator mode feature-complete (waves 1-5). Wave 5 closeout: test_room_manager.py (8 tests) + test_events.py (6 tests, flask_socketio-gated) added, ROADMAP/STATE updated, multi-tab smoke test deferred to post-deploy Playwright E2E (same posture as 14.1 / 14.2 / 14.3 closeouts)."
+last_updated: "2026-04-07T21:30:00.000Z"
 last_activity: 2026-04-07
 progress:
   total_phases: 5
@@ -25,10 +25,10 @@ See: .planning/PROJECT.md (updated 2026-04-04)
 
 ## Current Position
 
-Phase: 14.3 (game-juice) — COMPLETE
-Plan: 5 of 7 (integration + roadmap/STATE closeout) — COMPLETE (wave 5 was last to land; waves 6-7 were inserted mid-phase and shipped first)
-Status: Phase 14.3 game-juice arc feature-complete (waves 1-7). Wave 7 added showFloatingPopup(tileEl, text, variant) with 5 variants (combat-damage / heal / burn-tick / buff / debuff), Luckiest Guy font (popups only), and persistent 🔥 / ⬆️+N / ⬇️-N corner badges in renderBoardMinion. Combat damage now routes through showFloatingPopup (replacing Wave 4's inline .damage-popup); heal + burn-tick fire from a prev/next minion HP diff in applyStateFrame, gated by turn-flip + burning_stacks for burn. Burn-tick popup anchors to PREV tile so lethal burns still show the number before the minion is removed. Adding new statuses now needs only 1 CSS variant + 1 diff hook.
-Last activity: 2026-04-07 — Completed 14.3-05-PLAN.md (Phase 14.3 closeout)
+Phase: 14.4 (spectator-mode) — COMPLETE
+Plan: 5 of 5 — COMPLETE
+Status: Phase 14.4 spectator mode fully shipped (waves 1-5). Backend: RoomManager._room_spectators manager-level dict survives the WaitingRoom→GameSession transition; filter_state_for_spectator is a pure function (god = deepcopy, non-god = delegate to filter_state_for_player(0)); events.py has spectate_room handler, submit_action gate ("Spectators cannot submit actions"), _fanout_state_to_spectators / _fanout_game_start_to_spectators wired into _emit_state_to_players / _emit_game_over / handle_ready / handle_request_rematch, chat broadcast inclusive of spectators, disconnect handler scoped to spectators only (player-disconnect still Phase 15 territory). Frontend: Lobby Spectate Room button + God Mode checkbox, isSpectator / spectatorGodMode flags re-synced from every state frame, early-return at all 5 action seams (submitAction + 3 click handlers + renderActionBar), dual-hand god view via renderHand appendHand helper, SPECTATING badge. Mid-game join supported via synthetic game_start from handle_spectate_room. Multi-tab smoke test deferred to post-deploy Playwright E2E.
+Last activity: 2026-04-07 — Completed 14.4-05-PLAN.md (Phase 14.4 closeout)
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -159,6 +159,12 @@ Recent decisions affecting current work:
 - [Phase 14.3-05]: Phase 14.3 grew from the planned 5 plans to 7 mid-execution (waves 6 burning + 7 popups inserted). Wave 5 (this closeout) landed last. ROADMAP and STATE now reflect 7/7. Future-server contract: view_filter.enrich_last_action's `last_action` field (added Wave 4) is part of the client animation contract — preserve attacker_pos / target_pos / damage / killed schema.
 - [Phase 14.3-05]: Phase 14.3 client-side AnimationQueue is now the single point of state application; all pending UIs (react window, tutor modal from 14.2, post-move-attack picker from 14.1) gate STRUCTURALLY behind queue drain via applyStateFrame — no explicit isAnimating() guards needed.
 - [Phase 14.3-05]: Task 3 (visual smoke test) deferred to post-deploy Playwright E2E against Railway (same posture as 14.1-04 / 14.2-04 / 14.3-01 / 14.3-04 / 14.3-07).
+- [Phase 14.4]: Spectator mode locked: god-mode optional (per-spectator, not per-room), perspective fixed to Player 1 in non-god mode (perspective toggle deferred), mid-game join supported via synthetic game_start, multi-spectator per room supported, spectators chat into the main room (no separate spectator-only channel).
+- [Phase 14.4-01]: Spectator storage = RoomManager._room_spectators manager-level dict (NOT on WaitingRoom or GameSession) — survives start_game's WaitingRoom pop without touching either dataclass. _token_role classifies any token as 'player' | 'spectator'.
+- [Phase 14.4-02]: filter_state_for_spectator is a PURE function in view_filter.py — no room_manager coupling. god_mode=True deep-copies full state; non-god delegates to filter_state_for_player(perspective_idx=0) inheriting opponent-hand stripping + deck hiding + seed removal. Always stamps is_spectator / spectator_god_mode / spectator_perspective top-level flags.
+- [Phase 14.4-03]: Spectator state fanout via dedicated helpers (_fanout_state_to_spectators / _fanout_game_start_to_spectators) called from existing player-emit paths. Action gating done at the TOP of submit_action (before room/session lookup) so the error is unambiguous. Disconnect handler ONLY cleans spectators — player-sid churn is Phase 15 territory. Spectator payload mirrors player schema (state, legal_actions=[], your_player_idx=0) plus is_spectator:True discriminator so the client reuses its state_update reducer.
+- [Phase 14.4-04]: Client routes spectators through the existing applyStateFrame → renderGame pipeline (NOT a separate renderSpectatorView branch) — preserves Phase 14.3 animation contract for free. isSpectator + spectatorGodMode re-synced from every frame (onSpectatorJoined + onGameStart + _applyStateFrameImmediate) — reconnection/late-join safe, no drift. Dual-hand god view reuses renderHandCard verbatim with labeled dividers (no new DOM container). renderHandCard(..., isMyTurn && !isSpectator) prevents "my turn" glow leaking onto spectator hands.
+- [Phase 14.4-05]: Task 4 (multi-tab visual smoke test) deferred to post-deploy Playwright E2E against Railway (same posture as prior 14.x closeouts). Automated coverage = tests/test_room_manager.py (8 tests, always run) + tests/test_events.py (6 tests, gated on flask_socketio via conftest collect_ignore_glob).
 
 ### Pending Todos
 
@@ -173,8 +179,10 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-04-07T20:45:00.000Z
-Stopped at: Card-effects-and-action-flow audit followups complete. Tensor-engine parity for LEAP (CardTable.leap_amount precompute + _compute_move_mask LEAP override + apply_move_batch leap landing) and PASSIVE pipeline (CardTable.passive_burn_amount/passive_heal_amount + engine._fire_passive_effects_batch at turn flip, mirroring Python react_stack._fire_passive_effects). Bug-4 design clarification: BURN handler now stacks `int(effect.amount)` per tick so Emberplague's JSON amount=5 takes effect; tensor side already uses passive_burn_amount from the same JSON field. ActionEncoder _encode_move/_decode_move now leap-aware (collapse multi-step forward to unit cardinal on encode, walk over blockers on decode). 42 stale-assertion test failures swept to zero — pure test maintenance, no engine behavior changes. tests/conftest.py grew collect_ignore_glob for RL/tensor/server test files when torch/sb3/flask_socketio missing (single source of truth for ML-dep gating). Final: 538 passed, 4 skipped, 0 failed locally. Next: Phase 15 Resilience & Polish.
+Last session: 2026-04-07T21:30:00.000Z
+Stopped at: Phase 14.4 spectator mode fully shipped (plans 01-05). Wave 5 closeout added tests/test_room_manager.py (8 spectator data-model tests, all passing locally) and tests/test_events.py (6 Socket.IO spectator tests, gated on flask_socketio via conftest collect_ignore_glob — will run on CI / Railway). ROADMAP and STATE updated. Multi-tab visual smoke test deferred to post-deploy Playwright E2E. Full local suite: 564 passed, 4 skipped.
+
+Previous session (2026-04-07T20:45:00.000Z): Card-effects-and-action-flow audit followups complete. Tensor-engine parity for LEAP (CardTable.leap_amount precompute + _compute_move_mask LEAP override + apply_move_batch leap landing) and PASSIVE pipeline (CardTable.passive_burn_amount/passive_heal_amount + engine._fire_passive_effects_batch at turn flip, mirroring Python react_stack._fire_passive_effects). Bug-4 design clarification: BURN handler now stacks `int(effect.amount)` per tick so Emberplague's JSON amount=5 takes effect; tensor side already uses passive_burn_amount from the same JSON field. ActionEncoder _encode_move/_decode_move now leap-aware (collapse multi-step forward to unit cardinal on encode, walk over blockers on decode). 42 stale-assertion test failures swept to zero — pure test maintenance, no engine behavior changes. tests/conftest.py grew collect_ignore_glob for RL/tensor/server test files when torch/sb3/flask_socketio missing (single source of truth for ML-dep gating). Final: 538 passed, 4 skipped, 0 failed locally. Next: Phase 15 Resilience & Polish.
 Resume file: None
 
 ### Audit followup commits (2026-04-07)
