@@ -500,8 +500,9 @@ def _compute_attack_mask(mask, card_table, friendly_alive, enemy_alive,
     is_melee = a_range_exp == 0
     melee_ok = is_melee & (manhattan == 1) & ortho
 
-    # Ranged: (ortho & manhattan<=range) | (chebyshev==1 & !ortho)
-    ranged_ok = ~is_melee & ((ortho & (manhattan <= a_range_exp)) | ((chebyshev == 1) & ~ortho))
+    # Ranged: (ortho & manhattan <= range + 1) | (chebyshev==1 & !ortho)
+    # The +1 matches Python _can_attack: range 1 means 2 ortho + 1 diag.
+    ranged_ok = ~is_melee & ((ortho & (manhattan <= a_range_exp + 1)) | ((chebyshev == 1) & ~ortho))
 
     # Pair validity and final mask
     pair_valid = can_strike.unsqueeze(2) & enemy_alive.unsqueeze(1)

@@ -82,9 +82,14 @@ def _can_attack(
 ) -> bool:
     """Check if attacker can reach defender based on attack range (D-03).
 
-    Melee (range=0): manhattan_distance == 1 AND orthogonal (same row or col).
-    Ranged (range>=1): (orthogonal AND manhattan_distance <= range) OR
+    Melee (range=0): orthogonally adjacent (manhattan == 1).
+    Ranged (range>=1): (orthogonal AND manhattan_distance <= range + 1) OR
                        (diagonal adjacent, chebyshev_distance == 1).
+
+    The +1 is intentional: a "range 1" minion (e.g. Light Cleric)
+    reaches 2 tiles orthogonally + 1 tile diagonally (ENG-06 spec).
+    A "range 2" minion (Wind Archer) reaches 3 tiles orthogonally + 1
+    diagonal, etc.
     """
     a_pos = attacker.position
     d_pos = defender.position
@@ -96,8 +101,8 @@ def _can_attack(
         # Melee: orthogonal adjacent only
         return manhattan == 1 and _is_orthogonal(a_pos, d_pos)
     else:
-        # Ranged: orthogonal up to N tiles OR diagonal adjacent
-        orthogonal_in_range = _is_orthogonal(a_pos, d_pos) and manhattan <= attack_range
+        # Ranged: orthogonal up to (range + 1) tiles OR diagonal adjacent
+        orthogonal_in_range = _is_orthogonal(a_pos, d_pos) and manhattan <= attack_range + 1
         diagonal_adjacent = chebyshev == 1 and not _is_orthogonal(a_pos, d_pos)
         return orthogonal_in_range or diagonal_adjacent
 

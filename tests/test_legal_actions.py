@@ -400,8 +400,8 @@ class TestAttackEnumeration:
         attack_actions = [a for a in actions if a.action_type == ActionType.ATTACK]
         assert len(attack_actions) == 1
 
-    def test_ranged_at_distance_3_no_attack(self, library):
-        """Ranged minion (range=2) at distance 3 cannot attack."""
+    def test_ranged_at_distance_4_no_attack(self, library):
+        """Ranged minion (range=2 → 3 ortho) at distance 4 cannot attack."""
         wind_archer_id = library.get_numeric_id("wind_archer")  # range=2
         fire_imp_id = library.get_numeric_id("fire_imp")
         attacker = MinionInstance(
@@ -410,7 +410,7 @@ class TestAttackEnumeration:
         )
         defender = MinionInstance(
             instance_id=1, card_numeric_id=fire_imp_id,
-            owner=PlayerSide.PLAYER_2, position=(3, 2), current_health=2,
+            owner=PlayerSide.PLAYER_2, position=(4, 2), current_health=2,
         )
         state = _make_state(minions=(attacker, defender))
         actions = legal_actions(state, library)

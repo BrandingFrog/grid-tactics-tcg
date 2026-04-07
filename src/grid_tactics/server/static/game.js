@@ -3427,7 +3427,9 @@ function highlightBoard() {
                         if (range === 0) {
                             inRange = (manhattan === 1 && orthogonal);
                         } else {
-                            var orthogonalInRange = orthogonal && manhattan <= range;
+                            // Range N: (N+1) tiles orthogonal + 1 diagonal.
+                            // Mirrors action_resolver._can_attack.
+                            var orthogonalInRange = orthogonal && manhattan <= range + 1;
                             var diagonalAdjacent = (chebyshev === 1 && !orthogonal);
                             inRange = orthogonalInRange || diagonalAdjacent;
                         }

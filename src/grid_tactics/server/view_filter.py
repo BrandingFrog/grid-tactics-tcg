@@ -68,7 +68,7 @@ def _tile_in_attack_range(
     """Mirror of action_resolver._can_attack geometry, parameterized by range only.
 
     Melee (range=0): orthogonal-adjacent (manhattan == 1).
-    Ranged (range>=1): orthogonal up to N tiles OR diagonal-adjacent.
+    Ranged (range>=1): orthogonal up to (range + 1) tiles OR diagonal-adjacent.
     """
     if a_pos == d_pos:
         return False
@@ -76,7 +76,7 @@ def _tile_in_attack_range(
     chebyshev = Board.chebyshev_distance(a_pos, d_pos)
     if attack_range == 0:
         return manhattan == 1 and _is_orthogonal(a_pos, d_pos)
-    orthogonal_in_range = _is_orthogonal(a_pos, d_pos) and manhattan <= attack_range
+    orthogonal_in_range = _is_orthogonal(a_pos, d_pos) and manhattan <= attack_range + 1
     diagonal_adjacent = chebyshev == 1 and not _is_orthogonal(a_pos, d_pos)
     return orthogonal_in_range or diagonal_adjacent
 

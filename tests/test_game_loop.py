@@ -294,6 +294,11 @@ class TestWinMechanism:
 
             while not state.is_game_over and state.turn_number <= 2000:
                 actions = legal_actions(state, library)
+                if not actions:
+                    # Zero-legal-actions edge case (auto-pass scenario the
+                    # server handles in production). Treat as a stalemate
+                    # for the purposes of this random-agent smoke test.
+                    break
                 action = rng.choice(actions)
                 state = resolve_action(state, action, library)
 
