@@ -1418,13 +1418,97 @@ function playAnimation(job, done) {
         case 'summon':
             playSummonAnimation(job, done);
             return;
-        case 'move':
         case 'attack':
+            playAttackAnimation(job, done);
+            return;
+        case 'move':
         case 'noop':
         default:
             setTimeout(done, 0);
             return;
     }
+}
+
+// Wave 4 (Phase 14.3-04): Attack animation.
+// Rubber-band pullback (180ms) -> pause (100ms) -> snap strike (120ms) ->
+// target flash + damage popup -> return tween (300ms) -> apply state.
+// Total ~800ms. State is applied by runQueue's default after done(),
+// so killed minions disappear AFTER the strike, not before.
+function playAttackAnimation(job, done) {
+    var payload = (job && job.payload) || {};
+    var attackerPos = payload.attackerPos;
+    var targetPos = payload.targetPos;
+    var damage = payload.damage;
+
+    if (!attackerPos || !targetPos) { setTimeout(done, 0); return; }
+
+    var attackerCell = document.querySelector(
+        '.board-cell[data-row="' + attackerPos[0] + '"][data-col="' + attackerPos[1] + '"]');
+    var targetCell = document.querySelector(
+        '.board-cell[data-row="' + targetPos[0] + '"][data-col="' + targetPos[1] + '"]');
+
+    if (!attackerCell || !targetCell) { setTimeout(done, 0); return; }
+
+    // Animate the inner .board-minion if present so the cell border stays put.
+    var attackerEl = attackerCell.querySelector('.board-minion') || attackerCell;
+
+    var aRect = attackerCell.getBoundingClientRect();
+    var tRect = targetCell.getBoundingClientRect();
+    var dx = (tRect.left + tRect.width / 2) - (aRect.left + aRect.width / 2);
+    var dy = (tRect.top + tRect.height / 2) - (aRect.top + aRect.height / 2);
+
+    var pullX = -0.3 * dx, pullY = -0.3 * dy;
+    var strikeX = 0.7 * dx, strikeY = 0.7 * dy;
+
+    function cleanupAttacker() {
+        attackerEl.classList.remove('anim-attack-windup');
+        attackerEl.classList.remove('anim-attack-strike');
+        attackerEl.style.transform = '';
+    }
+
+    // PHASE A — pullback (0-180ms)
+    attackerEl.classList.add('anim-attack-windup');
+    attackerEl.style.transform = 'translate(' + pullX + 'px,' + pullY + 'px)';
+
+    setTimeout(function () {
+        // PHASE B — pause (180-280ms)
+        setTimeout(function () {
+            // PHASE C — strike (280-400ms)
+            attackerEl.classList.remove('anim-attack-windup');
+            attackerEl.classList.add('anim-attack-strike');
+            attackerEl.style.transform = 'translate(' + strikeX + 'px,' + strikeY + 'px)';
+
+            setTimeout(function () {
+                // PHASE D — impact: flash + damage popup
+                targetCell.classList.add('anim-target-hit');
+                setTimeout(function () {
+                    targetCell.classList.remove('anim-target-hit');
+                }, 420);
+
+                if (damage != null && damage > 0) {
+                    var popup = document.createElement('div');
+                    popup.className = 'damage-popup';
+                    popup.textContent = '-' + damage;
+                    targetCell.appendChild(popup);
+                    setTimeout(function () {
+                        if (popup.parentNode) popup.parentNode.removeChild(popup);
+                    }, 920);
+                }
+
+                // PHASE E — return tween (400-700ms)
+                attackerEl.classList.remove('anim-attack-strike');
+                attackerEl.classList.add('anim-attack-windup');
+                attackerEl.style.transform = 'translate(0,0)';
+
+                setTimeout(function () {
+                    // PHASE F — finish; runQueue's default applyStateFrame
+                    // will fire on done() and remove dead minions.
+                    cleanupAttacker();
+                    done();
+                }, 300);
+            }, 120);
+        }, 100);
+    }, 180);
 }
 
 // Wave 2: summon animation.
@@ -1553,6 +1637,20 @@ function onStateUpdate(data) {
 // pending_action when present, and returns noop otherwise. Later waves
 // will sharpen the diff (damage numbers, kill detection, etc.).
 function deriveAnimationJob(prev, next) {
+    // Phase 14.3-04: Prefer next.last_action (authoritative server payload)
+    // for ATTACK so we get attacker_pos, target_pos, damage, and killed
+    // directly without diffing minion lists. Falls through to the legacy
+    // pending_action diff for summon/move and any frame missing last_action.
+    var la = next && next.last_action;
+    if (la && la.type === 'ATTACK') {
+        return { type: 'attack', payload: {
+            attackerPos: la.attacker_pos || null,
+            targetPos: la.target_pos || null,
+            damage: la.damage,
+            killed: !!la.killed,
+        } };
+    }
+
     var pa = next && next.pending_action;
     if (!pa) return { type: 'noop', payload: {} };
 
