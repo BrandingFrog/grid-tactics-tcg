@@ -2843,7 +2843,7 @@ function renderBoardMinion(minion) {
     var boardArtStyle = cardDef.card_id ? 'background-image:url(/static/art/' + cardDef.card_id + '.png);background-size:cover;background-position:center;' : '';
     return '<div class="board-minion ' + ownerClass + ' ' + typeClass + '" data-numeric-id="' + minion.card_numeric_id + '" style="' + boardArtStyle + '">'
         + '<div class="board-minion-overlay"></div>'
-        + '<div class="attr-circle-sm ' + elem.css + '"><span class="attr-text-sm">' + elem.name[0] + '</span></div>'
+        + '<div class="attr-circle-sm ' + elem.css + '"><span class="attr-text-sm">' + elem.name + '</span></div>'
         + '<div class="board-minion-name">' + cardDef.name + '</div>'
         + '<div class="board-minion-stats">'
         + '<span class="board-minion-atk">' + atk + '</span>'

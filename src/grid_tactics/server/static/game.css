@@ -958,21 +958,33 @@ body {
   pointer-events: none;
 }
 
-/* Attribute circle on board minion (small) */
+/* Attribute circle on board minion — same look as deck-builder badge, scaled down */
 .board-minion .attr-circle-sm {
   position: absolute;
   top: 3px;
   right: 3px;
-  width: 20px;
-  height: 20px;
+  width: 28px;
+  height: 28px;
   border-radius: 50%;
-  border: 1.5px solid rgb(30, 25, 20);
+  border: 2px solid rgb(30, 25, 20);
   z-index: 3;
 }
 
+.board-minion .attr-circle-sm::after {
+  content: '';
+  position: absolute;
+  top: 9%;
+  left: 9%;
+  width: 82%;
+  height: 82%;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  pointer-events: none;
+}
+
 .board-minion .attr-text-sm {
-  font-size: 10px;
-  letter-spacing: 0;
+  font-size: 7px;
+  letter-spacing: 0.3px;
 }
 
 /* Board minion name */
