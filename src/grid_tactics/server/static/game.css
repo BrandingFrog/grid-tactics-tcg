@@ -854,6 +854,7 @@ body {
   max-height: min(500px, 100%);
   aspect-ratio: 1;
   margin: 0 auto;
+  overflow: visible;
 }
 
 /* Board Cell */
@@ -868,7 +869,10 @@ body {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  overflow: hidden;
+  /* overflow:visible so animations (attack pullback, damage popup,
+     summon scale-in) can escape the cell. Card-art is still clipped
+     by .board-minion which has its own overflow:hidden + border-radius. */
+  overflow: visible;
 }
 
 .board-cell:hover {
