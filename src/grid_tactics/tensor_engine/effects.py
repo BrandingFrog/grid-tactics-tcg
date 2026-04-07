@@ -218,10 +218,11 @@ def _apply_to_adjacent(state, active, eamount, caster_slots, card_table, damage=
         m_row = state.minion_row[:, s]
         m_col = state.minion_col[:, s]
         m_flat = m_row * GRID_COLS + m_col
-        # Use chebyshev distance == 1 for all adjacent (ortho + diagonal)
+        # Orthogonal-only adjacency: manhattan==1 catches the 4 cardinals
+        # and excludes diagonals (which are manhattan==2).
         safe_caster_flat = caster_flat.clamp(0, 24)
         safe_m_flat = m_flat.clamp(0, 24)
-        is_adj = card_table.distance_chebyshev[safe_caster_flat, safe_m_flat] == 1
+        is_adj = card_table.distance_manhattan[safe_caster_flat, safe_m_flat] == 1
         hit = active & state.minion_alive[:, s] & is_adj & (caster_slots >= 0)
         if hit.any():
             if damage:

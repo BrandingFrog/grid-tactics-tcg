@@ -228,12 +228,14 @@ def _resolve_adjacent(
     library: CardLibrary,
     caster_owner: Optional[PlayerSide] = None,
 ) -> GameState:
-    """Resolve effect on all minions adjacent (orthogonal + diagonal) to caster_pos.
+    """Resolve effect on all minions orthogonally adjacent to caster_pos.
 
-    Burn-aura effects (EffectType.BURN) are restricted to enemies of the
-    caster -- they should not stack burning_stacks on friendlies.
+    "Adjacent" in this engine means the four cardinal neighbours (no
+    diagonals). Burn-aura effects (EffectType.BURN) are additionally
+    restricted to enemies of the caster -- they should not stack
+    burning_stacks on friendlies.
     """
-    adjacent_positions = Board.get_all_adjacent(caster_pos)
+    adjacent_positions = Board.get_orthogonal_adjacent(caster_pos)
     for minion in state.minions:
         if minion.position not in adjacent_positions:
             continue

@@ -483,7 +483,8 @@ class TensorGameEngine:
 
         For each masked game and each minion slot, applies:
           - BURN aura: +passive_burn_amount burning_stacks on every alive
-            adjacent ENEMY minion (chebyshev distance == 1).
+            ORTHOGONALLY adjacent ENEMY minion (manhattan distance == 1,
+            no diagonals).
           - PASSIVE_HEAL: heal self by passive_heal_amount, capped at the
             minion's base health from card_table.
 
@@ -529,7 +530,7 @@ class TensorGameEngine:
                     t_row = s.minion_row[:, tgt]
                     t_col = s.minion_col[:, tgt]
                     t_flat = (t_row * GRID_COLS + t_col).clamp(0, 24).long()
-                    is_adj = ct.distance_chebyshev[src_flat, t_flat] == 1
+                    is_adj = ct.distance_manhattan[src_flat, t_flat] == 1
                     hit = has_burn & t_alive & is_adj & (t_owner != src_owner)
                     if hit.any():
                         delta = (burn_amt * hit.int()).to(s.burning_stacks.dtype)
