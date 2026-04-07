@@ -2117,7 +2117,7 @@ function onBoardMinionClick(minion) {
         }
     }
 
-    // If clicking own minion — select it
+    // If clicking own minion — show action menu
     if (minion.owner === myPlayerIdx) {
         // If already selected, deselect
         if (selectedMinionId === minion.instance_id) {
@@ -2130,31 +2130,25 @@ function onBoardMinionClick(minion) {
 
         selectedMinionId = minion.instance_id;
         selectedHandIdx = null;
+        // Don't auto-enter move/attack mode — wait for menu choice
+        interactionMode = null;
 
         var moves = getMovePositions(minion.instance_id);
         var attacks = getAttackTargets(minion.instance_id);
         var transforms = getTransformActions(minion.instance_id);
         var canSac = canSacrifice(minion.instance_id);
 
-        if (moves.length > 0 || attacks.length > 0) {
-            interactionMode = (attacks.length > 0) ? 'attack' : 'move';
-            if (moves.length > 0 && attacks.length > 0) interactionMode = 'move_attack';
-        }
+        showMinionActionMenu(minion, moves, attacks, transforms, canSac);
 
-        // Show action menu if minion has transforms or sacrifice option
-        if (transforms.length > 0 || canSac) {
-            showMinionActionMenu(minion, transforms, canSac);
-        } else {
-            hideMinionActionMenu();
-        }
-
+        // Clear any stale highlights — they'll appear when a menu option is picked
         highlightBoard();
         updateHandHighlights();
     }
 }
 
-// Show a popup menu near a selected minion with transform/sacrifice options
-function showMinionActionMenu(minion, transforms, canSac) {
+// Show a popup action menu sticking out from the selected minion's tile.
+// Always shows Move/Attack/Effects/Cancel — options are disabled or hidden if not applicable.
+function showMinionActionMenu(minion, moves, attacks, transforms, canSac) {
     hideMinionActionMenu();
     var cell = document.querySelector('.board-cell[data-row="' + minion.position[0] + '"][data-col="' + minion.position[1] + '"]');
     if (!cell) return;
@@ -2163,39 +2157,70 @@ function showMinionActionMenu(minion, transforms, canSac) {
     menu.id = 'minion-action-menu';
     menu.className = 'minion-action-menu';
 
-    // Sacrifice button
-    if (canSac) {
-        var sacBtn = document.createElement('button');
-        sacBtn.className = 'minion-action-btn sacrifice';
-        sacBtn.textContent = 'Sacrifice for damage';
-        sacBtn.addEventListener('click', function(e) {
-            e.stopPropagation();
-            submitAction({ action_type: 6, minion_id: minion.instance_id });
-        });
-        menu.appendChild(sacBtn);
+    function addBtn(label, cls, handler, disabled) {
+        var btn = document.createElement('button');
+        btn.className = 'minion-action-btn ' + (cls || '');
+        btn.textContent = label;
+        if (disabled) {
+            btn.disabled = true;
+            btn.classList.add('disabled');
+        } else {
+            btn.addEventListener('click', function(e) {
+                e.stopPropagation();
+                handler();
+            });
+        }
+        menu.appendChild(btn);
     }
 
-    // Transform buttons
-    transforms.forEach(function(t) {
-        var btn = document.createElement('button');
-        btn.className = 'minion-action-btn transform';
-        // Look up target card name + cost
-        var targetCard = null;
-        for (var nid in cardDefs) {
-            if (cardDefs[nid].card_id === t.transform_target) { targetCard = cardDefs[nid]; break; }
-        }
-        var name = targetCard ? targetCard.name : t.transform_target;
-        var cost = targetCard ? targetCard.mana_cost : '?';
-        btn.textContent = 'Transform → ' + name + ' (' + cost + ')';
-        btn.addEventListener('click', function(e) {
-            e.stopPropagation();
-            submitAction({
-                action_type: 7,
-                minion_id: minion.instance_id,
-                transform_target: t.transform_target,
+    // Move
+    if (moves && moves.length > 0) {
+        addBtn('Move', 'move', function() {
+            interactionMode = (attacks && attacks.length > 0) ? 'move_attack' : 'move';
+            hideMinionActionMenu();
+            highlightBoard();
+        });
+    }
+
+    // Attack
+    if (attacks && attacks.length > 0) {
+        addBtn('Attack', 'attack', function() {
+            interactionMode = 'attack';
+            hideMinionActionMenu();
+            highlightBoard();
+        });
+    }
+
+    // Effects: Sacrifice + Transform options (only if any apply)
+    if (canSac) {
+        addBtn('Sacrifice for damage', 'sacrifice', function() {
+            submitAction({ action_type: 6, minion_id: minion.instance_id });
+        });
+    }
+    if (transforms && transforms.length > 0) {
+        transforms.forEach(function(t) {
+            var targetCard = null;
+            for (var nid in cardDefs) {
+                if (cardDefs[nid].card_id === t.transform_target) { targetCard = cardDefs[nid]; break; }
+            }
+            var name = targetCard ? targetCard.name : t.transform_target;
+            var cost = targetCard ? targetCard.mana_cost : '?';
+            addBtn('Transform → ' + name + ' (' + cost + ')', 'transform', function() {
+                submitAction({
+                    action_type: 7,
+                    minion_id: minion.instance_id,
+                    transform_target: t.transform_target,
+                });
             });
         });
-        menu.appendChild(btn);
+    }
+
+    // Cancel — always present
+    addBtn('Cancel', 'cancel', function() {
+        clearSelection();
+        hideMinionActionMenu();
+        highlightBoard();
+        updateHandHighlights();
     });
 
     cell.appendChild(menu);

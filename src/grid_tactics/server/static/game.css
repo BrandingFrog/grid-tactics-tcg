@@ -1583,6 +1583,39 @@ body {
   color: var(--bg);
 }
 
+.minion-action-btn.move {
+  border-color: var(--cyan);
+  color: var(--cyan);
+}
+.minion-action-btn.move:hover {
+  background: var(--cyan);
+  color: var(--bg);
+}
+
+.minion-action-btn.attack {
+  border-color: #ff5050;
+  color: #ff5050;
+}
+.minion-action-btn.attack:hover {
+  background: #ff5050;
+  color: white;
+}
+
+.minion-action-btn.cancel {
+  border-color: var(--border);
+  color: var(--text-dim);
+  margin-top: 2px;
+}
+.minion-action-btn.cancel:hover {
+  background: var(--border);
+  color: var(--text);
+}
+
+.minion-action-btn.disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
 /* Sacrifice picker overlay */
 .sacrifice-picker-overlay {
   position: fixed;
