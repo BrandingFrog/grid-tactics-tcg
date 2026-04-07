@@ -604,3 +604,150 @@ class TestSoundness:
                     f"legal_actions (react) returned action that raises ValueError: "
                     f"{action} -> {e}"
                 )
+
+
+# ---------------------------------------------------------------------------
+# Phase 14.1: Pending post-move attack mask
+# ---------------------------------------------------------------------------
+
+
+class TestPendingPostMoveAttackMask:
+    """Mask must restrict to ATTACK-from-pending + DECLINE in pending state."""
+
+    def _melee_state_with_pending(self, library, enemy_positions):
+        """Build a state where a P1 melee minion at (1,2) has pending set,
+        with enemy minions at the given positions."""
+        fire_imp_id = library.get_numeric_id("fire_imp")  # melee, range=0
+        attacker = MinionInstance(
+            instance_id=10, card_numeric_id=fire_imp_id,
+            owner=PlayerSide.PLAYER_1, position=(1, 2), current_health=2,
+        )
+        enemies = tuple(
+            MinionInstance(
+                instance_id=20 + i, card_numeric_id=fire_imp_id,
+                owner=PlayerSide.PLAYER_2, position=pos, current_health=2,
+            )
+            for i, pos in enumerate(enemy_positions)
+        )
+        state = _make_state(
+            p1_hand=(fire_imp_id,),  # would normally be playable
+            p1_mana=5, p2_mana=5,
+            minions=(attacker, *enemies),
+        )
+        return replace(state, pending_post_move_attacker_id=10)
+
+    def test_pending_state_only_attack_and_decline(self, library):
+        """In pending state: only ATTACK from the pending attacker on
+        in-range enemies + DECLINE_POST_MOVE_ATTACK are legal."""
+        # Two enemies adjacent to attacker at (1,2): (0,2) and (2,2)
+        # One enemy not adjacent: (4,4)
+        state = self._melee_state_with_pending(
+            library, enemy_positions=[(0, 2), (2, 2), (4, 4)]
+        )
+        actions = legal_actions(state, library)
+
+        # Every action is either ATTACK (from minion 10) or DECLINE
+        for a in actions:
+            assert a.action_type in (
+                ActionType.ATTACK, ActionType.DECLINE_POST_MOVE_ATTACK,
+            ), f"Unexpected action type in pending state: {a}"
+            if a.action_type == ActionType.ATTACK:
+                assert a.minion_id == 10, "Only pending attacker may attack"
+
+        # Exactly one DECLINE
+        decline = [a for a in actions if a.action_type == ActionType.DECLINE_POST_MOVE_ATTACK]
+        assert len(decline) == 1
+
+        # Two valid attack targets (the two adjacent enemies); the (4,4)
+        # enemy is out of range and must NOT be a target.
+        attacks = [a for a in actions if a.action_type == ActionType.ATTACK]
+        target_ids = {a.target_id for a in attacks}
+        assert target_ids == {20, 21}, f"Expected adjacent enemies only, got {target_ids}"
+
+        # No PLAY_CARD / MOVE / SACRIFICE / DRAW / regular PASS / REACT
+        forbidden = {
+            ActionType.PLAY_CARD, ActionType.MOVE, ActionType.SACRIFICE,
+            ActionType.DRAW, ActionType.PASS, ActionType.PLAY_REACT,
+        }
+        for a in actions:
+            assert a.action_type not in forbidden, (
+                f"Forbidden action type {a.action_type} in pending state"
+            )
+
+    def test_pending_state_no_targets_only_decline(self, library):
+        """Defensive: pending with no in-range enemies -> only DECLINE.
+
+        Wave 1 prevents this from happening at runtime, but the mask must
+        not crash and must keep the player able to escape.
+        """
+        # Only enemy is far away, not adjacent to (1,2)
+        state = self._melee_state_with_pending(
+            library, enemy_positions=[(4, 4)]
+        )
+        actions = legal_actions(state, library)
+        assert len(actions) == 1
+        assert actions[0].action_type == ActionType.DECLINE_POST_MOVE_ATTACK
+
+    def test_normal_state_mask_unchanged_when_pending_none(self, library):
+        """Non-pending state must enumerate the same actions as before."""
+        fire_imp_id = library.get_numeric_id("fire_imp")
+        state = _make_state(p1_hand=(fire_imp_id,), p1_mana=5)
+        # Sanity: pending is None by default
+        assert state.pending_post_move_attacker_id is None
+        actions = legal_actions(state, library)
+        # Should match the existing TestMinionDeployment expectation:
+        # 10 deploy positions for melee minion in P1 rows.
+        play = [a for a in actions if a.action_type == ActionType.PLAY_CARD]
+        assert len(play) == 10
+        # No DECLINE in non-pending state
+        decline = [a for a in actions if a.action_type == ActionType.DECLINE_POST_MOVE_ATTACK]
+        assert len(decline) == 0
+
+    def test_slot_1001_decodes_to_pass_normally_and_decline_in_pending(self, library):
+        """Action encoder slot 1001 dual meaning: PASS without pending,
+        DECLINE_POST_MOVE_ATTACK with pending set."""
+        pytest.importorskip("stable_baselines3")  # rl pkg __init__ imports SB3
+        from grid_tactics.rl.action_space import ActionEncoder, PASS_IDX
+
+        encoder = ActionEncoder()
+
+        # Non-pending state -> slot 1001 decodes to PASS
+        normal_state = _make_state()
+        assert normal_state.pending_post_move_attacker_id is None
+        decoded_normal = encoder.decode(PASS_IDX, normal_state, library)
+        assert decoded_normal.action_type == ActionType.PASS
+
+        # Pending state -> slot 1001 decodes to DECLINE_POST_MOVE_ATTACK
+        pending_state = self._melee_state_with_pending(
+            library, enemy_positions=[(0, 2)]
+        )
+        decoded_pending = encoder.decode(PASS_IDX, pending_state, library)
+        assert decoded_pending.action_type == ActionType.DECLINE_POST_MOVE_ATTACK
+
+        # Encoder maps DECLINE -> slot 1001
+        from grid_tactics.actions import decline_post_move_attack_action
+        encoded = encoder.encode(decline_post_move_attack_action(), pending_state)
+        assert encoded == PASS_IDX
+
+    def test_build_action_mask_pending_state(self, library):
+        """build_action_mask reflects the pending-state restriction."""
+        pytest.importorskip("stable_baselines3")  # rl pkg __init__ imports SB3
+        from grid_tactics.rl.action_space import (
+            ATTACK_BASE, ActionEncoder, PASS_IDX, build_action_mask,
+        )
+
+        encoder = ActionEncoder()
+        state = self._melee_state_with_pending(
+            library, enemy_positions=[(0, 2), (2, 2), (4, 4)]
+        )
+        mask = build_action_mask(state, library, encoder)
+
+        # Slot 1001 (DECLINE) is True
+        assert mask[PASS_IDX]
+
+        # Exactly 2 ATTACK slots are True (the two adjacent enemies)
+        attack_slice = mask[ATTACK_BASE:ATTACK_BASE + 625]
+        assert int(attack_slice.sum()) == 2
+
+        # Total True == 3 (2 attacks + 1 decline)
+        assert int(mask.sum()) == 3
