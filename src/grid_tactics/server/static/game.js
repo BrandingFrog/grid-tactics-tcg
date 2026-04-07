@@ -2847,13 +2847,26 @@ function showMinionActionMenu(minion, moves, attacks, transforms, canSac) {
         });
     }
     if (transforms && transforms.length > 0) {
+        // Look up the SOURCE minion's card def so we can read the per-target
+        // transform cost from `transform_options` (the engine charges this,
+        // NOT the target card's base mana_cost). Without this, the menu used
+        // to display the target's BASE cost which often differed from the
+        // actual transform cost, confusing the player about affordability.
+        var sourceCard = cardDefs[minion.card_numeric_id];
+        var transformCostByTarget = {};
+        if (sourceCard && sourceCard.transform_options) {
+            sourceCard.transform_options.forEach(function(opt) {
+                transformCostByTarget[opt.target] = opt.mana_cost;
+            });
+        }
         transforms.forEach(function(t) {
             var targetCard = null;
             for (var nid in cardDefs) {
                 if (cardDefs[nid].card_id === t.transform_target) { targetCard = cardDefs[nid]; break; }
             }
             var name = targetCard ? targetCard.name : t.transform_target;
-            var cost = targetCard ? targetCard.mana_cost : '?';
+            var cost = transformCostByTarget[t.transform_target];
+            if (cost == null) cost = targetCard ? targetCard.mana_cost : '?';
             addBtn('Transform → ' + name + ' (' + cost + ')', 'transform', function() {
                 submitAction({
                     action_type: 7,
