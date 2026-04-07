@@ -2560,3 +2560,34 @@ body {
   border-color: #ff6060;
 }
 
+/* =============================================
+ * Phase 14.3 Animations
+ * =============================================
+ * Wave 2: summon scale-in + grid shake.
+ * .anim-summon is applied to a .board-cell (containing a freshly-summoned
+ * minion) by the AnimationQueue via the animatingTiles registry.
+ * .anim-grid-shake is applied transiently to #game-board.
+ */
+
+@keyframes summon-scale-in {
+  0%   { transform: scale(2.0); opacity: 0; }
+  20%  { opacity: 1; }
+  100% { transform: scale(1.0); opacity: 1; }
+}
+.anim-summon {
+  animation: summon-scale-in 600ms cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  transform-origin: center center;
+  z-index: 10;
+}
+
+@keyframes grid-shake {
+  0%, 100% { transform: translate(0, 0); }
+  20% { transform: translate(-3px, 2px); }
+  40% { transform: translate(3px, -2px); }
+  60% { transform: translate(-2px, -2px); }
+  80% { transform: translate(2px, 1px); }
+}
+.anim-grid-shake {
+  animation: grid-shake 350ms ease-in-out;
+}
+
