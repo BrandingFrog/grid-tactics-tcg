@@ -463,8 +463,84 @@ class TensorGameEngine:
                     self.cleanup_dead_minions_batch()
                     self.check_game_over_batch()
 
+                # Audit-followup: PASSIVE pipeline parity. After burn-tick
+                # but before mana regen / auto-draw (matches Python order in
+                # react_stack.resolve_react_stack), fire PASSIVE-trigger
+                # effects for every minion on the board:
+                #   - passive_burn_amount > 0: stack burning on adjacent
+                #     enemies (Emberplague Rat aura)
+                #   - passive_heal_amount > 0: heal self up to base health
+                #     (Fallen Paladin)
+                self._fire_passive_effects_batch(should_advance)
+                self.cleanup_dead_minions_batch()
+                self.check_game_over_batch()
+
                 # Auto-draw for new active player at turn start
                 apply_draw_batch(s, should_advance, self.card_table)
+
+    def _fire_passive_effects_batch(self, mask: torch.Tensor) -> None:
+        """Audit-followup: vectorized PASSIVE-trigger pipeline.
+
+        For each masked game and each minion slot, applies:
+          - BURN aura: +passive_burn_amount burning_stacks on every alive
+            adjacent ENEMY minion (chebyshev distance == 1).
+          - PASSIVE_HEAL: heal self by passive_heal_amount, capped at the
+            minion's base health from card_table.
+
+        Iterates over MAX_MINIONS slots (fixed 25) — NOT over batch N.
+        Mirrors Python react_stack._fire_passive_effects.
+        """
+        s = self.state
+        device = self.device
+        N = self.n_envs
+        if not bool(mask.any().item()):
+            return
+
+        ct = self.card_table
+        arange_n = torch.arange(N, device=device)
+
+        for src in range(MAX_MINIONS):
+            src_alive = s.minion_alive[:, src]
+            src_active = mask & src_alive
+            if not src_active.any():
+                continue
+            src_cid = s.minion_card_id[:, src].clamp(0).long()
+            burn_amt = ct.passive_burn_amount[src_cid]      # [N]
+            heal_amt = ct.passive_heal_amount[src_cid]      # [N]
+            has_burn = src_active & (burn_amt > 0)
+            has_heal = src_active & (heal_amt > 0)
+            if not (has_burn.any() or has_heal.any()):
+                continue
+
+            src_owner = s.minion_owner[:, src]
+            src_row = s.minion_row[:, src]
+            src_col = s.minion_col[:, src]
+            src_flat = (src_row * GRID_COLS + src_col).clamp(0, 24).long()
+
+            # Burn aura: scan every other slot, stack on adjacent enemies.
+            if has_burn.any():
+                for tgt in range(MAX_MINIONS):
+                    if tgt == src:
+                        continue
+                    t_alive = s.minion_alive[:, tgt]
+                    if not t_alive.any():
+                        continue
+                    t_owner = s.minion_owner[:, tgt]
+                    t_row = s.minion_row[:, tgt]
+                    t_col = s.minion_col[:, tgt]
+                    t_flat = (t_row * GRID_COLS + t_col).clamp(0, 24).long()
+                    is_adj = ct.distance_chebyshev[src_flat, t_flat] == 1
+                    hit = has_burn & t_alive & is_adj & (t_owner != src_owner)
+                    if hit.any():
+                        delta = (burn_amt * hit.int()).to(s.burning_stacks.dtype)
+                        s.burning_stacks[:, tgt] = s.burning_stacks[:, tgt] + delta
+
+            # Passive self-heal: cap at base health.
+            if has_heal.any():
+                base_hp = ct.health[src_cid]
+                cur_hp = s.minion_health[:, src]
+                new_hp = torch.minimum(cur_hp + heal_amt, base_hp)
+                s.minion_health[:, src] = torch.where(has_heal, new_hp, cur_hp)
 
     def cleanup_dead_minions_batch(self):
         """Remove minions with health <= 0. Trigger ON_DEATH effects.
