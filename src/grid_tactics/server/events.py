@@ -10,6 +10,7 @@ from grid_tactics.server.action_codec import reconstruct_action, serialize_actio
 from grid_tactics.server.app import socketio
 from grid_tactics.server.room_manager import RoomManager
 from grid_tactics.server.view_filter import (
+    enrich_last_action,
     enrich_pending_post_move_attack,
     enrich_pending_tutor_for_viewer,
     filter_state_for_player,
@@ -83,14 +84,19 @@ def _build_card_defs(library):
     return defs
 
 
-def _emit_state_to_players(session, state):
+def _emit_state_to_players(session, state, prev_state=None, resolved_action=None):
     """Emit filtered state + legal actions to each player via their SID.
 
     Decision-maker gets the legal_actions list; opponent gets an empty list.
     REACT phase decision-maker is react_player_idx; ACTION phase is active_player_idx.
+
+    If `prev_state` and `resolved_action` are provided, a `last_action` field
+    (Phase 14.3-04) is enriched onto the serialized state so the client can
+    drive attack animations + damage popups.
     """
     state_dict = state.to_dict()
     enrich_pending_post_move_attack(state, state_dict, session.library)
+    enrich_last_action(state_dict, prev_state, state, resolved_action)
     actions = legal_actions(state, session.library) if not state.is_game_over else ()
     serialized_actions = [serialize_action(a) for a in actions]
 
@@ -411,8 +417,8 @@ def register_events(room_manager: RoomManager) -> None:
 
             new_state = session.state
 
-        # Step j: Emit state to both players
-        _emit_state_to_players(session, new_state)
+        # Step j: Emit state to both players (with last_action enrichment)
+        _emit_state_to_players(session, new_state, prev_state=saved_state, resolved_action=action)
 
         # Step k: If game over, emit game_over
         if new_state.is_game_over:

@@ -81,6 +81,94 @@ def _tile_in_attack_range(
     return orthogonal_in_range or diagonal_adjacent
 
 
+def enrich_last_action(
+    state_dict: dict,
+    prev_state,
+    new_state,
+    action,
+) -> None:
+    """Phase 14.3-04: Expose the just-resolved action to the client.
+
+    Mutates state_dict in place. Adds a `last_action` field shaped as:
+
+        {
+            "type": "PLAY_CARD" | "MOVE" | "ATTACK" | "PASS" | ... ,
+            "attacker_pos": [r, c] | None,
+            "target_pos":   [r, c] | None,
+            "damage":       int   | None,
+            "killed":       bool,
+        }
+
+    For ATTACK actions we also compute the actual damage dealt and whether
+    the target was killed by diffing the target minion between prev/new
+    state. For non-attack actions damage/killed remain None/False but the
+    field still flows so the client can branch on `type`.
+
+    Safe to call with `prev_state=None` and/or `action=None` (e.g. initial
+    frame, lobby/meta frames). In those cases `last_action` is set to None.
+    """
+    if action is None or prev_state is None:
+        state_dict["last_action"] = None
+        return
+
+    try:
+        atype = action.action_type
+        atype_name = atype.name if hasattr(atype, "name") else str(atype)
+    except Exception:
+        state_dict["last_action"] = None
+        return
+
+    attacker_pos = None
+    target_pos = None
+    damage = None
+    killed = False
+
+    # Resolve attacker minion position from prev_state via minion_id when present.
+    try:
+        if action.minion_id is not None:
+            m = prev_state.get_minion(action.minion_id)
+            if m is not None:
+                attacker_pos = [int(m.position[0]), int(m.position[1])]
+    except Exception:
+        pass
+
+    if atype_name == "ATTACK":
+        try:
+            target_prev = prev_state.get_minion(action.target_id) if action.target_id is not None else None
+            if target_prev is not None:
+                target_pos = [int(target_prev.position[0]), int(target_prev.position[1])]
+                target_new = new_state.get_minion(action.target_id) if new_state is not None else None
+                if target_new is None:
+                    damage = int(target_prev.current_health)
+                    killed = True
+                else:
+                    delta = int(target_prev.current_health) - int(target_new.current_health)
+                    damage = max(0, delta)
+                    killed = False
+        except Exception:
+            pass
+    elif atype_name == "MOVE":
+        try:
+            if action.position is not None:
+                target_pos = [int(action.position[0]), int(action.position[1])]
+        except Exception:
+            pass
+    elif atype_name == "PLAY_CARD":
+        try:
+            if action.position is not None:
+                target_pos = [int(action.position[0]), int(action.position[1])]
+        except Exception:
+            pass
+
+    state_dict["last_action"] = {
+        "type": atype_name,
+        "attacker_pos": attacker_pos,
+        "target_pos": target_pos,
+        "damage": damage,
+        "killed": bool(killed),
+    }
+
+
 def enrich_pending_post_move_attack(state, state_dict: dict, library) -> None:
     """Add Phase 14.1 pending-post-move-attack fields to a serialized state dict.
 
