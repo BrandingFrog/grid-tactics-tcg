@@ -1533,14 +1533,12 @@ function playAttackAnimation(job, done) {
                     targetCell.classList.remove('anim-target-hit');
                 }, 420);
 
+                // Phase 14.3 Wave 7: route combat damage through the unified
+                // showFloatingPopup pathway. Replaces the Wave 4 inline
+                // .damage-popup span. The .damage-popup CSS block is now
+                // unused (harmless to leave behind).
                 if (damage != null && damage > 0) {
-                    var popup = document.createElement('div');
-                    popup.className = 'damage-popup';
-                    popup.textContent = '-' + damage;
-                    targetCell.appendChild(popup);
-                    setTimeout(function () {
-                        if (popup.parentNode) popup.parentNode.removeChild(popup);
-                    }, 920);
+                    showFloatingPopup(targetCell, '⚔️ -' + damage, 'combat-damage');
                 }
 
                 // PHASE E — return tween (400-700ms)
@@ -1690,6 +1688,46 @@ function playSummonAnimation(job, done) {
 // it automatically runs post-animation.
 function applyStateFrame(frame, legal) {
     var prevState = gameState;
+
+    // Phase 14.3 Wave 7: per-minion HP delta hooks BEFORE state mutates.
+    // - Heal popup: any current_health increase between frames.
+    // - Burn-tick popup: HP decrease on a burning minion at the moment
+    //   the active player flips (the only frame where the engine ticks
+    //   burning). Popups anchor to the OLD tile so lethal burns still
+    //   show the number before the minion vanishes on the next render.
+    // NOTE: Phase 14.3 now has 7 plans (waves 6+7 added). Re-run
+    // /gsd:plan-phase Wave 5 closeout or update STATE.md/ROADMAP.md
+    // manually after this lands.
+    try {
+        if (prevState && prevState.minions && frame && frame.minions) {
+            var prevMinions = {};
+            collectMinions(prevState).forEach(function (m) {
+                if (m && m.instance_id != null) prevMinions[m.instance_id] = m;
+            });
+            var turnFlipped = prevState.active_player_idx !== frame.active_player_idx;
+            collectMinions(frame).forEach(function (m) {
+                var p = prevMinions[m.instance_id];
+                if (!p) return; // newly summoned this frame
+                var prevHp = p.current_health;
+                var nextHp = m.current_health;
+                var tileEl = getTileElForMinion(m);
+
+                // Heal: HP went UP
+                if (nextHp > prevHp) {
+                    showFloatingPopup(tileEl, '💚 +' + (nextHp - prevHp), 'heal');
+                }
+
+                // Burn tick: turn just flipped, prev had burning stacks,
+                // and HP went DOWN. Anchor to the prev tile in case the
+                // minion gets removed on this frame.
+                if (turnFlipped && p.burning_stacks > 0 && nextHp < prevHp) {
+                    var burnTile = getTileElForMinion(p) || tileEl;
+                    showFloatingPopup(burnTile, '🔥 -' + (prevHp - nextHp), 'burn-tick');
+                }
+            });
+        }
+    } catch (e) { /* defensive: never block state application */ }
+
     gameState = frame;
     if (legal !== undefined) legalActions = legal;
     logStateDiff(prevState, gameState);
