@@ -204,12 +204,41 @@ def _action_phase_actions(
     for minion in owned_minions:
         row, col = minion.position
         # Forward: P1 moves down (+1 row), P2 moves up (-1 row)
-        fwd_row = row + (1 if player_side == PlayerSide.PLAYER_1 else -1)
+        delta = 1 if player_side == PlayerSide.PLAYER_1 else -1
+        fwd_row = row + delta
         if 0 <= fwd_row < GRID_ROWS:
             if state.board.get(fwd_row, col) is None:
                 actions.append(move_action(
                     minion_id=minion.instance_id, position=(fwd_row, col),
                 ))
+            else:
+                # LEAP: if the forward tile is blocked but the minion has a
+                # LEAP effect, allow jumping over the blocker to the next empty
+                # tile in the same column (up to `amount` tiles past the blocker).
+                minion_card = library.get_by_id(minion.card_numeric_id)
+                leap_amount = 0
+                for eff in minion_card.effects:
+                    if eff.effect_type == EffectType.LEAP:
+                        leap_amount = max(leap_amount, eff.amount or 1)
+                if leap_amount > 0:
+                    # Walk past the blocker(s) up to leap_amount additional steps
+                    landing_row = fwd_row + delta
+                    steps = 0
+                    while (
+                        0 <= landing_row < GRID_ROWS
+                        and steps < leap_amount
+                        and state.board.get(landing_row, col) is not None
+                    ):
+                        landing_row += delta
+                        steps += 1
+                    if (
+                        0 <= landing_row < GRID_ROWS
+                        and state.board.get(landing_row, col) is None
+                    ):
+                        actions.append(move_action(
+                            minion_id=minion.instance_id,
+                            position=(landing_row, col),
+                        ))
 
     # ATTACK enumeration
     for minion in owned_minions:

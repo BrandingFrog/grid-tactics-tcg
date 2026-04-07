@@ -168,13 +168,40 @@ def _apply_move(state: GameState, action: Action, library: CardLibrary = None) -
             f"Lane-locked: cannot move laterally from col {src_col} to col {tgt_col}"
         )
 
-    # Forward-only: P1 moves down (+1 row), P2 moves up (-1 row)
-    expected_row = src_row + (1 if active_side == PlayerSide.PLAYER_1 else -1)
-    if tgt_row != expected_row:
+    # Forward-only: P1 moves down (+1 row), P2 moves up (-1 row).
+    # LEAP minions may move multiple tiles forward in the same column when
+    # the immediate forward tile is blocked. We delegate the geometry check
+    # to the legal-actions enumerator (legal_actions.py) and just verify
+    # here that the target row is in the forward direction and reachable.
+    delta = 1 if active_side == PlayerSide.PLAYER_1 else -1
+    if (tgt_row - src_row) * delta <= 0:
         raise ValueError(
-            f"Forward-only: {active_side.name} at row {src_row} must move to row "
-            f"{expected_row}, not row {tgt_row}"
+            f"Forward-only: {active_side.name} at row {src_row} must move "
+            f"forward (delta={delta}), not to row {tgt_row}"
         )
+    # Single-step is always allowed when target is empty (handled below).
+    # Multi-step (leap) requires a LEAP effect on the minion's card AND the
+    # immediate forward tile to be blocked.
+    if abs(tgt_row - src_row) > 1:
+        if library is None:
+            raise ValueError("Multi-tile move requires library for LEAP validation")
+        from grid_tactics.enums import EffectType as _ET
+        minion_card = library.get_by_id(minion.card_numeric_id)
+        leap_amount = 0
+        for eff in minion_card.effects:
+            if eff.effect_type == _ET.LEAP:
+                leap_amount = max(leap_amount, eff.amount or 1)
+        if leap_amount <= 0:
+            raise ValueError(
+                f"Minion {minion.instance_id} has no LEAP -- cannot multi-step move"
+            )
+        # Verify the immediate forward tile is occupied (precondition for leap)
+        first_step_row = src_row + delta
+        if state.board.get(first_step_row, src_col) is None:
+            raise ValueError("LEAP only legal when the forward tile is blocked")
+        # Leap distance cap: 1 (the immediate blocker) + leap_amount additional
+        if abs(tgt_row - src_row) > 1 + leap_amount:
+            raise ValueError("LEAP target row exceeds leap distance")
 
     # Check target cell is empty
     if state.board.get(target_pos[0], target_pos[1]) is not None:
