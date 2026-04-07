@@ -153,6 +153,7 @@ A fantasy trading card game on a 5x5 grid with RL-driven strategy discovery. Pla
 ## Conventions
 
 - **Card definitions**: JSON files in `data/cards/`, one per card. Loaded by `CardLibrary.from_directory()`.
+- **Card text stat notation** (locked 2026-04-07): Use 🗡️ (dagger) for attack and 🛡️ (shield) for health in ALL card-facing text — flavour_text, effect descriptions, tooltips, ability labels, aura formulas, glossary entries, Obsidian notes. Examples: `+5🗡️`, `+5🛡️`, `+1🗡️/+1🛡️`, `3🗡️/8🛡️`. Do NOT use words like "attack"/"ATK"/"HP" or other symbols when referring to stat changes in player-facing text. Engine field names (`attack`, `health`, `attack_bonus`) stay as-is.
 - **Keyword glossary**: `data/GLOSSARY.md` is the source of truth for all card keywords. When adding/changing/removing keywords, update BOTH `data/GLOSSARY.md` AND the `KEYWORD_GLOSSARY` object in `src/grid_tactics/server/static/game.js`. Always keep them in sync.
 - **Enums**: IntEnum for all game constants (numpy/tensor compatible). New values append to end.
 - **Immutable state**: Python engine uses frozen dataclasses + `replace()`. Tensor engine mutates in-place.
