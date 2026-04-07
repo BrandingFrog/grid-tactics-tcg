@@ -238,32 +238,60 @@ def _resolve_self_owner(
 # ---------------------------------------------------------------------------
 
 
-def _resolve_tutor(
+def _enter_pending_tutor(
     state: GameState,
     card_def: CardDefinition,
     caster_owner: PlayerSide,
     library: CardLibrary,
 ) -> GameState:
-    """Search the caster's deck for tutor_target card and add to hand."""
+    """Phase 14.2: enter pending_tutor state.
+
+    Computes deck indices in the caster's deck whose card matches
+    `card_def.tutor_target` (string shorthand or selector dict). Does NOT
+    move any card -- the pick is resolved later in action_resolver via
+    TUTOR_SELECT or DECLINE_TUTOR.
+
+    Mutex: asserts no concurrent pending_post_move_attacker_id (defense in
+    depth -- tutor only fires from on_play, not from MOVE).
+    """
     if not card_def.tutor_target:
         return state
-    try:
-        target_numeric_id = library.get_numeric_id(card_def.tutor_target)
-    except KeyError:
-        return state  # tutor target card not in library
+
+    assert state.pending_post_move_attacker_id is None, (
+        "Cannot enter pending_tutor while pending_post_move_attacker_id is set"
+    )
+    assert state.pending_tutor_player_idx is None, (
+        "Cannot enter pending_tutor while another pending_tutor is set"
+    )
+
     player_idx = _player_index_for_side(caster_owner)
     player = state.players[player_idx]
-    if target_numeric_id not in player.deck:
-        return state  # card not in deck
-    deck_list = list(player.deck)
-    deck_list.remove(target_numeric_id)
-    new_player = replace(
-        player,
-        deck=tuple(deck_list),
-        hand=player.hand + (target_numeric_id,),
+
+    matches: list[int] = []
+    for deck_idx, card_numeric_id in enumerate(player.deck):
+        try:
+            candidate = library.get_by_id(card_numeric_id)
+        except KeyError:
+            continue
+        if card_def.tutor_matches(candidate):
+            matches.append(deck_idx)
+
+    if not matches:
+        # No candidates -- silently no-op (caller proceeds to react window).
+        return state
+
+    return replace(
+        state,
+        pending_tutor_player_idx=player_idx,
+        pending_tutor_matches=tuple(matches),
     )
-    new_players = _replace_player(state.players, player_idx, new_player)
-    return replace(state, players=new_players)
+
+
+def _resolve_tutor(*args, **kwargs):
+    """Phase 14.2: legacy tutor resolver removed -- shim for defense in depth."""
+    raise NotImplementedError(
+        "_resolve_tutor was removed in Phase 14.2; use _enter_pending_tutor"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -340,7 +368,7 @@ def resolve_effects_for_trigger(
 
     for effect in matching_effects:
         if effect.effect_type == EffectType.TUTOR:
-            state = _resolve_tutor(state, card_def, minion.owner, library)
+            state = _enter_pending_tutor(state, card_def, minion.owner, library)
         elif effect.effect_type == EffectType.CONJURE:
             state = _resolve_conjure(state, card_def, minion.owner, library)
         else:

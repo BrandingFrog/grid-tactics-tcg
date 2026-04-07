@@ -758,6 +758,74 @@ def resolve_action(
             f"Cannot resolve action in phase {state.phase.name}, expected ACTION"
         )
 
+    # Phase 14.2: pending-tutor gate.
+    # If a card with TUTOR on_play just played and matches exist in deck, the
+    # caster MUST TUTOR_SELECT (with index into pending_tutor_matches) or
+    # DECLINE_TUTOR. Anything else is illegal. The single react window for
+    # the original play fires AFTER the pending clears.
+    if state.pending_tutor_player_idx is not None:
+        # Mutex defense
+        assert state.pending_post_move_attacker_id is None, (
+            "pending_tutor and pending_post_move_attacker cannot coexist"
+        )
+        if action.action_type == ActionType.TUTOR_SELECT:
+            match_idx = action.card_index  # reuse card_index payload
+            if match_idx is None or match_idx < 0 or match_idx >= len(state.pending_tutor_matches):
+                raise ValueError(
+                    f"TUTOR_SELECT: invalid match index {match_idx}; "
+                    f"have {len(state.pending_tutor_matches)} matches"
+                )
+            deck_idx = state.pending_tutor_matches[match_idx]
+            caster_idx = state.pending_tutor_player_idx
+            caster = state.players[caster_idx]
+            if deck_idx < 0 or deck_idx >= len(caster.deck):
+                raise ValueError(
+                    f"TUTOR_SELECT: stale deck index {deck_idx} (deck size {len(caster.deck)})"
+                )
+            chosen_card = caster.deck[deck_idx]
+            new_deck = caster.deck[:deck_idx] + caster.deck[deck_idx + 1:]
+            new_caster = replace(
+                caster,
+                deck=new_deck,
+                hand=caster.hand + (chosen_card,),
+            )
+            new_players = _replace_player(state.players, caster_idx, new_caster)
+            state = replace(
+                state,
+                players=new_players,
+                pending_tutor_player_idx=None,
+                pending_tutor_matches=(),
+            )
+        elif action.action_type == ActionType.DECLINE_TUTOR:
+            state = replace(
+                state,
+                pending_tutor_player_idx=None,
+                pending_tutor_matches=(),
+            )
+        else:
+            raise ValueError(
+                "Pending tutor: must TUTOR_SELECT or DECLINE_TUTOR"
+            )
+
+        # Single react window for the original on_play fires now.
+        state = _cleanup_dead_minions(state, library)
+        state = _check_game_over(state)
+        if state.is_game_over:
+            return state
+        state = replace(
+            state,
+            phase=TurnPhase.REACT,
+            react_player_idx=1 - state.active_player_idx,
+            pending_action=action,
+        )
+        return state
+
+    # Not in pending tutor: TUTOR_SELECT / DECLINE_TUTOR are illegal
+    if action.action_type in (ActionType.TUTOR_SELECT, ActionType.DECLINE_TUTOR):
+        raise ValueError(
+            f"{action.action_type.name} only legal during pending_tutor state"
+        )
+
     # Phase 14.1: pending-post-move-attack gate.
     # If a melee minion just moved and has in-range targets, the player MUST
     # either ATTACK with that minion or DECLINE_POST_MOVE_ATTACK. Anything
@@ -826,6 +894,12 @@ def resolve_action(
     # fire the react window yet. The react window fires after the player
     # resolves with ATTACK or DECLINE_POST_MOVE_ATTACK.
     if state.pending_post_move_attacker_id is not None:
+        return state
+
+    # Phase 14.2: If PLAY_CARD on_play entered pending_tutor state, defer
+    # the react window until TUTOR_SELECT/DECLINE_TUTOR clears it. One react
+    # window per logical card play.
+    if state.pending_tutor_player_idx is not None:
         return state
 
     # Transition to REACT phase (D-13)

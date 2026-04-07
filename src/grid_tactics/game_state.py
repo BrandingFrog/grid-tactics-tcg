@@ -55,6 +55,15 @@ class GameState:
     # just moved and may now ATTACK an in-range enemy or DECLINE_POST_MOVE_ATTACK.
     pending_post_move_attacker_id: Optional[int] = None
 
+    # Phase 14.2: Pending tutor-select state (on_play tutor effects).
+    # When a card with a TUTOR effect resolves on_play and at least one
+    # matching card exists in the caster's deck, we enter pending state and
+    # the caster MUST TUTOR_SELECT a deck index or DECLINE_TUTOR. The single
+    # react window for the play fires AFTER the pending clears.
+    # Mutually exclusive with pending_post_move_attacker_id (asserted).
+    pending_tutor_player_idx: Optional[int] = None      # Which player must pick
+    pending_tutor_matches: tuple = ()                    # Deck indices of matching cards (in deck order)
+
     @property
     def active_player(self) -> Player:
         """Return the currently active player."""
