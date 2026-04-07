@@ -1432,6 +1432,51 @@ function playAnimation(job, done) {
     }
 }
 
+// =============================================
+// Section: Floating popups + status badges (Phase 14.3 Wave 7)
+// =============================================
+// Reusable popup system. One function, five variants. Adding a new
+// status (frozen, stunned, etc.) is one CSS variant + one diff hook.
+//
+// Variant glyph convention:
+//   combat-damage: '⚔️ -X'
+//   heal:          '💚 +X'
+//   burn-tick:     '🔥 -X'
+//   buff:          '⬆️ +X ATK'
+//   debuff:        '⬇️ -X ATK'
+//
+// tileEl should be the .board-cell (already position:relative). The
+// popup is absolutely positioned and self-removes after the rise+fade
+// keyframe completes (~1200ms; 1400ms setTimeout fallback).
+function showFloatingPopup(tileEl, text, variant) {
+    if (!tileEl) return;
+    var el = document.createElement('div');
+    el.className = 'floating-popup ' + variant;
+    el.textContent = text;
+    tileEl.appendChild(el);
+    var removed = false;
+    var cleanup = function () {
+        if (removed) return;
+        removed = true;
+        if (el.parentNode) el.parentNode.removeChild(el);
+    };
+    el.addEventListener('animationend', cleanup);
+    setTimeout(cleanup, 1400);
+}
+
+// Helper: flatten all board minions from a state frame.
+function collectMinions(state) {
+    if (!state || !state.minions) return [];
+    return state.minions;
+}
+
+// Helper: locate the .board-cell DOM node for a minion's position.
+function getTileElForMinion(m) {
+    if (!m || !m.position) return null;
+    return document.querySelector(
+        '.board-cell[data-row="' + m.position[0] + '"][data-col="' + m.position[1] + '"]');
+}
+
 // Wave 4 (Phase 14.3-04): Attack animation.
 // Rubber-band pullback (180ms) -> pause (100ms) -> snap strike (120ms) ->
 // target flash + damage popup -> return tween (300ms) -> apply state.
@@ -3256,6 +3301,21 @@ function renderBoardMinion(minion) {
     var hp = minion.current_health;
 
     var boardArtStyle = cardDef.card_id ? 'background-image:url(/static/art/' + cardDef.card_id + '.png);background-size:cover;background-position:center;' : '';
+
+    // Phase 14.3 Wave 7: persistent status badges (burning / buff / debuff).
+    var badges = [];
+    if (minion.burning_stacks > 0) {
+        badges.push('<span class="minion-badge badge-burning" title="Burning ' + minion.burning_stacks + '">🔥</span>');
+    }
+    if (minion.attack_bonus > 0) {
+        badges.push('<span class="minion-badge badge-buff">⬆️+' + minion.attack_bonus + '</span>');
+    } else if (minion.attack_bonus < 0) {
+        badges.push('<span class="minion-badge badge-debuff">⬇️' + minion.attack_bonus + '</span>');
+    }
+    var badgesHtml = badges.length
+        ? '<div class="minion-badges">' + badges.join('') + '</div>'
+        : '';
+
     return '<div class="board-minion ' + ownerClass + ' ' + typeClass + '" data-numeric-id="' + minion.card_numeric_id + '" style="' + boardArtStyle + '">'
         + '<div class="board-minion-overlay"></div>'
         + '<div class="attr-circle-sm ' + elem.css + '"><span class="attr-text-sm">' + elem.name + '</span></div>'
@@ -3264,6 +3324,7 @@ function renderBoardMinion(minion) {
         + '<span class="board-minion-atk">' + atk + '</span>'
         + '<span class="board-minion-hp">' + hp + '</span>'
         + '</div>'
+        + badgesHtml
         + '</div>';
 }
 
