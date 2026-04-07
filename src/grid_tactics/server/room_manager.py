@@ -1,4 +1,14 @@
-"""Room creation, joining, lifecycle, and session token management."""
+"""Room creation, joining, lifecycle, and session token management.
+
+Spectator storage choice (Phase 14.4-01):
+  Spectators are tracked in `RoomManager._room_spectators: dict[room_code,
+  dict[token, SpectatorSlot]]` rather than on WaitingRoom. This is the least
+  invasive option because `start_game` pops WaitingRoom out of `_rooms` and
+  replaces it with a GameSession — keying spectators by room_code in the
+  manager itself means they survive that transition without touching either
+  WaitingRoom or GameSession dataclasses. Role lookups go through
+  `_token_role` so any token (player or spectator) can be classified.
+"""
 import secrets
 import string
 import threading
@@ -23,6 +33,16 @@ class PlayerSlot:
 
 
 @dataclass
+class SpectatorSlot:
+    """A spectator watching a room (waiting or in-game)."""
+
+    token: str
+    name: str
+    sid: str
+    god_mode: bool = False
+
+
+@dataclass
 class WaitingRoom:
     """A room waiting for players to join and ready up."""
 
@@ -41,6 +61,8 @@ class RoomManager:
         self._games: dict[str, GameSession] = {}           # code -> GameSession
         self._token_to_room: dict[str, str] = {}           # token -> room code
         self._sid_to_token: dict[str, str] = {}            # sid -> token
+        self._token_role: dict[str, str] = {}              # token -> 'player' | 'spectator'
+        self._room_spectators: dict[str, dict[str, SpectatorSlot]] = {}  # room_code -> token -> slot
         self._lock = threading.Lock()
 
     def _generate_code(self) -> str:
@@ -61,6 +83,7 @@ class RoomManager:
             self._rooms[code] = room
             self._token_to_room[token] = code
             self._sid_to_token[sid] = token
+            self._token_role[token] = 'player'
         return code, token
 
     def join_room(
@@ -86,6 +109,7 @@ class RoomManager:
         with self._lock:
             self._token_to_room[token] = room_code
             self._sid_to_token[sid] = token
+            self._token_role[token] = 'player'
         return token, room
 
     def set_ready(self, token: str) -> tuple[str, WaitingRoom, bool]:
@@ -236,3 +260,65 @@ class RoomManager:
     def get_room(self, room_code: str) -> WaitingRoom | None:
         """Get waiting room by room code."""
         return self._rooms.get(room_code)
+
+    # ------------------------------------------------------------------
+    # Spectator API (Phase 14.4-01)
+    # ------------------------------------------------------------------
+
+    def get_role(self, token: str) -> str | None:
+        """Return 'player' | 'spectator' | None for a session token."""
+        return self._token_role.get(token)
+
+    def join_as_spectator(
+        self, room_code: str, display_name: str, sid: str, god_mode: bool = False
+    ) -> tuple[str, WaitingRoom | GameSession]:
+        """Attach a spectator to an existing room (waiting or in-game).
+
+        Returns (session_token, room_or_session). Raises ValueError if neither
+        a waiting room nor an active game with that code exists. Spectators can
+        join even when the room is "full" (2 players) or already in-game.
+        """
+        token = str(uuid.uuid4())
+        with self._lock:
+            room: WaitingRoom | GameSession | None = self._rooms.get(room_code)
+            if room is None:
+                room = self._games.get(room_code)
+            if room is None:
+                raise ValueError(f"Room '{room_code}' not found")
+            slot = SpectatorSlot(
+                token=token, name=display_name, sid=sid, god_mode=god_mode
+            )
+            self._room_spectators.setdefault(room_code, {})[token] = slot
+            self._token_to_room[token] = room_code
+            self._sid_to_token[sid] = token
+            self._token_role[token] = 'spectator'
+        return token, room
+
+    def get_spectator_tokens(self, room_code: str) -> list[str]:
+        """Return list of spectator session tokens for a room."""
+        return list(self._room_spectators.get(room_code, {}).keys())
+
+    def get_spectator(self, token: str) -> SpectatorSlot | None:
+        """Look up a spectator slot by token."""
+        room_code = self._token_to_room.get(token)
+        if room_code is None:
+            return None
+        return self._room_spectators.get(room_code, {}).get(token)
+
+    def remove_spectator(self, token: str) -> str | None:
+        """Remove a spectator from its room and indexes. Returns room_code or None."""
+        with self._lock:
+            if self._token_role.get(token) != 'spectator':
+                return None
+            room_code = self._token_to_room.pop(token, None)
+            self._token_role.pop(token, None)
+            slot: SpectatorSlot | None = None
+            if room_code is not None:
+                bucket = self._room_spectators.get(room_code)
+                if bucket is not None:
+                    slot = bucket.pop(token, None)
+                    if not bucket:
+                        self._room_spectators.pop(room_code, None)
+            if slot is not None and self._sid_to_token.get(slot.sid) == token:
+                self._sid_to_token.pop(slot.sid, None)
+            return room_code
