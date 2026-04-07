@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Online PvP Dueling
 status: verifying
-stopped_at: "Completed 13-03 Task 1; Task 2 checkpoint:human-verify pending"
-last_updated: "2026-04-05T16:41:23.801Z"
-last_activity: 2026-04-05
+stopped_at: "Completed 14.1-01 (Python engine pending post-move attack state)"
+last_updated: "2026-04-07T00:00:00.000Z"
+last_activity: 2026-04-07
 progress:
   total_phases: 5
   completed_phases: 3
@@ -25,10 +25,10 @@ See: .planning/PROJECT.md (updated 2026-04-04)
 
 ## Current Position
 
-Phase: 13 (board-hand-ui) — EXECUTING
-Plan: 3 of 3
-Status: Phase complete — ready for verification
-Last activity: 2026-04-05
+Phase: 14.1 (melee-move-and-attack) — EXECUTING
+Plan: 1 of N (Wave 1: Python engine)
+Status: Wave 1 complete; Wave 2 (tensor engine) + Wave 3 (legal_actions/frontend) pending
+Last activity: 2026-04-07 — Completed 14.1-01-PLAN.md
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -90,6 +90,10 @@ Recent decisions affecting current work:
 - [Phase 13-board-hand-ui]: get_card_defs Socket.IO handler added to events.py for deck builder pre-game card loading
 - [Phase 13-board-hand-ui]: Perspective flip reverses display row iteration order only, never modifies data coordinates
 - [Phase 13-board-hand-ui]: JS enum arrays (EFFECT_TYPE_NAMES, TRIGGER_NAMES, TARGET_NAMES) must mirror Python IntEnum values exactly
+- [Phase 14.1-01]: Action-space [0:1262] preserved; DECLINE_POST_MOVE_ATTACK reuses PASS slot 1001 when pending_post_move_attacker_id is set
+- [Phase 14.1-01]: pending_post_move_attacker_id lives on GameState (not Action) for snapshot/tensor mirror friendliness
+- [Phase 14.1-01]: Melee move + attack/decline = ONE logical action = ONE react window (fires after pending clears)
+- [Phase 14.1-01]: Pending state only set when at least one in-range enemy exists (no point asking a question with no answers)
 
 ### Pending Todos
 
@@ -103,6 +107,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-04-05T16:41:23.797Z
-Stopped at: Completed 13-03 Task 1; Task 2 checkpoint:human-verify pending
+Last session: 2026-04-07T00:00:00.000Z
+Stopped at: Completed 14.1-01 (Python engine refactored; tensor engine + legal_actions + frontend still need updates)
 Resume file: None
