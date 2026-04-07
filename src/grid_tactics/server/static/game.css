@@ -2876,7 +2876,7 @@ body {
   pointer-events: none;
   z-index: 60;
   white-space: nowrap;
-  animation: popup-rise 1200ms ease-out forwards;
+  animation: popup-rise 2200ms ease-out forwards;
 }
 
 .floating-popup.combat-damage { color: #ff3030; }

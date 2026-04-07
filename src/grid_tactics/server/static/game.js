@@ -1574,7 +1574,7 @@ function showFloatingPopup(tileEl, text, variant) {
         if (el.parentNode) el.parentNode.removeChild(el);
     };
     el.addEventListener('animationend', cleanup);
-    setTimeout(cleanup, 1400);
+    setTimeout(cleanup, 2400);
 }
 
 // Helper: flatten all board minions from a state frame.
@@ -1726,6 +1726,19 @@ function playMoveAnimation(job, done) {
     var dx = delta.dx, dy = delta.dy;
     var destKey = to[0] + ',' + to[1];
     var srcKey = from[0] + ',' + from[1];
+
+    // Bug B fix: .board-cell has overflow:hidden (for the cover-art bg).
+    // The translated minion gets clipped at the source cell's bounds and
+    // visually escapes only along the overflow edge — appearing "below the
+    // grid" to the user. Lift overflow on the source cell for the duration
+    // of the slide; Phase C re-renders the board so we don't need to
+    // restore it explicitly (the cell is rebuilt by renderBoard).
+    var prevOverflow = delta.fromCell.style.overflow;
+    delta.fromCell.style.overflow = 'visible';
+    // Also lift the parent stacking — z-index on board-minion won't escape
+    // the cell otherwise. board-cell is position:relative so we can stack it.
+    var prevZ = delta.fromCell.style.zIndex;
+    delta.fromCell.style.zIndex = '30';
 
     // PHASE A — lift
     minionEl.classList.add('anim-move-lift');
@@ -2630,14 +2643,23 @@ function onBoardCellClick(row, col) {
     // Phase 14.1: post-move attack-pick mode. Only valid enemy targets are
     // clickable; everything else is inert (use Decline button to exit).
     if (interactionMode === 'post_move_attack_pick') {
-        var validTargets = (gameState && gameState.pending_attack_valid_targets) || [];
-        var isValidTargetTile = validTargets.some(function(p) { return p[0] === row && p[1] === col; });
-        if (!isValidTargetTile) return;
         var enemy = getMinionAt(row, col);
         if (!enemy) return;
+        var attackerId = gameState && gameState.pending_post_move_attacker_id;
+        if (attackerId == null) return;
+        // Primary: trust server-provided pending_attack_valid_targets.
+        var validTargets = (gameState && gameState.pending_attack_valid_targets) || [];
+        var isValidTargetTile = validTargets.some(function(p) { return p[0] === row && p[1] === col; });
+        // Fallback: any legal ATTACK action by the pending attacker against
+        // this enemy (defensive — should always match the target list but
+        // guards against desync between view_filter and legal_actions).
+        var isLegalAttack = (legalActions || []).some(function(a) {
+            return a.action_type === 2 && a.minion_id === attackerId && a.target_id === enemy.instance_id;
+        });
+        if (!isValidTargetTile && !isLegalAttack) return;
         submitAction({
             action_type: 2,
-            minion_id: gameState.pending_post_move_attacker_id,
+            minion_id: attackerId,
             target_id: enemy.instance_id,
         });
         return;
@@ -2703,9 +2725,12 @@ function onBoardCellClick(row, col) {
         if (interactionMode === 'move') return;
     }
 
-    // Check if clicking on own minion to select it
+    // Click on any minion — route to minion handler so the attack/target/
+    // post-move-attack/reselect branches all run. Previously gated on
+    // `owner === myPlayerIdx`, which made enemy clicks a dead-end in
+    // interactionMode === 'attack' / 'move_attack' (Bug C).
     var minion = getMinionAt(row, col);
-    if (minion && minion.owner === myPlayerIdx) {
+    if (minion) {
         onBoardMinionClick(minion);
     }
 }
