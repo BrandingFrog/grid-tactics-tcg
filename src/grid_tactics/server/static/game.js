@@ -2828,6 +2828,7 @@ function showMinionActionMenu(minion, moves, attacks, transforms, canSac) {
             interactionMode = (attacks && attacks.length > 0) ? 'move_attack' : 'move';
             hideMinionActionMenu();
             highlightBoard();
+            renderActionBar();
         });
     }
 
@@ -2837,6 +2838,7 @@ function showMinionActionMenu(minion, moves, attacks, transforms, canSac) {
             interactionMode = 'attack';
             hideMinionActionMenu();
             highlightBoard();
+            renderActionBar();
         });
     }
 
@@ -3210,11 +3212,50 @@ function highlightBoard() {
         }
 
         if (interactionMode === 'attack' || interactionMode === 'move_attack') {
+            // Bug 1 unification: render the attack-range footprint AND the
+            // bright valid-target highlight, mirroring the post-move-attack
+            // pick UI. Range tiles are computed client-side from the source
+            // minion's card range using the same geometry as engine
+            // _can_attack (action_resolver.py). This is a cosmetic / UX
+            // change only — actual legal targets still come from
+            // legalActions via getAttackTargets().
+            var srcMinion = null;
+            (gameState.minions || []).forEach(function(m) {
+                if (m.instance_id === selectedMinionId) srcMinion = m;
+            });
+            if (srcMinion) {
+                var srcCard = cardDefs[srcMinion.card_numeric_id];
+                var range = (srcCard && srcCard.attack_range != null) ? srcCard.attack_range : 0;
+                var sr = srcMinion.position[0], sc = srcMinion.position[1];
+                for (var rr = 0; rr < 5; rr++) {
+                    for (var cc = 0; cc < 5; cc++) {
+                        if (rr === sr && cc === sc) continue;
+                        var manhattan = Math.abs(rr - sr) + Math.abs(cc - sc);
+                        var chebyshev = Math.max(Math.abs(rr - sr), Math.abs(cc - sc));
+                        var orthogonal = (rr === sr || cc === sc);
+                        var inRange = false;
+                        if (range === 0) {
+                            inRange = (manhattan === 1 && orthogonal);
+                        } else {
+                            var orthogonalInRange = orthogonal && manhattan <= range;
+                            var diagonalAdjacent = (chebyshev === 1 && !orthogonal);
+                            inRange = orthogonalInRange || diagonalAdjacent;
+                        }
+                        if (inRange) {
+                            var tile = document.querySelector('.board-cell[data-row="' + rr + '"][data-col="' + cc + '"]');
+                            if (tile) tile.classList.add('attack-range-footprint');
+                        }
+                    }
+                }
+            }
             var atkTargets = getAttackTargets(selectedMinionId);
             (gameState.minions || []).forEach(function(m) {
                 if (atkTargets.indexOf(m.instance_id) !== -1) {
                     var cell = document.querySelector('.board-cell[data-row="' + m.position[0] + '"][data-col="' + m.position[1] + '"]');
-                    if (cell) cell.classList.add('cell-attack');
+                    if (cell) {
+                        cell.classList.add('cell-attack');
+                        cell.classList.add('attack-valid-target');
+                    }
                 }
             });
         }
@@ -3302,6 +3343,31 @@ function renderActionBar() {
                 });
                 slot.appendChild(drawBtn);
             }
+        }
+
+        // Bug 1 unification: when a minion is selected in a standalone
+        // attack/move mode (NOT the pending post-move flow, which has its
+        // own Decline button), show a Cancel button so the player has a
+        // clear escape from the selection. Mirrors the post-move flow's
+        // affordance and makes the two attack paths feel symmetric.
+        if (gameState.phase !== 1
+                && selectedMinionId !== null
+                && interactionMode !== 'post_move_attack_pick'
+                && (interactionMode === 'attack'
+                    || interactionMode === 'move'
+                    || interactionMode === 'move_attack')) {
+            var cancelBtn = document.createElement('button');
+            cancelBtn.className = 'btn btn-action btn-decline-attack';
+            cancelBtn.textContent = 'Cancel';
+            cancelBtn.title = 'Deselect this minion';
+            cancelBtn.addEventListener('click', function() {
+                clearSelection();
+                hideMinionActionMenu();
+                highlightBoard();
+                updateHandHighlights();
+                renderActionBar();
+            });
+            slot.appendChild(cancelBtn);
         }
     }
 
