@@ -170,6 +170,7 @@ Plans:
 - [x] **Phase 13: Board & Hand UI** - 5x5 CSS Grid board, hand display, mana/HP bars, and turn phase indicator in the browser (completed 2026-04-05)
 - [x] **Phase 14: Gameplay Interaction** - Action submission via click targeting, react window UI, and game over screen (completed 2026-04-06)
 - [x] **Phase 14.1: Melee Move-and-Attack** - Player-driven Advance-Wars-style melee chain (move then choose attack target or decline); ranged minions get no chain (completed 2026-04-07)
+- [x] **Phase 14.2: Tutor Choice Prompt** - Replace auto-tutor with player-facing selection modal; extend tutor_target to support selector dicts (completed 2026-04-07)
 - [ ] **Phase 15: Resilience & Polish** - Reconnection handling, scrollable game log, and rematch flow
 
 ## Phase Details
@@ -244,6 +245,17 @@ Plans:
 - [x] 14.1-04-PLAN.md -- Frontend two-step flow + range footprint
 - [x] 14.1-05-PLAN.md -- Roadmap/state update + smoke test
 
+### Phase 14.2: Tutor Choice Prompt
+**Goal:** Replace auto-tutor with player-facing selection modal; extend tutor_target to support selector dicts (tribe/element/card_type AND semantics) instead of only card_id strings.
+**Depends on**: Phase 14.1
+**Plans:** 5/5 plans complete
+Plans:
+- [x] 14.2-01-PLAN.md -- Python engine pending_tutor + tutor_target selector schema
+- [x] 14.2-02-PLAN.md -- Tensor engine parity
+- [x] 14.2-03-PLAN.md -- Legal-action masks
+- [x] 14.2-04-PLAN.md -- Frontend modal + serialization
+- [x] 14.2-05-PLAN.md -- Roadmap/STATE + smoke test
+
 ### Phase 15: Resilience & Polish
 **Goal**: The game handles real-world conditions -- disconnections recover gracefully, a game log tracks what happened, and players can rematch without creating a new room
 **Depends on**: Phase 14
@@ -277,4 +289,5 @@ Phases execute in numeric order: 11 -> 12 -> 13 -> 14 -> 15
 | 13. Board & Hand UI | v1.1 | 3/3 | Complete   | 2026-04-05 |
 | 14. Gameplay Interaction | v1.1 | 2/2 | Complete | 2026-04-06 |
 | 14.1 Melee Move-and-Attack | v1.1 | 5/5 | Complete | 2026-04-07 |
+| 14.2 Tutor Choice Prompt | v1.1 | 5/5 | Complete | 2026-04-07 |
 | 15. Resilience & Polish | v1.1 | 0/TBD | Not started | - |

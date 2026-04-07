@@ -3,7 +3,7 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Online PvP Dueling
 status: verifying
-stopped_at: "Completed Phase 14.2 Wave 3 (legal-action masking for pending_tutor in Python + tensor); all four waves implementation-complete, deferred E2E sweep pending post-deploy"
+stopped_at: "Phase 14.2 complete (tutor-choice-prompt); next: Phase 15 reconnection. Final smoke test deferred to post-deploy Playwright E2E."
 last_updated: "2026-04-07T00:00:00.000Z"
 last_activity: 2026-04-07
 progress:
@@ -25,10 +25,10 @@ See: .planning/PROJECT.md (updated 2026-04-04)
 
 ## Current Position
 
-Phase: 14.2 (tutor-choice-prompt) — IMPLEMENTATION COMPLETE (deferred E2E)
-Plan: Wave 3 of 4 (legal-action masks for pending_tutor) — COMPLETE
-Status: All four waves shipped. Wave 3 added the pending_tutor branch to Python legal_actions, vectorized override to tensor legal_actions, ActionEncoder encode/decode for TUTOR_SELECT/DECLINE_TUTOR, and 7 mask tests (6 pass + 1 SB3-gated skip). Action-space [0:1262] preserved. Manual checkpoint deferred to post-deploy Playwright E2E (same posture as 14.1-04).
-Last activity: 2026-04-07 — Completed 14.2-03-PLAN.md
+Phase: 14.2 (tutor-choice-prompt) — COMPLETE
+Plan: 5 of 5 (roadmap/STATE + smoke test) — COMPLETE
+Status: Phase 14.2 landed across all 5 waves. Python + tensor engines route pending_tutor with parity, legal-action masks reinterpret PLAY_CARD/PASS slots while pending, frontend renders a full-card selection modal driven by per-viewer enrichment, action space [0:1262] preserved end-to-end. Final smoke test (Task 2) deferred to post-deploy Playwright E2E against Railway (same posture as 14.1-05 and 14.2-04). Next: Phase 15 reconnection.
+Last activity: 2026-04-07 — Completed 14.2-05-PLAN.md
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -127,6 +127,10 @@ Recent decisions affecting current work:
 - [Phase 14.2-03]: TUTOR_SELECT encoder convention — match_idx packed onto card_index, slot = PLAY_CARD_BASE + match_idx * GRID_SIZE (cell sub-index pinned to 0). Decode disambiguates from PLAY_CARD via state.pending_tutor_player_idx.
 - [Phase 14.2-03]: Encoder decode order — pending_tutor checked BEFORE pending_post_move_attacker (safe because the two pendings are mutex-asserted in legal_actions itself).
 - [Phase 14.2-03]: Tensor pending_tutor override mirrors 14.1-03's post-hoc pattern — zero pending rows, scatter PLAY_CARD slots [PLAY_CARD_BASE + i*GRID_SIZE for i<n_matches] + PASS_IDX. n_matches computed as (pending_tutor_matches >= 0).sum(dim=-1).
+- [Phase 14.2-05]: tutor_target accepts either a card_id string OR a selector dict with tribe/element/card_type keys (AND semantics, case-insensitive). Loader rejects unknown keys at load time.
+- [Phase 14.2-05]: Tutor on_play enters a pending_tutor state; player picks from a modal or declines via Skip. Exactly one react window fires after the pending state resolves.
+- [Phase 14.2-05]: Decline-allowed is the default behavior for pending_tutor; tunable to forced-pick if balance testing later suggests it.
+- [Phase 14.2-05]: Action-space [0:1262] preserved across 14.2; TUTOR_SELECT reuses PLAY_CARD[0:K] slots and DECLINE_TUTOR reuses slot 1001 (PASS) only while pending_tutor is set. Mutually exclusive with pending_post_move_attacker.
 
 ### Pending Todos
 
@@ -134,7 +138,7 @@ None yet.
 
 ### Blockers/Concerns
 
-- Known issue: RL checkpoints trained before Phase 14.1 are STALE — they learned the old auto-attack-after-move behavior. Loadable but suboptimal. Retrain plan deferred to a future phase; not blocking gameplay.
+- Known issue: RL checkpoints are now STALE after the cumulative 14.1 + 14.2 encoding reinterpretations (post-move-attack pending state + tutor selector schema + pending_tutor slot reuse). Loadable but behaviorally outdated. Retraining deferred; not blocking gameplay.
 - Research flag: Phase 15 reconnection -- cookie vs localStorage, token expiry, and state resend edge cases may surface
 - Research flag: Phase 15 timer cancellation -- start_background_task() cancellation is MEDIUM confidence per research
 - Gap: Preset deck composition (card copy counts for 30-card deck) must be decided in Phase 11
@@ -142,5 +146,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-04-07T00:00:00.000Z
-Stopped at: Completed Phase 14.2 Wave 3 (14.2-03-PLAN.md): pending_tutor legal-action masks in both engines + ActionEncoder TUTOR_SELECT/DECLINE_TUTOR support + 7 tests. Phase 14.2 implementation-complete across all four waves; awaiting post-deploy Playwright E2E.
+Stopped at: Completed Phase 14.2 (14.2-05-PLAN.md): ROADMAP + STATE updated, phase landed. Final smoke test deferred to post-deploy Playwright E2E. Next: Phase 15 reconnection.
 Resume file: None
