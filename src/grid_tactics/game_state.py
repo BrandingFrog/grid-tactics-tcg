@@ -163,6 +163,8 @@ class GameState:
                     "current_health": m.current_health,
                     "attack_bonus": m.attack_bonus,
                     "is_burning": bool(m.is_burning),
+                    "dark_matter_stacks": m.dark_matter_stacks,
+                    "ratchanter_aura": m.ratchanter_aura,
                 }
                 for m in self.minions
             ],
@@ -231,6 +233,8 @@ class GameState:
                 current_health=m["current_health"],
                 attack_bonus=m.get("attack_bonus", 0),
                 is_burning=bool(m.get("is_burning", False)),
+                dark_matter_stacks=m.get("dark_matter_stacks", 0),
+                ratchanter_aura=m.get("ratchanter_aura", 0),
             )
             for m in minions_data
         )

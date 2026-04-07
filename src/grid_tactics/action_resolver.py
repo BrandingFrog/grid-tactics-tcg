@@ -844,6 +844,8 @@ def resolve_action(
 
         # Single react window for the original on_play fires now.
         state = _cleanup_dead_minions(state, library)
+        from grid_tactics.react_stack import recompute_ratchanter_aura
+        state = recompute_ratchanter_aura(state, library)
         state = _check_game_over(state)
         if state.is_game_over:
             return state
@@ -884,6 +886,8 @@ def resolve_action(
 
         # Dead minion cleanup + game-over check, then react window (single).
         state = _cleanup_dead_minions(state, library)
+        from grid_tactics.react_stack import recompute_ratchanter_aura
+        state = recompute_ratchanter_aura(state, library)
         state = _check_game_over(state)
         if state.is_game_over:
             return state
@@ -919,6 +923,11 @@ def resolve_action(
 
     # Dead minion cleanup (D-02)
     state = _cleanup_dead_minions(state, library)
+
+    # Ratchanter aura: recompute after every main-phase action so deploys
+    # apply the buff immediately and deaths strip it immediately.
+    from grid_tactics.react_stack import recompute_ratchanter_aura
+    state = recompute_ratchanter_aura(state, library)
 
     # Win/draw detection (Phase 4) -- after cleanup, before react transition
     state = _check_game_over(state)

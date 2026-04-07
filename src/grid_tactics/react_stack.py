@@ -153,7 +153,104 @@ def _fire_passive_effects(
 
     state = _cleanup_dead_minions(state, library)
     state = _check_game_over(state)
+    state = recompute_ratchanter_aura(state, library)
     return state
+
+
+# ---------------------------------------------------------------------------
+# Ratchanter aura -- continuous buff on owner's "rat" minions
+# ---------------------------------------------------------------------------
+
+
+# Base aura applied while a friendly Ratchanter is alive (atk and hp).
+RATCHANTER_AURA_BASE = 5
+# Additional aura per Dark Matter stack on the strongest friendly Ratchanter.
+RATCHANTER_AURA_PER_DM = 1
+# card_id of the minion that conjures and buffs.
+RATCHANTER_CARD_ID = "ratchanter"
+# card_id of the buffed minion (the conjure target).
+RATCHANTER_BUFFED_CARD_ID = "rat"
+
+
+def recompute_ratchanter_aura(
+    state: GameState, library: CardLibrary,
+) -> GameState:
+    """Strip and reapply Ratchanter's aura on every "rat" minion.
+
+    Continuous aura, recomputed from scratch each call:
+      1. Strip the previously-applied aura magnitude (`ratchanter_aura`)
+         from each minion's `attack_bonus` and `current_health`, then
+         clear `ratchanter_aura` to 0.
+      2. For each player side, find the strongest living friendly
+         Ratchanter (max `5 + dark_matter_stacks`). If none, that side's
+         rats receive no aura. Multiple Ratchanters do NOT stack -- only
+         the strongest applies (sensible default; future cards may revisit).
+      3. For each living friendly minion whose card_id == "rat", add the
+         aura magnitude to `attack_bonus` and `current_health`, and store
+         the magnitude in `ratchanter_aura` so the next strip pass knows
+         how much to peel off.
+
+    Health note: aura adds to `current_health` (uncapped, like
+    BUFF_HEALTH). When stripped, current_health drops by the same
+    amount; if that would put a rat at <=0 it gets cleaned up by the
+    standard death path on the next tick (matches losing a healer aura
+    in other TCGs).
+    """
+    minions = list(state.minions)
+
+    # ---- Strip phase --------------------------------------------------
+    stripped: list[MinionInstance] = []
+    for m in minions:
+        if m.ratchanter_aura:
+            stripped.append(replace(
+                m,
+                attack_bonus=m.attack_bonus - m.ratchanter_aura,
+                current_health=m.current_health - m.ratchanter_aura,
+                ratchanter_aura=0,
+            ))
+        else:
+            stripped.append(m)
+
+    # ---- Compute per-side aura magnitude ------------------------------
+    # max(5 + DM*1) over living friendly Ratchanters, or 0 if none alive.
+    aura_by_side: dict[int, int] = {0: 0, 1: 0}
+    for m in stripped:
+        if m.current_health <= 0:
+            continue
+        cd = library.get_by_id(m.card_numeric_id)
+        if cd.card_id != RATCHANTER_CARD_ID:
+            continue
+        magnitude = RATCHANTER_AURA_BASE + RATCHANTER_AURA_PER_DM * m.dark_matter_stacks
+        side = int(m.owner)
+        if magnitude > aura_by_side[side]:
+            aura_by_side[side] = magnitude
+
+    if aura_by_side[0] == 0 and aura_by_side[1] == 0:
+        # Nothing to apply -- only the strip pass mattered.
+        return replace(state, minions=tuple(stripped))
+
+    # ---- Apply phase --------------------------------------------------
+    final: list[MinionInstance] = []
+    for m in stripped:
+        if m.current_health <= 0:
+            final.append(m)
+            continue
+        cd = library.get_by_id(m.card_numeric_id)
+        if cd.card_id != RATCHANTER_BUFFED_CARD_ID:
+            final.append(m)
+            continue
+        magnitude = aura_by_side[int(m.owner)]
+        if magnitude <= 0:
+            final.append(m)
+            continue
+        final.append(replace(
+            m,
+            attack_bonus=m.attack_bonus + magnitude,
+            current_health=m.current_health + magnitude,
+            ratchanter_aura=magnitude,
+        ))
+
+    return replace(state, minions=tuple(final))
 
 
 # ---------------------------------------------------------------------------
@@ -351,6 +448,7 @@ def resolve_react_stack(
     # Clean up dead minions after react resolution
     from grid_tactics.action_resolver import _cleanup_dead_minions, _check_game_over
     state = _cleanup_dead_minions(state, library)
+    state = recompute_ratchanter_aura(state, library)
 
     # Win/draw detection after react resolution (Phase 4)
     state = _check_game_over(state)
