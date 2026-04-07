@@ -140,10 +140,15 @@ def _apply_effect_to_minion(
     elif effect.effect_type == EffectType.BURN:
         # Legacy BURN aura: re-routed to APPLY_BURNING semantics so passive
         # adjacency-burn cards (Emberplague Rat) actually do something.
-        # Stacks 1 burning_stack per tick (regardless of legacy `amount`,
-        # which historically encoded raw damage per action).
+        # Audit-followup: stack `effect.amount` per tick (default 1) so the
+        # JSON `amount` field controls aura intensity. Emberplague's JSON
+        # declares amount=5, which now stacks 5 burning_stacks per adjacent
+        # enemy per turn flip (matching design intent). Tensor parity is
+        # via card_table.passive_burn_amount, populated from the same
+        # `amount` field.
+        amount = int(effect.amount) if effect.amount else 1
         new_minion = replace(
-            minion, burning_stacks=minion.burning_stacks + 1,
+            minion, burning_stacks=minion.burning_stacks + amount,
         )
         new_minions = _replace_minion(state.minions, minion.instance_id, new_minion)
         return replace(state, minions=new_minions)
