@@ -55,6 +55,16 @@ def draw_action() -> Action:
     return Action(action_type=ActionType.DRAW)
 
 
+def decline_post_move_attack_action() -> Action:
+    """Create a DECLINE_POST_MOVE_ATTACK action (Phase 14.1).
+
+    Only legal while ``state.pending_post_move_attacker_id`` is set. Encoded
+    on the integer action space by reusing slot 1001 (PASS); the encoder
+    disambiguates from PASS via the pending state at decode time.
+    """
+    return Action(action_type=ActionType.DECLINE_POST_MOVE_ATTACK)
+
+
 def move_action(minion_id: int, position: tuple[int, int]) -> Action:
     """Create a MOVE action for a minion to a destination position."""
     return Action(action_type=ActionType.MOVE, minion_id=minion_id, position=position)

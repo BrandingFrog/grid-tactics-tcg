@@ -25,6 +25,7 @@ from grid_tactics.action_resolver import _can_attack, _is_orthogonal
 from grid_tactics.actions import (
     Action,
     attack_action,
+    decline_post_move_attack_action,
     draw_action,
     move_action,
     pass_action,
@@ -68,6 +69,14 @@ def legal_actions(
     # Game is over -- no actions allowed
     if state.is_game_over:
         return ()
+
+    # Phase 14.1: while a melee minion is mid-move-attack (pending), the only
+    # legal actions are ATTACK from the pending attacker against an in-range
+    # enemy, or DECLINE_POST_MOVE_ATTACK. Slot 1001 (PASS) is reinterpreted
+    # as DECLINE in this state by the action encoder. PLAY_CARD, MOVE,
+    # SACRIFICE, DRAW, regular PASS and REACT are all illegal here.
+    if state.pending_post_move_attacker_id is not None:
+        return _pending_post_move_attack_actions(state, library)
 
     if state.phase == TurnPhase.ACTION:
         return _action_phase_actions(state, library)
@@ -217,6 +226,46 @@ def _action_phase_actions(
         actions.append(draw_action())
 
     # No PASS -- if no actions available, fatigue bleed handles it
+    return tuple(actions)
+
+
+# ---------------------------------------------------------------------------
+# Pending post-move attack enumeration (Phase 14.1)
+# ---------------------------------------------------------------------------
+
+
+def _pending_post_move_attack_actions(
+    state: GameState, library: CardLibrary,
+) -> tuple[Action, ...]:
+    """Enumerate the only-legal actions while a post-move attack is pending.
+
+    Legal:
+      - ATTACK from the pending attacker against any in-range enemy minion
+      - DECLINE_POST_MOVE_ATTACK (encoded on slot 1001 by the encoder)
+
+    Slot 1001 dual meaning: in non-pending state slot 1001 is PASS; in
+    pending state the action encoder maps slot 1001 to
+    DECLINE_POST_MOVE_ATTACK. The action_resolver dispatches based on
+    ``state.pending_post_move_attacker_id``.
+    """
+    actions: list[Action] = []
+    attacker = state.get_minion(state.pending_post_move_attacker_id)
+    if attacker is None:
+        # Defensive: pending references a missing minion -> only decline
+        return (decline_post_move_attack_action(),)
+
+    attacker_card = library.get_by_id(attacker.card_numeric_id)
+    for enemy in state.minions:
+        if enemy.owner == attacker.owner:
+            continue
+        if _can_attack(attacker, enemy, attacker_card):
+            actions.append(attack_action(
+                minion_id=attacker.instance_id,
+                target_id=enemy.instance_id,
+            ))
+
+    # DECLINE is always legal in pending state (escape hatch)
+    actions.append(decline_post_move_attack_action())
     return tuple(actions)
 
 

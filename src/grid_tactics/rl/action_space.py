@@ -24,6 +24,7 @@ import numpy as np
 from grid_tactics.actions import (
     Action,
     attack_action,
+    decline_post_move_attack_action,
     draw_action,
     move_action,
     pass_action,
@@ -101,6 +102,11 @@ class ActionEncoder:
         """
         atype = action.action_type
 
+        # Phase 14.1: DECLINE_POST_MOVE_ATTACK reuses slot 1001 (PASS).
+        # Disambiguated at decode time by state.pending_post_move_attacker_id.
+        if atype == ActionType.DECLINE_POST_MOVE_ATTACK:
+            return PASS_IDX
+
         if atype == ActionType.PASS:
             return PASS_IDX
 
@@ -141,6 +147,10 @@ class ActionEncoder:
             Action object.
         """
         if action_int == PASS_IDX:
+            # Phase 14.1: slot 1001 is reinterpreted as
+            # DECLINE_POST_MOVE_ATTACK while a post-move attack is pending.
+            if state.pending_post_move_attacker_id is not None:
+                return decline_post_move_attack_action()
             return pass_action()
 
         if action_int == DRAW_IDX:
