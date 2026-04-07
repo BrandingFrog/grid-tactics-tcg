@@ -2632,3 +2632,31 @@ body {
   animation: damage-float 900ms ease-out forwards;
 }
 
+/* ---------------------------------------------------------------- */
+/* Phase 14.3-03: Move animation (lift -> translate -> drop)        */
+/* ---------------------------------------------------------------- */
+/* The actual translate distance is set inline via style.transform   */
+/* by playMoveAnimation; these classes provide the easing/stacking. */
+.anim-move-lift {
+  transform: scale(1.15);
+  filter: drop-shadow(0 8px 12px rgba(0,0,0,0.5));
+  transition: transform 120ms ease-out, filter 120ms ease-out;
+  z-index: 20;
+  position: relative;
+}
+.anim-move-translate {
+  transition: transform 350ms cubic-bezier(0.4, 0.0, 0.2, 1),
+              filter 350ms ease-out;
+  z-index: 20;
+  position: relative;
+  pointer-events: none;
+}
+.anim-move-drop {
+  animation: move-drop 120ms ease-in both;
+  transform-origin: center center;
+}
+@keyframes move-drop {
+  0%   { transform: scale(1.15); filter: drop-shadow(0 8px 12px rgba(0,0,0,0.5)); }
+  100% { transform: scale(1.0);  filter: none; }
+}
+
