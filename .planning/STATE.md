@@ -3,7 +3,7 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Online PvP Dueling
 status: verifying
-stopped_at: "Completed 14.1-01 (Python engine pending post-move attack state)"
+stopped_at: "Completed 14.1-02 (Tensor engine pending post-move attack parity)"
 last_updated: "2026-04-07T00:00:00.000Z"
 last_activity: 2026-04-07
 progress:
@@ -26,9 +26,9 @@ See: .planning/PROJECT.md (updated 2026-04-04)
 ## Current Position
 
 Phase: 14.1 (melee-move-and-attack) — EXECUTING
-Plan: 1 of N (Wave 1: Python engine)
-Status: Wave 1 complete; Wave 2 (tensor engine) + Wave 3 (legal_actions/frontend) pending
-Last activity: 2026-04-07 — Completed 14.1-01-PLAN.md
+Plan: 2 of N (Wave 2: Tensor engine parity)
+Status: Waves 1+2 complete; Wave 3 (legal_actions masking + frontend) pending
+Last activity: 2026-04-07 — Completed 14.1-02-PLAN.md
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -94,6 +94,10 @@ Recent decisions affecting current work:
 - [Phase 14.1-01]: pending_post_move_attacker_id lives on GameState (not Action) for snapshot/tensor mirror friendliness
 - [Phase 14.1-01]: Melee move + attack/decline = ONE logical action = ONE react window (fires after pending clears)
 - [Phase 14.1-01]: Pending state only set when at least one in-range enemy exists (no point asking a question with no answers)
+- [Phase 14.1-02]: Tensor pending = `pending_post_move_attacker: IntTensor[N]` with -1 sentinel; None ↔ -1 maps to Python `pending_post_move_attacker_id`
+- [Phase 14.1-02]: DECLINE has no dedicated action int — `_step_action_phase` reinterprets PASS (slot 1001) as DECLINE when pending >= 0, and excludes those games from fatigue
+- [Phase 14.1-02]: React phase transition in tensor engine gated on `pending_post_move_attacker < 0` (mirrors Python)
+- [Phase 14.1-02]: No python<->tensor state bridge exists; parity verified via shared observable invariants, not state diff
 
 ### Pending Todos
 
@@ -108,5 +112,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-04-07T00:00:00.000Z
-Stopped at: Completed 14.1-01 (Python engine refactored; tensor engine + legal_actions + frontend still need updates)
+Stopped at: Completed 14.1-02 (tensor engine parity; legal_actions + frontend still need updates)
 Resume file: None
