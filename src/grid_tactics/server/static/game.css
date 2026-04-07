@@ -968,16 +968,19 @@ body {
   position: absolute;
   top: 3px;
   right: 3px;
-  width: 28px;
-  height: 28px;
+  width: 38px;
+  height: 38px;
   border-radius: 50%;
   border: 2px solid rgb(30, 25, 20);
   z-index: 3;
 }
 
 .board-minion .attr-text-sm {
-  font-size: 7px;
-  letter-spacing: 0.3px;
+  font-size: 11px;
+  letter-spacing: 0;
+  font-family: 'Luckiest Guy', cursive;
+  font-weight: 400;
+  -webkit-text-stroke: 2px black;
 }
 
 /* Board minion name */

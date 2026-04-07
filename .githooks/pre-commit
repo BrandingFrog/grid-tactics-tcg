@@ -19,18 +19,32 @@ import json
 import datetime
 from pathlib import Path
 
-try:
-    from zoneinfo import ZoneInfo
-    DUBLIN = ZoneInfo("Europe/Dublin")
-except Exception:
-    DUBLIN = None
+
+def dublin_now():
+    """Return current time in Europe/Dublin with correct BST/GMT offset.
+
+    Avoids zoneinfo/tzdata Windows issues by computing the last Sunday
+    of March (BST start) and last Sunday of October (GMT resume) directly.
+    BST = UTC+1, GMT = UTC+0. Transitions happen at 01:00 UTC.
+    """
+    now_utc = datetime.datetime.utcnow()
+    year = now_utc.year
+    last_sun_mar = datetime.date(year, 3, 31)
+    while last_sun_mar.weekday() != 6:
+        last_sun_mar -= datetime.timedelta(days=1)
+    last_sun_oct = datetime.date(year, 10, 31)
+    while last_sun_oct.weekday() != 6:
+        last_sun_oct -= datetime.timedelta(days=1)
+    bst_start = datetime.datetime(year, 3, last_sun_mar.day, 1, 0)
+    bst_end = datetime.datetime(year, 10, last_sun_oct.day, 1, 0)
+    in_bst = bst_start <= now_utc < bst_end
+    offset_hours = 1 if in_bst else 0
+    tz = datetime.timezone(datetime.timedelta(hours=offset_hours))
+    return now_utc.replace(tzinfo=datetime.timezone.utc).astimezone(tz)
+
 
 vf = Path("src/grid_tactics/server/static/VERSION.json")
-
-if DUBLIN is not None:
-    now = datetime.datetime.now(DUBLIN)
-else:
-    now = datetime.datetime.utcnow()
+now = dublin_now()
 
 if vf.exists():
     try:
@@ -53,12 +67,9 @@ last_date = None
 if last_updated_str:
     try:
         last_dt = datetime.datetime.fromisoformat(last_updated_str)
-        if last_dt.tzinfo is None and DUBLIN is not None:
-            last_dt = last_dt.replace(tzinfo=DUBLIN)
-        if DUBLIN is not None:
-            last_date = last_dt.astimezone(DUBLIN).date()
-        else:
-            last_date = last_dt.date()
+        if last_dt.tzinfo is None:
+            last_dt = last_dt.replace(tzinfo=now.tzinfo)
+        last_date = last_dt.astimezone(now.tzinfo).date()
     except Exception:
         last_date = None
 
