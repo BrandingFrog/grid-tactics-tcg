@@ -1935,8 +1935,77 @@ function playSummonAnimation(job, done) {
 // (initial join, react open/close, lobby) and from runQueue() for queued
 // action frames. All pending-UI sync lives downstream in renderGame() so
 // it automatically runs post-animation.
+// Cinder/paper-burn death animation. Adds .anim-cinder-death to the OLD
+// .board-minion DOM node and sprinkles a few floating embers above it.
+// Calls `done` after the animation completes (~1000ms). Used by
+// applyStateFrame to defer state-swap on burn deaths so the player sees
+// the kill animate instead of the minion vanishing instantly.
+function playBurnDeathAnimation(prevMinion, done) {
+    var tile = getTileElForMinion(prevMinion);
+    if (!tile) { done && done(); return; }
+    var minionEl = tile.querySelector('.board-minion');
+    if (!minionEl) { done && done(); return; }
+
+    playSfx('burn_tick');
+
+    // Spawn 4 embers drifting up at slight horizontal offsets.
+    var embers = [];
+    for (var i = 0; i < 4; i++) {
+        var em = document.createElement('span');
+        em.className = 'cinder-ember';
+        em.style.setProperty('--ex', ((i - 1.5) * 6) + 'px');
+        em.style.animationDelay = (i * 80) + 'ms';
+        tile.appendChild(em);
+        embers.push(em);
+    }
+
+    minionEl.classList.add('anim-cinder-death');
+
+    setTimeout(function () {
+        try { minionEl.classList.remove('anim-cinder-death'); } catch (e) {}
+        embers.forEach(function (e) { try { e.remove(); } catch (_) {} });
+        done && done();
+    }, 1000);
+}
+
 function applyStateFrame(frame, legal) {
     var prevState = gameState;
+
+    // Detect burn-deaths: minions that existed in prevState with
+    // burning_stacks > 0 and are MISSING from the next frame. We assume
+    // these died from the end-of-turn burn tick (combat-killed minions
+    // are removed by other code paths after their own animations).
+    // For each burn-death, kick off the cinder animation on the OLD DOM
+    // node and defer the actual gameState swap until they all finish.
+    try {
+        if (prevState && prevState.minions && frame && frame.minions) {
+            var nextIds = {};
+            collectMinions(frame).forEach(function (m) {
+                if (m && m.instance_id != null) nextIds[m.instance_id] = true;
+            });
+            var burnDying = [];
+            collectMinions(prevState).forEach(function (m) {
+                if (!m || m.instance_id == null) return;
+                if (nextIds[m.instance_id]) return;
+                if ((m.burning_stacks || 0) > 0) burnDying.push(m);
+            });
+            if (burnDying.length > 0) {
+                var pending = burnDying.length;
+                var finish = function () {
+                    pending -= 1;
+                    if (pending <= 0) _applyStateFrameImmediate(frame, legal, prevState);
+                };
+                burnDying.forEach(function (m) { playBurnDeathAnimation(m, finish); });
+                return;
+            }
+        }
+    } catch (e) { /* defensive — fall through to immediate apply */ }
+
+    _applyStateFrameImmediate(frame, legal, prevState);
+}
+
+function _applyStateFrameImmediate(frame, legal, prevState) {
+    if (prevState === undefined) prevState = gameState;
 
     // Phase 14.3 Wave 7: per-minion HP delta hooks BEFORE state mutates.
     // - Heal popup: any current_health increase between frames.
