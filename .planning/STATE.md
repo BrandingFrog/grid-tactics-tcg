@@ -3,7 +3,7 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Online PvP Dueling
 status: verifying
-stopped_at: "Completed Phase 14.1 (melee move-and-attack); next is Phase 15 (Resilience & Polish)"
+stopped_at: "Completed Phase 14.2 Wave 1 (Python engine pending_tutor); next is Wave 2 (tensor parity)"
 last_updated: "2026-04-07T00:00:00.000Z"
 last_activity: 2026-04-07
 progress:
@@ -25,10 +25,10 @@ See: .planning/PROJECT.md (updated 2026-04-04)
 
 ## Current Position
 
-Phase: 14.1 (melee-move-and-attack) — COMPLETE
-Plan: 5 of 5 (Wave 5: Roadmap/STATE update + smoke test)
-Status: Phase 14.1 fully shipped; smoke test deferred to post-deploy Playwright E2E. Next: Phase 15 (Resilience & Polish).
-Last activity: 2026-04-07 — Completed 14.1-05-PLAN.md
+Phase: 14.2 (tutor-choice-prompt) — IN PROGRESS
+Plan: Wave 1 of N (Python engine pending_tutor state machine) — COMPLETE
+Status: Wave 1 shipped (enums, selector schema, pending state, effect resolver refactor, action_resolver gating, 13 new tests green). Next: Wave 2 tensor parity.
+Last activity: 2026-04-07 — Completed 14.2-01-PLAN.md
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -107,6 +107,10 @@ Recent decisions affecting current work:
 - [Phase 14.1-04]: Two distinct CSS layers (.attack-range-footprint soft hint vs .attack-valid-target bright pulse) — combining them would hide threat geometry or muddle clickability
 - [Phase 14.1-04]: Task 4 visual verification deferred to post-deploy Playwright E2E against Railway (same pattern as prior bug-fix waves)
 - [2026-04-07]: Melee minions (attack_range == 0) chain move+attack as one action via post-move pending state. Ranged minions do not chain. One react window per logical action. Action-space layout [0:1262] preserved; slot 1001 reused as DECLINE_POST_MOVE_ATTACK when pending.
+- [Phase 14.2-01]: Tutor on_play no longer auto-picks; enters pending_tutor state. Caster must TUTOR_SELECT (match index into pending_tutor_matches) or DECLINE_TUTOR. One react window fires AFTER pending clears.
+- [Phase 14.2-01]: Action-space [0:1262] preserved. TUTOR_SELECT reuses PLAY_CARD[0:250] slots while pending_tutor set; DECLINE_TUTOR reuses slot 1001 (PASS), same trick as 14.1's DECLINE_POST_MOVE_ATTACK. Mutually exclusive with pending_post_move (asserted).
+- [Phase 14.2-01]: tutor_target schema extended: accepts string (card_id shorthand, back-compat) OR dict selector with subset of {tribe, element, card_type} (AND semantics, case-insensitive). Loader rejects unknown keys at load time.
+- [Phase 14.2-01]: pending_tutor lives on GameState (pending_tutor_player_idx, pending_tutor_matches) — same snapshot/tensor-friendly pattern as 14.1's pending_post_move_attacker_id.
 
 ### Pending Todos
 
@@ -122,5 +126,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-04-07T00:00:00.000Z
-Stopped at: Completed Phase 14.1 (melee move-and-attack) — all 5 waves shipped; smoke test deferred to post-deploy Playwright E2E. Next: Phase 15.
+Stopped at: Completed Phase 14.2 Wave 1 (14.2-01-PLAN.md): Python engine pending_tutor state machine + selector schema. Next: Wave 2 (tensor engine parity).
 Resume file: None
