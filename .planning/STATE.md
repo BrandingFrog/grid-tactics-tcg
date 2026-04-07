@@ -3,7 +3,7 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Online PvP Dueling
 status: verifying
-stopped_at: "Completed Phase 14.2 Wave 4 (frontend tutor-pick modal + asymmetric serialization); phase implementation-complete, deferred E2E sweep pending post-deploy"
+stopped_at: "Completed Phase 14.2 Wave 3 (legal-action masking for pending_tutor in Python + tensor); all four waves implementation-complete, deferred E2E sweep pending post-deploy"
 last_updated: "2026-04-07T00:00:00.000Z"
 last_activity: 2026-04-07
 progress:
@@ -26,9 +26,9 @@ See: .planning/PROJECT.md (updated 2026-04-04)
 ## Current Position
 
 Phase: 14.2 (tutor-choice-prompt) — IMPLEMENTATION COMPLETE (deferred E2E)
-Plan: Wave 4 of 4 (frontend tutor-pick modal + asymmetric serialization) — COMPLETE
-Status: All four waves shipped. Wave 4 added per-viewer pending_tutor enrichment in view_filter, the showTutorModal frontend (reusing renderDeckBuilderCard for full art), and removed dead auto-tutor detection. Manual checkpoint deferred to post-deploy Playwright E2E (same posture as 14.1-04).
-Last activity: 2026-04-07 — Completed 14.2-04-PLAN.md
+Plan: Wave 3 of 4 (legal-action masks for pending_tutor) — COMPLETE
+Status: All four waves shipped. Wave 3 added the pending_tutor branch to Python legal_actions, vectorized override to tensor legal_actions, ActionEncoder encode/decode for TUTOR_SELECT/DECLINE_TUTOR, and 7 mask tests (6 pass + 1 SB3-gated skip). Action-space [0:1262] preserved. Manual checkpoint deferred to post-deploy Playwright E2E (same posture as 14.1-04).
+Last activity: 2026-04-07 — Completed 14.2-03-PLAN.md
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -123,6 +123,10 @@ Recent decisions affecting current work:
 - [Phase 14.2-04]: Opponent sees a passive 'Opponent is tutoring…' toast, never the modal — preserves caster's hidden information.
 - [Phase 14.2-04]: TUTOR_SELECT/DECLINE_TUTOR client wire format reuses existing action codec verbatim ({action_type:9, card_index:match_idx} / {action_type:10}) — no codec changes.
 - [Phase 14.2-04]: Task 3 visual verification deferred to post-deploy Playwright E2E against Railway (same pattern as 14.1-04 and prior bug-fix waves).
+- [Phase 14.2-03]: Python legal_actions returns Action tuples (not a 1262 bool mask); the bool mask is built downstream by build_action_mask via ActionEncoder. Wave 3 routes pending_tutor through this seam: legal_actions emits TUTOR_SELECT/DECLINE_TUTOR Action objects, and ActionEncoder is extended to encode/decode them.
+- [Phase 14.2-03]: TUTOR_SELECT encoder convention — match_idx packed onto card_index, slot = PLAY_CARD_BASE + match_idx * GRID_SIZE (cell sub-index pinned to 0). Decode disambiguates from PLAY_CARD via state.pending_tutor_player_idx.
+- [Phase 14.2-03]: Encoder decode order — pending_tutor checked BEFORE pending_post_move_attacker (safe because the two pendings are mutex-asserted in legal_actions itself).
+- [Phase 14.2-03]: Tensor pending_tutor override mirrors 14.1-03's post-hoc pattern — zero pending rows, scatter PLAY_CARD slots [PLAY_CARD_BASE + i*GRID_SIZE for i<n_matches] + PASS_IDX. n_matches computed as (pending_tutor_matches >= 0).sum(dim=-1).
 
 ### Pending Todos
 
@@ -138,5 +142,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-04-07T00:00:00.000Z
-Stopped at: Completed Phase 14.2 Wave 4 (14.2-04-PLAN.md): asymmetric pending_tutor serialization + frontend tutor-pick modal reusing renderDeckBuilderCard. Phase 14.2 implementation-complete; awaiting post-deploy Playwright E2E.
+Stopped at: Completed Phase 14.2 Wave 3 (14.2-03-PLAN.md): pending_tutor legal-action masks in both engines + ActionEncoder TUTOR_SELECT/DECLINE_TUTOR support + 7 tests. Phase 14.2 implementation-complete across all four waves; awaiting post-deploy Playwright E2E.
 Resume file: None
