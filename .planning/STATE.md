@@ -3,7 +3,7 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Online PvP Dueling
 status: verifying
-stopped_at: "Completed 14.1-03 (Pending-aware legal-action mask, Python + tensor)"
+stopped_at: "Completed 14.1-04 (Frontend two-step move-and-attack UI; visual verify deferred to post-deploy Playwright)"
 last_updated: "2026-04-07T00:00:00.000Z"
 last_activity: 2026-04-07
 progress:
@@ -25,10 +25,10 @@ See: .planning/PROJECT.md (updated 2026-04-04)
 
 ## Current Position
 
-Phase: 14.1 (melee-move-and-attack) — EXECUTING
-Plan: 3 of N (Wave 3: Legal-action mask, Python + tensor)
-Status: Waves 1+2+3 complete; frontend wave pending
-Last activity: 2026-04-07 — Completed 14.1-03-PLAN.md
+Phase: 14.1 (melee-move-and-attack) — IMPLEMENTATION COMPLETE
+Plan: 4 of 4 (Wave 4: Frontend two-step UI)
+Status: All 4 waves complete; visual verification deferred to post-deploy Playwright E2E
+Last activity: 2026-04-07 — Completed 14.1-04-PLAN.md
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -102,6 +102,10 @@ Recent decisions affecting current work:
 - [Phase 14.1-03]: ActionEncoder maps DECLINE_POST_MOVE_ATTACK -> slot 1001 and decode disambiguates from PASS via state.pending_post_move_attacker_id
 - [Phase 14.1-03]: Tensor mask uses post-hoc override (zero pending games then re-enable attack+slot 1001) rather than threading pending through every sub-helper
 - [Phase 14.1-03]: Tensor override uses 4-cardinal adjacency (not full pairwise distance table) — valid because Wave 1 only sets pending for melee minions
+- [Phase 14.1-04]: Server pre-computes pending_attack_range_tiles + pending_attack_valid_targets; client never duplicates range geometry
+- [Phase 14.1-04]: UI mode auto-enters from `pending_post_move_attacker_id != null` in state frames (same pattern as react-window) — reconnection-safe
+- [Phase 14.1-04]: Two distinct CSS layers (.attack-range-footprint soft hint vs .attack-valid-target bright pulse) — combining them would hide threat geometry or muddle clickability
+- [Phase 14.1-04]: Task 4 visual verification deferred to post-deploy Playwright E2E against Railway (same pattern as prior bug-fix waves)
 
 ### Pending Todos
 
@@ -116,5 +120,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-04-07T00:00:00.000Z
-Stopped at: Completed 14.1-03 (pending-aware legal-action mask in Python + tensor; frontend wave still pending)
+Stopped at: Completed 14.1-04 (frontend two-step move-and-attack UI; visual verify deferred to post-deploy Playwright E2E against Railway)
 Resume file: None
