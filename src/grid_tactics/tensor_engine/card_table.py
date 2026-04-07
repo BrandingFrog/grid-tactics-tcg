@@ -51,6 +51,10 @@ class CardTable:
         promote_target_id: torch.Tensor,
         is_unique: torch.Tensor,
         tutor_target_id: torch.Tensor,
+        tutor_has_target: torch.Tensor,
+        tutor_selector_tribe_id: torch.Tensor,
+        tutor_selector_element: torch.Tensor,
+        tutor_selector_card_type: torch.Tensor,
         tribe_id: torch.Tensor,
         summon_sacrifice_tribe_id: torch.Tensor,
         _num_cards: int,
@@ -80,7 +84,16 @@ class CardTable:
         self.is_orthogonal = is_orthogonal
         self.promote_target_id = promote_target_id  # [num_cards] int32, -1 if no promote
         self.is_unique = is_unique                  # [num_cards] bool
-        self.tutor_target_id = tutor_target_id      # [num_cards] int32, -1 if no tutor
+        self.tutor_target_id = tutor_target_id      # [num_cards] int32, -1 if no string target
+        # Phase 14.2: tutor selector dict columns. tutor_has_target[i] is True
+        # if card i has any tutor_target (string OR dict). The selector columns
+        # are -1 for "any" (not constrained on this attribute) and a value for
+        # an AND-constraint. String-form tutor uses tutor_target_id only and
+        # leaves selectors as -1.
+        self.tutor_has_target = tutor_has_target              # [num_cards] bool
+        self.tutor_selector_tribe_id = tutor_selector_tribe_id  # [num_cards] int32, -1 = any
+        self.tutor_selector_element = tutor_selector_element    # [num_cards] int32, -1 = any
+        self.tutor_selector_card_type = tutor_selector_card_type  # [num_cards] int32, -1 = any
         self.tribe_id = tribe_id                    # [num_cards] int32, 0 if no tribe
         self.summon_sacrifice_tribe_id = summon_sacrifice_tribe_id  # [num_cards] int32, 0 if none
         self._num_cards = _num_cards
@@ -117,6 +130,10 @@ class CardTable:
         promote_target_id = torch.full((n,), -1, dtype=torch.int32)
         is_unique = torch.zeros(n, dtype=torch.bool)
         tutor_target_id = torch.full((n,), -1, dtype=torch.int32)
+        tutor_has_target = torch.zeros(n, dtype=torch.bool)
+        tutor_selector_tribe_id = torch.full((n,), -1, dtype=torch.int32)
+        tutor_selector_element = torch.full((n,), -1, dtype=torch.int32)
+        tutor_selector_card_type = torch.full((n,), -1, dtype=torch.int32)
         tribe_id = torch.zeros(n, dtype=torch.int32)
         summon_sacrifice_tribe_id = torch.zeros(n, dtype=torch.int32)
 
@@ -159,12 +176,51 @@ class CardTable:
                     pass  # promote target card not in library
             is_unique[i] = card.unique
 
-            # Tutor target
-            if card.tutor_target is not None:
-                try:
-                    tutor_target_id[i] = library.get_numeric_id(card.tutor_target)
-                except KeyError:
-                    pass  # tutor target card not in library
+            # Tutor target (Phase 14.2: string OR dict selector)
+            tt = card.tutor_target
+            if tt is not None:
+                if isinstance(tt, str):
+                    try:
+                        tutor_target_id[i] = library.get_numeric_id(tt)
+                        tutor_has_target[i] = True
+                    except KeyError:
+                        pass  # tutor target card not in library
+                elif isinstance(tt, dict):
+                    tutor_has_target[i] = True
+                    # Resolve selector keys to integer ids/values for GPU matching
+                    if "tribe" in tt:
+                        # Case-insensitive tribe lookup against tribe_map
+                        want = str(tt["tribe"]).lower()
+                        match_id = -1
+                        for tname, tid in tribe_map.items():
+                            if tname.lower() == want:
+                                match_id = tid
+                                break
+                        # If unknown tribe (no card has it), match_id stays -1
+                        # which will produce zero matches at runtime — same as
+                        # the Python engine semantics ("no candidate matches").
+                        # Use a sentinel that can never equal a real tribe_id
+                        # (>= 1) by storing -2 to disambiguate from "any".
+                        tutor_selector_tribe_id[i] = match_id if match_id > 0 else -2
+                    if "element" in tt:
+                        # Element enum: match by name (case-insensitive)
+                        from grid_tactics.enums import Element
+                        want = str(tt["element"]).lower()
+                        match_val = -2
+                        for e in Element:
+                            if e.name.lower() == want:
+                                match_val = e.value
+                                break
+                        tutor_selector_element[i] = match_val
+                    if "card_type" in tt:
+                        from grid_tactics.enums import CardType as _CT
+                        want = str(tt["card_type"]).lower()
+                        match_val = -2
+                        for ct_e in _CT:
+                            if ct_e.name.lower() == want:
+                                match_val = ct_e.value
+                                break
+                        tutor_selector_card_type[i] = match_val
 
             # Tribe
             if card.tribe:
@@ -217,6 +273,10 @@ class CardTable:
             promote_target_id=promote_target_id.to(device),
             is_unique=is_unique.to(device),
             tutor_target_id=tutor_target_id.to(device),
+            tutor_has_target=tutor_has_target.to(device),
+            tutor_selector_tribe_id=tutor_selector_tribe_id.to(device),
+            tutor_selector_element=tutor_selector_element.to(device),
+            tutor_selector_card_type=tutor_selector_card_type.to(device),
             tribe_id=tribe_id.to(device),
             summon_sacrifice_tribe_id=summon_sacrifice_tribe_id.to(device),
             _num_cards=n,

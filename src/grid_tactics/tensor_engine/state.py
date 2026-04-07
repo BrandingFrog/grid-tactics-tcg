@@ -85,6 +85,17 @@ class TensorGameState:
     # deferred until the pending state clears.
     pending_post_move_attacker: torch.Tensor  # [N] int32 (-1 = none)
 
+    # Phase 14.2: pending tutor choice state.
+    # When a tutor on_play card resolves and finds at least one match in the
+    # caster's deck, pending_tutor_player[g] is set to the caster idx (0/1) and
+    # pending_tutor_matches[g] holds up to K=8 deck indices (-1 padded). While
+    # set, only TUTOR_SELECT (PLAY_CARD slots reinterpreted as match index) or
+    # DECLINE_TUTOR (PASS slot reinterpreted) is legal, and the react window is
+    # deferred until the pending state clears. Mutually exclusive with
+    # pending_post_move_attacker (asserted in handlers).
+    pending_tutor_player: torch.Tensor   # [N] int32 (-1 = none, else player idx 0/1)
+    pending_tutor_matches: torch.Tensor  # [N, 8] int32 (-1 padded deck indices)
+
     def clone(self) -> TensorGameState:
         """Deep-copy all tensors."""
         return TensorGameState(
@@ -120,6 +131,8 @@ class TensorGameState:
             pending_action_had_position=self.pending_action_had_position.clone(),
             fatigue_count=self.fatigue_count.clone(),
             pending_post_move_attacker=self.pending_post_move_attacker.clone(),
+            pending_tutor_player=self.pending_tutor_player.clone(),
+            pending_tutor_matches=self.pending_tutor_matches.clone(),
         )
 
 
@@ -161,4 +174,6 @@ def create_initial_state(
         pending_action_had_position=torch.zeros(n_envs, dtype=torch.bool, device=device),
         fatigue_count=torch.zeros((n_envs, 2), dtype=torch.int32, device=device),
         pending_post_move_attacker=torch.full((n_envs,), -1, dtype=torch.int32, device=device),
+        pending_tutor_player=torch.full((n_envs,), -1, dtype=torch.int32, device=device),
+        pending_tutor_matches=torch.full((n_envs, 8), -1, dtype=torch.int32, device=device),
     )
