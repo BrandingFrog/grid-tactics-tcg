@@ -137,6 +137,14 @@ def _apply_effect_to_minion(
         new_minion = replace(minion, current_health=0)
         new_minions = _replace_minion(state.minions, minion.instance_id, new_minion)
         return replace(state, minions=new_minions)
+    elif effect.effect_type == EffectType.APPLY_BURNING:
+        # Phase 14.3: stack additively. Default amount=1 if zero/missing.
+        amount = effect.amount if effect.amount else 1
+        new_minion = replace(
+            minion, burning_stacks=minion.burning_stacks + amount,
+        )
+        new_minions = _replace_minion(state.minions, minion.instance_id, new_minion)
+        return replace(state, minions=new_minions)
     # Unimplemented or non-minion-targeting effect types: skip gracefully
     return state
 

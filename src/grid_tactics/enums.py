@@ -58,6 +58,7 @@ class EffectType(IntEnum):
     PASSIVE_HEAL = 12  # Heal self by amount (fires on PASSIVE trigger each turn)
     LEAP = 13          # On move: if blocked by enemy, advance to next available tile instead
     CONJURE = 14       # Create a card from outside the deck (specified by summon_token_target)
+    APPLY_BURNING = 15  # Phase 14.3: grant N burning_stacks to the target minion (stacks additively)
 
 
 class ReactCondition(IntEnum):

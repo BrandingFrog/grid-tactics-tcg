@@ -15,6 +15,11 @@ from dataclasses import dataclass
 
 from grid_tactics.enums import PlayerSide
 
+# Damage Per Tick for the burning status. Future statuses follow the
+# `<STATUS>_DPT` naming pattern (e.g. POISON_DPT) so the tick architecture
+# stays uniform across status effects.
+BURN_DPT = 1
+
 
 @dataclass(frozen=True, slots=True)
 class MinionInstance:
@@ -29,6 +34,7 @@ class MinionInstance:
     position: tuple[int, int]    # (row, col) on board
     current_health: int          # starts at CardDefinition.health, decreases from damage
     attack_bonus: int = 0        # cumulative attack buff (effective attack = card_def.attack + attack_bonus)
+    burning_stacks: int = 0      # Phase 14.3: status effect — ticks at end of turn for BURN_DPT * stacks damage, decrements by 1
 
     @property
     def is_alive(self) -> bool:

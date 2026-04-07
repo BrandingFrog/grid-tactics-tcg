@@ -20,6 +20,7 @@ from grid_tactics.actions import Action
 from grid_tactics.card_library import CardLibrary
 from grid_tactics.enums import ActionType, CardType, EffectType, TriggerType, TurnPhase
 from grid_tactics.game_state import GameState
+from grid_tactics.minion import BURN_DPT, MinionInstance
 from grid_tactics.types import AUTO_DRAW_ENABLED, MAX_REACT_STACK_DEPTH
 
 
@@ -51,6 +52,59 @@ def _replace_player(
     if idx == 0:
         return (new_player, players[1])
     return (players[0], new_player)
+
+
+def tick_status_effects(state: GameState, library: CardLibrary) -> GameState:
+    """Tick all per-minion status effects at end of turn (Phase 14.3).
+
+    Burn tick semantics (locked):
+    - Who ticks: ALL minions on the board with `burning_stacks > 0`,
+      regardless of owner.
+    - When ticks: Once per turn flip, inside `resolve_react_stack`, AFTER
+      the react resolves and the active player has flipped, BEFORE mana
+      regen for the new active player. This guarantees a burning minion
+      takes exactly one tick per full turn cycle and that the new active
+      player sees post-tick state when they begin their turn.
+    - Damage formula: `damage = burning_stacks * BURN_DPT` where BURN_DPT=1.
+    - Decrement: After dealing damage, `burning_stacks -= 1` (clamped >= 0).
+    - Death: If current_health <= 0 after burn damage, route through the
+      existing death-cleanup path used by combat (so on-death effects,
+      sacrifice checks, etc., still fire).
+    - Order: Iterate minions in (row, col) order for determinism.
+
+    Future statuses (frozen, stunned, poisoned) add their own branch here
+    using the `<status>_stacks` field naming pattern.
+    """
+    from dataclasses import replace as _replace
+
+    # Snapshot in (row, col) order for determinism
+    ordered = sorted(state.minions, key=lambda m: (m.position[0], m.position[1]))
+
+    new_minions_by_id: dict[int, MinionInstance] = {}
+    for m in ordered:
+        if m.burning_stacks <= 0:
+            continue
+        damage = m.burning_stacks * BURN_DPT
+        new_minions_by_id[m.instance_id] = _replace(
+            m,
+            current_health=m.current_health - damage,
+            burning_stacks=max(0, m.burning_stacks - 1),
+        )
+
+    if not new_minions_by_id:
+        return state
+
+    new_minions = tuple(
+        new_minions_by_id.get(m.instance_id, m) for m in state.minions
+    )
+    state = _replace(state, minions=new_minions)
+
+    # Route any newly-dead minions through the standard death-cleanup path
+    # so on-death effects (and game-over checks) fire.
+    from grid_tactics.action_resolver import _check_game_over, _cleanup_dead_minions
+    state = _cleanup_dead_minions(state, library)
+    state = _check_game_over(state)
+    return state
 
 
 # ---------------------------------------------------------------------------
@@ -271,6 +325,12 @@ def resolve_react_stack(
         active_player_idx=new_active_idx,
         turn_number=state.turn_number + 1,
     )
+
+    # Phase 14.3: tick per-minion status effects (burning) AFTER turn flip
+    # but BEFORE mana regen / draw for the new active player.
+    state = tick_status_effects(state, library)
+    if state.is_game_over:
+        return state
 
     # Regenerate mana for the new active player at turn start.
     # Skip on turn 2: P2's first action must start at STARTING_MANA to
