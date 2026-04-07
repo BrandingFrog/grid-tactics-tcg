@@ -250,6 +250,29 @@ function onChatMessage(data) {
         var unreadDot = document.getElementById('chat-unread');
         if (unreadDot) unreadDot.style.display = '';
     }
+
+    // Easter egg: opponent typed "egg" -> splat their egg on our screen
+    // (MSN-messenger-nudge style). Only fires for recipients, never the sender.
+    if (!isOwn && data.text && data.text.trim().toLowerCase() === 'egg') {
+        triggerEggSplat();
+    }
+}
+
+function triggerEggSplat() {
+    // Remove any existing splat so consecutive eggs don't pile up
+    var existing = document.getElementById('egg-splat-overlay');
+    if (existing) existing.remove();
+    var overlay = document.createElement('div');
+    overlay.id = 'egg-splat-overlay';
+    overlay.className = 'egg-splat-overlay';
+    overlay.innerHTML =
+        '<div class="egg-splat-egg">🥚</div>' +
+        '<div class="egg-splat-splat">🍳</div>';
+    document.body.appendChild(overlay);
+    // Self-remove after the animation finishes
+    setTimeout(function() {
+        if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+    }, 3200);
 }
 
 // =============================================

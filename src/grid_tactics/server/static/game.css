@@ -2539,6 +2539,63 @@ body {
 }
 
 /* Phase 14.1: Decline post-move attack button */
+/* MSN-Messenger-style egg-nudge easter egg.
+   Fires on the recipient's screen when opponent types "egg" in chat. */
+.egg-splat-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  pointer-events: none;
+  overflow: hidden;
+  animation: egg-screen-shake 600ms cubic-bezier(.36,.07,.19,.97) 700ms 1;
+}
+
+.egg-splat-egg {
+  position: absolute;
+  top: 50%;
+  left: -20vw;
+  font-size: 220px;
+  line-height: 1;
+  transform: translateY(-50%) rotate(-20deg);
+  filter: drop-shadow(0 8px 20px rgba(0,0,0,0.6));
+  animation: egg-fly 700ms cubic-bezier(.45,.05,.55,.95) forwards;
+}
+
+.egg-splat-splat {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  font-size: 260px;
+  line-height: 1;
+  transform: translate(-50%, -50%) scale(0);
+  opacity: 0;
+  filter: drop-shadow(0 6px 16px rgba(0,0,0,0.6));
+  animation: egg-splat-pop 0ms 700ms forwards,
+             egg-splat-fade 1500ms 1700ms forwards;
+}
+
+@keyframes egg-fly {
+  0%   { left: -20vw; transform: translateY(-50%) rotate(-20deg); opacity: 1; }
+  85%  { left: 50vw;  transform: translateY(-50%) translateX(-50%) rotate(380deg); opacity: 1; }
+  100% { left: 50vw;  transform: translateY(-50%) translateX(-50%) rotate(380deg) scale(0.1); opacity: 0; }
+}
+
+@keyframes egg-splat-pop {
+  to { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+}
+
+@keyframes egg-splat-fade {
+  0%   { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  100% { opacity: 0; transform: translate(-50%, -50%) scale(1.15); }
+}
+
+@keyframes egg-screen-shake {
+  10%, 90% { transform: translate(-2px, 1px); }
+  20%, 80% { transform: translate(4px, -2px); }
+  30%, 50%, 70% { transform: translate(-6px, 3px); }
+  40%, 60% { transform: translate(6px, -3px); }
+}
+
 /* Hand action bar — groups Draw Card / Skip React / Decline Attack
    directly above the hand so all player actions live in one place. */
 .hand-action-bar {
