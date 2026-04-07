@@ -576,3 +576,338 @@ class TestImmutability:
         assert state.get_minion(0).current_health == 5
         # New state has the change
         assert new_state.get_minion(0).current_health == 3
+
+
+# ===========================================================================
+# Phase 14.2: pending_tutor lifecycle tests
+# ===========================================================================
+
+
+def _make_tutor_test_library(tutor_target):
+    """Build a CardLibrary with a tutor caster + diverse deck candidates.
+
+    Cards (sorted alphabetically by card_id for deterministic numeric IDs):
+      0 = "magic_metal_blast" (magic, element=metal, no tribe)
+      1 = "minion_robot_metal" (minion, tribe=Robot, element=metal)
+      2 = "minion_robot_water" (minion, tribe=Robot, element=water)
+      3 = "minion_zombie_metal" (minion, tribe=Zombie, element=metal)
+      4 = "tutor_caster" (minion with TUTOR on_play, tutor_target=<param>)
+    """
+    from grid_tactics.enums import Element
+
+    tutor_effect = EffectDefinition(
+        effect_type=EffectType.TUTOR,
+        trigger=TriggerType.ON_PLAY,
+        target=TargetType.SELF_OWNER,
+        amount=1,
+    )
+    cards = {
+        "magic_metal_blast": CardDefinition(
+            card_id="magic_metal_blast",
+            name="Metal Blast",
+            card_type=CardType.MAGIC,
+            mana_cost=1,
+            element=Element.METAL,
+        ),
+        "minion_robot_metal": CardDefinition(
+            card_id="minion_robot_metal",
+            name="Robot Metal",
+            card_type=CardType.MINION,
+            mana_cost=2,
+            attack=2,
+            health=3,
+            attack_range=0,
+            tribe="Robot",
+            element=Element.METAL,
+        ),
+        "minion_robot_water": CardDefinition(
+            card_id="minion_robot_water",
+            name="Robot Water",
+            card_type=CardType.MINION,
+            mana_cost=2,
+            attack=1,
+            health=3,
+            attack_range=0,
+            tribe="Robot",
+            element=Element.WATER,
+        ),
+        "minion_zombie_metal": CardDefinition(
+            card_id="minion_zombie_metal",
+            name="Zombie Metal",
+            card_type=CardType.MINION,
+            mana_cost=2,
+            attack=2,
+            health=2,
+            attack_range=0,
+            tribe="Zombie",
+            element=Element.METAL,
+        ),
+        "tutor_caster": CardDefinition(
+            card_id="tutor_caster",
+            name="Tutor Caster",
+            card_type=CardType.MINION,
+            mana_cost=1,
+            attack=1,
+            health=1,
+            attack_range=0,
+            effects=(tutor_effect,),
+            tutor_target=tutor_target,
+        ),
+    }
+    return CardLibrary(cards)
+
+
+def _make_tutor_state(library, deck_card_ids, p1_hand=()):
+    """Build a GameState where P1's deck contains the listed card_ids."""
+    deck = tuple(library.get_numeric_id(cid) for cid in deck_card_ids)
+    p1 = Player(
+        side=PlayerSide.PLAYER_1,
+        hp=STARTING_HP,
+        current_mana=5,
+        max_mana=5,
+        hand=tuple(library.get_numeric_id(c) for c in p1_hand),
+        deck=deck,
+        graveyard=(),
+    )
+    p2 = Player(
+        side=PlayerSide.PLAYER_2,
+        hp=STARTING_HP,
+        current_mana=5,
+        max_mana=5,
+        hand=(),
+        deck=(),
+        graveyard=(),
+    )
+    return GameState(
+        board=Board.empty(),
+        players=(p1, p2),
+        active_player_idx=0,
+        phase=TurnPhase.ACTION,
+        turn_number=1,
+        seed=42,
+    )
+
+
+class TestPendingTutorEntry:
+    """_enter_pending_tutor sets pending state without moving cards."""
+
+    def test_tutor_on_play_enters_pending_state_with_matches(self):
+        from grid_tactics.effect_resolver import _enter_pending_tutor
+
+        lib = _make_tutor_test_library(tutor_target="minion_robot_metal")
+        # Deck has 2 copies of robot_metal at indices 0 and 2
+        state = _make_tutor_state(
+            lib, ["minion_robot_metal", "minion_robot_water", "minion_robot_metal"]
+        )
+        caster_def = lib.get_by_card_id("tutor_caster")
+        new_state = _enter_pending_tutor(
+            state, caster_def, PlayerSide.PLAYER_1, lib,
+        )
+        assert new_state.pending_tutor_player_idx == 0
+        assert new_state.pending_tutor_matches == (0, 2)
+        # Deck unchanged, hand unchanged
+        assert new_state.players[0].deck == state.players[0].deck
+        assert new_state.players[0].hand == ()
+
+    def test_tutor_on_play_no_matches_no_pending(self):
+        from grid_tactics.effect_resolver import _enter_pending_tutor
+
+        lib = _make_tutor_test_library(tutor_target="minion_robot_metal")
+        state = _make_tutor_state(lib, ["minion_robot_water", "minion_zombie_metal"])
+        caster_def = lib.get_by_card_id("tutor_caster")
+        new_state = _enter_pending_tutor(
+            state, caster_def, PlayerSide.PLAYER_1, lib,
+        )
+        assert new_state.pending_tutor_player_idx is None
+        assert new_state.pending_tutor_matches == ()
+        assert new_state is state  # unchanged short-circuit
+
+    def test_tutor_selector_dict_tribe(self):
+        from grid_tactics.effect_resolver import _enter_pending_tutor
+
+        lib = _make_tutor_test_library(tutor_target={"tribe": "Robot"})
+        # Deck: zombie, robot_metal, robot_water -> 2 robots at idx 1, 2
+        state = _make_tutor_state(
+            lib, ["minion_zombie_metal", "minion_robot_metal", "minion_robot_water"]
+        )
+        new_state = _enter_pending_tutor(
+            state, lib.get_by_card_id("tutor_caster"), PlayerSide.PLAYER_1, lib,
+        )
+        assert new_state.pending_tutor_matches == (1, 2)
+
+    def test_tutor_selector_dict_element(self):
+        from grid_tactics.effect_resolver import _enter_pending_tutor
+
+        lib = _make_tutor_test_library(tutor_target={"element": "metal"})
+        # robot_metal (METAL), robot_water (WATER), zombie_metal (METAL)
+        state = _make_tutor_state(
+            lib, ["minion_robot_metal", "minion_robot_water", "minion_zombie_metal"]
+        )
+        new_state = _enter_pending_tutor(
+            state, lib.get_by_card_id("tutor_caster"), PlayerSide.PLAYER_1, lib,
+        )
+        assert new_state.pending_tutor_matches == (0, 2)
+
+    def test_tutor_selector_dict_card_type(self):
+        from grid_tactics.effect_resolver import _enter_pending_tutor
+
+        lib = _make_tutor_test_library(tutor_target={"card_type": "minion"})
+        state = _make_tutor_state(
+            lib, ["magic_metal_blast", "minion_robot_metal", "magic_metal_blast"]
+        )
+        new_state = _enter_pending_tutor(
+            state, lib.get_by_card_id("tutor_caster"), PlayerSide.PLAYER_1, lib,
+        )
+        assert new_state.pending_tutor_matches == (1,)
+
+    def test_tutor_selector_dict_multi_key_and(self):
+        from grid_tactics.effect_resolver import _enter_pending_tutor
+
+        lib = _make_tutor_test_library(
+            tutor_target={"tribe": "Robot", "element": "metal"}
+        )
+        state = _make_tutor_state(
+            lib,
+            [
+                "minion_robot_metal",   # match
+                "minion_robot_water",   # robot but not metal
+                "minion_zombie_metal",  # metal but not robot
+                "minion_robot_metal",   # match
+            ],
+        )
+        new_state = _enter_pending_tutor(
+            state, lib.get_by_card_id("tutor_caster"), PlayerSide.PLAYER_1, lib,
+        )
+        assert new_state.pending_tutor_matches == (0, 3)
+
+    def test_tutor_pending_mutex_with_post_move_attack(self):
+        """Defense in depth: cannot enter pending_tutor while post-move pending set."""
+        from grid_tactics.effect_resolver import _enter_pending_tutor
+
+        lib = _make_tutor_test_library(tutor_target="minion_robot_metal")
+        state = _make_tutor_state(lib, ["minion_robot_metal"])
+        state = replace(state, pending_post_move_attacker_id=99)
+        with pytest.raises(AssertionError):
+            _enter_pending_tutor(
+                state, lib.get_by_card_id("tutor_caster"), PlayerSide.PLAYER_1, lib,
+            )
+
+
+class TestTutorSelectorLoaderValidation:
+    """Loader rejects unknown selector keys at load time."""
+
+    def test_tutor_selector_unknown_key_rejected_at_load(self):
+        from grid_tactics.card_loader import CardLoader
+
+        with pytest.raises(ValueError, match="unknown selector key"):
+            CardLoader._parse_tutor_target(
+                {"tutor_target": {"foo": "bar"}}, "fake_card"
+            )
+
+
+class TestPendingTutorResolution:
+    """resolve_action handles TUTOR_SELECT and DECLINE_TUTOR."""
+
+    def _make_pending_state(self):
+        lib = _make_tutor_test_library(tutor_target="minion_robot_metal")
+        # Deck has 4 cards; matches at indices [1, 3]
+        state = _make_tutor_state(
+            lib,
+            [
+                "minion_robot_water",
+                "minion_robot_metal",
+                "minion_zombie_metal",
+                "minion_robot_metal",
+            ],
+        )
+        # Manually enter pending state (simulating just-played caster)
+        state = replace(
+            state,
+            pending_tutor_player_idx=0,
+            pending_tutor_matches=(1, 3),
+        )
+        return state, lib
+
+    def test_tutor_select_moves_chosen_card_and_clears_pending(self):
+        from grid_tactics.action_resolver import resolve_action
+        from grid_tactics.actions import Action
+        from grid_tactics.enums import ActionType, TurnPhase
+
+        state, lib = self._make_pending_state()
+        original_deck = state.players[0].deck
+        chosen_card = original_deck[3]  # match index 1 -> deck idx 3
+
+        action = Action(action_type=ActionType.TUTOR_SELECT, card_index=1)
+        new_state = resolve_action(state, action, lib)
+
+        # Card moved deck -> hand
+        assert chosen_card in new_state.players[0].hand
+        assert len(new_state.players[0].deck) == len(original_deck) - 1
+        # Pending cleared
+        assert new_state.pending_tutor_player_idx is None
+        assert new_state.pending_tutor_matches == ()
+        # React window now fired (single one for the play)
+        assert new_state.phase == TurnPhase.REACT
+        assert new_state.react_player_idx == 1
+
+    def test_decline_tutor_clears_pending_keeps_deck(self):
+        from grid_tactics.action_resolver import resolve_action
+        from grid_tactics.actions import Action
+        from grid_tactics.enums import ActionType, TurnPhase
+
+        state, lib = self._make_pending_state()
+        original_deck = state.players[0].deck
+
+        action = Action(action_type=ActionType.DECLINE_TUTOR)
+        new_state = resolve_action(state, action, lib)
+
+        assert new_state.players[0].deck == original_deck
+        assert new_state.players[0].hand == ()
+        assert new_state.pending_tutor_player_idx is None
+        assert new_state.pending_tutor_matches == ()
+        assert new_state.phase == TurnPhase.REACT
+
+    def test_tutor_select_invalid_match_index_raises(self):
+        from grid_tactics.action_resolver import resolve_action
+        from grid_tactics.actions import Action
+        from grid_tactics.enums import ActionType
+
+        state, lib = self._make_pending_state()
+        # 2 matches; index 5 is out of range
+        with pytest.raises(ValueError, match="invalid match index"):
+            resolve_action(
+                state, Action(action_type=ActionType.TUTOR_SELECT, card_index=5), lib
+            )
+
+    def test_pending_tutor_blocks_unrelated_actions(self):
+        from grid_tactics.action_resolver import resolve_action
+        from grid_tactics.actions import Action
+        from grid_tactics.enums import ActionType
+
+        state, lib = self._make_pending_state()
+        for at in (
+            ActionType.MOVE,
+            ActionType.PLAY_CARD,
+            ActionType.ATTACK,
+            ActionType.SACRIFICE,
+            ActionType.PASS,
+        ):
+            with pytest.raises(ValueError, match="Pending tutor"):
+                resolve_action(state, Action(action_type=at), lib)
+
+    def test_tutor_select_outside_pending_state_illegal(self):
+        from grid_tactics.action_resolver import resolve_action
+        from grid_tactics.actions import Action
+        from grid_tactics.enums import ActionType
+
+        lib = _make_tutor_test_library(tutor_target="minion_robot_metal")
+        state = _make_tutor_state(lib, ["minion_robot_metal"])
+        # No pending set
+        with pytest.raises(ValueError, match="only legal during pending_tutor"):
+            resolve_action(
+                state, Action(action_type=ActionType.TUTOR_SELECT, card_index=0), lib
+            )
+        with pytest.raises(ValueError, match="only legal during pending_tutor"):
+            resolve_action(
+                state, Action(action_type=ActionType.DECLINE_TUTOR), lib
+            )
