@@ -72,7 +72,59 @@ def compute_legal_mask_batch(state, card_table) -> torch.Tensor:
     if hasattr(state, "pending_post_move_attacker"):
         _apply_pending_post_move_attack_override(mask, state, alive)
 
+    # Phase 14.2: pending_tutor override.
+    # For games where pending_tutor_player[n] >= 0, restrict the legal mask to
+    # (a) PLAY_CARD slots [PLAY_CARD_BASE + i*GRID_SIZE for i in 0..n_matches)
+    # which the encoder reinterprets as TUTOR_SELECT[match_idx=i] while
+    # pending, and (b) slot 1001 (PASS_IDX, reinterpreted as DECLINE_TUTOR).
+    # All other slots are cleared. Mutex with pending_post_move_attacker is
+    # asserted: a game cannot have both pendings active.
+    if hasattr(state, "pending_tutor_player"):
+        _apply_pending_tutor_override(mask, state, alive)
+
     return mask
+
+
+def _apply_pending_tutor_override(mask, state, alive):
+    """Restrict legal mask to TUTOR_SELECT[0..n) + slot 1001 for pending games.
+
+    TUTOR_SELECT encoding mirrors the Python ``ActionEncoder``: match index
+    ``i`` -> ``PLAY_CARD_BASE + i * GRID_SIZE`` (cell sub-index pinned to 0).
+    DECLINE_TUTOR -> slot 1001.
+    """
+    device = mask.device
+
+    pending_player = state.pending_tutor_player  # [N] int32, -1 = none
+    has_pending_tutor = alive & (pending_player >= 0)
+    if not has_pending_tutor.any():
+        return
+
+    # Mutex defense: no game may have both pending flavours.
+    if hasattr(state, "pending_post_move_attacker"):
+        both = has_pending_tutor & (state.pending_post_move_attacker >= 0)
+        assert not bool(both.any().item()), (
+            "pending_tutor and pending_post_move_attacker active in same game"
+        )
+
+    # Per-game number of valid match slots (count of non-(-1) entries).
+    n_matches = (state.pending_tutor_matches >= 0).sum(dim=-1).long()  # [N]
+
+    # Zero out all slots for pending-tutor games (we'll re-enable below).
+    mask[has_pending_tutor] = False
+
+    # Enable PLAY_CARD slots PLAY_CARD_BASE + i*GRID_SIZE for i in 0..K-1,
+    # gated by (i < n_matches[g]) AND has_pending_tutor[g].
+    K = state.pending_tutor_matches.shape[1]
+    i_range = torch.arange(K, device=device)  # [K]
+    slot_idx = (PLAY_CARD_BASE + i_range * GRID_SIZE).long()  # [K]
+
+    enable = has_pending_tutor.unsqueeze(1) & (i_range.unsqueeze(0) < n_matches.unsqueeze(1))  # [N, K]
+    # Scatter the enable bits into the corresponding slot columns.
+    slot_idx_exp = slot_idx.unsqueeze(0).expand(mask.shape[0], K)  # [N, K]
+    mask.scatter_(1, slot_idx_exp, enable)
+
+    # Enable slot 1001 (DECLINE_TUTOR) for all pending-tutor games.
+    mask[has_pending_tutor, PASS_IDX] = True
 
 
 def _apply_pending_post_move_attack_override(mask, state, alive):
