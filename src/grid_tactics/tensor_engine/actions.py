@@ -166,6 +166,39 @@ def apply_move_batch(state, mask, action_type, source_flat, direction, card_tabl
     slot = state.board[arange_n, src_row, src_col]  # [N]
     valid = is_move & (slot >= 0)
 
+    # Audit-followup: LEAP — if the chosen forward tile is occupied, walk
+    # forward over the blocker(s) up to the minion's leap_amount additional
+    # steps and use the first empty landing tile as the actual destination.
+    # Mirrors the Python `_apply_move` LEAP path. Lateral directions never
+    # leap (delta-col != 0 disables the override).
+    if card_table is not None:
+        safe_slot_pre = slot.clamp(0).long()
+        cid_pre = state.minion_card_id[arange_n, safe_slot_pre].clamp(0).long()
+        leap_amt = card_table.leap_amount[cid_pre]  # [N]
+        # Original target occupancy (use freshly-computed dst_row, dst_col)
+        dst_occupied = (
+            state.board[arange_n, dst_row, dst_col] != EMPTY
+        )
+        is_forward = (dr != 0) & (dc == 0)
+        wants_leap = valid & is_forward & dst_occupied & (leap_amt > 0)
+        if wants_leap.any():
+            cur_row = dst_row.clone()
+            found_empty = torch.zeros_like(wants_leap)
+            land_row = dst_row.clone()
+            max_amt = int(leap_amt.max().item())
+            for extra in range(1, max_amt + 1):
+                cand = (cur_row + dr).clamp(0, 4)
+                in_b = (cur_row + dr >= 0) & (cur_row + dr < 5)
+                allowed = wants_leap & ~found_empty & (extra <= leap_amt) & in_b
+                empty_here = state.board[arange_n, cand, dst_col] == EMPTY
+                pick = allowed & empty_here
+                land_row = torch.where(pick, cand, land_row)
+                found_empty = found_empty | pick
+                cur_row = cand
+            dst_row = torch.where(wants_leap & found_empty, land_row, dst_row)
+            # If the leap couldn't find a landing, mark the move invalid.
+            valid = valid & ~(wants_leap & ~found_empty)
+
     if not valid.any():
         return
 

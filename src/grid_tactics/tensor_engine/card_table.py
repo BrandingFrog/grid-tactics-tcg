@@ -57,6 +57,9 @@ class CardTable:
         tutor_selector_card_type: torch.Tensor,
         tribe_id: torch.Tensor,
         summon_sacrifice_tribe_id: torch.Tensor,
+        leap_amount: torch.Tensor,
+        passive_burn_amount: torch.Tensor,
+        passive_heal_amount: torch.Tensor,
         _num_cards: int,
         device: torch.device,
     ):
@@ -96,6 +99,12 @@ class CardTable:
         self.tutor_selector_card_type = tutor_selector_card_type  # [num_cards] int32, -1 = any
         self.tribe_id = tribe_id                    # [num_cards] int32, 0 if no tribe
         self.summon_sacrifice_tribe_id = summon_sacrifice_tribe_id  # [num_cards] int32, 0 if none
+        # Audit-followup: precomputed per-card effect amounts for fast lookup
+        # without re-scanning effect_type[i, j]. Zero means the card lacks the
+        # effect. Used by LEAP move enumeration and the PASSIVE pipeline.
+        self.leap_amount = leap_amount                        # [num_cards] int32
+        self.passive_burn_amount = passive_burn_amount        # [num_cards] int32
+        self.passive_heal_amount = passive_heal_amount        # [num_cards] int32
         self._num_cards = _num_cards
         self.device = device
 
@@ -136,6 +145,9 @@ class CardTable:
         tutor_selector_card_type = torch.full((n,), -1, dtype=torch.int32)
         tribe_id = torch.zeros(n, dtype=torch.int32)
         summon_sacrifice_tribe_id = torch.zeros(n, dtype=torch.int32)
+        leap_amount = torch.zeros(n, dtype=torch.int32)
+        passive_burn_amount = torch.zeros(n, dtype=torch.int32)
+        passive_heal_amount = torch.zeros(n, dtype=torch.int32)
 
         # Build tribe string -> int mapping
         tribe_map: dict[str, int] = {}
@@ -161,6 +173,27 @@ class CardTable:
                 effect_target[i, j] = eff.target.value
                 effect_amount[i, j] = eff.amount
             num_effects[i] = len(card.effects)
+
+            # Audit-followup: precompute LEAP / PASSIVE amounts so the move
+            # enumerator and the PASSIVE pipeline don't need to re-scan
+            # effect rows on every step. Mirrors Python engine semantics:
+            #   - LEAP: ON_MOVE trigger ignored, only the amount matters;
+            #     legal_actions checks `EffectType.LEAP in card.effects`.
+            #   - BURN (passive aura): amount controls stacks-per-tick.
+            #   - PASSIVE_HEAL: amount controls heal-per-tick.
+            # If a card has multiple matching effects we take the max,
+            # matching the Python `max(leap_amount, eff.amount or 1)` rule.
+            for eff in card.effects:
+                if eff.effect_type == EffectType.LEAP:
+                    leap_amount[i] = max(int(leap_amount[i].item()), eff.amount or 1)
+                elif eff.effect_type == EffectType.BURN:
+                    passive_burn_amount[i] = max(
+                        int(passive_burn_amount[i].item()), eff.amount or 1
+                    )
+                elif eff.effect_type == EffectType.PASSIVE_HEAL:
+                    passive_heal_amount[i] = max(
+                        int(passive_heal_amount[i].item()), eff.amount or 1
+                    )
 
             if card.react_condition is not None:
                 react_condition[i] = card.react_condition.value
@@ -279,6 +312,9 @@ class CardTable:
             tutor_selector_card_type=tutor_selector_card_type.to(device),
             tribe_id=tribe_id.to(device),
             summon_sacrifice_tribe_id=summon_sacrifice_tribe_id.to(device),
+            leap_amount=leap_amount.to(device),
+            passive_burn_amount=passive_burn_amount.to(device),
+            passive_heal_amount=passive_heal_amount.to(device),
             _num_cards=n,
             device=device,
         )

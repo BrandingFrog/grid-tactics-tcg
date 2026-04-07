@@ -189,7 +189,7 @@ class ActionEncoder:
             return self._decode_play_card(action_int, state, library)
 
         if MOVE_BASE <= action_int < ATTACK_BASE:
-            return self._decode_move(action_int, state)
+            return self._decode_move(action_int, state, library)
 
         if ATTACK_BASE <= action_int < SACRIFICE_BASE:
             return self._decode_attack(action_int, state)
@@ -269,7 +269,13 @@ class ActionEncoder:
     # ----- MOVE encoding -----
 
     def _encode_move(self, action: Action, state: GameState) -> int:
-        """Encode MOVE action. Computes direction from minion's current position."""
+        """Encode MOVE action. Computes direction from minion's current position.
+
+        Audit-followup (LEAP): a multi-tile forward move (e.g. Rathopper jumping
+        over a blocker) is encoded by collapsing the dr to its sign — the slot
+        carries direction only, and the decoder re-derives the actual landing
+        row by walking forward over blockers.
+        """
         minion = state.get_minion(action.minion_id)
         if minion is None:
             raise ValueError(f"Minion {action.minion_id} not found in state")
@@ -280,12 +286,21 @@ class ActionEncoder:
         dest = action.position
         dr = dest[0] - minion.position[0]
         dc = dest[1] - minion.position[1]
+        # Collapse multi-step LEAP forward to a unit cardinal direction
+        if dc == 0 and abs(dr) > 1:
+            dr = 1 if dr > 0 else -1
         direction = DIRECTION_MAP[(dr, dc)]
 
         return MOVE_BASE + source_flat * 4 + direction
 
-    def _decode_move(self, action_int: int, state: GameState) -> Action:
-        """Decode MOVE action integer."""
+    def _decode_move(self, action_int: int, state: GameState, library: CardLibrary | None = None) -> Action:
+        """Decode MOVE action integer.
+
+        Audit-followup (LEAP): if the immediate forward tile is occupied AND
+        the source minion has `EffectType.LEAP`, walk forward over blockers up
+        to `leap_amount` additional steps and use the first empty landing tile
+        as the destination. Mirrors the legal_actions and apply_move LEAP rules.
+        """
         idx = action_int - MOVE_BASE
         source_flat = idx // 4
         direction = idx % 4
@@ -294,9 +309,39 @@ class ActionEncoder:
         # Find minion at source position
         minion_id = self._find_minion_at(state, source_pos)
 
-        # Compute destination
+        # Compute single-step destination
         dr, dc = DIRECTION_REVERSE[direction]
         dest = (source_pos[0] + dr, source_pos[1] + dc)
+
+        # LEAP override: only when forward (dc==0) and the immediate tile is
+        # occupied. Look up leap_amount via the card library.
+        if (
+            dc == 0
+            and 0 <= dest[0] < 5
+            and state.board.get(dest[0], dest[1]) is not None
+            and minion_id is not None
+            and library is not None
+        ):
+            from grid_tactics.enums import EffectType as _ET
+            minion = state.get_minion(minion_id)
+            if minion is not None:
+                card = library.get_by_id(minion.card_numeric_id)
+                leap_amt = 0
+                for eff in card.effects:
+                    if eff.effect_type == _ET.LEAP:
+                        leap_amt = max(leap_amt, eff.amount or 1)
+                if leap_amt > 0:
+                    landing = dest[0] + dr
+                    steps = 0
+                    while (
+                        0 <= landing < 5
+                        and steps < leap_amt
+                        and state.board.get(landing, dest[1]) is not None
+                    ):
+                        landing += dr
+                        steps += 1
+                    if 0 <= landing < 5 and state.board.get(landing, dest[1]) is None:
+                        dest = (landing, dest[1])
 
         return move_action(minion_id=minion_id, position=dest)
 

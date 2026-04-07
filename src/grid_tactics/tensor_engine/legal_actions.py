@@ -222,7 +222,7 @@ def _compute_action_phase_mask(mask, state, card_table, phase_mask):
     )
 
     # --- MOVE ---
-    _compute_move_mask(mask, state, phase_mask, friendly_alive, board_flat)
+    _compute_move_mask(mask, state, phase_mask, friendly_alive, board_flat, card_table)
 
     # --- ATTACK ---
     _compute_attack_mask(
@@ -338,11 +338,19 @@ def _compute_play_card_mask(mask, state, card_table, phase_mask, ap, arange_n,
     mask[:, PLAY_CARD_BASE:PLAY_CARD_BASE + MAX_HAND * GRID_SIZE] |= play_out.reshape(N, -1)
 
 
-def _compute_move_mask(mask, state, phase_mask, friendly_alive, board_flat):
+def _compute_move_mask(mask, state, phase_mask, friendly_alive, board_flat, card_table=None):
     """Compute MOVE legal actions -- forward only in lane.
 
     Player 0 moves forward = DOWN (dir 1), Player 1 moves forward = UP (dir 0).
     No lateral movement. Units stay in their column (lane).
+
+    Audit-followup (LEAP parity): minions whose card has `EffectType.LEAP`
+    (precomputed in `card_table.leap_amount > 0`) may also use the forward
+    direction slot when the immediate forward tile is BLOCKED, provided some
+    landing tile within `1 + leap_amount` forward steps is empty. The MOVE
+    action slot only carries (source, direction); the actual leap landing
+    row is recomputed at apply time. Mirrors the Python `legal_actions` leap
+    branch in `_action_phase_actions`.
     """
     N = mask.shape[0]
     device = mask.device
@@ -377,10 +385,70 @@ def _compute_move_mask(mask, state, phase_mask, friendly_alive, board_flat):
 
     can_move = friendly_alive.unsqueeze(2) & in_bounds & dest_empty & dir_allowed
 
-    # Action indices and scatter
-    d_range = torch.arange(4, device=device)
-    action_idx = (MOVE_BASE + src_flat.unsqueeze(2) * 4 + d_range).reshape(N, -1).long()
-    mask.scatter_(1, action_idx, can_move.reshape(N, -1))
+    # Standard scatter first; LEAP override (below) OR's into the forward slot.
+    d_range_pre = torch.arange(4, device=device)
+    action_idx_pre = (MOVE_BASE + src_flat.unsqueeze(2) * 4 + d_range_pre).reshape(N, -1).long()
+    mask.scatter_(1, action_idx_pre, can_move.reshape(N, -1))
+
+    # Audit-followup: LEAP — when forward (single-step) is blocked, allow the
+    # forward direction slot if minion has LEAP and a landing tile exists.
+    if card_table is not None:
+        cid = state.minion_card_id.clamp(0).long()  # [N, MAX_MINIONS]
+        leap_amt = card_table.leap_amount[cid]      # [N, MAX_MINIONS]
+        has_leap = leap_amt > 0                     # [N, MAX_MINIONS]
+
+        # Forward direction index per minion: P0=1 (DOWN), P1=0 (UP)
+        # delta row per minion: P0=+1, P1=-1
+        owner = state.minion_owner  # [N, MAX_MINIONS]
+        drow = torch.where(owner == 0, 1, -1).to(torch.int32)  # [N, MAX_MINIONS]
+        fwd_dir = torch.where(owner == 0, 1, 0).to(torch.long)  # [N, MAX_MINIONS]
+
+        # Immediate forward row+col
+        m_row = state.minion_row
+        m_col = state.minion_col
+        fwd_row = m_row + drow
+        in_b1 = (fwd_row >= 0) & (fwd_row < GRID_ROWS)
+
+        safe_fr = fwd_row.clamp(0, GRID_ROWS - 1)
+        fwd_flat = (safe_fr * GRID_COLS + m_col).clamp(0, GRID_SIZE - 1).long()
+        fwd_occupied = torch.gather(board_flat, 1, fwd_flat) != -1  # [N, MAX_MINIONS]
+
+        # Walk forward up to (1 + leap_amt) total steps; we already considered
+        # step=1 above. Find first empty landing row in steps 2..(1+max_amt).
+        max_amt = int(card_table.leap_amount.max().item()) if card_table.leap_amount.numel() > 0 else 0
+        leap_lands = torch.zeros_like(friendly_alive)
+        if max_amt > 0:
+            for extra in range(1, max_amt + 1):
+                land_row = m_row + drow * (1 + extra)
+                in_b = (land_row >= 0) & (land_row < GRID_ROWS)
+                safe_lr = land_row.clamp(0, GRID_ROWS - 1)
+                land_flat = (safe_lr * GRID_COLS + m_col).clamp(0, GRID_SIZE - 1).long()
+                land_empty = torch.gather(board_flat, 1, land_flat) == -1
+                # Only allowed when the leap distance fits this minion
+                allowed = extra <= leap_amt
+                # Count this landing only if no closer landing already chosen
+                first = ~leap_lands & in_b & land_empty & allowed
+                leap_lands = leap_lands | first
+
+        leap_can_move = (
+            friendly_alive
+            & has_leap
+            & phase_mask.unsqueeze(1)
+            & in_b1
+            & fwd_occupied
+            & leap_lands
+        )
+        if leap_can_move.any():
+            # Scatter into the forward-direction slot for each (minion) row
+            leap_action_idx = (MOVE_BASE + src_flat * 4 + fwd_dir.to(torch.int32)).long()
+            # Use scatter with True only where leap_can_move is True
+            mask.scatter_(
+                1,
+                leap_action_idx,
+                leap_can_move | torch.gather(mask, 1, leap_action_idx),
+            )
+
+    # (standard scatter moved above so LEAP can OR into forward slot)
 
 
 def _compute_attack_mask(mask, card_table, friendly_alive, enemy_alive,
