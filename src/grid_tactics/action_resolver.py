@@ -639,11 +639,14 @@ def _apply_attack(
     state = replace(state, minions=new_minions)
 
     # Trigger ON_ATTACK effects for attacker
-    # Need to refresh attacker reference from state
+    # Need to refresh attacker reference from state.
+    # Pass defender.position as target_pos so SINGLE_TARGET on_attack effects
+    # (e.g. Pyre Archer's burn) land on the attacked minion.
     updated_attacker = state.get_minion(attacker.instance_id)
     if updated_attacker is not None:
         state = resolve_effects_for_trigger(
             state, TriggerType.ON_ATTACK, updated_attacker, library,
+            target_pos=defender.position,
         )
 
     # Trigger ON_DAMAGED for both if they took damage

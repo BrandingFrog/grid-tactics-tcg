@@ -62,6 +62,12 @@ def apply_effects_batch(
         _apply_destroy(state, active & (etype == 9), etarget, target_flat_pos)
         # Phase 14.3: APPLY_BURNING (15) — grant burning_stacks to target minion
         _apply_burning(state, active & (etype == 15), etarget, eamount, target_flat_pos)
+        # BURN (10) on a non-PASSIVE trigger (e.g. Pyre Archer's on_attack
+        # single_target burn) — set is_burning on the target minion. The
+        # PASSIVE-trigger BURN aura (Emberplague Rat) is handled separately
+        # in _fire_passive_effects_batch via passive_burn_amount and never
+        # reaches this dispatch.
+        _apply_burning(state, active & (etype == 10), etarget, eamount, target_flat_pos)
 
 
 def _find_minion_slot_at_pos(state, flat_pos: torch.Tensor) -> torch.Tensor:
