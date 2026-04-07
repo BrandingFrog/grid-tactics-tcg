@@ -1,0 +1,3 @@
+# Insect
+
+Members: [[Cards/Furryroach]]
