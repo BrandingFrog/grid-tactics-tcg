@@ -114,6 +114,7 @@ class TensorGameEngine:
         s.minion_health = torch.where(mask.unsqueeze(1), torch.tensor(0, device=device, dtype=torch.int32), s.minion_health)
         s.minion_atk_bonus = torch.where(mask.unsqueeze(1), torch.tensor(0, device=device, dtype=torch.int32), s.minion_atk_bonus)
         s.minion_alive = torch.where(mask.unsqueeze(1), torch.tensor(False, device=device), s.minion_alive)
+        s.burning_stacks = torch.where(mask.unsqueeze(1), torch.tensor(0, device=device, dtype=torch.int32), s.burning_stacks)
         s.next_minion_slot = torch.where(mask, torch.tensor(0, device=device, dtype=torch.int32), s.next_minion_slot)
 
         # Turn state
@@ -441,6 +442,26 @@ class TensorGameEngine:
                 if regen_p1.any():
                     new_mana_p1 = (s.player_mana[:, 1] + 1).clamp(max=10)
                     s.player_mana[:, 1] = torch.where(regen_p1, new_mana_p1, s.player_mana[:, 1])
+
+                # Phase 14.3: tick burning status effects after turn flip,
+                # before mana regen / draw. Vectorized: every minion with
+                # burning_stacks > 0 takes stacks*BURN_DPT damage and stacks
+                # decrements by 1. Mirrors Python tick_status_effects.
+                from grid_tactics.minion import BURN_DPT
+                tick_mask = should_advance.view(N, 1) & s.minion_alive & (s.burning_stacks > 0)
+                if tick_mask.any():
+                    burn_damage = s.burning_stacks * BURN_DPT  # int32
+                    s.minion_health = torch.where(
+                        tick_mask, s.minion_health - burn_damage, s.minion_health
+                    )
+                    s.burning_stacks = torch.where(
+                        tick_mask,
+                        (s.burning_stacks - 1).clamp(min=0),
+                        s.burning_stacks,
+                    )
+                    # Lethal burns: route through standard cleanup
+                    self.cleanup_dead_minions_batch()
+                    self.check_game_over_batch()
 
                 # Auto-draw for new active player at turn start
                 apply_draw_batch(s, should_advance, self.card_table)

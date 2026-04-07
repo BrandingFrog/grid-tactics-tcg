@@ -60,6 +60,8 @@ def apply_effects_batch(
         _apply_promote(state, active & (etype == 7), card_ids, caster_owners, card_table)
         _apply_tutor(state, active & (etype == 8), card_ids, caster_owners, card_table)
         _apply_destroy(state, active & (etype == 9), etarget, target_flat_pos)
+        # Phase 14.3: APPLY_BURNING (15) — grant burning_stacks to target minion
+        _apply_burning(state, active & (etype == 15), etarget, eamount, target_flat_pos)
 
 
 def _find_minion_slot_at_pos(state, flat_pos: torch.Tensor) -> torch.Tensor:
@@ -404,6 +406,31 @@ def _apply_tutor(state, active, card_ids, caster_owners, card_table):
     state.pending_tutor_matches = torch.where(
         found.view(N, 1), matches, state.pending_tutor_matches
     )
+
+
+def _apply_burning(state, active, etarget, eamount, target_flat_pos):
+    """APPLY_BURNING (Phase 14.3): grant burning_stacks to the target minion.
+
+    Stacking is additive. SINGLE_TARGET (0) only — burning is not currently
+    designed as an AoE effect, but adding ALL_ENEMIES later is a simple
+    branch following the existing dispatch shape.
+    """
+    if not active.any():
+        return
+    N = active.shape[0]
+    device = active.device
+    arange_n = torch.arange(N, device=device)
+
+    single = active & (etarget == 0)
+    if single.any():
+        slot = _find_minion_slot_at_pos(state, target_flat_pos)
+        valid = single & (slot >= 0)
+        if valid.any():
+            safe_slot = slot.clamp(min=0)
+            # Default amount=1 if zero/missing, mirroring Python resolver
+            amt = torch.where(eamount > 0, eamount, torch.tensor(1, device=device, dtype=eamount.dtype))
+            delta = (amt * valid.int()).to(state.burning_stacks.dtype)
+            state.burning_stacks[arange_n, safe_slot] += delta
 
 
 def _apply_destroy(state, active, etarget, target_flat_pos):
