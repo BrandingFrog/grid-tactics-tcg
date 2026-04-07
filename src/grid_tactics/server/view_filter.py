@@ -282,3 +282,32 @@ def enrich_pending_tutor_for_viewer(
             key = str(nid)
             totals[key] = totals.get(key, 0) + 1
     filtered_dict["pending_tutor_total_copies_owned"] = totals
+
+
+def filter_state_for_spectator(
+    state_dict: dict, god_mode: bool, perspective_idx: int = 0
+) -> dict:
+    """Filter game state for a spectator (Phase 14.4-02).
+
+    god_mode=True: return a deep copy of the full state with no filtering.
+      Both hands, both decks (with card order), and any pending tutor
+      matches all remain visible. Adds top-level flag
+      ``spectator_god_mode=True`` for client UI.
+
+    god_mode=False: delegate to ``filter_state_for_player(state, perspective_idx)``.
+      The spectator sees exactly what player ``perspective_idx`` sees
+      (default 0 = Player 1's perspective). Inherits all hidden-info
+      filtering rules including pending-tutor opponent stripping.
+
+    Always adds top-level ``is_spectator=True`` so the client knows to
+    enter spectator mode, plus ``spectator_perspective`` to record which
+    seat the (non-god) view is anchored to.
+    """
+    if god_mode:
+        filtered = copy.deepcopy(state_dict)
+    else:
+        filtered = filter_state_for_player(state_dict, perspective_idx)
+    filtered["is_spectator"] = True
+    filtered["spectator_god_mode"] = god_mode
+    filtered["spectator_perspective"] = perspective_idx
+    return filtered
