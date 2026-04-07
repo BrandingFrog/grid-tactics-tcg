@@ -1676,6 +1676,147 @@ body {
   transform: translateX(-50%) translateY(-20px);
 }
 
+/* Phase 14.2: Tutor-pick modal (caster only). Opponent sees the toast above. */
+.tutor-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(5, 10, 20, 0.78);
+  backdrop-filter: blur(3px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 3000;
+  padding: 20px;
+}
+
+.tutor-modal {
+  background: var(--card);
+  border: 2px solid var(--cyan);
+  border-radius: 12px;
+  box-shadow: 0 10px 40px rgba(0, 212, 255, 0.35);
+  max-width: 960px;
+  width: 100%;
+  max-height: 92vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  font-family: 'Inter', system-ui, sans-serif;
+}
+
+.tutor-modal-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+  background: var(--card2);
+}
+
+.tutor-modal-title {
+  font-size: 18px;
+  font-weight: 800;
+  color: white;
+  letter-spacing: 0.3px;
+}
+
+.tutor-modal-deckline {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--cyan);
+}
+
+.tutor-modal-cards {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px;
+  padding: 20px;
+  justify-content: center;
+  overflow-y: auto;
+}
+
+.tutor-modal-card {
+  position: relative;
+  cursor: pointer;
+  transition: transform 150ms ease, filter 150ms ease;
+  width: 200px;
+  flex: 0 0 auto;
+}
+
+.tutor-modal-card:hover {
+  transform: translateY(-4px) scale(1.03);
+  filter: drop-shadow(0 6px 18px rgba(0, 212, 255, 0.45));
+}
+
+.tutor-modal-empty {
+  color: var(--muted);
+  font-size: 14px;
+  padding: 24px;
+}
+
+.tutor-copy-count {
+  position: absolute;
+  left: 50%;
+  bottom: -10px;
+  transform: translateX(-50%);
+  background: var(--cyan);
+  color: #001018;
+  font-size: 11px;
+  font-weight: 800;
+  padding: 4px 10px;
+  border-radius: 999px;
+  white-space: nowrap;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+  pointer-events: none;
+}
+
+.tutor-modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  padding: 14px 20px;
+  border-top: 1px solid var(--border);
+  background: var(--card2);
+}
+
+.tutor-skip-button {
+  background: transparent;
+  color: white;
+  border: 2px solid var(--muted);
+  border-radius: 6px;
+  padding: 10px 22px;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 150ms ease;
+}
+
+.tutor-skip-button:hover {
+  border-color: var(--cyan);
+  color: var(--cyan);
+  background: rgba(0, 212, 255, 0.08);
+}
+
+@media (max-width: 700px) {
+  .tutor-modal {
+    max-height: 96vh;
+  }
+  .tutor-modal-cards {
+    flex-direction: column;
+    align-items: center;
+    gap: 22px;
+    padding: 16px;
+  }
+  .tutor-modal-card {
+    width: 80%;
+    max-width: 260px;
+  }
+  .tutor-modal-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+  }
+}
+
 /* Saved display name greeting in lobby */
 .name-saved-row {
   display: flex;

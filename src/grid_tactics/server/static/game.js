@@ -1455,22 +1455,10 @@ function logStateDiff(prev, next) {
         addLogEntry((prevMinions - nextMinions) + ' minion(s) destroyed');
     }
 
-    // Detect tutored/conjured cards (hand grew without a draw action by us)
-    if (myPlayerIdx != null && prev.players?.[myPlayerIdx]?.hand && next.players?.[myPlayerIdx]?.hand) {
-        var prevHand = prev.players[myPlayerIdx].hand;
-        var nextHand = next.players[myPlayerIdx].hand;
-        if (nextHand.length > prevHand.length + 1) {
-            // More than one new card — probably tutor/conjure
-            var newCards = nextHand.slice(prevHand.length);
-            newCards.forEach(function(nid) {
-                var c = cardDefs[nid];
-                if (c) {
-                    addLogEntry('Tutored/Conjured: ' + c.name, 'heal');
-                    showTutorToast(c.name);
-                }
-            });
-        }
-    }
+    // Phase 14.2: tutor pick is now an explicit modal flow (showTutorModal),
+    // not a silent hand-growth detection. The old auto-tutor heuristic that
+    // lived here has been removed — pending_tutor_player_idx in state frames
+    // drives the modal directly via syncPendingTutorUI().
 }
 
 function describeAction(pa, prevState, nextState, actor) {
@@ -1679,6 +1667,9 @@ function renderGame() {
     // attack decision is pending, auto-enter the attack-pick UI mode and show
     // the decline button. Must run BEFORE highlightBoard so highlights reflect it.
     syncPendingPostMoveAttackUI();
+    // Phase 14.2: pending_tutor modal sync. Caster sees full-card-art picker;
+    // opponent sees a passive "Opponent is tutoring…" toast.
+    syncPendingTutorUI();
     // Always refresh highlights — even when it's not my turn — so stale
     // .card-playable classes from the previous render are cleared.
     highlightBoard();
@@ -2266,18 +2257,6 @@ function hideSacrificePicker() {
     if (existing) existing.remove();
 }
 
-// Tutor toast — show a brief popup when a card was tutored to your hand
-function showTutorToast(cardName) {
-    var toast = document.createElement('div');
-    toast.className = 'tutor-toast';
-    toast.textContent = 'Tutored: ' + cardName;
-    document.body.appendChild(toast);
-    setTimeout(function() {
-        toast.classList.add('fade-out');
-        setTimeout(function() { toast.remove(); }, 500);
-    }, 2500);
-}
-
 function getMinionAt(row, col) {
     if (!gameState || !gameState.minions) return null;
     for (var i = 0; i < gameState.minions.length; i++) {
@@ -2325,6 +2304,145 @@ function showDeclinePostMoveAttackButton() {
 
 function hideDeclinePostMoveAttackButton() {
     var existing = document.getElementById('decline-post-move-attack-btn');
+    if (existing) existing.remove();
+}
+
+// =============================================
+// Phase 14.2: Tutor-pick modal
+// =============================================
+
+var tutorModalOpen = false;
+
+function syncPendingTutorUI() {
+    if (!gameState) {
+        if (tutorModalOpen) closeTutorModal();
+        hideOpponentTutoringToast();
+        return;
+    }
+    var pendingIdx = gameState.pending_tutor_player_idx;
+    if (pendingIdx == null) {
+        if (tutorModalOpen) closeTutorModal();
+        hideOpponentTutoringToast();
+        return;
+    }
+    if (pendingIdx === myPlayerIdx) {
+        // I'm the caster — show the picker modal.
+        hideOpponentTutoringToast();
+        if (!tutorModalOpen) {
+            var matches = gameState.pending_tutor_matches || [];
+            var deckSize = (gameState.players && gameState.players[myPlayerIdx])
+                ? (gameState.players[myPlayerIdx].deck_count || 0)
+                : 0;
+            var totals = gameState.pending_tutor_total_copies_owned || {};
+            showTutorModal(matches, deckSize, totals);
+        }
+    } else {
+        // Opponent is choosing — passive toast, no modal.
+        if (tutorModalOpen) closeTutorModal();
+        showOpponentTutoringToast();
+    }
+}
+
+function showTutorModal(matches, deckSize, totalCopiesByCardId) {
+    closeTutorModal();
+    tutorModalOpen = true;
+
+    // Count remaining-in-deck per card_numeric_id (matches come from deck only).
+    var remainingByNid = {};
+    matches.forEach(function(m) {
+        var k = String(m.card_numeric_id);
+        remainingByNid[k] = (remainingByNid[k] || 0) + 1;
+    });
+
+    var overlay = document.createElement('div');
+    overlay.className = 'tutor-modal-overlay';
+    overlay.id = 'tutor-modal-overlay';
+
+    var modal = document.createElement('div');
+    modal.className = 'tutor-modal';
+
+    var header = document.createElement('div');
+    header.className = 'tutor-modal-header';
+    var title = document.createElement('div');
+    title.className = 'tutor-modal-title';
+    title.textContent = 'Choose a card to tutor';
+    var deckLine = document.createElement('div');
+    deckLine.className = 'tutor-modal-deckline';
+    deckLine.textContent = 'Deck: ' + deckSize + ' cards remaining';
+    header.appendChild(title);
+    header.appendChild(deckLine);
+    modal.appendChild(header);
+
+    var fan = document.createElement('div');
+    fan.className = 'tutor-modal-cards';
+
+    if (!matches || matches.length === 0) {
+        var empty = document.createElement('div');
+        empty.className = 'tutor-modal-empty';
+        empty.textContent = 'No matching cards.';
+        fan.appendChild(empty);
+    } else {
+        matches.forEach(function(match) {
+            var nid = match.card_numeric_id;
+            var tile = document.createElement('div');
+            tile.className = 'tutor-modal-card';
+            tile.innerHTML = renderDeckBuilderCard(nid, -1);
+
+            var key = String(nid);
+            var remainingInDeck = remainingByNid[key] || 0;
+            var totalOwned = (totalCopiesByCardId && totalCopiesByCardId[key]) || remainingInDeck;
+            var pill = document.createElement('div');
+            pill.className = 'tutor-copy-count';
+            pill.textContent = remainingInDeck + ' of ' + totalOwned + ' copies remaining';
+            tile.appendChild(pill);
+
+            tile.addEventListener('click', function(e) {
+                e.stopPropagation();
+                // ActionType.TUTOR_SELECT = 9 (Phase 14.2). card_index reused as match index.
+                submitAction({ action_type: 9, card_index: match.match_idx });
+            });
+            fan.appendChild(tile);
+        });
+    }
+    modal.appendChild(fan);
+
+    var footer = document.createElement('div');
+    footer.className = 'tutor-modal-footer';
+    var skipBtn = document.createElement('button');
+    skipBtn.className = 'tutor-skip-button';
+    skipBtn.textContent = 'Skip';
+    skipBtn.title = 'Decline tutor — leave matching cards in deck';
+    skipBtn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        // ActionType.DECLINE_TUTOR = 10 (Phase 14.2)
+        submitAction({ action_type: 10 });
+    });
+    footer.appendChild(skipBtn);
+    modal.appendChild(footer);
+
+    overlay.appendChild(modal);
+    // Block background clicks (no accidental dismiss — must Skip explicitly).
+    overlay.addEventListener('click', function(e) { e.stopPropagation(); });
+    document.body.appendChild(overlay);
+}
+
+function closeTutorModal() {
+    var existing = document.getElementById('tutor-modal-overlay');
+    if (existing) existing.remove();
+    tutorModalOpen = false;
+}
+
+function showOpponentTutoringToast() {
+    if (document.getElementById('opponent-tutoring-toast')) return;
+    var toast = document.createElement('div');
+    toast.id = 'opponent-tutoring-toast';
+    toast.className = 'tutor-toast';
+    toast.textContent = 'Opponent is tutoring…';
+    document.body.appendChild(toast);
+}
+
+function hideOpponentTutoringToast() {
+    var existing = document.getElementById('opponent-tutoring-toast');
     if (existing) existing.remove();
 }
 
