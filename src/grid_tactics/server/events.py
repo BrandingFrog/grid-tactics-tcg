@@ -317,6 +317,52 @@ def register_events(room_manager: RoomManager) -> None:
                     },
                     to=session.player_sids[idx],
                 )
+            _fanout_game_start_to_spectators(session, state_dict, card_defs)
+
+    @socketio.on("spectate_room")
+    def handle_spectate_room(data):
+        data = data or {}
+        display_name = (data.get("display_name") or "").strip()
+        room_code = (data.get("room_code") or "").strip().upper()
+        god_mode = bool(data.get("god_mode", False))
+        if not display_name:
+            emit("error", {"msg": "display_name is required"})
+            return
+        if not room_code:
+            emit("error", {"msg": "room_code is required"})
+            return
+        try:
+            token, _ = _room_manager.join_as_spectator(
+                room_code, display_name, request.sid, god_mode
+            )
+        except ValueError as e:
+            emit("error", {"msg": str(e)})
+            return
+        sio_join_room(room_code)
+        emit("spectator_joined", {
+            "room_code": room_code,
+            "session_token": token,
+            "god_mode": god_mode,
+        })
+        # If a game is already underway, immediately push current state.
+        session = _room_manager.get_game(room_code)
+        if session is not None:
+            state_dict = session.state.to_dict()
+            enrich_pending_post_move_attack(session.state, state_dict, session.library)
+            spec_state = filter_state_for_spectator(
+                state_dict, god_mode=god_mode, perspective_idx=0,
+            )
+            if not god_mode:
+                enrich_pending_tutor_for_viewer(session.state, spec_state, 0, session.library)
+            card_defs = _build_card_defs(session.library)
+            emit("game_start", {
+                "your_player_idx": 0,
+                "state": spec_state,
+                "legal_actions": [],
+                "opponent_name": session.player_names[1],
+                "card_defs": card_defs,
+                "is_spectator": True,
+            })
 
     @socketio.on("get_card_defs")
     def handle_get_card_defs(data=None):
@@ -380,6 +426,7 @@ def register_events(room_manager: RoomManager) -> None:
                 },
                 to=sid,
             )
+        _fanout_game_start_to_spectators(new_session, state_dict, card_defs)
 
     @socketio.on("chat_message")
     def handle_chat_message(data):
@@ -399,20 +446,25 @@ def register_events(room_manager: RoomManager) -> None:
         text = text.strip()[:200]
         if not text:
             return
-        # Determine sender name from active game or waiting room
+        # Determine sender name from active game, waiting room, or spectator slot
         sender_name = "Unknown"
-        session = _room_manager.get_game(room_code)
-        if session is not None:
-            player_idx = session.get_player_idx(token)
-            if player_idx is not None:
-                sender_name = session.player_names[player_idx]
+        if _room_manager.get_role(token) == "spectator":
+            spec = _room_manager.get_spectator(token)
+            if spec is not None:
+                sender_name = spec.name
         else:
-            room = _room_manager.get_room(room_code)
-            if room is not None:
-                if room.creator and room.creator.token == token:
-                    sender_name = room.creator.name
-                elif room.joiner and room.joiner.token == token:
-                    sender_name = room.joiner.name
+            session = _room_manager.get_game(room_code)
+            if session is not None:
+                player_idx = session.get_player_idx(token)
+                if player_idx is not None:
+                    sender_name = session.player_names[player_idx]
+            else:
+                room = _room_manager.get_room(room_code)
+                if room is not None:
+                    if room.creator and room.creator.token == token:
+                        sender_name = room.creator.name
+                    elif room.joiner and room.joiner.token == token:
+                        sender_name = room.joiner.name
         emit(
             "chat_message",
             {"author": sender_name, "text": text},
@@ -425,6 +477,11 @@ def register_events(room_manager: RoomManager) -> None:
         token = _room_manager.get_token_by_sid(request.sid)
         if token is None:
             emit("error", {"msg": "Not in a game"})
+            return
+
+        # Phase 14.4: spectators cannot submit actions
+        if _room_manager.get_role(token) == "spectator":
+            emit("error", {"msg": "Spectators cannot submit actions"})
             return
 
         # Step b: Look up room_code
@@ -505,3 +562,17 @@ def register_events(room_manager: RoomManager) -> None:
         # Step k: If game over, emit game_over
         if new_state.is_game_over:
             _emit_game_over(session, new_state)
+
+    @socketio.on("disconnect")
+    def handle_disconnect():
+        """Phase 14.4: clean up spectator entries on disconnect.
+
+        Player disconnect cleanup is intentionally NOT implemented here — Phase
+        15 (reconnection) will handle player sid churn. Spectators have no
+        reconnection story, so we drop them eagerly.
+        """
+        token = _room_manager.get_token_by_sid(request.sid)
+        if token is None:
+            return
+        if _room_manager.get_role(token) == "spectator":
+            _room_manager.remove_spectator(token)
