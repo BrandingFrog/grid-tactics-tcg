@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Online PvP Dueling
 status: verifying
-stopped_at: "Phase 14.3-02 + 14.3-04 complete (summon + attack animations + last_action payload). Next: 14.3-03 move animation."
-last_updated: "2026-04-07T16:30:00.000Z"
+stopped_at: "Phase 14.3-02 + 14.3-03 + 14.3-04 complete (summon + move + attack animations + last_action payload). All Wave 2-4 animation branches have real visuals."
+last_updated: "2026-04-07T16:45:00.000Z"
 last_activity: 2026-04-07
 progress:
   total_phases: 5
@@ -26,9 +26,9 @@ See: .planning/PROJECT.md (updated 2026-04-04)
 ## Current Position
 
 Phase: 14.3 (game-juice) — IN PROGRESS
-Plan: 2 + 4 of N (summon + attack animations) — COMPLETE
-Status: 14.3-02 (summon) and 14.3-04 (attack) landed. Wave 3 (move) still a 0ms stub. Server now emits last_action {type, attacker_pos, target_pos, damage, killed} on every state_update via view_filter.enrich_last_action. playAttackAnimation choreographs pullback (180ms) -> hold (100ms) -> strike (120ms) -> target flash + damage popup -> return tween (300ms) -> state apply, total ~800ms. Killed minions disappear AFTER the strike via runQueue's default applyStateFrame (no stateApplied flag set).
-Last activity: 2026-04-07 — Completed 14.3-04-PLAN.md
+Plan: 2 + 3 + 4 of N (summon + move + attack animations) — COMPLETE
+Status: All three core action animations now have real visuals. Move animation = lift (120ms scale 1.15 + drop-shadow) -> translate (350ms cubic-bezier slide) -> apply state mid-flight + .anim-move-drop keyframe on freshly-rendered destination cell -> cleanup. Total ~600ms. Source tile clears at PHASE C, never before. New shared getTileDelta() helper extracted for any pos-to-pos animation reuse. deriveAnimationJob prefers last_action.MOVE (server-authoritative) before falling back to pending_action diff, mirroring the ATTACK precedence. playAnimation switch no longer has stub branches except 'noop'.
+Last activity: 2026-04-07 — Completed 14.3-03-PLAN.md
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -144,6 +144,10 @@ Recent decisions affecting current work:
 - [Phase 14.3-04]: Animate the inner .board-minion element (not .board-cell) so cell borders/highlights stay put while the minion lunges. Strike delta is 0.7*vector (lands on target edge), pullback is -0.3*vector.
 - [Phase 14.3-04]: deriveAnimationJob branches on last_action.type === 'ATTACK' first; falls back to pending_action diff for summon/move/early frames. Keeps Wave 2 summon path intact.
 - [Phase 14.3-04]: Wave 3 (move animation) and Wave 4 (attack) were executed out of dependency order — 14.3-04 only depends on 14.3-01, not 14.3-03.
+- [Phase 14.3-03]: Move animation applies state MID-flight (PHASE C) via job.stateApplied=true, same opt-out pattern as summon and OPPOSITE of attack. Source tile is the original DOM .board-minion node lifted+translated; PHASE C re-renders the board so source clears and destination fills atomically at the moment of landing.
+- [Phase 14.3-03]: animatingTiles[destKey] = 'move-drop' is set BEFORE applyStateFrame so the freshly-rendered destination .board-cell picks up .anim-move-drop on first paint. The drop is a CSS @keyframes (not a transition) so it fires reliably on a brand-new DOM node.
+- [Phase 14.3-03]: getTileDelta(fromPos, toPos) extracted as shared helper returning {dx,dy,fromCell,toCell}. Reusable for any future pos-to-pos animation. Wave 4 attack predates this and still inlines getBoundingClientRect math — left untouched to avoid retrofitting shipped code.
+- [Phase 14.3-03]: deriveAnimationJob prefers last_action.type==='MOVE' (server-authoritative attacker_pos/target_pos from enrich_last_action) before falling back to pending_action.source_position/target_position diff. Mirrors the ATTACK precedence added in 14.3-04.
 
 ### Pending Todos
 
@@ -158,6 +162,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-04-07T16:30:00.000Z
-Stopped at: Completed 14.3-04-PLAN.md (attack animation + last_action payload). Wave 3 (move animation) still pending.
+Last session: 2026-04-07T16:45:00.000Z
+Stopped at: Completed 14.3-03-PLAN.md (move animation). Waves 2/3/4 all shipped — playAnimation has no remaining stub branches except 'noop'.
 Resume file: None
