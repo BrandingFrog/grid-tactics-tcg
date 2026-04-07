@@ -975,18 +975,6 @@ body {
   z-index: 3;
 }
 
-.board-minion .attr-circle-sm::after {
-  content: '';
-  position: absolute;
-  top: 9%;
-  left: 9%;
-  width: 82%;
-  height: 82%;
-  border-radius: 50%;
-  border: 1px solid rgba(255, 255, 255, 0.35);
-  pointer-events: none;
-}
-
 .board-minion .attr-text-sm {
   font-size: 7px;
   letter-spacing: 0.3px;
@@ -1134,17 +1122,6 @@ body {
 .card-frame-hand .attr-text {
   font-size: 7px;
   -webkit-text-stroke: 1px black;
-}
-
-.attr-circle::after {
-  content: '';
-  position: absolute;
-  top: 9%;
-  left: 9%;
-  width: 82%;
-  height: 82%;
-  border-radius: 50%;
-  border: 1px solid rgba(255, 255, 255, 0.5);
 }
 
 .attr-wood {
