@@ -1611,6 +1611,20 @@ function playAttackAnimation(job, done) {
 
     if (!attackerCell || !targetCell) { setTimeout(done, 0); return; }
 
+    // Branch on attacker range: ranged minions get a projectile-arrow, melee
+    // gets the rubber-band rush. Look up the attacker's CardDef via the .board-minion
+    // element's data-numeric-id (set by renderBoardMinion).
+    var attackerMinionEl = attackerCell.querySelector('.board-minion');
+    var atkRange = 0;
+    if (attackerMinionEl) {
+        var nid = parseInt(attackerMinionEl.getAttribute('data-numeric-id'), 10);
+        var def = !isNaN(nid) ? cardDefs[nid] : null;
+        if (def && typeof def.attack_range === 'number') atkRange = def.attack_range;
+    }
+    if (atkRange >= 1) {
+        return playRangedAttackAnimation(attackerCell, targetCell, damage, done);
+    }
+
     // Animate the inner .board-minion if present so the cell border stays put.
     var attackerEl = attackerCell.querySelector('.board-minion') || attackerCell;
 
@@ -1669,6 +1683,112 @@ function playAttackAnimation(job, done) {
             }, 120);
         }, 100);
     }, 180);
+}
+
+// Ranged attack animation: SVG arrow drawn from attacker to target.
+// Phase A: arrow grows from attacker (~350ms via stroke-dasharray)
+// Phase B: target flash + damage popup
+// Phase C: arrow fades (~300ms) then removed
+// Total ~850ms.
+function playRangedAttackAnimation(attackerCell, targetCell, damage, done) {
+    var aRect = attackerCell.getBoundingClientRect();
+    var tRect = targetCell.getBoundingClientRect();
+    var ax = aRect.left + aRect.width / 2;
+    var ay = aRect.top + aRect.height / 2;
+    var tx = tRect.left + tRect.width / 2;
+    var ty = tRect.top + tRect.height / 2;
+
+    // Recoil the attacker slightly back along the firing axis
+    var attackerEl = attackerCell.querySelector('.board-minion') || attackerCell;
+    var dx = tx - ax, dy = ty - ay;
+    var len = Math.max(1, Math.sqrt(dx * dx + dy * dy));
+    var ux = dx / len, uy = dy / len;
+    var recoilX = -8 * ux, recoilY = -8 * uy;
+    attackerEl.style.transition = 'transform 120ms ease-out';
+    attackerEl.style.transform = 'translate(' + recoilX + 'px,' + recoilY + 'px)';
+
+    // SVG overlay covering the viewport so the arrow can span anywhere
+    var SVG_NS = 'http://www.w3.org/2000/svg';
+    var svg = document.createElementNS(SVG_NS, 'svg');
+    svg.setAttribute('class', 'ranged-attack-svg');
+    svg.style.position = 'fixed';
+    svg.style.left = '0';
+    svg.style.top = '0';
+    svg.style.width = '100vw';
+    svg.style.height = '100vh';
+    svg.style.pointerEvents = 'none';
+    svg.style.zIndex = '900';
+
+    // Arrowhead marker
+    var defs = document.createElementNS(SVG_NS, 'defs');
+    var marker = document.createElementNS(SVG_NS, 'marker');
+    marker.setAttribute('id', 'ranged-arrowhead');
+    marker.setAttribute('viewBox', '0 0 10 10');
+    marker.setAttribute('refX', '8');
+    marker.setAttribute('refY', '5');
+    marker.setAttribute('markerWidth', '6');
+    marker.setAttribute('markerHeight', '6');
+    marker.setAttribute('orient', 'auto-start-reverse');
+    var arrowPath = document.createElementNS(SVG_NS, 'path');
+    arrowPath.setAttribute('d', 'M 0 0 L 10 5 L 0 10 z');
+    arrowPath.setAttribute('fill', '#ffd84a');
+    marker.appendChild(arrowPath);
+    defs.appendChild(marker);
+    svg.appendChild(defs);
+
+    // The line itself: black halo underneath, gold on top, animated draw
+    var halo = document.createElementNS(SVG_NS, 'line');
+    halo.setAttribute('x1', ax); halo.setAttribute('y1', ay);
+    halo.setAttribute('x2', tx); halo.setAttribute('y2', ty);
+    halo.setAttribute('stroke', 'rgba(0,0,0,0.85)');
+    halo.setAttribute('stroke-width', '7');
+    halo.setAttribute('stroke-linecap', 'round');
+    var line = document.createElementNS(SVG_NS, 'line');
+    line.setAttribute('x1', ax); line.setAttribute('y1', ay);
+    line.setAttribute('x2', tx); line.setAttribute('y2', ty);
+    line.setAttribute('stroke', '#ffd84a');
+    line.setAttribute('stroke-width', '4');
+    line.setAttribute('stroke-linecap', 'round');
+    line.setAttribute('marker-end', 'url(#ranged-arrowhead)');
+
+    // Stroke-dasharray draw-on effect
+    [halo, line].forEach(function (el) {
+        el.style.strokeDasharray = len + ' ' + len;
+        el.style.strokeDashoffset = len;
+        el.style.transition = 'stroke-dashoffset 350ms ease-out, opacity 300ms ease-out';
+    });
+    svg.appendChild(halo);
+    svg.appendChild(line);
+    document.body.appendChild(svg);
+
+    // Trigger the draw on next frame
+    requestAnimationFrame(function () {
+        halo.style.strokeDashoffset = '0';
+        line.style.strokeDashoffset = '0';
+    });
+
+    setTimeout(function () {
+        // Impact: target flash + damage popup
+        targetCell.classList.add('anim-target-hit');
+        setTimeout(function () { targetCell.classList.remove('anim-target-hit'); }, 420);
+        if (damage != null && damage > 0) {
+            showFloatingPopup(targetCell, '⚔️ -' + damage, 'combat-damage');
+        }
+
+        // Recoil return
+        attackerEl.style.transform = 'translate(0,0)';
+
+        // Fade out the arrow
+        halo.style.opacity = '0';
+        line.style.opacity = '0';
+
+        setTimeout(function () {
+            if (svg.parentNode) svg.parentNode.removeChild(svg);
+            attackerEl.style.transition = '';
+            attackerEl.style.transform = '';
+            done();
+        }, 300);
+    }, 380);
 }
 
 // Tile-rect measurement helper. Returns the pixel delta between the centers
