@@ -998,7 +998,7 @@ body {
   font-weight: 700;
   line-height: 1.1;
   color: white;
-  -webkit-text-stroke: 1.5px black;
+  -webkit-text-stroke: 3px black;
   paint-order: stroke fill;
   white-space: nowrap;
   overflow: hidden;
@@ -1193,7 +1193,7 @@ body {
   justify-content: center;
   font-family: 'Luckiest Guy', cursive;
   font-size: 16px;
-  -webkit-text-stroke: 1.5px black;
+  -webkit-text-stroke: 3px black;
   paint-order: stroke fill;
   border: 2px solid rgb(30, 25, 20);
   z-index: 2;
@@ -1240,7 +1240,7 @@ body {
   font-family: 'Luckiest Guy', cursive;
   font-size: 16px;
   color: white;
-  -webkit-text-stroke: 1.5px black;
+  -webkit-text-stroke: 3px black;
   paint-order: stroke fill;
   border: 2px solid rgb(30, 25, 20);
   flex-shrink: 0;
@@ -1292,13 +1292,14 @@ body {
 .card-effect {
   text-align: center;
   color: white;
-  -webkit-text-stroke: 1.5px black;
+  -webkit-text-stroke: 3px black;
   paint-order: stroke fill;
   font-family: 'Inter', system-ui, sans-serif;
   font-size: 10px;
   font-weight: 700;
-  line-height: 1.2;
-  padding: 1px 3%;
+  line-height: 1.45;
+  letter-spacing: 0.2px;
+  padding: 3px 3%;
   overflow: hidden;
   text-overflow: ellipsis;
   display: -webkit-box;
@@ -1359,13 +1360,14 @@ body {
 .card-effect-full {
   text-align: center;
   color: white;
-  -webkit-text-stroke: 1.5px black;
+  -webkit-text-stroke: 3px black;
   paint-order: stroke fill;
   font-family: 'Inter', system-ui, sans-serif;
   font-size: 12px;
   font-weight: 700;
-  line-height: 1.25;
-  padding: 1px 3%;
+  line-height: 1.5;
+  letter-spacing: 0.2px;
+  padding: 4px 3%;
   word-wrap: break-word;
   overflow: visible;
 }
@@ -1509,10 +1511,11 @@ body {
   font-size: 10px;
   font-style: italic;
   font-weight: 700;
-  -webkit-text-stroke: 1.5px black;
+  -webkit-text-stroke: 3px black;
   paint-order: stroke fill;
-  line-height: 1.3;
-  padding: 1px 4%;
+  line-height: 1.5;
+  letter-spacing: 0.2px;
+  padding: 3px 4%;
   overflow: hidden;
   text-overflow: ellipsis;
   display: -webkit-box;
