@@ -122,10 +122,12 @@ def _fire_passive_effects(
     Newly-dead minions (e.g. from a future damaging passive) are routed
     through the standard cleanup path.
     """
-    from grid_tactics.effect_resolver import resolve_effects_for_trigger
+    from grid_tactics.effect_resolver import resolve_effect
     from grid_tactics.action_resolver import (
         _check_game_over, _cleanup_dead_minions,
     )
+
+    active_side = state.players[state.active_player_idx].side
 
     ordered_ids = [
         m.instance_id
@@ -135,9 +137,19 @@ def _fire_passive_effects(
         m = state.get_minion(inst_id)
         if m is None:
             continue  # died from a previous passive earlier in this pass
-        state = resolve_effects_for_trigger(
-            state, TriggerType.PASSIVE, m, library, target_pos=None,
-        )
+        card_def = library.get_by_id(m.card_numeric_id)
+        for effect in card_def.effects:
+            if effect.trigger != TriggerType.PASSIVE:
+                continue
+            # Heal-aura semantics: PASSIVE_HEAL ticks once per full turn
+            # cycle, gated to the OWNER becoming active. Burn-aura
+            # (EffectType.BURN) still fires every turn flip so adjacent
+            # enemies get refreshed regardless of whose turn it is.
+            if effect.effect_type == EffectType.PASSIVE_HEAL and m.owner != active_side:
+                continue
+            state = resolve_effect(
+                state, effect, m.position, m.owner, library, target_pos=None,
+            )
 
     state = _cleanup_dead_minions(state, library)
     state = _check_game_over(state)

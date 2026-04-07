@@ -512,7 +512,15 @@ class TensorGameEngine:
             burn_amt = ct.passive_burn_amount[src_cid]      # [N]
             heal_amt = ct.passive_heal_amount[src_cid]      # [N]
             has_burn = src_active & (burn_amt > 0)
-            has_heal = src_active & (heal_amt > 0)
+            # PASSIVE_HEAL ticks only when the source minion's owner is the
+            # newly-active player (one tick per full turn cycle). Mirrors
+            # the gate in Python react_stack._fire_passive_effects.
+            src_owner_for_heal = s.minion_owner[:, src]
+            has_heal = (
+                src_active
+                & (heal_amt > 0)
+                & (src_owner_for_heal == s.active_player)
+            )
             if not (has_burn.any() or has_heal.any()):
                 continue
 
