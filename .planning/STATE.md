@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Online PvP Dueling
 status: verifying
-stopped_at: "Phase 14.3-02 complete (summon animation + grid shake). Next: 14.3-03 move animation."
-last_updated: "2026-04-07T15:55:00.000Z"
+stopped_at: "Phase 14.3-02 + 14.3-04 complete (summon + attack animations + last_action payload). Next: 14.3-03 move animation."
+last_updated: "2026-04-07T16:30:00.000Z"
 last_activity: 2026-04-07
 progress:
   total_phases: 5
@@ -26,9 +26,9 @@ See: .planning/PROJECT.md (updated 2026-04-04)
 ## Current Position
 
 Phase: 14.3 (game-juice) — IN PROGRESS
-Plan: 2 of N (summon animation) — COMPLETE
-Status: 14.3-02 landed. Summon scale-in (2x→1x, 600ms, springy) + grid shake (350ms) hooked into the Wave 1 AnimationQueue. animatingTiles registry pattern established for Wave 3/4 reuse. job.stateApplied opt-out flag added to runQueue for animations that apply state up-front (summon) vs. post-animation (future move/attack). deriveAnimationJob hardened to only emit 'summon' when a minion actually appeared in next.minions (guards magic-with-position). React window remains structurally gated.
-Last activity: 2026-04-07 — Completed 14.3-02-PLAN.md
+Plan: 2 + 4 of N (summon + attack animations) — COMPLETE
+Status: 14.3-02 (summon) and 14.3-04 (attack) landed. Wave 3 (move) still a 0ms stub. Server now emits last_action {type, attacker_pos, target_pos, damage, killed} on every state_update via view_filter.enrich_last_action. playAttackAnimation choreographs pullback (180ms) -> hold (100ms) -> strike (120ms) -> target flash + damage popup -> return tween (300ms) -> state apply, total ~800ms. Killed minions disappear AFTER the strike via runQueue's default applyStateFrame (no stateApplied flag set).
+Last activity: 2026-04-07 — Completed 14.3-04-PLAN.md
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -139,6 +139,11 @@ Recent decisions affecting current work:
 - [Phase 14.3-02]: runQueue gained a job.stateApplied opt-out flag. Animations that need the new state visible during the animation (summon) call applyStateFrame themselves and set the flag; animations that need the old state to persist (future attack) leave the flag false and let runQueue apply post-animation.
 - [Phase 14.3-02]: deriveAnimationJob for PLAY_CARD now verifies a minion actually appeared at pa.position in next.minions before emitting 'summon'. Guards magic-with-position cards from being misclassified.
 - [Phase 14.3-02]: Last session: 2026-04-07T15:55:00.000Z — Stopped at: Completed 14.3-02-PLAN.md (summon animation). Next: 14.3-03 move animation.
+- [Phase 14.3-04]: Damage/killed info is server-authoritative via last_action payload (view_filter.enrich_last_action), computed from (prev_state, new_state, action). Client never diffs minion HP. Schema: {type, attacker_pos, target_pos, damage, killed}.
+- [Phase 14.3-04]: Attack animation does NOT set job.stateApplied — runQueue's default applyStateFrame fires after done(), guaranteeing killed minions disappear AFTER the strike, never before. (Opposite of summon, which applies state at start.)
+- [Phase 14.3-04]: Animate the inner .board-minion element (not .board-cell) so cell borders/highlights stay put while the minion lunges. Strike delta is 0.7*vector (lands on target edge), pullback is -0.3*vector.
+- [Phase 14.3-04]: deriveAnimationJob branches on last_action.type === 'ATTACK' first; falls back to pending_action diff for summon/move/early frames. Keeps Wave 2 summon path intact.
+- [Phase 14.3-04]: Wave 3 (move animation) and Wave 4 (attack) were executed out of dependency order — 14.3-04 only depends on 14.3-01, not 14.3-03.
 
 ### Pending Todos
 
@@ -153,6 +158,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-04-07T15:41:00.000Z
-Stopped at: Completed 14.3-01-PLAN.md (AnimationQueue infra). Next: 14.3-02 summon animation plugs into playAnimation 'summon' branch.
+Last session: 2026-04-07T16:30:00.000Z
+Stopped at: Completed 14.3-04-PLAN.md (attack animation + last_action payload). Wave 3 (move animation) still pending.
 Resume file: None
