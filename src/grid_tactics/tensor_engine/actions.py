@@ -202,86 +202,59 @@ def apply_move_batch(state, mask, action_type, source_flat, direction, card_tabl
                 _apply_rally_forward(state, has_rally, moved_card_id, safe_slot)
                 break
 
-        # --- Move + Attack: auto-attack nearest enemy in range after moving ---
-        _auto_attack_after_move(state, valid, safe_slot, dst_row, dst_col, card_table)
+        # --- Phase 14.1: Pending post-move attack state ---
+        # Replaces the old auto-attack-after-move. For melee minions
+        # (attack_range == 0), if at least one in-range enemy exists from
+        # the new tile, set pending_post_move_attacker to this slot. The
+        # next action MUST be ATTACK with this slot or DECLINE.
+        atk_cid_pm = state.minion_card_id[arange_n, safe_slot].clamp(0).long()
+        atk_range_pm = card_table.attack_range[atk_cid_pm]  # [N]
+        is_melee = valid & (atk_range_pm == 0)
+        atk_owner_pm = state.minion_owner[arange_n, safe_slot]
+
+        # Compute has_target_after_move: any enemy in melee range from
+        # (dst_row, dst_col)? Melee = manhattan==1 & orthogonal.
+        has_target = torch.zeros(N, dtype=torch.bool, device=device)
+        for s in range(MAX_MINIONS):
+            t_row = state.minion_row[:, s]
+            t_col = state.minion_col[:, s]
+            dr = (dst_row - t_row).abs()
+            dc = (dst_col - t_col).abs()
+            manhattan = dr + dc
+            is_ortho = (dr == 0) | (dc == 0)
+            in_range_s = (
+                is_melee
+                & state.minion_alive[:, s]
+                & (state.minion_owner[:, s] != atk_owner_pm)
+                & (manhattan == 1)
+                & is_ortho
+            )
+            has_target = has_target | in_range_s
+
+        set_pending = is_melee & has_target
+        state.pending_post_move_attacker = torch.where(
+            set_pending,
+            safe_slot.to(torch.int32),
+            state.pending_post_move_attacker,
+        )
 
 
-def _auto_attack_after_move(state, mask, attacker_slot, atk_row, atk_col, card_table):
-    """After moving, auto-attack the first enemy in range (melee=adjacent ortho, ranged=2 ortho/1 diag)."""
+def _apply_decline_post_move_attack(state, mask):
+    """Phase 14.1: clear pending post-move attacker for masked games.
+
+    Only valid where pending_post_move_attacker >= 0; defensively re-mask.
+    """
     if not mask.any():
         return
-    N = mask.shape[0]
     device = mask.device
-    arange_n = torch.arange(N, device=device)
-
-    atk_cid = state.minion_card_id[arange_n, attacker_slot].clamp(0).long()
-    atk_range = card_table.attack_range[atk_cid]  # [N] 0=melee, 1+=ranged
-    atk_owner = state.minion_owner[arange_n, attacker_slot]
-    base_atk = card_table.attack[atk_cid]
-    bonus = state.minion_atk_bonus[arange_n, attacker_slot]
-    total_atk = base_atk + bonus
-
-    # Find first enemy in range (iterate slots, pick first valid)
-    best_target = torch.full((N,), -1, dtype=torch.long, device=device)
-    best_dist = torch.full((N,), 999, dtype=torch.int32, device=device)
-
-    for s in range(25):
-        is_enemy = mask & state.minion_alive[:, s] & (state.minion_owner[:, s] != atk_owner)
-        if not is_enemy.any():
-            continue
-        t_row = state.minion_row[:, s]
-        t_col = state.minion_col[:, s]
-        dr = (atk_row - t_row).abs()
-        dc = (atk_col - t_col).abs()
-        manhattan = dr + dc
-        chebyshev = torch.max(dr, dc)
-        is_ortho = (dr == 0) | (dc == 0)
-
-        # Melee (range 0): adjacent orthogonal (manhattan == 1 and ortho)
-        melee_ok = (atk_range == 0) & (manhattan == 1) & is_ortho
-        # Ranged: ortho up to range, or diagonal at 1
-        ranged_ok = (atk_range > 0) & ((is_ortho & (manhattan <= atk_range)) | (~is_ortho & (chebyshev == 1)))
-
-        in_range = is_enemy & (melee_ok | ranged_ok)
-        closer = in_range & (manhattan < best_dist)
-        best_target = torch.where(closer, torch.tensor(s, dtype=torch.long, device=device), best_target)
-        best_dist = torch.where(closer, manhattan, best_dist)
-
-    do_attack = mask & (best_target >= 0)
-    if not do_attack.any():
+    valid = mask & (state.pending_post_move_attacker >= 0)
+    if not valid.any():
         return
-
-    safe_target = best_target.clamp(0)
-
-    # Range combat with first-strike rules
-    defender_cid = state.minion_card_id[arange_n, safe_target].clamp(0).long()
-    def_range = card_table.attack_range[defender_cid]
-    defender_base_atk = card_table.attack[defender_cid]
-    defender_bonus = state.minion_atk_bonus[arange_n, safe_target]
-    defender_total = defender_base_atk + defender_bonus
-
-    t_row = state.minion_row[arange_n, safe_target]
-    t_col = state.minion_col[arange_n, safe_target]
-    dist = (atk_row - t_row).abs() + (atk_col - t_col).abs()
-
-    # Can defender reach attacker at this distance?
-    def_can_reach = ((def_range == 0) & (dist <= 1)) | ((def_range > 0) & (dist <= def_range))
-
-    # Attacker has first strike if shorter/equal range (faster unit)
-    attacker_first = do_attack & (atk_range < def_range) & def_can_reach
-    simultaneous = do_attack & def_can_reach & ~attacker_first
-    no_retaliate = do_attack & ~def_can_reach
-
-    # Attacker always hits
-    state.minion_health[arange_n, safe_target] -= total_atk * do_attack.int()
-
-    # First strike: defender retaliates only if alive after attacker's hit
-    defender_alive_after = state.minion_health[arange_n, safe_target] > 0
-    first_strike_retaliate = attacker_first & defender_alive_after
-    state.minion_health[arange_n, attacker_slot] -= defender_total * first_strike_retaliate.int()
-
-    # Simultaneous: defender always retaliates
-    state.minion_health[arange_n, attacker_slot] -= defender_total * simultaneous.int()
+    state.pending_post_move_attacker = torch.where(
+        valid,
+        torch.tensor(-1, device=device, dtype=torch.int32),
+        state.pending_post_move_attacker,
+    )
 
 
 def _apply_rally_forward(state, mask, card_id, moved_slot):
@@ -483,6 +456,15 @@ def apply_attack_batch(state, mask, action_type, source_flat, target_flat, card_
     safe_a_slot = a_slot.clamp(0).long()
     safe_d_slot = d_slot.clamp(0).long()
 
+    # Phase 14.1: pending-post-move-attack gate.
+    # If pending_post_move_attacker[n] >= 0, ATTACK is only valid in that
+    # game when the attacker slot equals the pending slot.
+    has_pending = state.pending_post_move_attacker >= 0
+    pending_match = a_slot == state.pending_post_move_attacker
+    valid = valid & (~has_pending | pending_match)
+    if not valid.any():
+        return
+
     # Get card IDs for attacker and defender
     a_cid = state.minion_card_id[arange_n, safe_a_slot].clamp(0).long()
     d_cid = state.minion_card_id[arange_n, safe_d_slot].clamp(0).long()
@@ -544,6 +526,14 @@ def apply_attack_batch(state, mask, action_type, source_flat, target_flat, card_
             state, d_cid.int(), 3, state.minion_owner[arange_n, safe_d_slot],
             safe_d_slot.int(), source_flat.int(), card_table, def_damaged,
         )
+
+    # Phase 14.1: clear pending post-move attacker after the gated attack.
+    clear_pending = valid & (state.pending_post_move_attacker >= 0)
+    state.pending_post_move_attacker = torch.where(
+        clear_pending,
+        torch.tensor(-1, device=device, dtype=torch.int32),
+        state.pending_post_move_attacker,
+    )
 
 
 def apply_sacrifice_batch(state, mask, action_type, source_flat, card_table):

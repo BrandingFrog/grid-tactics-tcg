@@ -233,7 +233,16 @@ class TensorGameEngine:
         device = self.device
         arange_n = torch.arange(N, device=device)
 
-        # Apply each action type
+        # Phase 14.1: PASS while pending_post_move_attacker is set means
+        # DECLINE_POST_MOVE_ATTACK (slot 1001 reused). Reinterpret first.
+        has_pending_pre = s.pending_post_move_attacker >= 0
+        is_decline = mask & (action_type == 4) & has_pending_pre
+        if is_decline.any():
+            from grid_tactics.tensor_engine.actions import _apply_decline_post_move_attack
+            _apply_decline_post_move_attack(s, is_decline)
+
+        # Apply each action type. Decline games are excluded from PASS/fatigue
+        # below to avoid double-handling.
         apply_draw_batch(s, mask & (action_type == 3), self.card_table)
         apply_move_batch(s, mask, action_type, source_flat, direction, self.card_table)
         apply_play_card_batch(s, mask, action_type, hand_idx, target_flat, self.card_table)
@@ -241,7 +250,8 @@ class TensorGameEngine:
         apply_sacrifice_batch(s, mask, action_type, source_flat, self.card_table)
         # PASS (type 4) -- only happens when no other actions available (fatigue)
         # Escalating fatigue damage: 10, 20, 30, 40...
-        is_pass_action = mask & (action_type == 4)
+        # Exclude decline-as-PASS games from fatigue.
+        is_pass_action = mask & (action_type == 4) & ~is_decline
         if is_pass_action.any():
             ap = s.active_player
             for p in range(2):
@@ -296,8 +306,10 @@ class TensorGameEngine:
         # Win check
         self.check_game_over_batch()
 
-        # Transition to REACT phase for non-terminal games
-        should_transition = mask & ~s.is_game_over
+        # Transition to REACT phase for non-terminal games.
+        # Phase 14.1: defer react if a MOVE just set pending_post_move_attacker.
+        # The move+attack/decline pair is one logical action with one react window.
+        should_transition = mask & ~s.is_game_over & (s.pending_post_move_attacker < 0)
         if should_transition.any():
             s.phase = torch.where(should_transition, torch.tensor(1, device=device, dtype=torch.int32), s.phase)
             s.react_player = torch.where(
