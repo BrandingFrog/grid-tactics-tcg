@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Online PvP Dueling
 status: verifying
-stopped_at: "Phase 14.3-07 complete (floating popups + status badges + Luckiest Guy font). Game-juice arc feature-complete: combat-damage / heal / burn-tick / buff / debuff popups + persistent 🔥 / ⬆️ / ⬇️ badges all live."
-last_updated: "2026-04-07T17:15:00.000Z"
+stopped_at: "Phase 14.3 game-juice arc feature-complete (waves 1-7). Wave 5 closeout landed: ROADMAP/STATE updated, melee chain integration verified (natural 2-frame pipeline), smoke test deferred to post-deploy Playwright E2E."
+last_updated: "2026-04-07T17:30:00.000Z"
 last_activity: 2026-04-07
 progress:
   total_phases: 5
@@ -25,10 +25,10 @@ See: .planning/PROJECT.md (updated 2026-04-04)
 
 ## Current Position
 
-Phase: 14.3 (game-juice) — IN PROGRESS
-Plan: 7 of 7 (floating popups + status badges) — COMPLETE
+Phase: 14.3 (game-juice) — COMPLETE
+Plan: 5 of 7 (integration + roadmap/STATE closeout) — COMPLETE (wave 5 was last to land; waves 6-7 were inserted mid-phase and shipped first)
 Status: Phase 14.3 game-juice arc feature-complete (waves 1-7). Wave 7 added showFloatingPopup(tileEl, text, variant) with 5 variants (combat-damage / heal / burn-tick / buff / debuff), Luckiest Guy font (popups only), and persistent 🔥 / ⬆️+N / ⬇️-N corner badges in renderBoardMinion. Combat damage now routes through showFloatingPopup (replacing Wave 4's inline .damage-popup); heal + burn-tick fire from a prev/next minion HP diff in applyStateFrame, gated by turn-flip + burning_stacks for burn. Burn-tick popup anchors to PREV tile so lethal burns still show the number before the minion is removed. Adding new statuses now needs only 1 CSS variant + 1 diff hook.
-Last activity: 2026-04-07 — Completed 14.3-07-PLAN.md
+Last activity: 2026-04-07 — Completed 14.3-05-PLAN.md (Phase 14.3 closeout)
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -155,6 +155,10 @@ Recent decisions affecting current work:
 - [Phase 14.3-07]: Luckiest Guy loaded via Google Fonts <link> in <head>; applied ONLY to .floating-popup. body font is unchanged.
 - [Phase 14.3-07]: Recipe for new status popup = 1 CSS variant + 1 diff hook in applyStateFrame. No queue, animation infra, or render surgery needed. Phase 14.3 grew from 5 plans to 7 (waves 6 burning + 7 popups added mid-phase); Wave 5 closeout still owes a STATE.md/ROADMAP.md amendment.
 - [Phase 14.3-07]: Task 4 visual verification deferred to post-deploy Playwright E2E against Railway (same posture as 14.1-04 / 14.2-04 / 14.3-01 / 14.3-04).
+- [Phase 14.3-05]: Phase 14.1 melee move+attack chain ALREADY chains naturally — no client code changes needed. The melee chain submits as TWO sequential server actions (MOVE then ATTACK) per the 14.1 design (one logical action via pending_post_move_attacker_id, one react window). Each action emits its own state_update frame with its own last_action, so the existing AnimationQueue plays move-animation then attack-animation in order with no synthesis. Plan's Option A (client-side intermediate state) and Option B (server pre_attack_pos) are unnecessary.
+- [Phase 14.3-05]: Phase 14.3 grew from the planned 5 plans to 7 mid-execution (waves 6 burning + 7 popups inserted). Wave 5 (this closeout) landed last. ROADMAP and STATE now reflect 7/7. Future-server contract: view_filter.enrich_last_action's `last_action` field (added Wave 4) is part of the client animation contract — preserve attacker_pos / target_pos / damage / killed schema.
+- [Phase 14.3-05]: Phase 14.3 client-side AnimationQueue is now the single point of state application; all pending UIs (react window, tutor modal from 14.2, post-move-attack picker from 14.1) gate STRUCTURALLY behind queue drain via applyStateFrame — no explicit isAnimating() guards needed.
+- [Phase 14.3-05]: Task 3 (visual smoke test) deferred to post-deploy Playwright E2E against Railway (same posture as 14.1-04 / 14.2-04 / 14.3-01 / 14.3-04 / 14.3-07).
 
 ### Pending Todos
 
@@ -169,6 +173,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-04-07T17:15:00.000Z
-Stopped at: Completed 14.3-07-PLAN.md (floating popups + status badges). Phase 14.3 game-juice arc feature-complete (waves 1-7).
+Last session: 2026-04-07T17:30:00.000Z
+Stopped at: Completed 14.3-05-PLAN.md (Phase 14.3 closeout — ROADMAP/STATE updated, melee chain verified, smoke test deferred). Phase 14.3 game-juice arc feature-complete (waves 1-7). Next: Phase 15 Resilience & Polish.
 Resume file: None

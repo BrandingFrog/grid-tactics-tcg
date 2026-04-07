@@ -171,6 +171,7 @@ Plans:
 - [x] **Phase 14: Gameplay Interaction** - Action submission via click targeting, react window UI, and game over screen (completed 2026-04-06)
 - [x] **Phase 14.1: Melee Move-and-Attack** - Player-driven Advance-Wars-style melee chain (move then choose attack target or decline); ranged minions get no chain (completed 2026-04-07)
 - [x] **Phase 14.2: Tutor Choice Prompt** - Replace auto-tutor with player-facing selection modal; extend tutor_target to support selector dicts (completed 2026-04-07)
+- [x] **Phase 14.3: Game Juice (Animation Layer)** - Client-side AnimationQueue serializing summon / move / attack / burn / floating-popup visuals; pending UIs (react, tutor, post-move-attack) gate behind queue drain via applyStateFrame (completed 2026-04-07)
 - [ ] **Phase 15: Resilience & Polish** - Reconnection handling, scrollable game log, and rematch flow
 
 ## Phase Details
@@ -245,6 +246,19 @@ Plans:
 - [x] 14.1-04-PLAN.md -- Frontend two-step flow + range footprint
 - [x] 14.1-05-PLAN.md -- Roadmap/state update + smoke test
 
+### Phase 14.3: Game Juice (Animation Layer)
+**Goal:** Make the game feel alive with visible animations for summon, move, attack, burn tick, and floating status popups, all serialized through a client-side AnimationQueue. Pending UIs (react window, tutor modal, post-move-attack picker) gate structurally behind queue drain via applyStateFrame.
+**Depends on**: Phase 14.2
+**Plans:** 7/7 plans complete
+Plans:
+- [x] 14.3-01-PLAN.md -- Client AnimationQueue infrastructure + applyStateFrame seam
+- [x] 14.3-02-PLAN.md -- Summon scale-in + grid shake animation
+- [x] 14.3-03-PLAN.md -- Move lift/translate/drop animation
+- [x] 14.3-04-PLAN.md -- Attack rubber-band + flash + damage popup + last_action server payload
+- [x] 14.3-05-PLAN.md -- Phase 14.1 / 14.2 integration + roadmap/STATE closeout + smoke test
+- [x] 14.3-06-PLAN.md -- Burning status engine tick (added mid-phase)
+- [x] 14.3-07-PLAN.md -- Floating popups (heal/burn/buff/debuff) + persistent status badges + Luckiest Guy font (added mid-phase)
+
 ### Phase 14.2: Tutor Choice Prompt
 **Goal:** Replace auto-tutor with player-facing selection modal; extend tutor_target to support selector dicts (tribe/element/card_type AND semantics) instead of only card_id strings.
 **Depends on**: Phase 14.1
@@ -290,4 +304,5 @@ Phases execute in numeric order: 11 -> 12 -> 13 -> 14 -> 15
 | 14. Gameplay Interaction | v1.1 | 2/2 | Complete | 2026-04-06 |
 | 14.1 Melee Move-and-Attack | v1.1 | 5/5 | Complete | 2026-04-07 |
 | 14.2 Tutor Choice Prompt | v1.1 | 5/5 | Complete | 2026-04-07 |
+| 14.3 Game Juice (Animation Layer) | v1.1 | 7/7 | Complete | 2026-04-07 |
 | 15. Resilience & Polish | v1.1 | 0/TBD | Not started | - |
