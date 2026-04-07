@@ -3,7 +3,7 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Online PvP Dueling
 status: verifying
-stopped_at: "Completed 14.1-02 (Tensor engine pending post-move attack parity)"
+stopped_at: "Completed 14.1-03 (Pending-aware legal-action mask, Python + tensor)"
 last_updated: "2026-04-07T00:00:00.000Z"
 last_activity: 2026-04-07
 progress:
@@ -26,9 +26,9 @@ See: .planning/PROJECT.md (updated 2026-04-04)
 ## Current Position
 
 Phase: 14.1 (melee-move-and-attack) — EXECUTING
-Plan: 2 of N (Wave 2: Tensor engine parity)
-Status: Waves 1+2 complete; Wave 3 (legal_actions masking + frontend) pending
-Last activity: 2026-04-07 — Completed 14.1-02-PLAN.md
+Plan: 3 of N (Wave 3: Legal-action mask, Python + tensor)
+Status: Waves 1+2+3 complete; frontend wave pending
+Last activity: 2026-04-07 — Completed 14.1-03-PLAN.md
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -98,6 +98,10 @@ Recent decisions affecting current work:
 - [Phase 14.1-02]: DECLINE has no dedicated action int — `_step_action_phase` reinterprets PASS (slot 1001) as DECLINE when pending >= 0, and excludes those games from fatigue
 - [Phase 14.1-02]: React phase transition in tensor engine gated on `pending_post_move_attacker < 0` (mirrors Python)
 - [Phase 14.1-02]: No python<->tensor state bridge exists; parity verified via shared observable invariants, not state diff
+- [Phase 14.1-03]: legal_actions branches on pending_post_move_attacker_id BEFORE the ACTION/REACT phase check; pending state is orthogonal to phase
+- [Phase 14.1-03]: ActionEncoder maps DECLINE_POST_MOVE_ATTACK -> slot 1001 and decode disambiguates from PASS via state.pending_post_move_attacker_id
+- [Phase 14.1-03]: Tensor mask uses post-hoc override (zero pending games then re-enable attack+slot 1001) rather than threading pending through every sub-helper
+- [Phase 14.1-03]: Tensor override uses 4-cardinal adjacency (not full pairwise distance table) — valid because Wave 1 only sets pending for melee minions
 
 ### Pending Todos
 
@@ -112,5 +116,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-04-07T00:00:00.000Z
-Stopped at: Completed 14.1-02 (tensor engine parity; legal_actions + frontend still need updates)
+Stopped at: Completed 14.1-03 (pending-aware legal-action mask in Python + tensor; frontend wave still pending)
 Resume file: None
