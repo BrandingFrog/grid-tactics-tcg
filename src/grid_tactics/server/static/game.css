@@ -1038,7 +1038,7 @@ body {
   overflow-x: auto;
   padding: 8px 4px;
   flex-shrink: 0;
-  max-height: 260px;
+  max-height: 312px;
   justify-content: center;
 }
 
@@ -1309,7 +1309,7 @@ body {
 
 /* ===== Full-Size Card (Deck Builder / YGO CardPreview style) ===== */
 .card-frame-full {
-  width: 160px;
+  width: 192px;
   display: flex;
   flex-direction: column;
 }
@@ -1541,7 +1541,7 @@ body {
 
 /* ===== Hand Card (full-size, matches deck builder card-frame-full) ===== */
 .card-frame-hand {
-  width: 160px;
+  width: 192px;
   display: flex;
   flex-direction: column;
 }
@@ -2307,7 +2307,7 @@ body {
     gap: 6px;
   }
 
-  .card-frame-full { width: 100px; }
+  .card-frame-full { width: 120px; }
   .card-name-overlay { font-size: 10px; }
   .card-effect-full { font-size: 8px; }
   .card-flavour { font-size: 8px; }
@@ -2332,10 +2332,10 @@ body {
   .stat-value { font-size: 14px; }
   .stat-group { gap: 12px; }
   .board-container { padding: 4px; }
-  .hand-container { max-height: 110px; }
+  .hand-container { max-height: 132px; }
   .card-frame { width: 70px; }
-  .card-frame-hand { width: 110px; }
-  .hand-container { max-height: 190px; }
+  .card-frame-hand { width: 132px; }
+  .hand-container { max-height: 228px; }
 }
 
 /* ===== Phase 14 PLAY-02: React Window UI ===== */
