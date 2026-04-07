@@ -758,6 +758,44 @@ def resolve_action(
             f"Cannot resolve action in phase {state.phase.name}, expected ACTION"
         )
 
+    # Phase 14.1: pending-post-move-attack gate.
+    # If a melee minion just moved and has in-range targets, the player MUST
+    # either ATTACK with that minion or DECLINE_POST_MOVE_ATTACK. Anything
+    # else is illegal. The combined move+attack/decline counts as ONE
+    # logical action, so the react window only fires after this resolves.
+    if state.pending_post_move_attacker_id is not None:
+        pending_id = state.pending_post_move_attacker_id
+        if action.action_type == ActionType.ATTACK:
+            if action.minion_id != pending_id:
+                raise ValueError(
+                    "Pending post-move attack: must ATTACK with the moved minion or DECLINE"
+                )
+            state = _apply_attack(state, action, library)
+            state = replace(state, pending_post_move_attacker_id=None)
+        elif action.action_type == ActionType.DECLINE_POST_MOVE_ATTACK:
+            state = replace(state, pending_post_move_attacker_id=None)
+        else:
+            raise ValueError(
+                "Pending post-move attack: must ATTACK with the moved minion or DECLINE"
+            )
+
+        # Dead minion cleanup + game-over check, then react window (single).
+        state = _cleanup_dead_minions(state, library)
+        state = _check_game_over(state)
+        if state.is_game_over:
+            return state
+        state = replace(
+            state,
+            phase=TurnPhase.REACT,
+            react_player_idx=1 - state.active_player_idx,
+            pending_action=action,
+        )
+        return state
+
+    # Not in pending state: DECLINE is illegal
+    if action.action_type == ActionType.DECLINE_POST_MOVE_ATTACK:
+        raise ValueError("DECLINE_POST_MOVE_ATTACK only legal in pending post-move state")
+
     # Dispatch to action handler
     if action.action_type == ActionType.PASS:
         state = _apply_pass(state)
@@ -782,6 +820,12 @@ def resolve_action(
     # Win/draw detection (Phase 4) -- after cleanup, before react transition
     state = _check_game_over(state)
     if state.is_game_over:
+        return state
+
+    # Phase 14.1: If MOVE entered pending-post-move-attack state, do NOT
+    # fire the react window yet. The react window fires after the player
+    # resolves with ATTACK or DECLINE_POST_MOVE_ATTACK.
+    if state.pending_post_move_attacker_id is not None:
         return state
 
     # Transition to REACT phase (D-13)
