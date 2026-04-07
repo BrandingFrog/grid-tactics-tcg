@@ -3,7 +3,7 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Online PvP Dueling
 status: verifying
-stopped_at: "Completed Phase 14.2 Wave 1 (Python engine pending_tutor); next is Wave 2 (tensor parity)"
+stopped_at: "Completed Phase 14.2 Wave 4 (frontend tutor-pick modal + asymmetric serialization); phase implementation-complete, deferred E2E sweep pending post-deploy"
 last_updated: "2026-04-07T00:00:00.000Z"
 last_activity: 2026-04-07
 progress:
@@ -25,10 +25,10 @@ See: .planning/PROJECT.md (updated 2026-04-04)
 
 ## Current Position
 
-Phase: 14.2 (tutor-choice-prompt) — IN PROGRESS
-Plan: Wave 1 of N (Python engine pending_tutor state machine) — COMPLETE
-Status: Wave 1 shipped (enums, selector schema, pending state, effect resolver refactor, action_resolver gating, 13 new tests green). Next: Wave 2 tensor parity.
-Last activity: 2026-04-07 — Completed 14.2-01-PLAN.md
+Phase: 14.2 (tutor-choice-prompt) — IMPLEMENTATION COMPLETE (deferred E2E)
+Plan: Wave 4 of 4 (frontend tutor-pick modal + asymmetric serialization) — COMPLETE
+Status: All four waves shipped. Wave 4 added per-viewer pending_tutor enrichment in view_filter, the showTutorModal frontend (reusing renderDeckBuilderCard for full art), and removed dead auto-tutor detection. Manual checkpoint deferred to post-deploy Playwright E2E (same posture as 14.1-04).
+Last activity: 2026-04-07 — Completed 14.2-04-PLAN.md
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -111,6 +111,12 @@ Recent decisions affecting current work:
 - [Phase 14.2-01]: Action-space [0:1262] preserved. TUTOR_SELECT reuses PLAY_CARD[0:250] slots while pending_tutor set; DECLINE_TUTOR reuses slot 1001 (PASS), same trick as 14.1's DECLINE_POST_MOVE_ATTACK. Mutually exclusive with pending_post_move (asserted).
 - [Phase 14.2-01]: tutor_target schema extended: accepts string (card_id shorthand, back-compat) OR dict selector with subset of {tribe, element, card_type} (AND semantics, case-insensitive). Loader rejects unknown keys at load time.
 - [Phase 14.2-01]: pending_tutor lives on GameState (pending_tutor_player_idx, pending_tutor_matches) — same snapshot/tensor-friendly pattern as 14.1's pending_post_move_attacker_id.
+- [Phase 14.2-04]: pending_tutor serialization is per-viewer enrichment AFTER filter_state_for_player. Caster receives resolved match list (numeric_id + deck_idx + match_idx) plus total-copies-owned across deck+hand+board. Opponent receives only pending_tutor_player_idx + pending_tutor_match_count. Avoids leaking deck contents while preserving the standard view-filter security boundary.
+- [Phase 14.2-04]: Tutor-pick modal reuses renderDeckBuilderCard verbatim (passing count=-1 to suppress quantity badge). Single card-rendering source of truth — full art, stats, effects, element/tribe — no stripped-down tile.
+- [Phase 14.2-04]: Modal sync mirrors 14.1's syncPendingPostMoveAttackUI pattern — driven by pending_tutor_player_idx in state frames, idempotent open/close, reconnection-safe. Background click does NOT dismiss; Skip button is the only explicit decline path.
+- [Phase 14.2-04]: Opponent sees a passive 'Opponent is tutoring…' toast, never the modal — preserves caster's hidden information.
+- [Phase 14.2-04]: TUTOR_SELECT/DECLINE_TUTOR client wire format reuses existing action codec verbatim ({action_type:9, card_index:match_idx} / {action_type:10}) — no codec changes.
+- [Phase 14.2-04]: Task 3 visual verification deferred to post-deploy Playwright E2E against Railway (same pattern as 14.1-04 and prior bug-fix waves).
 
 ### Pending Todos
 
@@ -126,5 +132,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-04-07T00:00:00.000Z
-Stopped at: Completed Phase 14.2 Wave 1 (14.2-01-PLAN.md): Python engine pending_tutor state machine + selector schema. Next: Wave 2 (tensor engine parity).
+Stopped at: Completed Phase 14.2 Wave 4 (14.2-04-PLAN.md): asymmetric pending_tutor serialization + frontend tutor-pick modal reusing renderDeckBuilderCard. Phase 14.2 implementation-complete; awaiting post-deploy Playwright E2E.
 Resume file: None
