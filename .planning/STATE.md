@@ -4,7 +4,7 @@ milestone: v1.1
 milestone_name: Online PvP Dueling
 status: verifying
 stopped_at: "Phase 14.3 game-juice arc feature-complete (waves 1-7). Wave 5 closeout landed: ROADMAP/STATE updated, melee chain integration verified (natural 2-frame pipeline), smoke test deferred to post-deploy Playwright E2E."
-last_updated: "2026-04-07T17:30:00.000Z"
+last_updated: "2026-04-07T20:45:00.000Z"
 last_activity: 2026-04-07
 progress:
   total_phases: 5
@@ -173,6 +173,12 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-04-07T17:30:00.000Z
-Stopped at: Completed 14.3-05-PLAN.md (Phase 14.3 closeout — ROADMAP/STATE updated, melee chain verified, smoke test deferred). Phase 14.3 game-juice arc feature-complete (waves 1-7). Next: Phase 15 Resilience & Polish.
+Last session: 2026-04-07T20:45:00.000Z
+Stopped at: Card-effects-and-action-flow audit followups complete. Tensor-engine parity for LEAP (CardTable.leap_amount precompute + _compute_move_mask LEAP override + apply_move_batch leap landing) and PASSIVE pipeline (CardTable.passive_burn_amount/passive_heal_amount + engine._fire_passive_effects_batch at turn flip, mirroring Python react_stack._fire_passive_effects). Bug-4 design clarification: BURN handler now stacks `int(effect.amount)` per tick so Emberplague's JSON amount=5 takes effect; tensor side already uses passive_burn_amount from the same JSON field. ActionEncoder _encode_move/_decode_move now leap-aware (collapse multi-step forward to unit cardinal on encode, walk over blockers on decode). 42 stale-assertion test failures swept to zero — pure test maintenance, no engine behavior changes. tests/conftest.py grew collect_ignore_glob for RL/tensor/server test files when torch/sb3/flask_socketio missing (single source of truth for ML-dep gating). Final: 538 passed, 4 skipped, 0 failed locally. Next: Phase 15 Resilience & Polish.
 Resume file: None
+
+### Audit followup commits (2026-04-07)
+- 91d157c fix(audit-followup): tensor LEAP parity + ActionEncoder leap-aware decode
+- c60fda7 fix(audit-followup): tensor PASSIVE pipeline parity (burn aura + heal)
+- c289bbd fix(audit-followup): BURN aura honors JSON amount (Bug 4 clarification)
+- db40f9e test(audit-followup): sweep 42 stale assertions to match current engine
