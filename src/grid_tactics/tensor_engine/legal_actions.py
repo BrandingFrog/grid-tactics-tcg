@@ -62,7 +62,77 @@ def compute_legal_mask_batch(state, card_table) -> torch.Tensor:
     if no_actions.any():
         mask[no_actions, PASS_IDX] = True
 
+    # Phase 14.1: pending-post-move-attack override.
+    # For games where pending_post_move_attacker[n] >= 0, restrict the legal
+    # mask to (a) ATTACK slots from the pending attacker against in-range
+    # enemies, and (b) slot 1001 (PASS_IDX, reinterpreted as
+    # DECLINE_POST_MOVE_ATTACK by _step_action_phase). All other slots are
+    # cleared. Slot 1001 is the *only* slot whose meaning changes; the
+    # action int layout [0:1262] is unchanged.
+    if hasattr(state, "pending_post_move_attacker"):
+        _apply_pending_post_move_attack_override(mask, state, alive)
+
     return mask
+
+
+def _apply_pending_post_move_attack_override(mask, state, alive):
+    """Restrict legal mask to ATTACK-from-pending + slot 1001 for pending games.
+
+    Pending implies the attacker is a *melee* minion (Wave 1 invariant: only
+    melee minions enter pending and only when at least one in-range enemy
+    exists from the new tile). Melee range = manhattan==1 AND orthogonal,
+    which collapses to manhattan==1 on a grid (any manhattan==1 pair is
+    orthogonal). We therefore enable ATTACK slots from the pending attacker's
+    position to each of the 4 cardinal-adjacent cells that contain an alive
+    enemy minion.
+    """
+    N = mask.shape[0]
+    device = mask.device
+
+    pending = state.pending_post_move_attacker  # [N] int32, -1 = none
+    has_pending = alive & (pending >= 0)
+    if not has_pending.any():
+        return
+
+    arange_n = torch.arange(N, device=device)
+    safe_pending = pending.clamp(0).long()  # [N]
+
+    # Attacker position and owner
+    a_row = state.minion_row[arange_n, safe_pending]  # [N]
+    a_col = state.minion_col[arange_n, safe_pending]  # [N]
+    a_owner = state.minion_owner[arange_n, safe_pending]  # [N]
+    a_flat = (a_row * GRID_COLS + a_col).clamp(0, GRID_SIZE - 1).long()  # [N]
+
+    # Build a [N, 25] map of "cell contains an enemy of the pending attacker
+    # that is alive". Enemy = minion_alive & owner != a_owner.
+    minion_flat = (state.minion_row * GRID_COLS + state.minion_col).clamp(
+        0, GRID_SIZE - 1
+    ).long()  # [N, MAX_MINIONS]
+    is_enemy = state.minion_alive & (state.minion_owner != a_owner.unsqueeze(1))
+    enemy_cell_mask = torch.zeros(N, GRID_SIZE, dtype=torch.bool, device=device)
+    enemy_cell_mask.scatter_(1, minion_flat, is_enemy)
+
+    # Compute the 4 melee target cells (up/down/left/right) per game.
+    # For each adjacent direction compute (nr, nc) and check bounds + enemy.
+    dr = torch.tensor(_DR, device=device)  # [4]
+    dc = torch.tensor(_DC, device=device)  # [4]
+    nr = a_row.unsqueeze(1) + dr  # [N, 4]
+    nc = a_col.unsqueeze(1) + dc  # [N, 4]
+    in_bounds = (nr >= 0) & (nr < GRID_ROWS) & (nc >= 0) & (nc < GRID_COLS)
+    nflat = (nr * GRID_COLS + nc).clamp(0, GRID_SIZE - 1).long()  # [N, 4]
+    has_enemy_at = torch.gather(enemy_cell_mask, 1, nflat)  # [N, 4]
+    can_attack = has_pending.unsqueeze(1) & in_bounds & has_enemy_at  # [N, 4]
+
+    # Zero out all slots for pending games (we'll re-enable below)
+    mask[has_pending] = False
+
+    # Enable ATTACK slots: ATTACK_BASE + a_flat * 25 + target_flat
+    # action_idx[N, 4] = ATTACK_BASE + a_flat[:, None] * 25 + nflat
+    action_idx = (ATTACK_BASE + a_flat.unsqueeze(1) * GRID_SIZE + nflat).long()
+    mask.scatter_(1, action_idx, can_attack)
+
+    # Enable slot 1001 (DECLINE) for all pending games (always legal)
+    mask[has_pending, PASS_IDX] = True
 
 
 def _compute_action_phase_mask(mask, state, card_table, phase_mask):
