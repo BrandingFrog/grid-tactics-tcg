@@ -13,7 +13,7 @@
             "type": "burn",
             "trigger": "passive",
             "target": "adjacent",
-            "amount": 5
+            "amount": 1
         },
         {
             "type": "apply_burning",

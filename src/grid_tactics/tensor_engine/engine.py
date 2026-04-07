@@ -533,8 +533,11 @@ class TensorGameEngine:
                     is_adj = ct.distance_manhattan[src_flat, t_flat] == 1
                     hit = has_burn & t_alive & is_adj & (t_owner != src_owner)
                     if hit.any():
+                        from grid_tactics.minion import MAX_BURNING_STACKS
                         delta = (burn_amt * hit.int()).to(s.burning_stacks.dtype)
-                        s.burning_stacks[:, tgt] = s.burning_stacks[:, tgt] + delta
+                        s.burning_stacks[:, tgt] = (
+                            s.burning_stacks[:, tgt] + delta
+                        ).clamp(max=MAX_BURNING_STACKS)
 
             # Passive self-heal: cap at base health.
             if has_heal.any():

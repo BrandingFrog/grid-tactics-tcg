@@ -430,8 +430,11 @@ def _apply_burning(state, active, etarget, eamount, target_flat_pos):
             safe_slot = slot.clamp(min=0)
             # Default amount=1 if zero/missing, mirroring Python resolver
             amt = torch.where(eamount > 0, eamount, torch.tensor(1, device=device, dtype=eamount.dtype))
+            from grid_tactics.minion import MAX_BURNING_STACKS
             delta = (amt * valid.int()).to(state.burning_stacks.dtype)
-            state.burning_stacks[arange_n, safe_slot] += delta
+            state.burning_stacks[arange_n, safe_slot] = (
+                state.burning_stacks[arange_n, safe_slot] + delta
+            ).clamp(max=MAX_BURNING_STACKS)
 
 
 def _apply_destroy(state, active, etarget, target_flat_pos):

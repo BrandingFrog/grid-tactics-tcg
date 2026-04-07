@@ -140,15 +140,13 @@ def _apply_effect_to_minion(
     elif effect.effect_type == EffectType.BURN:
         # Legacy BURN aura: re-routed to APPLY_BURNING semantics so passive
         # adjacency-burn cards (Emberplague Rat) actually do something.
-        # Audit-followup: stack `effect.amount` per tick (default 1) so the
-        # JSON `amount` field controls aura intensity. Emberplague's JSON
-        # declares amount=5, which now stacks 5 burning_stacks per adjacent
-        # enemy per turn flip (matching design intent). Tensor parity is
-        # via card_table.passive_burn_amount, populated from the same
-        # `amount` field.
+        # `effect.amount` is the per-tick stack amount (default 1). Capped
+        # at MAX_BURNING_STACKS so multiple auras can't runaway-stack.
+        from grid_tactics.minion import MAX_BURNING_STACKS
         amount = int(effect.amount) if effect.amount else 1
+        new_stacks = min(minion.burning_stacks + amount, MAX_BURNING_STACKS)
         new_minion = replace(
-            minion, burning_stacks=minion.burning_stacks + amount,
+            minion, burning_stacks=new_stacks,
         )
         new_minions = _replace_minion(state.minions, minion.instance_id, new_minion)
         return replace(state, minions=new_minions)
@@ -157,9 +155,12 @@ def _apply_effect_to_minion(
         return _apply_heal_to_minion(state, minion, effect.amount, library)
     elif effect.effect_type == EffectType.APPLY_BURNING:
         # Phase 14.3: stack additively. Default amount=1 if zero/missing.
+        # Capped at MAX_BURNING_STACKS to prevent runaway stacking.
+        from grid_tactics.minion import MAX_BURNING_STACKS
         amount = effect.amount if effect.amount else 1
+        new_stacks = min(minion.burning_stacks + amount, MAX_BURNING_STACKS)
         new_minion = replace(
-            minion, burning_stacks=minion.burning_stacks + amount,
+            minion, burning_stacks=new_stacks,
         )
         new_minions = _replace_minion(state.minions, minion.instance_id, new_minion)
         return replace(state, minions=new_minions)

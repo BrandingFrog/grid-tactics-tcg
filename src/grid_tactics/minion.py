@@ -20,6 +20,11 @@ from grid_tactics.enums import PlayerSide
 # stays uniform across status effects.
 BURN_DPT = 1
 
+# Maximum burning_stacks any minion can carry. Aura applications above this
+# cap are clamped to MAX_BURNING_STACKS so multiple Emberplague Rats (or
+# repeated APPLY_BURNING) cannot runaway-stack and one-shot a wedge.
+MAX_BURNING_STACKS = 3
+
 
 @dataclass(frozen=True, slots=True)
 class MinionInstance:
