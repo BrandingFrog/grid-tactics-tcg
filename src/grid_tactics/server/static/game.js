@@ -1423,6 +1423,8 @@ function playAnimation(job, done) {
             playAttackAnimation(job, done);
             return;
         case 'move':
+            playMoveAnimation(job, done);
+            return;
         case 'noop':
         default:
             setTimeout(done, 0);
@@ -1510,6 +1512,93 @@ function playAttackAnimation(job, done) {
             }, 120);
         }, 100);
     }, 180);
+}
+
+// Tile-rect measurement helper. Returns the pixel delta between the centers
+// of two board tiles, or null if either tile is missing from the DOM.
+// Shared by move (Wave 3) and available for future animations.
+function getTileDelta(fromPos, toPos) {
+    if (!fromPos || !toPos) return null;
+    var fromCell = document.querySelector(
+        '.board-cell[data-row="' + fromPos[0] + '"][data-col="' + fromPos[1] + '"]');
+    var toCell = document.querySelector(
+        '.board-cell[data-row="' + toPos[0] + '"][data-col="' + toPos[1] + '"]');
+    if (!fromCell || !toCell) return null;
+    var fr = fromCell.getBoundingClientRect();
+    var tr = toCell.getBoundingClientRect();
+    return {
+        dx: (tr.left + tr.width / 2) - (fr.left + fr.width / 2),
+        dy: (tr.top + tr.height / 2) - (fr.top + fr.height / 2),
+        fromCell: fromCell,
+        toCell: toCell,
+    };
+}
+
+// Wave 3 (Phase 14.3-03): Move animation.
+// PHASE A — lift   (0ms):    add .anim-move-lift to source minion (scale + shadow)
+// PHASE B — translate (120ms): add .anim-move-translate, set inline transform
+//                              translate(dx,dy) scale(1.15). Wait 350ms.
+// PHASE C — apply state + drop (470ms): applyStateFrame so the board re-renders
+//   with the minion at the destination tile. The animatingTiles registry causes
+//   renderBoard to tag the destination .board-cell with .anim-move-drop, which
+//   plays a 120ms drop keyframe back to scale 1.0. Wait 120ms.
+// PHASE D — cleanup, done().
+//
+// State application happens MID-animation (like summon, unlike attack), so we
+// set job.stateApplied = true to suppress runQueue's default applyStateFrame.
+function playMoveAnimation(job, done) {
+    var payload = (job && job.payload) || {};
+    var from = payload.from;
+    var to = payload.to;
+
+    // Bail to a no-op if we don't have valid coords; runQueue will still
+    // apply the state frame after done() because we don't set stateApplied.
+    if (!from || !to) { setTimeout(done, 0); return; }
+
+    var delta = getTileDelta(from, to);
+    if (!delta) { setTimeout(done, 0); return; }
+
+    var minionEl = delta.fromCell.querySelector('.board-minion');
+    if (!minionEl) {
+        // Source minion isn't in the DOM (race / reconnection). Skip visuals.
+        setTimeout(done, 0);
+        return;
+    }
+
+    var dx = delta.dx, dy = delta.dy;
+    var destKey = to[0] + ',' + to[1];
+    var srcKey = from[0] + ',' + from[1];
+
+    // PHASE A — lift
+    minionEl.classList.add('anim-move-lift');
+
+    setTimeout(function () {
+        // PHASE B — translate. The lift transform (scale 1.15) is preserved
+        // explicitly because setting style.transform overrides the class rule.
+        minionEl.classList.add('anim-move-translate');
+        minionEl.style.transform = 'translate(' + dx + 'px,' + dy + 'px) scale(1.15)';
+
+        setTimeout(function () {
+            // PHASE C — apply state + drop. The board re-renders; the source
+            // tile is now empty and the destination tile holds the minion.
+            // animatingTiles[destKey] makes renderBoard tag that .board-cell
+            // with .anim-move-drop so the freshly-rendered minion plays the
+            // drop keyframe.
+            animatingTiles[destKey] = 'move-drop';
+            try {
+                applyStateFrame(job.stateAfter, job.legalActionsAfter);
+            } catch (e) { /* defensive */ }
+            job.stateApplied = true;
+
+            setTimeout(function () {
+                // PHASE D — cleanup
+                delete animatingTiles[destKey];
+                delete animatingTiles[srcKey];
+                try { renderBoard(); } catch (e) { /* defensive */ }
+                done();
+            }, 130);
+        }, 350);
+    }, 120);
 }
 
 // Wave 2: summon animation.
@@ -1649,6 +1738,14 @@ function deriveAnimationJob(prev, next) {
             targetPos: la.target_pos || null,
             damage: la.damage,
             killed: !!la.killed,
+        } };
+    }
+    // Phase 14.3-03: Prefer last_action for MOVE too. attacker_pos = pre-action
+    // source, target_pos = destination (per enrich_last_action schema).
+    if (la && la.type === 'MOVE') {
+        return { type: 'move', payload: {
+            from: la.attacker_pos || null,
+            to: la.target_pos || null,
         } };
     }
 
