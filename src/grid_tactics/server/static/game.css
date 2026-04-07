@@ -495,8 +495,9 @@ body {
 
 .card-browser-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-  gap: 8px;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 10px;
+  justify-items: center;
 }
 
 @media (max-width: 700px) {
@@ -2303,7 +2304,7 @@ body {
   .filter-checkbox { font-size: 8px; }
 
   .card-browser-grid {
-    grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
     gap: 6px;
   }
 
