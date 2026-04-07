@@ -130,6 +130,10 @@ class TensorGameEngine:
         s.pending_action_type = torch.where(mask, torch.tensor(EMPTY, device=device, dtype=torch.int32), s.pending_action_type)
         s.pending_action_card_id = torch.where(mask, torch.tensor(EMPTY, device=device, dtype=torch.int32), s.pending_action_card_id)
         s.pending_action_had_position = torch.where(mask, torch.tensor(False, device=device), s.pending_action_had_position)
+        # Phase 14.1: clear pending post-move attacker on reset
+        s.pending_post_move_attacker = torch.where(
+            mask, torch.tensor(-1, device=device, dtype=torch.int32), s.pending_post_move_attacker
+        )
 
         # --- Shuffle decks using numpy RNG (per-game for seed compatibility) ---
         # Build shuffled decks on CPU, then upload in bulk

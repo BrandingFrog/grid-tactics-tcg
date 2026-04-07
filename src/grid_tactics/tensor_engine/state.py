@@ -78,6 +78,13 @@ class TensorGameState:
     pending_action_card_id: torch.Tensor  # [N] int32 (-1 = none)
     pending_action_had_position: torch.Tensor  # [N] bool
 
+    # Phase 14.1: pending post-move attack state.
+    # Per-game minion slot index of a melee minion that just moved into range
+    # of at least one enemy. -1 = no pending. While >= 0, only ATTACK with that
+    # slot or DECLINE_POST_MOVE_ATTACK is legal, and the react window is
+    # deferred until the pending state clears.
+    pending_post_move_attacker: torch.Tensor  # [N] int32 (-1 = none)
+
     def clone(self) -> TensorGameState:
         """Deep-copy all tensors."""
         return TensorGameState(
@@ -112,6 +119,7 @@ class TensorGameState:
             pending_action_card_id=self.pending_action_card_id.clone(),
             pending_action_had_position=self.pending_action_had_position.clone(),
             fatigue_count=self.fatigue_count.clone(),
+            pending_post_move_attacker=self.pending_post_move_attacker.clone(),
         )
 
 
@@ -152,4 +160,5 @@ def create_initial_state(
         pending_action_card_id=torch.full((n_envs,), EMPTY, dtype=torch.int32, device=device),
         pending_action_had_position=torch.zeros(n_envs, dtype=torch.bool, device=device),
         fatigue_count=torch.zeros((n_envs, 2), dtype=torch.int32, device=device),
+        pending_post_move_attacker=torch.full((n_envs,), -1, dtype=torch.int32, device=device),
     )
