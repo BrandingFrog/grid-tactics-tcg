@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Online PvP Dueling
 status: verifying
-stopped_at: "Phase 14.3-02 + 14.3-03 + 14.3-04 complete (summon + move + attack animations + last_action payload). All Wave 2-4 animation branches have real visuals."
-last_updated: "2026-04-07T16:45:00.000Z"
+stopped_at: "Phase 14.3-07 complete (floating popups + status badges + Luckiest Guy font). Game-juice arc feature-complete: combat-damage / heal / burn-tick / buff / debuff popups + persistent 🔥 / ⬆️ / ⬇️ badges all live."
+last_updated: "2026-04-07T17:15:00.000Z"
 last_activity: 2026-04-07
 progress:
   total_phases: 5
@@ -26,9 +26,9 @@ See: .planning/PROJECT.md (updated 2026-04-04)
 ## Current Position
 
 Phase: 14.3 (game-juice) — IN PROGRESS
-Plan: 2 + 3 + 4 of N (summon + move + attack animations) — COMPLETE
-Status: All three core action animations now have real visuals. Move animation = lift (120ms scale 1.15 + drop-shadow) -> translate (350ms cubic-bezier slide) -> apply state mid-flight + .anim-move-drop keyframe on freshly-rendered destination cell -> cleanup. Total ~600ms. Source tile clears at PHASE C, never before. New shared getTileDelta() helper extracted for any pos-to-pos animation reuse. deriveAnimationJob prefers last_action.MOVE (server-authoritative) before falling back to pending_action diff, mirroring the ATTACK precedence. playAnimation switch no longer has stub branches except 'noop'.
-Last activity: 2026-04-07 — Completed 14.3-03-PLAN.md
+Plan: 7 of 7 (floating popups + status badges) — COMPLETE
+Status: Phase 14.3 game-juice arc feature-complete (waves 1-7). Wave 7 added showFloatingPopup(tileEl, text, variant) with 5 variants (combat-damage / heal / burn-tick / buff / debuff), Luckiest Guy font (popups only), and persistent 🔥 / ⬆️+N / ⬇️-N corner badges in renderBoardMinion. Combat damage now routes through showFloatingPopup (replacing Wave 4's inline .damage-popup); heal + burn-tick fire from a prev/next minion HP diff in applyStateFrame, gated by turn-flip + burning_stacks for burn. Burn-tick popup anchors to PREV tile so lethal burns still show the number before the minion is removed. Adding new statuses now needs only 1 CSS variant + 1 diff hook.
+Last activity: 2026-04-07 — Completed 14.3-07-PLAN.md
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -148,6 +148,13 @@ Recent decisions affecting current work:
 - [Phase 14.3-03]: animatingTiles[destKey] = 'move-drop' is set BEFORE applyStateFrame so the freshly-rendered destination .board-cell picks up .anim-move-drop on first paint. The drop is a CSS @keyframes (not a transition) so it fires reliably on a brand-new DOM node.
 - [Phase 14.3-03]: getTileDelta(fromPos, toPos) extracted as shared helper returning {dx,dy,fromCell,toCell}. Reusable for any future pos-to-pos animation. Wave 4 attack predates this and still inlines getBoundingClientRect math — left untouched to avoid retrofitting shipped code.
 - [Phase 14.3-03]: deriveAnimationJob prefers last_action.type==='MOVE' (server-authoritative attacker_pos/target_pos from enrich_last_action) before falling back to pending_action.source_position/target_position diff. Mirrors the ATTACK precedence added in 14.3-04.
+- [Phase 14.3-07]: Single popup pathway — showFloatingPopup(tileEl, text, variant) with 5 variants (combat-damage / heal / burn-tick / buff / debuff). Wave 4's inline .damage-popup is replaced; combat damage now routes through showFloatingPopup with the '⚔️ -X' glyph.
+- [Phase 14.3-07]: Heal + burn-tick popups fire from a prev/next minion HP diff at the TOP of applyStateFrame (before gameState mutation). Heal = any current_health increase; burn-tick = HP decrease AND prev.active_player_idx !== next.active_player_idx AND prev.burning_stacks > 0. Matches the engine tick semantics from 14.3-06.
+- [Phase 14.3-07]: Burn-tick popup anchors to the PREV tile (via getTileElForMinion(prevMinion)) so lethal burns still show the number before renderGame removes the minion.
+- [Phase 14.3-07]: Persistent badges (🔥 / ⬆️+N / ⬇️-N) live as innerHTML inside renderBoardMinion's returned string, not appended post-hoc to the cell — matches the existing string-build style and survives renderBoard re-renders without DOM tracking.
+- [Phase 14.3-07]: Luckiest Guy loaded via Google Fonts <link> in <head>; applied ONLY to .floating-popup. body font is unchanged.
+- [Phase 14.3-07]: Recipe for new status popup = 1 CSS variant + 1 diff hook in applyStateFrame. No queue, animation infra, or render surgery needed. Phase 14.3 grew from 5 plans to 7 (waves 6 burning + 7 popups added mid-phase); Wave 5 closeout still owes a STATE.md/ROADMAP.md amendment.
+- [Phase 14.3-07]: Task 4 visual verification deferred to post-deploy Playwright E2E against Railway (same posture as 14.1-04 / 14.2-04 / 14.3-01 / 14.3-04).
 
 ### Pending Todos
 
@@ -162,6 +169,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-04-07T16:45:00.000Z
-Stopped at: Completed 14.3-03-PLAN.md (move animation). Waves 2/3/4 all shipped — playAnimation has no remaining stub branches except 'noop'.
+Last session: 2026-04-07T17:15:00.000Z
+Stopped at: Completed 14.3-07-PLAN.md (floating popups + status badges). Phase 14.3 game-juice arc feature-complete (waves 1-7).
 Resume file: None
