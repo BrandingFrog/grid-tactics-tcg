@@ -15,15 +15,15 @@ from dataclasses import dataclass
 
 from grid_tactics.enums import PlayerSide
 
-# Damage Per Tick for the burning status. Future statuses follow the
-# `<STATUS>_DPT` naming pattern (e.g. POISON_DPT) so the tick architecture
-# stays uniform across status effects.
-BURN_DPT = 1
+# Damage dealt to a burning minion at the start of its owner's turn.
+# Burn is a non-stacking BOOLEAN status: a minion is either burning or not.
+# Re-applying burn to an already-burning minion is a no-op (no refresh,
+# no stacks). Burn persists until the minion dies (no cleanse exists yet).
+BURN_DAMAGE = 5
 
-# Maximum burning_stacks any minion can carry. Aura applications above this
-# cap are clamped to MAX_BURNING_STACKS so multiple Emberplague Rats (or
-# repeated APPLY_BURNING) cannot runaway-stack and one-shot a wedge.
-MAX_BURNING_STACKS = 3
+# Backwards-compat alias kept for any external imports; new code should use
+# BURN_DAMAGE. Will be removed in a future cleanup pass.
+BURN_DPT = BURN_DAMAGE
 
 
 @dataclass(frozen=True, slots=True)
@@ -39,7 +39,7 @@ class MinionInstance:
     position: tuple[int, int]    # (row, col) on board
     current_health: int          # starts at CardDefinition.health, decreases from damage
     attack_bonus: int = 0        # cumulative attack buff (effective attack = card_def.attack + attack_bonus)
-    burning_stacks: int = 0      # Phase 14.3: status effect — ticks at end of turn for BURN_DPT * stacks damage, decrements by 1
+    is_burning: bool = False     # Boolean burn status. Tick fires for BURN_DAMAGE at the start of the owner's turn. Persists until death.
 
     @property
     def is_alive(self) -> bool:

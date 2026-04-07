@@ -309,9 +309,15 @@ class TestMinionFields:
 class TestStatValidation:
     """Stat range validation per D-19: stats in [MIN_STAT, MAX_STAT] range."""
 
-    def test_attack_zero_raises(self) -> None:
+    def test_attack_zero_ok(self) -> None:
+        # attack=0 is legal (e.g. Emberplague Rat). The minion simply
+        # cannot ATTACK unless buffed -- gated by legal_actions.
+        card = _minion_card(attack=0)
+        assert card.attack == 0
+
+    def test_attack_negative_raises(self) -> None:
         with pytest.raises(ValueError, match="attack"):
-            _minion_card(attack=0)
+            _minion_card(attack=-1)
 
     def test_attack_above_max_raises(self) -> None:
         with pytest.raises(ValueError, match="attack"):

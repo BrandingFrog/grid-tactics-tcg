@@ -138,30 +138,21 @@ def _apply_effect_to_minion(
         new_minions = _replace_minion(state.minions, minion.instance_id, new_minion)
         return replace(state, minions=new_minions)
     elif effect.effect_type == EffectType.BURN:
-        # Legacy BURN aura: re-routed to APPLY_BURNING semantics so passive
-        # adjacency-burn cards (Emberplague Rat) actually do something.
-        # `effect.amount` is the per-tick stack amount (default 1). Capped
-        # at MAX_BURNING_STACKS so multiple auras can't runaway-stack.
-        from grid_tactics.minion import MAX_BURNING_STACKS
-        amount = int(effect.amount) if effect.amount else 1
-        new_stacks = min(minion.burning_stacks + amount, MAX_BURNING_STACKS)
-        new_minion = replace(
-            minion, burning_stacks=new_stacks,
-        )
+        # Boolean burn aura: set is_burning=True. No-op if already burning
+        # (no refresh, no stacks). Burn persists until death.
+        if minion.is_burning:
+            return state
+        new_minion = replace(minion, is_burning=True)
         new_minions = _replace_minion(state.minions, minion.instance_id, new_minion)
         return replace(state, minions=new_minions)
     elif effect.effect_type == EffectType.PASSIVE_HEAL:
         # Heal self by `amount`, capped at base health.
         return _apply_heal_to_minion(state, minion, effect.amount, library)
     elif effect.effect_type == EffectType.APPLY_BURNING:
-        # Phase 14.3: stack additively. Default amount=1 if zero/missing.
-        # Capped at MAX_BURNING_STACKS to prevent runaway stacking.
-        from grid_tactics.minion import MAX_BURNING_STACKS
-        amount = effect.amount if effect.amount else 1
-        new_stacks = min(minion.burning_stacks + amount, MAX_BURNING_STACKS)
-        new_minion = replace(
-            minion, burning_stacks=new_stacks,
-        )
+        # Boolean burn: set is_burning=True. No-op if already burning.
+        if minion.is_burning:
+            return state
+        new_minion = replace(minion, is_burning=True)
         new_minions = _replace_minion(state.minions, minion.instance_id, new_minion)
         return replace(state, minions=new_minions)
     # Unimplemented or non-minion-targeting effect types: skip gracefully
@@ -233,8 +224,8 @@ def _resolve_adjacent(
 
     "Adjacent" in this engine means the four cardinal neighbours (no
     diagonals). Burn-aura effects (EffectType.BURN) are additionally
-    restricted to enemies of the caster -- they should not stack
-    burning_stacks on friendlies.
+    restricted to enemies of the caster -- they should not set
+    is_burning on friendlies.
     """
     adjacent_positions = Board.get_orthogonal_adjacent(caster_pos)
     for minion in state.minions:

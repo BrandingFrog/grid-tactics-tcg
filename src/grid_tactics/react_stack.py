@@ -20,7 +20,7 @@ from grid_tactics.actions import Action
 from grid_tactics.card_library import CardLibrary
 from grid_tactics.enums import ActionType, CardType, EffectType, TriggerType, TurnPhase
 from grid_tactics.game_state import GameState
-from grid_tactics.minion import BURN_DPT, MinionInstance
+from grid_tactics.minion import BURN_DAMAGE, MinionInstance
 from grid_tactics.types import AUTO_DRAW_ENABLED, MAX_REACT_STACK_DEPTH
 
 
@@ -55,40 +55,39 @@ def _replace_player(
 
 
 def tick_status_effects(state: GameState, library: CardLibrary) -> GameState:
-    """Tick all per-minion status effects at end of turn (Phase 14.3).
+    """Tick per-minion status effects at the start of the active player's turn.
 
-    Burn tick semantics (locked):
-    - Who ticks: ALL minions on the board with `burning_stacks > 0`,
-      regardless of owner.
-    - When ticks: Once per turn flip, inside `resolve_react_stack`, AFTER
-      the react resolves and the active player has flipped, BEFORE mana
-      regen for the new active player. This guarantees a burning minion
-      takes exactly one tick per full turn cycle and that the new active
-      player sees post-tick state when they begin their turn.
-    - Damage formula: `damage = burning_stacks * BURN_DPT` where BURN_DPT=1.
-    - Decrement: After dealing damage, `burning_stacks -= 1` (clamped >= 0).
-    - Death: If current_health <= 0 after burn damage, route through the
-      existing death-cleanup path used by combat (so on-death effects,
-      sacrifice checks, etc., still fire).
+    Boolean burn semantics (locked):
+    - Who ticks: minions OWNED BY the newly-active player that have
+      `is_burning == True`. A burning minion takes one tick per full
+      turn cycle (when their owner becomes active again).
+    - When ticks: Called from `resolve_react_stack` AFTER the active
+      player flip, BEFORE the PASSIVE pipeline and mana regen for the
+      new active player. So a minion that gets the burn aura applied
+      this turn will take its first tick on the owner's NEXT turn.
+    - Damage: BURN_DAMAGE per tick (5).
+    - Persistence: is_burning is NOT cleared by ticking. It persists
+      until the minion dies.
+    - Death: If current_health <= 0 after burn damage, route through
+      the existing death-cleanup path used by combat.
     - Order: Iterate minions in (row, col) order for determinism.
-
-    Future statuses (frozen, stunned, poisoned) add their own branch here
-    using the `<status>_stacks` field naming pattern.
     """
     from dataclasses import replace as _replace
+
+    active_side = state.players[state.active_player_idx].side
 
     # Snapshot in (row, col) order for determinism
     ordered = sorted(state.minions, key=lambda m: (m.position[0], m.position[1]))
 
     new_minions_by_id: dict[int, MinionInstance] = {}
     for m in ordered:
-        if m.burning_stacks <= 0:
+        if not m.is_burning:
             continue
-        damage = m.burning_stacks * BURN_DPT
+        if m.owner != active_side:
+            continue
         new_minions_by_id[m.instance_id] = _replace(
             m,
-            current_health=m.current_health - damage,
-            burning_stacks=max(0, m.burning_stacks - 1),
+            current_health=m.current_health - BURN_DAMAGE,
         )
 
     if not new_minions_by_id:

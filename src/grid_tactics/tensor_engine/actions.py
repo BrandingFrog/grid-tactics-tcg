@@ -536,10 +536,10 @@ def _deploy_minion_batch(state, deploy_mask, owners, card_ids, target_flat, card
         valid, torch.tensor(0, device=device, dtype=torch.int32),
         state.minion_atk_bonus[arange_n, safe_slot]
     )
-    # Phase 14.3: reset burning_stacks for the new occupant of this slot
-    state.burning_stacks[arange_n, safe_slot] = torch.where(
-        valid, torch.tensor(0, device=device, dtype=torch.int32),
-        state.burning_stacks[arange_n, safe_slot]
+    # Reset is_burning for the new occupant of this slot
+    state.is_burning[arange_n, safe_slot] = torch.where(
+        valid, torch.tensor(False, device=device),
+        state.is_burning[arange_n, safe_slot]
     )
     state.minion_alive[arange_n, safe_slot] = torch.where(
         valid, torch.tensor(True, device=device),

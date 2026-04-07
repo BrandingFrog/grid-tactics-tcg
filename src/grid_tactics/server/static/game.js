@@ -889,7 +889,7 @@ var KEYWORD_GLOSSARY = {
     'Heal': 'Restore HP to a target.',
     'Deal': 'Deal damage to a target.',
     'Burn': 'A permanent passive debuff that deals damage each turn.',
-    'Burning': 'When this minion is burning, it takes 1 damage at the start of each turn and burning decreases by 1.',
+    'Burning': 'A burning minion takes 5 damage at the start of its owner\'s turn. Burning persists until the minion dies.',
     'Dark Matter': 'Buff scales with Dark Matter stacks.',
     'Leap': 'If blocked by an enemy, advance to the next available tile instead.',
     'Conjure': 'Summon a card from outside your deck directly to the board.',
@@ -1971,12 +1971,10 @@ function playBurnDeathAnimation(prevMinion, done) {
 function applyStateFrame(frame, legal) {
     var prevState = gameState;
 
-    // Detect burn-deaths: minions that existed in prevState with
-    // burning_stacks > 0 and are MISSING from the next frame. We assume
-    // these died from the end-of-turn burn tick (combat-killed minions
-    // are removed by other code paths after their own animations).
-    // For each burn-death, kick off the cinder animation on the OLD DOM
-    // node and defer the actual gameState swap until they all finish.
+    // Detect burn-deaths: minions that were is_burning in prevState and
+    // are MISSING from the next frame. We assume these died from the
+    // start-of-turn burn tick (combat-killed minions are removed by other
+    // code paths after their own animations).
     try {
         if (prevState && prevState.minions && frame && frame.minions) {
             var nextIds = {};
@@ -1987,7 +1985,7 @@ function applyStateFrame(frame, legal) {
             collectMinions(prevState).forEach(function (m) {
                 if (!m || m.instance_id == null) return;
                 if (nextIds[m.instance_id]) return;
-                if ((m.burning_stacks || 0) > 0) burnDying.push(m);
+                if (m.is_burning) burnDying.push(m);
             });
             if (burnDying.length > 0) {
                 var pending = burnDying.length;
@@ -2035,10 +2033,13 @@ function _applyStateFrameImmediate(frame, legal, prevState) {
                     showFloatingPopup(tileEl, '💚 +' + (nextHp - prevHp), 'heal');
                 }
 
-                // Burn tick: turn just flipped, prev had burning stacks,
-                // and HP went DOWN. Anchor to the prev tile in case the
-                // minion gets removed on this frame.
-                if (turnFlipped && p.burning_stacks > 0 && nextHp < prevHp) {
+                // Burn tick: turn just flipped, prev was burning, and HP
+                // went DOWN. The engine ticks burn at the start of the
+                // owner's turn — only fire the popup when the new active
+                // player is the owner. Anchor to the prev tile so lethal
+                // burns still show the number before the minion vanishes.
+                if (turnFlipped && p.is_burning && nextHp < prevHp
+                        && frame.active_player_idx === p.owner) {
                     var burnTile = getTileElForMinion(p) || tileEl;
                     showFloatingPopup(burnTile, '🔥 -' + (prevHp - nextHp), 'burn-tick');
                 }
@@ -3781,8 +3782,8 @@ function renderBoardMinion(minion) {
 
     // Phase 14.3 Wave 7: persistent status badges (burning / buff / debuff).
     var badges = [];
-    if (minion.burning_stacks > 0) {
-        badges.push('<span class="minion-badge badge-burning" title="Burning ' + minion.burning_stacks + '">🔥</span>');
+    if (minion.is_burning) {
+        badges.push('<span class="minion-badge badge-burning" title="Burning">🔥</span>');
     }
     if (minion.attack_bonus > 0) {
         badges.push('<span class="minion-badge badge-buff">⬆️+' + minion.attack_bonus + '</span>');

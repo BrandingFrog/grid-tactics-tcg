@@ -114,7 +114,7 @@ class TensorGameEngine:
         s.minion_health = torch.where(mask.unsqueeze(1), torch.tensor(0, device=device, dtype=torch.int32), s.minion_health)
         s.minion_atk_bonus = torch.where(mask.unsqueeze(1), torch.tensor(0, device=device, dtype=torch.int32), s.minion_atk_bonus)
         s.minion_alive = torch.where(mask.unsqueeze(1), torch.tensor(False, device=device), s.minion_alive)
-        s.burning_stacks = torch.where(mask.unsqueeze(1), torch.tensor(0, device=device, dtype=torch.int32), s.burning_stacks)
+        s.is_burning = torch.where(mask.unsqueeze(1), torch.tensor(False, device=device), s.is_burning)
         s.next_minion_slot = torch.where(mask, torch.tensor(0, device=device, dtype=torch.int32), s.next_minion_slot)
 
         # Turn state
@@ -443,23 +443,26 @@ class TensorGameEngine:
                     new_mana_p1 = (s.player_mana[:, 1] + 1).clamp(max=10)
                     s.player_mana[:, 1] = torch.where(regen_p1, new_mana_p1, s.player_mana[:, 1])
 
-                # Phase 14.3: tick burning status effects after turn flip,
-                # before mana regen / draw. Vectorized: every minion with
-                # burning_stacks > 0 takes stacks*BURN_DPT damage and stacks
-                # decrements by 1. Mirrors Python tick_status_effects.
-                from grid_tactics.minion import BURN_DPT
-                tick_mask = should_advance.view(N, 1) & s.minion_alive & (s.burning_stacks > 0)
+                # Boolean burn tick: at the start of each player's turn,
+                # their OWNED burning minions take BURN_DAMAGE. is_burning
+                # persists (does NOT clear). Mirrors Python tick_status_effects.
+                from grid_tactics.minion import BURN_DAMAGE
+                ap_new = s.active_player  # [N]
+                # owner-of-this-slot == newly active player
+                owner_is_active = s.minion_owner == ap_new.view(N, 1)
+                tick_mask = (
+                    should_advance.view(N, 1)
+                    & s.minion_alive
+                    & s.is_burning
+                    & owner_is_active
+                )
                 if tick_mask.any():
-                    burn_damage = s.burning_stacks * BURN_DPT  # int32
                     s.minion_health = torch.where(
-                        tick_mask, s.minion_health - burn_damage, s.minion_health
-                    )
-                    s.burning_stacks = torch.where(
                         tick_mask,
-                        (s.burning_stacks - 1).clamp(min=0),
-                        s.burning_stacks,
+                        s.minion_health - BURN_DAMAGE,
+                        s.minion_health,
                     )
-                    # Lethal burns: route through standard cleanup
+                    # is_burning persists -- no clear
                     self.cleanup_dead_minions_batch()
                     self.check_game_over_batch()
 
@@ -482,7 +485,7 @@ class TensorGameEngine:
         """Audit-followup: vectorized PASSIVE-trigger pipeline.
 
         For each masked game and each minion slot, applies:
-          - BURN aura: +passive_burn_amount burning_stacks on every alive
+          - BURN aura: set is_burning=True on every alive
             ORTHOGONALLY adjacent ENEMY minion (manhattan distance == 1,
             no diagonals).
           - PASSIVE_HEAL: heal self by passive_heal_amount, capped at the
@@ -533,11 +536,9 @@ class TensorGameEngine:
                     is_adj = ct.distance_manhattan[src_flat, t_flat] == 1
                     hit = has_burn & t_alive & is_adj & (t_owner != src_owner)
                     if hit.any():
-                        from grid_tactics.minion import MAX_BURNING_STACKS
-                        delta = (burn_amt * hit.int()).to(s.burning_stacks.dtype)
-                        s.burning_stacks[:, tgt] = (
-                            s.burning_stacks[:, tgt] + delta
-                        ).clamp(max=MAX_BURNING_STACKS)
+                        # Boolean burn: set is_burning=True. No-op if already
+                        # burning. We OR with the current flag.
+                        s.is_burning[:, tgt] = s.is_burning[:, tgt] | hit
 
             # Passive self-heal: cap at base health.
             if has_heal.any():

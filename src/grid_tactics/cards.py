@@ -170,16 +170,20 @@ class CardDefinition:
                         f"Card '{self.card_id}': Minion must have {field_name}"
                     )
 
-            # Stat range validation (D-19) for attack, health
-            for field_name, value in [
-                ("attack", self.attack),
-                ("health", self.health),
-            ]:
-                if not (MIN_STAT <= value <= MAX_STAT):  # type: ignore[operator]
-                    raise ValueError(
-                        f"Card '{self.card_id}': {field_name}={value} "
-                        f"out of range [{MIN_STAT}, {MAX_STAT}]"
-                    )
+            # Stat range validation (D-19): health in [MIN_STAT, MAX_STAT];
+            # attack in [0, MAX_STAT] -- 0 is a legal "cannot attack" card
+            # (e.g. Emberplague Rat) gated by the effective-attack rule in
+            # legal_actions. Buffs can give such a minion temporary teeth.
+            if not (MIN_STAT <= self.health <= MAX_STAT):  # type: ignore[operator]
+                raise ValueError(
+                    f"Card '{self.card_id}': health={self.health} "
+                    f"out of range [{MIN_STAT}, {MAX_STAT}]"
+                )
+            if not (0 <= self.attack <= MAX_STAT):  # type: ignore[operator]
+                raise ValueError(
+                    f"Card '{self.card_id}': attack={self.attack} "
+                    f"out of range [0, {MAX_STAT}]"
+                )
 
             # Range is 0+ (melee=0, ranged=1+), no upper bound enforced yet
             if self.attack_range < 0:  # type: ignore[operator]

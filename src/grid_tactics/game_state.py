@@ -162,7 +162,7 @@ class GameState:
                     "position": list(m.position),
                     "current_health": m.current_health,
                     "attack_bonus": m.attack_bonus,
-                    "burning_stacks": m.burning_stacks,
+                    "is_burning": bool(m.is_burning),
                 }
                 for m in self.minions
             ],
@@ -230,7 +230,7 @@ class GameState:
                 position=tuple(m["position"]),
                 current_health=m["current_health"],
                 attack_bonus=m.get("attack_bonus", 0),
-                burning_stacks=m.get("burning_stacks", 0),
+                is_burning=bool(m.get("is_burning", False)),
             )
             for m in minions_data
         )

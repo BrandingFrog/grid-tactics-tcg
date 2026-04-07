@@ -70,7 +70,7 @@ def compute_legal_mask_batch(state, card_table) -> torch.Tensor:
     # cleared. Slot 1001 is the *only* slot whose meaning changes; the
     # action int layout [0:1262] is unchanged.
     if hasattr(state, "pending_post_move_attacker"):
-        _apply_pending_post_move_attack_override(mask, state, alive)
+        _apply_pending_post_move_attack_override(mask, state, alive, card_table)
 
     # Phase 14.2: pending_tutor override.
     # For games where pending_tutor_player[n] >= 0, restrict the legal mask to
@@ -127,7 +127,7 @@ def _apply_pending_tutor_override(mask, state, alive):
     mask[has_pending_tutor, PASS_IDX] = True
 
 
-def _apply_pending_post_move_attack_override(mask, state, alive):
+def _apply_pending_post_move_attack_override(mask, state, alive, card_table):
     """Restrict legal mask to ATTACK-from-pending + slot 1001 for pending games.
 
     Pending implies the attacker is a *melee* minion (Wave 1 invariant: only
@@ -173,7 +173,15 @@ def _apply_pending_post_move_attack_override(mask, state, alive):
     in_bounds = (nr >= 0) & (nr < GRID_ROWS) & (nc >= 0) & (nc < GRID_COLS)
     nflat = (nr * GRID_COLS + nc).clamp(0, GRID_SIZE - 1).long()  # [N, 4]
     has_enemy_at = torch.gather(enemy_cell_mask, 1, nflat)  # [N, 4]
-    can_attack = has_pending.unsqueeze(1) & in_bounds & has_enemy_at  # [N, 4]
+
+    # Effective attack gate: pending attacker must have base+bonus > 0.
+    a_cid = state.minion_card_id[arange_n, safe_pending].clamp(0).long()
+    a_eff = (
+        card_table.attack[a_cid]
+        + state.minion_atk_bonus[arange_n, safe_pending]
+    )  # [N]
+    can_strike_pending = has_pending & (a_eff > 0)
+    can_attack = can_strike_pending.unsqueeze(1) & in_bounds & has_enemy_at  # [N, 4]
 
     # Zero out all slots for pending games (we'll re-enable below)
     mask[has_pending] = False
@@ -227,7 +235,7 @@ def _compute_action_phase_mask(mask, state, card_table, phase_mask):
     # --- ATTACK ---
     _compute_attack_mask(
         mask, card_table, friendly_alive, enemy_alive, minion_flat,
-        state.minion_card_id
+        state.minion_card_id, state.minion_atk_bonus,
     )
 
     # --- SACRIFICE ---
@@ -452,8 +460,13 @@ def _compute_move_mask(mask, state, phase_mask, friendly_alive, board_flat, card
 
 
 def _compute_attack_mask(mask, card_table, friendly_alive, enemy_alive,
-                          minion_flat, minion_card_id):
-    """Compute ATTACK legal actions -- fully vectorized over all minion pairs."""
+                          minion_flat, minion_card_id, minion_atk_bonus):
+    """Compute ATTACK legal actions -- fully vectorized over all minion pairs.
+
+    A minion with effective attack <= 0 (card_table.attack[cid] +
+    minion_atk_bonus) cannot attack -- general rule, also covers Emberplague
+    Rat (base atk 0) unless buffed.
+    """
     N = mask.shape[0]
     device = mask.device
 
@@ -464,6 +477,11 @@ def _compute_attack_mask(mask, card_table, friendly_alive, enemy_alive,
     # Attacker ranges: [N, MAX_MINIONS]
     a_cid = minion_card_id.clamp(0).long()
     a_range = card_table.attack_range[a_cid.reshape(-1)].reshape(N, MAX_MINIONS)
+
+    # Effective attack gate: friendly_alive AND (base + bonus) > 0
+    a_base_atk = card_table.attack[a_cid.reshape(-1)].reshape(N, MAX_MINIONS)
+    a_eff_atk = a_base_atk + minion_atk_bonus
+    can_strike = friendly_alive & (a_eff_atk > 0)
 
     # Pairwise positions: [N, S, T]
     a_flat = minion_flat.unsqueeze(2).expand(N, MAX_MINIONS, MAX_MINIONS)
@@ -486,7 +504,7 @@ def _compute_attack_mask(mask, card_table, friendly_alive, enemy_alive,
     ranged_ok = ~is_melee & ((ortho & (manhattan <= a_range_exp)) | ((chebyshev == 1) & ~ortho))
 
     # Pair validity and final mask
-    pair_valid = friendly_alive.unsqueeze(2) & enemy_alive.unsqueeze(1)
+    pair_valid = can_strike.unsqueeze(2) & enemy_alive.unsqueeze(1)
     can_attack = pair_valid & (melee_ok | ranged_ok)
 
     # Scatter to mask

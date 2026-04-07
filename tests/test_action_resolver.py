@@ -914,3 +914,74 @@ class TestPendingPostMoveAttack:
                 Action(action_type=ActionType.DECLINE_POST_MOVE_ATTACK),
                 lib,
             )
+
+
+# ---------------------------------------------------------------------------
+# Zero-effective-attack ATTACK enumeration gate
+# ---------------------------------------------------------------------------
+
+
+def test_zero_effective_attack_minion_has_no_attack_actions():
+    """A minion with effective_attack <= 0 must not be enumerated as an attacker."""
+    from grid_tactics.legal_actions import legal_actions
+
+    zero_atk_card = CardDefinition(
+        card_id="zero_atk",
+        name="Zero Atk",
+        card_type=CardType.MINION,
+        mana_cost=1,
+        attack=0,
+        health=10,
+        attack_range=0,
+    )
+    target_card = CardDefinition(
+        card_id="target",
+        name="Target",
+        card_type=CardType.MINION,
+        mana_cost=1,
+        attack=1,
+        health=10,
+        attack_range=0,
+    )
+    lib = CardLibrary({"zero_atk": zero_atk_card, "target": target_card})
+
+    # Place P1 zero-attack adjacent to a P2 enemy
+    attacker = MinionInstance(
+        instance_id=0,
+        card_numeric_id=lib.get_numeric_id("zero_atk"),
+        owner=PlayerSide.PLAYER_1,
+        position=(2, 2),
+        current_health=10,
+    )
+    enemy = MinionInstance(
+        instance_id=1,
+        card_numeric_id=lib.get_numeric_id("target"),
+        owner=PlayerSide.PLAYER_2,
+        position=(2, 3),
+        current_health=10,
+    )
+    board = Board.empty().place(2, 2, 0).place(2, 3, 1)
+    p1 = Player(side=PlayerSide.PLAYER_1, hp=STARTING_HP, current_mana=5,
+                max_mana=5, hand=(), deck=(), graveyard=())
+    p2 = Player(side=PlayerSide.PLAYER_2, hp=STARTING_HP, current_mana=5,
+                max_mana=5, hand=(), deck=(), graveyard=())
+    state = GameState(
+        board=board, players=(p1, p2), active_player_idx=0,
+        phase=TurnPhase.ACTION, turn_number=3, seed=42,
+        minions=(attacker, enemy), next_minion_id=2,
+    )
+
+    actions = legal_actions(state, lib)
+    attack_actions = [a for a in actions if a.action_type == ActionType.ATTACK]
+    assert attack_actions == [], (
+        "Zero-effective-attack minion must not be enumerated as an attacker"
+    )
+
+    # Now buff to +1 attack: ATTACK should appear
+    buffed = replace(attacker, attack_bonus=1)
+    state2 = replace(state, minions=(buffed, enemy))
+    actions2 = legal_actions(state2, lib)
+    attack_actions2 = [a for a in actions2 if a.action_type == ActionType.ATTACK]
+    assert len(attack_actions2) == 1
+    assert attack_actions2[0].minion_id == 0
+    assert attack_actions2[0].target_id == 1

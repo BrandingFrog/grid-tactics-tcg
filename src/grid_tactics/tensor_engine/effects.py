@@ -410,11 +410,9 @@ def _apply_tutor(state, active, card_ids, caster_owners, card_table):
 
 
 def _apply_burning(state, active, etarget, eamount, target_flat_pos):
-    """APPLY_BURNING (Phase 14.3): grant burning_stacks to the target minion.
+    """APPLY_BURNING: set is_burning=True on the target minion.
 
-    Stacking is additive. SINGLE_TARGET (0) only — burning is not currently
-    designed as an AoE effect, but adding ALL_ENEMIES later is a simple
-    branch following the existing dispatch shape.
+    Boolean status — no-op if target is already burning. SINGLE_TARGET only.
     """
     if not active.any():
         return
@@ -428,13 +426,8 @@ def _apply_burning(state, active, etarget, eamount, target_flat_pos):
         valid = single & (slot >= 0)
         if valid.any():
             safe_slot = slot.clamp(min=0)
-            # Default amount=1 if zero/missing, mirroring Python resolver
-            amt = torch.where(eamount > 0, eamount, torch.tensor(1, device=device, dtype=eamount.dtype))
-            from grid_tactics.minion import MAX_BURNING_STACKS
-            delta = (amt * valid.int()).to(state.burning_stacks.dtype)
-            state.burning_stacks[arange_n, safe_slot] = (
-                state.burning_stacks[arange_n, safe_slot] + delta
-            ).clamp(max=MAX_BURNING_STACKS)
+            cur = state.is_burning[arange_n, safe_slot]
+            state.is_burning[arange_n, safe_slot] = cur | valid
 
 
 def _apply_destroy(state, active, etarget, target_flat_pos):

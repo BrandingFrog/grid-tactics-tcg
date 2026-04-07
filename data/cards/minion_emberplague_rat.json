@@ -3,7 +3,7 @@
     "name": "Emberplague Rat",
     "card_type": "minion",
     "mana_cost": 2,
-    "attack": 1,
+    "attack": 0,
     "health": 24,
     "range": 0,
     "element": "fire",
@@ -13,13 +13,7 @@
             "type": "burn",
             "trigger": "passive",
             "target": "adjacent",
-            "amount": 1
-        },
-        {
-            "type": "apply_burning",
-            "trigger": "on_attack",
-            "target": "single_target",
-            "amount": 1
+            "amount": 5
         }
     ]
 }

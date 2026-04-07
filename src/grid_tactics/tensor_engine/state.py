@@ -96,9 +96,9 @@ class TensorGameState:
     pending_tutor_player: torch.Tensor   # [N] int32 (-1 = none, else player idx 0/1)
     pending_tutor_matches: torch.Tensor  # [N, 8] int32 (-1 padded deck indices)
 
-    # Phase 14.3: per-minion status effects. Currently only burning. Future
-    # statuses follow the `<status>_stacks` field naming pattern.
-    burning_stacks: torch.Tensor         # [N, MAX_MINIONS] int32 (>=0)
+    # Boolean burn status: per-minion is_burning flag. Persists until death.
+    # Re-applying burn to an already-burning minion is a no-op.
+    is_burning: torch.Tensor             # [N, MAX_MINIONS] bool
 
     def clone(self) -> TensorGameState:
         """Deep-copy all tensors."""
@@ -137,7 +137,7 @@ class TensorGameState:
             pending_post_move_attacker=self.pending_post_move_attacker.clone(),
             pending_tutor_player=self.pending_tutor_player.clone(),
             pending_tutor_matches=self.pending_tutor_matches.clone(),
-            burning_stacks=self.burning_stacks.clone(),
+            is_burning=self.is_burning.clone(),
         )
 
 
@@ -181,5 +181,5 @@ def create_initial_state(
         pending_post_move_attacker=torch.full((n_envs,), -1, dtype=torch.int32, device=device),
         pending_tutor_player=torch.full((n_envs,), -1, dtype=torch.int32, device=device),
         pending_tutor_matches=torch.full((n_envs, 8), -1, dtype=torch.int32, device=device),
-        burning_stacks=torch.zeros((n_envs, MAX_MINIONS), dtype=torch.int32, device=device),
+        is_burning=torch.zeros((n_envs, MAX_MINIONS), dtype=torch.bool, device=device),
     )

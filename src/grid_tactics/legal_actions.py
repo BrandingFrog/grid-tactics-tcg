@@ -241,8 +241,13 @@ def _action_phase_actions(
                         ))
 
     # ATTACK enumeration
+    # General rule: a minion with effective attack <= 0 cannot attack.
+    # Effective attack = card_def.attack + minion.attack_bonus.
     for minion in owned_minions:
         card_def = library.get_by_id(minion.card_numeric_id)
+        effective_attack = card_def.attack + minion.attack_bonus
+        if effective_attack <= 0:
+            continue
         for enemy in state.minions:
             if enemy.owner != player_side:
                 if _can_attack(minion, enemy, card_def):
@@ -330,6 +335,8 @@ def _pending_post_move_attack_actions(
         return (decline_post_move_attack_action(),)
 
     attacker_card = library.get_by_id(attacker.card_numeric_id)
+    if attacker_card.attack + attacker.attack_bonus <= 0:
+        return (decline_post_move_attack_action(),)
     for enemy in state.minions:
         if enemy.owner == attacker.owner:
             continue
