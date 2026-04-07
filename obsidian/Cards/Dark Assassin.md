@@ -1,6 +1,6 @@
 # Dark Assassin
 
-| Cost | Attack | Health | Range | Element | Tribe |
+| Cost | 🗡️ | 🛡️ | Range | Element | Tribe |
 |------|--------|--------|-------|---------|-------|
 | 2 | 30 | 10 | 0 | [[Elements/Dark\|Dark]] | [[Tribes/Assassin\|Assassin]] |
 

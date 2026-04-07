@@ -1,6 +1,6 @@
 # RGB Lasercannon
 
-| Cost | Attack | Health | Range | Element | Tribe |
+| Cost | 🗡️ | 🛡️ | Range | Element | Tribe |
 |------|--------|--------|-------|---------|-------|
 | 3 | 25 | 16 | 1 | [[Elements/Metal\|Metal]] | [[Tribes/Robot\|Robot]] |
 

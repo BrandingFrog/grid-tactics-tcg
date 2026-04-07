@@ -1,6 +1,6 @@
 # Wind Archer
 
-| Cost | Attack | Health | Range | Element | Tribe |
+| Cost | 🗡️ | 🛡️ | Range | Element | Tribe |
 |------|--------|--------|-------|---------|-------|
 | 2 | 20 | 20 | 2 | [[Elements/Wood\|Wood]] | [[Tribes/Archer\|Archer]] |
 

@@ -8,7 +8,7 @@ Game rules and keyword behaviors. See [[Glossary]] for the keyword cheat-sheet.
 - [[Range and Attacks]] — Melee vs Range X
 - [[Move and Attack]] — melee chain (Phase 14.1)
 - [[React Window]] — opponent interrupt
-- [[Win Conditions]] — sacrifice + HP
+- [[Win Conditions]] — sacrifice + 🛡️
 
 ## Effects & Statuses
 - [[Burn]]

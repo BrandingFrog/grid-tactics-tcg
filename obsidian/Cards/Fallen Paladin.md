@@ -1,6 +1,6 @@
 # Fallen Paladin
 
-| Cost | Attack | Health | Range | Element | Tribe |
+| Cost | 🗡️ | 🛡️ | Range | Element | Tribe |
 |------|--------|--------|-------|---------|-------|
 | 5 | 16 | 42 | 0 | [[Elements/Light\|Light]] | [[Tribes/Undead\|Undead]] |
 

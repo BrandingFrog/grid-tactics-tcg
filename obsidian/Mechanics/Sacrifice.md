@@ -1,6 +1,6 @@
 # Sacrifice
 
-A minion that reaches the opponent's back row may sacrifice itself, dealing its **Attack value** as damage to the opponent.
+A minion that reaches the opponent's back row may sacrifice itself, dealing its **🗡️ value** as damage to the opponent.
 
 ## Rules
 - Only legal from the opponent's back row.

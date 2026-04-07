@@ -1,6 +1,6 @@
 # Furryroach
 
-| Cost | Attack | Health | Range | Element | Tribe |
+| Cost | 🗡️ | 🛡️ | Range | Element | Tribe |
 |------|--------|--------|-------|---------|-------|
 | 1 | 10 | 10 | 0 | [[Elements/Earth\|Earth]] | [[Tribes/Insect\|Insect]] |
 

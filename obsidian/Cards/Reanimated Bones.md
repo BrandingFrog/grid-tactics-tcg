@@ -1,6 +1,6 @@
 # Reanimated Bones
 
-| Cost | Attack | Health | Range | Element | Tribe |
+| Cost | 🗡️ | 🛡️ | Range | Element | Tribe |
 |------|--------|--------|-------|---------|-------|
 | 1 | 5 | 5 | 0 | [[Elements/Earth\|Earth]] | [[Tribes/Undead\|Undead]] |
 
