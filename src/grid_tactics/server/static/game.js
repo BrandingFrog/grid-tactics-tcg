@@ -251,29 +251,64 @@ function onChatMessage(data) {
         if (unreadDot) unreadDot.style.display = '';
     }
 
-    // Easter egg: opponent typed "egg" -> splat their egg on our screen
+    // Easter egg: opponent typed a nudge keyword -> splat on our screen
     // (MSN-messenger-nudge style). Only fires for recipients, never the sender.
-    if (!isOwn && data.text && data.text.trim().toLowerCase() === 'egg') {
-        triggerEggSplat();
+    if (!isOwn && data.text) {
+        var keyword = data.text.trim().toLowerCase();
+        if (NUDGES[keyword]) NUDGES[keyword]();
     }
 }
 
-function triggerEggSplat() {
-    // Remove any existing splat so consecutive eggs don't pile up
-    var existing = document.getElementById('egg-splat-overlay');
+// Generic chat-nudge runner. Mounts a fixed full-screen overlay with
+// the given inner HTML + duration, removes itself when done.
+function runNudge(id, innerHtml, durationMs) {
+    var existing = document.getElementById(id);
     if (existing) existing.remove();
     var overlay = document.createElement('div');
-    overlay.id = 'egg-splat-overlay';
-    overlay.className = 'egg-splat-overlay';
-    overlay.innerHTML =
-        '<div class="egg-splat-egg">🥚</div>' +
-        '<div class="egg-splat-splat">🍳</div>';
+    overlay.id = id;
+    overlay.className = 'nudge-overlay ' + id;
+    overlay.innerHTML = innerHtml;
     document.body.appendChild(overlay);
-    // Self-remove after the animation finishes
     setTimeout(function() {
         if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
-    }, 3200);
+    }, durationMs);
 }
+
+var NUDGES = {
+    'egg': function() {
+        runNudge('nudge-egg',
+            '<div class="egg-splat-egg">🥚</div>' +
+            '<div class="egg-splat-splat">🍳</div>',
+            3200);
+    },
+    'boom': function() {
+        runNudge('nudge-boom',
+            '<div class="boom-bomb">💣</div>' +
+            '<div class="boom-flash"></div>' +
+            '<div class="boom-burst">💥</div>',
+            3000);
+    },
+    'rain': function() {
+        // Generate 40 rain drops at random horizontal positions
+        var drops = '';
+        for (var i = 0; i < 40; i++) {
+            var left = Math.floor(Math.random() * 100);
+            var delay = (Math.random() * 1.2).toFixed(2);
+            var dur = (1.0 + Math.random() * 0.8).toFixed(2);
+            drops += '<div class="rain-drop" style="left:' + left + 'vw;' +
+                     'animation-delay:' + delay + 's;' +
+                     'animation-duration:' + dur + 's;">💧</div>';
+        }
+        runNudge('nudge-rain',
+            '<div class="rain-cloud">☁️</div>' + drops,
+            3500);
+    },
+    'kiss': function() {
+        runNudge('nudge-kiss',
+            '<div class="kiss-mark">💋</div>',
+            3000);
+    }
+};
 
 // =============================================
 // Section 5: Lobby Event Handlers

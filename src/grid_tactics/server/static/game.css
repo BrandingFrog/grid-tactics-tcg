@@ -2539,14 +2539,18 @@ body {
 }
 
 /* Phase 14.1: Decline post-move attack button */
-/* MSN-Messenger-style egg-nudge easter egg.
-   Fires on the recipient's screen when opponent types "egg" in chat. */
-.egg-splat-overlay {
+/* MSN-Messenger-style chat nudges. Triggered when opponent types
+   keywords ("egg", "boom", "rain", "kiss") in chat. */
+.nudge-overlay {
   position: fixed;
   inset: 0;
   z-index: 9999;
   pointer-events: none;
   overflow: hidden;
+}
+
+/* --- egg --- */
+.nudge-overlay.nudge-egg {
   animation: egg-screen-shake 600ms cubic-bezier(.36,.07,.19,.97) 700ms 1;
 }
 
@@ -2594,6 +2598,112 @@ body {
   20%, 80% { transform: translate(4px, -2px); }
   30%, 50%, 70% { transform: translate(-6px, 3px); }
   40%, 60% { transform: translate(6px, -3px); }
+}
+
+/* --- boom --- bomb drops, flash, burst --- */
+.nudge-overlay.nudge-boom {
+  animation: egg-screen-shake 700ms cubic-bezier(.36,.07,.19,.97) 600ms 1;
+}
+.boom-bomb {
+  position: absolute;
+  top: -20vh;
+  left: 50%;
+  font-size: 180px;
+  line-height: 1;
+  transform: translateX(-50%) rotate(0deg);
+  filter: drop-shadow(0 8px 20px rgba(0,0,0,0.7));
+  animation: boom-drop 600ms cubic-bezier(.55,.05,.85,.45) forwards;
+}
+.boom-flash {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at center, rgba(255,240,180,0.95) 0%, rgba(255,140,40,0.6) 30%, rgba(255,60,20,0) 70%);
+  opacity: 0;
+  animation: boom-flash 250ms 600ms ease-out forwards;
+}
+.boom-burst {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  font-size: 320px;
+  line-height: 1;
+  transform: translate(-50%, -50%) scale(0);
+  opacity: 0;
+  filter: drop-shadow(0 6px 20px rgba(255,80,0,0.7));
+  animation: boom-burst-pop 400ms 600ms cubic-bezier(.16,1.5,.3,1) forwards,
+             boom-burst-fade 1700ms 1000ms ease-out forwards;
+}
+@keyframes boom-drop {
+  0%   { top: -20vh; }
+  100% { top: 50%; transform: translateX(-50%) translateY(-50%) rotate(540deg); }
+}
+@keyframes boom-flash {
+  0%   { opacity: 0; }
+  20%  { opacity: 1; }
+  100% { opacity: 0; }
+}
+@keyframes boom-burst-pop {
+  to { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+}
+@keyframes boom-burst-fade {
+  0%   { opacity: 1; }
+  100% { opacity: 0; transform: translate(-50%, -50%) scale(1.3); }
+}
+
+/* --- rain --- cloud + 40 falling drops --- */
+.nudge-overlay.nudge-rain {
+  background: linear-gradient(to bottom, rgba(20,30,60,0.45), rgba(20,30,60,0.15));
+}
+.rain-cloud {
+  position: absolute;
+  top: 4vh;
+  left: 50%;
+  font-size: 140px;
+  line-height: 1;
+  transform: translateX(-50%);
+  filter: drop-shadow(0 6px 16px rgba(0,0,0,0.6));
+  animation: rain-cloud-sway 2500ms ease-in-out infinite alternate;
+}
+.rain-drop {
+  position: absolute;
+  top: -8vh;
+  font-size: 32px;
+  line-height: 1;
+  animation-name: rain-fall;
+  animation-timing-function: linear;
+  animation-iteration-count: 2;
+  filter: drop-shadow(0 2px 4px rgba(0,0,0,0.5));
+}
+@keyframes rain-cloud-sway {
+  0%   { transform: translateX(-55%); }
+  100% { transform: translateX(-45%); }
+}
+@keyframes rain-fall {
+  0%   { top: -8vh; opacity: 1; }
+  90%  { opacity: 1; }
+  100% { top: 110vh; opacity: 0; }
+}
+
+/* --- kiss --- lipstick mark stamps and lingers --- */
+.kiss-mark {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  font-size: 260px;
+  line-height: 1;
+  transform: translate(-50%, -50%) scale(0) rotate(-25deg);
+  opacity: 0;
+  filter: drop-shadow(0 8px 20px rgba(220,40,80,0.7));
+  animation: kiss-stamp 350ms cubic-bezier(.16,1.5,.3,1) forwards,
+             kiss-fade 1500ms 1500ms ease-out forwards;
+}
+@keyframes kiss-stamp {
+  0%   { transform: translate(-50%, -50%) scale(0) rotate(-25deg); opacity: 0; }
+  60%  { transform: translate(-50%, -50%) scale(1.25) rotate(-12deg); opacity: 1; }
+  100% { transform: translate(-50%, -50%) scale(1) rotate(-15deg); opacity: 1; }
+}
+@keyframes kiss-fade {
+  to { opacity: 0; }
 }
 
 /* Hand action bar — groups Draw Card / Skip React / Decline Attack
