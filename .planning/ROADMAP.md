@@ -169,6 +169,7 @@ Plans:
 - [x] **Phase 12: State Serialization & Game Flow** - Hidden-info view filtering, action validation, legal action emission, complete game playable via WebSocket client (completed 2026-04-05)
 - [x] **Phase 13: Board & Hand UI** - 5x5 CSS Grid board, hand display, mana/HP bars, and turn phase indicator in the browser (completed 2026-04-05)
 - [x] **Phase 14: Gameplay Interaction** - Action submission via click targeting, react window UI, and game over screen (completed 2026-04-06)
+- [x] **Phase 14.1: Melee Move-and-Attack** - Player-driven Advance-Wars-style melee chain (move then choose attack target or decline); ranged minions get no chain (completed 2026-04-07)
 - [ ] **Phase 15: Resilience & Polish** - Reconnection handling, scrollable game log, and rematch flow
 
 ## Phase Details
@@ -232,6 +233,17 @@ Plans:
 - [ ] 14-02-PLAN.md -- Game over modal: VICTORY/DEFEAT overlay with reason, final HP, back-to-lobby flow (PLAY-03)
 **UI hint**: yes
 
+### Phase 14.1: Melee Move-and-Attack
+**Goal:** Replace auto-attack-after-move with player-driven Advance-Wars-style melee chain (move then choose attack target or decline). Ranged minions get no chain.
+**Depends on**: Phase 14
+**Plans:** 5/5 plans complete
+Plans:
+- [x] 14.1-01-PLAN.md -- Python engine pending state + remove auto-attack
+- [x] 14.1-02-PLAN.md -- Tensor engine parity
+- [x] 14.1-03-PLAN.md -- Legal-action mask pending awareness
+- [x] 14.1-04-PLAN.md -- Frontend two-step flow + range footprint
+- [x] 14.1-05-PLAN.md -- Roadmap/state update + smoke test
+
 ### Phase 15: Resilience & Polish
 **Goal**: The game handles real-world conditions -- disconnections recover gracefully, a game log tracks what happened, and players can rematch without creating a new room
 **Depends on**: Phase 14
@@ -264,4 +276,5 @@ Phases execute in numeric order: 11 -> 12 -> 13 -> 14 -> 15
 | 12. State Serialization & Game Flow | v1.1 | 2/2 | Complete    | 2026-04-05 |
 | 13. Board & Hand UI | v1.1 | 3/3 | Complete   | 2026-04-05 |
 | 14. Gameplay Interaction | v1.1 | 2/2 | Complete | 2026-04-06 |
+| 14.1 Melee Move-and-Attack | v1.1 | 5/5 | Complete | 2026-04-07 |
 | 15. Resilience & Polish | v1.1 | 0/TBD | Not started | - |
