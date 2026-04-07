@@ -56,6 +56,10 @@ let sessionToken = null;     // from room_created/room_joined
 let roomCode = null;         // current room code
 let opponentName = '';       // from game_start
 let myName = '';             // display name entered in lobby
+// Phase 14.4 spectator-mode: client-side flags. isSpectator gates all
+// action-submitting code paths; spectatorGodMode toggles dual-hand rendering.
+let isSpectator = false;
+let spectatorGodMode = false;
 
 // Game interaction state
 let selectedHandIdx = null;  // index of selected hand card (for PLAY_CARD)
@@ -162,6 +166,20 @@ function initSocket() {
     socket.on('card_defs', onCardDefs);
     socket.on('chat_message', onChatMessage);
     socket.on('rematch_waiting', onRematchWaiting);
+    socket.on('spectator_joined', onSpectatorJoined);
+}
+
+// Phase 14.4: ack from server after spectate_room. Flips client into
+// spectator mode; transition to the game screen happens on game_start
+// (emitted immediately by the server when a game is already underway) or
+// when the next game begins. We intentionally DO NOT call showScreen here
+// because the lobby may not yet have a game in progress.
+function onSpectatorJoined(data) {
+    isSpectator = true;
+    spectatorGodMode = !!(data && data.god_mode);
+    if (data && data.session_token) sessionToken = data.session_token;
+    if (data && data.room_code) roomCode = data.room_code;
+    showLobbyStatus('Spectating room ' + (roomCode || '') + (spectatorGodMode ? ' (GOD MODE)' : '') + '. Waiting for game…', 'info');
 }
 
 // =============================================
@@ -518,6 +536,29 @@ function setupLobbyHandlers() {
             myName = name;
             saveDisplayName(name);
             socket.emit('join_room', { display_name: name, room_code: code });
+        });
+    }
+
+    // Spectate Room (Phase 14.4)
+    var btnSpectate = document.getElementById('btn-spectate-room');
+    if (btnSpectate) {
+        btnSpectate.addEventListener('click', function() {
+            var codeInput2 = document.getElementById('input-room-code');
+            var name = getCurrentDisplayName();
+            var code = codeInput2 ? codeInput2.value.trim().toUpperCase() : '';
+            if (!name) {
+                showLobbyStatus('Please enter a display name.', 'error');
+                return;
+            }
+            if (!code) {
+                showLobbyStatus('Please enter a room code.', 'error');
+                return;
+            }
+            var godCb = document.getElementById('god-mode-checkbox');
+            var god_mode = !!(godCb && godCb.checked);
+            myName = name;
+            saveDisplayName(name);
+            socket.emit('spectate_room', { display_name: name, room_code: code, god_mode: god_mode });
         });
     }
 

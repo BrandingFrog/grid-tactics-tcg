@@ -61,7 +61,11 @@
         <div class="join-row">
           <input type="text" id="input-room-code" class="input input-code" placeholder="XXXXXX" maxlength="6">
           <button class="btn btn-secondary" id="btn-join-room">Join Room</button>
+          <button class="btn btn-secondary" id="btn-spectate-room">Spectate Room</button>
         </div>
+        <label class="god-mode-label">
+          <input type="checkbox" id="god-mode-checkbox" /> God Mode (see both hands + decks)
+        </label>
       </div>
 
       <!-- Room Panel (hidden until in room) -->
@@ -221,6 +225,7 @@
         <!-- Room Bar -->
         <div class="room-bar">
           <span class="room-bar-code" id="game-room-code"></span>
+          <span id="spectating-badge">SPECTATING</span>
           <div class="turn-banner" id="turn-banner">
             <span class="turn-dot pulse-dot" id="turn-dot"></span>
             <span class="turn-text" id="turn-text">WAITING</span>
