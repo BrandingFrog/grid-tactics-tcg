@@ -11,6 +11,7 @@ from grid_tactics.server.app import socketio
 from grid_tactics.server.room_manager import RoomManager
 from grid_tactics.server.view_filter import (
     enrich_pending_post_move_attack,
+    enrich_pending_tutor_for_viewer,
     filter_state_for_player,
 )
 
@@ -101,6 +102,7 @@ def _emit_state_to_players(session, state):
 
     for idx in (0, 1):
         filtered = filter_state_for_player(state_dict, idx)
+        enrich_pending_tutor_for_viewer(state, filtered, idx, session.library)
         emit("state_update", {
             "state": filtered,
             "legal_actions": serialized_actions if idx == decision_idx else [],
@@ -114,6 +116,7 @@ def _emit_game_over(session, state):
     enrich_pending_post_move_attack(state, state_dict, session.library)
     for idx in (0, 1):
         filtered = filter_state_for_player(state_dict, idx)
+        enrich_pending_tutor_for_viewer(state, filtered, idx, session.library)
         emit("game_over", {
             "winner": int(state.winner) if state.winner is not None else None,
             "final_state": filtered,
@@ -214,6 +217,7 @@ def register_events(room_manager: RoomManager) -> None:
             for idx in (0, 1):
                 opponent_idx = 1 - idx
                 filtered = filter_state_for_player(state_dict, idx)
+                enrich_pending_tutor_for_viewer(session.state, filtered, idx, session.library)
                 emit(
                     "game_start",
                     {
@@ -273,6 +277,7 @@ def register_events(room_manager: RoomManager) -> None:
         for idx in (0, 1):
             opponent_idx = 1 - idx
             filtered = filter_state_for_player(state_dict, idx)
+            enrich_pending_tutor_for_viewer(new_session.state, filtered, idx, new_session.library)
             sid = new_session.player_sids[idx]
             if sid is None:
                 continue

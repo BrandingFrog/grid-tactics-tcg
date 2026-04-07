@@ -125,3 +125,72 @@ def enrich_pending_post_move_attack(state, state_dict: dict, library) -> None:
         if _tile_in_attack_range(a_pos, m_pos, attack_range):
             valid_targets.append([m_pos[0], m_pos[1]])
     state_dict["pending_attack_valid_targets"] = valid_targets
+
+
+def enrich_pending_tutor_for_viewer(
+    state, filtered_dict: dict, viewer_idx: int, library
+) -> None:
+    """Add Phase 14.2 pending_tutor fields to a per-viewer filtered state dict.
+
+    Asymmetric: the caster (whose turn-to-pick it is) gets the resolved match
+    list with full card identities; the opponent only sees a count and the
+    caster's player index. Always sets `pending_tutor_player_idx` so any
+    client can detect that a tutor selection is in progress.
+
+    Mutates filtered_dict in place. Adds:
+      - pending_tutor_player_idx: int | None
+      - pending_tutor_match_count: int                       (always)
+      - pending_tutor_matches: list[{card_numeric_id, deck_idx, match_idx}]
+            (caster only; empty list for opponent or when no pending)
+      - pending_tutor_total_copies_owned: dict[str(card_id) -> int]
+            (caster only; counts copies of each matching card across the
+             caster's whole pool — deck + hand + board minions — at the
+             moment the tutor was triggered)
+    """
+    pending_idx = getattr(state, "pending_tutor_player_idx", None)
+    matches = getattr(state, "pending_tutor_matches", ()) or ()
+
+    filtered_dict["pending_tutor_player_idx"] = pending_idx
+    filtered_dict["pending_tutor_match_count"] = len(matches)
+    filtered_dict["pending_tutor_matches"] = []
+    filtered_dict["pending_tutor_total_copies_owned"] = {}
+
+    if pending_idx is None or not matches:
+        return
+
+    if viewer_idx != pending_idx:
+        # Opponent view — only the count is exposed.
+        return
+
+    caster = state.players[pending_idx]
+    deck = list(caster.deck)
+
+    resolved: list[dict] = []
+    matching_card_ids: set[int] = set()
+    for match_idx, deck_idx in enumerate(matches):
+        if 0 <= deck_idx < len(deck):
+            numeric_id = int(deck[deck_idx])
+            resolved.append(
+                {
+                    "card_numeric_id": numeric_id,
+                    "deck_idx": int(deck_idx),
+                    "match_idx": int(match_idx),
+                }
+            )
+            matching_card_ids.add(numeric_id)
+    filtered_dict["pending_tutor_matches"] = resolved
+
+    # Total copies owned across the caster's whole pool: deck + hand + board.
+    # Used by the modal to render "X of Y copies remaining in deck".
+    totals: dict[str, int] = {}
+    pool: list[int] = []
+    pool.extend(int(x) for x in caster.deck)
+    pool.extend(int(x) for x in caster.hand)
+    for m in state.minions:
+        if m.owner == pending_idx:
+            pool.append(int(m.card_numeric_id))
+    for nid in pool:
+        if nid in matching_card_ids:
+            key = str(nid)
+            totals[key] = totals.get(key, 0) + 1
+    filtered_dict["pending_tutor_total_copies_owned"] = totals
