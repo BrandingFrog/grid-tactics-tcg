@@ -853,7 +853,7 @@ function showCardTooltip(numericId) {
     if (c.attack != null) statsHtml += '<span style="color:var(--red)">ATK ' + c.attack + '</span>';
     if (c.health != null) statsHtml += '<span style="color:var(--green)">HP ' + c.health + '</span>';
     if (c.card_type === 0 && c.attack_range != null) {
-        statsHtml += '<span>' + (c.attack_range <= 1 ? 'Melee' : 'Range ' + c.attack_range) + '</span>';
+        statsHtml += '<span>' + (c.attack_range === 0 ? 'Melee' : 'Range ' + c.attack_range) + '</span>';
     }
     document.getElementById('tooltip-stats').innerHTML = statsHtml;
 
@@ -967,7 +967,7 @@ function showCardTooltip(numericId) {
             if (rc.tribe) rStats += ' | ' + rc.tribe;
             rStats += ' | ' + rElem.name;
             if (rc.attack != null) rStats += ' | ATK ' + rc.attack + ' | HP ' + rc.health;
-            if (rc.attack_range != null) rStats += ' | ' + (rc.attack_range <= 1 ? 'Melee' : 'Range ' + rc.attack_range);
+            if (rc.attack_range != null) rStats += ' | ' + (rc.attack_range === 0 ? 'Melee' : 'Range ' + rc.attack_range);
             relHtml += '<div class="tooltip-related-stats">' + rStats + '</div>';
             var rEffect = '';
             if (rc.unique) rEffect += 'Unique. ';
@@ -1012,7 +1012,7 @@ function showGameTooltip(numericId, anchorEl) {
     if (c.attack != null) statsHtml += '<span style="color:var(--red)">ATK ' + c.attack + '</span>';
     if (c.health != null) statsHtml += '<span style="color:var(--green)">HP ' + c.health + '</span>';
     if (c.card_type === 0 && c.attack_range != null) {
-        statsHtml += '<span>' + (c.attack_range <= 1 ? 'Melee' : 'Range ' + c.attack_range) + '</span>';
+        statsHtml += '<span>' + (c.attack_range === 0 ? 'Melee' : 'Range ' + c.attack_range) + '</span>';
     }
     tooltip.querySelector('.gtt-stats').innerHTML = statsHtml;
 
