@@ -1,4 +1,11 @@
-"""Phase 14.1 Wave 2 — tensor engine parity tests for pending post-move attack.
+"""Phase 14.1 / 14.2 Wave 2 — tensor engine parity tests.
+
+Phase 14.1: pending post-move attack lifecycle.
+Phase 14.2: pending tutor lifecycle (entry, select, decline, dict-selector,
+no-match short-circuit). Per the 14.1-02 precedent there is no python<->tensor
+state-diff bridge; parity is verified via shared observable invariants and a
+mirrored Python-engine sanity check.
+
 
 These tests verify that the tensor engine matches the Python engine semantics
 (Wave 1) for the new move+attack/decline mechanic. They place minions directly
@@ -233,3 +240,209 @@ class TestPendingPostMoveAttack:
 
         assert s.minion_health[0, 3].item() == hp_target_before, "wrong-attacker ATTACK was gated"
         assert s.pending_post_move_attacker[0].item() == 0, "pending preserved"
+
+
+# ---------------------------------------------------------------------------
+# Phase 14.2: pending_tutor lifecycle parity
+# ---------------------------------------------------------------------------
+
+
+def _play_card_action(hand_idx: int, target_flat: int) -> int:
+    """PLAY_CARD encoding: PLAY_CARD_BASE + hand_idx * 25 + target_flat."""
+    from grid_tactics.tensor_engine.constants import PLAY_CARD_BASE
+    return PLAY_CARD_BASE + hand_idx * 25 + target_flat
+
+
+def _tutor_select_action(match_idx: int) -> int:
+    """TUTOR_SELECT reuses PLAY_CARD slot space: hand_idx == match_idx."""
+    from grid_tactics.tensor_engine.constants import PLAY_CARD_BASE
+    return PLAY_CARD_BASE + match_idx * 25 + 0  # target_flat ignored on select
+
+
+def _inject_tutor_setup(setup, tutor_card_id_str: str):
+    """Build a 1-game tensor engine with one tutor card in hand and a deck
+    containing copies of its target. Returns (engine, lib, device, caster_idx)."""
+    lib, ct, _, _ = setup
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+    # Build a deck of 40 cards: stuff red_diodebot copies for blue tutor target,
+    # plus filler. Caster is P1 (active_player == 0).
+    target_cid = lib.get_numeric_id("red_diodebot")
+    tutor_cid = lib.get_numeric_id(tutor_card_id_str)
+    filler_cid = lib.get_numeric_id("rat")  # benign filler
+
+    # P1 deck: [red_diodebot x6, then filler]
+    p1_deck = [target_cid] * 6 + [filler_cid] * (40 - 6)
+    p2_deck = [filler_cid] * 40
+
+    deck_p1 = torch.tensor([p1_deck], dtype=torch.int32, device=device)
+    deck_p2 = torch.tensor([p2_deck], dtype=torch.int32, device=device)
+
+    engine = TensorGameEngine(1, ct, deck_p1, deck_p2, device)
+    engine.reset_batch()
+    s = engine.state
+
+    # Clear board so deploy succeeds anywhere
+    s.board[:] = -1
+    s.minion_alive[:] = False
+    s.next_minion_slot[:] = 0
+
+    # Force the tutor card into P1 hand slot 0 (overwrite existing).
+    s.hands[0, 0, 0] = tutor_cid
+    # Make sure mana is sufficient
+    s.player_mana[0, 0] = 10
+    s.active_player[0] = 0
+    s.phase[0] = 0
+    return engine, lib, device, 0
+
+
+class TestPendingTutorParity:
+    def test_tensor_tutor_pending_entry(self, setup):
+        """Playing Blue Diodebot enters pending_tutor with red_diodebot deck matches."""
+        engine, lib, device, _ = _inject_tutor_setup(setup, "blue_diodebot")
+        s = engine.state
+
+        deck_size_before = s.deck_sizes[0, 0].item()
+        hand_size_before = s.hand_sizes[0, 0].item()
+
+        # Play tutor card (hand idx 0) onto an empty cell. P1 back row is row 0;
+        # any open cell works since board was cleared.
+        engine.step_batch(torch.tensor([_play_card_action(0, _flat(0, 0))],
+                                       dtype=torch.int64, device=device))
+
+        assert s.pending_tutor_player[0].item() == 0, "caster idx must be set"
+        assert s.phase[0].item() == 0, "react deferred while pending_tutor set"
+        # Deck unchanged pre-pick
+        assert s.deck_sizes[0, 0].item() == deck_size_before
+        # Match slots populated: 6 red_diodebot copies in deck
+        match_row = s.pending_tutor_matches[0].tolist()
+        non_pad = [m for m in match_row if m >= 0]
+        assert len(non_pad) == 6, f"expected 6 matches, got {non_pad}"
+        # All matched indices point at red_diodebot
+        target_cid = lib.get_numeric_id("red_diodebot")
+        for d in non_pad:
+            assert s.decks[0, 0, d].item() == target_cid
+
+    def test_tensor_tutor_select_resolves(self, setup):
+        """TUTOR_SELECT picks a match, hand grows by tutored card, pending clears, react fires."""
+        engine, lib, device, _ = _inject_tutor_setup(setup, "blue_diodebot")
+        s = engine.state
+
+        engine.step_batch(torch.tensor([_play_card_action(0, _flat(0, 0))],
+                                       dtype=torch.int64, device=device))
+        assert s.pending_tutor_player[0].item() == 0
+
+        deck_size_pre = s.deck_sizes[0, 0].item()
+        hand_size_pre = s.hand_sizes[0, 0].item()
+        target_cid = lib.get_numeric_id("red_diodebot")
+
+        # Select match index 0
+        engine.step_batch(torch.tensor([_tutor_select_action(0)],
+                                       dtype=torch.int64, device=device))
+
+        assert s.pending_tutor_player[0].item() == -1, "pending cleared"
+        assert s.phase[0].item() == 1, "react phase entered after resolve"
+        assert s.deck_sizes[0, 0].item() == deck_size_pre - 1
+        assert s.hand_sizes[0, 0].item() == hand_size_pre + 1
+        # The newly added hand slot should hold a red_diodebot
+        new_slot = s.hand_sizes[0, 0].item() - 1
+        assert s.hands[0, 0, new_slot].item() == target_cid
+
+    def test_tensor_tutor_decline_clears_pending(self, setup):
+        """DECLINE_TUTOR (PASS slot 1001) clears pending without moving cards."""
+        engine, lib, device, _ = _inject_tutor_setup(setup, "blue_diodebot")
+        s = engine.state
+
+        engine.step_batch(torch.tensor([_play_card_action(0, _flat(0, 0))],
+                                       dtype=torch.int64, device=device))
+        deck_size_pre = s.deck_sizes[0, 0].item()
+        hand_size_pre = s.hand_sizes[0, 0].item()
+
+        engine.step_batch(torch.tensor([PASS_IDX], dtype=torch.int64, device=device))
+
+        assert s.pending_tutor_player[0].item() == -1
+        assert s.phase[0].item() == 1, "react entered after decline"
+        assert s.deck_sizes[0, 0].item() == deck_size_pre, "deck unchanged"
+        assert s.hand_sizes[0, 0].item() == hand_size_pre, "hand unchanged"
+
+    def test_tensor_tutor_no_matches_skips_pending(self, setup):
+        """Tutor played with zero deck matches: pending stays unset, react fires."""
+        lib, ct, _, _ = setup
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        tutor_cid = lib.get_numeric_id("blue_diodebot")
+        filler_cid = lib.get_numeric_id("rat")
+        # Deck has zero red_diodebots
+        p1_deck = [filler_cid] * 40
+        p2_deck = [filler_cid] * 40
+        deck_p1 = torch.tensor([p1_deck], dtype=torch.int32, device=device)
+        deck_p2 = torch.tensor([p2_deck], dtype=torch.int32, device=device)
+        engine = TensorGameEngine(1, ct, deck_p1, deck_p2, device)
+        engine.reset_batch()
+        s = engine.state
+        s.board[:] = -1
+        s.minion_alive[:] = False
+        s.next_minion_slot[:] = 0
+        s.hands[0, 0, 0] = tutor_cid
+        s.player_mana[0, 0] = 10
+        s.active_player[0] = 0
+        s.phase[0] = 0
+
+        engine.step_batch(torch.tensor([_play_card_action(0, _flat(0, 0))],
+                                       dtype=torch.int64, device=device))
+
+        assert s.pending_tutor_player[0].item() == -1, "no matches -> no pending"
+        assert s.phase[0].item() == 1, "react entered immediately"
+
+    def test_tensor_tutor_mutex_with_pending_post_move(self, setup):
+        """Mutual exclusion: cannot have both pending flavours active in one game."""
+        engine, lib, device, _ = _inject_tutor_setup(setup, "blue_diodebot")
+        s = engine.state
+        # Pretend a pending_post_move_attacker is already set (force it).
+        s.pending_post_move_attacker[0] = 0
+        s.minion_alive[0, 0] = True  # not strictly required for the assertion path
+
+        with pytest.raises(AssertionError, match="pending_tutor"):
+            engine.step_batch(torch.tensor([_play_card_action(0, _flat(0, 0))],
+                                           dtype=torch.int64, device=device))
+
+
+class TestPythonEngineTutorSanity:
+    """Sanity-check the Python engine pending_tutor flow alongside the tensor
+    tests. This is the cross-engine 'parity' lever per the 14.1-02 precedent:
+    we don't bridge state, we drive both engines through the same conceptual
+    sequence and assert each behaves correctly on its own observables."""
+
+    def test_python_engine_tutor_lifecycle(self, setup):
+        from dataclasses import replace
+        from grid_tactics.game_state import GameState
+        from grid_tactics.action_resolver import resolve_action
+        from grid_tactics.actions import Action
+        from grid_tactics.enums import ActionType
+
+        lib, _, _, _ = setup
+        blue_id = lib.get_numeric_id("blue_diodebot")
+        red_id = lib.get_numeric_id("red_diodebot")
+        rat_id = lib.get_numeric_id("rat")
+
+        # Decks are tuples of numeric card ids
+        deck_p1 = tuple([red_id] * 6 + [rat_id] * 24)
+        deck_p2 = tuple([rat_id] * 30)
+        state, _rng = GameState.new_game(seed=0, deck_p1=deck_p1, deck_p2=deck_p2)
+
+        # Force blue diodebot into P1 hand slot 0; ensure mana
+        p1 = state.players[0]
+        new_hand = (blue_id,) + p1.hand[1:] if len(p1.hand) >= 1 else (blue_id,)
+        p1 = replace(p1, hand=new_hand, current_mana=10)
+        state = replace(state, players=(p1, state.players[1]))
+
+        # Play blue diodebot at (0,0) (P1 back row)
+        play = Action(action_type=ActionType.PLAY_CARD, card_index=0, position=(0, 0))
+        state = resolve_action(state, play, lib)
+        assert state.pending_tutor_player_idx == 0
+        assert len(state.pending_tutor_matches) >= 1, "deck has 6 red_diodebots"
+
+        # Decline path
+        decline = Action(action_type=ActionType.DECLINE_TUTOR)
+        state2 = resolve_action(state, decline, lib)
+        assert state2.pending_tutor_player_idx is None
+        assert state2.pending_tutor_matches == ()
