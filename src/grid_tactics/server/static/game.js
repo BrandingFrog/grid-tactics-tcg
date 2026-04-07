@@ -1798,13 +1798,21 @@ function renderGame() {
     renderSelfInfo();
     renderHand();
     renderActionBar();
+    // Phase 14.3: do not open react window mid-animation; gated because
+    // renderGame runs from applyStateFrame which the AnimationQueue only
+    // calls AFTER the triggering animation completes.
     renderReactBanner();
     // Phase 14.1: if server says a melee minion has just moved and a post-move
     // attack decision is pending, auto-enter the attack-pick UI mode and show
     // the decline button. Must run BEFORE highlightBoard so highlights reflect it.
+    // Phase 14.3: do not open post-move-attack picker mid-animation; the
+    // AnimationQueue guarantees applyStateFrame (which calls renderGame)
+    // only runs AFTER the triggering animation completes.
     syncPendingPostMoveAttackUI();
     // Phase 14.2: pending_tutor modal sync. Caster sees full-card-art picker;
     // opponent sees a passive "Opponent is tutoring…" toast.
+    // Phase 14.3: do not open tutor modal mid-animation; gated by the
+    // AnimationQueue via applyStateFrame as above.
     syncPendingTutorUI();
     // Always refresh highlights — even when it's not my turn — so stale
     // .card-playable classes from the previous render are cleared.
