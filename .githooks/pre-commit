@@ -21,26 +21,34 @@ from pathlib import Path
 
 
 def dublin_now():
-    """Return current time in Europe/Dublin with correct BST/GMT offset.
+    """Return current time with Dublin offset attached.
 
-    Avoids zoneinfo/tzdata Windows issues by computing the last Sunday
-    of March (BST start) and last Sunday of October (GMT resume) directly.
-    BST = UTC+1, GMT = UTC+0. Transitions happen at 01:00 UTC.
+    Uses the OS local clock via datetime.now().astimezone() — works on
+    Windows without tzdata because it asks the OS directly for both the
+    wall-clock time and the current offset. Assumes the dev machine's
+    system timezone is set to Europe/Dublin (or UK/London, same offset).
+    Falls back to a dep-free BST calculator if astimezone() doesn't
+    produce a timezone-aware result.
     """
-    now_utc = datetime.datetime.utcnow()
-    year = now_utc.year
+    try:
+        now = datetime.datetime.now().astimezone()
+        if now.tzinfo is not None:
+            return now
+    except Exception:
+        pass
+    # Fallback: treat local clock as Dublin, compute BST/GMT offset manually
+    now_local = datetime.datetime.now()
+    year = now_local.year
     last_sun_mar = datetime.date(year, 3, 31)
     while last_sun_mar.weekday() != 6:
         last_sun_mar -= datetime.timedelta(days=1)
     last_sun_oct = datetime.date(year, 10, 31)
     while last_sun_oct.weekday() != 6:
         last_sun_oct -= datetime.timedelta(days=1)
-    bst_start = datetime.datetime(year, 3, last_sun_mar.day, 1, 0)
-    bst_end = datetime.datetime(year, 10, last_sun_oct.day, 1, 0)
-    in_bst = bst_start <= now_utc < bst_end
-    offset_hours = 1 if in_bst else 0
-    tz = datetime.timezone(datetime.timedelta(hours=offset_hours))
-    return now_utc.replace(tzinfo=datetime.timezone.utc).astimezone(tz)
+    d = now_local.date()
+    in_bst = datetime.date(year, 3, last_sun_mar.day) <= d < datetime.date(year, 10, last_sun_oct.day)
+    tz = datetime.timezone(datetime.timedelta(hours=1 if in_bst else 0))
+    return now_local.replace(tzinfo=tz)
 
 
 vf = Path("src/grid_tactics/server/static/VERSION.json")
