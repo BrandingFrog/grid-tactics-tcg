@@ -711,3 +711,202 @@ class TestDeployZoneP2:
         )
         with pytest.raises(ValueError, match="[Bb]ack.*row|[Rr]anged|[Dd]eploy"):
             resolve_action(state, action, lib)
+
+
+# ---------------------------------------------------------------------------
+# Phase 14.1: Pending post-move attack state tests
+# ---------------------------------------------------------------------------
+
+
+class TestPendingPostMoveAttack:
+    """Melee minions enter pending-attack state after a productive forward move."""
+
+    def test_melee_move_sets_pending_state_when_target_in_range(self):
+        from grid_tactics.action_resolver import resolve_action
+
+        lib = _make_test_library()
+        attacker = MinionInstance(
+            instance_id=0, card_numeric_id=1, owner=PlayerSide.PLAYER_1,
+            position=(1, 0), current_health=5,
+        )
+        defender = MinionInstance(
+            instance_id=1, card_numeric_id=1, owner=PlayerSide.PLAYER_2,
+            position=(2, 1), current_health=5,
+        )
+        state = _make_state(minions=[attacker, defender])
+        action = Action(action_type=ActionType.MOVE, minion_id=0, position=(2, 0))
+        new_state = resolve_action(state, action, lib)
+
+        assert new_state.pending_post_move_attacker_id == 0
+        assert new_state.phase == TurnPhase.ACTION
+        assert new_state.get_minion(1).current_health == 5
+
+    def test_melee_move_no_pending_when_no_targets(self):
+        from grid_tactics.action_resolver import resolve_action
+
+        lib = _make_test_library()
+        attacker = MinionInstance(
+            instance_id=0, card_numeric_id=1, owner=PlayerSide.PLAYER_1,
+            position=(1, 0), current_health=5,
+        )
+        state = _make_state(minions=[attacker])
+        action = Action(action_type=ActionType.MOVE, minion_id=0, position=(2, 0))
+        new_state = resolve_action(state, action, lib)
+
+        assert new_state.pending_post_move_attacker_id is None
+        assert new_state.phase == TurnPhase.REACT
+
+    def test_ranged_move_never_sets_pending(self):
+        from grid_tactics.action_resolver import resolve_action
+
+        lib = _make_test_library()
+        attacker = MinionInstance(
+            instance_id=0, card_numeric_id=4, owner=PlayerSide.PLAYER_1,
+            position=(0, 0), current_health=3,
+        )
+        defender = MinionInstance(
+            instance_id=1, card_numeric_id=1, owner=PlayerSide.PLAYER_2,
+            position=(2, 1), current_health=5,
+        )
+        state = _make_state(minions=[attacker, defender])
+        action = Action(action_type=ActionType.MOVE, minion_id=0, position=(1, 0))
+        new_state = resolve_action(state, action, lib)
+
+        assert new_state.pending_post_move_attacker_id is None
+        assert new_state.phase == TurnPhase.REACT
+
+    def test_pending_attack_resolves_combat_and_clears_state(self):
+        from grid_tactics.action_resolver import resolve_action
+
+        lib = _make_test_library()
+        attacker = MinionInstance(
+            instance_id=0, card_numeric_id=1, owner=PlayerSide.PLAYER_1,
+            position=(1, 0), current_health=5,
+        )
+        defender = MinionInstance(
+            instance_id=1, card_numeric_id=1, owner=PlayerSide.PLAYER_2,
+            position=(2, 1), current_health=5,
+        )
+        state = _make_state(minions=[attacker, defender])
+        move = Action(action_type=ActionType.MOVE, minion_id=0, position=(2, 0))
+        state = resolve_action(state, move, lib)
+        assert state.pending_post_move_attacker_id == 0
+
+        atk = Action(action_type=ActionType.ATTACK, minion_id=0, target_id=1)
+        new_state = resolve_action(state, atk, lib)
+
+        assert new_state.pending_post_move_attacker_id is None
+        assert new_state.get_minion(0).current_health == 3
+        assert new_state.get_minion(1).current_health == 3
+        assert new_state.phase == TurnPhase.REACT
+        assert new_state.pending_action == atk
+
+    def test_pending_decline_clears_state_with_one_react(self):
+        from grid_tactics.action_resolver import resolve_action
+
+        lib = _make_test_library()
+        attacker = MinionInstance(
+            instance_id=0, card_numeric_id=1, owner=PlayerSide.PLAYER_1,
+            position=(1, 0), current_health=5,
+        )
+        defender = MinionInstance(
+            instance_id=1, card_numeric_id=1, owner=PlayerSide.PLAYER_2,
+            position=(2, 1), current_health=5,
+        )
+        state = _make_state(minions=[attacker, defender])
+        state = resolve_action(
+            state, Action(action_type=ActionType.MOVE, minion_id=0, position=(2, 0)), lib,
+        )
+        assert state.pending_post_move_attacker_id == 0
+
+        decline = Action(action_type=ActionType.DECLINE_POST_MOVE_ATTACK)
+        new_state = resolve_action(state, decline, lib)
+
+        assert new_state.pending_post_move_attacker_id is None
+        assert new_state.get_minion(0).current_health == 5
+        assert new_state.get_minion(1).current_health == 5
+        assert new_state.phase == TurnPhase.REACT
+        assert new_state.pending_action == decline
+
+    def test_pending_state_blocks_unrelated_actions(self):
+        from grid_tactics.action_resolver import resolve_action
+
+        lib = _make_test_library()
+        attacker = MinionInstance(
+            instance_id=0, card_numeric_id=1, owner=PlayerSide.PLAYER_1,
+            position=(1, 0), current_health=5,
+        )
+        defender = MinionInstance(
+            instance_id=1, card_numeric_id=1, owner=PlayerSide.PLAYER_2,
+            position=(2, 1), current_health=5,
+        )
+        state = _make_state(minions=[attacker, defender], p1_hand=(1,))
+        state = resolve_action(
+            state, Action(action_type=ActionType.MOVE, minion_id=0, position=(2, 0)), lib,
+        )
+        assert state.pending_post_move_attacker_id == 0
+
+        with pytest.raises(ValueError, match="[Pp]ending"):
+            resolve_action(state, Action(action_type=ActionType.PASS), lib)
+
+        with pytest.raises(ValueError, match="[Pp]ending"):
+            resolve_action(
+                state,
+                Action(action_type=ActionType.PLAY_CARD, card_index=0, position=(0, 1)),
+                lib,
+            )
+
+        with pytest.raises(ValueError, match="[Pp]ending"):
+            resolve_action(
+                state,
+                Action(action_type=ActionType.MOVE, minion_id=0, position=(3, 0)),
+                lib,
+            )
+
+        with pytest.raises(ValueError, match="[Pp]ending"):
+            resolve_action(
+                state,
+                Action(action_type=ActionType.SACRIFICE, minion_id=0),
+                lib,
+            )
+
+    def test_pending_attack_only_with_pending_attacker(self):
+        from grid_tactics.action_resolver import resolve_action
+
+        lib = _make_test_library()
+        attacker = MinionInstance(
+            instance_id=0, card_numeric_id=1, owner=PlayerSide.PLAYER_1,
+            position=(1, 0), current_health=5,
+        )
+        other = MinionInstance(
+            instance_id=2, card_numeric_id=1, owner=PlayerSide.PLAYER_1,
+            position=(1, 1), current_health=5,
+        )
+        defender = MinionInstance(
+            instance_id=1, card_numeric_id=1, owner=PlayerSide.PLAYER_2,
+            position=(2, 1), current_health=5,
+        )
+        state = _make_state(minions=[attacker, other, defender])
+        state = resolve_action(
+            state, Action(action_type=ActionType.MOVE, minion_id=0, position=(2, 0)), lib,
+        )
+        assert state.pending_post_move_attacker_id == 0
+
+        with pytest.raises(ValueError, match="[Pp]ending"):
+            resolve_action(
+                state,
+                Action(action_type=ActionType.ATTACK, minion_id=2, target_id=1),
+                lib,
+            )
+
+    def test_decline_outside_pending_state_raises(self):
+        from grid_tactics.action_resolver import resolve_action
+
+        lib = _make_test_library()
+        state = _make_state()
+        with pytest.raises(ValueError, match="DECLINE|pending"):
+            resolve_action(
+                state,
+                Action(action_type=ActionType.DECLINE_POST_MOVE_ATTACK),
+                lib,
+            )
