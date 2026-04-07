@@ -3166,9 +3166,18 @@ function showMinionActionMenu(minion, moves, attacks, transforms, canSac) {
         });
         var canActivate = myMana >= ability.mana_cost && abilityActions.length > 0;
         addBtn(ability.name + ' (' + ability.mana_cost + ')', 'ability', function() {
+            hideMinionActionMenu();
+            if (ability.target === 'none') {
+                // Untargeted self-ability -- submit directly.
+                submitAction({
+                    action_type: 11,
+                    minion_id: minion.instance_id,
+                    target_pos: null,
+                });
+                return;
+            }
             selectedAbilityMinionId = minion.instance_id;
             interactionMode = 'activate_target';
-            hideMinionActionMenu();
             highlightBoard();
             renderActionBar();
         }, !canActivate);
@@ -3971,6 +3980,9 @@ function renderBoardMinion(minion) {
         badges.push('<span class="minion-badge badge-buff">⬆️+' + minion.attack_bonus + '🗡️</span>');
     } else if (minion.attack_bonus < 0) {
         badges.push('<span class="minion-badge badge-debuff">⬇️' + minion.attack_bonus + '🗡️</span>');
+    }
+    if (minion.max_health_bonus && minion.max_health_bonus > 0) {
+        badges.push('<span class="minion-badge badge-buff">⬆️+' + minion.max_health_bonus + '❤️</span>');
     }
     var badgesHtml = badges.length
         ? '<div class="minion-badges">' + badges.join('') + '</div>'

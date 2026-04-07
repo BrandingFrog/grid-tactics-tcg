@@ -1,12 +1,15 @@
-"""Ratchanter conjure + aura tests.
+"""Ratchanter rework v2: stacking flat buff + tutor-from-deck.
 
-Covers two locked behaviours:
-  1. Conjure: deploying Ratchanter adds a "rat" card to the owner's hand.
-  2. Aura: while a friendly Ratchanter is alive, every friendly "rat"
-     receives +5/+5 (atk + current_health), plus +1/+1 per Dark Matter
-     stack on the strongest friendly Ratchanter. The buff is continuous
-     -- killing the Ratchanter strips the buff. Multiple Ratchanters do
-     not stack; only the strongest applies.
+The old continuous +5/+5 aura model is GONE. New semantics:
+
+  - Activated ability "Conjure Common Rat" costs 2 mana.
+  - Each cast applies a FLAT stacking buff of (1 + caster.dark_matter_stacks)
+    to every living friendly Rat on the board EXCEPT the caster:
+    +attack_bonus, +max_health_bonus, +current_health (immediately usable).
+  - Each cast also conjures a Common Rat from the caster's deck via the
+    Phase 14.2 tutor machinery. If the deck has zero common rats, the
+    conjure is skipped silently; the buff still applies.
+  - Recasting stacks additively. Buffs persist until the minion dies.
 """
 
 from __future__ import annotations
@@ -14,14 +17,14 @@ from __future__ import annotations
 from dataclasses import replace
 from pathlib import Path
 
+from grid_tactics.action_resolver import resolve_action
+from grid_tactics.actions import Action
 from grid_tactics.board import Board
 from grid_tactics.card_library import CardLibrary
-from grid_tactics.effect_resolver import resolve_effects_for_trigger
-from grid_tactics.enums import PlayerSide, TriggerType, TurnPhase
+from grid_tactics.enums import ActionType, PlayerSide, TurnPhase
 from grid_tactics.game_state import GameState
 from grid_tactics.minion import MinionInstance
 from grid_tactics.player import Player
-from grid_tactics.react_stack import recompute_ratchanter_aura
 from grid_tactics.types import STARTING_HP
 
 
@@ -29,9 +32,9 @@ def _lib() -> CardLibrary:
     return CardLibrary.from_directory(Path("data/cards"))
 
 
-def _empty_state(lib: CardLibrary) -> GameState:
-    p1 = Player(side=PlayerSide.PLAYER_1, hp=STARTING_HP, current_mana=10,
-                max_mana=10, hand=(), deck=(), graveyard=())
+def _empty_state(lib: CardLibrary, mana: int = 10, deck: tuple = ()) -> GameState:
+    p1 = Player(side=PlayerSide.PLAYER_1, hp=STARTING_HP, current_mana=mana,
+                max_mana=10, hand=(), deck=deck, graveyard=())
     p2 = Player(side=PlayerSide.PLAYER_2, hp=STARTING_HP, current_mana=10,
                 max_mana=10, hand=(), deck=(), graveyard=())
     return GameState(
@@ -55,19 +58,35 @@ def _put(state: GameState, m: MinionInstance) -> GameState:
     )
 
 
+def _activate(minion_id: int) -> Action:
+    return Action(
+        action_type=ActionType.ACTIVATE_ABILITY,
+        minion_id=minion_id,
+        target_pos=None,
+    )
+
+
+def _resolve_react_pass(state: GameState, lib: CardLibrary) -> GameState:
+    """Pass through both react windows to get back to the active player."""
+    from grid_tactics.actions import pass_action
+    # P2 passes
+    if state.phase == TurnPhase.REACT:
+        state = resolve_action(state, pass_action(), lib)
+    return state
+
+
 # ---------------------------------------------------------------------------
-# Conjure
+# On-play no longer conjures
 # ---------------------------------------------------------------------------
 
 
-def test_ratchanter_on_play_no_longer_conjures_to_hand():
-    """Ratchanter's on_play conjure was replaced with an activated ability.
-
-    Deploying Ratchanter must NOT add a rat card to the owner's hand any
-    more — the rat is now summoned directly to the board via the activated
-    ability (see test_activated_abilities.py).
-    """
+def test_ratchanter_on_play_does_not_conjure_to_hand():
+    """Deploying Ratchanter must NOT add a rat card to the owner's hand.
+    The on_play conjure was replaced by an activated ability."""
     lib = _lib()
+    from grid_tactics.effect_resolver import resolve_effects_for_trigger
+    from grid_tactics.enums import TriggerType
+
     rat_id = lib.get_numeric_id("rat")
     rc_id = lib.get_numeric_id("ratchanter")
 
@@ -83,72 +102,60 @@ def test_ratchanter_on_play_no_longer_conjures_to_hand():
     )
     assert rat_id not in state.players[0].hand
     assert state.players[0].hand == ()
-    assert state.players[1].hand == ()
 
 
 # ---------------------------------------------------------------------------
-# Aura
+# Ability cost
 # ---------------------------------------------------------------------------
 
 
-def test_aura_applies_5_5_with_zero_dark_matter():
+def test_ability_cost_is_two():
     lib = _lib()
-    rat_id = lib.get_numeric_id("rat")
-    rc_id = lib.get_numeric_id("ratchanter")
-    rat_def = lib.get_by_card_id("rat")
+    rc = lib.get_by_card_id("ratchanter")
+    assert rc.activated_ability.mana_cost == 2
+    assert rc.activated_ability.effect_type == "conjure_rat_and_buff"
+    assert rc.activated_ability.target == "none"
 
-    state = _empty_state(lib)
-    rat = MinionInstance(
-        instance_id=1, card_numeric_id=rat_id,
-        owner=PlayerSide.PLAYER_1, position=(4, 0), current_health=rat_def.health,
-    )
-    rc = MinionInstance(
-        instance_id=2, card_numeric_id=rc_id,
+
+def test_cannot_activate_with_one_mana():
+    lib = _lib()
+    rc_id = lib.get_numeric_id("ratchanter")
+    state = _empty_state(lib, mana=1)
+    state = _put(state, MinionInstance(
+        instance_id=1, card_numeric_id=rc_id,
         owner=PlayerSide.PLAYER_1, position=(4, 2), current_health=30,
-    )
-    state = _put(state, rat)
-    state = _put(state, rc)
-
-    state = recompute_ratchanter_aura(state, lib)
-    new_rat = state.get_minion(1)
-    assert new_rat.attack_bonus == 5
-    assert new_rat.current_health == rat_def.health + 5
-    assert new_rat.ratchanter_aura == 5
+    ))
+    try:
+        resolve_action(state, _activate(1), lib)
+    except ValueError:
+        return
+    raise AssertionError("Expected ValueError for insufficient mana")
 
 
-def test_aura_scales_with_dark_matter_stacks():
+def test_activation_deducts_two_mana():
     lib = _lib()
-    rat_id = lib.get_numeric_id("rat")
     rc_id = lib.get_numeric_id("ratchanter")
-    rat_def = lib.get_by_card_id("rat")
-
-    state = _empty_state(lib)
-    rat = MinionInstance(
-        instance_id=1, card_numeric_id=rat_id,
-        owner=PlayerSide.PLAYER_1, position=(4, 0), current_health=rat_def.health,
-    )
-    rc = MinionInstance(
-        instance_id=2, card_numeric_id=rc_id,
+    state = _empty_state(lib, mana=5)
+    state = _put(state, MinionInstance(
+        instance_id=1, card_numeric_id=rc_id,
         owner=PlayerSide.PLAYER_1, position=(4, 2), current_health=30,
-        dark_matter_stacks=3,
-    )
-    state = _put(state, rat)
-    state = _put(state, rc)
-
-    state = recompute_ratchanter_aura(state, lib)
-    new_rat = state.get_minion(1)
-    assert new_rat.attack_bonus == 8  # 5 + 3
-    assert new_rat.current_health == rat_def.health + 8
-    assert new_rat.ratchanter_aura == 8
+    ))
+    new_state = resolve_action(state, _activate(1), lib)
+    assert new_state.players[0].current_mana == 3
 
 
-def test_aura_strips_when_ratchanter_dies():
+# ---------------------------------------------------------------------------
+# Flat stacking buff on friendly rats
+# ---------------------------------------------------------------------------
+
+
+def test_buff_applies_plus_one_plus_one_to_friendly_rat():
     lib = _lib()
     rat_id = lib.get_numeric_id("rat")
     rc_id = lib.get_numeric_id("ratchanter")
     rat_def = lib.get_by_card_id("rat")
 
-    state = _empty_state(lib)
+    state = _empty_state(lib, mana=5)
     state = _put(state, MinionInstance(
         instance_id=1, card_numeric_id=rat_id,
         owner=PlayerSide.PLAYER_1, position=(4, 0), current_health=rat_def.health,
@@ -157,32 +164,112 @@ def test_aura_strips_when_ratchanter_dies():
         instance_id=2, card_numeric_id=rc_id,
         owner=PlayerSide.PLAYER_1, position=(4, 2), current_health=30,
     ))
-    state = recompute_ratchanter_aura(state, lib)
-    assert state.get_minion(1).attack_bonus == 5
-
-    # Kill Ratchanter (drop to 0 hp), strip via recompute.
-    rc = state.get_minion(2)
-    state = replace(
-        state,
-        minions=tuple(
-            replace(m, current_health=0) if m.instance_id == 2 else m
-            for m in state.minions
-        ),
-    )
-    state = recompute_ratchanter_aura(state, lib)
-    new_rat = state.get_minion(1)
-    assert new_rat.attack_bonus == 0
-    assert new_rat.current_health == rat_def.health
-    assert new_rat.ratchanter_aura == 0
+    state = resolve_action(state, _activate(2), lib)
+    rat = state.get_minion(1)
+    assert rat.attack_bonus == 1
+    assert rat.max_health_bonus == 1
+    assert rat.current_health == rat_def.health + 1
 
 
-def test_aura_does_not_buff_opponent_rats():
+def test_buff_stacks_on_repeated_cast():
     lib = _lib()
     rat_id = lib.get_numeric_id("rat")
     rc_id = lib.get_numeric_id("ratchanter")
     rat_def = lib.get_by_card_id("rat")
 
-    state = _empty_state(lib)
+    state = _empty_state(lib, mana=10)
+    state = _put(state, MinionInstance(
+        instance_id=1, card_numeric_id=rat_id,
+        owner=PlayerSide.PLAYER_1, position=(4, 0), current_health=rat_def.health,
+    ))
+    state = _put(state, MinionInstance(
+        instance_id=2, card_numeric_id=rc_id,
+        owner=PlayerSide.PLAYER_1, position=(4, 2), current_health=30,
+    ))
+    # Cast once, pass react, then we'd need a new turn — but for engine-
+    # level stacking we just bypass turn flow and re-call _apply directly
+    # via a fresh ACTION-phase state.
+    from grid_tactics.action_resolver import _apply_activate_ability
+    state = _apply_activate_ability(state, _activate(2), lib)
+    state = _apply_activate_ability(state, _activate(2), lib)
+    state = _apply_activate_ability(state, _activate(2), lib)
+    rat = state.get_minion(1)
+    assert rat.attack_bonus == 3
+    assert rat.max_health_bonus == 3
+    assert rat.current_health == rat_def.health + 3
+
+
+def test_buff_scales_with_dark_matter_stacks():
+    lib = _lib()
+    rat_id = lib.get_numeric_id("rat")
+    rc_id = lib.get_numeric_id("ratchanter")
+    rat_def = lib.get_by_card_id("rat")
+
+    state = _empty_state(lib, mana=5)
+    state = _put(state, MinionInstance(
+        instance_id=1, card_numeric_id=rat_id,
+        owner=PlayerSide.PLAYER_1, position=(4, 0), current_health=rat_def.health,
+    ))
+    state = _put(state, MinionInstance(
+        instance_id=2, card_numeric_id=rc_id,
+        owner=PlayerSide.PLAYER_1, position=(4, 2), current_health=30,
+        dark_matter_stacks=4,
+    ))
+    state = resolve_action(state, _activate(2), lib)
+    rat = state.get_minion(1)
+    # 1 + 4 = 5
+    assert rat.attack_bonus == 5
+    assert rat.max_health_bonus == 5
+    assert rat.current_health == rat_def.health + 5
+
+
+def test_buff_applies_to_all_rat_tribe_members():
+    """Any tribe containing 'Rat' should be buffed (Giant Rat, Rathopper, etc)."""
+    lib = _lib()
+    rc_id = lib.get_numeric_id("ratchanter")
+
+    try:
+        gr_id = lib.get_numeric_id("giant_rat")
+        gr_def = lib.get_by_card_id("giant_rat")
+    except KeyError:
+        return  # card not in library; skip
+
+    state = _empty_state(lib, mana=5)
+    state = _put(state, MinionInstance(
+        instance_id=1, card_numeric_id=gr_id,
+        owner=PlayerSide.PLAYER_1, position=(4, 0), current_health=gr_def.health,
+    ))
+    state = _put(state, MinionInstance(
+        instance_id=2, card_numeric_id=rc_id,
+        owner=PlayerSide.PLAYER_1, position=(4, 2), current_health=30,
+    ))
+    state = resolve_action(state, _activate(2), lib)
+    gr = state.get_minion(1)
+    assert gr.attack_bonus == 1
+    assert gr.max_health_bonus == 1
+
+
+def test_buff_does_not_affect_caster_ratchanter():
+    lib = _lib()
+    rc_id = lib.get_numeric_id("ratchanter")
+    state = _empty_state(lib, mana=5)
+    state = _put(state, MinionInstance(
+        instance_id=1, card_numeric_id=rc_id,
+        owner=PlayerSide.PLAYER_1, position=(4, 2), current_health=30,
+    ))
+    state = resolve_action(state, _activate(1), lib)
+    rc = state.get_minion(1)
+    assert rc.attack_bonus == 0
+    assert rc.max_health_bonus == 0
+
+
+def test_buff_does_not_affect_enemy_rats():
+    lib = _lib()
+    rat_id = lib.get_numeric_id("rat")
+    rc_id = lib.get_numeric_id("ratchanter")
+    rat_def = lib.get_by_card_id("rat")
+
+    state = _empty_state(lib, mana=5)
     state = _put(state, MinionInstance(
         instance_id=1, card_numeric_id=rat_id,
         owner=PlayerSide.PLAYER_2, position=(0, 0), current_health=rat_def.health,
@@ -191,19 +278,127 @@ def test_aura_does_not_buff_opponent_rats():
         instance_id=2, card_numeric_id=rc_id,
         owner=PlayerSide.PLAYER_1, position=(4, 2), current_health=30,
     ))
-    state = recompute_ratchanter_aura(state, lib)
-    enemy_rat = state.get_minion(1)
-    assert enemy_rat.attack_bonus == 0
-    assert enemy_rat.ratchanter_aura == 0
+    state = resolve_action(state, _activate(2), lib)
+    enemy = state.get_minion(1)
+    assert enemy.attack_bonus == 0
+    assert enemy.max_health_bonus == 0
+    assert enemy.current_health == rat_def.health
 
 
-def test_multiple_ratchanters_take_max_not_sum():
+def test_buff_does_not_affect_non_rat_allies():
+    lib = _lib()
+    rc_id = lib.get_numeric_id("ratchanter")
+    # Pick any non-rat minion card in the library
+    non_rat_id = None
+    non_rat_def = None
+    for nid in range(lib.card_count):
+        cd = lib.get_by_id(nid)
+        if cd.card_id == "ratchanter":
+            continue
+        if cd.health is None:
+            continue
+        tribe = (cd.tribe or "").lower()
+        if cd.card_id == "rat" or "rat" in tribe.split("/"):
+            continue
+        non_rat_id = nid
+        non_rat_def = cd
+        break
+    assert non_rat_id is not None
+
+    state = _empty_state(lib, mana=5)
+    state = _put(state, MinionInstance(
+        instance_id=1, card_numeric_id=non_rat_id,
+        owner=PlayerSide.PLAYER_1, position=(4, 0), current_health=non_rat_def.health,
+    ))
+    state = _put(state, MinionInstance(
+        instance_id=2, card_numeric_id=rc_id,
+        owner=PlayerSide.PLAYER_1, position=(4, 2), current_health=30,
+    ))
+    state = resolve_action(state, _activate(2), lib)
+    m = state.get_minion(1)
+    assert m.attack_bonus == 0
+    assert m.max_health_bonus == 0
+
+
+# ---------------------------------------------------------------------------
+# Conjure from deck (tutor flow)
+# ---------------------------------------------------------------------------
+
+
+def test_conjure_enters_pending_tutor_when_deck_has_rat():
+    lib = _lib()
+    rat_id = lib.get_numeric_id("rat")
+    rc_id = lib.get_numeric_id("ratchanter")
+
+    state = _empty_state(lib, mana=5, deck=(rat_id, rat_id))
+    state = _put(state, MinionInstance(
+        instance_id=1, card_numeric_id=rc_id,
+        owner=PlayerSide.PLAYER_1, position=(4, 2), current_health=30,
+    ))
+    state = resolve_action(state, _activate(1), lib)
+    assert state.pending_tutor_player_idx == 0
+    assert len(state.pending_tutor_matches) == 2
+    # Still in ACTION phase until tutor resolves
+    assert state.phase == TurnPhase.ACTION
+
+
+def test_conjure_skipped_when_deck_empty():
+    lib = _lib()
+    rc_id = lib.get_numeric_id("ratchanter")
+
+    state = _empty_state(lib, mana=5, deck=())
+    state = _put(state, MinionInstance(
+        instance_id=1, card_numeric_id=rc_id,
+        owner=PlayerSide.PLAYER_1, position=(4, 2), current_health=30,
+    ))
+    state = resolve_action(state, _activate(1), lib)
+    assert state.pending_tutor_player_idx is None
+    # Went straight to react window
+    assert state.phase == TurnPhase.REACT
+
+
+def test_conjure_skipped_when_deck_has_no_rats():
+    lib = _lib()
+    rc_id = lib.get_numeric_id("ratchanter")
+    # Fill deck with Ratchanter copies (no common rat)
+    state = _empty_state(lib, mana=5, deck=(rc_id, rc_id, rc_id))
+    state = _put(state, MinionInstance(
+        instance_id=1, card_numeric_id=rc_id,
+        owner=PlayerSide.PLAYER_1, position=(4, 2), current_health=30,
+    ))
+    state = resolve_action(state, _activate(1), lib)
+    assert state.pending_tutor_player_idx is None
+    assert state.phase == TurnPhase.REACT
+
+
+def test_tutor_select_adds_rat_to_hand_and_opens_react():
+    lib = _lib()
+    rat_id = lib.get_numeric_id("rat")
+    rc_id = lib.get_numeric_id("ratchanter")
+
+    state = _empty_state(lib, mana=5, deck=(rat_id,))
+    state = _put(state, MinionInstance(
+        instance_id=1, card_numeric_id=rc_id,
+        owner=PlayerSide.PLAYER_1, position=(4, 2), current_health=30,
+    ))
+    state = resolve_action(state, _activate(1), lib)
+    assert state.pending_tutor_player_idx == 0
+
+    select = Action(action_type=ActionType.TUTOR_SELECT, card_index=0)
+    state = resolve_action(state, select, lib)
+    assert rat_id in state.players[0].hand
+    assert state.players[0].deck == ()
+    assert state.pending_tutor_player_idx is None
+    assert state.phase == TurnPhase.REACT
+
+
+def test_buff_applies_even_if_conjure_skipped():
     lib = _lib()
     rat_id = lib.get_numeric_id("rat")
     rc_id = lib.get_numeric_id("ratchanter")
     rat_def = lib.get_by_card_id("rat")
 
-    state = _empty_state(lib)
+    state = _empty_state(lib, mana=5, deck=())
     state = _put(state, MinionInstance(
         instance_id=1, card_numeric_id=rat_id,
         owner=PlayerSide.PLAYER_1, position=(4, 0), current_health=rat_def.health,
@@ -211,26 +406,25 @@ def test_multiple_ratchanters_take_max_not_sum():
     state = _put(state, MinionInstance(
         instance_id=2, card_numeric_id=rc_id,
         owner=PlayerSide.PLAYER_1, position=(4, 2), current_health=30,
-        dark_matter_stacks=2,
     ))
-    state = _put(state, MinionInstance(
-        instance_id=3, card_numeric_id=rc_id,
-        owner=PlayerSide.PLAYER_1, position=(4, 3), current_health=30,
-        dark_matter_stacks=5,
-    ))
-    state = recompute_ratchanter_aura(state, lib)
+    state = resolve_action(state, _activate(2), lib)
     rat = state.get_minion(1)
-    assert rat.attack_bonus == 10  # max(5+2, 5+5) = 10, not 7+10
-    assert rat.ratchanter_aura == 10
+    assert rat.attack_bonus == 1
+    assert rat.max_health_bonus == 1
 
 
-def test_aura_idempotent_on_repeated_recompute():
+# ---------------------------------------------------------------------------
+# Buff persists until death (no recompute)
+# ---------------------------------------------------------------------------
+
+
+def test_buff_persists_if_ratchanter_dies():
     lib = _lib()
     rat_id = lib.get_numeric_id("rat")
     rc_id = lib.get_numeric_id("ratchanter")
     rat_def = lib.get_by_card_id("rat")
 
-    state = _empty_state(lib)
+    state = _empty_state(lib, mana=5)
     state = _put(state, MinionInstance(
         instance_id=1, card_numeric_id=rat_id,
         owner=PlayerSide.PLAYER_1, position=(4, 0), current_health=rat_def.health,
@@ -239,9 +433,15 @@ def test_aura_idempotent_on_repeated_recompute():
         instance_id=2, card_numeric_id=rc_id,
         owner=PlayerSide.PLAYER_1, position=(4, 2), current_health=30,
     ))
-    for _ in range(5):
-        state = recompute_ratchanter_aura(state, lib)
+    from grid_tactics.action_resolver import _apply_activate_ability
+    state = _apply_activate_ability(state, _activate(2), lib)
+
+    # Simulate Ratchanter death: remove it from minions.
+    state = replace(
+        state,
+        minions=tuple(m for m in state.minions if m.instance_id != 2),
+    )
     rat = state.get_minion(1)
-    assert rat.attack_bonus == 5
-    assert rat.current_health == rat_def.health + 5
-    assert rat.ratchanter_aura == 5
+    # Buff stays — it's a flat stat add, not an aura.
+    assert rat.attack_bonus == 1
+    assert rat.max_health_bonus == 1

@@ -85,10 +85,15 @@ def _apply_damage_to_minion(
 def _apply_heal_to_minion(
     state: GameState, minion: MinionInstance, amount: int, library: CardLibrary,
 ) -> GameState:
-    """Apply heal to a minion, capped at base health from CardDefinition."""
+    """Apply heal to a minion, capped at effective max HP.
+
+    Effective max HP = CardDefinition.health + max_health_bonus so that
+    flat max-HP buffs (e.g. Ratchanter's conjure_rat_and_buff) raise the
+    heal ceiling too.
+    """
     card_def = library.get_by_id(minion.card_numeric_id)
-    base_health = card_def.health
-    new_health = min(minion.current_health + amount, base_health)
+    effective_max = card_def.health + minion.max_health_bonus
+    new_health = min(minion.current_health + amount, effective_max)
     new_minion = replace(minion, current_health=new_health)
     new_minions = _replace_minion(state.minions, minion.instance_id, new_minion)
     return replace(state, minions=new_minions)

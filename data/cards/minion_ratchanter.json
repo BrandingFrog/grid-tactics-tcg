@@ -9,10 +9,10 @@
     "element": "dark",
     "tribe": "Mage/Rat",
     "activated_ability": {
-        "name": "Summon Rat",
-        "mana_cost": 1,
-        "effect_type": "summon_token",
+        "name": "Conjure Common Rat",
+        "mana_cost": 2,
+        "effect_type": "conjure_rat_and_buff",
         "summon_card_id": "rat",
-        "target": "own_side_empty"
+        "target": "none"
     }
 }

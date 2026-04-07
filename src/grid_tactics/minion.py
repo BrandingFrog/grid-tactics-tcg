@@ -40,8 +40,8 @@ class MinionInstance:
     current_health: int          # starts at CardDefinition.health, decreases from damage
     attack_bonus: int = 0        # cumulative attack buff (effective attack = card_def.attack + attack_bonus)
     is_burning: bool = False     # Boolean burn status. Tick fires for BURN_DAMAGE at the start of the owner's turn. Persists until death.
-    dark_matter_stacks: int = 0  # Dark Matter counters on this minion. Currently only Ratchanter consumes these (aura scales with DM). No card grants DM yet; reserved for future cards.
-    ratchanter_aura: int = 0     # Magnitude of Ratchanter's currently-applied aura buff on THIS minion (added to both attack_bonus and current_health). Recomputed each turn flip in _fire_passive_effects so it tracks Ratchanter's life status and DM stacks.
+    dark_matter_stacks: int = 0  # Dark Matter counters on this minion. Currently only Ratchanter consumes these (buff scales with DM). No card grants DM yet; reserved for future cards.
+    max_health_bonus: int = 0    # Cumulative max-HP buff. Effective max HP = card_def.health + max_health_bonus. Heals cap at the effective max. Added on top of current_health when the buff is applied so it is immediately usable.
 
     @property
     def is_alive(self) -> bool:

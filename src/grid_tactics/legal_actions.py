@@ -297,6 +297,13 @@ def _action_phase_actions(
                             minion_id=minion.instance_id,
                             target_pos=(r, c),
                         ))
+        elif ability.target == "none":
+            # Untargeted self-ability — emit exactly one action.
+            actions.append(Action(
+                action_type=ActionType.ACTIVATE_ABILITY,
+                minion_id=minion.instance_id,
+                target_pos=None,
+            ))
 
     # DRAW as an action (in addition to auto-draw at turn start)
     if player.deck and len(player.hand) < 10:

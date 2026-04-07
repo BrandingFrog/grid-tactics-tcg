@@ -570,8 +570,16 @@ def _apply_activate_ability(
 ) -> GameState:
     """Apply ACTIVATE_ABILITY: pay mana, resolve effect, counts as turn action.
 
-    Currently supports effect_type 'summon_token' with target 'own_side_empty':
-    creates a fresh MinionInstance from the referenced card_id at target_pos.
+    Supported effect types:
+      - ``summon_token`` with target ``own_side_empty``: summon a fresh
+        MinionInstance at ``action.target_pos`` (legacy shape).
+      - ``conjure_rat_and_buff`` with target ``none`` (Ratchanter rework):
+        stacking flat buff. Applies +(1 + caster.dark_matter_stacks) to
+        every living friendly Rat's attack, max-HP bonus AND current HP.
+        Then, if the caster's deck contains any card with card_id ``rat``,
+        enters the Phase 14.2 pending_tutor state so the player selects
+        one to add to hand. If the deck has zero matches, the conjure is
+        skipped silently and control returns directly to the react flow.
     """
     active_idx = state.active_player_idx
     active_side = _get_active_side(state)
@@ -594,11 +602,11 @@ def _apply_activate_ability(
         )
 
     target_pos = action.target_pos
-    if target_pos is None:
-        raise ValueError("ACTIVATE_ABILITY requires a target_pos")
 
     # Validate target tile per ability.target rule
     if ability.target == "own_side_empty":
+        if target_pos is None:
+            raise ValueError("ACTIVATE_ABILITY requires a target_pos")
         own_rows = PLAYER_1_ROWS if active_side == PlayerSide.PLAYER_1 else PLAYER_2_ROWS
         if target_pos[0] not in own_rows:
             raise ValueError(
@@ -606,6 +614,9 @@ def _apply_activate_ability(
             )
         if state.board.get(target_pos[0], target_pos[1]) is not None:
             raise ValueError(f"Target tile {target_pos} is occupied")
+    elif ability.target == "none":
+        # Untargeted self-ability; target_pos must be None (ignored if set).
+        pass
     else:
         raise ValueError(f"Unsupported activated_ability target '{ability.target}'")
 
@@ -640,10 +651,98 @@ def _apply_activate_ability(
             minions=new_minions,
             next_minion_id=state.next_minion_id + 1,
         )
+    elif ability.effect_type == "conjure_rat_and_buff":
+        state = _apply_conjure_rat_and_buff(
+            state, active_idx, active_side, minion, ability, library,
+        )
     else:
         raise ValueError(f"Unsupported activated_ability effect_type '{ability.effect_type}'")
 
     return state
+
+
+def _is_rat_card(card_def) -> bool:
+    """Match anything the user calls a "rat": card_id 'rat' OR tribe contains 'Rat'.
+
+    Tribe match is case-insensitive and handles composite tribes like
+    'Mage/Rat' so Ratchanter itself is NOT buffed (it matches via tribe
+    but we explicitly exclude the caster in the buff loop). Common Rat,
+    Giant Rat, Rathopper, Emberplague Rat, Furryroach all count.
+    """
+    if card_def.card_id == "rat":
+        return True
+    if not card_def.tribe:
+        return False
+    parts = [p.strip().lower() for p in card_def.tribe.split("/")]
+    return "rat" in parts
+
+
+def _apply_conjure_rat_and_buff(
+    state: GameState,
+    active_idx: int,
+    active_side: PlayerSide,
+    caster: MinionInstance,
+    ability,
+    library: CardLibrary,
+) -> GameState:
+    """Rework v2: flat stacking buff + optional tutor-from-deck.
+
+    Step 1 (buff, unconditional): for every living friendly minion
+    matching _is_rat_card EXCEPT the caster itself, add
+    ``1 + caster.dark_matter_stacks`` to ``attack_bonus``,
+    ``max_health_bonus`` AND ``current_health`` so the extra HP is
+    usable right away.
+
+    Step 2 (conjure, conditional): scan the caster's deck for card_id
+    ``rat``. If >=1 matches, enter pending_tutor state with those deck
+    indices so the caller resolves via TUTOR_SELECT / DECLINE_TUTOR.
+    Zero matches -> no pending state, no prompt.
+    """
+    magnitude = 1 + caster.dark_matter_stacks
+
+    # ---- Step 1: buff friendly rats on board --------------------------
+    new_minions_list = list(state.minions)
+    for i, m in enumerate(new_minions_list):
+        if m.instance_id == caster.instance_id:
+            continue
+        if m.owner != active_side:
+            continue
+        if m.current_health <= 0:
+            continue
+        cd = library.get_by_id(m.card_numeric_id)
+        if not _is_rat_card(cd):
+            continue
+        new_minions_list[i] = replace(
+            m,
+            attack_bonus=m.attack_bonus + magnitude,
+            max_health_bonus=m.max_health_bonus + magnitude,
+            current_health=m.current_health + magnitude,
+        )
+    state = replace(state, minions=tuple(new_minions_list))
+
+    # ---- Step 2: pending_tutor for common rat from deck ---------------
+    summon_card_id = ability.summon_card_id or "rat"
+    try:
+        rat_numeric_id = library.get_numeric_id(summon_card_id)
+    except KeyError:
+        return state
+
+    caster_player = state.players[active_idx]
+    matches = tuple(
+        i for i, cid in enumerate(caster_player.deck) if cid == rat_numeric_id
+    )
+    if not matches:
+        return state
+
+    # Mutex defense -- no other pending state should be active.
+    assert state.pending_tutor_player_idx is None
+    assert state.pending_post_move_attacker_id is None
+
+    return replace(
+        state,
+        pending_tutor_player_idx=active_idx,
+        pending_tutor_matches=matches,
+    )
 
 
 def _apply_attack(
@@ -925,8 +1024,6 @@ def resolve_action(
 
         # Single react window for the original on_play fires now.
         state = _cleanup_dead_minions(state, library)
-        from grid_tactics.react_stack import recompute_ratchanter_aura
-        state = recompute_ratchanter_aura(state, library)
         state = _check_game_over(state)
         if state.is_game_over:
             return state
@@ -967,8 +1064,6 @@ def resolve_action(
 
         # Dead minion cleanup + game-over check, then react window (single).
         state = _cleanup_dead_minions(state, library)
-        from grid_tactics.react_stack import recompute_ratchanter_aura
-        state = recompute_ratchanter_aura(state, library)
         state = _check_game_over(state)
         if state.is_game_over:
             return state
@@ -1006,11 +1101,6 @@ def resolve_action(
 
     # Dead minion cleanup (D-02)
     state = _cleanup_dead_minions(state, library)
-
-    # Ratchanter aura: recompute after every main-phase action so deploys
-    # apply the buff immediately and deaths strip it immediately.
-    from grid_tactics.react_stack import recompute_ratchanter_aura
-    state = recompute_ratchanter_aura(state, library)
 
     # Win/draw detection (Phase 4) -- after cleanup, before react transition
     state = _check_game_over(state)
