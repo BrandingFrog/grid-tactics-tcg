@@ -3,6 +3,47 @@
    Vanilla JS (no modules, no build step). */
 
 // =============================================
+// Patch badge — fetch VERSION.json + render top-right
+// =============================================
+(function loadPatchBadge() {
+    function render() {
+        var badge = document.getElementById('patch-badge');
+        if (!badge) {
+            // DOM not ready yet — retry on DOMContentLoaded
+            document.addEventListener('DOMContentLoaded', render, { once: true });
+            return;
+        }
+        // Cache-bust so the badge always reflects the latest deploy
+        fetch('/static/VERSION.json?t=' + Date.now())
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+                var version = data.version || '?.?.?';
+                var channel = data.channel || '';
+                var updatedIso = data.last_updated || '';
+                var updatedStr = '';
+                try {
+                    var d = new Date(updatedIso);
+                    if (!isNaN(d.getTime())) {
+                        // Format in Dublin timezone: DD/MM HH:MM
+                        var opts = {
+                            timeZone: 'Europe/Dublin',
+                            day: '2-digit', month: '2-digit',
+                            hour: '2-digit', minute: '2-digit',
+                            hour12: false,
+                        };
+                        updatedStr = d.toLocaleString('en-IE', opts).replace(',', '');
+                    }
+                } catch (e) {}
+                badge.innerHTML =
+                    '<div class="patch-version">Patch ' + version + ' ' + channel + '</div>' +
+                    (updatedStr ? '<div class="patch-updated">Updated ' + updatedStr + ' Dublin</div>' : '');
+            })
+            .catch(function () { /* silent — badge stays empty */ });
+    }
+    render();
+})();
+
+// =============================================
 // Section 1: Constants and Enum Mappings
 // =============================================
 

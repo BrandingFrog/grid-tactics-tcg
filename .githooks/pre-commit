@@ -1,0 +1,85 @@
+#!/usr/bin/env bash
+# Auto-increment VERSION.json on every commit, using Dublin (Europe/Dublin) time.
+#
+# Rules (per user spec):
+#   - patch (third number) increments on every commit same day
+#   - minor (second number) increments on the first commit of a new Dublin day;
+#     patch resets to 1
+#   - major (first number) only ever bumped manually by the user
+#
+# The bumped VERSION.json is re-staged so it lands in the same commit that
+# triggered the hook.
+#
+# Install (one-time): git config core.hooksPath .githooks
+
+set -e
+
+python - <<'PYEOF'
+import json
+import datetime
+from pathlib import Path
+
+try:
+    from zoneinfo import ZoneInfo
+    DUBLIN = ZoneInfo("Europe/Dublin")
+except Exception:
+    DUBLIN = None
+
+vf = Path("src/grid_tactics/server/static/VERSION.json")
+
+if DUBLIN is not None:
+    now = datetime.datetime.now(DUBLIN)
+else:
+    now = datetime.datetime.utcnow()
+
+if vf.exists():
+    try:
+        data = json.loads(vf.read_text(encoding="utf-8"))
+    except Exception:
+        data = {}
+else:
+    data = {}
+
+data.setdefault("version", "0.0.1")
+data.setdefault("channel", "ALPHA")
+
+parts = [int(x) for x in data["version"].split(".")]
+while len(parts) < 3:
+    parts.append(0)
+major, minor, patch = parts[:3]
+
+last_updated_str = data.get("last_updated")
+last_date = None
+if last_updated_str:
+    try:
+        last_dt = datetime.datetime.fromisoformat(last_updated_str)
+        if last_dt.tzinfo is None and DUBLIN is not None:
+            last_dt = last_dt.replace(tzinfo=DUBLIN)
+        if DUBLIN is not None:
+            last_date = last_dt.astimezone(DUBLIN).date()
+        else:
+            last_date = last_dt.date()
+    except Exception:
+        last_date = None
+
+today = now.date()
+if last_date != today:
+    # New Dublin day -> bump minor, reset patch to 1
+    minor += 1
+    patch = 1
+else:
+    # Same day -> bump patch
+    patch += 1
+
+data["version"] = f"{major}.{minor}.{patch}"
+data["last_updated"] = now.strftime("%Y-%m-%dT%H:%M:%S%z")
+if not data["last_updated"].endswith(("Z",)) and "+" not in data["last_updated"][-6:] and "-" not in data["last_updated"][-6:]:
+    # Fallback if no tz info
+    data["last_updated"] = now.isoformat(timespec="seconds")
+
+vf.parent.mkdir(parents=True, exist_ok=True)
+vf.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+print(f"[VERSION] bumped to {data['version']} @ {data['last_updated']}")
+PYEOF
+
+git add src/grid_tactics/server/static/VERSION.json
