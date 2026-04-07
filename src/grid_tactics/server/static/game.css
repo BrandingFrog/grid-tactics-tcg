@@ -2706,6 +2706,23 @@ body {
   to { opacity: 0; }
 }
 
+/* SFX mute toggle in the room bar */
+.sfx-mute-btn {
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text);
+  font-size: 18px;
+  line-height: 1;
+  padding: 4px 8px;
+  cursor: pointer;
+  margin-left: 8px;
+}
+.sfx-mute-btn:hover {
+  background: var(--card2);
+  border-color: var(--cyan);
+}
+
 /* Hand action bar — groups Draw Card / Skip React / Decline Attack
    directly above the hand so all player actions live in one place. */
 .hand-action-bar {

@@ -276,12 +276,14 @@ function runNudge(id, innerHtml, durationMs) {
 
 var NUDGES = {
     'egg': function() {
+        playSfx('nudge_egg');
         runNudge('nudge-egg',
             '<div class="egg-splat-egg">🥚</div>' +
             '<div class="egg-splat-splat">🍳</div>',
             3200);
     },
     'boom': function() {
+        playSfx('nudge_boom');
         runNudge('nudge-boom',
             '<div class="boom-bomb">💣</div>' +
             '<div class="boom-flash"></div>' +
@@ -289,6 +291,7 @@ var NUDGES = {
             3000);
     },
     'rain': function() {
+        playSfx('nudge_rain');
         // Generate 40 rain drops at random horizontal positions
         var drops = '';
         for (var i = 0; i < 40; i++) {
@@ -304,6 +307,7 @@ var NUDGES = {
             3500);
     },
     'kiss': function() {
+        playSfx('nudge_kiss');
         runNudge('nudge-kiss',
             '<div class="kiss-mark">💋</div>',
             3000);
@@ -1506,8 +1510,59 @@ function playAnimation(job, done) {
 // tileEl should be the .board-cell (already position:relative). The
 // popup is absolutely positioned and self-removes after the rise+fade
 // keyframe completes (~1200ms; 1400ms setTimeout fallback).
+// =============================================
+// Audio system (CC0 Kenney sounds in /static/sfx/)
+// =============================================
+var SFX_FILES = {
+    card_play:    '/static/sfx/card_play.ogg',
+    move:         '/static/sfx/move.ogg',
+    attack_hit:   '/static/sfx/attack_hit.ogg',
+    damage:       '/static/sfx/damage.ogg',
+    heal:         '/static/sfx/heal.ogg',
+    burn_tick:    '/static/sfx/burn_tick.ogg',
+    button_click: '/static/sfx/button_click.ogg',
+    victory:      '/static/sfx/victory.ogg',
+    defeat:       '/static/sfx/defeat.ogg',
+    nudge_egg:    '/static/sfx/nudge_egg.ogg',
+    nudge_boom:   '/static/sfx/nudge_boom.ogg',
+    nudge_rain:   '/static/sfx/nudge_rain.ogg',
+    nudge_kiss:   '/static/sfx/nudge_kiss.ogg',
+};
+var sfxBuffers = {};
+var sfxVolume = 0.6;
+var sfxMuted = (function () {
+    try { return localStorage.getItem('gt_sfx_muted') === '1'; } catch (e) { return false; }
+})();
+(function preloadSfx() {
+    for (var k in SFX_FILES) {
+        var a = new Audio(SFX_FILES[k]);
+        a.preload = 'auto';
+        sfxBuffers[k] = a;
+    }
+})();
+function playSfx(name) {
+    if (sfxMuted) return;
+    var src = sfxBuffers[name];
+    if (!src) return;
+    // Clone so overlapping plays work (Audio elements can't double-play themselves)
+    try {
+        var node = src.cloneNode();
+        node.volume = sfxVolume;
+        var p = node.play();
+        if (p && p.catch) p.catch(function () { /* autoplay blocked, ignore */ });
+    } catch (e) {}
+}
+function setSfxMuted(muted) {
+    sfxMuted = !!muted;
+    try { localStorage.setItem('gt_sfx_muted', sfxMuted ? '1' : '0'); } catch (e) {}
+}
+
 function showFloatingPopup(tileEl, text, variant) {
     if (!tileEl) return;
+    // Sound for the popup variant
+    if (variant === 'combat-damage') playSfx('damage');
+    else if (variant === 'heal') playSfx('heal');
+    else if (variant === 'burn-tick') playSfx('burn_tick');
     var el = document.createElement('div');
     el.className = 'floating-popup ' + variant;
     el.textContent = text;
@@ -1541,6 +1596,7 @@ function getTileElForMinion(m) {
 // Total ~800ms. State is applied by runQueue's default after done(),
 // so killed minions disappear AFTER the strike, not before.
 function playAttackAnimation(job, done) {
+    playSfx('attack_hit');
     var payload = (job && job.payload) || {};
     var attackerPos = payload.attackerPos;
     var targetPos = payload.targetPos;
@@ -1648,6 +1704,7 @@ function getTileDelta(fromPos, toPos) {
 // State application happens MID-animation (like summon, unlike attack), so we
 // set job.stateApplied = true to suppress runQueue's default applyStateFrame.
 function playMoveAnimation(job, done) {
+    playSfx('move');
     var payload = (job && job.payload) || {};
     var from = payload.from;
     var to = payload.to;
@@ -1707,6 +1764,7 @@ function playMoveAnimation(job, done) {
 // summoned minion is visible during its scale-in. We mark the destination
 // tile in animatingTiles so renderBoard adds .anim-summon to that .board-cell.
 function playSummonAnimation(job, done) {
+    playSfx('card_play');
     var pos = job.payload && job.payload.pos;
     if (!pos) { setTimeout(done, 0); return; }
     var key = pos[0] + ',' + pos[1];
@@ -2023,6 +2081,10 @@ function onGameOver(data) {
     gameState = data.final_state;
     legalActions = [];
     renderGame();
+    var winner = data.final_state && data.final_state.winner;
+    if (winner != null && myPlayerIdx != null) {
+        playSfx(winner === myPlayerIdx ? 'victory' : 'defeat');
+    }
     showGameOver(data);
 }
 
@@ -2148,6 +2210,16 @@ function setupGameHandlers() {
     var btnRematch = document.getElementById('btn-rematch');
     if (btnRematch) {
         btnRematch.addEventListener('click', requestRematch);
+    }
+    var btnMute = document.getElementById('sfx-mute-btn');
+    if (btnMute) {
+        var refreshMuteBtn = function () { btnMute.textContent = sfxMuted ? '🔇' : '🔊'; };
+        refreshMuteBtn();
+        btnMute.addEventListener('click', function () {
+            setSfxMuted(!sfxMuted);
+            refreshMuteBtn();
+            if (!sfxMuted) playSfx('button_click');
+        });
     }
 }
 
