@@ -1381,6 +1381,10 @@ document.addEventListener('DOMContentLoaded', function() {
 
 var animQueue = [];
 var animRunning = false;
+// Registry of tiles currently animating: { "<row>,<col>": "summon"|"move"|... }
+// Read by renderBoard() to apply the matching .anim-* class to .board-cell.
+// Wave 3/4 (move/attack) will reuse this same registry.
+var animatingTiles = {};
 
 function enqueueAnimation(job) {
     animQueue.push(job);
@@ -1393,18 +1397,27 @@ function runQueue() {
     var job = animQueue.shift();
     animRunning = true;
     playAnimation(job, function onAnimDone() {
-        // Apply the buffered state frame AFTER the animation completes.
-        applyStateFrame(job.stateAfter, job.legalActionsAfter);
+        // Apply the buffered state frame AFTER the animation completes,
+        // unless the branch already applied it (e.g. summon applies up-front
+        // so the minion is visible during scale-in and sets job.stateApplied).
+        if (!job.stateApplied) {
+            applyStateFrame(job.stateAfter, job.legalActionsAfter);
+        }
         animRunning = false;
         runQueue();
     });
 }
 
 function playAnimation(job, done) {
-    // Wave 1: all animations are 0ms no-op stubs. Waves 2-4 will replace
-    // individual branches (summon/move/attack) with real visuals.
+    // Phase 14.3 contract: branches call done() when their animation
+    // finishes. Some branches (summon) apply state at the START of the
+    // animation; others (move/attack, future waves) apply state at
+    // different points. The default applyStateFrame call in runQueue is
+    // suppressed by setting job.stateApplied = true inside the branch.
     switch (job && job.type) {
         case 'summon':
+            playSummonAnimation(job, done);
+            return;
         case 'move':
         case 'attack':
         case 'noop':
@@ -1412,6 +1425,44 @@ function playAnimation(job, done) {
             setTimeout(done, 0);
             return;
     }
+}
+
+// Wave 2: summon animation.
+// Contract deviation from move/attack: state is applied at the START so the
+// summoned minion is visible during its scale-in. We mark the destination
+// tile in animatingTiles so renderBoard adds .anim-summon to that .board-cell.
+function playSummonAnimation(job, done) {
+    var pos = job.payload && job.payload.pos;
+    if (!pos) { setTimeout(done, 0); return; }
+    var key = pos[0] + ',' + pos[1];
+
+    // 1. Mark the tile so the next renderBoard tags it with .anim-summon.
+    animatingTiles[key] = 'summon';
+
+    // 2. Apply the post-summon state NOW (minion appears) and prevent the
+    //    queue's default post-animation applyStateFrame.
+    applyStateFrame(job.stateAfter, job.legalActionsAfter);
+    job.stateApplied = true;
+
+    // 3. Shake the board container.
+    var boardEl = document.getElementById('game-board');
+    if (boardEl) {
+        boardEl.classList.remove('anim-grid-shake');
+        // Force reflow so re-adding the class restarts the animation.
+        void boardEl.offsetWidth;
+        boardEl.classList.add('anim-grid-shake');
+        setTimeout(function() {
+            if (boardEl) boardEl.classList.remove('anim-grid-shake');
+        }, 360);
+    }
+
+    // 4. After one full scale-in cycle, drop the registry entry, re-render
+    //    the board so the .anim-summon class falls off, and signal done.
+    setTimeout(function() {
+        delete animatingTiles[key];
+        try { renderBoard(); } catch (e) { /* defensive: never block done() */ }
+        done();
+    }, 650);
 }
 
 // Single point of state application. Called directly for non-action frames
@@ -1509,8 +1560,25 @@ function deriveAnimationJob(prev, next) {
     // ActionType: 0=PLAY_CARD, 1=MOVE, 2=ATTACK
     if (t === 0) {
         // Only minion deploys get a summon animation; magic/tutor -> noop.
+        // Wave 2 emits pos + card_id (numeric_id). card_id is informational
+        // for now; the destination tile in next.minions carries authoritative
+        // identity for renderBoardMinion.
         if (pa.position) {
-            return { type: 'summon', payload: { pos: pa.position } };
+            // Confirm a minion actually appeared at pa.position in next that
+            // wasn't there in prev — guards against magic-with-position cards.
+            var pkey = pa.position[0] + ',' + pa.position[1];
+            var prevHas = (prev.minions || []).some(function(m) {
+                return m.position && (m.position[0] + ',' + m.position[1]) === pkey;
+            });
+            var nextMinion = (next.minions || []).find(function(m) {
+                return m.position && (m.position[0] + ',' + m.position[1]) === pkey;
+            });
+            if (!prevHas && nextMinion) {
+                return { type: 'summon', payload: {
+                    pos: pa.position,
+                    card_id: nextMinion.card_numeric_id,
+                } };
+            }
         }
         return { type: 'noop', payload: {} };
     }
@@ -2945,6 +3013,13 @@ function renderBoard() {
                 cell.classList.add('zone-neutral');
             } else if (oppRows.indexOf(row) !== -1) {
                 cell.classList.add('zone-opp');
+            }
+
+            // Phase 14.3: tag cell with the active animation class if its
+            // tile key is in animatingTiles (set by the AnimationQueue).
+            var animKind = animatingTiles[row + ',' + col];
+            if (animKind) {
+                cell.classList.add('anim-' + animKind);
             }
 
             // Check for minion at this position
