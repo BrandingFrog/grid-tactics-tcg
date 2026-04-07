@@ -100,6 +100,12 @@ class GameState:
         for _ in range(STARTING_HAND_P2):
             p2, _ = p2.draw_card()
 
+        # Apply turn-start mana regeneration to P1 at game start so that
+        # both players receive the same "first turn" mana. Without this,
+        # P2 would get +1 regen on their first turn (via turn advance)
+        # while P1 would not, producing an off-by-one on turn 2.
+        p1 = p1.regenerate_mana()
+
         state = cls(
             board=Board.empty(),
             players=(p1, p2),

@@ -2058,13 +2058,16 @@ function onBoardCellClick(row, col) {
     }
 
     // If we have a minion selected for move, try to move here
-    if (interactionMode === 'move' && selectedMinionId !== null) {
+    if ((interactionMode === 'move' || interactionMode === 'move_attack') && selectedMinionId !== null) {
         var movePositions = getMovePositions(selectedMinionId);
         var validMove = movePositions.some(function(p) { return p[0] === row && p[1] === col; });
         if (validMove) {
             submitAction({ action_type: 1, minion_id: selectedMinionId, position: [row, col] });
+            return;
         }
-        return;
+        // In move_attack mode, clicking a non-valid-move empty cell should not block
+        // the "click own minion to reselect" path below. In pure move mode we return.
+        if (interactionMode === 'move') return;
     }
 
     // Check if clicking on own minion to select it
@@ -2534,18 +2537,18 @@ function renderBoard() {
         minionMap[m.position[0] + ',' + m.position[1]] = m;
     });
 
-    // Display order depends on perspective (D-03)
-    // P1 (idx 0): rows 0,1,2,3,4 top-to-bottom (opponent zone at top)
-    // P2 (idx 1): rows 4,3,2,1,0 top-to-bottom (opponent zone at top)
+    // Display order depends on perspective (D-03).
+    // Engine truth: P1 back row = 0, P2 back row = 4. Each player should see
+    // their own back row at the BOTTOM (standard TCG convention).
+    // P1 (idx 0): render rows 4,3,2,1,0 top-to-bottom -> row 0 (P1 back) at bottom
+    // P2 (idx 1): render rows 0,1,2,3,4 top-to-bottom -> row 4 (P2 back) at bottom
     var rowOrder = myPlayerIdx === 0
-        ? [0, 1, 2, 3, 4]
-        : [4, 3, 2, 1, 0];
+        ? [4, 3, 2, 1, 0]
+        : [0, 1, 2, 3, 4];
 
-    // Zone classification from player's perspective
-    // P1: rows 0-1 = opp zone, row 2 = neutral, rows 3-4 = self zone
-    // P2: rows 3-4 = opp zone, row 2 = neutral, rows 0-1 = self zone
-    var selfRows = myPlayerIdx === 0 ? [3, 4] : [0, 1];
-    var oppRows = myPlayerIdx === 0 ? [0, 1] : [3, 4];
+    // Zone classification matches engine: P1 zone = rows 0,1; P2 zone = rows 3,4.
+    var selfRows = myPlayerIdx === 0 ? [0, 1] : [3, 4];
+    var oppRows = myPlayerIdx === 0 ? [3, 4] : [0, 1];
 
     rowOrder.forEach(function(row) {
         for (var col = 0; col < 5; col++) {
