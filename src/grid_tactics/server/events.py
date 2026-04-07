@@ -9,7 +9,10 @@ from grid_tactics.legal_actions import legal_actions
 from grid_tactics.server.action_codec import reconstruct_action, serialize_action
 from grid_tactics.server.app import socketio
 from grid_tactics.server.room_manager import RoomManager
-from grid_tactics.server.view_filter import filter_state_for_player
+from grid_tactics.server.view_filter import (
+    enrich_pending_post_move_attack,
+    filter_state_for_player,
+)
 
 _room_manager: RoomManager | None = None
 
@@ -86,6 +89,7 @@ def _emit_state_to_players(session, state):
     REACT phase decision-maker is react_player_idx; ACTION phase is active_player_idx.
     """
     state_dict = state.to_dict()
+    enrich_pending_post_move_attack(state, state_dict, session.library)
     actions = legal_actions(state, session.library) if not state.is_game_over else ()
     serialized_actions = [serialize_action(a) for a in actions]
 
@@ -107,6 +111,7 @@ def _emit_state_to_players(session, state):
 def _emit_game_over(session, state):
     """Emit game_over event with filtered final state to both players."""
     state_dict = state.to_dict()
+    enrich_pending_post_move_attack(state, state_dict, session.library)
     for idx in (0, 1):
         filtered = filter_state_for_player(state_dict, idx)
         emit("game_over", {
@@ -201,6 +206,7 @@ def register_events(room_manager: RoomManager) -> None:
         if both_ready:
             session = _room_manager.start_game(room_code)
             state_dict = session.state.to_dict()
+            enrich_pending_post_move_attack(session.state, state_dict, session.library)
             card_defs = _build_card_defs(session.library)
             initial_actions = legal_actions(session.state, session.library)
             serialized_actions = [serialize_action(a) for a in initial_actions]
@@ -260,6 +266,7 @@ def register_events(room_manager: RoomManager) -> None:
 
         # status == 'started' -- emit game_start to both players with the fresh state
         state_dict = new_session.state.to_dict()
+        enrich_pending_post_move_attack(new_session.state, state_dict, new_session.library)
         card_defs = _build_card_defs(new_session.library)
         initial_actions = legal_actions(new_session.state, new_session.library)
         serialized_actions = [serialize_action(a) for a in initial_actions]
