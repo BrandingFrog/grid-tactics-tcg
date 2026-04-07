@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Online PvP Dueling
 status: verifying
-stopped_at: "Phase 14.2 complete (tutor-choice-prompt); next: Phase 15 reconnection. Final smoke test deferred to post-deploy Playwright E2E."
-last_updated: "2026-04-07T00:00:00.000Z"
+stopped_at: "Phase 14.3-01 complete (AnimationQueue infra). Next: 14.3-02 summon animation."
+last_updated: "2026-04-07T15:41:00.000Z"
 last_activity: 2026-04-07
 progress:
   total_phases: 5
@@ -25,10 +25,10 @@ See: .planning/PROJECT.md (updated 2026-04-04)
 
 ## Current Position
 
-Phase: 14.2 (tutor-choice-prompt) — COMPLETE
-Plan: 5 of 5 (roadmap/STATE + smoke test) — COMPLETE
-Status: Phase 14.2 landed across all 5 waves. Python + tensor engines route pending_tutor with parity, legal-action masks reinterpret PLAY_CARD/PASS slots while pending, frontend renders a full-card selection modal driven by per-viewer enrichment, action space [0:1262] preserved end-to-end. Final smoke test (Task 2) deferred to post-deploy Playwright E2E against Railway (same posture as 14.1-05 and 14.2-04). Next: Phase 15 reconnection.
-Last activity: 2026-04-07 — Completed 14.2-05-PLAN.md
+Phase: 14.3 (game-juice) — IN PROGRESS
+Plan: 1 of N (animation queue infra) — COMPLETE
+Status: 14.3-01 landed. Client-side AnimationQueue + applyStateFrame refactor in place. State frames for action transitions (summon/move/attack) are buffered behind animations; pending UIs (react banner, tutor modal, post-move-attack pick) are structurally gated because they live inside renderGame which only runs from applyStateFrame. Wave 1 animations are 0ms no-op stubs — gameplay identical to pre-14.3. Waves 2-4 plug real visuals into playAnimation branches.
+Last activity: 2026-04-07 — Completed 14.3-01-PLAN.md
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -131,6 +131,10 @@ Recent decisions affecting current work:
 - [Phase 14.2-05]: Tutor on_play enters a pending_tutor state; player picks from a modal or declines via Skip. Exactly one react window fires after the pending state resolves.
 - [Phase 14.2-05]: Decline-allowed is the default behavior for pending_tutor; tunable to forced-pick if balance testing later suggests it.
 - [Phase 14.2-05]: Action-space [0:1262] preserved across 14.2; TUTOR_SELECT reuses PLAY_CARD[0:K] slots and DECLINE_TUTOR reuses slot 1001 (PASS) only while pending_tutor is set. Mutually exclusive with pending_post_move_attacker.
+- [Phase 14.3-01]: Client AnimationQueue is serial callback-style (not Promises). Job = {type, payload, stateAfter, legalActionsAfter}. applyStateFrame is the single point of state application; renderGame (and therefore all pending-UI sync) only runs from applyStateFrame.
+- [Phase 14.3-01]: Pending-UI gating is STRUCTURAL, not guarded. React banner / tutor modal / post-move-attack picker live inside renderGame → applyStateFrame → runQueue post-animation callback. No explicit isAnimating() guard needed on sync calls.
+- [Phase 14.3-01]: Non-action frames (first frame, noop diffs) bypass the queue via direct applyStateFrame — keeps lobby/meta/react-open-close responsive. Only summon/move/attack diffs from next.pending_action enqueue.
+- [Phase 14.3-01]: Wave 1 playAnimation branches are all setTimeout(done, 0) stubs. Waves 2-4 replace branches with real visuals; contract is "call done() when animation finishes".
 
 ### Pending Todos
 
@@ -145,6 +149,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-04-07T00:00:00.000Z
-Stopped at: Completed Phase 14.2 (14.2-05-PLAN.md): ROADMAP + STATE updated, phase landed. Final smoke test deferred to post-deploy Playwright E2E. Next: Phase 15 reconnection.
+Last session: 2026-04-07T15:41:00.000Z
+Stopped at: Completed 14.3-01-PLAN.md (AnimationQueue infra). Next: 14.3-02 summon animation plugs into playAnimation 'summon' branch.
 Resume file: None
