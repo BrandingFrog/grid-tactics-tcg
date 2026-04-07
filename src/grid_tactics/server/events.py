@@ -14,6 +14,7 @@ from grid_tactics.server.view_filter import (
     enrich_pending_post_move_attack,
     enrich_pending_tutor_for_viewer,
     filter_state_for_player,
+    filter_state_for_spectator,
 )
 
 _room_manager: RoomManager | None = None
@@ -126,6 +127,44 @@ def _emit_state_to_players(session, state, prev_state=None, resolved_action=None
             "your_player_idx": idx,
         }, to=session.player_sids[idx])
 
+    _fanout_state_to_spectators(session, state, state_dict, resolved_action)
+
+
+def _fanout_state_to_spectators(session, state, base_state_dict, resolved_action, event_name="state_update"):
+    """Phase 14.4: emit filtered state to every spectator in the session's room."""
+    if _room_manager is None:
+        return
+    room_code = _room_manager.get_room_code_by_token(session.player_tokens[0])
+    if room_code is None:
+        return
+    spec_tokens = _room_manager.get_spectator_tokens(room_code)
+    if not spec_tokens:
+        return
+    for spec_token in spec_tokens:
+        slot = _room_manager.get_spectator(spec_token)
+        if slot is None:
+            continue
+        spec_state = filter_state_for_spectator(
+            base_state_dict, god_mode=slot.god_mode, perspective_idx=0,
+        )
+        # Spectators inherit the same pending-tutor enrichment as their perspective seat.
+        if not slot.god_mode:
+            enrich_pending_tutor_for_viewer(state, spec_state, 0, session.library)
+        if event_name == "state_update":
+            emit("state_update", {
+                "state": spec_state,
+                "legal_actions": [],
+                "your_player_idx": 0,
+                "is_spectator": True,
+            }, to=slot.sid)
+        elif event_name == "game_over":
+            emit("game_over", {
+                "winner": int(state.winner) if state.winner is not None else None,
+                "final_state": spec_state,
+                "your_player_idx": 0,
+                "is_spectator": True,
+            }, to=slot.sid)
+
 
 def _emit_game_over(session, state):
     """Emit game_over event with filtered final state to both players."""
@@ -139,6 +178,38 @@ def _emit_game_over(session, state):
             "final_state": filtered,
             "your_player_idx": idx,
         }, to=session.player_sids[idx])
+
+    _fanout_state_to_spectators(session, state, state_dict, None, event_name="game_over")
+
+
+def _fanout_game_start_to_spectators(session, base_state_dict, card_defs):
+    """Phase 14.4: emit game_start to spectators of this session's room."""
+    if _room_manager is None:
+        return
+    room_code = _room_manager.get_room_code_by_token(session.player_tokens[0])
+    if room_code is None:
+        return
+    for spec_token in _room_manager.get_spectator_tokens(room_code):
+        slot = _room_manager.get_spectator(spec_token)
+        if slot is None:
+            continue
+        spec_state = filter_state_for_spectator(
+            base_state_dict, god_mode=slot.god_mode, perspective_idx=0,
+        )
+        if not slot.god_mode:
+            enrich_pending_tutor_for_viewer(session.state, spec_state, 0, session.library)
+        emit(
+            "game_start",
+            {
+                "your_player_idx": 0,
+                "state": spec_state,
+                "legal_actions": [],
+                "opponent_name": session.player_names[1],
+                "card_defs": card_defs,
+                "is_spectator": True,
+            },
+            to=slot.sid,
+        )
 
 
 def register_events(room_manager: RoomManager) -> None:
