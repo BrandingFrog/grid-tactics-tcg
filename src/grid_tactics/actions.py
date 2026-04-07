@@ -65,6 +65,28 @@ def decline_post_move_attack_action() -> Action:
     return Action(action_type=ActionType.DECLINE_POST_MOVE_ATTACK)
 
 
+def tutor_select_action(match_index: int) -> Action:
+    """Create a TUTOR_SELECT action (Phase 14.2).
+
+    Only legal while ``state.pending_tutor_player_idx`` is set. ``match_index``
+    is reused on the ``card_index`` field and indexes into
+    ``state.pending_tutor_matches``. Encoded on the integer action space by
+    reusing the PLAY_CARD slot space [0:250]; the encoder disambiguates from
+    PLAY_CARD via the pending state at decode time.
+    """
+    return Action(action_type=ActionType.TUTOR_SELECT, card_index=match_index)
+
+
+def decline_tutor_action() -> Action:
+    """Create a DECLINE_TUTOR action (Phase 14.2).
+
+    Only legal while ``state.pending_tutor_player_idx`` is set. Encoded on the
+    integer action space by reusing slot 1001 (PASS); the encoder
+    disambiguates from PASS via the pending state at decode time.
+    """
+    return Action(action_type=ActionType.DECLINE_TUTOR)
+
+
 def move_action(minion_id: int, position: tuple[int, int]) -> Action:
     """Create a MOVE action for a minion to a destination position."""
     return Action(action_type=ActionType.MOVE, minion_id=minion_id, position=position)

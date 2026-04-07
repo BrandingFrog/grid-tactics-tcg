@@ -26,6 +26,7 @@ from grid_tactics.actions import (
     Action,
     attack_action,
     decline_post_move_attack_action,
+    decline_tutor_action,
     draw_action,
     move_action,
     pass_action,
@@ -33,6 +34,7 @@ from grid_tactics.actions import (
     play_react_action,
     sacrifice_action,
     transform_action,
+    tutor_select_action,
 )
 from grid_tactics.board import Board
 from grid_tactics.card_library import CardLibrary
@@ -69,6 +71,27 @@ def legal_actions(
     # Game is over -- no actions allowed
     if state.is_game_over:
         return ()
+
+    # Mutex: the two pending flavours must never coexist. Loud assert (defense
+    # in depth on top of the asserts in _enter_pending_tutor / action_resolver).
+    assert not (
+        state.pending_tutor_player_idx is not None
+        and state.pending_post_move_attacker_id is not None
+    ), "pending_tutor and pending_post_move_attacker cannot coexist"
+
+    # Phase 14.2: while pending_tutor is set, the ONLY legal actions are
+    # TUTOR_SELECT (one per match index in state.pending_tutor_matches) and
+    # DECLINE_TUTOR. Slot reinterpretation in the integer action space:
+    #   - TUTOR_SELECT reuses PLAY_CARD slots [0:n] (the encoder writes the
+    #     match index on Action.card_index, then PLAY_CARD_BASE + match_idx*25)
+    #     -- regular PLAY_CARD is illegal here so the channel is free.
+    #   - DECLINE_TUTOR reuses slot 1001 (PASS); the encoder/decoder
+    #     disambiguate using state.pending_tutor_player_idx, mirroring the
+    #     14.1 DECLINE_POST_MOVE_ATTACK trick.
+    # The action_resolver layer enforces the same restriction at runtime; this
+    # branch keeps RL agents (and the human UI) from selecting illegal slots.
+    if state.pending_tutor_player_idx is not None:
+        return _pending_tutor_actions(state)
 
     # Phase 14.1: while a melee minion is mid-move-attack (pending), the only
     # legal actions are ATTACK from the pending attacker against an in-range
@@ -226,6 +249,29 @@ def _action_phase_actions(
         actions.append(draw_action())
 
     # No PASS -- if no actions available, fatigue bleed handles it
+    return tuple(actions)
+
+
+# ---------------------------------------------------------------------------
+# Pending tutor enumeration (Phase 14.2)
+# ---------------------------------------------------------------------------
+
+
+def _pending_tutor_actions(state: GameState) -> tuple[Action, ...]:
+    """Enumerate the only-legal actions while pending_tutor is set.
+
+    Legal:
+      - TUTOR_SELECT(match_idx) for each ``match_idx in [0, len(matches))``
+      - DECLINE_TUTOR (encoded on slot 1001 by the encoder)
+
+    Mutually exclusive with the 14.1 pending-post-move-attack state (asserted
+    upstream in ``legal_actions``).
+    """
+    actions: list[Action] = [
+        tutor_select_action(match_index=i)
+        for i in range(len(state.pending_tutor_matches))
+    ]
+    actions.append(decline_tutor_action())
     return tuple(actions)
 
 

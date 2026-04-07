@@ -25,12 +25,14 @@ from grid_tactics.actions import (
     Action,
     attack_action,
     decline_post_move_attack_action,
+    decline_tutor_action,
     draw_action,
     move_action,
     pass_action,
     play_card_action,
     play_react_action,
     sacrifice_action,
+    tutor_select_action,
 )
 from grid_tactics.card_library import CardLibrary
 from grid_tactics.enums import ActionType, CardType, TargetType, TriggerType
@@ -107,6 +109,18 @@ class ActionEncoder:
         if atype == ActionType.DECLINE_POST_MOVE_ATTACK:
             return PASS_IDX
 
+        # Phase 14.2: DECLINE_TUTOR reuses slot 1001 (PASS).
+        # Disambiguated at decode time by state.pending_tutor_player_idx.
+        if atype == ActionType.DECLINE_TUTOR:
+            return PASS_IDX
+
+        # Phase 14.2: TUTOR_SELECT reuses the PLAY_CARD slot space [0:250].
+        # The match index lives on Action.card_index. We pin cell=0 so the
+        # decoded slot is PLAY_CARD_BASE + match_idx * GRID_SIZE.
+        if atype == ActionType.TUTOR_SELECT:
+            match_idx = action.card_index if action.card_index is not None else 0
+            return PLAY_CARD_BASE + match_idx * GRID_SIZE
+
         if atype == ActionType.PASS:
             return PASS_IDX
 
@@ -147,11 +161,26 @@ class ActionEncoder:
             Action object.
         """
         if action_int == PASS_IDX:
-            # Phase 14.1: slot 1001 is reinterpreted as
-            # DECLINE_POST_MOVE_ATTACK while a post-move attack is pending.
+            # Phase 14.2: slot 1001 reinterpreted as DECLINE_TUTOR while a
+            # tutor pick is pending. Checked first because pending_tutor and
+            # pending_post_move_attacker are mutually exclusive.
+            if state.pending_tutor_player_idx is not None:
+                return decline_tutor_action()
+            # Phase 14.1: slot 1001 reinterpreted as DECLINE_POST_MOVE_ATTACK
+            # while a post-move attack is pending.
             if state.pending_post_move_attacker_id is not None:
                 return decline_post_move_attack_action()
             return pass_action()
+
+        # Phase 14.2: PLAY_CARD slot space reinterpreted as TUTOR_SELECT while
+        # a tutor pick is pending. The slot's hand_idx field carries the match
+        # index (cell sub-index is ignored / always 0 on encode).
+        if (
+            state.pending_tutor_player_idx is not None
+            and PLAY_CARD_BASE <= action_int < MOVE_BASE
+        ):
+            match_idx = (action_int - PLAY_CARD_BASE) // GRID_SIZE
+            return tutor_select_action(match_index=match_idx)
 
         if action_int == DRAW_IDX:
             return draw_action()
