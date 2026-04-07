@@ -38,6 +38,7 @@ if not _HAS_FLASK_SIO:
     collect_ignore_glob += [
         "test_pvp_server.py",
         "test_game_flow.py",
+        "test_events.py",
     ]
 from grid_tactics.types import (
     STARTING_HP,
