@@ -2660,3 +2660,63 @@ body {
   100% { transform: scale(1.0);  filter: none; }
 }
 
+/* ---------------------------------------------------------------- */
+/* Phase 14.3 Wave 7 — Floating popups & status badges              */
+/* ---------------------------------------------------------------- */
+/* Reusable popup system: showFloatingPopup(tile, text, variant)    */
+/* in game.js appends a .floating-popup.<variant> to a .board-cell. */
+/* Five variants: combat-damage, heal, burn-tick, buff, debuff.     */
+
+.floating-popup {
+  position: absolute;
+  left: 50%;
+  top: 30%;
+  transform: translate(-50%, 0);
+  font-family: 'Luckiest Guy', system-ui, sans-serif;
+  font-size: 26px;
+  font-weight: 400;
+  letter-spacing: 1px;
+  -webkit-text-stroke: 4px #000;
+  paint-order: stroke fill;
+  pointer-events: none;
+  z-index: 60;
+  white-space: nowrap;
+  animation: popup-rise 1200ms ease-out forwards;
+}
+
+.floating-popup.combat-damage { color: #ff3030; }
+.floating-popup.heal          { color: #3aff70; }
+.floating-popup.burn-tick     { color: #ff8030; }
+.floating-popup.buff          { color: #30dfff; }
+.floating-popup.debuff        { color: #c060ff; }
+
+@keyframes popup-rise {
+  0%   { transform: translate(-50%, 0)    scale(0.6); opacity: 0; }
+  12%  { transform: translate(-50%, -8px) scale(1.15); opacity: 1; }
+  70%  { transform: translate(-50%, -48px) scale(1.0); opacity: 1; }
+  100% { transform: translate(-50%, -72px) scale(0.95); opacity: 0; }
+}
+
+/* Persistent status badges, rendered inside renderBoardMinion. */
+.minion-badges {
+  position: absolute;
+  left: 2px;
+  bottom: 2px;
+  display: flex;
+  gap: 2px;
+  z-index: 5;
+  pointer-events: none;
+}
+.minion-badge {
+  font-size: 14px;
+  line-height: 1;
+  padding: 1px 3px;
+  border-radius: 3px;
+  background: rgba(0,0,0,0.55);
+  color: #fff;
+  font-weight: bold;
+}
+.badge-burning { /* emoji-only, no border */ }
+.badge-buff   { border: 1px solid #3aff70; color: #3aff70; }
+.badge-debuff { border: 1px solid #ff5050; color: #ff5050; }
+
