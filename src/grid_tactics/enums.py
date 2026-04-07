@@ -122,3 +122,4 @@ class ActionType(IntEnum):
     PLAY_REACT = 5  # Play a react card during react window
     SACRIFICE = 6   # Sacrifice minion on opponent's back row for player damage
     TRANSFORM = 7   # Transform an on-board minion into a different card (costs mana)
+    DECLINE_POST_MOVE_ATTACK = 8  # Decline the post-move attack offered to a melee minion

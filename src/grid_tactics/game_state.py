@@ -50,6 +50,11 @@ class GameState:
     # Phase 11: Fatigue tracking (moved from action_resolver module global)
     fatigue_counts: tuple[int, int] = (0, 0)  # (p0_pass_count, p1_pass_count)
 
+    # Phase 14.1: Post-move attack-pick state for melee minions.
+    # None = not in pending state. int = instance_id of the melee minion that
+    # just moved and may now ATTACK an in-range enemy or DECLINE_POST_MOVE_ATTACK.
+    pending_post_move_attacker_id: Optional[int] = None
+
     @property
     def active_player(self) -> Player:
         """Return the currently active player."""

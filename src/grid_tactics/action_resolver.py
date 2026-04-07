@@ -191,65 +191,29 @@ def _apply_move(state: GameState, action: Action, library: CardLibrary = None) -
     new_minions = _replace_minion(state.minions, minion.instance_id, new_minion)
     state = replace(state, board=new_board, minions=new_minions)
 
-    # --- Auto-attack after move: hit nearest enemy in range ---
+    # Phase 14.1: For melee (range=0) minions, if there is at least one
+    # in-range enemy from the new tile, enter pending-post-move-attack state.
+    # The player must then ATTACK or DECLINE_POST_MOVE_ATTACK as the
+    # continuation of the same logical action (single react window).
     if library is not None:
-        state = _auto_attack_after_move(state, new_minion, library)
+        attacker_card = library.get_by_id(new_minion.card_numeric_id)
+        if attacker_card.attack_range == 0 and _has_any_attack_target(state, new_minion, library):
+            state = replace(state, pending_post_move_attacker_id=new_minion.instance_id)
 
     return state
 
 
-def _auto_attack_after_move(
-    state: GameState, moved_minion: MinionInstance, library: CardLibrary,
-) -> GameState:
-    """After moving, auto-attack the closest enemy in range if one exists."""
-    attacker_card = library.get_by_id(moved_minion.card_numeric_id)
-    best_target = None
-    best_dist = 999
-
+def _has_any_attack_target(
+    state: GameState, attacker_minion: MinionInstance, library: CardLibrary,
+) -> bool:
+    """Return True if attacker has at least one in-range enemy from current tile."""
+    attacker_card = library.get_by_id(attacker_minion.card_numeric_id)
     for m in state.minions:
-        if m.owner == moved_minion.owner:
+        if m.owner == attacker_minion.owner:
             continue
-        if not _can_attack(moved_minion, m, attacker_card):
-            continue
-        dist = Board.manhattan_distance(moved_minion.position, m.position)
-        if dist < best_dist:
-            best_dist = dist
-            best_target = m
-
-    if best_target is None:
-        return state
-
-    # Range combat with first strike rules
-    defender_card = library.get_by_id(best_target.card_numeric_id)
-    atk_eff = attacker_card.attack + moved_minion.attack_bonus
-    def_eff = defender_card.attack + best_target.attack_bonus
-
-    atk_range = attacker_card.attack_range or 0
-    def_range = defender_card.attack_range or 0
-    def_can_reach = (def_range == 0 and best_dist <= 1) or (def_range > 0 and best_dist <= def_range)
-
-    # Moving unit with shorter range = faster, strikes first
-    attacker_first = atk_range < def_range and def_can_reach
-
-    if not def_can_reach:
-        new_defender = replace(best_target, current_health=best_target.current_health - atk_eff)
-        new_minions = _replace_minion(state.minions, moved_minion.instance_id, moved_minion)
-        new_minions = _replace_minion(new_minions, best_target.instance_id, new_defender)
-    elif attacker_first:
-        new_defender = replace(best_target, current_health=best_target.current_health - atk_eff)
-        if new_defender.current_health > 0:
-            new_attacker = replace(moved_minion, current_health=moved_minion.current_health - def_eff)
-        else:
-            new_attacker = moved_minion
-        new_minions = _replace_minion(state.minions, new_attacker.instance_id, new_attacker)
-        new_minions = _replace_minion(new_minions, new_defender.instance_id, new_defender)
-    else:
-        new_attacker = replace(moved_minion, current_health=moved_minion.current_health - def_eff)
-        new_defender = replace(best_target, current_health=best_target.current_health - atk_eff)
-        new_minions = _replace_minion(state.minions, new_attacker.instance_id, new_attacker)
-        new_minions = _replace_minion(new_minions, new_defender.instance_id, new_defender)
-
-    return replace(state, minions=new_minions)
+        if _can_attack(attacker_minion, m, attacker_card):
+            return True
+    return False
 
 
 def _apply_play_card(
