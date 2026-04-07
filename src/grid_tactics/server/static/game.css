@@ -1545,9 +1545,9 @@ body {
 
 /* Minion action menu (transform / sacrifice popup on selected minion) */
 .minion-action-menu {
-  position: absolute;
-  top: -8px;
-  left: 50%;
+  position: fixed;
+  /* left/top are set inline by JS via getBoundingClientRect; this transform
+     anchors the menu so it sits above the cell, horizontally centered. */
   transform: translate(-50%, -100%);
   background: var(--card);
   border: 1px solid var(--cyan);
@@ -1556,7 +1556,7 @@ body {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  z-index: 50;
+  z-index: 1200;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.6);
   white-space: nowrap;
 }

@@ -2662,10 +2662,13 @@ function onBoardMinionClick(minion) {
 
 // Show a popup action menu sticking out from the selected minion's tile.
 // Always shows Move/Attack/Effects/Cancel — options are disabled or hidden if not applicable.
+// Uses fixed positioning anchored to the cell rect so it can't be clipped by
+// .board-cell's overflow:hidden (which exists for the card-art background).
 function showMinionActionMenu(minion, moves, attacks, transforms, canSac) {
     hideMinionActionMenu();
     var cell = document.querySelector('.board-cell[data-row="' + minion.position[0] + '"][data-col="' + minion.position[1] + '"]');
     if (!cell) return;
+    var rect = cell.getBoundingClientRect();
 
     var menu = document.createElement('div');
     menu.id = 'minion-action-menu';
@@ -2737,7 +2740,11 @@ function showMinionActionMenu(minion, moves, attacks, transforms, canSac) {
         updateHandHighlights();
     });
 
-    cell.appendChild(menu);
+    // Append to body and position via fixed coordinates so the menu escapes
+    // .board-cell's overflow:hidden clip.
+    document.body.appendChild(menu);
+    menu.style.left = (rect.left + rect.width / 2) + 'px';
+    menu.style.top = (rect.top - 8) + 'px';
 }
 
 function hideMinionActionMenu() {
