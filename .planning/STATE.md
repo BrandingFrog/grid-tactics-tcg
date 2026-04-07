@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Online PvP Dueling
 status: verifying
-stopped_at: "Phase 14.3-01 complete (AnimationQueue infra). Next: 14.3-02 summon animation."
-last_updated: "2026-04-07T15:41:00.000Z"
+stopped_at: "Phase 14.3-02 complete (summon animation + grid shake). Next: 14.3-03 move animation."
+last_updated: "2026-04-07T15:55:00.000Z"
 last_activity: 2026-04-07
 progress:
   total_phases: 5
@@ -26,9 +26,9 @@ See: .planning/PROJECT.md (updated 2026-04-04)
 ## Current Position
 
 Phase: 14.3 (game-juice) — IN PROGRESS
-Plan: 1 of N (animation queue infra) — COMPLETE
-Status: 14.3-01 landed. Client-side AnimationQueue + applyStateFrame refactor in place. State frames for action transitions (summon/move/attack) are buffered behind animations; pending UIs (react banner, tutor modal, post-move-attack pick) are structurally gated because they live inside renderGame which only runs from applyStateFrame. Wave 1 animations are 0ms no-op stubs — gameplay identical to pre-14.3. Waves 2-4 plug real visuals into playAnimation branches.
-Last activity: 2026-04-07 — Completed 14.3-01-PLAN.md
+Plan: 2 of N (summon animation) — COMPLETE
+Status: 14.3-02 landed. Summon scale-in (2x→1x, 600ms, springy) + grid shake (350ms) hooked into the Wave 1 AnimationQueue. animatingTiles registry pattern established for Wave 3/4 reuse. job.stateApplied opt-out flag added to runQueue for animations that apply state up-front (summon) vs. post-animation (future move/attack). deriveAnimationJob hardened to only emit 'summon' when a minion actually appeared in next.minions (guards magic-with-position). React window remains structurally gated.
+Last activity: 2026-04-07 — Completed 14.3-02-PLAN.md
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -135,6 +135,10 @@ Recent decisions affecting current work:
 - [Phase 14.3-01]: Pending-UI gating is STRUCTURAL, not guarded. React banner / tutor modal / post-move-attack picker live inside renderGame → applyStateFrame → runQueue post-animation callback. No explicit isAnimating() guard needed on sync calls.
 - [Phase 14.3-01]: Non-action frames (first frame, noop diffs) bypass the queue via direct applyStateFrame — keeps lobby/meta/react-open-close responsive. Only summon/move/attack diffs from next.pending_action enqueue.
 - [Phase 14.3-01]: Wave 1 playAnimation branches are all setTimeout(done, 0) stubs. Waves 2-4 replace branches with real visuals; contract is "call done() when animation finishes".
+- [Phase 14.3-02]: Summon animation = 600ms scale-in (2x→1x, springy cubic-bezier) + 350ms grid shake. animatingTiles registry { "r,c": kind } is the Wave 3/4 reuse target; renderBoard tags .board-cell with anim-<kind> generically.
+- [Phase 14.3-02]: runQueue gained a job.stateApplied opt-out flag. Animations that need the new state visible during the animation (summon) call applyStateFrame themselves and set the flag; animations that need the old state to persist (future attack) leave the flag false and let runQueue apply post-animation.
+- [Phase 14.3-02]: deriveAnimationJob for PLAY_CARD now verifies a minion actually appeared at pa.position in next.minions before emitting 'summon'. Guards magic-with-position cards from being misclassified.
+- [Phase 14.3-02]: Last session: 2026-04-07T15:55:00.000Z — Stopped at: Completed 14.3-02-PLAN.md (summon animation). Next: 14.3-03 move animation.
 
 ### Pending Todos
 
