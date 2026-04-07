@@ -306,7 +306,17 @@ def _apply_promote(state, active, card_ids, caster_owners, card_table):
 
 
 def _apply_tutor(state, active, card_ids, caster_owners, card_table):
-    """TUTOR: Search deck for tutor_target card and add to hand."""
+    """TUTOR (Phase 14.2): enter pending_tutor state instead of auto-pulling.
+
+    Scans the caster's deck for cards matching `tutor_target` (string card_id
+    OR dict selector via tutor_selector_* columns), collects up to K=8 deck
+    indices into pending_tutor_matches, and sets pending_tutor_player to the
+    caster idx. Games with zero matches leave pending unset (no-op), matching
+    the Python engine's `_enter_pending_tutor` semantics.
+
+    The react window for the playing action is deferred by the engine while
+    pending_tutor_player >= 0 (handled in engine._step_action_phase).
+    """
     if not active.any():
         return
     N = active.shape[0]
@@ -314,54 +324,85 @@ def _apply_tutor(state, active, card_ids, caster_owners, card_table):
     arange_n = torch.arange(N, device=device)
 
     safe_ids = card_ids.clamp(0).long()
-    target_cid = card_table.tutor_target_id[safe_ids]  # [N]
-    valid = active & (target_cid >= 0)
-
+    has_target = card_table.tutor_has_target[safe_ids]  # [N] bool
+    valid = active & has_target
     if not valid.any():
         return
+
+    # Mutual exclusion with pending_post_move_attacker — assert before writes
+    bad = valid & (state.pending_post_move_attacker >= 0)
+    if bool(bad.any().item()):
+        raise AssertionError(
+            "pending_tutor cannot coexist with pending_post_move_attacker"
+        )
 
     player_idx = caster_owners.long()
     deck_top = state.deck_tops[arange_n, player_idx]  # [N]
     deck_size = state.deck_sizes[arange_n, player_idx]  # [N]
 
-    # Search deck for target card (loop over fixed MAX_DECK positions)
-    found_pos = torch.full((N,), -1, dtype=torch.long, device=device)
-    for d in range(MAX_DECK):
-        d_card = state.decks[arange_n, player_idx, d]  # [N]
-        in_deck = (d >= deck_top) & (d < deck_size)
-        is_match = valid & in_deck & (d_card == target_cid) & (found_pos < 0)
-        found_pos = torch.where(is_match, torch.tensor(d, device=device, dtype=torch.long), found_pos)
+    # String-form target (back-compat)
+    target_cid = card_table.tutor_target_id[safe_ids]  # [N], -1 = no string target
 
-    found = valid & (found_pos >= 0)
+    # Dict-form selector columns (-1 = unconstrained, -2 = unsatisfiable)
+    sel_tribe = card_table.tutor_selector_tribe_id[safe_ids]      # [N]
+    sel_elem = card_table.tutor_selector_element[safe_ids]        # [N]
+    sel_ctype = card_table.tutor_selector_card_type[safe_ids]     # [N]
+
+    # Walk the deck and collect up to K=8 match indices per game
+    K = 8
+    matches = torch.full((N, K), -1, dtype=torch.int32, device=device)
+    counts = torch.zeros(N, dtype=torch.int32, device=device)
+
+    for d in range(MAX_DECK):
+        d_card = state.decks[arange_n, player_idx, d]  # [N] int32
+        in_deck = valid & (d >= deck_top) & (d < deck_size) & (d_card >= 0)
+
+        safe_dc = d_card.clamp(0).long()
+
+        # String-form: exact card_id equality (only when target_cid >= 0)
+        string_match = (target_cid >= 0) & (d_card == target_cid)
+
+        # Dict-form: AND of provided constraints (only when target_cid < 0
+        # AND has_target). Each unconstrained column (-1) auto-passes; -2 fails.
+        cand_tribe = card_table.tribe_id[safe_dc]
+        cand_elem = card_table.element[safe_dc]
+        cand_ctype = card_table.card_type[safe_dc]
+
+        tribe_ok = (sel_tribe == -1) | ((sel_tribe >= 0) & (cand_tribe == sel_tribe))
+        elem_ok = (sel_elem == -1) | ((sel_elem >= 0) & (cand_elem == sel_elem))
+        ctype_ok = (sel_ctype == -1) | ((sel_ctype >= 0) & (cand_ctype == sel_ctype))
+        dict_match = (target_cid < 0) & has_target & tribe_ok & elem_ok & ctype_ok
+
+        is_match = in_deck & (string_match | dict_match)
+        if not is_match.any():
+            continue
+
+        # Append d at slot=counts[g] for matching games (if counts < K)
+        slot_idx = counts.clamp(0, K - 1).long()
+        # K cap assertion: no game should overflow (current decks ~6 copies max)
+        overflow = is_match & (counts >= K)
+        if bool(overflow.any().item()):
+            raise AssertionError(
+                f"pending_tutor: more than K={K} deck matches in one game; bump K"
+            )
+
+        # Scatter d into matches[g, counts[g]] only where is_match
+        cur = matches[arange_n, slot_idx]
+        new_val = torch.where(is_match, torch.tensor(d, device=device, dtype=torch.int32), cur)
+        matches[arange_n, slot_idx] = new_val
+        counts = counts + is_match.int()
+
+    found = valid & (counts > 0)
     if not found.any():
         return
 
-    safe_found = found_pos.clamp(0).long()
-    tutored_card = state.decks[arange_n, player_idx, safe_found]
-
-    # Remove from deck: swap with last card, shrink size
-    last_idx = (deck_size - 1).clamp(0).long()
-    last_card = state.decks[arange_n, player_idx, last_idx]
-    state.decks[arange_n, player_idx, safe_found] = torch.where(
-        found, last_card, state.decks[arange_n, player_idx, safe_found]
+    # Commit pending state for found games
+    state.pending_tutor_player = torch.where(
+        found, caster_owners.int(), state.pending_tutor_player
     )
-    state.decks[arange_n, player_idx, last_idx] = torch.where(
-        found, torch.tensor(-1, device=device, dtype=state.decks.dtype),
-        state.decks[arange_n, player_idx, last_idx]
-    )
-    state.deck_sizes[arange_n, player_idx] = torch.where(
-        found, deck_size - 1, state.deck_sizes[arange_n, player_idx]
-    )
-
-    # Add to hand (if hand not full)
-    hand_size = state.hand_sizes[arange_n, player_idx]
-    safe_hs = hand_size.clamp(0, MAX_HAND - 1).long()
-    can_add = found & (hand_size < MAX_HAND)
-    state.hands[arange_n, player_idx, safe_hs] = torch.where(
-        can_add, tutored_card, state.hands[arange_n, player_idx, safe_hs]
-    )
-    state.hand_sizes[arange_n, player_idx] = torch.where(
-        can_add, hand_size + 1, state.hand_sizes[arange_n, player_idx]
+    # Row-wise write: only update rows where `found`
+    state.pending_tutor_matches = torch.where(
+        found.view(N, 1), matches, state.pending_tutor_matches
     )
 
 

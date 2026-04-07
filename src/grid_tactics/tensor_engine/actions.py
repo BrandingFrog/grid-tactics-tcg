@@ -239,6 +239,95 @@ def apply_move_batch(state, mask, action_type, source_flat, direction, card_tabl
         )
 
 
+def apply_tutor_select_batch(state, mask, match_index):
+    """Phase 14.2: resolve pending_tutor by picking match `match_index`.
+
+    For each masked game with pending_tutor_player >= 0:
+      1. Read deck index from pending_tutor_matches[g, match_index].
+      2. Pop that deck card to the caster's hand (swap-with-last + shrink).
+      3. Clear pending_tutor_player and pending_tutor_matches.
+
+    `match_index` is [N] int32 (the chosen slot 0..7). Mirrors the Python
+    engine's TUTOR_SELECT path.
+    """
+    if not mask.any():
+        return
+    N = mask.shape[0]
+    device = mask.device
+    arange_n = torch.arange(N, device=device)
+
+    valid = mask & (state.pending_tutor_player >= 0)
+    if not valid.any():
+        return
+
+    safe_mi = match_index.clamp(0, 7).long()
+    deck_idx = state.pending_tutor_matches[arange_n, safe_mi]  # [N] int32, -1 if invalid slot
+    valid = valid & (deck_idx >= 0)
+    if not valid.any():
+        return
+
+    player = state.pending_tutor_player.long()
+    safe_di = deck_idx.clamp(0, 39).long()
+    tutored_card = state.decks[arange_n, player, safe_di]
+
+    # Swap-with-last + shrink (mirrors the old _apply_tutor removal)
+    deck_size = state.deck_sizes[arange_n, player]
+    last_idx = (deck_size - 1).clamp(0, 39).long()
+    last_card = state.decks[arange_n, player, last_idx]
+    state.decks[arange_n, player, safe_di] = torch.where(
+        valid, last_card, state.decks[arange_n, player, safe_di]
+    )
+    state.decks[arange_n, player, last_idx] = torch.where(
+        valid, torch.tensor(-1, device=device, dtype=state.decks.dtype),
+        state.decks[arange_n, player, last_idx]
+    )
+    state.deck_sizes[arange_n, player] = torch.where(
+        valid, deck_size - 1, state.deck_sizes[arange_n, player]
+    )
+
+    # Add to hand (if hand not full)
+    hand_size = state.hand_sizes[arange_n, player]
+    safe_hs = hand_size.clamp(0, MAX_HAND - 1).long()
+    can_add = valid & (hand_size < MAX_HAND)
+    state.hands[arange_n, player, safe_hs] = torch.where(
+        can_add, tutored_card, state.hands[arange_n, player, safe_hs]
+    )
+    state.hand_sizes[arange_n, player] = torch.where(
+        can_add, hand_size + 1, state.hand_sizes[arange_n, player]
+    )
+
+    # Clear pending tutor state
+    state.pending_tutor_player = torch.where(
+        valid, torch.tensor(-1, device=device, dtype=torch.int32),
+        state.pending_tutor_player,
+    )
+    state.pending_tutor_matches = torch.where(
+        valid.view(N, 1),
+        torch.tensor(-1, device=device, dtype=torch.int32),
+        state.pending_tutor_matches,
+    )
+
+
+def apply_decline_tutor_batch(state, mask):
+    """Phase 14.2: clear pending_tutor without moving any deck card."""
+    if not mask.any():
+        return
+    N = mask.shape[0]
+    device = mask.device
+    valid = mask & (state.pending_tutor_player >= 0)
+    if not valid.any():
+        return
+    state.pending_tutor_player = torch.where(
+        valid, torch.tensor(-1, device=device, dtype=torch.int32),
+        state.pending_tutor_player,
+    )
+    state.pending_tutor_matches = torch.where(
+        valid.view(N, 1),
+        torch.tensor(-1, device=device, dtype=torch.int32),
+        state.pending_tutor_matches,
+    )
+
+
 def _apply_decline_post_move_attack(state, mask):
     """Phase 14.1: clear pending post-move attacker for masked games.
 

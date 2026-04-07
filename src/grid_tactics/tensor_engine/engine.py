@@ -250,17 +250,45 @@ class TensorGameEngine:
             from grid_tactics.tensor_engine.actions import _apply_decline_post_move_attack
             _apply_decline_post_move_attack(s, is_decline)
 
+        # Phase 14.2: pending_tutor reinterpretation. While pending_tutor_player
+        # is set, PLAY_CARD slots [0:250] are reinterpreted as TUTOR_SELECT
+        # (hand_idx == match index) and PASS slot 1001 is reinterpreted as
+        # DECLINE_TUTOR. Mutex with pending_post_move_attacker is asserted in
+        # _apply_tutor at entry; defense in depth here.
+        has_pending_tutor_pre = s.pending_tutor_player >= 0
+        # Loud assertion: no game can have BOTH pendings active
+        if bool((has_pending_tutor_pre & has_pending_pre).any().item()):
+            raise AssertionError(
+                "pending_tutor and pending_post_move_attacker active in same game"
+            )
+        is_tutor_select = mask & has_pending_tutor_pre & (action_type == 0)
+        is_tutor_decline = mask & has_pending_tutor_pre & (action_type == 4)
+        if is_tutor_select.any() or is_tutor_decline.any():
+            from grid_tactics.tensor_engine.actions import (
+                apply_tutor_select_batch,
+                apply_decline_tutor_batch,
+            )
+            if is_tutor_select.any():
+                apply_tutor_select_batch(s, is_tutor_select, hand_idx)
+            if is_tutor_decline.any():
+                apply_decline_tutor_batch(s, is_tutor_decline)
+        # Exclude pending_tutor games from the normal action dispatch entirely:
+        # while pending_tutor was set at the start of this step, PLAY_CARD and
+        # PASS were the resolving actions, not real plays. Block them from the
+        # standard handlers below.
+        normal_mask = mask & ~has_pending_tutor_pre
+
         # Apply each action type. Decline games are excluded from PASS/fatigue
         # below to avoid double-handling.
-        apply_draw_batch(s, mask & (action_type == 3), self.card_table)
-        apply_move_batch(s, mask, action_type, source_flat, direction, self.card_table)
-        apply_play_card_batch(s, mask, action_type, hand_idx, target_flat, self.card_table)
-        apply_attack_batch(s, mask, action_type, source_flat, target_flat, self.card_table)
-        apply_sacrifice_batch(s, mask, action_type, source_flat, self.card_table)
+        apply_draw_batch(s, normal_mask & (action_type == 3), self.card_table)
+        apply_move_batch(s, normal_mask, action_type, source_flat, direction, self.card_table)
+        apply_play_card_batch(s, normal_mask, action_type, hand_idx, target_flat, self.card_table)
+        apply_attack_batch(s, normal_mask, action_type, source_flat, target_flat, self.card_table)
+        apply_sacrifice_batch(s, normal_mask, action_type, source_flat, self.card_table)
         # PASS (type 4) -- only happens when no other actions available (fatigue)
         # Escalating fatigue damage: 10, 20, 30, 40...
         # Exclude decline-as-PASS games from fatigue.
-        is_pass_action = mask & (action_type == 4) & ~is_decline
+        is_pass_action = normal_mask & (action_type == 4) & ~is_decline
         if is_pass_action.any():
             ap = s.active_player
             for p in range(2):
@@ -270,9 +298,11 @@ class TensorGameEngine:
                     fatigue_dmg = s.fatigue_count[:, p] * 10  # 10, 20, 30...
                     s.player_hp[:, p] -= fatigue_dmg * is_p_pass.int()
 
-        # Record pending action info for react condition checking (batched)
+        # Record pending action info for react condition checking (batched).
+        # Exclude pending_tutor resolution games — TUTOR_SELECT/DECLINE_TUTOR
+        # are not real plays and should not overwrite the prior pending action.
         ap = s.active_player
-        is_play = mask & (action_type == 0)
+        is_play = normal_mask & (action_type == 0)
         if is_play.any():
             # The card was already removed from hand. Look at the last graveyard entry.
             gs = s.graveyard_sizes[arange_n, ap]  # [N]
@@ -295,16 +325,16 @@ class TensorGameEngine:
                 s.pending_action_had_position,
             )
 
-        s.pending_action_type = torch.where(mask, action_type, s.pending_action_type)
+        s.pending_action_type = torch.where(normal_mask, action_type, s.pending_action_type)
 
         # For non-play actions, clear card_id and had_position
         s.pending_action_card_id = torch.where(
-            mask & ~is_play,
+            normal_mask & ~is_play,
             torch.tensor(EMPTY, device=device, dtype=torch.int32),
             s.pending_action_card_id,
         )
         s.pending_action_had_position = torch.where(
-            mask & ~is_play,
+            normal_mask & ~is_play,
             torch.tensor(False, device=device),
             s.pending_action_had_position,
         )
@@ -318,7 +348,12 @@ class TensorGameEngine:
         # Transition to REACT phase for non-terminal games.
         # Phase 14.1: defer react if a MOVE just set pending_post_move_attacker.
         # The move+attack/decline pair is one logical action with one react window.
-        should_transition = mask & ~s.is_game_over & (s.pending_post_move_attacker < 0)
+        should_transition = (
+            mask
+            & ~s.is_game_over
+            & (s.pending_post_move_attacker < 0)
+            & (s.pending_tutor_player < 0)
+        )
         if should_transition.any():
             s.phase = torch.where(should_transition, torch.tensor(1, device=device, dtype=torch.int32), s.phase)
             s.react_player = torch.where(
