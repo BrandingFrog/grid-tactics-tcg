@@ -1675,6 +1675,10 @@ function renderGame() {
     renderHand();
     renderActionBar();
     renderReactBanner();
+    // Phase 14.1: if server says a melee minion has just moved and a post-move
+    // attack decision is pending, auto-enter the attack-pick UI mode and show
+    // the decline button. Must run BEFORE highlightBoard so highlights reflect it.
+    syncPendingPostMoveAttackUI();
     // Always refresh highlights — even when it's not my turn — so stale
     // .card-playable classes from the previous render are cleared.
     highlightBoard();
@@ -1692,6 +1696,7 @@ function clearSelection() {
     selectedDeployPos = null;
     interactionMode = null;
     hideMinionActionMenu();
+    hideDeclinePostMoveAttackButton();
 }
 
 function submitAction(actionData) {
@@ -2010,6 +2015,22 @@ function onBoardCellClick(row, col) {
     var isMyTurn = legalActions && legalActions.length > 0;
     if (!isMyTurn) return;
 
+    // Phase 14.1: post-move attack-pick mode. Only valid enemy targets are
+    // clickable; everything else is inert (use Decline button to exit).
+    if (interactionMode === 'post_move_attack_pick') {
+        var validTargets = (gameState && gameState.pending_attack_valid_targets) || [];
+        var isValidTargetTile = validTargets.some(function(p) { return p[0] === row && p[1] === col; });
+        if (!isValidTargetTile) return;
+        var enemy = getMinionAt(row, col);
+        if (!enemy) return;
+        submitAction({
+            action_type: 2,
+            minion_id: gameState.pending_post_move_attacker_id,
+            target_id: enemy.instance_id,
+        });
+        return;
+    }
+
     // If we have a hand card selected for deploy
     if (interactionMode === 'play' && selectedHandIdx !== null) {
         if (canPlayCardAt(selectedHandIdx, row, col)) {
@@ -2082,6 +2103,13 @@ function onBoardMinionClick(minion) {
     if (isReactWindow()) return;  // board clicks are inert during react window
     var isMyTurn = legalActions && legalActions.length > 0;
     if (!isMyTurn) return;
+
+    // Phase 14.1: in post-move attack-pick mode, only enemy clicks on valid
+    // target tiles are honored — selecting other minions is inert.
+    if (interactionMode === 'post_move_attack_pick') {
+        onBoardCellClick(minion.position[0], minion.position[1]);
+        return;
+    }
 
     // If in target-selection mode (magic with target), use this minion's position as target
     if (interactionMode === 'target' && selectedHandIdx !== null) {
@@ -2259,11 +2287,77 @@ function getMinionAt(row, col) {
     return null;
 }
 
+// Phase 14.1: post-move attack-pick mode sync. Reads server-provided
+// pending_post_move_attacker_id and sets interactionMode + decline button.
+function syncPendingPostMoveAttackUI() {
+    var pendingId = gameState && gameState.pending_post_move_attacker_id;
+    if (pendingId != null) {
+        // Find the attacker minion to determine ownership; only the owner
+        // (the player whose turn it is) sees the picker UI.
+        var attacker = null;
+        (gameState.minions || []).forEach(function(m) {
+            if (m.instance_id === pendingId) attacker = m;
+        });
+        if (attacker && attacker.owner === myPlayerIdx) {
+            interactionMode = 'post_move_attack_pick';
+            selectedMinionId = pendingId;
+            showDeclinePostMoveAttackButton();
+            return;
+        }
+    }
+    // Not pending (or not my pending) — make sure the button is gone.
+    hideDeclinePostMoveAttackButton();
+}
+
+function showDeclinePostMoveAttackButton() {
+    if (document.getElementById('decline-post-move-attack-btn')) return;
+    var btn = document.createElement('button');
+    btn.id = 'decline-post-move-attack-btn';
+    btn.textContent = 'Decline Attack';
+    btn.title = 'End the action without attacking';
+    btn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        // ActionType.DECLINE_POST_MOVE_ATTACK = 8 (Phase 14.1)
+        submitAction({ action_type: 8 });
+    });
+    document.body.appendChild(btn);
+}
+
+function hideDeclinePostMoveAttackButton() {
+    var existing = document.getElementById('decline-post-move-attack-btn');
+    if (existing) existing.remove();
+}
+
 // Highlight valid board cells based on current selection
 function highlightBoard() {
     document.querySelectorAll('.board-cell').forEach(function(cell) {
-        cell.classList.remove('cell-valid', 'cell-attack', 'cell-selected');
+        cell.classList.remove('cell-valid', 'cell-attack', 'cell-selected',
+                              'attack-range-footprint', 'attack-valid-target');
     });
+
+    // Phase 14.1: post-move attack-pick layer (rendered first so the brighter
+    // valid-target class can override the footprint visually).
+    if (interactionMode === 'post_move_attack_pick' && gameState) {
+        var rangeTiles = gameState.pending_attack_range_tiles || [];
+        rangeTiles.forEach(function(p) {
+            var cell = document.querySelector('.board-cell[data-row="' + p[0] + '"][data-col="' + p[1] + '"]');
+            if (cell) cell.classList.add('attack-range-footprint');
+        });
+        var validTargets = gameState.pending_attack_valid_targets || [];
+        validTargets.forEach(function(p) {
+            var cell = document.querySelector('.board-cell[data-row="' + p[0] + '"][data-col="' + p[1] + '"]');
+            if (cell) cell.classList.add('attack-valid-target');
+        });
+        // Mark the attacker's own cell as selected
+        var pendingId = gameState.pending_post_move_attacker_id;
+        (gameState.minions || []).forEach(function(m) {
+            if (m.instance_id === pendingId) {
+                var mc = document.querySelector('.board-cell[data-row="' + m.position[0] + '"][data-col="' + m.position[1] + '"]');
+                if (mc) mc.classList.add('cell-selected');
+            }
+        });
+        return;  // Skip the regular selection-driven highlighting
+    }
 
     if (interactionMode === 'play' && selectedHandIdx !== null) {
         var positions = getDeployPositions(selectedHandIdx);
