@@ -164,10 +164,10 @@ class TestReactPass:
         state = replace(react_state_empty_stack, react_stack=(entry,))
         result = handle_react_action(state, pass_action(), library)
 
-        # Shield block buffs health by 2 on the minion at (1,2)
+        # Audit-followup: shield_block now BUFF_HEALTH +20 (scaled).
         minion = result.get_minion(0)
         assert minion is not None
-        assert minion.current_health == 7  # 5 + 2
+        assert minion.current_health == 25  # 5 + 20
 
         # Turn should have advanced
         assert result.phase == TurnPhase.ACTION
@@ -175,9 +175,15 @@ class TestReactPass:
         assert result.turn_number == 2
 
     def test_mana_regenerates_for_new_active_player(self, react_state_empty_stack, library):
-        """After react resolves, the new active player regenerates mana."""
-        # P2 starts with mana=5, should get +1 at turn start
-        state = react_state_empty_stack
+        """After react resolves, the new active player regenerates mana.
+
+        Audit-followup: regen is suppressed on turn 2 (P2's first action) so
+        both players start their first action with STARTING_MANA
+        (Phase 11 decision). To exercise regen, advance the fixture to a
+        later turn first.
+        """
+        # Bump turn_number so the post-flip turn is > 2 and regen applies.
+        state = replace(react_state_empty_stack, turn_number=3)
         result = handle_react_action(state, pass_action(), library)
 
         # P2 is now active (idx=1)
@@ -229,9 +235,9 @@ class TestPlayReactCard:
         assert len(result.react_stack) == 1
         assert result.react_stack[0].card_numeric_id == dark_sentinel_id
 
-        # react_mana_cost for dark_sentinel is 1: 5 - 1 = 4
+        # Audit-followup: dark_sentinel react_mana_cost is now 2: 5 - 2 = 3
         p2 = result.players[1]
-        assert p2.current_mana == 4
+        assert p2.current_mana == 3
         assert dark_sentinel_id not in p2.hand
 
     def test_insufficient_mana_raises(self, react_state_empty_stack, library):
@@ -354,7 +360,9 @@ class TestResolveReactStack:
 
         minion = result.get_minion(0)
         assert minion is not None
-        assert minion.current_health == 7  # 5 + 2
+        # Audit-followup: shield_block now buffs +20 hp (scaled). Fixture
+        # minion starts at current_health=5, so 5 + 20 = 25.
+        assert minion.current_health == 25
 
     def test_resolve_dark_mirror_damage_and_heal(self, react_state_empty_stack, library):
         """Dark mirror does damage to target and heals the owning player."""
@@ -368,14 +376,15 @@ class TestResolveReactStack:
         state = replace(react_state_empty_stack, react_stack=(entry,))
         result = resolve_react_stack(state, library)
 
-        # Damage 1 to minion at (1,2): 5-1=4
+        # Audit-followup: dark_mirror DAMAGE is now 10 (scaled). Fixture
+        # minion has current_health=5, so this is lethal — the minion is
+        # cleaned up and get_minion(0) returns None.
         minion = result.get_minion(0)
-        assert minion is not None
-        assert minion.current_health == 4
+        assert minion is None
 
-        # Heal 1 to player 1 (self_owner = player who played react = P2)
-        # dark_mirror heals self_owner which is P2
-        assert result.players[1].hp == STARTING_HP  # Already at max, heal capped
+        # Heal 10 to player 1 (self_owner = player who played react = P2),
+        # already at STARTING_HP so capped.
+        assert result.players[1].hp == STARTING_HP
 
     def test_resolve_multi_purpose_react_effect(self, react_state_empty_stack, library):
         """Multi-purpose card's DEPLOY_SELF react_effect deploys the minion during stack resolution."""
@@ -394,7 +403,8 @@ class TestResolveReactStack:
         deployed = [m for m in result.minions if m.card_numeric_id == dark_sentinel_id]
         assert len(deployed) == 1
         assert deployed[0].position == (3, 0)
-        assert deployed[0].current_health == 3  # dark_sentinel has health=3
+        # Audit-followup: dark_sentinel base health is now 30 (scaled).
+        assert deployed[0].current_health == 30
         assert deployed[0].owner == PlayerSide.PLAYER_2
 
 

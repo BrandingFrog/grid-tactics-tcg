@@ -155,7 +155,12 @@ class TestEffectType:
             assert isinstance(member, IntEnum)
 
     def test_member_count(self) -> None:
-        assert len(EffectType) == 7  # DAMAGE, HEAL, BUFF_ATTACK, BUFF_HEALTH, NEGATE, DEPLOY_SELF, RALLY_FORWARD
+        # Audit-followup test sweep: EffectType has grown via Phases 14.x +
+        # the audit's PASSIVE pipeline. Current 16 members (append-only):
+        # DAMAGE, HEAL, BUFF_ATTACK, BUFF_HEALTH, NEGATE, DEPLOY_SELF,
+        # RALLY_FORWARD, PROMOTE, TUTOR, DESTROY, BURN, DARK_MATTER_BUFF,
+        # PASSIVE_HEAL, LEAP, CONJURE, APPLY_BURNING.
+        assert len(EffectType) == 16
 
     def test_bracket_lookup(self) -> None:
         assert EffectType["DAMAGE"] is EffectType.DAMAGE
@@ -181,7 +186,9 @@ class TestTriggerType:
             assert isinstance(member, IntEnum)
 
     def test_member_count(self) -> None:
-        assert len(TriggerType) == 5  # ON_PLAY, ON_DEATH, ON_ATTACK, ON_DAMAGED, ON_MOVE
+        # Audit-followup test sweep: PASSIVE trigger added by 9608874.
+        # ON_PLAY, ON_DEATH, ON_ATTACK, ON_DAMAGED, ON_MOVE, PASSIVE.
+        assert len(TriggerType) == 6
 
     def test_bracket_lookup(self) -> None:
         assert TriggerType["ON_PLAY"] is TriggerType.ON_PLAY
@@ -225,16 +232,19 @@ class TestCardConstants:
         assert MAX_COPIES_PER_DECK == 3
 
     def test_min_deck_size(self) -> None:
-        assert MIN_DECK_SIZE == 40
+        # Audit-followup: 30-card preset deck (Phase 11 decision)
+        assert MIN_DECK_SIZE == 30
 
     def test_min_stat(self) -> None:
         assert MIN_STAT == 1
 
     def test_max_stat(self) -> None:
-        assert MAX_STAT == 5
+        # Audit-followup: stat cap raised to 50 to accommodate scaled HP/dmg
+        assert MAX_STAT == 50
 
     def test_max_effect_amount(self) -> None:
-        assert MAX_EFFECT_AMOUNT == 10
+        # Audit-followup: effect amount cap raised to 100 (HP scale)
+        assert MAX_EFFECT_AMOUNT == 100
 
 
 # ---------------------------------------------------------------------------
@@ -258,4 +268,5 @@ class TestPhase1Constants:
         assert MAX_MANA_CAP == 10
 
     def test_starting_hp(self) -> None:
-        assert STARTING_HP == 20
+        # Audit-followup: HP scaled 20 -> 100
+        assert STARTING_HP == 100

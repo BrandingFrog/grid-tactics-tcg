@@ -339,7 +339,9 @@ class TestHealSelfOwner:
         from grid_tactics.effect_resolver import resolve_effect
 
         lib = _make_test_library()
-        state = _make_state_with_minions([], p1_hp=18)
+        # Audit-followup: STARTING_HP scaled 20 -> 100. To exercise the cap
+        # we need to start near the new ceiling.
+        state = _make_state_with_minions([], p1_hp=STARTING_HP - 2)
         effect = EffectDefinition(
             effect_type=EffectType.HEAL, trigger=TriggerType.ON_PLAY,
             target=TargetType.SELF_OWNER, amount=5,
@@ -348,7 +350,7 @@ class TestHealSelfOwner:
             state, effect, caster_pos=(0, 0),
             caster_owner=PlayerSide.PLAYER_1, library=lib,
         )
-        assert new_state.players[0].hp == STARTING_HP  # capped at 20
+        assert new_state.players[0].hp == STARTING_HP  # capped
 
 
 class TestBuffAttack:

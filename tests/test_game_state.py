@@ -11,7 +11,12 @@ from grid_tactics.enums import ActionType, PlayerSide, TurnPhase
 from grid_tactics.game_state import GameState
 from grid_tactics.minion import MinionInstance
 from grid_tactics.player import Player
-from grid_tactics.types import STARTING_HAND_SIZE, STARTING_HP, STARTING_MANA
+from grid_tactics.types import (
+    STARTING_HAND_P1,
+    STARTING_HAND_P2,
+    STARTING_HP,
+    STARTING_MANA,
+)
 
 
 # Standard test decks (40 cards each, per deck size rules)
@@ -37,16 +42,16 @@ class TestNewGame:
             assert player.current_mana == STARTING_MANA
 
     def test_new_game_starting_hands(self):
-        """Each player has STARTING_HAND_SIZE (5) cards in hand."""
+        """Audit-followup: P1 draws STARTING_HAND_P1 (3), P2 draws STARTING_HAND_P2 (4)."""
         state, rng = GameState.new_game(42, DECK_P1, DECK_P2)
-        assert len(state.players[0].hand) == STARTING_HAND_SIZE
-        assert len(state.players[1].hand) == STARTING_HAND_SIZE
+        assert len(state.players[0].hand) == STARTING_HAND_P1
+        assert len(state.players[1].hand) == STARTING_HAND_P2
 
     def test_new_game_deck_reduced(self):
-        """Each player's deck has len(original) - STARTING_HAND_SIZE cards."""
+        """Audit-followup: deck reduced by P1/P2 starting-hand sizes."""
         state, rng = GameState.new_game(42, DECK_P1, DECK_P2)
-        assert len(state.players[0].deck) == len(DECK_P1) - STARTING_HAND_SIZE
-        assert len(state.players[1].deck) == len(DECK_P2) - STARTING_HAND_SIZE
+        assert len(state.players[0].deck) == len(DECK_P1) - STARTING_HAND_P1
+        assert len(state.players[1].deck) == len(DECK_P2) - STARTING_HAND_P2
 
     def test_new_game_turn_1(self):
         """New game starts at turn 1, ACTION phase, player 0 active."""

@@ -1,6 +1,44 @@
+import importlib.util
+
 import pytest
 
 from grid_tactics.enums import PlayerSide, TurnPhase
+
+
+# ---------------------------------------------------------------------------
+# Audit-followup test sweep: skip RL/tensor-engine test files when their
+# heavy dependencies (torch, sb3_contrib, flask_socketio) are not installed
+# in the local env. CI / RunPod images install these and the tests run
+# normally there. This collect_ignore_glob list is the single source of
+# truth for "tests gated on optional ML deps".
+# ---------------------------------------------------------------------------
+
+_HAS_TORCH = importlib.util.find_spec("torch") is not None
+_HAS_SB3 = importlib.util.find_spec("sb3_contrib") is not None
+_HAS_FLASK_SIO = importlib.util.find_spec("flask_socketio") is not None
+
+collect_ignore_glob: list[str] = []
+if not _HAS_TORCH:
+    collect_ignore_glob += [
+        "test_tensor_engine.py",
+        "test_tensor_engine_parity.py",
+        "test_tensor_verification.py",
+    ]
+if not _HAS_SB3:
+    collect_ignore_glob += [
+        "test_training.py",
+        "test_checkpoint_manager.py",
+        "test_self_play.py",
+        "test_action_space.py",
+        "test_observation.py",
+        "test_reward_shaping.py",
+        "test_rl_env.py",
+    ]
+if not _HAS_FLASK_SIO:
+    collect_ignore_glob += [
+        "test_pvp_server.py",
+        "test_game_flow.py",
+    ]
 from grid_tactics.types import (
     STARTING_HP,
     STARTING_MANA,

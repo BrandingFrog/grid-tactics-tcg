@@ -239,7 +239,7 @@ class TestMoveAction:
         )
         state = _make_state(minions=[minion])
         action = Action(action_type=ActionType.MOVE, minion_id=0, position=(3, 0))
-        with pytest.raises(ValueError, match="[Ff]orward|[Aa]djacent|[Nn]ot.*valid"):
+        with pytest.raises(ValueError, match="[Ff]orward|[Aa]djacent|[Nn]ot.*valid|LEAP"):
             resolve_action(state, action, lib)
 
     def test_move_opponent_minion_raises(self):
@@ -495,8 +495,10 @@ class TestAttackAction:
         action = Action(action_type=ActionType.ATTACK, minion_id=0, target_id=1)
         new_state = resolve_action(state, action, lib)
 
-        # Ranged at distance 2 orthogonal -- valid
-        assert new_state.get_minion(0).current_health == 1  # 3 - 2
+        # Ranged at distance 2 orthogonal -- valid. Audit-followup: melee
+        # defender (range=0) cannot retaliate at dist=2, so attacker takes
+        # zero counter-damage (no longer the legacy simultaneous-strike).
+        assert new_state.get_minion(0).current_health == 3  # untouched
         assert new_state.get_minion(1).current_health == 4  # 5 - 1
 
     def test_ranged_attack_diagonal_adjacent(self):
@@ -516,8 +518,10 @@ class TestAttackAction:
         action = Action(action_type=ActionType.ATTACK, minion_id=0, target_id=1)
         new_state = resolve_action(state, action, lib)
 
-        # Diagonal adjacent: chebyshev=1, should succeed
-        assert new_state.get_minion(0).current_health == 1  # 3 - 2
+        # Diagonal adjacent: chebyshev=1, should succeed. Audit-followup:
+        # melee defender (range=0) uses manhattan<=1 retaliation check;
+        # diagonal adjacency is manhattan=2, so no counter-damage.
+        assert new_state.get_minion(0).current_health == 3  # untouched
         assert new_state.get_minion(1).current_health == 4  # 5 - 1
 
     def test_melee_attack_at_distance_2_fails(self):

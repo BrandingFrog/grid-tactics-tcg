@@ -187,13 +187,16 @@ class TestReactInteraction:
         iron_guardian_id = library.get_numeric_id("iron_guardian")  # melee, attack=1, health=5
         shield_block_id = library.get_numeric_id("shield_block")  # buff_health +2
 
+        # Audit-followup: stats are scaled (fire_imp atk=20, iron_guardian
+        # hp=50, shield_block buff=+20). Use large healths so the defender
+        # actually survives one strike.
         attacker = MinionInstance(
             instance_id=0, card_numeric_id=fire_imp_id,
-            owner=PlayerSide.PLAYER_1, position=(1, 2), current_health=2,
+            owner=PlayerSide.PLAYER_1, position=(1, 2), current_health=20,
         )
         defender = MinionInstance(
             instance_id=1, card_numeric_id=iron_guardian_id,
-            owner=PlayerSide.PLAYER_2, position=(2, 2), current_health=5,
+            owner=PlayerSide.PLAYER_2, position=(2, 2), current_health=50,
         )
 
         state = _make_state(
@@ -201,26 +204,24 @@ class TestReactInteraction:
             minions=(attacker, defender),
         )
 
-        # P1 attacks: fire_imp (attack=2) vs iron_guardian (attack=1)
-        # attacker takes 1 damage: 2-1=1 (alive)
-        # defender takes 2 damage: 5-2=3 (alive)
+        # P1 attacks. Numbers (current scaled stats):
+        # fire_imp atk=20, iron_guardian atk=10. Both melee, manhattan=1.
+        # Defender survives (50 - 20 = 30) and retaliates (20 - 10 = 10).
         state = resolve_action(state, attack_action(minion_id=0, target_id=1), library)
         assert state.phase == TurnPhase.REACT
 
         # P2 plays shield_block on defender at (2,2)
         state = resolve_action(state, play_react_action(card_index=0, target_pos=(2, 2)), library)
-        # Counter-react opportunity for P1
         assert state.react_player_idx == 0
 
         # P1 passes
         state = resolve_action(state, pass_action(), library)
 
-        # shield_block resolved: buff_health +2 on defender at (2,2)
-        # iron_guardian started at 5 HP, took 2 damage (->3), then on_damaged triggered (+1 -> 4)
-        # shield_block adds +2 -> 6
+        # shield_block resolved: buff_health +20 on defender.
+        # iron_guardian: 50 - 20 = 30, then +20 from shield_block = 50.
         defender_after = state.get_minion(1)
         assert defender_after is not None
-        assert defender_after.current_health == 6  # 5 - 2 + 1(on_damaged) + 2(shield_block)
+        assert defender_after.current_health == 50
 
         # Turn advanced
         assert state.phase == TurnPhase.ACTION
@@ -324,10 +325,18 @@ class TestMultiTurnFlow:
         assert state.get_minion(1).position == (4, 4)
 
     def test_mana_deduction_and_regeneration(self, library):
-        """Mana is deducted on play and regenerated at turn start."""
+        """Mana is deducted on play and regenerated at turn start.
+
+        Audit-followup: turn-2 regen is suppressed (P2's first action) so
+        both players start with STARTING_MANA. Bump turn_number to a
+        post-suppression value to actually exercise mana regen.
+        """
+        from dataclasses import replace as _replace
         shadow_knight_id = library.get_numeric_id("shadow_knight")  # cost=3, no ON_PLAY effects
 
         state = _make_state(p1_hand=(shadow_knight_id,), p1_mana=5)
+        # Skip past the turn-2 regen suppression by starting on a later turn.
+        state = _replace(state, turn_number=3)
 
         # P1 plays shadow_knight (cost 3): 5 - 3 = 2
         state = resolve_action(state, play_card_action(card_index=0, position=(0, 0)), library)

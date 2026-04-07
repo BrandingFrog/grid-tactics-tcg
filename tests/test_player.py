@@ -41,11 +41,11 @@ class TestPlayerConstruction:
         assert p.graveyard == ()
 
     def test_starting_hp(self, make_player):
-        """Player starts with hp=20 (D-09)."""
+        """Player starts with hp=100 (audit-followup: scaled from 20)."""
         from grid_tactics.player import Player
 
         p = Player.new(PlayerSide.PLAYER_2, ())
-        assert p.hp == 20
+        assert p.hp == 100
 
     def test_player_is_frozen(self, make_player):
         """Assigning to player.hp raises FrozenInstanceError."""

@@ -358,10 +358,12 @@ class TestStatValidation:
         assert card.mana_cost == MAX_STAT
 
     def test_react_mana_cost_below_min_raises(self) -> None:
+        # Audit-followup: react_mana_cost=0 is now valid (free react abilities,
+        # cards.py:225). Use a negative value to exercise the validator.
         with pytest.raises(ValueError, match="react_mana_cost"):
             _minion_card(
                 react_effect=_heal_effect(),
-                react_mana_cost=0,
+                react_mana_cost=-1,
             )
 
     def test_react_mana_cost_above_max_raises(self) -> None:

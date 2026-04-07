@@ -324,7 +324,10 @@ class TestStarterPool:
     def test_all_cards_load_without_errors(self, starter_lib: CardLibrary) -> None:
         """All cards load successfully -- no validation errors."""
         all_cards = starter_lib.all_cards
-        assert len(all_cards) == 19
+        # Audit-followup: card pool grew well past the original 19 D-16
+        # starter set; just assert all cards parse cleanly and meet the
+        # minimum count from test_card_count_minimum.
+        assert len(all_cards) >= 19
         for card in all_cards:
             assert isinstance(card, CardDefinition)
 

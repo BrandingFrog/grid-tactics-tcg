@@ -22,8 +22,13 @@ class TestActionTypeEnum:
         assert ActionType.PLAY_REACT == 5
 
     def test_action_type_count(self):
-        """ActionType has exactly 7 members (including SACRIFICE)."""
-        assert len(ActionType) == 7
+        """ActionType count after Phase 14.x additions.
+
+        Audit-followup test sweep: PLAY_CARD, MOVE, ATTACK, DRAW, PASS,
+        PLAY_REACT, SACRIFICE, TRANSFORM, DECLINE_POST_MOVE_ATTACK,
+        TUTOR_SELECT, DECLINE_TUTOR.
+        """
+        assert len(ActionType) == 11
 
     def test_action_type_is_int(self):
         """ActionType values are ints (IntEnum pattern)."""

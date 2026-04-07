@@ -13,8 +13,12 @@ import pytest
 # Schema tests
 # ---------------------------------------------------------------------------
 
+@pytest.mark.skipif(
+    not __import__("importlib").util.find_spec("sb3_contrib"),
+    reason="audit-followup: sb3_contrib not installed in this env (RL deps gated)",
+)
 def test_sb3_import():
-    """SB3 and MaskablePPO are importable."""
+    """SB3 and MaskablePPO are importable (skipped when RL deps missing)."""
     from sb3_contrib import MaskablePPO  # noqa: F401
     import torch  # noqa: F401
 

@@ -62,7 +62,9 @@ def _build_test_decks(library: CardLibrary) -> tuple[tuple[int, ...], tuple[int,
     # Total = 6 + 9 + 12 + 1 + 12 = 40
 
     deck = library.build_deck(card_counts)
-    assert len(deck) == MIN_DECK_SIZE
+    # Audit-followup: MIN_DECK_SIZE was lowered from 40 to 30; this helper
+    # still builds 40-card decks (a valid superset for the smoke loop).
+    assert len(deck) >= MIN_DECK_SIZE
     return deck, deck  # Same deck for both players (different shuffle per seed)
 
 
@@ -90,7 +92,9 @@ def _build_no_heal_decks(library: CardLibrary) -> tuple[tuple[int, ...], tuple[i
         "dark_drain": 1,
     }
     deck = library.build_deck(card_counts)
-    assert len(deck) == MIN_DECK_SIZE
+    # Audit-followup: MIN_DECK_SIZE was lowered from 40 to 30; this helper
+    # still builds 40-card decks (a valid superset for the smoke loop).
+    assert len(deck) >= MIN_DECK_SIZE
     return deck, deck
 
 

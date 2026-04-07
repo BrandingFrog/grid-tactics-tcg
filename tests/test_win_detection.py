@@ -194,18 +194,19 @@ class TestLethalSacrifice:
 class TestLegalActionsGameOver:
     """Test that legal_actions returns only PASS when game is over."""
 
-    def test_game_over_returns_only_pass(self):
-        """When is_game_over=True, legal_actions returns only PASS."""
+    def test_game_over_returns_no_actions(self):
+        """Audit-followup: legal_actions returns () when is_game_over=True
+        (legal_actions.py line 72 — game-over short-circuits to empty tuple).
+        """
         lib = _make_test_library()
         state = _make_state(p1_hp=0, p2_hp=10)
         state = replace(state, is_game_over=True, winner=PlayerSide.PLAYER_2)
 
         actions = legal_actions(state, lib)
-        assert len(actions) == 1
-        assert actions[0].action_type == ActionType.PASS
+        assert actions == ()
 
-    def test_game_over_react_phase_returns_only_pass(self):
-        """When is_game_over=True in REACT phase, legal_actions returns only PASS."""
+    def test_game_over_react_phase_returns_no_actions(self):
+        """Audit-followup: same in REACT phase — game-over short-circuits."""
         lib = _make_test_library()
         state = _make_state(p1_hp=0, p2_hp=10)
         state = replace(
@@ -214,8 +215,7 @@ class TestLegalActionsGameOver:
         )
 
         actions = legal_actions(state, lib)
-        assert len(actions) == 1
-        assert actions[0].action_type == ActionType.PASS
+        assert actions == ()
 
 
 # ---------------------------------------------------------------------------
