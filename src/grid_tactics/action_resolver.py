@@ -112,10 +112,15 @@ def _can_attack(
 # ---------------------------------------------------------------------------
 
 
+FATIGUE_DAMAGE = 5
+
+
 def _apply_pass(state: GameState) -> GameState:
     """Apply PASS action. Only triggers when no other actions available.
 
-    Applies escalating fatigue damage: 10, 20, 30...
+    Deals a flat FATIGUE_DAMAGE (5) to the active player. The client
+    surfaces this via a big 'NO ACTION AVAILABLE' nudge overlay when
+    the resulting state shows fatigue_counts incrementing.
     Fatigue counts are stored in GameState.fatigue_counts (per-player tuple)
     instead of a module-level dict, ensuring concurrent game safety.
     """
@@ -123,8 +128,7 @@ def _apply_pass(state: GameState) -> GameState:
     player = state.players[active_idx]
     counts = list(state.fatigue_counts)
     counts[active_idx] += 1
-    dmg = counts[active_idx] * 10
-    new_player = replace(player, hp=player.hp - dmg)
+    new_player = replace(player, hp=player.hp - FATIGUE_DAMAGE)
     new_players = _replace_player(state.players, active_idx, new_player)
     return replace(state, players=new_players, fatigue_counts=tuple(counts))
 

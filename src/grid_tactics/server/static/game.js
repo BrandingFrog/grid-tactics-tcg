@@ -326,6 +326,18 @@ function onChatMessage(data) {
 
 // Generic chat-nudge runner. Mounts a fixed full-screen overlay with
 // the given inner HTML + duration, removes itself when done.
+// No-action fatigue nudge — fires when the player has zero legal
+// actions and the engine auto-passes, dealing 5 player HP damage.
+// Big skull + -5❤️ + "NO ACTION AVAILABLE" in Luckiest Guy.
+function triggerNoActionNudge() {
+    playSfx('defeat');
+    runNudge('nudge-no-action',
+        '<div class="no-action-skull">💀</div>' +
+        '<div class="no-action-damage">-5❤️</div>' +
+        '<div class="no-action-text">NO ACTION AVAILABLE</div>',
+        3000);
+}
+
 function runNudge(id, innerHtml, durationMs) {
     var existing = document.getElementById(id);
     if (existing) existing.remove();
@@ -2179,6 +2191,21 @@ function _applyStateFrameImmediate(frame, legal, prevState) {
             });
         }
     } catch (e) { /* defensive: never block state application */ }
+
+    // Fatigue nudge: if either player's fatigue_counts just incremented,
+    // trigger the NO ACTION AVAILABLE overlay on the fatigued player's screen.
+    try {
+        if (prevState && prevState.fatigue_counts && frame && frame.fatigue_counts) {
+            for (var fi = 0; fi < 2; fi++) {
+                var prevFat = prevState.fatigue_counts[fi] || 0;
+                var nextFat = frame.fatigue_counts[fi] || 0;
+                if (nextFat > prevFat && fi === myPlayerIdx) {
+                    triggerNoActionNudge();
+                    break;
+                }
+            }
+        }
+    } catch (e) {}
 
     gameState = frame;
     if (legal !== undefined) legalActions = legal;
