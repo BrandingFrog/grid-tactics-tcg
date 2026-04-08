@@ -20,8 +20,21 @@ import torch
 import torch.nn.functional as F
 from torch.distributions import Categorical
 
-# --- Patch version (increment when rules/cards/deck change) ---
-PATCH_VERSION = "0.8A"  # draw as action, no pass, fatigue bleed 10/20/30, 30 card deck, curriculum
+# --- Patch version (reads VERSION.json so it auto-syncs with the web game) ---
+def _load_patch_version():
+    try:
+        vf = Path(__file__).parent / "src" / "grid_tactics" / "server" / "static" / "VERSION.json"
+        if vf.exists():
+            import json as _json
+            data = _json.loads(vf.read_text(encoding="utf-8"))
+            v = data.get("version", "0.0.0")
+            channel = data.get("channel", "")
+            return f"{v}-{channel}" if channel else v
+    except Exception:
+        pass
+    return "0.0.0"
+
+PATCH_VERSION = _load_patch_version()
 
 # --- Supabase reporting (optional, skipped if env vars missing) ---
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "")
@@ -644,8 +657,11 @@ def main():
     num_updates = TOTAL_STEPS // (N_STEPS * N_ENVS)
     start_time = time.perf_counter()
 
-    out_dir = Path("/root/output")
-    out_dir.mkdir(exist_ok=True)
+    # Output dir: RunPod uses /root/output; local Windows/Linux dev uses ./output.
+    # OUTPUT_DIR env var overrides both.
+    default_out = Path("/root/output") if os.path.isdir("/root") else Path("output")
+    out_dir = Path(os.environ.get("OUTPUT_DIR", str(default_out)))
+    out_dir.mkdir(parents=True, exist_ok=True)
     snapshots = []
 
     for update in range(1, num_updates + 1):
@@ -655,6 +671,14 @@ def main():
             obs = encode_observations_batch(state, card_table, state.active_player)
             legal = compute_legal_mask_batch(state, card_table).bool()
 
+            # Safety net: any game whose mask is entirely False falls back
+            # to PASS (slot 1001). Prevents multinomial / Categorical from
+            # blowing up on degenerate state transitions.
+            from grid_tactics.tensor_engine.constants import PASS_IDX as _PASS_IDX
+            no_legal = ~legal.any(dim=-1)
+            if no_legal.any():
+                legal[no_legal, _PASS_IDX] = True
+
             with torch.no_grad():
                 action, log_prob, _, value = policy.get_action_and_value(obs, legal)
 
@@ -663,6 +687,15 @@ def main():
             is_opponent = (active == 1)
             if is_opponent.any():
                 opp_legal = legal[is_opponent].float()
+                # Safety net: any game with zero legal actions falls back to
+                # PASS (slot 1001). torch.multinomial crashes on all-zero rows.
+                # The in-engine safety net in legal_actions should catch this,
+                # but we double-gate here in case a pending-state override
+                # slipped a zero row through.
+                from grid_tactics.tensor_engine.constants import PASS_IDX as _PASS_IDX
+                zero_rows = opp_legal.sum(dim=-1) == 0
+                if zero_rows.any():
+                    opp_legal[zero_rows, _PASS_IDX] = 1.0
                 opp_legal = opp_legal / opp_legal.sum(dim=-1, keepdim=True).clamp(min=1)
                 action[is_opponent] = torch.multinomial(opp_legal, 1).squeeze(-1)
 
