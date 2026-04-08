@@ -1,5 +1,6 @@
 {
     "card_id": "green_diodebot",
+    "stable_id": 16,
     "name": "Green Diodebot",
     "card_type": "minion",
     "mana_cost": 2,

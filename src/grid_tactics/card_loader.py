@@ -78,6 +78,7 @@ class CardLoader:
         # Construct CardDefinition -- __post_init__ validates invariants
         return CardDefinition(
             card_id=card_id,
+            stable_id=int(data.get("stable_id", 0)),
             name=data["name"],
             card_type=card_type,
             mana_cost=data.get("mana_cost", 0),

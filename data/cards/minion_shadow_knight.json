@@ -1,5 +1,6 @@
 {
     "card_id": "shadow_knight",
+    "stable_id": 29,
     "name": "Shadow Knight",
     "card_type": "minion",
     "mana_cost": 3,

@@ -1,5 +1,6 @@
 {
     "card_id": "holy_paladin",
+    "stable_id": 18,
     "name": "Holy Paladin",
     "card_type": "minion",
     "mana_cost": 3,

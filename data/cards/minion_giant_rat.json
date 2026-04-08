@@ -1,5 +1,6 @@
 {
     "card_id": "giant_rat",
+    "stable_id": 14,
     "name": "Giant Rat",
     "card_type": "minion",
     "mana_cost": 3,

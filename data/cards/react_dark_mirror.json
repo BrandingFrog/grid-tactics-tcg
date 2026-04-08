@@ -1,5 +1,6 @@
 {
     "card_id": "dark_mirror",
+    "stable_id": 6,
     "name": "Dark Mirror",
     "card_type": "react",
     "mana_cost": 1,

@@ -53,6 +53,7 @@ def _build_card_defs(library):
                 }
             defs[nid] = {
                 "card_id": card.card_id,
+                "stable_id": card.stable_id,
                 "name": card.name,
                 "card_type": int(card.card_type),
                 "mana_cost": card.mana_cost,

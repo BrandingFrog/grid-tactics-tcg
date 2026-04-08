@@ -1,5 +1,6 @@
 {
     "card_id": "light_cleric",
+    "stable_id": 21,
     "name": "Light Cleric",
     "card_type": "minion",
     "mana_cost": 2,

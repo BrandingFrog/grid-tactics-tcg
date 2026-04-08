@@ -1,5 +1,6 @@
 {
     "card_id": "counter_spell",
+    "stable_id": 2,
     "name": "Counter Spell",
     "card_type": "react",
     "mana_cost": 2,

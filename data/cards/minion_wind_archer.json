@@ -1,5 +1,6 @@
 {
     "card_id": "wind_archer",
+    "stable_id": 34,
     "name": "Wind Archer",
     "card_type": "minion",
     "mana_cost": 2,

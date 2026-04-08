@@ -1,5 +1,6 @@
 {
     "card_id": "shadow_stalker",
+    "stable_id": 30,
     "name": "Shadow Stalker",
     "card_type": "minion",
     "mana_cost": 1,

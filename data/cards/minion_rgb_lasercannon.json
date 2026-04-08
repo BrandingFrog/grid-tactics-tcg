@@ -1,5 +1,6 @@
 {
     "card_id": "rgb_lasercannon",
+    "stable_id": 28,
     "name": "RGB Lasercannon",
     "card_type": "minion",
     "mana_cost": 3,

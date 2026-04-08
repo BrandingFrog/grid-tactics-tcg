@@ -83,6 +83,12 @@ class CardDefinition:
     health: Optional[int] = None
     attack_range: Optional[int] = None  # named attack_range to avoid shadowing builtin range()
 
+    # Permanent numeric ID for deck codes (GT2 format). Assigned once,
+    # NEVER reassigned. Default 0 = not yet assigned (tests / programmatic
+    # cards without a JSON file). Real cards loaded from data/cards/ all
+    # have a stable_id.
+    stable_id: int = 0
+
     # Element/tribes (D-09, D-10)
     element: Optional[Element] = None
     tribe: Optional[str] = None

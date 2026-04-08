@@ -1,5 +1,6 @@
 {
     "card_id": "emberplague_rat",
+    "stable_id": 8,
     "name": "Emberplague Rat",
     "card_type": "minion",
     "mana_cost": 2,

@@ -1,5 +1,6 @@
 {
     "card_id": "dark_drain",
+    "stable_id": 4,
     "name": "Dark Drain",
     "card_type": "magic",
     "mana_cost": 2,

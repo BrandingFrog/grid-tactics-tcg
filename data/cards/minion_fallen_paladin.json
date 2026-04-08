@@ -1,5 +1,6 @@
 {
     "card_id": "fallen_paladin",
+    "stable_id": 9,
     "name": "Fallen Paladin",
     "card_type": "minion",
     "mana_cost": 5,

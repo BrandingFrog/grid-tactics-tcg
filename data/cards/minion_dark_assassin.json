@@ -1,5 +1,6 @@
 {
     "card_id": "dark_assassin",
+    "stable_id": 3,
     "name": "Dark Assassin",
     "card_type": "minion",
     "mana_cost": 2,

@@ -1,5 +1,6 @@
 {
     "card_id": "pyre_archer",
+    "stable_id": 22,
     "name": "Pyre Archer",
     "card_type": "minion",
     "mana_cost": 3,

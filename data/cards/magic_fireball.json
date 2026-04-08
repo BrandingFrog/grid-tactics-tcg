@@ -1,5 +1,6 @@
 {
     "card_id": "fireball",
+    "stable_id": 11,
     "name": "Fireball",
     "card_type": "magic",
     "mana_cost": 3,

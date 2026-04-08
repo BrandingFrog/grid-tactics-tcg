@@ -1,5 +1,6 @@
 {
     "card_id": "rat",
+    "stable_id": 23,
     "name": "Common Rat",
     "card_type": "minion",
     "mana_cost": 1,

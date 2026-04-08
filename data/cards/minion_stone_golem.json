@@ -1,5 +1,6 @@
 {
     "card_id": "stone_golem",
+    "stable_id": 32,
     "name": "Stone Golem",
     "card_type": "minion",
     "mana_cost": 4,

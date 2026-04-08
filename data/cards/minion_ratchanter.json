@@ -1,5 +1,6 @@
 {
     "card_id": "ratchanter",
+    "stable_id": 24,
     "name": "Ratchanter",
     "card_type": "minion",
     "mana_cost": 4,

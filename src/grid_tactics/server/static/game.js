@@ -752,61 +752,102 @@ function deleteDeckSlot(idx) {
 
 // =============================================
 // Deck code export / import
-// Format: GT1:<base64url of JSON [[card_id, count], ...]>
-// Stable, cross-platform (Python tensor_train.py decodes the same format).
+// GT2 (preferred): raw bytes [stable_id, count, stable_id, count, ...]
+//                  then base64url. ~40 chars for a full 30-card deck.
+// GT1 (legacy):    JSON [[card_id, count], ...] then base64url.
+// Cross-platform — src/grid_tactics/deck_code.py decodes the same format.
 // =============================================
-var DECK_CODE_PREFIX = 'GT1:';
+var DECK_CODE_PREFIX_V2 = 'GT2:';
+var DECK_CODE_PREFIX_V1 = 'GT1:';
+
+function _b64urlEncodeBytes(bytes) {
+    var s = '';
+    for (var i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i]);
+    return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+function _b64urlDecodeBytes(b64) {
+    b64 = b64.replace(/-/g, '+').replace(/_/g, '/');
+    while (b64.length % 4) b64 += '=';
+    var s = atob(b64);
+    var out = new Uint8Array(s.length);
+    for (var i = 0; i < s.length; i++) out[i] = s.charCodeAt(i);
+    return out;
+}
 
 function encodeDeckCode(deckObj) {
-    // deckObj is { numericId: count } — convert to [[card_id, count], ...]
+    // deckObj is { numericId: count } — look up each card's stable_id from
+    // cardDefs and pack as [stable_id, count] uint8 pairs.
+    var defs = allCardDefs || cardDefs;
     var entries = [];
     for (var numId in deckObj) {
         var c = deckObj[numId];
         if (!c || c <= 0) continue;
-        var def = (allCardDefs || cardDefs)[numId];
-        if (!def || !def.card_id) continue;
-        entries.push([def.card_id, c]);
+        var def = defs[numId];
+        if (!def) continue;
+        var sid = def.stable_id;
+        if (!sid || sid <= 0 || sid > 255) {
+            throw new Error('card ' + (def.card_id || numId) + ' has no valid stable_id');
+        }
+        if (c > 255) throw new Error('count > 255 for ' + def.card_id);
+        entries.push([sid, c]);
     }
-    // Sort for stable round-trips
-    entries.sort(function (a, b) { return a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0; });
-    var json = JSON.stringify(entries);
-    // base64url (no padding)
-    var b64 = btoa(json).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-    return DECK_CODE_PREFIX + b64;
+    entries.sort(function (a, b) { return a[0] - b[0]; });
+    var bytes = new Uint8Array(entries.length * 2);
+    for (var i = 0; i < entries.length; i++) {
+        bytes[i * 2] = entries[i][0];
+        bytes[i * 2 + 1] = entries[i][1];
+    }
+    return DECK_CODE_PREFIX_V2 + _b64urlEncodeBytes(bytes);
 }
 
 function decodeDeckCode(code) {
     if (!code || typeof code !== 'string') throw new Error('Empty deck code');
     code = code.trim();
-    if (code.indexOf(DECK_CODE_PREFIX) !== 0) {
-        throw new Error('Invalid deck code — must start with ' + DECK_CODE_PREFIX);
-    }
-    var b64 = code.slice(DECK_CODE_PREFIX.length);
-    // base64url -> base64
-    b64 = b64.replace(/-/g, '+').replace(/_/g, '/');
-    while (b64.length % 4) b64 += '=';
-    var json = atob(b64);
-    var entries = JSON.parse(json);
-    if (!Array.isArray(entries)) throw new Error('Malformed deck code payload');
-    // Map back to { numericId: count }
-    var cardIdToNumId = {};
     var defs = allCardDefs || cardDefs;
-    for (var nid in defs) {
-        if (defs[nid] && defs[nid].card_id) cardIdToNumId[defs[nid].card_id] = parseInt(nid, 10);
+
+    if (code.indexOf(DECK_CODE_PREFIX_V2) === 0) {
+        var bytes = _b64urlDecodeBytes(code.slice(DECK_CODE_PREFIX_V2.length));
+        if (bytes.length % 2 !== 0) throw new Error('GT2 payload length must be even');
+        // Build stable_id -> numericId map
+        var sidToNumId = {};
+        for (var nid in defs) {
+            var d = defs[nid];
+            if (d && d.stable_id) sidToNumId[d.stable_id] = parseInt(nid, 10);
+        }
+        var deck = {};
+        var unknown = [];
+        for (var j = 0; j < bytes.length; j += 2) {
+            var sid = bytes[j];
+            var cnt = bytes[j + 1];
+            if (!sid || !cnt) continue;
+            if (!(sid in sidToNumId)) { unknown.push(sid); continue; }
+            var numId2 = sidToNumId[sid];
+            deck[numId2] = (deck[numId2] || 0) + cnt;
+        }
+        if (unknown.length) console.warn('[deck-code] unknown stable_ids:', unknown);
+        return deck;
     }
-    var deck = {};
-    var unknown = [];
-    entries.forEach(function (e) {
-        var cardId = e[0];
-        var count = e[1];
-        if (!(cardId in cardIdToNumId)) { unknown.push(cardId); return; }
-        var numId = cardIdToNumId[cardId];
-        deck[numId] = (deck[numId] || 0) + count;
-    });
-    if (unknown.length) {
-        console.warn('[deck-code] unknown card_ids skipped:', unknown);
+
+    if (code.indexOf(DECK_CODE_PREFIX_V1) === 0) {
+        // Legacy JSON format — kept so old exported codes still import
+        var json = atob(code.slice(DECK_CODE_PREFIX_V1.length)
+            .replace(/-/g, '+').replace(/_/g, '/')
+            + '==='.slice(0, (4 - code.slice(DECK_CODE_PREFIX_V1.length).length % 4) % 4));
+        var entries = JSON.parse(json);
+        if (!Array.isArray(entries)) throw new Error('Malformed GT1 payload');
+        var cardIdToNumId = {};
+        for (var nid2 in defs) {
+            if (defs[nid2] && defs[nid2].card_id) cardIdToNumId[defs[nid2].card_id] = parseInt(nid2, 10);
+        }
+        var deckLegacy = {};
+        entries.forEach(function (e) {
+            var nn = cardIdToNumId[e[0]];
+            if (nn != null) deckLegacy[nn] = (deckLegacy[nn] || 0) + e[1];
+        });
+        return deckLegacy;
     }
-    return deck;
+
+    throw new Error('Invalid deck code — must start with GT2: or GT1:');
 }
 
 function getDeckAsArray(deckObj) {

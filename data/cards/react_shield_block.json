@@ -1,5 +1,6 @@
 {
     "card_id": "shield_block",
+    "stable_id": 31,
     "name": "Shield Block",
     "card_type": "react",
     "mana_cost": 1,

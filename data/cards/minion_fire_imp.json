@@ -1,5 +1,6 @@
 {
     "card_id": "fire_imp",
+    "stable_id": 10,
     "name": "Fire Imp",
     "card_type": "minion",
     "mana_cost": 1,

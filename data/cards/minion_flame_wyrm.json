@@ -1,5 +1,6 @@
 {
     "card_id": "flame_wyrm",
+    "stable_id": 12,
     "name": "Flame Wyrm",
     "card_type": "minion",
     "mana_cost": 5,
