@@ -591,6 +591,7 @@ class TensorGameEngine:
             dead_owner = s.minion_owner.clone()    # [N, MAX_MINIONS]
             dead_row = s.minion_row.clone()        # [N, MAX_MINIONS]
             dead_col = s.minion_col.clone()        # [N, MAX_MINIONS]
+            dead_from_deck = s.minion_from_deck.clone()  # [N, MAX_MINIONS]
 
             # Remove dead minions from board -- iterate over slots (constant MAX_MINIONS=25)
             for slot in range(MAX_MINIONS):
@@ -616,14 +617,24 @@ class TensorGameEngine:
                     torch.tensor(False, device=device),
                     s.minion_alive[:, slot]
                 )
+                # Phase 14.5: clear from_deck on the vacated slot so the next
+                # occupant starts with a clean default (set True on deploy).
+                s.minion_from_deck[:, slot] = torch.where(
+                    slot_dead,
+                    torch.tensor(False, device=device),
+                    s.minion_from_deck[:, slot]
+                )
 
                 # Add to graveyard (batched per-slot)
                 cid = dead_cid[:, slot]
                 owner = dead_owner[:, slot]
 
-                # Graveyard add for player 0 owners
+                # Phase 14.5: tokens (from_deck=False) vanish silently on
+                # death; only deck-origin minions enter the graveyard.
+                slot_from_deck = dead_from_deck[:, slot]
+                # Graveyard add for player 0 owners (gated on from_deck)
                 for p in range(2):
-                    is_p = slot_dead & (owner == p)
+                    is_p = slot_dead & slot_from_deck & (owner == p)
                     if not is_p.any():
                         continue
                     gs = s.graveyard_sizes[:, p]  # [N]

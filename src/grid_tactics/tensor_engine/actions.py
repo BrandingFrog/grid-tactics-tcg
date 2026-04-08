@@ -477,8 +477,13 @@ def apply_play_card_batch(state, mask, action_type, hand_idx, target_flat, card_
     # Remove card from hand (batched shift-left)
     _remove_from_hand_batch(state, valid, ap, safe_hi, arange_n)
 
-    # Add to graveyard (batched)
-    _add_to_graveyard_batch(state, valid, ap, card_id, arange_n)
+    # Phase 14.5: Only magic one-shots route to graveyard on play.
+    # Minion plays leave the hand via remove-only; the card lands in the
+    # graveyard later via death cleanup iff from_deck=True. Mirrors Python
+    # Wave 1 split (remove_from_hand vs discard_from_hand).
+    is_magic_type = valid & (ctype == 1)
+    if is_magic_type.any():
+        _add_to_graveyard_batch(state, is_magic_type, ap, card_id, arange_n)
 
     # --- SUMMON SACRIFICE: destroy a tribe card from hand ---
     sac_tribe = card_table.summon_sacrifice_tribe_id[safe_cid]  # [N]
@@ -562,6 +567,13 @@ def _deploy_minion_batch(state, deploy_mask, owners, card_ids, target_flat, card
     state.minion_alive[arange_n, safe_slot] = torch.where(
         valid, torch.tensor(True, device=device),
         state.minion_alive[arange_n, safe_slot]
+    )
+    # Phase 14.5: normal PLAY_CARD deploys are from_deck=True. Tokens spawned
+    # via activated abilities (no tensor path exists today) would set False
+    # explicitly; leave the False default in those hypothetical paths.
+    state.minion_from_deck[arange_n, safe_slot] = torch.where(
+        valid, torch.tensor(True, device=device),
+        state.minion_from_deck[arange_n, safe_slot]
     )
     state.next_minion_slot = torch.where(
         valid, slot + 1, state.next_minion_slot
@@ -715,8 +727,10 @@ def apply_sacrifice_batch(state, mask, action_type, source_flat, card_table):
         state.minion_alive[arange_n, safe_slot]
     )
 
-    # Add to graveyard
-    _add_to_graveyard_batch(state, valid, owner, cid, arange_n)
+    # Phase 14.5: Only from_deck minions enter the graveyard on sacrifice.
+    # Tokens vanish silently. Mirrors Python _apply_sacrifice gating.
+    from_deck_mask = state.minion_from_deck[arange_n, safe_slot]
+    _add_to_graveyard_batch(state, valid & from_deck_mask, owner, cid, arange_n)
 
     # Deal damage to opponent
     opponent = (1 - state.active_player).int()  # [N]
@@ -972,7 +986,9 @@ def _apply_summon_sacrifice_batch(state, mask, player, req_tribe_id, card_table,
     sac_card = state.hands[arange_n, player, safe_idx]
 
     _remove_from_hand_batch(state, found, player, safe_idx, arange_n)
-    _add_to_graveyard_batch(state, found, player, sac_card, arange_n)
+    # Phase 14.5: summon_sacrifice_tribe discards route to EXHAUST, not
+    # graveyard. Mirrors Python Player.exhaust_from_hand.
+    _add_to_exhaust_batch(state, found, player, sac_card, arange_n)
 
 
 # ---------------------------------------------------------------------------
@@ -1029,5 +1045,25 @@ def _add_to_graveyard_batch(state, valid_mask, player, card_id, arange_n):
         can_add, card_id, state.graveyards[arange_n, player, safe_gs]
     )
     state.graveyard_sizes[arange_n, player] = torch.where(
+        can_add, gs + 1, gs
+    )
+
+
+def _add_to_exhaust_batch(state, valid_mask, player, card_id, arange_n):
+    """Phase 14.5: append card to exhaust pile at next slot -- batched.
+
+    Parallel to _add_to_graveyard_batch. Used by discard-for-cost paths
+    (summon_sacrifice_tribe). Mirrors Python Player.exhaust_from_hand.
+    """
+    device = valid_mask.device
+    gs = state.exhaust_sizes[arange_n, player]  # [N]
+    can_add = valid_mask & (gs < 80)
+    if not can_add.any():
+        return
+    safe_gs = gs.clamp(0, 79).long()
+    state.exhausts[arange_n, player, safe_gs] = torch.where(
+        can_add, card_id, state.exhausts[arange_n, player, safe_gs]
+    )
+    state.exhaust_sizes[arange_n, player] = torch.where(
         can_add, gs + 1, gs
     )
