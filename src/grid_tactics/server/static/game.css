@@ -1360,7 +1360,7 @@ body {
   position: absolute;
   top: 0;
   right: 0;
-  width: 240px;
+  width: 260px;
   max-height: 100%;
   background: var(--card);
   border: 1px solid var(--cyan);
@@ -1369,6 +1369,17 @@ body {
   overflow-y: auto;
   z-index: 50;
   box-shadow: 0 0 20px rgba(0, 212, 255, 0.15);
+}
+
+/* Full card art preview at top of tooltip */
+.tooltip-card {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 10px;
+}
+.tooltip-card .card-frame-full {
+  width: 100%;
+  max-width: 220px;
 }
 
 .tooltip-header {

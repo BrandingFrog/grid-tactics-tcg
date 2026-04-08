@@ -985,6 +985,10 @@ function showCardTooltip(numericId) {
     var tooltip = document.getElementById('card-tooltip');
     tooltip.style.display = '';
 
+    // Full card art preview — reuse the deck-builder card renderer
+    var artHost = document.getElementById('tooltip-card-art');
+    if (artHost) artHost.innerHTML = renderDeckBuilderCard(numericId, -1);
+
     // Name
     document.getElementById('tooltip-name').textContent = c.name;
 
