@@ -182,7 +182,7 @@ None yet.
 
 ### Blockers/Concerns
 
-- Known issue: RL checkpoints are now STALE after the cumulative 14.1 + 14.2 encoding reinterpretations (post-move-attack pending state + tutor selector schema + pending_tutor slot reuse). Loadable but behaviorally outdated. Retraining deferred; not blocking gameplay.
+- Known issue: RL checkpoints are now TRIPLY STALE — (1) 14.1/14.2 encoding reinterpretations (post-move-attack pending + tutor selector + pending_tutor slot reuse), (2) 8bd61e1 ACTION_SPACE_SIZE 1262→1287, (3) 14.5-02 tensor pile semantics (minion plays no longer added to graveyard on cast; exhaust pile introduced; tokens vanish silently via from_deck gate). Loadable but any observation derived from graveyard contents diverges silently. Retraining required before tournament/eval. Not blocking gameplay.
 - Research flag: Phase 15 reconnection -- cookie vs localStorage, token expiry, and state resend edge cases may surface
 - Research flag: Phase 15 timer cancellation -- start_background_task() cancellation is MEDIUM confidence per research
 - Gap: Preset deck composition (card copy counts for 30-card deck) must be decided in Phase 11
@@ -241,6 +241,20 @@ were not exercised in this sweep — that gating is unchanged. The new
 Ratchanter / Dark Matter / max_health_bonus tensor paths therefore have
 no direct unit tests yet; the existing Python ratchanter_aura and
 activated_abilities tests cover the source-of-truth behavior.
+
+### Phase 14.5 Wave 2 — tensor parity (2026-04-08)
+
+- 5157016 feat(14.5-02): add from_deck + exhaust tensors to GPU state
+- 9f284e5 feat(14.5-02): wire from_deck + exhaust through tensor play/death paths
+
+Key decisions:
+- [Phase 14.5-02]: TensorGameState gains `minion_from_deck` [N, MAX_MINIONS] bool, `exhausts` + `exhaust_sizes` [N, 2, MAX_GRAVEYARD] / [N, 2] int32. All three cleared in reset_batch, propagated by clone(), cleared on death-slot vacation.
+- [Phase 14.5-02]: Default `minion_from_deck = False`, set True on every normal deploy. Chosen over default-True-set-False-on-token because there is no tensor token-spawn path today — False default is the safe baseline for any future token code path.
+- [Phase 14.5-02]: `apply_play_card_batch` no longer unconditionally appends every play to the graveyard. Only magic plays (`ctype == 1`) route to graveyard on cast. Minion plays leave hand via remove-only and enter graveyard later via death cleanup gated on from_deck. Fixes the same double-count bug the Python engine had before Wave 1.
+- [Phase 14.5-02]: Death cleanup clones `dead_from_deck` alongside the existing dead_* snapshots per cleanup pass and gates `is_p` on `slot_from_deck`. The snapshot (not live tensor) is needed because two-pass cleanup could race against slot reuse within the same pass.
+- [Phase 14.5-02]: `_apply_summon_sacrifice_batch` routes discards through new `_add_to_exhaust_batch` helper instead of graveyard. On-board `apply_sacrifice_batch` also gates graveyard append on from_deck for symmetry (defensive — no token currently reaches the back row).
+- [Phase 14.5-02]: react play path (`apply_react_batch`) and Ratchanter activate path (`apply_activate_ability_batch`) left untouched — react one-shots correctly go to graveyard; conjured rats come from deck via pending_tutor so legitimately from_deck=True.
+- [Phase 14.5-02]: No tensor-side unit tests added — conftest gates on torch/sb3 availability and the only cross-engine parity test (`test_random_games_match`) is on the pre-existing hand_size-mismatch baseline-failure list. Stash-verified zero regressions: tensor tests before diff = after diff = 27 passed / 7 failed (identical set).
 
 ### Phase 14.5 Wave 1 (2026-04-08)
 
