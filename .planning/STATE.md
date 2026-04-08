@@ -26,9 +26,9 @@ See: .planning/PROJECT.md (updated 2026-04-04)
 ## Current Position
 
 Phase: 14.5 (piles-and-hand-vis) — IN PROGRESS
-Plan: 4 of N (uniform card renderer) — COMPLETE
+Plan: 5 of N (pile buttons + shared modal + opp face-down hand row) — COMPLETE
 Status: Wave 1 engine done. MinionInstance.from_deck + Player.exhaust shipped; minion plays no longer double-count in graveyard; tokens vanish silently on death; discard-for-cost routes to exhaust. Tensor parity deferred to Wave 2. Phase 14.4 spectator mode fully shipped (waves 1-5). Backend: RoomManager._room_spectators manager-level dict survives the WaitingRoom→GameSession transition; filter_state_for_spectator is a pure function (god = deepcopy, non-god = delegate to filter_state_for_player(0)); events.py has spectate_room handler, submit_action gate ("Spectators cannot submit actions"), _fanout_state_to_spectators / _fanout_game_start_to_spectators wired into _emit_state_to_players / _emit_game_over / handle_ready / handle_request_rematch, chat broadcast inclusive of spectators, disconnect handler scoped to spectators only (player-disconnect still Phase 15 territory). Frontend: Lobby Spectate Room button + God Mode checkbox, isSpectator / spectatorGodMode flags re-synced from every state frame, early-return at all 5 action seams (submitAction + 3 click handlers + renderActionBar), dual-hand god view via renderHand appendHand helper, SPECTATING badge. Mid-game join supported via synthetic game_start from handle_spectate_room. Multi-tab smoke test deferred to post-deploy Playwright E2E.
-Last activity: 2026-04-08 — Completed 14.5-04-PLAN.md (uniform card renderer — renderCardFrame shared base for hand/deck-builder/tooltip/pile)
+Last activity: 2026-04-08 — Completed 14.5-05-PLAN.md (4 pile buttons on info-bars + shared showPileModal via renderCardFrame context:'pile' + face-down opp-hand-row reflecting hand_count every frame; inline button placement chosen over absolute corner positioning; .stat-emoji halo reused for counts)
 
 Progress: [░░░░░░░░░░] 0%
 
