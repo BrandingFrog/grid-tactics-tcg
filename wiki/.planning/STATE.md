@@ -1,17 +1,17 @@
 ---
 milestone: v1.0
-status: in-progress
-stopped_at: completed_01-03
-last_updated: 2026-04-07
+status: phase-1-complete
+stopped_at: completed_01-04
+last_updated: 2026-04-09
 progress:
   phase: 1
   phase_name: Foundation & Schema Design
-  plan: 03
+  plan: 04
   phases_total: 9
-  phases_completed: 0
-  plans_completed_in_phase: 3
+  phases_completed: 1
+  plans_completed_in_phase: 4
   plans_total_in_phase: 4
-  percent: 8
+  percent: 11
 ---
 
 # Project State — Grid Tactics Wiki
@@ -21,28 +21,28 @@ progress:
 See: `.planning/PROJECT.md`
 
 **Core value:** Living, semantically-queryable knowledge base that auto-mirrors Grid Tactics card and mechanic state via git hooks.
-**Current focus:** Phase 1 — Foundation & Schema Design
+**Current focus:** Phase 1 complete — ready for Phase 2 (Railway deploy)
 
 ## Current Position
 
-Phase: 1 of 9 (Foundation & Schema Design)
-Plan: 03 of 4 complete — SMW property schema bootstrapped (25 properties live)
-Status: In progress
-Last activity: 2026-04-07 — Completed 01-03-PLAN.md (schema.py / bootstrap_schema.py / verify_schema.py, 25 Property: pages created, idempotent, verify 25/25 OK)
+Phase: 1 of 9 (Foundation & Schema Design) — **COMPLETE**
+Plan: 04 of 4 complete — Template:Card + Card:Ratchanter sample live, full pipeline proven end-to-end
+Status: Phase complete
+Last activity: 2026-04-09 — Completed 01-04-PLAN.md (Template:Card uploaded, Card:Ratchanter created from real JSON data, SMW ask returns Cost=4 HP=30, PASS)
 
-Progress: `██░░░░░░░░` 8%
+Progress: `██░░░░░░░░` 11%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 3
-- Average duration: ~20 min/plan
+- Total plans completed: 4
+- Average duration: ~18 min/plan
 
 **By Phase:**
 
-| Phase | Plans | Total | Avg/Plan |
-|---|---|---|---|
-| 1 — Foundation & Schema Design | 3 | 4 | ~20 min |
+| Phase | Plans | Total | Avg/Plan | Status |
+|---|---|---|---|---|
+| 1 — Foundation & Schema Design | 4 | 4 | ~18 min | complete |
 
 ## Accumulated Context
 
@@ -59,32 +59,45 @@ Progress: `██░░░░░░░░` 8%
 - **[01-01]** `MW_DB_INSTALLDB_USER == MW_DB_USER` (same credential as runtime). This makes MediaWiki's installer detect installer==runtime and skip its buggy `CREATE USER`/`GRANT` step that otherwise aborts first boot with MariaDB error 1133.
 - **[01-02]** mwclient Site path is `/w/` on this Taqasta build (confirmed by curling `/w/api.php?action=query&meta=siteinfo`). Centralized in `wiki/sync/client.py::get_site()`.
 - **[01-02]** Bot credential format is `Admin@phase1` (capital A — the admin DB row is `Admin`, lowercase `admin` makes `createBotPassword.php` fail silently with exit 1).
-- **[01-02]** BotPassword grants chosen: `basic,highvolume,editpage,createeditmovepage`. Sufficient for schema bootstrap (01-03) and template uploads (01-04); widen in later plans if needed.
+- **[01-02]** BotPassword grants chosen: `basic,highvolume,editpage,createeditmovepage`. Sufficient for schema bootstrap (01-03) and template uploads (01-04); widen in Phase 3 when card art upload begins (need `upload` grant).
 - **[01-02]** `wiki/pyproject.toml` relaxed to `requires-python = ">=3.11"` for the wiki subproject (ambient interpreter is 3.11.9). The root CLAUDE.md's >=3.12 target applies to the RL engine, not the wiki bot.
 - **[01-02]** `wiki/sync/verify_smw.py` is the canonical smoke test — every downstream sync plan should run `python -m sync.verify_smw` as a gate.
 - **[01-03]** Property naming: **CamelCase** (Name, CardType, Cost, HasEffect), not snake_case. Matches SMW community convention; diverges from roadmap examples but roadmap semantics are preserved.
 - **[01-03]** `wiki/sync/schema.py` is the single source of truth — 20 core properties + 5 effect subobject fields. Any new property added in later phases goes here first, then `bootstrap_schema.py` re-runs.
-- **[01-03]** Idempotency pattern: compare `page.text().rstrip() == expected.rstrip()` because MediaWiki strips the trailing newline on storage. Exact equality would re-edit every page on every run.
+- **[01-03]** Idempotency pattern: compare `page.text().rstrip() == expected.rstrip()` because MediaWiki strips the trailing newline on storage. Exact equality would re-edit every page on every run. This pattern is now reused by `bootstrap_template.py` and `create_sample_card.py`.
 - **[01-03]** SMW change-propagation lock (`smw-change-propagation-protection`) is expected on legitimate schema expansions — `bootstrap_schema._edit_with_retry()` retries with linear backoff up to 6 times.
 - **[01-03]** `verify_schema.py`'s `ask([[Property:+]])` cross-check is a **soft** signal on SMW 6.0.1 (returns nothing on this build); the page-level `[[Has type::X]]` marker check is the authoritative gate.
 - **[01-03]** `CardType`/`Element` are SMW `Page` type with `[[Allows value::X]]` constraints. SMW does NOT auto-create target pages — Phase 3 card sync must create stub pages (Minion, Wood, ...) or accept red-link dereferences.
+- **[01-04]** `wiki/sync/templates/` is the canonical on-disk home for MediaWiki template wikitext. `.wiki` files are plain text, version-controlled, and pushed to the wiki by a paired `bootstrap_*.py` script.
+- **[01-04]** Template:Card emits infobox HTML AND SMW annotations in a single `<includeonly>` pass. Every SMW property annotation except `Name` is wrapped in `{{#if:...}}` so missing params don't pollute the store with empty values. `Name` falls back to `{{PAGENAME}}`.
+- **[01-04]** Keyword multi-valuedness is implemented via `#arraymap` (Extension:Arrays, confirmed present in the Taqasta bundle) splitting a comma-separated `keywords=` param into repeated `[[Keyword::X]]` calls.
+- **[01-04]** `mwclient.Site.ask()` yields FLAT dicts shaped `{"fulltext": "...", "printouts": {"Cost": [4], ...}}`, NOT nested-by-title. Any future verification code that reads ask results must use `result["fulltext"]` and `result["printouts"]`, not `result.items()`.
+- **[01-04]** Sample cards source values from the real `data/cards/*.json`, not from illustrative values in plan text. This makes Phase 1's sample an honest dry-run of Phase 3's sync path.
+- **[01-04]** Rules-text synthesis for cards without a `rules_text` field: derive from `activated_ability` or `effects` blocks. Phase 3 should formalize this as a dedicated helper in `sync_cards.py`.
+- **[01-04]** Subobject emission (`{{#subobject:}}`) intentionally deferred to Phase 3 — Phase 1 sample proves basic property annotations only.
 
 ### Pending Todos
 
-- Phase 1 remaining plans: 01-04 (Template:Card + PageForms)
+- **Phase 1 is complete.** Next action: Phase 2 (Railway deploy).
 - Phase 2 watch item: the `MW_DB_INSTALLDB_USER == MW_DB_USER` trick and the db-init SQL must be preserved in the Railway deploy — do NOT point installer at root credentials.
 - Phase 2 watch item: BotPassword must be recreated on the Railway instance (credential lives in the wiki DB, doesn't port across). Automate via `createBotPassword.php` one-shot after deploy.
-- Phase 2 watch item: post-deploy bootstrap sequence on Railway must include `python -m sync.bootstrap_schema` followed by `python -m sync.verify_schema` — SMW schema lives in the wiki DB and does not travel with code.
+- Phase 2 watch item: post-deploy bootstrap sequence on Railway must run in order — `bootstrap_schema.py` → `verify_schema.py` → `bootstrap_template.py` → `create_sample_card.py`. All four scripts are idempotent.
 - Phase 3 watch item: `CardType`/`Element` Page-type properties with `[[Allows value::X]]` produce red-links until stub pages are created. Decide whether to auto-create stubs or accept red-links.
-- Phase 1 open checkpoint: 01-02 Task 3 (human-verify Special:Version + bot login UI) deferred like 14.x posture — the `verify_smw.py` smoke test covers the same ground headlessly.
+- Phase 3 watch item: widen BotPassword grants to include `upload` before card art sync begins.
+- Phase 3 watch item: formalize rules-text synthesis helper (activated_ability/effects → human-readable rules string) in `sync_cards.py`.
+- Phase 1 open checkpoints (deferred in 14.x posture, not blocking):
+  - 01-02 Task 3 — visual check of Special:Version + bot login UI
+  - 01-04 Task 3 — visual check of Card:Ratchanter infobox + Factbox
+  Both are covered headlessly by the automated verification scripts; the user is expected to drop in visually at their convenience.
 
 ### Blockers/Concerns
 
 - **[01-01 minor]** `wiki/db-init/01-create-wiki-user.sql` hardcodes `wikipass` to match `.env.example`. If a designer changes `MW_DB_PASS` in `.env` without editing this file, first boot will fail with auth error. Consider templating in a future polish pass.
 - **[01-01 cosmetic]** `wiki_mediawiki` compose healthcheck lingers in `(health: starting)` even after the site serves HTTP 301. Not blocking — revisit in polish.
+- **[01-04 cosmetic]** `Card:Ratchanter` shows a broken-image placeholder for `File:Ratchanter.png`. Accepted — card art upload is Phase 3.
 
 ## Session Continuity
 
-Last session: 2026-04-07
-Stopped at: Completed 01-03-PLAN.md — 25 SMW Property: pages live, bootstrap idempotent, verify 25/25 OK
-Resume file: None (ready for 01-04 Template:Card + PageForms)
+Last session: 2026-04-09
+Stopped at: Phase 1 complete — Template:Card live, Card:Ratchanter renders with real JSON data, SMW #ask returns Cost=4 HP=30 PASS
+Resume file: None (ready for Phase 2 Railway deploy)
