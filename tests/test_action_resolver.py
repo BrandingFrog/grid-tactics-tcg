@@ -393,8 +393,10 @@ class TestPlayCardMinion:
         assert new_state.players[0].current_mana == 3  # 5 - 2
         # Card removed from hand
         assert len(new_state.players[0].hand) == 0
-        # Card in graveyard
-        assert 1 in new_state.players[0].graveyard
+        # Phase 14.5: minion plays do NOT route to graveyard on play — the
+        # card only enters graveyard if/when the minion dies (and only if
+        # from_deck=True).
+        assert 1 not in new_state.players[0].graveyard
         # Minion created on board
         assert len(new_state.minions) == 1
         m = new_state.minions[0]

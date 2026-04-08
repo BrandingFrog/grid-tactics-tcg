@@ -292,11 +292,19 @@ def _apply_play_card(
             f"Insufficient mana: have {player.current_mana}, need {card_def.mana_cost}"
         )
 
-    # Spend mana and remove card from hand (discard to graveyard)
+    # Phase 14.5 pile semantics:
+    #   - MINION plays are removed from hand and placed on the board; the card
+    #     only enters graveyard if/when the minion dies (and only if it was
+    #     from_deck=True — tokens vanish).
+    #   - MAGIC plays are one-shots and route to graveyard immediately via
+    #     discard_from_hand (the card is "played").
     new_player = player.spend_mana(card_def.mana_cost)
-    new_player = new_player.discard_from_hand(card_numeric_id)
+    if card_def.card_type == CardType.MINION:
+        new_player = new_player.remove_from_hand(card_numeric_id)
+    else:
+        new_player = new_player.discard_from_hand(card_numeric_id)
 
-    # Summon sacrifice: discard a card of the required tribe from hand.
+    # Summon sacrifice: exhaust a card of the required tribe from hand (cost).
     # Use the user's chosen sacrifice_card_index if provided; otherwise auto-pick first.
     if card_def.summon_sacrifice_tribe:
         sacrifice_id = None
@@ -323,7 +331,8 @@ def _apply_play_card(
             raise ValueError(
                 f"No {card_def.summon_sacrifice_tribe} card in hand to sacrifice"
             )
-        new_player = new_player.discard_from_hand(sacrifice_id)
+        # Phase 14.5: discard-for-cost goes to EXHAUST, not graveyard.
+        new_player = new_player.exhaust_from_hand(sacrifice_id)
 
     new_players = _replace_player(state.players, active_idx, new_player)
     state = replace(state, players=new_players)
@@ -488,11 +497,14 @@ def _apply_sacrifice(
     # Remove minion from minions tuple
     new_minions = tuple(m for m in state.minions if m.instance_id != minion.instance_id)
 
-    # Add card to owner's graveyard
+    # Add card to owner's graveyard (tokens vanish silently — Phase 14.5).
     owner_idx = int(minion.owner)
     owner_player = state.players[owner_idx]
-    new_owner = replace(owner_player, graveyard=owner_player.graveyard + (minion.card_numeric_id,))
-    new_players = _replace_player(state.players, owner_idx, new_owner)
+    if minion.from_deck:
+        new_owner = replace(owner_player, graveyard=owner_player.graveyard + (minion.card_numeric_id,))
+        new_players = _replace_player(state.players, owner_idx, new_owner)
+    else:
+        new_players = state.players
 
     # Deal damage to opponent
     opponent_idx = 1 - state.active_player_idx
@@ -649,12 +661,15 @@ def _apply_activate_ability(
                 f"summon_token target '{ability.summon_card_id}' not in library"
             )
         token_def = library.get_by_id(token_numeric_id)
+        # Phase 14.5: tokens spawned by activated abilities are NOT from the
+        # caster's deck — they vanish on death (no graveyard entry).
         token = MinionInstance(
             instance_id=state.next_minion_id,
             card_numeric_id=token_numeric_id,
             owner=active_side,
             position=target_pos,
             current_health=token_def.health,
+            from_deck=False,
         )
         new_board = state.board.place(target_pos[0], target_pos[1], token.instance_id)
         new_minions = state.minions + (token,)
@@ -893,9 +908,12 @@ def _cleanup_dead_minions(
     dead_ids = {m.instance_id for m in dead_minions}
     alive_minions = tuple(m for m in state.minions if m.instance_id not in dead_ids)
 
-    # Add dead minion cards to their owner's graveyard
+    # Add dead minion cards to their owner's graveyard.
+    # Phase 14.5: tokens (from_deck=False) vanish silently — no graveyard entry.
     new_players = state.players
     for m in dead_minions:
+        if not m.from_deck:
+            continue
         player_idx = int(m.owner)
         player = new_players[player_idx]
         new_player = replace(player, graveyard=player.graveyard + (m.card_numeric_id,))
