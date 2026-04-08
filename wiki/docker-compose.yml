@@ -20,6 +20,11 @@ services:
       MW_DB_NAME: ${MW_DB_NAME}
       MW_DB_USER: ${MW_DB_USER}
       MW_DB_PASS: ${MW_DB_PASS}
+      # Use the same wiki user as the installer. MediaWiki's installer will
+      # detect installer==runtime and skip its (buggy) CREATE USER/GRANT step.
+      # The wiki user already has full privileges on the wiki DB via db-init.
+      MW_DB_INSTALLDB_USER: ${MW_DB_USER}
+      MW_DB_INSTALLDB_PASS: ${MW_DB_PASS}
       MW_MAIN_CACHE: CACHE_REDIS
       MW_REDIS_SERVERS: redis:6379
       MW_LOAD_EXTENSIONS: SemanticMediaWiki,SemanticResultFormats,PageForms,ParserFunctions,Arrays,Scribunto,CategoryTree
@@ -37,11 +42,13 @@ services:
       - .env
     environment:
       MARIADB_ROOT_PASSWORD: ${MARIADB_ROOT_PASSWORD}
+      # NOTE: MariaDB only creates the database. The wiki user is created by
+      # Taqasta's installer (MW_DB_USER/MW_DB_PASS) using the root credentials
+      # above, so GRANTs use the correct '<user>'@'%' host pattern.
       MARIADB_DATABASE: ${MARIADB_DATABASE}
-      MARIADB_USER: ${MARIADB_USER}
-      MARIADB_PASSWORD: ${MARIADB_PASSWORD}
     volumes:
       - db_data:/var/lib/mysql
+      - ./db-init:/docker-entrypoint-initdb.d:ro
     restart: unless-stopped
 
   redis:
