@@ -33,6 +33,10 @@ class Player:
     hand: tuple[int, ...]
     deck: tuple[int, ...]
     graveyard: tuple[int, ...]
+    # Phase 14.5: cards removed from hand as a COST (e.g. summon_sacrifice_tribe
+    # discard) go here instead of graveyard. Exhaust is shown in a separate pile
+    # in the UI and is NOT considered "played" for card-effect purposes.
+    exhaust: tuple[int, ...] = ()
 
     # -- Construction -------------------------------------------------------
 
@@ -47,6 +51,35 @@ class Player:
             hand=(),
             deck=deck,
             graveyard=(),
+            exhaust=(),
+        )
+
+    # -- Phase 14.5: hand removal without graveyard side-effect ------------
+
+    def remove_from_hand(self, card_id: int) -> Player:
+        """Remove a card from hand WITHOUT adding to any pile.
+
+        Used by the minion PLAY_CARD path — deployed minions live on the board
+        and only enter the graveyard if/when they die (gated on from_deck).
+        Magic/react one-shots continue to use ``discard_from_hand`` which does
+        route to graveyard.
+        """
+        if card_id not in self.hand:
+            raise ValueError(f"Card {card_id} not in hand: {self.hand}")
+        hand_list = list(self.hand)
+        hand_list.remove(card_id)
+        return replace(self, hand=tuple(hand_list))
+
+    def exhaust_from_hand(self, card_id: int) -> Player:
+        """Move a card from hand to exhaust pile (discard-for-cost)."""
+        if card_id not in self.hand:
+            raise ValueError(f"Card {card_id} not in hand: {self.hand}")
+        hand_list = list(self.hand)
+        hand_list.remove(card_id)
+        return replace(
+            self,
+            hand=tuple(hand_list),
+            exhaust=self.exhaust + (card_id,),
         )
 
     # -- Mana operations ----------------------------------------------------

@@ -146,6 +146,7 @@ class GameState:
                     "hand": list(p.hand),
                     "deck": list(p.deck),
                     "graveyard": list(p.graveyard),
+                    "exhaust": list(p.exhaust),
                 }
                 for p in self.players
             ],
@@ -165,6 +166,7 @@ class GameState:
                     "is_burning": bool(m.is_burning),
                     "dark_matter_stacks": m.dark_matter_stacks,
                     "max_health_bonus": m.max_health_bonus,
+                    "from_deck": bool(m.from_deck),
                 }
                 for m in self.minions
             ],
@@ -217,6 +219,7 @@ class GameState:
                 hand=tuple(p["hand"]),
                 deck=tuple(p["deck"]),
                 graveyard=tuple(p["graveyard"]),
+                exhaust=tuple(p.get("exhaust", ())),
             )
             for p in d["players"]
         )
@@ -235,6 +238,7 @@ class GameState:
                 is_burning=bool(m.get("is_burning", False)),
                 dark_matter_stacks=m.get("dark_matter_stacks", 0),
                 max_health_bonus=m.get("max_health_bonus", 0),
+                from_deck=bool(m.get("from_deck", True)),
             )
             for m in minions_data
         )
