@@ -4,8 +4,8 @@ milestone: v1.1
 milestone_name: Online PvP Dueling
 status: verifying
 stopped_at: "Phase 14.4 spectator mode feature-complete (waves 1-5). Wave 5 closeout: test_room_manager.py (8 tests) + test_events.py (6 tests, flask_socketio-gated) added, ROADMAP/STATE updated, multi-tab smoke test deferred to post-deploy Playwright E2E (same posture as 14.1 / 14.2 / 14.3 closeouts)."
-last_updated: "2026-04-07T21:30:00.000Z"
-last_activity: 2026-04-07
+last_updated: "2026-04-08T20:15:00.000Z"
+last_activity: 2026-04-08
 progress:
   total_phases: 5
   completed_phases: 3
@@ -25,10 +25,10 @@ See: .planning/PROJECT.md (updated 2026-04-04)
 
 ## Current Position
 
-Phase: 14.4 (spectator-mode) — COMPLETE
-Plan: 5 of 5 — COMPLETE
-Status: Phase 14.4 spectator mode fully shipped (waves 1-5). Backend: RoomManager._room_spectators manager-level dict survives the WaitingRoom→GameSession transition; filter_state_for_spectator is a pure function (god = deepcopy, non-god = delegate to filter_state_for_player(0)); events.py has spectate_room handler, submit_action gate ("Spectators cannot submit actions"), _fanout_state_to_spectators / _fanout_game_start_to_spectators wired into _emit_state_to_players / _emit_game_over / handle_ready / handle_request_rematch, chat broadcast inclusive of spectators, disconnect handler scoped to spectators only (player-disconnect still Phase 15 territory). Frontend: Lobby Spectate Room button + God Mode checkbox, isSpectator / spectatorGodMode flags re-synced from every state frame, early-return at all 5 action seams (submitAction + 3 click handlers + renderActionBar), dual-hand god view via renderHand appendHand helper, SPECTATING badge. Mid-game join supported via synthetic game_start from handle_spectate_room. Multi-tab smoke test deferred to post-deploy Playwright E2E.
-Last activity: 2026-04-07 — Completed 14.4-05-PLAN.md (Phase 14.4 closeout)
+Phase: 14.5 (piles-and-hand-vis) — IN PROGRESS
+Plan: 1 of N (engine piles) — COMPLETE
+Status: Wave 1 engine done. MinionInstance.from_deck + Player.exhaust shipped; minion plays no longer double-count in graveyard; tokens vanish silently on death; discard-for-cost routes to exhaust. Tensor parity deferred to Wave 2. Phase 14.4 spectator mode fully shipped (waves 1-5). Backend: RoomManager._room_spectators manager-level dict survives the WaitingRoom→GameSession transition; filter_state_for_spectator is a pure function (god = deepcopy, non-god = delegate to filter_state_for_player(0)); events.py has spectate_room handler, submit_action gate ("Spectators cannot submit actions"), _fanout_state_to_spectators / _fanout_game_start_to_spectators wired into _emit_state_to_players / _emit_game_over / handle_ready / handle_request_rematch, chat broadcast inclusive of spectators, disconnect handler scoped to spectators only (player-disconnect still Phase 15 territory). Frontend: Lobby Spectate Room button + God Mode checkbox, isSpectator / spectatorGodMode flags re-synced from every state frame, early-return at all 5 action seams (submitAction + 3 click handlers + renderActionBar), dual-hand god view via renderHand appendHand helper, SPECTATING badge. Mid-game join supported via synthetic game_start from handle_spectate_room. Multi-tab smoke test deferred to post-deploy Playwright E2E.
+Last activity: 2026-04-08 — Completed 14.5-01-PLAN.md (engine piles foundation)
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -231,6 +231,29 @@ were not exercised in this sweep — that gating is unchanged. The new
 Ratchanter / Dark Matter / max_health_bonus tensor paths therefore have
 no direct unit tests yet; the existing Python ratchanter_aura and
 activated_abilities tests cover the source-of-truth behavior.
+
+### Phase 14.5 Wave 1 (2026-04-08)
+
+- fea4fbb feat(14.5-01): add MinionInstance.from_deck + Player.exhaust fields
+- aa93005 feat(14.5-01): wire from_deck propagation + exhaust for discard-for-cost
+- 9758728 test(14.5-01): graveyard/exhaust/token-exclusion coverage
+
+Key decisions:
+- [Phase 14.5-01]: from_deck is a flag on MinionInstance, set True by default on hand-origin PLAY_CARD and explicitly False on the activated summon_token token spawn path. Tokens vanish on death (no graveyard entry). Ratchanter conjure path is unaffected — it uses pending_tutor → deck search, so those rats are legitimately from_deck=True.
+- [Phase 14.5-01]: Three verbs for hand removal — remove_from_hand (no pile, minion plays), discard_from_hand (graveyard, magic/react one-shots), exhaust_from_hand (exhaust, summon_sacrifice_tribe cost). Explicit at each call site.
+- [Phase 14.5-01]: Rule 1 bug fix — pre-existing flow routed minion plays to graveyard via discard_from_hand, double-counting with the death-cleanup append. Split fixed; one stale test assertion updated.
+- [Phase 14.5-01]: Dormant `_resolve_conjure` effect path (CONJURE EffectType) left untouched — no current card uses it. Future card would need per-hand-card origin tracking.
+- [Phase 14.5-01]: Tensor engine NOT touched — Wave 2 will port the same split (graveyards stop receiving minion plays, new exhausts + exhaust_sizes tensors, death-cleanup gated on from_deck).
+
+Pre-existing baseline failures confirmed unchanged (stash-verified):
+- test_action_space::test_always_has_legal
+- test_card_library::TestStarterPoolDeck::test_build_valid_deck (fallen_paladin)
+- test_fatigue_fix::test_fatigue_escalates
+- test_observation::test_observation_range[_player2]
+- test_rl_env::test_env_checker
+- test_tensor_engine::test_card_count + TestReset + TestStepping (multiple)
+- test_tensor_engine_parity::test_tensor_tutor_pending_entry
+- test_tensor_verification::test_random_games_match (hand_size mismatch)
 
 Out of scope (not done, by design):
 - Generic activated-ability dispatch (only Ratchanter exists; TODO note
