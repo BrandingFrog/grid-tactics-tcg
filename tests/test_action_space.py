@@ -1,7 +1,7 @@
 """Tests for action space encoding, decoding, masking, and reward.
 
 Covers:
-  - ACTION_SPACE_SIZE = 1262
+  - ACTION_SPACE_SIZE = 1287
   - Encode/decode round-trip for all 7 action types
   - Action mask shape and dtype
   - Mask matches legal_actions() for random states
@@ -97,8 +97,8 @@ class TestActionSpaceSize:
     """Test action space size constant."""
 
     def test_action_space_size(self):
-        """ACTION_SPACE_SIZE == 1262."""
-        assert ACTION_SPACE_SIZE == 1262
+        """ACTION_SPACE_SIZE == 1287 (1262 base + 25 ACTIVATE_ABILITY slots)."""
+        assert ACTION_SPACE_SIZE == 1287
 
 
 class TestEncodeDecodePASS:
@@ -421,10 +421,10 @@ class TestMaskShape:
     """Test action mask shape and dtype."""
 
     def test_mask_shape(self, new_game_state, library, encoder):
-        """build_action_mask returns ndarray shape (1262,) dtype bool."""
+        """build_action_mask returns ndarray shape (1287,) dtype bool."""
         mask = build_action_mask(new_game_state, library, encoder)
         assert isinstance(mask, np.ndarray)
-        assert mask.shape == (1262,)
+        assert mask.shape == (1287,)
         assert mask.dtype == np.bool_
 
 

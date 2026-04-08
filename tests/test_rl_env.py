@@ -71,7 +71,7 @@ class TestGymnasiumAPI:
 
     def test_gymnasium_api(self, env):
         """Env has observation_space (Box, shape=(292,), dtype=float32, low=-1, high=1)
-        and action_space (Discrete(1262))."""
+        and action_space (Discrete(1287))."""
         import gymnasium
 
         # observation_space
@@ -160,7 +160,7 @@ class TestActionMasks:
     """Test action_masks() method."""
 
     def test_action_masks_method(self, env):
-        """env.action_masks() returns ndarray shape (1262,) dtype bool with at least one True."""
+        """env.action_masks() returns ndarray shape (1287,) dtype bool with at least one True."""
         env.reset(seed=42)
         masks = env.action_masks()
 

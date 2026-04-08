@@ -44,7 +44,7 @@ class GridTacticsEnv(gymnasium.Env):
     Attributes:
         metadata: Gymnasium metadata dict.
         observation_space: Box space of shape (292,) with range [-1, 1].
-        action_space: Discrete(1262) covering all action types.
+        action_space: Discrete(1287) covering all action types.
     """
 
     metadata: dict[str, Any] = {"render_modes": []}

@@ -11,6 +11,7 @@ import torch
 
 from grid_tactics.tensor_engine.constants import (
     ACTION_SPACE_SIZE,
+    ACTIVATE_BASE,
     ATTACK_BASE,
     BACK_ROW_P1,
     BACK_ROW_P2,
@@ -240,6 +241,11 @@ def _compute_action_phase_mask(mask, state, card_table, phase_mask):
 
     # --- SACRIFICE ---
     _compute_sacrifice_mask(mask, state, ap, friendly_alive)
+
+    # --- ACTIVATE_ABILITY (hardcoded Ratchanter dispatch) ---
+    _compute_activate_ability_mask(
+        mask, state, card_table, friendly_alive, player_mana, minion_flat,
+    )
 
 
 def _compute_play_card_mask(mask, state, card_table, phase_mask, ap, arange_n,
@@ -527,6 +533,30 @@ def _compute_sacrifice_mask(mask, state, ap, friendly_alive):
     can_sacrifice = friendly_alive & on_enemy_back_row
     action_idx = (SACRIFICE_BASE + minion_flat).long()
     mask.scatter_(1, action_idx, can_sacrifice)
+
+
+def _compute_activate_ability_mask(
+    mask, state, card_table, friendly_alive, player_mana, minion_flat,
+):
+    """Compute ACTIVATE_ABILITY legal actions -- hardcoded Ratchanter only.
+
+    Mirrors Python ``legal_actions._action_phase_actions`` ACTIVATE_ABILITY
+    enumeration: a friendly living Ratchanter whose owner has >=2 mana
+    yields exactly one action slot keyed by the activator's flat position.
+    Slot index = ACTIVATE_BASE + minion_flat. Mana cost is hardcoded to 2.
+
+    TODO: generalise via per-card activated_ability_* columns when a
+    second activated-ability card lands.
+    """
+    if card_table.ratchanter_card_id < 0:
+        return
+    can_pay = player_mana >= 2  # [N]
+    is_ratchanter = state.minion_card_id == card_table.ratchanter_card_id  # [N, M]
+    can_activate = friendly_alive & is_ratchanter & can_pay.unsqueeze(1)
+    if not can_activate.any():
+        return
+    action_idx = (ACTIVATE_BASE + minion_flat).long()
+    mask.scatter_(1, action_idx, can_activate | torch.gather(mask, 1, action_idx))
 
 
 def _compute_react_phase_mask(mask, state, card_table, phase_mask):

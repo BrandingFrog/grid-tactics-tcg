@@ -11,6 +11,8 @@ from __future__ import annotations
 import torch
 
 from grid_tactics.tensor_engine.constants import (
+    ACTIVATE_BASE,
+    ACTION_SPACE_SIZE,
     ATTACK_BASE,
     BACK_ROW_P1,
     BACK_ROW_P2,
@@ -101,6 +103,13 @@ def decode_actions(
         action_type = torch.where(is_react, torch.tensor(5, device=device), action_type)
         hand_idx = torch.where(is_react, (idx // 26).int(), hand_idx)
         target_flat = torch.where(is_react, (idx % 26).int(), target_flat)
+
+    # ACTIVATE_ABILITY [1262:1287] -- source = activator's flat board position
+    is_activate = (a >= ACTIVATE_BASE) & (a < ACTIVATE_BASE + GRID_SIZE)
+    if is_activate.any():
+        idx = a - ACTIVATE_BASE
+        action_type = torch.where(is_activate, torch.tensor(11, device=device), action_type)
+        source_flat = torch.where(is_activate, idx.int(), source_flat)
 
     return action_type, hand_idx, source_flat, target_flat, direction
 
@@ -719,6 +728,147 @@ def apply_sacrifice_batch(state, mask, action_type, source_flat, card_table):
     dmg_p1 = valid & (opponent == 1)
     if dmg_p1.any():
         state.player_hp[:, 1] -= (eff_atk * dmg_p1.int())
+
+
+def apply_activate_ability_batch(state, mask, action_type, source_flat, card_table):
+    """Apply ACTIVATE_ABILITY -- hardcoded Ratchanter dispatch (Phase 14.x).
+
+    Mirrors Python ``_apply_activate_ability`` + ``_apply_conjure_rat_and_buff``
+    for the only card with an activated ability today (Ratchanter,
+    ``conjure_rat_and_buff`` with target ``none`` and mana_cost 2).
+
+    For each game in mask & (action_type == ACTIVATE_ABILITY) where the
+    minion at source_flat is the active player's living Ratchanter and they
+    have >=2 mana:
+      1. Spend 2 mana
+      2. Buff every other friendly Rat by magnitude = 1 + caster_dm_stacks:
+         attack_bonus += magnitude
+         max_health_bonus += magnitude
+         current_health += magnitude
+      3. If the caster's deck contains any "rat" card, enter pending_tutor
+         with up to K=8 deck indices.
+    The PASS-fatigue path in ``_step_action_phase`` already excludes
+    ACTIVATE_ABILITY (action_type == 11) because it only fires fatigue on
+    ``action_type == 4``.
+
+    TODO: when a second activated-ability card lands, generalise via a
+    per-card ``activated_ability_effect_type`` column on CardTable.
+    """
+    is_act = mask & (action_type == 11)
+    if not is_act.any():
+        return
+    if card_table.ratchanter_card_id < 0:
+        # Library does not contain Ratchanter — silently no-op (used in
+        # synthetic tests with custom card sets).
+        return
+
+    N = mask.shape[0]
+    device = mask.device
+    arange_n = torch.arange(N, device=device)
+    ap = state.active_player
+
+    src_row = (source_flat // GRID_COLS).clamp(0, 4)
+    src_col = (source_flat % GRID_COLS).clamp(0, 4)
+    slot = state.board[arange_n, src_row, src_col]  # [N]
+    valid = is_act & (slot >= 0)
+    if not valid.any():
+        return
+
+    safe_slot = slot.clamp(0).long()
+    cid = state.minion_card_id[arange_n, safe_slot]
+    owner = state.minion_owner[arange_n, safe_slot]
+
+    # Caster must be the active player's living Ratchanter
+    valid = (
+        valid
+        & state.minion_alive[arange_n, safe_slot]
+        & (owner == ap)
+        & (cid == card_table.ratchanter_card_id)
+    )
+    # Mana cost 2
+    valid = valid & (state.player_mana[arange_n, ap] >= 2)
+    if not valid.any():
+        return
+
+    # Spend mana
+    state.player_mana[arange_n, ap] = torch.where(
+        valid, state.player_mana[arange_n, ap] - 2, state.player_mana[arange_n, ap]
+    )
+
+    # Magnitude per game = 1 + caster.dark_matter_stacks
+    magnitude = (1 + state.minion_dark_matter_stacks[arange_n, safe_slot]).int()  # [N]
+
+    # Buff every other friendly Rat on the board.
+    # Iterate over MAX_MINIONS slots (constant 25), not over batch.
+    caster_slot = safe_slot  # rename for clarity
+    for s in range(MAX_MINIONS):
+        target_alive = state.minion_alive[:, s]
+        target_cid = state.minion_card_id[:, s].clamp(0).long()
+        target_is_rat = card_table.is_rat[target_cid]
+        target_owner = state.minion_owner[:, s]
+        # Exclude the caster slot itself per game (slot equality check)
+        not_caster = caster_slot != s
+        hit = (
+            valid
+            & target_alive
+            & target_is_rat
+            & (target_owner == ap)
+            & not_caster
+        )
+        if not hit.any():
+            continue
+        delta = magnitude * hit.int()
+        state.minion_atk_bonus[:, s] = state.minion_atk_bonus[:, s] + delta
+        state.minion_max_health_bonus[:, s] = state.minion_max_health_bonus[:, s] + delta
+        state.minion_health[:, s] = state.minion_health[:, s] + delta
+
+    # Enter pending_tutor for "rat" if the caster's deck has any. Reuses
+    # the existing pending_tutor pipeline; the engine will reinterpret
+    # subsequent PLAY_CARD / PASS actions as TUTOR_SELECT / DECLINE_TUTOR.
+    if card_table.rat_card_id < 0:
+        return
+
+    K = 8
+    deck_top = state.deck_tops[arange_n, ap]
+    deck_size = state.deck_sizes[arange_n, ap]
+    matches = torch.full((N, K), -1, dtype=torch.int32, device=device)
+    counts = torch.zeros(N, dtype=torch.int32, device=device)
+
+    for d in range(state.decks.shape[2]):
+        d_card = state.decks[arange_n, ap, d]
+        in_deck = valid & (d >= deck_top) & (d < deck_size) & (d_card == card_table.rat_card_id)
+        if not in_deck.any():
+            continue
+        slot_idx = counts.clamp(0, K - 1).long()
+        overflow = in_deck & (counts >= K)
+        if bool(overflow.any().item()):
+            raise AssertionError(
+                f"activate_ability tutor: more than K={K} rat matches in one game"
+            )
+        cur = matches[arange_n, slot_idx]
+        new_val = torch.where(
+            in_deck, torch.tensor(d, device=device, dtype=torch.int32), cur
+        )
+        matches[arange_n, slot_idx] = new_val
+        counts = counts + in_deck.int()
+
+    found = valid & (counts > 0)
+    if not found.any():
+        return
+
+    # Mutex defense: pending_tutor cannot coexist with pending_post_move_attack
+    bad = found & (state.pending_post_move_attacker >= 0)
+    if bool(bad.any().item()):
+        raise AssertionError(
+            "activate_ability cannot enter pending_tutor while pending_post_move_attack is set"
+        )
+
+    state.pending_tutor_player = torch.where(
+        found, ap.int(), state.pending_tutor_player
+    )
+    state.pending_tutor_matches = torch.where(
+        found.view(N, 1), matches, state.pending_tutor_matches
+    )
 
 
 def apply_react_batch(state, mask, action_type, hand_idx, target_flat, card_table):

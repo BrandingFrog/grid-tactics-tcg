@@ -60,6 +60,9 @@ class CardTable:
         leap_amount: torch.Tensor,
         passive_burn_amount: torch.Tensor,
         passive_heal_amount: torch.Tensor,
+        is_rat: torch.Tensor,
+        ratchanter_card_id: int,
+        rat_card_id: int,
         _num_cards: int,
         device: torch.device,
     ):
@@ -105,6 +108,15 @@ class CardTable:
         self.leap_amount = leap_amount                        # [num_cards] int32
         self.passive_burn_amount = passive_burn_amount        # [num_cards] int32
         self.passive_heal_amount = passive_heal_amount        # [num_cards] int32
+        # ACTIVATE_ABILITY parity (hardcoded for Ratchanter — only card with
+        # an activated ability today). is_rat marks any card matching the
+        # Python `_is_rat_card` rule (card_id 'rat' OR tribe contains 'Rat').
+        # ratchanter_card_id / rat_card_id are -1 if the library lacks them.
+        # TODO: when a second activated-ability card lands, generalise to a
+        # per-card `activated_ability_effect_type` column and a real dispatch.
+        self.is_rat = is_rat                                  # [num_cards] bool
+        self.ratchanter_card_id = ratchanter_card_id          # int (-1 if absent)
+        self.rat_card_id = rat_card_id                        # int (-1 if absent)
         self._num_cards = _num_cards
         self.device = device
 
@@ -148,6 +160,7 @@ class CardTable:
         leap_amount = torch.zeros(n, dtype=torch.int32)
         passive_burn_amount = torch.zeros(n, dtype=torch.int32)
         passive_heal_amount = torch.zeros(n, dtype=torch.int32)
+        is_rat = torch.zeros(n, dtype=torch.bool)
 
         # Build tribe string -> int mapping
         tribe_map: dict[str, int] = {}
@@ -259,6 +272,15 @@ class CardTable:
             if card.tribe:
                 tribe_id[i] = tribe_map[card.tribe]
 
+            # Mirror Python `_is_rat_card`: card_id 'rat' OR tribe contains
+            # 'Rat' (case-insensitive, handles composite 'Mage/Rat').
+            if card.card_id == "rat":
+                is_rat[i] = True
+            elif card.tribe:
+                parts = [p.strip().lower() for p in card.tribe.split("/")]
+                if "rat" in parts:
+                    is_rat[i] = True
+
             # Summon sacrifice tribe
             if card.summon_sacrifice_tribe:
                 tid = tribe_map.get(card.summon_sacrifice_tribe, 0)
@@ -279,6 +301,16 @@ class CardTable:
         distance_manhattan = cls._build_manhattan()
         distance_chebyshev = cls._build_chebyshev()
         is_ortho = cls._build_orthogonal()
+
+        # Resolve hardcoded card IDs for ACTIVATE_ABILITY dispatch
+        try:
+            ratchanter_card_id = library.get_numeric_id("ratchanter")
+        except KeyError:
+            ratchanter_card_id = -1
+        try:
+            rat_card_id = library.get_numeric_id("rat")
+        except KeyError:
+            rat_card_id = -1
 
         return cls(
             card_type=card_type.to(device),
@@ -315,6 +347,9 @@ class CardTable:
             leap_amount=leap_amount.to(device),
             passive_burn_amount=passive_burn_amount.to(device),
             passive_heal_amount=passive_heal_amount.to(device),
+            is_rat=is_rat.to(device),
+            ratchanter_card_id=ratchanter_card_id,
+            rat_card_id=rat_card_id,
             _num_cards=n,
             device=device,
         )

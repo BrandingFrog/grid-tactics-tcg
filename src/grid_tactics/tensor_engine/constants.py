@@ -30,7 +30,7 @@ MAX_EFFECTS_PER_CARD: int = 3
 MAX_REACT_DEPTH: int = MAX_REACT_STACK_DEPTH  # 10
 
 # Action space layout (must match rl/action_space.py exactly)
-ACTION_SPACE_SIZE: int = 1262
+ACTION_SPACE_SIZE: int = 1287
 PLAY_CARD_BASE: int = 0       # 250 slots: hand(10) * grid(25)
 MOVE_BASE: int = 250           # 100 slots: source(25) * dir(4)
 ATTACK_BASE: int = 350         # 625 slots: source(25) * target(25)
@@ -38,6 +38,7 @@ SACRIFICE_BASE: int = 975      # 25 slots: source(25)
 DRAW_IDX: int = 1000
 PASS_IDX: int = 1001
 REACT_BASE: int = 1002         # 260 slots: hand(10) * target_or_none(26)
+ACTIVATE_BASE: int = 1262      # 25 slots: source(25), one per board tile
 
 # Sentinel value for empty slots
 EMPTY: int = -1

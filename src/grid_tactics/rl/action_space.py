@@ -1,7 +1,7 @@
 """Action space encoder -- maps between Action objects and integer IDs.
 
-Provides deterministic, invertible mapping for all 7 action types to/from
-a flat Discrete(1262) integer space for MaskablePPO compatibility.
+Provides deterministic, invertible mapping for all action types to/from
+a flat Discrete(1287) integer space for MaskablePPO compatibility.
 
 Encoding scheme (position-based, not minion-ID-based):
   Section            Base    Encoding                          Count
@@ -13,8 +13,18 @@ Encoding scheme (position-based, not minion-ID-based):
   DRAW               1000    (no params)                       1
   PASS               1001    (no params)                       1
   PLAY_REACT         1002    hand(10) * tgt_or_none(26)        260
+  ACTIVATE_ABILITY   1262    source(25)                        25
   -----------------------------------------------------------------------
-  TOTAL                                                        1262
+  TOTAL                                                        1287
+
+ACTIVATE_ABILITY slots are indexed by the activator minion's current
+board flat position (row * 5 + col). All currently-supported abilities
+have ``target: "none"`` (Ratchanter), so the activator's tile uniquely
+identifies the action. If a future ability uses a target tile, a
+separate slot block can be added without disturbing the existing layout.
+
+Adding ACTIVATE_ABILITY invalidates all RL checkpoints trained against
+the prior 1262-slot space — see STATE.md.
 """
 
 from __future__ import annotations
@@ -53,8 +63,9 @@ SACRIFICE_BASE: int = 975      # 25 slots: source(25)
 DRAW_IDX: int = 1000           # 1 slot
 PASS_IDX: int = 1001           # 1 slot
 REACT_BASE: int = 1002         # 260 slots: hand(10) * target_or_none(26)
+ACTIVATE_BASE: int = 1262      # 25 slots: source(25)
 
-ACTION_SPACE_SIZE: int = 1262
+ACTION_SPACE_SIZE: int = 1287
 
 # Direction mapping: (dr, dc) -> int
 DIRECTION_MAP: dict[tuple[int, int], int] = {
@@ -142,6 +153,9 @@ class ActionEncoder:
         if atype == ActionType.PLAY_REACT:
             return self._encode_play_react(action)
 
+        if atype == ActionType.ACTIVATE_ABILITY:
+            return self._encode_activate_ability(action, state)
+
         raise ValueError(f"Unknown action type: {atype}")
 
     def decode(
@@ -199,6 +213,9 @@ class ActionEncoder:
 
         if REACT_BASE <= action_int < REACT_BASE + MAX_HAND_SIZE * 26:
             return self._decode_play_react(action_int)
+
+        if ACTIVATE_BASE <= action_int < ACTIVATE_BASE + GRID_SIZE:
+            return self._decode_activate_ability(action_int, state)
 
         raise ValueError(f"Action int {action_int} out of range [0, {ACTION_SPACE_SIZE})")
 
@@ -418,6 +435,36 @@ class ActionEncoder:
             target_pos = None
 
         return play_react_action(card_index=hand_idx, target_pos=target_pos)
+
+    # ----- ACTIVATE_ABILITY encoding -----
+
+    def _encode_activate_ability(self, action: Action, state: GameState) -> int:
+        """Encode ACTIVATE_ABILITY using the activator minion's flat position.
+
+        All currently-supported activated abilities have ``target: "none"``,
+        so the activator's position uniquely identifies the action.
+        """
+        minion = state.get_minion(action.minion_id)
+        if minion is None:
+            raise ValueError(f"Activator minion {action.minion_id} not found")
+        return ACTIVATE_BASE + pos_to_flat(minion.position)
+
+    def _decode_activate_ability(self, action_int: int, state: GameState) -> Action:
+        """Decode ACTIVATE_ABILITY action integer.
+
+        The slot encodes the activator's flat position; we look up the
+        minion at that tile and emit an Action with ``target_pos=None``
+        (matching the ``target: "none"`` ability shape).
+        """
+        from grid_tactics.enums import ActionType as _AT
+        flat = action_int - ACTIVATE_BASE
+        pos = flat_to_pos(flat)
+        minion_id = self._find_minion_at(state, pos)
+        return Action(
+            action_type=_AT.ACTIVATE_ABILITY,
+            minion_id=minion_id,
+            target_pos=None,
+        )
 
     # ----- Helpers -----
 

@@ -32,6 +32,7 @@ from grid_tactics.tensor_engine.constants import (
 )
 from grid_tactics.tensor_engine.state import TensorGameState, create_initial_state
 from grid_tactics.tensor_engine.actions import (
+    apply_activate_ability_batch,
     apply_attack_batch,
     apply_draw_batch,
     apply_move_batch,
@@ -292,6 +293,7 @@ class TensorGameEngine:
         apply_play_card_batch(s, normal_mask, action_type, hand_idx, target_flat, self.card_table)
         apply_attack_batch(s, normal_mask, action_type, source_flat, target_flat, self.card_table)
         apply_sacrifice_batch(s, normal_mask, action_type, source_flat, self.card_table)
+        apply_activate_ability_batch(s, normal_mask, action_type, source_flat, self.card_table)
         # PASS (type 4) -- only happens when no other actions available (fatigue)
         # Escalating fatigue damage: 10, 20, 30, 40...
         # Exclude decline-as-PASS games from fatigue.
