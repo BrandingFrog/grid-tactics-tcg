@@ -51,6 +51,13 @@ class TensorGameState:
     graveyards: torch.Tensor      # [N, 2, MAX_GRAVEYARD] int32
     graveyard_sizes: torch.Tensor  # [N, 2] int32
 
+    # Phase 14.5: Exhaust piles (discard-for-cost destination). Parallel to
+    # graveyards: same [N, 2, MAX_GRAVEYARD] capacity/pointer pattern. Mirrors
+    # Python Player.exhaust. `summon_sacrifice_tribe` discards route here
+    # instead of the graveyard.
+    exhausts: torch.Tensor        # [N, 2, MAX_GRAVEYARD] int32
+    exhaust_sizes: torch.Tensor   # [N, 2] int32
+
     # Minion slots (fixed MAX_MINIONS, use minion_alive mask)
     minion_card_id: torch.Tensor   # [N, MAX_MINIONS] int32
     minion_owner: torch.Tensor     # [N, MAX_MINIONS] int32 (-1=empty, 0=p1, 1=p2)
@@ -59,6 +66,12 @@ class TensorGameState:
     minion_health: torch.Tensor    # [N, MAX_MINIONS] int32
     minion_atk_bonus: torch.Tensor  # [N, MAX_MINIONS] int32
     minion_alive: torch.Tensor     # [N, MAX_MINIONS] bool
+    # Phase 14.5: from_deck flag mirroring Python MinionInstance.from_deck.
+    # True = minion originated from the owner's deck/hand (normal PLAY_CARD or
+    # pending_tutor conjure). False = token spawned via activated abilities.
+    # Death cleanup only appends from_deck=True minions to the graveyard so
+    # tokens vanish silently.
+    minion_from_deck: torch.Tensor  # [N, MAX_MINIONS] bool
     next_minion_slot: torch.Tensor  # [N] int32
 
     # Turn state
@@ -126,6 +139,8 @@ class TensorGameState:
             deck_sizes=self.deck_sizes.clone(),
             graveyards=self.graveyards.clone(),
             graveyard_sizes=self.graveyard_sizes.clone(),
+            exhausts=self.exhausts.clone(),
+            exhaust_sizes=self.exhaust_sizes.clone(),
             minion_card_id=self.minion_card_id.clone(),
             minion_owner=self.minion_owner.clone(),
             minion_row=self.minion_row.clone(),
@@ -133,6 +148,7 @@ class TensorGameState:
             minion_health=self.minion_health.clone(),
             minion_atk_bonus=self.minion_atk_bonus.clone(),
             minion_alive=self.minion_alive.clone(),
+            minion_from_deck=self.minion_from_deck.clone(),
             next_minion_slot=self.next_minion_slot.clone(),
             active_player=self.active_player.clone(),
             phase=self.phase.clone(),
@@ -172,6 +188,8 @@ def create_initial_state(
         deck_sizes=torch.zeros((n_envs, 2), dtype=torch.int32, device=device),
         graveyards=torch.full((n_envs, 2, MAX_GRAVEYARD), EMPTY, dtype=torch.int32, device=device),
         graveyard_sizes=torch.zeros((n_envs, 2), dtype=torch.int32, device=device),
+        exhausts=torch.full((n_envs, 2, MAX_GRAVEYARD), EMPTY, dtype=torch.int32, device=device),
+        exhaust_sizes=torch.zeros((n_envs, 2), dtype=torch.int32, device=device),
         minion_card_id=torch.full((n_envs, MAX_MINIONS), EMPTY, dtype=torch.int32, device=device),
         minion_owner=torch.full((n_envs, MAX_MINIONS), EMPTY, dtype=torch.int32, device=device),
         minion_row=torch.zeros((n_envs, MAX_MINIONS), dtype=torch.int32, device=device),
@@ -179,6 +197,7 @@ def create_initial_state(
         minion_health=torch.zeros((n_envs, MAX_MINIONS), dtype=torch.int32, device=device),
         minion_atk_bonus=torch.zeros((n_envs, MAX_MINIONS), dtype=torch.int32, device=device),
         minion_alive=torch.zeros((n_envs, MAX_MINIONS), dtype=torch.bool, device=device),
+        minion_from_deck=torch.zeros((n_envs, MAX_MINIONS), dtype=torch.bool, device=device),
         next_minion_slot=torch.zeros(n_envs, dtype=torch.int32, device=device),
         active_player=torch.zeros(n_envs, dtype=torch.int32, device=device),
         phase=torch.zeros(n_envs, dtype=torch.int32, device=device),

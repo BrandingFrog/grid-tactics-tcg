@@ -34,6 +34,7 @@ def _make_state_dict() -> dict:
                 "hand": [1, 2, 3],
                 "deck": [4, 5, 6, 7],
                 "graveyard": [8],
+                "exhaust": [15, 16],
             },
             {
                 "side": 1,
@@ -42,7 +43,8 @@ def _make_state_dict() -> dict:
                 "max_mana": 4,
                 "hand": [10, 11],
                 "deck": [12, 13, 14],
-                "graveyard": [],
+                "graveyard": [17, 18, 19],
+                "exhaust": [],
             },
         ],
         "active_player_idx": 0,
@@ -136,7 +138,7 @@ class TestFilterStateForPlayer:
         assert filtered["players"][1]["hp"] == 95
         # Graveyard preserved
         assert filtered["players"][0]["graveyard"] == [8]
-        assert filtered["players"][1]["graveyard"] == []
+        assert filtered["players"][1]["graveyard"] == [17, 18, 19]
         # Fatigue counts preserved
         assert filtered["fatigue_counts"] == [0, 0]
         # Winner and game over preserved
@@ -172,6 +174,52 @@ class TestFilterStateForPlayer:
         state["pending_action"] = {"action_type": 0, "card_index": 2}
         filtered = filter_state_for_player(state, viewer_idx=0)
         assert filtered["pending_action"] == {"action_type": 0, "card_index": 2}
+
+    # -- Phase 14.5-03: piles serialization -------------------------------
+
+    def test_view_filter_emits_both_graveyards(self):
+        """Both players' graveyards are serialized as public card_numeric_id lists."""
+        state = _make_state_dict()
+        # Viewer is P0; both own and opponent graveyard must be present.
+        filtered_p0 = filter_state_for_player(state, viewer_idx=0)
+        assert filtered_p0["players"][0]["graveyard"] == [8]
+        assert filtered_p0["players"][1]["graveyard"] == [17, 18, 19]
+        # Symmetric from P1 perspective.
+        filtered_p1 = filter_state_for_player(state, viewer_idx=1)
+        assert filtered_p1["players"][0]["graveyard"] == [8]
+        assert filtered_p1["players"][1]["graveyard"] == [17, 18, 19]
+
+    def test_view_filter_emits_both_exhausts(self):
+        """Both players' exhaust piles are serialized as public card_numeric_id lists."""
+        state = _make_state_dict()
+        filtered_p0 = filter_state_for_player(state, viewer_idx=0)
+        assert filtered_p0["players"][0]["exhaust"] == [15, 16]
+        assert filtered_p0["players"][1]["exhaust"] == []
+        filtered_p1 = filter_state_for_player(state, viewer_idx=1)
+        assert filtered_p1["players"][0]["exhaust"] == [15, 16]
+        assert filtered_p1["players"][1]["exhaust"] == []
+
+    def test_view_filter_hides_opponent_hand_ids(self):
+        """Opponent hand must be count-only — no card identities leak.
+
+        Hidden-info security property: under no code path does the filtered
+        output contain the opponent's hand card ids. Only a hand_count int.
+        """
+        state = _make_state_dict()
+        # P0 viewer — P1 hand must be stripped.
+        filtered = filter_state_for_player(state, viewer_idx=0)
+        opp = filtered["players"][1]
+        assert opp["hand"] == []
+        assert opp["hand_count"] == 2
+        for leaked in (10, 11):
+            assert leaked not in opp["hand"]
+        # Symmetric P1 viewer — P0 hand must be stripped.
+        filtered = filter_state_for_player(state, viewer_idx=1)
+        opp = filtered["players"][0]
+        assert opp["hand"] == []
+        assert opp["hand_count"] == 3
+        for leaked in (1, 2, 3):
+            assert leaked not in opp["hand"]
 
     def test_original_state_not_mutated(self):
         """Filtering does not modify the original state dict."""

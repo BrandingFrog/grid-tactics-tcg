@@ -107,6 +107,10 @@ class TensorGameEngine:
         s.graveyards = torch.where(mask.view(N, 1, 1), torch.tensor(EMPTY, device=device, dtype=torch.int32), s.graveyards)
         s.graveyard_sizes = torch.where(mask.view(N, 1), torch.tensor(0, device=device, dtype=torch.int32), s.graveyard_sizes)
 
+        # Phase 14.5: clear exhaust piles
+        s.exhausts = torch.where(mask.view(N, 1, 1), torch.tensor(EMPTY, device=device, dtype=torch.int32), s.exhausts)
+        s.exhaust_sizes = torch.where(mask.view(N, 1), torch.tensor(0, device=device, dtype=torch.int32), s.exhaust_sizes)
+
         # Clear minions
         s.minion_card_id = torch.where(mask.unsqueeze(1), torch.tensor(EMPTY, device=device, dtype=torch.int32), s.minion_card_id)
         s.minion_owner = torch.where(mask.unsqueeze(1), torch.tensor(EMPTY, device=device, dtype=torch.int32), s.minion_owner)
@@ -115,6 +119,8 @@ class TensorGameEngine:
         s.minion_health = torch.where(mask.unsqueeze(1), torch.tensor(0, device=device, dtype=torch.int32), s.minion_health)
         s.minion_atk_bonus = torch.where(mask.unsqueeze(1), torch.tensor(0, device=device, dtype=torch.int32), s.minion_atk_bonus)
         s.minion_alive = torch.where(mask.unsqueeze(1), torch.tensor(False, device=device), s.minion_alive)
+        # Phase 14.5: clear from_deck flags on reset
+        s.minion_from_deck = torch.where(mask.unsqueeze(1), torch.tensor(False, device=device), s.minion_from_deck)
         s.is_burning = torch.where(mask.unsqueeze(1), torch.tensor(False, device=device), s.is_burning)
         s.minion_max_health_bonus = torch.where(
             mask.unsqueeze(1), torch.tensor(0, device=device, dtype=torch.int32), s.minion_max_health_bonus
