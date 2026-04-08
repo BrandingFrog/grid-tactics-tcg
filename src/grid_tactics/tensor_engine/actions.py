@@ -541,6 +541,15 @@ def _deploy_minion_batch(state, deploy_mask, owners, card_ids, target_flat, card
         valid, torch.tensor(False, device=device),
         state.is_burning[arange_n, safe_slot]
     )
+    # Reset max_health_bonus and dark_matter_stacks for the new occupant
+    state.minion_max_health_bonus[arange_n, safe_slot] = torch.where(
+        valid, torch.tensor(0, device=device, dtype=torch.int32),
+        state.minion_max_health_bonus[arange_n, safe_slot]
+    )
+    state.minion_dark_matter_stacks[arange_n, safe_slot] = torch.where(
+        valid, torch.tensor(0, device=device, dtype=torch.int32),
+        state.minion_dark_matter_stacks[arange_n, safe_slot]
+    )
     state.minion_alive[arange_n, safe_slot] = torch.where(
         valid, torch.tensor(True, device=device),
         state.minion_alive[arange_n, safe_slot]

@@ -100,6 +100,18 @@ class TensorGameState:
     # Re-applying burn to an already-burning minion is a no-op.
     is_burning: torch.Tensor             # [N, MAX_MINIONS] bool
 
+    # Cumulative max-HP buff. Effective max HP = card_table.health[cid] +
+    # minion_max_health_bonus. HEAL caps at the effective max so flat max-HP
+    # buffs (e.g. Ratchanter's conjure_rat_and_buff) raise the heal ceiling.
+    # Mirrors Python MinionInstance.max_health_bonus.
+    minion_max_health_bonus: torch.Tensor  # [N, MAX_MINIONS] int32
+
+    # Dark Matter counters per minion. Currently consumed by Ratchanter
+    # (conjure_rat_and_buff scales with caster.dark_matter_stacks) and granted
+    # by GRANT_DARK_MATTER effect (Dark Matter Infusion magic card).
+    # Mirrors Python MinionInstance.dark_matter_stacks.
+    minion_dark_matter_stacks: torch.Tensor  # [N, MAX_MINIONS] int32
+
     def clone(self) -> TensorGameState:
         """Deep-copy all tensors."""
         return TensorGameState(
@@ -138,6 +150,8 @@ class TensorGameState:
             pending_tutor_player=self.pending_tutor_player.clone(),
             pending_tutor_matches=self.pending_tutor_matches.clone(),
             is_burning=self.is_burning.clone(),
+            minion_max_health_bonus=self.minion_max_health_bonus.clone(),
+            minion_dark_matter_stacks=self.minion_dark_matter_stacks.clone(),
         )
 
 
@@ -182,4 +196,6 @@ def create_initial_state(
         pending_tutor_player=torch.full((n_envs,), -1, dtype=torch.int32, device=device),
         pending_tutor_matches=torch.full((n_envs, 8), -1, dtype=torch.int32, device=device),
         is_burning=torch.zeros((n_envs, MAX_MINIONS), dtype=torch.bool, device=device),
+        minion_max_health_bonus=torch.zeros((n_envs, MAX_MINIONS), dtype=torch.int32, device=device),
+        minion_dark_matter_stacks=torch.zeros((n_envs, MAX_MINIONS), dtype=torch.int32, device=device),
     )

@@ -115,6 +115,12 @@ class TensorGameEngine:
         s.minion_atk_bonus = torch.where(mask.unsqueeze(1), torch.tensor(0, device=device, dtype=torch.int32), s.minion_atk_bonus)
         s.minion_alive = torch.where(mask.unsqueeze(1), torch.tensor(False, device=device), s.minion_alive)
         s.is_burning = torch.where(mask.unsqueeze(1), torch.tensor(False, device=device), s.is_burning)
+        s.minion_max_health_bonus = torch.where(
+            mask.unsqueeze(1), torch.tensor(0, device=device, dtype=torch.int32), s.minion_max_health_bonus
+        )
+        s.minion_dark_matter_stacks = torch.where(
+            mask.unsqueeze(1), torch.tensor(0, device=device, dtype=torch.int32), s.minion_dark_matter_stacks
+        )
         s.next_minion_slot = torch.where(mask, torch.tensor(0, device=device, dtype=torch.int32), s.next_minion_slot)
 
         # Turn state
@@ -548,11 +554,11 @@ class TensorGameEngine:
                         # burning. We OR with the current flag.
                         s.is_burning[:, tgt] = s.is_burning[:, tgt] | hit
 
-            # Passive self-heal: cap at base health.
+            # Passive self-heal: cap at effective max (base + max_health_bonus).
             if has_heal.any():
-                base_hp = ct.health[src_cid]
+                eff_max = ct.health[src_cid] + s.minion_max_health_bonus[:, src]
                 cur_hp = s.minion_health[:, src]
-                new_hp = torch.minimum(cur_hp + heal_amt, base_hp)
+                new_hp = torch.minimum(cur_hp + heal_amt, eff_max)
                 s.minion_health[:, src] = torch.where(has_heal, new_hp, cur_hp)
 
     def cleanup_dead_minions_batch(self):

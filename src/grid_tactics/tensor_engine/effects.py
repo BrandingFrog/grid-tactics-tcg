@@ -142,12 +142,13 @@ def _apply_heal(state, active, etarget, eamount, caster_owners, caster_slots, ta
         valid = single & (slot >= 0)
         if valid.any():
             safe_slot = slot.clamp(min=0)
-            # Get base health cap from card_table
+            # Effective max HP = card base health + minion_max_health_bonus.
+            # Mirrors Python _apply_heal_to_minion which uses max_health_bonus.
             minion_cid = state.minion_card_id[arange_n, safe_slot].clamp(min=0)
-            base_hp = card_table.health[minion_cid]
+            eff_max = card_table.health[minion_cid] + state.minion_max_health_bonus[arange_n, safe_slot]
             new_hp = torch.min(
                 state.minion_health[arange_n, safe_slot] + eamount,
-                base_hp,
+                eff_max,
             )
             old_hp = state.minion_health[arange_n, safe_slot]
             state.minion_health[arange_n, safe_slot] = torch.where(valid, new_hp, old_hp)
@@ -160,8 +161,8 @@ def _apply_heal(state, active, etarget, eamount, caster_owners, caster_slots, ta
             hit = all_enemies & is_enemy
             if hit.any():
                 minion_cid = state.minion_card_id[:, s].clamp(min=0)
-                base_hp = card_table.health[minion_cid]
-                new_hp = torch.min(state.minion_health[:, s] + eamount, base_hp)
+                eff_max = card_table.health[minion_cid] + state.minion_max_health_bonus[:, s]
+                new_hp = torch.min(state.minion_health[:, s] + eamount, eff_max)
                 state.minion_health[:, s] = torch.where(hit, new_hp, state.minion_health[:, s])
 
     # SELF_OWNER (3): heal owning player HP
@@ -236,8 +237,8 @@ def _apply_to_adjacent(state, active, eamount, caster_slots, card_table, damage=
             else:
                 # Heal adjacent (unusual but possible)
                 minion_cid = state.minion_card_id[:, s].clamp(min=0)
-                base_hp = card_table.health[minion_cid]
-                new_hp = torch.min(state.minion_health[:, s] + eamount, base_hp)
+                eff_max = card_table.health[minion_cid] + state.minion_max_health_bonus[:, s]
+                new_hp = torch.min(state.minion_health[:, s] + eamount, eff_max)
                 state.minion_health[:, s] = torch.where(hit, new_hp, state.minion_health[:, s])
 
 
