@@ -1075,3 +1075,161 @@ def test_zero_effective_attack_minion_has_no_attack_actions():
     assert len(attack_actions2) == 1
     assert attack_actions2[0].minion_id == 0
     assert attack_actions2[0].target_id == 1
+
+
+# ---------------------------------------------------------------------------
+# Phase 14.5: graveyard / exhaust / token exclusion
+# ---------------------------------------------------------------------------
+
+
+class TestPilesPhase145:
+    """Phase 14.5 pile semantics: graveyard tracks from_deck cards that died
+    or were played as one-shots; exhaust tracks discard-for-cost; tokens
+    (from_deck=False) vanish on death."""
+
+    def _ratchanter_library(self) -> CardLibrary:
+        """Build a library containing a cheap minion with a
+        summon_sacrifice_tribe cost so the discard-for-cost path is
+        exercisable without relying on JSON card data."""
+        cards = {
+            "test_melee": CardDefinition(
+                card_id="test_melee", name="Test Melee", card_type=CardType.MINION,
+                mana_cost=2, attack=2, health=5, attack_range=0,
+            ),
+            "test_rat": CardDefinition(
+                card_id="test_rat", name="Test Rat", card_type=CardType.MINION,
+                mana_cost=1, attack=1, health=1, attack_range=0, tribe="Rat",
+            ),
+            "test_rat_costs_rat": CardDefinition(
+                card_id="test_rat_costs_rat", name="Pricey Rat", card_type=CardType.MINION,
+                mana_cost=2, attack=3, health=3, attack_range=0,
+                summon_sacrifice_tribe="Rat",
+            ),
+            "test_magic_damage": CardDefinition(
+                card_id="test_magic_damage", name="Damage Spell", card_type=CardType.MAGIC,
+                mana_cost=2,
+                effects=(
+                    EffectDefinition(
+                        effect_type=EffectType.DAMAGE, trigger=TriggerType.ON_PLAY,
+                        target=TargetType.SINGLE_TARGET, amount=2,
+                    ),
+                ),
+            ),
+        }
+        return CardLibrary(cards)
+
+    def test_minion_death_adds_to_graveyard(self):
+        """A deck-origin minion killed by damage has its card_numeric_id
+        appended to its owner's graveyard."""
+        from grid_tactics.action_resolver import _cleanup_dead_minions
+
+        lib = self._ratchanter_library()
+        melee_nid = lib.get_numeric_id("test_melee")
+        dead = MinionInstance(
+            instance_id=0, card_numeric_id=melee_nid,
+            owner=PlayerSide.PLAYER_1, position=(1, 0),
+            current_health=0,  # already dead
+            from_deck=True,
+        )
+        state = _make_state(minions=[dead])
+        new_state = _cleanup_dead_minions(state, lib)
+        assert melee_nid in new_state.players[0].graveyard
+        # Board cleared, minion removed
+        assert new_state.board.get(1, 0) is None
+        assert new_state.get_minion(0) is None
+
+    def test_token_death_does_not_add_to_graveyard(self):
+        """A from_deck=False token (e.g. summon_token spawn) vanishes on
+        death — nothing is appended to the owner's graveyard."""
+        from grid_tactics.action_resolver import _cleanup_dead_minions
+
+        lib = self._ratchanter_library()
+        rat_nid = lib.get_numeric_id("test_rat")
+        token = MinionInstance(
+            instance_id=0, card_numeric_id=rat_nid,
+            owner=PlayerSide.PLAYER_1, position=(1, 0),
+            current_health=0,  # dead
+            from_deck=False,
+        )
+        state = _make_state(minions=[token])
+        new_state = _cleanup_dead_minions(state, lib)
+        assert new_state.players[0].graveyard == ()
+        assert new_state.players[1].graveyard == ()
+        # Board cleanup still happens
+        assert new_state.board.get(1, 0) is None
+        assert new_state.get_minion(0) is None
+
+    def test_magic_play_goes_to_graveyard(self):
+        """Casting a magic card routes its card_numeric_id to the caster's
+        graveyard immediately (one-shot play)."""
+        from grid_tactics.action_resolver import resolve_action
+
+        lib = self._ratchanter_library()
+        magic_nid = lib.get_numeric_id("test_magic_damage")
+        # Put an enemy minion on the board as a target for SINGLE_TARGET.
+        enemy = MinionInstance(
+            instance_id=0, card_numeric_id=lib.get_numeric_id("test_melee"),
+            owner=PlayerSide.PLAYER_2, position=(3, 0), current_health=5,
+        )
+        state = _make_state(p1_hand=(magic_nid,), p1_mana=5, minions=[enemy])
+        action = Action(
+            action_type=ActionType.PLAY_CARD, card_index=0, target_pos=(3, 0),
+        )
+        new_state = resolve_action(state, action, lib)
+        assert magic_nid in new_state.players[0].graveyard
+        assert len(new_state.players[0].hand) == 0
+
+    def test_discard_for_cost_goes_to_exhaust(self):
+        """summon_sacrifice_tribe removes a hand card as a COST; it goes to
+        the exhaust pile, NOT the graveyard."""
+        from grid_tactics.action_resolver import resolve_action
+
+        lib = self._ratchanter_library()
+        pricey_nid = lib.get_numeric_id("test_rat_costs_rat")
+        rat_nid = lib.get_numeric_id("test_rat")
+        # P1 has the pricey rat + a plain Rat to discard as cost.
+        state = _make_state(
+            p1_hand=(pricey_nid, rat_nid), p1_mana=5,
+        )
+        action = Action(
+            action_type=ActionType.PLAY_CARD, card_index=0, position=(1, 0),
+            sacrifice_card_index=1,
+        )
+        new_state = resolve_action(state, action, lib)
+        p1 = new_state.players[0]
+        # Pricey rat deployed (minion NOT in graveyard), sacrificed rat in exhaust
+        assert rat_nid in p1.exhaust, (
+            f"expected {rat_nid} in exhaust, got {p1.exhaust}"
+        )
+        assert rat_nid not in p1.graveyard, (
+            f"sacrificed card must not be in graveyard, got {p1.graveyard}"
+        )
+        assert pricey_nid not in p1.graveyard, (
+            "deployed minion must not enter graveyard on play"
+        )
+        # Pricey rat is on the board
+        assert len(new_state.minions) == 1
+        assert new_state.minions[0].card_numeric_id == pricey_nid
+        assert new_state.minions[0].from_deck is True
+
+    def test_conjured_minion_has_from_deck_false(self):
+        """The activated summon_token path constructs a MinionInstance with
+        from_deck=False. Covered structurally by constructing one directly
+        and asserting the field — there is no current card that exercises
+        the summon_token branch, so this test pins the kwarg contract."""
+        lib = self._ratchanter_library()
+        rat_nid = lib.get_numeric_id("test_rat")
+        token = MinionInstance(
+            instance_id=0, card_numeric_id=rat_nid,
+            owner=PlayerSide.PLAYER_1, position=(1, 0),
+            current_health=1,
+            from_deck=False,
+        )
+        assert token.from_deck is False
+        # And default is True (regression guard)
+        normal = MinionInstance(
+            instance_id=1, card_numeric_id=rat_nid,
+            owner=PlayerSide.PLAYER_1, position=(1, 1),
+            current_health=1,
+        )
+        assert normal.from_deck is True
