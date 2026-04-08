@@ -1480,21 +1480,57 @@ function fitHandCardEffects() {
     });
 }
 
-function renderDeckBuilderCard(numericId, count) {
-    var c = allCardDefs ? allCardDefs[numericId] : cardDefs[numericId];
+// =============================================
+// renderCardFrame(c, opts) -- SHARED full-size card renderer
+// Single source of truth for deck builder, hand, tooltip preview, and
+// (Wave 5) pile modals. Returns an HTML string for a full YGO-style card.
+//
+// opts: {
+//   context: 'deck-builder' | 'hand' | 'tooltip' | 'pile' (default 'deck-builder')
+//   count:   number (deck-builder badge; -1 = prohibited/no badge variant,
+//            undefined = no badge)
+//   handIndex:  number (hand context; stamped as data-hand-idx)
+//   numericId:  number (hand/deck-builder; stamped as data-numeric-id)
+//   dim:        bool   (adds .card-dimmed — hand can't-afford/not-my-turn)
+//   showReactDeploy: bool (deck-builder shows the '▶ Deploy' react hint;
+//                          hand suppresses it to match original behavior)
+// }
+// =============================================
+function renderCardFrame(c, opts) {
     if (!c) return '';
+    opts = opts || {};
+    var context = opts.context || 'deck-builder';
     var typeClass = TYPE_CSS[c.card_type] || '';
     var elem = (c.element !== null && c.element !== undefined)
         ? ELEMENT_MAP[c.element] : NEUTRAL_ELEMENT;
 
-    var html = '<div class="card-frame card-frame-full ' + typeClass + '">';
-    // Mana badge (top-left, direct child of card-frame)
+    // Context class: hand context still carries .card-frame-hand so all
+    // existing state selectors (.card-frame-hand.card-playable,
+    // .card-selected-hand, .card-react-playable, mobile sizing) keep working.
+    var contextClass = '';
+    var artClass = 'card-art-full';
+    if (context === 'hand') {
+        contextClass = ' card-frame-hand';
+        artClass = 'card-art-hand';
+    } else if (context === 'pile') {
+        contextClass = ' card-frame-pile';
+    } else if (context === 'tooltip') {
+        contextClass = ' card-frame-tooltip';
+    }
+
+    var dimClass = opts.dim ? ' card-dimmed' : '';
+    var dataAttrs = '';
+    if (opts.handIndex != null) dataAttrs += ' data-hand-idx="' + opts.handIndex + '"';
+    if (opts.numericId != null) dataAttrs += ' data-numeric-id="' + opts.numericId + '"';
+
+    var html = '<div class="card-frame card-frame-full ' + typeClass + contextClass + dimClass + '"' + dataAttrs + '>';
+    // Mana badge (top-left)
     html += '<div class="card-mana">' + c.mana_cost + '</div>';
-    // Element circle (top-right, direct child of card-frame)
+    // Element circle (top-right)
     html += '<div class="attr-circle ' + elem.css + '"><span class="attr-text">' + elem.name + '</span></div>';
     // Art area with name overlay (YGO CardPreview style)
     var artStyle = c.card_id ? 'background-image:url(/static/art/' + c.card_id + '.png)' : '';
-    html += '<div class="card-art card-art-full" style="' + artStyle + '">';
+    html += '<div class="card-art ' + artClass + '" style="' + artStyle + '">';
     html += '<div class="card-art-overlay"></div>';
     html += '<div class="card-name-overlay">' + c.name + '</div>';
     html += '</div>';
@@ -1557,7 +1593,9 @@ function renderDeckBuilderCard(numericId, count) {
         var extraCond = c.react_requires_no_friendly_minions ? ' & No friendly minions' : '';
         var costText = c.react_mana_cost > 0 ? ' (' + c.react_mana_cost + ')' : '';
         html += '<div class="card-effect-full">React' + costText + ': ' + condText + extraCond + '</div>';
-        html += '<div class="card-effect-full">▶ Deploy</div>';
+        if (opts.showReactDeploy) {
+            html += '<div class="card-effect-full">▶ Deploy</div>';
+        }
     }
     // Flavour text — only when the card has no other text content
     if (c.flavour_text
@@ -1567,16 +1605,28 @@ function renderDeckBuilderCard(numericId, count) {
             && (!c.transform_options || c.transform_options.length === 0)) {
         html += '<div class="card-flavour">' + c.flavour_text + '</div>';
     }
-    // Range already shown in bottom center for minions
     html += '</div>';
-    // Count badge
-    if (count === -1) {
-        html += '<div class="card-count-badge prohibited">🚫</div>';
-    } else {
-        var badgeClass = count > 0 ? 'card-count-badge' : 'card-count-badge empty';
-        html += '<div class="' + badgeClass + '">x' + count + '</div>';
+    // Count badge (deck-builder / tooltip contexts)
+    if (opts.count != null) {
+        if (opts.count === -1) {
+            html += '<div class="card-count-badge prohibited">🚫</div>';
+        } else {
+            var badgeClass = opts.count > 0 ? 'card-count-badge' : 'card-count-badge empty';
+            html += '<div class="' + badgeClass + '">x' + opts.count + '</div>';
+        }
     }
     return html;
+}
+
+// Thin wrapper: deck-builder tiles / tooltip full-art previews.
+function renderDeckBuilderCard(numericId, count) {
+    var c = allCardDefs ? allCardDefs[numericId] : cardDefs[numericId];
+    return renderCardFrame(c, {
+        context: 'deck-builder',
+        count: count,
+        numericId: numericId,
+        showReactDeploy: true,
+    });
 }
 
 function renderDeckSidebar() {
@@ -4329,87 +4379,21 @@ function renderHand() {
 }
 
 // =============================================
-// renderHandCard() -- Full YGO-style (D-05, D-06)
+// renderHandCard() -- thin wrapper over renderCardFrame (Wave 14.5-04)
+// Single source of truth lives in renderCardFrame(). Hand context stamps
+// data-hand-idx / data-numeric-id and dims on can't-afford OR not-my-turn.
 // =============================================
-
 function renderHandCard(numericId, handIndex, currentMana, isMyTurn) {
     var c = cardDefs[numericId];
     if (!c) return '';
-    var typeClass = TYPE_CSS[c.card_type] || '';
     var canAfford = currentMana >= c.mana_cost;
-    // Dim if can't afford OR not my turn (cards aren't playable when not active)
-    var dimClass = (canAfford && isMyTurn) ? '' : ' card-dimmed';
-    var elem = (c.element !== null && c.element !== undefined)
-        ? ELEMENT_MAP[c.element] : NEUTRAL_ELEMENT;
-
-    var html = '<div class="card-frame card-frame-hand ' + typeClass + dimClass + '" data-hand-idx="' + handIndex + '" data-numeric-id="' + numericId + '">';
-    // Mana badge (top-left)
-    html += '<div class="card-mana">' + c.mana_cost + '</div>';
-    // Element circle (top-right)
-    html += '<div class="attr-circle ' + elem.css + '"><span class="attr-text">' + elem.name + '</span></div>';
-    // Art area with overlay + name (YGO style matching deck builder)
-    var handArtStyle = c.card_id ? 'background-image:url(/static/art/' + c.card_id + '.png)' : '';
-    html += '<div class="card-art card-art-hand" style="' + handArtStyle + '">';
-    html += '<div class="card-art-overlay"></div>';
-    html += '<div class="card-name-overlay">' + c.name + '</div>';
-    html += '</div>';
-    // Bottom section: ATK circle | tribe+range | HP circle (minions)
-    if (c.card_type === 0 && c.attack != null) {
-        var tribe = c.tribe || '';
-        var rangeText = (c.attack_range != null) ? (c.attack_range === 0 ? 'MELEE' : 'RANGE ' + c.attack_range) : '';
-        html += '<div class="card-bottom-section">';
-        html += '<div class="card-stat-atk">' + c.attack + '</div>';
-        html += '<div class="card-bottom-center">';
-        if (tribe) html += '<div class="card-bottom-tribe">' + tribe + '</div>';
-        if (rangeText) html += '<div class="card-bottom-range">' + rangeText + '</div>';
-        html += '</div>';
-        html += '<div class="card-stat-hp">' + c.health + '</div>';
-        html += '</div>';
-    }
-    // Summon sacrifice cost
-    if (c.summon_sacrifice_tribe) {
-        html += '<div class="card-effect-full">Cost: Discard any ' + c.summon_sacrifice_tribe + '</div>';
-    }
-    // Unique tag
-    if (c.unique) {
-        html += '<div class="card-effect-full">Unique</div>';
-    }
-    // Effect text (all card types)
-    if (c.effects && c.effects.length > 0) {
-        var desc = getEffectDescription(c.effects, c);
-        html += '<div class="card-effect-full">' + desc + '</div>';
-    }
-    // Transform options
-    if (c.transform_options && c.transform_options.length > 0) {
-        var tLines = c.transform_options.map(function(opt) {
-            return '(' + opt.mana_cost + ') ' + findCardNameById(opt.target);
-        });
-        html += '<div class="card-effect-full">Transform: ' + tLines.join(', ') + '</div>';
-    }
-    // React ability for multi-purpose cards
-    if (c.react_condition != null && c.react_mana_cost != null) {
-        var condMap = {
-            0: 'Enemy plays Magic', 1: 'Enemy summons Minion', 2: 'Enemy attacks',
-            3: 'Enemy plays React', 4: 'Any enemy action',
-            5: 'Enemy plays any Wood', 6: 'Enemy plays any Fire', 7: 'Enemy plays any Earth',
-            8: 'Enemy plays any Water', 9: 'Enemy plays any Metal', 10: 'Enemy plays any Dark',
-            11: 'Enemy plays any Light', 12: 'Enemy sacrifices'
-        };
-        var condText = condMap[c.react_condition] || 'Enemy acts';
-        var extraCond = c.react_requires_no_friendly_minions ? ' & No friendly minions' : '';
-        var costText = c.react_mana_cost > 0 ? ' (' + c.react_mana_cost + ')' : '';
-        html += '<div class="card-effect-full">React' + costText + ': ' + condText + extraCond + '</div>';
-    }
-    // Flavour text — only when the card has no other text content
-    if (c.flavour_text
-            && (!c.effects || c.effects.length === 0)
-            && !c.activated_ability
-            && c.react_condition == null
-            && (!c.transform_options || c.transform_options.length === 0)) {
-        html += '<div class="card-flavour">' + c.flavour_text + '</div>';
-    }
-    html += '</div>';
-    return html;
+    return renderCardFrame(c, {
+        context: 'hand',
+        handIndex: handIndex,
+        numericId: numericId,
+        dim: !(canAfford && isMyTurn),
+        showReactDeploy: false,
+    });
 }
 
 // =============================================

@@ -1531,16 +1531,14 @@ body {
   line-height: 24px;
 }
 
-/* ===== Hand Card (full-size, matches deck builder card-frame-full) ===== */
-.card-frame-hand {
-  width: 192px;
-  display: flex;
-  flex-direction: column;
-}
-
-.card-art-hand {
-  height: 58%;
-}
+/* ===== Hand Card context modifier =====
+ * Wave 14.5-04: hand cards now carry BOTH .card-frame-full (base layout)
+ * and .card-frame-hand (context hook for .card-playable / .card-selected-hand
+ * / .card-react-playable / mobile width override). Base sizing and art
+ * height are inherited from .card-frame-full / .card-art-full — do not
+ * re-declare them here, or visual drift between hand and deck builder
+ * will return. .card-art-hand is kept as a no-op class name in case
+ * future hand-specific art tweaks are needed. */
 
 /* Minion action menu (transform / sacrifice popup on selected minion) */
 .minion-action-menu {
