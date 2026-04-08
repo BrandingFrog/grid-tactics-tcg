@@ -581,7 +581,20 @@ def main():
     from grid_tactics.types import STARTING_HP
 
     library = CardLibrary.from_directory(Path("data/cards"))
-    deck_tuple = _build_standard_deck(library)
+
+    # Deck selection:
+    #   TRAIN_DECK_CODE="GT1:..." — use a user-supplied deck code (same format
+    #       as the deck-builder Export Code button in the web client).
+    #   otherwise — fall back to the standard preset deck.
+    deck_code_env = os.environ.get("TRAIN_DECK_CODE", "").strip()
+    if deck_code_env:
+        from grid_tactics.deck_code import decode_deck_code
+        deck_counts = decode_deck_code(deck_code_env)
+        deck_tuple = library.build_deck(deck_counts)
+        print(f"  [deck] Using TRAIN_DECK_CODE ({len(deck_tuple)} cards)")
+    else:
+        deck_tuple = _build_standard_deck(library)
+        print(f"  [deck] Using standard preset deck ({len(deck_tuple)} cards)")
     deck_1d = torch.tensor(deck_tuple, dtype=torch.int32)
     card_table = CardTable.from_library(library, device=device)
 

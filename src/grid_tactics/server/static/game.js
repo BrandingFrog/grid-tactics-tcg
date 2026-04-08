@@ -750,6 +750,65 @@ function deleteDeckSlot(idx) {
     }
 }
 
+// =============================================
+// Deck code export / import
+// Format: GT1:<base64url of JSON [[card_id, count], ...]>
+// Stable, cross-platform (Python tensor_train.py decodes the same format).
+// =============================================
+var DECK_CODE_PREFIX = 'GT1:';
+
+function encodeDeckCode(deckObj) {
+    // deckObj is { numericId: count } — convert to [[card_id, count], ...]
+    var entries = [];
+    for (var numId in deckObj) {
+        var c = deckObj[numId];
+        if (!c || c <= 0) continue;
+        var def = (allCardDefs || cardDefs)[numId];
+        if (!def || !def.card_id) continue;
+        entries.push([def.card_id, c]);
+    }
+    // Sort for stable round-trips
+    entries.sort(function (a, b) { return a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0; });
+    var json = JSON.stringify(entries);
+    // base64url (no padding)
+    var b64 = btoa(json).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    return DECK_CODE_PREFIX + b64;
+}
+
+function decodeDeckCode(code) {
+    if (!code || typeof code !== 'string') throw new Error('Empty deck code');
+    code = code.trim();
+    if (code.indexOf(DECK_CODE_PREFIX) !== 0) {
+        throw new Error('Invalid deck code — must start with ' + DECK_CODE_PREFIX);
+    }
+    var b64 = code.slice(DECK_CODE_PREFIX.length);
+    // base64url -> base64
+    b64 = b64.replace(/-/g, '+').replace(/_/g, '/');
+    while (b64.length % 4) b64 += '=';
+    var json = atob(b64);
+    var entries = JSON.parse(json);
+    if (!Array.isArray(entries)) throw new Error('Malformed deck code payload');
+    // Map back to { numericId: count }
+    var cardIdToNumId = {};
+    var defs = allCardDefs || cardDefs;
+    for (var nid in defs) {
+        if (defs[nid] && defs[nid].card_id) cardIdToNumId[defs[nid].card_id] = parseInt(nid, 10);
+    }
+    var deck = {};
+    var unknown = [];
+    entries.forEach(function (e) {
+        var cardId = e[0];
+        var count = e[1];
+        if (!(cardId in cardIdToNumId)) { unknown.push(cardId); return; }
+        var numId = cardIdToNumId[cardId];
+        deck[numId] = (deck[numId] || 0) + count;
+    });
+    if (unknown.length) {
+        console.warn('[deck-code] unknown card_ids skipped:', unknown);
+    }
+    return deck;
+}
+
 function getDeckAsArray(deckObj) {
     var arr = [];
     if (!deckObj) return arr;
@@ -1487,6 +1546,44 @@ function setupDeckBuilderHandlers() {
             refreshLoadDropdown();
             populateDeckSelector();  // refresh lobby dropdown too
             showLobbyStatus('Deck saved!', 'info');
+        });
+    }
+
+    // Export Code — copy the current deck as a GT1: code to clipboard
+    var btnExport = document.getElementById('btn-export-deck');
+    if (btnExport) {
+        btnExport.addEventListener('click', function() {
+            try {
+                var code = encodeDeckCode(currentDeck);
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    navigator.clipboard.writeText(code).then(function () {
+                        showLobbyStatus('Deck code copied to clipboard!', 'info');
+                    }, function () {
+                        window.prompt('Copy this deck code:', code);
+                    });
+                } else {
+                    window.prompt('Copy this deck code:', code);
+                }
+            } catch (e) {
+                showLobbyStatus('Export failed: ' + e.message, 'error');
+            }
+        });
+    }
+
+    // Import Code — paste a GT1: code to overwrite the current deck
+    var btnImport = document.getElementById('btn-import-deck');
+    if (btnImport) {
+        btnImport.addEventListener('click', function() {
+            var code = window.prompt('Paste a deck code (GT1:...):');
+            if (!code) return;
+            try {
+                var deck = decodeDeckCode(code);
+                currentDeck = deck;
+                renderCurrentDeck();
+                showLobbyStatus('Deck imported!', 'info');
+            } catch (e) {
+                showLobbyStatus('Import failed: ' + e.message, 'error');
+            }
         });
     }
 
