@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Online PvP Dueling
 status: verifying
-stopped_at: "Phase 14.4 spectator mode feature-complete (waves 1-5). Wave 5 closeout: test_room_manager.py (8 tests) + test_events.py (6 tests, flask_socketio-gated) added, ROADMAP/STATE updated, multi-tab smoke test deferred to post-deploy Playwright E2E (same posture as 14.1 / 14.2 / 14.3 closeouts)."
-last_updated: "2026-04-08T20:15:00.000Z"
+stopped_at: "Phase 14.5 Wave 6 complete — card-draw animations via AnimationQueue. Two new job types (draw_own ~600ms card-fly-in, draw_opp ~400ms face-down pop) wired into playAnimation switch. onStateUpdate multiset-diffs own hand + opponent hand_count delta via new deriveDrawJobs(), enqueues pure-visual jobs (stateApplied=true) AFTER the primary action job so main-action timing is preserved. Single structural trigger point catches ALL hand-growing paths: draw / Diodebot tutor / Ratchanter tutor chain / conjure / future react-gain. Opponent diff is count-only, hidden-info posture preserved."
+last_updated: "2026-04-08T22:28:00.000Z"
 last_activity: 2026-04-08
 progress:
   total_phases: 5
@@ -26,9 +26,9 @@ See: .planning/PROJECT.md (updated 2026-04-04)
 ## Current Position
 
 Phase: 14.5 (piles-and-hand-vis) — IN PROGRESS
-Plan: 5 of N (pile buttons + shared modal + opp face-down hand row) — COMPLETE
+Plan: 6 of N (card-draw animations via AnimationQueue) — COMPLETE
 Status: Wave 1 engine done. MinionInstance.from_deck + Player.exhaust shipped; minion plays no longer double-count in graveyard; tokens vanish silently on death; discard-for-cost routes to exhaust. Tensor parity deferred to Wave 2. Phase 14.4 spectator mode fully shipped (waves 1-5). Backend: RoomManager._room_spectators manager-level dict survives the WaitingRoom→GameSession transition; filter_state_for_spectator is a pure function (god = deepcopy, non-god = delegate to filter_state_for_player(0)); events.py has spectate_room handler, submit_action gate ("Spectators cannot submit actions"), _fanout_state_to_spectators / _fanout_game_start_to_spectators wired into _emit_state_to_players / _emit_game_over / handle_ready / handle_request_rematch, chat broadcast inclusive of spectators, disconnect handler scoped to spectators only (player-disconnect still Phase 15 territory). Frontend: Lobby Spectate Room button + God Mode checkbox, isSpectator / spectatorGodMode flags re-synced from every state frame, early-return at all 5 action seams (submitAction + 3 click handlers + renderActionBar), dual-hand god view via renderHand appendHand helper, SPECTATING badge. Mid-game join supported via synthetic game_start from handle_spectate_room. Multi-tab smoke test deferred to post-deploy Playwright E2E.
-Last activity: 2026-04-08 — Completed 14.5-05-PLAN.md (4 pile buttons on info-bars + shared showPileModal via renderCardFrame context:'pile' + face-down opp-hand-row reflecting hand_count every frame; inline button placement chosen over absolute corner positioning; .stat-emoji halo reused for counts)
+Last activity: 2026-04-08 — Completed 14.5-06-PLAN.md (card-draw animations via Phase 14.3 AnimationQueue; draw_own ~600ms fly-in and draw_opp ~400ms face-down pop; multiset hand diff in onStateUpdate as single structural trigger catching draw/tutor/conjure/future react-gain paths uniformly; draw jobs run AFTER primary action job with stateApplied=true so move/attack timing stays intact)
 
 Progress: [░░░░░░░░░░] 0%
 
