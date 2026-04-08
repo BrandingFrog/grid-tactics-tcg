@@ -850,6 +850,118 @@ function decodeDeckCode(code) {
     throw new Error('Invalid deck code — must start with GT2: or GT1:');
 }
 
+// Show a modal for exporting or importing a deck code.
+// mode: 'export' (readonly textarea + Copy button) or 'import' (editable).
+function showDeckCodeModal(mode, code) {
+    hideDeckCodeModal();
+    var overlay = document.createElement('div');
+    overlay.id = 'deck-code-modal-overlay';
+    overlay.className = 'deck-code-modal-overlay';
+
+    var panel = document.createElement('div');
+    panel.className = 'deck-code-modal';
+
+    var title = document.createElement('div');
+    title.className = 'deck-code-modal-title';
+    title.textContent = mode === 'export' ? 'Export Deck Code' : 'Import Deck Code';
+    panel.appendChild(title);
+
+    var hint = document.createElement('div');
+    hint.className = 'deck-code-modal-hint';
+    hint.textContent = mode === 'export'
+        ? 'Share this code to let others import your deck.'
+        : 'Paste a deck code (GT2: or GT1:) below.';
+    panel.appendChild(hint);
+
+    var ta = document.createElement('textarea');
+    ta.className = 'deck-code-modal-textarea';
+    ta.value = code || '';
+    ta.readOnly = (mode === 'export');
+    ta.spellcheck = false;
+    ta.rows = 4;
+    panel.appendChild(ta);
+
+    var row = document.createElement('div');
+    row.className = 'deck-code-modal-row';
+
+    if (mode === 'export') {
+        var btnCopy = document.createElement('button');
+        btnCopy.className = 'btn btn-primary btn-sm';
+        btnCopy.textContent = 'Copy to Clipboard';
+        btnCopy.addEventListener('click', function() {
+            var val = ta.value;
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(val).then(function() {
+                    btnCopy.textContent = 'Copied ✓';
+                    setTimeout(function() { btnCopy.textContent = 'Copy to Clipboard'; }, 1500);
+                }, function() {
+                    ta.select();
+                    document.execCommand('copy');
+                    btnCopy.textContent = 'Copied ✓';
+                    setTimeout(function() { btnCopy.textContent = 'Copy to Clipboard'; }, 1500);
+                });
+            } else {
+                ta.select();
+                document.execCommand('copy');
+                btnCopy.textContent = 'Copied ✓';
+                setTimeout(function() { btnCopy.textContent = 'Copy to Clipboard'; }, 1500);
+            }
+        });
+        row.appendChild(btnCopy);
+    } else {
+        var btnApply = document.createElement('button');
+        btnApply.className = 'btn btn-primary btn-sm';
+        btnApply.textContent = 'Import';
+        btnApply.addEventListener('click', function() {
+            var val = (ta.value || '').trim();
+            if (!val) return;
+            try {
+                var deck = decodeDeckCode(val);
+                currentDeck = deck;
+                renderDeckSidebar();
+                if (typeof renderCardBrowser === 'function') renderCardBrowser();
+                hideDeckCodeModal();
+                showLobbyStatus('Deck imported!', 'info');
+            } catch (e) {
+                var err = panel.querySelector('.deck-code-modal-error');
+                if (!err) {
+                    err = document.createElement('div');
+                    err.className = 'deck-code-modal-error';
+                    panel.insertBefore(err, row);
+                }
+                err.textContent = 'Invalid code: ' + (e && e.message ? e.message : e);
+            }
+        });
+        row.appendChild(btnApply);
+    }
+
+    var btnClose = document.createElement('button');
+    btnClose.className = 'btn btn-secondary btn-sm';
+    btnClose.textContent = mode === 'export' ? 'Close' : 'Cancel';
+    btnClose.addEventListener('click', hideDeckCodeModal);
+    row.appendChild(btnClose);
+
+    panel.appendChild(row);
+    overlay.appendChild(panel);
+    document.body.appendChild(overlay);
+
+    // Auto-select the code for quick manual copy
+    setTimeout(function() {
+        ta.focus();
+        if (mode === 'export') ta.select();
+    }, 50);
+
+    // Escape to close
+    overlay.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') hideDeckCodeModal();
+    });
+}
+
+function hideDeckCodeModal() {
+    var existing = document.getElementById('deck-code-modal-overlay');
+    if (existing) existing.remove();
+}
+
 function getDeckAsArray(deckObj) {
     var arr = [];
     if (!deckObj) return arr;
@@ -1590,41 +1702,24 @@ function setupDeckBuilderHandlers() {
         });
     }
 
-    // Export Code — copy the current deck as a GT1: code to clipboard
+    // Export Code — show the code in a modal with a Copy button
     var btnExport = document.getElementById('btn-export-deck');
     if (btnExport) {
         btnExport.addEventListener('click', function() {
             try {
                 var code = encodeDeckCode(currentDeck);
-                if (navigator.clipboard && navigator.clipboard.writeText) {
-                    navigator.clipboard.writeText(code).then(function () {
-                        showLobbyStatus('Deck code copied to clipboard!', 'info');
-                    }, function () {
-                        window.prompt('Copy this deck code:', code);
-                    });
-                } else {
-                    window.prompt('Copy this deck code:', code);
-                }
+                showDeckCodeModal('export', code);
             } catch (e) {
                 showLobbyStatus('Export failed: ' + e.message, 'error');
             }
         });
     }
 
-    // Import Code — paste a GT1: code to overwrite the current deck
+    // Import Code — show a modal with a textarea to paste a code into
     var btnImport = document.getElementById('btn-import-deck');
     if (btnImport) {
         btnImport.addEventListener('click', function() {
-            var code = window.prompt('Paste a deck code (GT1:...):');
-            if (!code) return;
-            try {
-                var deck = decodeDeckCode(code);
-                currentDeck = deck;
-                renderCurrentDeck();
-                showLobbyStatus('Deck imported!', 'info');
-            } catch (e) {
-                showLobbyStatus('Import failed: ' + e.message, 'error');
-            }
+            showDeckCodeModal('import', '');
         });
     }
 
