@@ -173,6 +173,7 @@ Plans:
 - [x] **Phase 14.2: Tutor Choice Prompt** - Replace auto-tutor with player-facing selection modal; extend tutor_target to support selector dicts (completed 2026-04-07)
 - [x] **Phase 14.3: Game Juice (Animation Layer)** - Client-side AnimationQueue serializing summon / move / attack / burn / floating-popup visuals; pending UIs (react, tutor, post-move-attack) gate behind queue drain via applyStateFrame (completed 2026-04-07)
 - [x] **Phase 14.4: Spectator Mode** - Lobby Spectate button + optional God Mode, server-side join_as_spectator + spectator fanout + action gating, dual-hand god view and P1-perspective non-god view (completed 2026-04-07)
+- [x] **Phase 14.5: Piles & Hand Visibility** - from_deck flag + exhaust pile, tensor parity, view_filter piles, uniform card renderer, symmetric pile buttons with modal, opponent face-down hand row, AnimationQueue-integrated draw animations (completed 2026-04-08)
 - [ ] **Phase 15: Resilience & Polish** - Reconnection handling, scrollable game log, and rematch flow
 
 ## Phase Details
@@ -281,6 +282,19 @@ Plans:
 - [x] 14.2-03-PLAN.md -- Legal-action masks
 - [x] 14.2-04-PLAN.md -- Frontend modal + serialization
 - [x] 14.2-05-PLAN.md -- Roadmap/STATE + smoke test
+
+### Phase 14.5: Piles & Hand Visibility
+**Goal:** Make piles (graveyard + exhaust) first-class and visible for both players, fix the minion-play-to-graveyard double-count bug, unify card rendering across hand/deck-builder/tooltip, show an opponent face-down hand row, and animate card draws through the Phase 14.3 AnimationQueue.
+**Depends on**: Phase 14.4
+**Plans:** 7/7 plans complete
+Plans:
+- [x] 14.5-01-PLAN.md -- Python engine: MinionInstance.from_deck + Player.exhaust + three hand-removal verbs
+- [x] 14.5-02-PLAN.md -- Tensor engine parity: minion_from_deck + exhausts + exhaust_sizes; fix minion-play graveyard double-count
+- [x] 14.5-03-PLAN.md -- view_filter symmetric piles (own/opp graveyard + exhaust) on every state frame
+- [x] 14.5-04-PLAN.md -- Uniform card renderer (renderCardFrame single source of truth)
+- [x] 14.5-05-PLAN.md -- 4 pile buttons + shared pile modal + opponent face-down hand row
+- [x] 14.5-06-PLAN.md -- Card-draw animations via AnimationQueue (draw_own + draw_opp) driven by multiset hand diff
+- [x] 14.5-07-PLAN.md -- Roadmap/STATE closeout + UAT (UAT deferred to post-deploy E2E)
 
 ### Phase 15: Resilience & Polish
 **Goal**: The game handles real-world conditions -- disconnections recover gracefully, a game log tracks what happened, and players can rematch without creating a new room

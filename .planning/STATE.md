@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Online PvP Dueling
 status: verifying
-stopped_at: "Phase 14.5 Wave 6 complete — card-draw animations via AnimationQueue. Two new job types (draw_own ~600ms card-fly-in, draw_opp ~400ms face-down pop) wired into playAnimation switch. onStateUpdate multiset-diffs own hand + opponent hand_count delta via new deriveDrawJobs(), enqueues pure-visual jobs (stateApplied=true) AFTER the primary action job so main-action timing is preserved. Single structural trigger point catches ALL hand-growing paths: draw / Diodebot tutor / Ratchanter tutor chain / conjure / future react-gain. Opponent diff is count-only, hidden-info posture preserved."
-last_updated: "2026-04-08T22:28:00.000Z"
+stopped_at: "Phase 14.5 COMPLETE (all 7 waves). from_deck flag + exhaust pile in Python and tensor engines, symmetric view_filter piles, uniform renderCardFrame, 4 pile buttons + shared modal, opponent face-down hand row, draw animations via AnimationQueue. Wave 7 closeout deferred multi-tab UAT to post-deploy Playwright E2E (standard 14.x posture). Next up: Phase 15 Resilience & Polish."
+last_updated: "2026-04-08T22:45:00.000Z"
 last_activity: 2026-04-08
 progress:
   total_phases: 5
@@ -25,10 +25,11 @@ See: .planning/PROJECT.md (updated 2026-04-04)
 
 ## Current Position
 
-Phase: 14.5 (piles-and-hand-vis) — IN PROGRESS
-Plan: 6 of N (card-draw animations via AnimationQueue) — COMPLETE
-Status: Wave 1 engine done. MinionInstance.from_deck + Player.exhaust shipped; minion plays no longer double-count in graveyard; tokens vanish silently on death; discard-for-cost routes to exhaust. Tensor parity deferred to Wave 2. Phase 14.4 spectator mode fully shipped (waves 1-5). Backend: RoomManager._room_spectators manager-level dict survives the WaitingRoom→GameSession transition; filter_state_for_spectator is a pure function (god = deepcopy, non-god = delegate to filter_state_for_player(0)); events.py has spectate_room handler, submit_action gate ("Spectators cannot submit actions"), _fanout_state_to_spectators / _fanout_game_start_to_spectators wired into _emit_state_to_players / _emit_game_over / handle_ready / handle_request_rematch, chat broadcast inclusive of spectators, disconnect handler scoped to spectators only (player-disconnect still Phase 15 territory). Frontend: Lobby Spectate Room button + God Mode checkbox, isSpectator / spectatorGodMode flags re-synced from every state frame, early-return at all 5 action seams (submitAction + 3 click handlers + renderActionBar), dual-hand god view via renderHand appendHand helper, SPECTATING badge. Mid-game join supported via synthetic game_start from handle_spectate_room. Multi-tab smoke test deferred to post-deploy Playwright E2E.
-Last activity: 2026-04-08 — Completed 14.5-06-PLAN.md (card-draw animations via Phase 14.3 AnimationQueue; draw_own ~600ms fly-in and draw_opp ~400ms face-down pop; multiset hand diff in onStateUpdate as single structural trigger catching draw/tutor/conjure/future react-gain paths uniformly; draw jobs run AFTER primary action job with stateApplied=true so move/attack timing stays intact)
+Phase: 14.5 (piles-and-hand-vis) — COMPLETE (all 7 waves)
+Plan: 7 of 7 (roadmap/STATE closeout) — COMPLETE
+Next: Phase 15 Resilience & Polish
+Status: Phase 14.5 fully shipped. MinionInstance.from_deck + Player.exhaust shipped in Python and tensor engines; minion plays no longer double-count in graveyard; tokens vanish silently on death; discard-for-cost routes to exhaust. Tensor parity deferred to Wave 2. Phase 14.4 spectator mode fully shipped (waves 1-5). Backend: RoomManager._room_spectators manager-level dict survives the WaitingRoom→GameSession transition; filter_state_for_spectator is a pure function (god = deepcopy, non-god = delegate to filter_state_for_player(0)); events.py has spectate_room handler, submit_action gate ("Spectators cannot submit actions"), _fanout_state_to_spectators / _fanout_game_start_to_spectators wired into _emit_state_to_players / _emit_game_over / handle_ready / handle_request_rematch, chat broadcast inclusive of spectators, disconnect handler scoped to spectators only (player-disconnect still Phase 15 territory). Frontend: Lobby Spectate Room button + God Mode checkbox, isSpectator / spectatorGodMode flags re-synced from every state frame, early-return at all 5 action seams (submitAction + 3 click handlers + renderActionBar), dual-hand god view via renderHand appendHand helper, SPECTATING badge. Mid-game join supported via synthetic game_start from handle_spectate_room. Multi-tab smoke test deferred to post-deploy Playwright E2E.
+Last activity: 2026-04-08 — Completed 14.5-07-PLAN.md (Phase 14.5 closeout: ROADMAP + STATE updated, SUMMARY written, multi-tab UAT deferred to post-deploy Playwright E2E per standard 14.x posture)
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -175,6 +176,8 @@ Key decisions:
 - [Phase 14.5-04]: Hand cards stamped with BOTH `.card-frame-full` (base layout) and `.card-frame-hand` (state-modifier hook). Keeps all existing state selectors working unchanged (`.card-playable`, `.card-selected-hand`, `.card-react-playable`, mobile width override). Dead `.card-frame-hand` base rule + `.card-art-hand` base rule deleted from CSS (verbatim duplicates of `.card-frame-full` / `.card-art-full`) to prevent silent drift.
 - [Phase 14.5-04]: `showReactDeploy` opt-in flag preserves the original asymmetry — deck builder shows "▶ Deploy" hint for multi-purpose react cards, hand suppresses.
 - [Phase 14.5-04]: Task 2 visual smoke test deferred to post-deploy Playwright E2E (same posture as 14.1-04 / 14.2-04 / 14.3-01/04/07 / 14.4-05). Structural review confirmed: data attrs preserved, context classes preserved, dim logic preserved, tooltip path preserved, mobile media query still valid.
+- [Phase 14.5-07]: Phase 14.5 closeout — `from_deck` flag on MinionInstance gates graveyard population; tokens vanish silently on death. Exhaust pile introduced alongside graveyard for discard-for-cost mechanics (summon_sacrifice_tribe). Uniform card rendering via shared `renderCardFrame` — one source of truth for hand / deck builder / tooltip. Pile buttons are symmetric — both players see own and opponent ⚰️ / 🌀 with live counts and clickable modals. Draw animations triggered structurally via multiset hand diff in `onStateUpdate`, never per-action-site.
+- [Phase 14.5-07]: Task 2 (multi-tab visual UAT) deferred to post-deploy Playwright E2E against Railway, same posture as every prior 14.x closeout.
 
 ### Pending Todos
 
@@ -182,15 +185,15 @@ None yet.
 
 ### Blockers/Concerns
 
-- Known issue: RL checkpoints are now TRIPLY STALE — (1) 14.1/14.2 encoding reinterpretations (post-move-attack pending + tutor selector + pending_tutor slot reuse), (2) 8bd61e1 ACTION_SPACE_SIZE 1262→1287, (3) 14.5-02 tensor pile semantics (minion plays no longer added to graveyard on cast; exhaust pile introduced; tokens vanish silently via from_deck gate). Loadable but any observation derived from graveyard contents diverges silently. Retraining required before tournament/eval. Not blocking gameplay.
+- Known issue: RL checkpoints are now TRIPLY STALE — (1) 14.1/14.2 encoding reinterpretations (post-move-attack pending + tutor selector + pending_tutor slot reuse), (2) 8bd61e1 ACTION_SPACE_SIZE 1262→1287, (3) 14.5-02 tensor pile semantics (minion plays no longer added to graveyard on cast; exhaust pile introduced; tokens vanish silently via from_deck gate; new minion_from_deck + exhausts + exhaust_sizes GPU fields). Loadable but any observation derived from graveyard contents diverges silently. Retraining required before tournament/eval. Not blocking gameplay. **Confirmed at Phase 14.5 closeout (2026-04-08): retrain-or-continue-from-scratch decision belongs to next RL cycle.**
 - Research flag: Phase 15 reconnection -- cookie vs localStorage, token expiry, and state resend edge cases may surface
 - Research flag: Phase 15 timer cancellation -- start_background_task() cancellation is MEDIUM confidence per research
 - Gap: Preset deck composition (card copy counts for 30-card deck) must be decided in Phase 11
 
 ## Session Continuity
 
-Last session: 2026-04-08T22:15:00.000Z — Completed 14.5-04 (uniform card renderer). Previous: 2026-04-07T21:30:00.000Z
-Stopped at: Phase 14.4 spectator mode fully shipped (plans 01-05). Wave 5 closeout added tests/test_room_manager.py (8 spectator data-model tests, all passing locally) and tests/test_events.py (6 Socket.IO spectator tests, gated on flask_socketio via conftest collect_ignore_glob — will run on CI / Railway). ROADMAP and STATE updated. Multi-tab visual smoke test deferred to post-deploy Playwright E2E. Full local suite: 564 passed, 4 skipped.
+Last session: 2026-04-08T22:45:00.000Z — Completed 14.5-07 (Phase 14.5 closeout). Previous: 2026-04-08T22:28:00.000Z (14.5-06 draw animations).
+Stopped at: Phase 14.5 (piles-and-hand-vis) fully shipped, all 7 waves. ROADMAP updated with Phase 14.5 entry + details block, STATE updated with Phase 14.5-07 decisions and compounded RL checkpoint staleness note, SUMMARY written at .planning/phases/14.5-piles-and-hand-vis/14.5-07-SUMMARY.md. Multi-tab visual UAT deferred to post-deploy Playwright E2E against Railway (standard 14.x posture). Next: Phase 15 Resilience & Polish (reconnection, scrollable game log, rematch flow).
 
 Previous session (2026-04-07T20:45:00.000Z): Card-effects-and-action-flow audit followups complete. Tensor-engine parity for LEAP (CardTable.leap_amount precompute + _compute_move_mask LEAP override + apply_move_batch leap landing) and PASSIVE pipeline (CardTable.passive_burn_amount/passive_heal_amount + engine._fire_passive_effects_batch at turn flip, mirroring Python react_stack._fire_passive_effects). Bug-4 design clarification: BURN handler now stacks `int(effect.amount)` per tick so Emberplague's JSON amount=5 takes effect; tensor side already uses passive_burn_amount from the same JSON field. ActionEncoder _encode_move/_decode_move now leap-aware (collapse multi-step forward to unit cardinal on encode, walk over blockers on decode). 42 stale-assertion test failures swept to zero — pure test maintenance, no engine behavior changes. tests/conftest.py grew collect_ignore_glob for RL/tensor/server test files when torch/sb3/flask_socketio missing (single source of truth for ML-dep gating). Final: 538 passed, 4 skipped, 0 failed locally. Next: Phase 15 Resilience & Polish.
 Resume file: None
