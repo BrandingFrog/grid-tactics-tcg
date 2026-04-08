@@ -86,8 +86,96 @@ def _make_test_library() -> CardLibrary:
             card_id="test_react_card", name="Test React", card_type=CardType.REACT,
             mana_cost=1, react_condition=ReactCondition.ANY_ACTION,
         ),
+        "test_zrally": CardDefinition(
+            card_id="test_zrally", name="Rally Minion", card_type=CardType.MINION,
+            mana_cost=1, attack=1, health=1, attack_range=2,  # ranged so no 14.1 pending
+            effects=(
+                EffectDefinition(
+                    effect_type=EffectType.RALLY_FORWARD,
+                    trigger=TriggerType.ON_MOVE,
+                    target=TargetType.SELF_OWNER, amount=1,
+                ),
+            ),
+        ),
     }
     return CardLibrary(cards)
+
+
+class TestRallyForwardOnMove:
+    """RALLY_FORWARD ON_MOVE: moving one friendly with rally also advances
+    every other living friendly minion with the same card_numeric_id one
+    tile forward (Furryroach behaviour)."""
+
+    def test_zrally_advances_other_friendlies_with_same_card(self):
+        from grid_tactics.action_resolver import resolve_action
+
+        lib = _make_test_library()
+        rally_nid = lib.get_numeric_id("test_zrally")
+        # Three rally minions for P1 at row 1, cols 0/1/2. P1 moves forward (+row).
+        m0 = MinionInstance(instance_id=0, card_numeric_id=rally_nid,
+                            owner=PlayerSide.PLAYER_1, position=(1, 0), current_health=1)
+        m1 = MinionInstance(instance_id=1, card_numeric_id=rally_nid,
+                            owner=PlayerSide.PLAYER_1, position=(1, 1), current_health=1)
+        m2 = MinionInstance(instance_id=2, card_numeric_id=rally_nid,
+                            owner=PlayerSide.PLAYER_1, position=(1, 2), current_health=1)
+        state = _make_state(minions=[m0, m1, m2])
+        # Move m0 forward 1 -> should trigger rally on m1 and m2.
+        action = Action(action_type=ActionType.MOVE, minion_id=0, position=(2, 0))
+        new_state = resolve_action(state, action, lib)
+        assert new_state.get_minion(0).position == (2, 0)
+        assert new_state.get_minion(1).position == (2, 1)
+        assert new_state.get_minion(2).position == (2, 2)
+        # Board mirrors positions
+        assert new_state.board.get(2, 0) == 0
+        assert new_state.board.get(2, 1) == 1
+        assert new_state.board.get(2, 2) == 2
+        assert new_state.board.get(1, 0) is None
+        assert new_state.board.get(1, 1) is None
+        assert new_state.board.get(1, 2) is None
+
+    def test_zrally_skips_blocked_and_offboard(self):
+        from grid_tactics.action_resolver import resolve_action
+
+        lib = _make_test_library()
+        rally_nid = lib.get_numeric_id("test_zrally")
+        blocker_nid = lib.get_numeric_id("test_melee")
+        # m0 mover; m1 at col1 row1 would rally to (2,1) but blocked by enemy.
+        # m2 at col2 row4 is already at back row -> no forward tile for P1? P1 forward=+1, 4+1=5 off-board.
+        m0 = MinionInstance(instance_id=0, card_numeric_id=rally_nid,
+                            owner=PlayerSide.PLAYER_1, position=(1, 0), current_health=1)
+        m1 = MinionInstance(instance_id=1, card_numeric_id=rally_nid,
+                            owner=PlayerSide.PLAYER_1, position=(1, 1), current_health=1)
+        m2 = MinionInstance(instance_id=2, card_numeric_id=rally_nid,
+                            owner=PlayerSide.PLAYER_1, position=(4, 2), current_health=1)
+        blocker = MinionInstance(instance_id=3, card_numeric_id=blocker_nid,
+                                 owner=PlayerSide.PLAYER_2, position=(2, 1), current_health=5)
+        state = _make_state(minions=[m0, m1, m2, blocker])
+        action = Action(action_type=ActionType.MOVE, minion_id=0, position=(2, 0))
+        new_state = resolve_action(state, action, lib)
+        assert new_state.get_minion(0).position == (2, 0)
+        assert new_state.get_minion(1).position == (1, 1)  # blocked, unchanged
+        assert new_state.get_minion(2).position == (4, 2)  # off-board, unchanged
+
+    def test_zrally_excludes_enemies_and_other_cards(self):
+        from grid_tactics.action_resolver import resolve_action
+
+        lib = _make_test_library()
+        rally_nid = lib.get_numeric_id("test_zrally")
+        other_nid = lib.get_numeric_id("test_ranged")
+        m0 = MinionInstance(instance_id=0, card_numeric_id=rally_nid,
+                            owner=PlayerSide.PLAYER_1, position=(1, 0), current_health=1)
+        # Enemy rally minion — must NOT advance
+        enemy = MinionInstance(instance_id=1, card_numeric_id=rally_nid,
+                               owner=PlayerSide.PLAYER_2, position=(1, 1), current_health=1)
+        # Friendly different card — must NOT advance
+        friend_other = MinionInstance(instance_id=2, card_numeric_id=other_nid,
+                                      owner=PlayerSide.PLAYER_1, position=(1, 2), current_health=3)
+        state = _make_state(minions=[m0, enemy, friend_other])
+        action = Action(action_type=ActionType.MOVE, minion_id=0, position=(2, 0))
+        new_state = resolve_action(state, action, lib)
+        assert new_state.get_minion(0).position == (2, 0)
+        assert new_state.get_minion(1).position == (1, 1)  # enemy unchanged
+        assert new_state.get_minion(2).position == (1, 2)  # other card unchanged
 
 
 def _make_state(

@@ -227,6 +227,15 @@ def _apply_move(state: GameState, action: Action, library: CardLibrary = None) -
     new_minions = _replace_minion(state.minions, minion.instance_id, new_minion)
     state = replace(state, board=new_board, minions=new_minions)
 
+    # ON_MOVE trigger: fire any effects with trigger=ON_MOVE on this minion
+    # (e.g. Furryroach's RALLY_FORWARD). Mirrors tensor engine behaviour.
+    # Must happen AFTER the position update so rally sees the new location
+    # (and the mover is correctly excluded from the rally sweep).
+    if library is not None:
+        state = resolve_effects_for_trigger(
+            state, TriggerType.ON_MOVE, new_minion, library,
+        )
+
     # Phase 14.1: For melee (range=0) minions, if there is at least one
     # in-range enemy from the new tile, enter pending-post-move-attack state.
     # The player must then ATTACK or DECLINE_POST_MOVE_ATTACK as the

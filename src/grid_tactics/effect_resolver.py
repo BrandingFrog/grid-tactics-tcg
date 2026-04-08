@@ -416,11 +416,49 @@ def resolve_effects_for_trigger(
             state = _enter_pending_tutor(state, card_def, minion.owner, library)
         elif effect.effect_type == EffectType.CONJURE:
             state = _resolve_conjure(state, card_def, minion.owner, library)
+        elif effect.effect_type == EffectType.RALLY_FORWARD:
+            state = _apply_rally_forward(state, minion)
         else:
             state = resolve_effect(
                 state, effect, minion.position, minion.owner, library, target_pos,
             )
     return state
+
+
+def _apply_rally_forward(
+    state: GameState,
+    mover: MinionInstance,
+) -> GameState:
+    """RALLY_FORWARD: advance every other friendly minion with the same
+    card_numeric_id forward 1 tile in its column, if the destination is
+    in-bounds and empty. Mirrors the tensor engine implementation
+    (``tensor_engine/actions.py::_apply_rally_forward``).
+
+    The mover itself is excluded. Minions whose forward tile is blocked
+    or off the board are left in place.
+    """
+    delta = 1 if mover.owner == PlayerSide.PLAYER_1 else -1
+    new_minions_list = list(state.minions)
+    new_board = state.board
+    for i, m in enumerate(new_minions_list):
+        if m.instance_id == mover.instance_id:
+            continue
+        if m.owner != mover.owner:
+            continue
+        if m.current_health <= 0:
+            continue
+        if m.card_numeric_id != mover.card_numeric_id:
+            continue
+        src_row, src_col = m.position
+        dst_row = src_row + delta
+        if dst_row < 0 or dst_row >= 5:
+            continue
+        if new_board.get(dst_row, src_col) is not None:
+            continue
+        new_board = new_board.remove(src_row, src_col)
+        new_board = new_board.place(dst_row, src_col, m.instance_id)
+        new_minions_list[i] = replace(m, position=(dst_row, src_col))
+    return replace(state, board=new_board, minions=tuple(new_minions_list))
 
 
 def _resolve_conjure(
