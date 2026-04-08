@@ -418,6 +418,70 @@ class TestAttackEnumeration:
         attack_actions = [a for a in actions if a.action_type == ActionType.ATTACK]
         assert len(attack_actions) == 0
 
+    def test_ranged_diagonal_distance_1_attack_present(self, library):
+        """Range-2 minion: diagonal chebyshev=1 is reachable (star footprint)."""
+        wind_archer_id = library.get_numeric_id("wind_archer")
+        fire_imp_id = library.get_numeric_id("fire_imp")
+        attacker = MinionInstance(
+            instance_id=0, card_numeric_id=wind_archer_id,
+            owner=PlayerSide.PLAYER_1, position=(1, 1), current_health=3,
+        )
+        defender = MinionInstance(
+            instance_id=1, card_numeric_id=fire_imp_id,
+            owner=PlayerSide.PLAYER_2, position=(2, 2), current_health=2,
+        )
+        state = _make_state(minions=(attacker, defender))
+        attack_actions = [a for a in legal_actions(state, library) if a.action_type == ActionType.ATTACK]
+        assert len(attack_actions) == 1
+
+    def test_ranged_diagonal_distance_2_attack_present(self, library):
+        """Range-2 star: diagonal chebyshev=2 is reachable (|dr|==|dc|==2)."""
+        wind_archer_id = library.get_numeric_id("wind_archer")
+        fire_imp_id = library.get_numeric_id("fire_imp")
+        attacker = MinionInstance(
+            instance_id=0, card_numeric_id=wind_archer_id,
+            owner=PlayerSide.PLAYER_1, position=(0, 0), current_health=3,
+        )
+        defender = MinionInstance(
+            instance_id=1, card_numeric_id=fire_imp_id,
+            owner=PlayerSide.PLAYER_2, position=(2, 2), current_health=2,
+        )
+        state = _make_state(minions=(attacker, defender))
+        attack_actions = [a for a in legal_actions(state, library) if a.action_type == ActionType.ATTACK]
+        assert len(attack_actions) == 1
+
+    def test_ranged_off_diagonal_knight_no_attack(self, library):
+        """Range-2 star: (dr=2, dc=1) is NOT on diagonal, NOT ortho -> unreachable."""
+        wind_archer_id = library.get_numeric_id("wind_archer")
+        fire_imp_id = library.get_numeric_id("fire_imp")
+        attacker = MinionInstance(
+            instance_id=0, card_numeric_id=wind_archer_id,
+            owner=PlayerSide.PLAYER_1, position=(0, 0), current_health=3,
+        )
+        defender = MinionInstance(
+            instance_id=1, card_numeric_id=fire_imp_id,
+            owner=PlayerSide.PLAYER_2, position=(2, 1), current_health=2,
+        )
+        state = _make_state(minions=(attacker, defender))
+        attack_actions = [a for a in legal_actions(state, library) if a.action_type == ActionType.ATTACK]
+        assert len(attack_actions) == 0
+
+    def test_ranged_diagonal_distance_3_no_attack(self, library):
+        """Range-2 star: diagonal chebyshev=3 exceeds range -> unreachable."""
+        wind_archer_id = library.get_numeric_id("wind_archer")
+        fire_imp_id = library.get_numeric_id("fire_imp")
+        attacker = MinionInstance(
+            instance_id=0, card_numeric_id=wind_archer_id,
+            owner=PlayerSide.PLAYER_1, position=(0, 0), current_health=3,
+        )
+        defender = MinionInstance(
+            instance_id=1, card_numeric_id=fire_imp_id,
+            owner=PlayerSide.PLAYER_2, position=(3, 3), current_health=2,
+        )
+        state = _make_state(minions=(attacker, defender))
+        attack_actions = [a for a in legal_actions(state, library) if a.action_type == ActionType.ATTACK]
+        assert len(attack_actions) == 0
+
     def test_cannot_attack_own_minion(self, library):
         """No attack actions targeting own minions."""
         fire_imp_id = library.get_numeric_id("fire_imp")

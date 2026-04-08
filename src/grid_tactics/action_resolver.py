@@ -83,28 +83,28 @@ def _can_attack(
     """Check if attacker can reach defender based on attack range (D-03).
 
     Melee (range=0): orthogonally adjacent (manhattan == 1).
-    Ranged (range>=1): (orthogonal AND manhattan_distance <= range + 1) OR
-                       (diagonal adjacent, chebyshev_distance == 1).
+    Ranged (range>=1): star-shaped footprint --
+        orthogonal arm: same row/col AND manhattan <= range + 1
+        diagonal arm:  |dr| == |dc| AND 1 <= chebyshev <= range
 
-    The +1 is intentional: a "range 1" minion (e.g. Light Cleric)
-    reaches 2 tiles orthogonally + 1 tile diagonally (ENG-06 spec).
-    A "range 2" minion (Wind Archer) reaches 3 tiles orthogonally + 1
-    diagonal, etc.
+    Range 1 -> 8 ortho + 4 diag = 12 tiles.
+    Range 2 -> 12 ortho + 8 diag = 20 tiles.
     """
     a_pos = attacker.position
     d_pos = defender.position
-    manhattan = Board.manhattan_distance(a_pos, d_pos)
-    chebyshev = Board.chebyshev_distance(a_pos, d_pos)
+    dr = abs(a_pos[0] - d_pos[0])
+    dc = abs(a_pos[1] - d_pos[1])
+    manhattan = dr + dc
+    chebyshev = dr if dr > dc else dc
     attack_range = attacker_card.attack_range
 
     if attack_range == 0:
         # Melee: orthogonal adjacent only
         return manhattan == 1 and _is_orthogonal(a_pos, d_pos)
     else:
-        # Ranged: orthogonal up to (range + 1) tiles OR diagonal adjacent
         orthogonal_in_range = _is_orthogonal(a_pos, d_pos) and manhattan <= attack_range + 1
-        diagonal_adjacent = chebyshev == 1 and not _is_orthogonal(a_pos, d_pos)
-        return orthogonal_in_range or diagonal_adjacent
+        on_diagonal = dr == dc and dr >= 1 and chebyshev <= attack_range
+        return orthogonal_in_range or on_diagonal
 
 
 # ---------------------------------------------------------------------------

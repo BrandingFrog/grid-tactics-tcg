@@ -3940,11 +3940,15 @@ function highlightBoard() {
                         if (range === 0) {
                             inRange = (manhattan === 1 && orthogonal);
                         } else {
-                            // Range N: (N+1) tiles orthogonal + 1 diagonal.
+                            // Range N star footprint: orthogonal arm reaches
+                            // N+1 tiles; diagonal arm reaches chebyshev<=N
+                            // along the |dr|==|dc| lines.
                             // Mirrors action_resolver._can_attack.
+                            var dr = Math.abs(rr - sr);
+                            var dc = Math.abs(cc - sc);
                             var orthogonalInRange = orthogonal && manhattan <= range + 1;
-                            var diagonalAdjacent = (chebyshev === 1 && !orthogonal);
-                            inRange = orthogonalInRange || diagonalAdjacent;
+                            var onDiagonal = (dr === dc && dr >= 1 && chebyshev <= range);
+                            inRange = orthogonalInRange || onDiagonal;
                         }
                         if (inRange) {
                             var tile = document.querySelector('.board-cell[data-row="' + rr + '"][data-col="' + cc + '"]');

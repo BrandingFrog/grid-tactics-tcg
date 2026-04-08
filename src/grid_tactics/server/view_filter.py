@@ -68,17 +68,20 @@ def _tile_in_attack_range(
     """Mirror of action_resolver._can_attack geometry, parameterized by range only.
 
     Melee (range=0): orthogonal-adjacent (manhattan == 1).
-    Ranged (range>=1): orthogonal up to (range + 1) tiles OR diagonal-adjacent.
+    Ranged (range>=1): star footprint -- orthogonal arm manhattan<=range+1
+        OR diagonal arm |dr|==|dc| with chebyshev<=range.
     """
     if a_pos == d_pos:
         return False
-    manhattan = Board.manhattan_distance(a_pos, d_pos)
-    chebyshev = Board.chebyshev_distance(a_pos, d_pos)
+    dr = abs(a_pos[0] - d_pos[0])
+    dc = abs(a_pos[1] - d_pos[1])
+    manhattan = dr + dc
+    chebyshev = dr if dr > dc else dc
     if attack_range == 0:
         return manhattan == 1 and _is_orthogonal(a_pos, d_pos)
     orthogonal_in_range = _is_orthogonal(a_pos, d_pos) and manhattan <= attack_range + 1
-    diagonal_adjacent = chebyshev == 1 and not _is_orthogonal(a_pos, d_pos)
-    return orthogonal_in_range or diagonal_adjacent
+    on_diagonal = dr == dc and dr >= 1 and chebyshev <= attack_range
+    return orthogonal_in_range or on_diagonal
 
 
 def enrich_last_action(
