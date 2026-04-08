@@ -1,0 +1,16 @@
+[project]
+name = "grid-tactics-wiki-sync"
+version = "0.1.0"
+description = "Bot-side sync package for the Grid Tactics Wiki (MediaWiki + Semantic MediaWiki)."
+requires-python = ">=3.11"
+dependencies = [
+  "mwclient>=0.11",
+  "python-dotenv>=1.0",
+]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["sync"]
