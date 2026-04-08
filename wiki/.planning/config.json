@@ -1,0 +1,11 @@
+{
+  "workflow_mode": "interactive",
+  "parallelization": {
+    "max_concurrent_agents": 3,
+    "skip_checkpoints": false,
+    "min_plans_for_parallel": 2
+  },
+  "depth": "standard",
+  "project_name": "grid-tactics-wiki",
+  "parent_project": "../"
+}
