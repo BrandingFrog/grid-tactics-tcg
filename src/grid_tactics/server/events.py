@@ -269,10 +269,16 @@ def register_events(room_manager: RoomManager) -> None:
             emit("error", {"msg": "Not in a room"})
             return
 
-        # Extract optional deck from payload before marking ready
+        # Extract optional deck from payload before marking ready.
+        # Server-side validation — rejects decks with non-deckable cards,
+        # wrong size, too many copies, or unknown IDs.
         deck_data = data.get("deck") if isinstance(data, dict) else None
         if deck_data and isinstance(deck_data, list) and len(deck_data) == 30:
             deck_tuple = tuple(int(x) for x in deck_data)
+            errors = _room_manager._library.validate_deck(deck_tuple)
+            if errors:
+                emit("error", {"msg": "Invalid deck: " + "; ".join(errors)})
+                return
             room_code_lookup = _room_manager.get_room_code_by_token(token)
             room_for_deck = _room_manager.get_room(room_code_lookup) if room_code_lookup else None
             if room_for_deck:

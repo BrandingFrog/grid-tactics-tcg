@@ -104,6 +104,16 @@ class CardLibrary:
                     f"max is {MAX_COPIES_PER_DECK}"
                 )
 
+        # Reject non-deckable cards (tokens / summons / reward-only cards)
+        for card_id in counts.keys():
+            if card_id in self._id_to_card_id:
+                cid_str = self._id_to_card_id[card_id]
+                cdef = self._cards.get(cid_str)
+                if cdef is not None and getattr(cdef, "deckable", True) is False:
+                    errors.append(
+                        f"Card '{cid_str}' is not deckable (tokens/summons only)"
+                    )
+
         return errors
 
     def build_deck(self, card_counts: dict[str, int]) -> tuple[int, ...]:

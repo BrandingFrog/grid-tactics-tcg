@@ -116,6 +116,21 @@ let selectedAbilityMinionId = null; // minion whose activated ability is being t
 
 // Deck builder state
 let currentDeck = {};        // { numericId: count }
+
+// Strip non-deckable cards (tokens, summons, reward cards) from a deck
+// object in-place. Returns an array of removed card names for reporting.
+function stripUndeckable(deckObj) {
+    var defs = allCardDefs || cardDefs;
+    var removed = [];
+    Object.keys(deckObj).forEach(function(numId) {
+        var c = defs[numId];
+        if (c && c.deckable === false) {
+            removed.push(c.name || c.card_id || numId);
+            delete deckObj[numId];
+        }
+    });
+    return removed;
+}
 let currentSlotIdx = 0;
 let allCardDefs = null;      // set from server on game_start or card_defs event
 let deckFilterType = 'all';     // 'all', 'minion', 'magic', 'react'
@@ -639,7 +654,15 @@ function setupLobbyHandlers() {
                 var slots = loadDeckSlots();
                 var idx = parseInt(selectedIdx, 10);
                 if (idx >= 0 && idx < slots.length) {
-                    deckArray = getDeckAsArray(slots[idx].cards);
+                    // Clean undeckable cards before sending so the server
+                    // doesn't reject the whole ready-up for a stale slot.
+                    var cleaned = Object.assign({}, slots[idx].cards || {});
+                    var removed = stripUndeckable(cleaned);
+                    if (removed.length) {
+                        saveDeckSlot(idx, slots[idx].name, cleaned);
+                        showLobbyStatus('Stripped non-deckable from deck: ' + removed.join(', '), 'info');
+                    }
+                    deckArray = getDeckAsArray(cleaned);
                 }
             }
             socket.emit('ready', { deck: deckArray });
@@ -917,11 +940,16 @@ function showDeckCodeModal(mode, code) {
             if (!val) return;
             try {
                 var deck = decodeDeckCode(val);
+                var removed = stripUndeckable(deck);
                 currentDeck = deck;
                 renderDeckSidebar();
                 if (typeof renderCardBrowser === 'function') renderCardBrowser();
                 hideDeckCodeModal();
-                showLobbyStatus('Deck imported!', 'info');
+                if (removed.length) {
+                    showLobbyStatus('Deck imported — stripped non-deckable: ' + removed.join(', '), 'info');
+                } else {
+                    showLobbyStatus('Deck imported!', 'info');
+                }
             } catch (e) {
                 var err = panel.querySelector('.deck-code-modal-error');
                 if (!err) {
@@ -1733,6 +1761,13 @@ function setupDeckBuilderHandlers() {
             if (idx >= 0 && idx < slots.length) {
                 currentSlotIdx = idx;
                 currentDeck = Object.assign({}, slots[idx].cards || {});
+                var removed = stripUndeckable(currentDeck);
+                if (removed.length) {
+                    // Persist the cleaned deck back to localStorage so the
+                    // stale entries don't reappear on the next load.
+                    saveDeckSlot(currentSlotIdx, slots[idx].name, currentDeck);
+                    showLobbyStatus('Stripped non-deckable cards: ' + removed.join(', '), 'info');
+                }
                 var nameInput = document.getElementById('deck-slot-name');
                 if (nameInput) nameInput.value = slots[idx].name;
                 renderDeckBuilder();
