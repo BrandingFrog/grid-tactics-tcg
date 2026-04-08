@@ -2,6 +2,11 @@
    Socket.IO integration, lobby, deck builder, and game rendering.
    Vanilla JS (no modules, no build step). */
 
+// Stat emoji wrappers — apply a drop-shadow halo and slightly larger
+// font so 🗡️ and 🤍 look consistent next to numeric text with black stroke.
+var SWORD = '<span class="stat-emoji">🗡️</span>';
+var HEART = '<span class="stat-emoji">🤍</span>';
+
 // =============================================
 // Patch badge — fetch VERSION.json + render top-right
 // =============================================
@@ -1000,8 +1005,8 @@ function showCardTooltip(numericId) {
     var elem = (c.element !== null && c.element !== undefined) ? ELEMENT_MAP[c.element] : NEUTRAL_ELEMENT;
     statsHtml += '<span style="color:' + elem.color + '">' + elem.name + '</span>';
     statsHtml += '<span style="color:var(--cyan)">' + c.mana_cost + ' Mana</span>';
-    if (c.attack != null) statsHtml += '<span style="color:var(--red)">' + c.attack + '🗡️</span>';
-    if (c.health != null) statsHtml += '<span style="color:var(--green)">' + c.health + '🤍</span>';
+    if (c.attack != null) statsHtml += '<span style="color:var(--red)">' + c.attack + SWORD + '</span>';
+    if (c.health != null) statsHtml += '<span style="color:var(--green)">' + c.health + HEART + '</span>';
     if (c.card_type === 0 && c.attack_range != null) {
         statsHtml += '<span>' + (c.attack_range === 0 ? 'Melee' : 'Range ' + c.attack_range) + '</span>';
     }
@@ -1019,7 +1024,7 @@ function showCardTooltip(numericId) {
         var ab = c.activated_ability;
         var abDesc = 'Active (' + ab.mana_cost + '): ';
         if (ab.effect_type === 'conjure_rat_and_buff') {
-            abDesc += 'Conjure Common Rat from deck. Ally Rats on board +1🗡️/+1🤍 (+Dark Matter × 1).';
+            abDesc += 'Conjure Common Rat from deck. Ally Rats on board +1' + SWORD + '/+1' + HEART + ' (+Dark Matter × 1).';
         } else if (ab.effect_type === 'summon_token' && ab.summon_card_id) {
             abDesc += 'Summon ' + findCardNameById(ab.summon_card_id) + '.';
         } else {
@@ -1128,7 +1133,7 @@ function showCardTooltip(numericId) {
             var rStats = rc.mana_cost + ' Mana';
             if (rc.tribe) rStats += ' | ' + rc.tribe;
             rStats += ' | ' + rElem.name;
-            if (rc.attack != null) rStats += ' | ' + rc.attack + '🗡️ | ' + rc.health + '🤍';
+            if (rc.attack != null) rStats += ' | ' + rc.attack + SWORD + ' | ' + rc.health + HEART;
             if (rc.attack_range != null) rStats += ' | ' + (rc.attack_range === 0 ? 'Melee' : 'Range ' + rc.attack_range);
             relHtml += '<div class="tooltip-related-stats">' + rStats + '</div>';
             var rEffect = '';
@@ -1171,8 +1176,8 @@ function showGameTooltip(numericId, anchorEl) {
     var elem = (c.element !== null && c.element !== undefined) ? ELEMENT_MAP[c.element] : NEUTRAL_ELEMENT;
     statsHtml += '<span style="color:' + elem.color + '">' + elem.name + '</span>';
     statsHtml += '<span style="color:var(--cyan)">' + c.mana_cost + ' Mana</span>';
-    if (c.attack != null) statsHtml += '<span style="color:var(--red)">' + c.attack + '🗡️</span>';
-    if (c.health != null) statsHtml += '<span style="color:var(--green)">' + c.health + '🤍</span>';
+    if (c.attack != null) statsHtml += '<span style="color:var(--red)">' + c.attack + SWORD + '</span>';
+    if (c.health != null) statsHtml += '<span style="color:var(--green)">' + c.health + HEART + '</span>';
     if (c.card_type === 0 && c.attack_range != null) {
         statsHtml += '<span>' + (c.attack_range === 0 ? 'Melee' : 'Range ' + c.attack_range) + '</span>';
     }
@@ -1189,7 +1194,7 @@ function showGameTooltip(numericId, anchorEl) {
         var ab = c.activated_ability;
         var abDesc = 'Active (' + ab.mana_cost + '): ';
         if (ab.effect_type === 'conjure_rat_and_buff') {
-            abDesc += 'Conjure Common Rat from deck. Ally Rats on board +1🗡️/+1🤍 (+Dark Matter × 1).';
+            abDesc += 'Conjure Common Rat from deck. Ally Rats on board +1' + SWORD + '/+1' + HEART + ' (+Dark Matter × 1).';
         } else if (ab.effect_type === 'summon_token' && ab.summon_card_id) {
             abDesc += 'Summon ' + findCardNameById(ab.summon_card_id) + '.';
         } else {
@@ -1345,7 +1350,7 @@ function renderDeckBuilderCard(numericId, count) {
         var ab = c.activated_ability;
         var abDesc = 'Active (' + ab.mana_cost + '): ';
         if (ab.effect_type === 'conjure_rat_and_buff') {
-            abDesc += 'Conjure Common Rat from deck. Ally Rats on board +1🗡️/+1🤍 (+Dark Matter × 1).';
+            abDesc += 'Conjure Common Rat from deck. Ally Rats on board +1' + SWORD + '/+1' + HEART + ' (+Dark Matter × 1).';
         } else if (ab.effect_type === 'summon_token' && ab.summon_card_id) {
             abDesc += 'Summon ' + findCardNameById(ab.summon_card_id) + '.';
         } else {
@@ -4022,12 +4027,12 @@ function renderBoardMinion(minion) {
         badges.push('<span class="minion-badge badge-burning" title="Burning">🔥</span>');
     }
     if (minion.attack_bonus > 0) {
-        badges.push('<span class="minion-badge badge-buff">⬆️+' + minion.attack_bonus + '🗡️</span>');
+        badges.push('<span class="minion-badge badge-buff">⬆️+' + minion.attack_bonus + SWORD + '</span>');
     } else if (minion.attack_bonus < 0) {
-        badges.push('<span class="minion-badge badge-debuff">⬇️' + minion.attack_bonus + '🗡️</span>');
+        badges.push('<span class="minion-badge badge-debuff">⬇️' + minion.attack_bonus + SWORD + '</span>');
     }
     if (minion.max_health_bonus && minion.max_health_bonus > 0) {
-        badges.push('<span class="minion-badge badge-buff">⬆️+' + minion.max_health_bonus + '🤍</span>');
+        badges.push('<span class="minion-badge badge-buff">⬆️+' + minion.max_health_bonus + HEART + '</span>');
     }
     var badgesHtml = badges.length
         ? '<div class="minion-badges">' + badges.join('') + '</div>'
@@ -4205,9 +4210,9 @@ function getEffectDescription(effects, cardData) {
         } else if (type === 1) { // Heal
             desc = prefix + 'Heal ' + amount;
         } else if (type === 2) { // Buff ATK
-            desc = prefix + '+' + amount + '🗡️';
+            desc = prefix + '+' + amount + SWORD;
         } else if (type === 3) { // Buff HP
-            desc = prefix + '+' + amount + '🤍';
+            desc = prefix + '+' + amount + HEART;
         } else if (type === 4) { // Negate
             desc = prefix + 'Negate';
         } else if (type === 5) { // Deploy Self
@@ -4236,7 +4241,7 @@ function getEffectDescription(effects, cardData) {
             var burnTarget = {0: '', 1: ' all enemies', 2: ' adjacent enemies', 3: ''}[eff.target] || '';
             desc = prefix + 'Burn' + burnTarget;
         } else if (type === 11) { // Dark Matter Buff
-            desc = 'Active: +' + amount + '🗡️ (+Dark Matter*1)';
+            desc = 'Active: +' + amount + SWORD + ' (+Dark Matter*1)';
         } else if (type === 12) { // Passive Heal
             desc = 'Passive: Heal ' + amount + ' per turn';
         } else if (type === 13) { // Leap
