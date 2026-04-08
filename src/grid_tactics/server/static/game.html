@@ -266,8 +266,19 @@
               <span class="stat-label">DECK</span>
               <span class="stat-value" id="opp-deck">0</span>
             </div>
+            <button class="pile-btn" id="pileBtnOppGraveyard" title="Opponent graveyard">
+              <span class="pile-emoji">⚰️</span>
+              <span class="pile-count stat-emoji">0</span>
+            </button>
+            <button class="pile-btn" id="pileBtnOppExhaust" title="Opponent exhaust">
+              <span class="pile-emoji">🌀</span>
+              <span class="pile-count stat-emoji">0</span>
+            </button>
           </div>
         </div>
+
+        <!-- Opponent face-down hand row (count only, no identities) -->
+        <div class="opp-hand-row" id="oppHandRow"></div>
 
         <!-- 5x5 Board -->
         <div class="board-container">
@@ -296,6 +307,14 @@
               <span class="stat-label">DECK</span>
               <span class="stat-value" id="self-deck">0</span>
             </div>
+            <button class="pile-btn" id="pileBtnOwnGraveyard" title="Your graveyard">
+              <span class="pile-emoji">⚰️</span>
+              <span class="pile-count stat-emoji">0</span>
+            </button>
+            <button class="pile-btn" id="pileBtnOwnExhaust" title="Your exhaust">
+              <span class="pile-emoji">🌀</span>
+              <span class="pile-count stat-emoji">0</span>
+            </button>
           </div>
         </div>
 
@@ -340,6 +359,17 @@
           </div>
         </div>
         <button class="btn btn-secondary full-width" id="btn-leave">Leave Game</button>
+      </div>
+
+      <!-- Phase 14.5 Wave 5: Shared Pile Modal (graveyard / exhaust viewer) -->
+      <div id="pileModal" class="pile-modal-overlay" style="display:none;">
+        <div class="pile-modal">
+          <div class="pile-modal-header">
+            <div class="pile-modal-title" id="pileModalTitle">Pile</div>
+            <button class="pile-modal-close" id="pileModalClose" title="Close">×</button>
+          </div>
+          <div class="pile-grid" id="pileModalGrid"></div>
+        </div>
       </div>
 
       <!-- Phase 14 PLAY-03: Game Over Overlay (hidden by default) -->

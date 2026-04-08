@@ -3220,3 +3220,148 @@ body {
   opacity: 0.8;
 }
 
+/* =====================================================================
+   Phase 14.5 Wave 5: Pile buttons (graveyard / exhaust) + Pile modal
+   + Opponent face-down hand row.
+   ===================================================================== */
+
+/* Pile buttons live inline at the end of each info-bar stat-group. */
+.pile-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 4px 8px;
+  cursor: pointer;
+  color: white;
+  font-family: inherit;
+  transition: background 150ms ease, border-color 150ms ease, transform 100ms ease;
+}
+.pile-btn:hover {
+  background: rgba(0, 212, 255, 0.08);
+  border-color: var(--cyan);
+}
+.pile-btn:active {
+  transform: scale(0.96);
+}
+.pile-emoji {
+  font-size: 22px;
+  line-height: 1;
+}
+.pile-count {
+  font-size: 15px;
+  font-weight: 800;
+  color: white;
+  min-width: 14px;
+  text-align: center;
+}
+
+/* Opponent face-down hand row — above the opponent info bar, count-only. */
+.opp-hand-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  justify-content: center;
+  padding: 4px 8px;
+  min-height: 0;
+}
+.opp-hand-card-back {
+  width: 42px;
+  height: 60px;
+  border-radius: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  background:
+    repeating-linear-gradient(45deg,
+      rgba(0, 212, 255, 0.18) 0 6px,
+      rgba(0, 60, 100, 0.35) 6px 12px),
+    linear-gradient(135deg, #0a1a30 0%, #061224 100%);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.4), inset 0 0 0 1px rgba(0, 212, 255, 0.12);
+  pointer-events: none;
+  flex: 0 0 auto;
+}
+
+/* Pile modal overlay — reuses the tutor-modal aesthetic. */
+.pile-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(5, 10, 20, 0.82);
+  backdrop-filter: blur(3px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 3000;
+  padding: 20px;
+}
+.pile-modal {
+  background: var(--card);
+  border: 2px solid var(--cyan);
+  border-radius: 12px;
+  box-shadow: 0 10px 40px rgba(0, 212, 255, 0.35);
+  max-width: 1100px;
+  width: 100%;
+  max-height: 92vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  font-family: 'Inter', system-ui, sans-serif;
+}
+.pile-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--border);
+  background: var(--card2);
+}
+.pile-modal-title {
+  font-size: 18px;
+  font-weight: 800;
+  color: white;
+  letter-spacing: 0.3px;
+}
+.pile-modal-close {
+  background: transparent;
+  border: 1px solid var(--muted);
+  color: white;
+  border-radius: 6px;
+  width: 32px;
+  height: 32px;
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+  transition: border-color 150ms ease, color 150ms ease;
+}
+.pile-modal-close:hover {
+  border-color: var(--cyan);
+  color: var(--cyan);
+}
+.pile-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 18px;
+  padding: 20px;
+  overflow-y: auto;
+  justify-items: center;
+}
+.pile-grid .card-frame-pile {
+  width: 200px;
+}
+.pile-grid-empty {
+  color: var(--muted);
+  font-size: 14px;
+  padding: 24px;
+  text-align: center;
+  grid-column: 1 / -1;
+}
+
+@media (max-width: 700px) {
+  .pile-modal { max-height: 96vh; }
+  .pile-grid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 12px; padding: 14px; }
+  .pile-grid .card-frame-pile { width: 140px; }
+  .opp-hand-card-back { width: 30px; height: 44px; }
+  .pile-emoji { font-size: 18px; }
+  .pile-count { font-size: 13px; }
+}
+
