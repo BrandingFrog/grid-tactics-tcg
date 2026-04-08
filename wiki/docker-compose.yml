@@ -1,0 +1,57 @@
+services:
+  mediawiki:
+    image: ghcr.io/wikiteq/taqasta:latest
+    container_name: wiki_mediawiki
+    depends_on:
+      - db
+      - redis
+    ports:
+      - "8080:80"
+    env_file:
+      - .env
+    environment:
+      MW_SITE_NAME: ${MW_SITE_NAME}
+      MW_SITE_SERVER: ${MW_SITE_SERVER}
+      MW_SITE_LANG: ${MW_SITE_LANG}
+      MW_ADMIN_USER: ${MW_ADMIN_USER}
+      MW_ADMIN_PASS: ${MW_ADMIN_PASS}
+      MW_DB_TYPE: mysql
+      MW_DB_SERVER: db
+      MW_DB_NAME: ${MW_DB_NAME}
+      MW_DB_USER: ${MW_DB_USER}
+      MW_DB_PASS: ${MW_DB_PASS}
+      MW_MAIN_CACHE: CACHE_REDIS
+      MW_REDIS_SERVERS: redis:6379
+      MW_LOAD_EXTENSIONS: SemanticMediaWiki,SemanticResultFormats,PageForms,ParserFunctions,Arrays,Scribunto,CategoryTree
+      MW_ENABLE_UPLOADS: "true"
+      MW_FILE_EXTENSIONS: png,jpg,jpeg,webp,svg
+      MW_SECRET_KEY: ${MW_SECRET_KEY}
+    volumes:
+      - mw_data:/mediawiki
+    restart: unless-stopped
+
+  db:
+    image: mariadb:10.11
+    container_name: wiki_db
+    env_file:
+      - .env
+    environment:
+      MARIADB_ROOT_PASSWORD: ${MARIADB_ROOT_PASSWORD}
+      MARIADB_DATABASE: ${MARIADB_DATABASE}
+      MARIADB_USER: ${MARIADB_USER}
+      MARIADB_PASSWORD: ${MARIADB_PASSWORD}
+    volumes:
+      - db_data:/var/lib/mysql
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: wiki_redis
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+
+volumes:
+  mw_data:
+  db_data:
+  redis_data:
