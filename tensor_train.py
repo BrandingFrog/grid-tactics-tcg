@@ -523,7 +523,13 @@ def evaluate_vs_random(policy, engine_cls, card_table, deck, n_games=200):
 
         state = engine.state
         active = state.active_player
-        legal = compute_legal_mask_batch(state, card_table)
+        legal = compute_legal_mask_batch(state, card_table).bool()
+
+        # Safety net: any game whose mask is entirely False falls back
+        # to PASS (slot 1001). Matches the main rollout loop.
+        no_legal = ~legal.any(dim=-1)
+        if no_legal.any():
+            legal[no_legal, PASS_IDX] = True
 
         # Player 0 uses policy, player 1 uses random
         is_p0 = (active == 0) & ~done
@@ -536,12 +542,16 @@ def evaluate_vs_random(policy, engine_cls, card_table, deck, n_games=200):
             obs_p0 = obs[is_p0]
             mask_p0 = legal[is_p0]
             with torch.no_grad():
-                logits, _ = policy(obs_p0, mask_p0.bool())
+                logits, _ = policy(obs_p0, mask_p0)
                 dist = Categorical(logits=logits)
                 actions[is_p0] = dist.sample()
 
         if is_p1.any():
             mask_p1 = legal[is_p1].float()
+            # Safety: any remaining zero rows (shouldn't happen after above guard)
+            zero_rows = mask_p1.sum(dim=-1) == 0
+            if zero_rows.any():
+                mask_p1[zero_rows, PASS_IDX] = 1.0
             mask_p1 = mask_p1 / mask_p1.sum(dim=-1, keepdim=True).clamp(min=1)
             actions[is_p1] = torch.multinomial(mask_p1, 1).squeeze(-1)
 
