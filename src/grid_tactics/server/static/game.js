@@ -2768,17 +2768,88 @@ function onStateUpdate(data) {
     // Derive a job from the prev->next diff.
     var job = deriveAnimationJob(prev, next);
 
+    // Phase 14.5-06: detect hand-size increases (draws/tutors/conjures) and
+    // build pure-visual draw animation jobs. These run AFTER state is applied
+    // so their target DOM (hand slot / opp card-back) already exists.
+    var drawJobs = deriveDrawJobs(prev, next);
+
     // Non-action transitions (noop with no meaningful diff) bypass the queue
     // entirely. This keeps react-window open/close, tutor-modal open/close,
     // turn-change banners, and passive state refreshes instantaneous.
     if (!job || job.type === 'noop') {
         applyStateFrame(next, nextLegal);
+        // State already applied; each draw job is pure-visual.
+        for (var i = 0; i < drawJobs.length; i++) {
+            var dj = drawJobs[i];
+            dj.stateApplied = true;
+            enqueueAnimation(dj);
+        }
         return;
     }
 
+    // Main action job runs first (applies state at its own rhythm). Draw
+    // jobs run after with state already applied by the main branch.
     job.stateAfter = next;
     job.legalActionsAfter = nextLegal;
     enqueueAnimation(job);
+    for (var j = 0; j < drawJobs.length; j++) {
+        var dj2 = drawJobs[j];
+        dj2.stateApplied = true;
+        enqueueAnimation(dj2);
+    }
+}
+
+// Diff hands (own identity, opponent count) between prev and next and
+// produce one draw_own job per newly-added own card and one draw_opp job
+// per increment of the opponent's hand size. Multiset diff on own-side
+// so re-ordered hands with identical contents yield zero jobs.
+function deriveDrawJobs(prev, next) {
+    var jobs = [];
+    if (myPlayerIdx == null || !prev || !next) return jobs;
+    var oppIdx = 1 - myPlayerIdx;
+
+    var prevMe = prev.players && prev.players[myPlayerIdx];
+    var nextMe = next.players && next.players[myPlayerIdx];
+    if (prevMe && nextMe && Array.isArray(prevMe.hand) && Array.isArray(nextMe.hand)) {
+        // Multiset subtract: count prev, then walk next and pick anything
+        // that isn't cancelled by a prev occurrence. Remaining next entries
+        // are newly-added cards (possibly with duplicates).
+        var prevCounts = {};
+        for (var pi = 0; pi < prevMe.hand.length; pi++) {
+            var pid = prevMe.hand[pi];
+            prevCounts[pid] = (prevCounts[pid] || 0) + 1;
+        }
+        for (var ni = 0; ni < nextMe.hand.length; ni++) {
+            var nid = nextMe.hand[ni];
+            if (prevCounts[nid] > 0) {
+                prevCounts[nid] -= 1;
+            } else {
+                jobs.push({
+                    type: 'draw_own',
+                    cardNumericId: nid,
+                    fromPos: 'deck',
+                    toSlotIndex: ni,
+                });
+            }
+        }
+    }
+
+    // Opponent: count-only (hidden info). Prefer hand_count, fall back to
+    // hand.length (spectator god mode). Negative deltas (discards) → skip.
+    var prevOpp = prev.players && prev.players[oppIdx];
+    var nextOpp = next.players && next.players[oppIdx];
+    function oppCount(p) {
+        if (!p) return 0;
+        if (typeof p.hand_count === 'number') return p.hand_count;
+        if (Array.isArray(p.hand)) return p.hand.length;
+        return 0;
+    }
+    var delta = oppCount(nextOpp) - oppCount(prevOpp);
+    for (var k = 0; k < delta; k++) {
+        jobs.push({ type: 'draw_opp' });
+    }
+
+    return jobs;
 }
 
 // Derive an animation job from a prev->next state diff. Wave 1 is
