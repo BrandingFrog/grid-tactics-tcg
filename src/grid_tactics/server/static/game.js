@@ -1810,7 +1810,117 @@ document.addEventListener('DOMContentLoaded', function() {
     setupNavHandlers();
     setupActivityTabs();
     setupGameHandlers();
+    setupPileHandlers();
 });
+
+// =============================================
+// Phase 14.5 Wave 5: Pile UI (graveyard / exhaust viewer + opp hand row)
+// =============================================
+
+// Shared modal for all four pile buttons. Renders every card in the pile as
+// a full YGO-style frame via renderCardFrame(context: 'pile').
+function showPileModal(title, cardNumericIds) {
+    var modal = document.getElementById('pileModal');
+    var titleEl = document.getElementById('pileModalTitle');
+    var grid = document.getElementById('pileModalGrid');
+    if (!modal || !titleEl || !grid) return;
+    titleEl.textContent = title || 'Pile';
+    grid.innerHTML = '';
+    var ids = cardNumericIds || [];
+    if (ids.length === 0) {
+        var empty = document.createElement('div');
+        empty.className = 'pile-grid-empty';
+        empty.textContent = 'Empty.';
+        grid.appendChild(empty);
+    } else {
+        ids.forEach(function(nid) {
+            var c = (allCardDefs && allCardDefs[nid]) || cardDefs[nid];
+            if (!c) return;
+            var cell = document.createElement('div');
+            cell.className = 'pile-grid-cell';
+            cell.innerHTML = renderCardFrame(c, {
+                context: 'pile',
+                numericId: nid,
+                showReactDeploy: false
+            });
+            grid.appendChild(cell);
+        });
+    }
+    modal.style.display = 'flex';
+}
+
+function hidePileModal() {
+    var modal = document.getElementById('pileModal');
+    if (modal) modal.style.display = 'none';
+}
+
+// Render N face-down card backs in the opp hand row. Count-only, no identities.
+function renderOppHandRow(count) {
+    var row = document.getElementById('oppHandRow');
+    if (!row) return;
+    row.innerHTML = '';
+    var n = count | 0;
+    for (var i = 0; i < n; i++) {
+        var back = document.createElement('div');
+        back.className = 'opp-hand-card-back';
+        row.appendChild(back);
+    }
+}
+
+// Update the 4 pile button counts from the current gameState.
+function updatePileButtonCounts() {
+    if (!gameState || !gameState.players || myPlayerIdx == null) return;
+    var me = gameState.players[myPlayerIdx];
+    var opp = gameState.players[1 - myPlayerIdx];
+    function setCount(id, n) {
+        var btn = document.getElementById(id);
+        if (!btn) return;
+        var countEl = btn.querySelector('.pile-count');
+        if (countEl) countEl.textContent = n | 0;
+    }
+    setCount('pileBtnOwnGraveyard', (me && me.graveyard) ? me.graveyard.length : 0);
+    setCount('pileBtnOwnExhaust',   (me && me.exhaust)   ? me.exhaust.length   : 0);
+    setCount('pileBtnOppGraveyard', (opp && opp.graveyard) ? opp.graveyard.length : 0);
+    setCount('pileBtnOppExhaust',   (opp && opp.exhaust)   ? opp.exhaust.length   : 0);
+}
+
+function setupPileHandlers() {
+    function bind(id, titleFn, idsFn) {
+        var btn = document.getElementById(id);
+        if (!btn) return;
+        btn.addEventListener('click', function() {
+            if (!gameState || !gameState.players || myPlayerIdx == null) return;
+            showPileModal(titleFn(), idsFn() || []);
+        });
+    }
+    bind('pileBtnOwnGraveyard',
+        function() { return 'Your Graveyard'; },
+        function() { return gameState.players[myPlayerIdx].graveyard; });
+    bind('pileBtnOwnExhaust',
+        function() { return 'Your Exhaust'; },
+        function() { return gameState.players[myPlayerIdx].exhaust; });
+    bind('pileBtnOppGraveyard',
+        function() { return "Opponent's Graveyard"; },
+        function() { return gameState.players[1 - myPlayerIdx].graveyard; });
+    bind('pileBtnOppExhaust',
+        function() { return "Opponent's Exhaust"; },
+        function() { return gameState.players[1 - myPlayerIdx].exhaust; });
+
+    var closeBtn = document.getElementById('pileModalClose');
+    if (closeBtn) closeBtn.addEventListener('click', hidePileModal);
+    var modal = document.getElementById('pileModal');
+    if (modal) {
+        modal.addEventListener('click', function(e) {
+            if (e.target === modal) hidePileModal();
+        });
+    }
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') {
+            var m = document.getElementById('pileModal');
+            if (m && m.style.display !== 'none') hidePileModal();
+        }
+    });
+}
 
 // =============================================
 // Section: AnimationQueue (Phase 14.3)
@@ -2895,6 +3005,16 @@ function renderGame() {
     clearSelection();
     renderRoomBar();
     renderOpponentInfo();
+    // Phase 14.5 Wave 5: face-down opp hand row + pile button counts.
+    (function() {
+        if (!gameState || !gameState.players || myPlayerIdx == null) return;
+        var opp = gameState.players[1 - myPlayerIdx];
+        var hc = (opp.hand_count != null)
+            ? opp.hand_count
+            : (opp.hand ? opp.hand.length : 0);
+        renderOppHandRow(hc);
+        updatePileButtonCounts();
+    })();
     renderBoard();
     renderSelfInfo();
     renderHand();
