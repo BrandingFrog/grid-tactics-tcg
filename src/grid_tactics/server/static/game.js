@@ -1011,6 +1011,18 @@ function showCardTooltip(numericId) {
     if (c.summon_sacrifice_tribe) cardTextLines.push('Sacrifice: ' + c.summon_sacrifice_tribe);
     if (c.unique) cardTextLines.push('Unique');
     if (effectDesc) cardTextLines.push(effectDesc);
+    if (c.activated_ability) {
+        var ab = c.activated_ability;
+        var abDesc = 'Active (' + ab.mana_cost + '): ';
+        if (ab.effect_type === 'conjure_rat_and_buff') {
+            abDesc += 'Conjure Common Rat from deck. Ally Rats on board +1🗡️/+1❤️ (+Dark Matter × 1).';
+        } else if (ab.effect_type === 'summon_token' && ab.summon_card_id) {
+            abDesc += 'Summon ' + findCardNameById(ab.summon_card_id) + '.';
+        } else {
+            abDesc += (ab.name || ab.effect_type);
+        }
+        cardTextLines.push(abDesc);
+    }
     if (c.transform_options && c.transform_options.length > 0) {
         var tLines = c.transform_options.map(function(opt) {
             return findCardNameById(opt.target) + ' (' + opt.mana_cost + ' mana)';
@@ -1169,6 +1181,18 @@ function showGameTooltip(numericId, anchorEl) {
     if (c.summon_sacrifice_tribe) cardTextLines.push('Sacrifice: ' + c.summon_sacrifice_tribe);
     if (c.unique) cardTextLines.push('Unique');
     if (effectDesc) cardTextLines.push(effectDesc);
+    if (c.activated_ability) {
+        var ab = c.activated_ability;
+        var abDesc = 'Active (' + ab.mana_cost + '): ';
+        if (ab.effect_type === 'conjure_rat_and_buff') {
+            abDesc += 'Conjure Common Rat from deck. Ally Rats on board +1🗡️/+1❤️ (+Dark Matter × 1).';
+        } else if (ab.effect_type === 'summon_token' && ab.summon_card_id) {
+            abDesc += 'Summon ' + findCardNameById(ab.summon_card_id) + '.';
+        } else {
+            abDesc += (ab.name || ab.effect_type);
+        }
+        cardTextLines.push(abDesc);
+    }
     if (c.transform_options && c.transform_options.length > 0) {
         var tLines = c.transform_options.map(function(opt) {
             return findCardNameById(opt.target) + ' (' + opt.mana_cost + ' mana)';
@@ -1312,6 +1336,19 @@ function renderDeckBuilderCard(numericId, count) {
         var desc = getEffectDescription(c.effects, c);
         html += '<div class="card-effect-full">' + desc + '</div>';
     }
+    // Activated ability — auto-derive description from the ability block
+    if (c.activated_ability) {
+        var ab = c.activated_ability;
+        var abDesc = 'Active (' + ab.mana_cost + '): ';
+        if (ab.effect_type === 'conjure_rat_and_buff') {
+            abDesc += 'Conjure Common Rat from deck. Ally Rats on board +1🗡️/+1❤️ (+Dark Matter × 1).';
+        } else if (ab.effect_type === 'summon_token' && ab.summon_card_id) {
+            abDesc += 'Summon ' + findCardNameById(ab.summon_card_id) + '.';
+        } else {
+            abDesc += (ab.name || ab.effect_type);
+        }
+        html += '<div class="card-effect-full">' + abDesc + '</div>';
+    }
     // Transform options (Reanimated Bones) — compact list
     if (c.transform_options && c.transform_options.length > 0) {
         var tLines = c.transform_options.map(function(opt) {
@@ -1334,8 +1371,12 @@ function renderDeckBuilderCard(numericId, count) {
         html += '<div class="card-effect-full">React' + costText + ': ' + condText + extraCond + '</div>';
         html += '<div class="card-effect-full">▶ Deploy</div>';
     }
-    // Flavour text for cards with no effects and no transform/react
-    if (c.flavour_text && (!c.effects || c.effects.length === 0) && c.react_condition == null && (!c.transform_options || c.transform_options.length === 0)) {
+    // Flavour text — only when the card has no other text content
+    if (c.flavour_text
+            && (!c.effects || c.effects.length === 0)
+            && !c.activated_ability
+            && c.react_condition == null
+            && (!c.transform_options || c.transform_options.length === 0)) {
         html += '<div class="card-flavour">' + c.flavour_text + '</div>';
     }
     // Range already shown in bottom center for minions
@@ -4124,8 +4165,12 @@ function renderHandCard(numericId, handIndex, currentMana, isMyTurn) {
         var costText = c.react_mana_cost > 0 ? ' (' + c.react_mana_cost + ')' : '';
         html += '<div class="card-effect-full">React' + costText + ': ' + condText + extraCond + '</div>';
     }
-    // Flavour text for cards with no effects and no transform/react
-    if (c.flavour_text && (!c.effects || c.effects.length === 0) && c.react_condition == null && (!c.transform_options || c.transform_options.length === 0)) {
+    // Flavour text — only when the card has no other text content
+    if (c.flavour_text
+            && (!c.effects || c.effects.length === 0)
+            && !c.activated_ability
+            && c.react_condition == null
+            && (!c.transform_options || c.transform_options.length === 0)) {
         html += '<div class="card-flavour">' + c.flavour_text + '</div>';
     }
     html += '</div>';
