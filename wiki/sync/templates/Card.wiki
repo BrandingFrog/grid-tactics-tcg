@@ -1,0 +1,68 @@
+<noinclude>
+Usage:
+<pre>
+{{Card
+| name      = Ratchanter
+| type      = Minion
+| element   = Dark
+| tribe     = Rat
+| cost      = 4
+| attack    = 15
+| hp        = 30
+| range     = 0
+| rules     = Activated: pay 2 mana to conjure a Common Rat and buff it.
+| flavor    = The rats listen, and the rats remember.
+| keywords  = Sacrifice, Summon
+| art       = Ratchanter.png
+| patch     = 0.4.2
+| stable_id = ratchanter
+| deckable  = true
+}}
+</pre>
+
+This template renders a card infobox AND emits SMW property annotations in a
+single pass. Phase 1 sample only — Phase 3 sync_cards.py will drive it from
+data/cards/*.json automatically.
+</noinclude><includeonly>{|
+ class="gt-card gt-element-{{lc:{{{element|}}}}}"
+ style="float:right; width:280px; border:2px solid #222; border-radius:10px; background:#1a1a1a; color:#eee; font-family:sans-serif; margin:0 0 1em 1em;"
+|-
+! colspan="2" style="padding:6px 10px; background:linear-gradient(90deg,#333,#111); border-radius:8px 8px 0 0; text-align:left;"
+| <span style="float:right; background:#3070d0; border-radius:50%; width:28px; height:28px; display:inline-block; text-align:center; line-height:28px; font-weight:bold;">{{{cost|?}}}</span>
+  <span style="font-size:1.2em; font-weight:bold;">{{{name|{{PAGENAME}}}}}</span>
+|-
+| colspan="2" style="padding:0;"
+| [[File:{{{art|CardBack.png}}}|280px|center|link=]]
+|-
+| colspan="2" style="padding:4px 10px; font-style:italic; border-top:1px solid #444; border-bottom:1px solid #444; background:#222;"
+| {{{type|Minion}}} &mdash; {{{element|Neutral}}}{{#if:{{{tribe|}}}| &middot; {{{tribe}}} }}{{#if:{{{keywords|}}}| &middot; {{{keywords}}} }}
+|-
+| colspan="2" style="padding:8px 10px; min-height:60px;"
+| {{{rules|}}}{{#if:{{{flavor|}}}|<hr style="border:0;border-top:1px dashed #555;"/><span style="color:#888;font-style:italic;">{{{flavor}}}</span>}}
+|-
+{{#if:{{{attack|}}}|
+! style="padding:6px 10px; background:#111; border-radius:0 0 0 8px; text-align:left;" | ATK {{{attack}}}
+! style="padding:6px 10px; background:#111; border-radius:0 0 8px 0; text-align:right;" | HP {{{hp}}}
+}}
+|}
+
+<!-- === SMW ANNOTATIONS === -->
+[[Name::{{{name|{{PAGENAME}}}}}| ]]
+{{#if:{{{stable_id|}}}|[[StableId::{{{stable_id}}}| ]]}}
+{{#if:{{{type|}}}|[[CardType::{{{type}}}| ]]}}
+{{#if:{{{element|}}}|[[Element::{{{element}}}| ]]}}
+{{#if:{{{tribe|}}}|[[Tribe::{{{tribe}}}| ]]}}
+{{#if:{{{cost|}}}|[[Cost::{{{cost}}}| ]]}}
+{{#if:{{{attack|}}}|[[Attack::{{{attack}}}| ]]}}
+{{#if:{{{hp|}}}|[[HP::{{{hp}}}| ]]}}
+{{#if:{{{range|}}}|[[Range::{{{range}}}| ]]}}
+{{#if:{{{rules|}}}|[[RulesText::{{{rules}}}| ]]}}
+{{#if:{{{flavor|}}}|[[FlavorText::{{{flavor}}}| ]]}}
+{{#if:{{{art|}}}|[[ArtFile::File:{{{art}}}| ]]}}
+{{#if:{{{patch|}}}|[[FirstPatch::{{{patch}}}| ]]}}
+{{#if:{{{deckable|}}}|[[Deckable::{{{deckable}}}| ]]}}
+{{#arraymap:{{{keywords|}}}|,|@@@|[[Keyword::@@@| ]]}}
+[[LastModified::{{CURRENTTIMESTAMP}}| ]]
+[[Category:Cards]]
+{{#if:{{{element|}}}|[[Category:{{{element}}} cards]]}}
+{{#if:{{{type|}}}|[[Category:{{{type}}}s]]}}</includeonly>
