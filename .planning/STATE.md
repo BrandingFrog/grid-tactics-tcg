@@ -26,9 +26,9 @@ See: .planning/PROJECT.md (updated 2026-04-04)
 ## Current Position
 
 Phase: 14.5 (piles-and-hand-vis) — IN PROGRESS
-Plan: 1 of N (engine piles) — COMPLETE
+Plan: 4 of N (uniform card renderer) — COMPLETE
 Status: Wave 1 engine done. MinionInstance.from_deck + Player.exhaust shipped; minion plays no longer double-count in graveyard; tokens vanish silently on death; discard-for-cost routes to exhaust. Tensor parity deferred to Wave 2. Phase 14.4 spectator mode fully shipped (waves 1-5). Backend: RoomManager._room_spectators manager-level dict survives the WaitingRoom→GameSession transition; filter_state_for_spectator is a pure function (god = deepcopy, non-god = delegate to filter_state_for_player(0)); events.py has spectate_room handler, submit_action gate ("Spectators cannot submit actions"), _fanout_state_to_spectators / _fanout_game_start_to_spectators wired into _emit_state_to_players / _emit_game_over / handle_ready / handle_request_rematch, chat broadcast inclusive of spectators, disconnect handler scoped to spectators only (player-disconnect still Phase 15 territory). Frontend: Lobby Spectate Room button + God Mode checkbox, isSpectator / spectatorGodMode flags re-synced from every state frame, early-return at all 5 action seams (submitAction + 3 click handlers + renderActionBar), dual-hand god view via renderHand appendHand helper, SPECTATING badge. Mid-game join supported via synthetic game_start from handle_spectate_room. Multi-tab smoke test deferred to post-deploy Playwright E2E.
-Last activity: 2026-04-08 — Completed 14.5-01-PLAN.md (engine piles foundation)
+Last activity: 2026-04-08 — Completed 14.5-04-PLAN.md (uniform card renderer — renderCardFrame shared base for hand/deck-builder/tooltip/pile)
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -166,6 +166,16 @@ Recent decisions affecting current work:
 - [Phase 14.4-04]: Client routes spectators through the existing applyStateFrame → renderGame pipeline (NOT a separate renderSpectatorView branch) — preserves Phase 14.3 animation contract for free. isSpectator + spectatorGodMode re-synced from every frame (onSpectatorJoined + onGameStart + _applyStateFrameImmediate) — reconnection/late-join safe, no drift. Dual-hand god view reuses renderHandCard verbatim with labeled dividers (no new DOM container). renderHandCard(..., isMyTurn && !isSpectator) prevents "my turn" glow leaking onto spectator hands.
 - [Phase 14.4-05]: Task 4 (multi-tab visual smoke test) deferred to post-deploy Playwright E2E against Railway (same posture as prior 14.x closeouts). Automated coverage = tests/test_room_manager.py (8 tests, always run) + tests/test_events.py (6 tests, gated on flask_socketio via conftest collect_ignore_glob).
 
+### Phase 14.5 Wave 4 (2026-04-08)
+
+- 8788c43 refactor(14.5-04): extract shared renderCardFrame for hand/deck/tooltip
+
+Key decisions:
+- [Phase 14.5-04]: Single shared `renderCardFrame(c, opts)` HTML builder is the source of truth for all full-size card rendering. `renderDeckBuilderCard` and `renderHandCard` are thin wrappers (7 and 12 lines). Tooltip preview path already routed through `renderDeckBuilderCard`, inherits the refactor for free.
+- [Phase 14.5-04]: Hand cards stamped with BOTH `.card-frame-full` (base layout) and `.card-frame-hand` (state-modifier hook). Keeps all existing state selectors working unchanged (`.card-playable`, `.card-selected-hand`, `.card-react-playable`, mobile width override). Dead `.card-frame-hand` base rule + `.card-art-hand` base rule deleted from CSS (verbatim duplicates of `.card-frame-full` / `.card-art-full`) to prevent silent drift.
+- [Phase 14.5-04]: `showReactDeploy` opt-in flag preserves the original asymmetry — deck builder shows "▶ Deploy" hint for multi-purpose react cards, hand suppresses.
+- [Phase 14.5-04]: Task 2 visual smoke test deferred to post-deploy Playwright E2E (same posture as 14.1-04 / 14.2-04 / 14.3-01/04/07 / 14.4-05). Structural review confirmed: data attrs preserved, context classes preserved, dim logic preserved, tooltip path preserved, mobile media query still valid.
+
 ### Pending Todos
 
 None yet.
@@ -179,7 +189,7 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-04-07T21:30:00.000Z
+Last session: 2026-04-08T22:15:00.000Z — Completed 14.5-04 (uniform card renderer). Previous: 2026-04-07T21:30:00.000Z
 Stopped at: Phase 14.4 spectator mode fully shipped (plans 01-05). Wave 5 closeout added tests/test_room_manager.py (8 spectator data-model tests, all passing locally) and tests/test_events.py (6 Socket.IO spectator tests, gated on flask_socketio via conftest collect_ignore_glob — will run on CI / Railway). ROADMAP and STATE updated. Multi-tab visual smoke test deferred to post-deploy Playwright E2E. Full local suite: 564 passed, 4 skipped.
 
 Previous session (2026-04-07T20:45:00.000Z): Card-effects-and-action-flow audit followups complete. Tensor-engine parity for LEAP (CardTable.leap_amount precompute + _compute_move_mask LEAP override + apply_move_batch leap landing) and PASSIVE pipeline (CardTable.passive_burn_amount/passive_heal_amount + engine._fire_passive_effects_batch at turn flip, mirroring Python react_stack._fire_passive_effects). Bug-4 design clarification: BURN handler now stacks `int(effect.amount)` per tick so Emberplague's JSON amount=5 takes effect; tensor side already uses passive_burn_amount from the same JSON field. ActionEncoder _encode_move/_decode_move now leap-aware (collapse multi-step forward to unit cardinal on encode, walk over blockers on decode). 42 stale-assertion test failures swept to zero — pure test maintenance, no engine behavior changes. tests/conftest.py grew collect_ignore_glob for RL/tensor/server test files when torch/sb3/flask_socketio missing (single source of truth for ML-dep gating). Final: 538 passed, 4 skipped, 0 failed locally. Next: Phase 15 Resilience & Polish.
