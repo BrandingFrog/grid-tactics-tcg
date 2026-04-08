@@ -62,6 +62,10 @@ def apply_effects_batch(
         _apply_destroy(state, active & (etype == 9), etarget, target_flat_pos)
         # Phase 14.3: APPLY_BURNING (15) — grant burning_stacks to target minion
         _apply_burning(state, active & (etype == 15), etarget, eamount, target_flat_pos)
+        # GRANT_DARK_MATTER (16): add `amount` dark_matter_stacks to target.
+        _apply_grant_dark_matter(
+            state, active & (etype == 16), etarget, eamount, target_flat_pos,
+        )
         # BURN (10) on a non-PASSIVE trigger (e.g. Pyre Archer's on_attack
         # single_target burn) — set is_burning on the target minion. The
         # PASSIVE-trigger BURN aura (Emberplague Rat) is handled separately
@@ -435,6 +439,30 @@ def _apply_burning(state, active, etarget, eamount, target_flat_pos):
             safe_slot = slot.clamp(min=0)
             cur = state.is_burning[arange_n, safe_slot]
             state.is_burning[arange_n, safe_slot] = cur | valid
+
+
+def _apply_grant_dark_matter(state, active, etarget, eamount, target_flat_pos):
+    """GRANT_DARK_MATTER: add `eamount` dark_matter_stacks to target minion.
+
+    SINGLE_TARGET only — currently used by the Dark Matter Infusion magic
+    card. Stacks additively per Python `_apply_effect_to_minion`.
+    """
+    if not active.any():
+        return
+    N = active.shape[0]
+    device = active.device
+    arange_n = torch.arange(N, device=device)
+
+    single = active & (etarget == 0)
+    if single.any():
+        slot = _find_minion_slot_at_pos(state, target_flat_pos)
+        valid = single & (slot >= 0)
+        if valid.any():
+            safe_slot = slot.clamp(min=0)
+            delta = eamount * valid.int()
+            state.minion_dark_matter_stacks[arange_n, safe_slot] = (
+                state.minion_dark_matter_stacks[arange_n, safe_slot] + delta
+            )
 
 
 def _apply_destroy(state, active, etarget, target_flat_pos):

@@ -125,9 +125,9 @@ def _apply_effect_to_minion(
 ) -> GameState:
     """Apply an effect to a single minion based on effect_type.
 
-    Effect types that don't apply to a minion (BURN, CONJURE, TUTOR, RALLY,
-    PROMOTE, NEGATE, DEPLOY_SELF, LEAP, PASSIVE_HEAL, DARK_MATTER_BUFF) are
-    silently skipped here — they're handled by other code paths or are
+    Effect types that don't apply to a minion (CONJURE, TUTOR, RALLY,
+    PROMOTE, NEGATE, DEPLOY_SELF, LEAP, DARK_MATTER_BUFF) are silently
+    skipped here — they're handled by other code paths or are
     informational/state markers that don't mutate minion stats directly.
     """
     if effect.effect_type == EffectType.DAMAGE:
@@ -158,6 +158,14 @@ def _apply_effect_to_minion(
         if minion.is_burning:
             return state
         new_minion = replace(minion, is_burning=True)
+        new_minions = _replace_minion(state.minions, minion.instance_id, new_minion)
+        return replace(state, minions=new_minions)
+    elif effect.effect_type == EffectType.GRANT_DARK_MATTER:
+        # Add `amount` Dark Matter stacks to the target minion. Stacks
+        # additively; currently consumed by Ratchanter's activated ability.
+        new_minion = replace(
+            minion, dark_matter_stacks=minion.dark_matter_stacks + effect.amount,
+        )
         new_minions = _replace_minion(state.minions, minion.instance_id, new_minion)
         return replace(state, minions=new_minions)
     # Unimplemented or non-minion-targeting effect types: skip gracefully

@@ -156,11 +156,12 @@ class TestEffectType:
 
     def test_member_count(self) -> None:
         # Audit-followup test sweep: EffectType has grown via Phases 14.x +
-        # the audit's PASSIVE pipeline. Current 16 members (append-only):
-        # DAMAGE, HEAL, BUFF_ATTACK, BUFF_HEALTH, NEGATE, DEPLOY_SELF,
-        # RALLY_FORWARD, PROMOTE, TUTOR, DESTROY, BURN, DARK_MATTER_BUFF,
-        # PASSIVE_HEAL, LEAP, CONJURE, APPLY_BURNING.
-        assert len(EffectType) == 16
+        # the audit's PASSIVE pipeline + Dark Matter source card. Current
+        # 17 members (append-only): DAMAGE, HEAL, BUFF_ATTACK, BUFF_HEALTH,
+        # NEGATE, DEPLOY_SELF, RALLY_FORWARD, PROMOTE, TUTOR, DESTROY, BURN,
+        # DARK_MATTER_BUFF, PASSIVE_HEAL, LEAP, CONJURE, APPLY_BURNING,
+        # GRANT_DARK_MATTER.
+        assert len(EffectType) == 17
 
     def test_bracket_lookup(self) -> None:
         assert EffectType["DAMAGE"] is EffectType.DAMAGE

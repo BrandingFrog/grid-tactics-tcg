@@ -1,0 +1,16 @@
+{
+    "card_id": "dark_matter_infusion",
+    "name": "Dark Matter Infusion",
+    "card_type": "magic",
+    "mana_cost": 2,
+    "element": "dark",
+    "effects": [
+        {
+            "type": "grant_dark_matter",
+            "trigger": "on_play",
+            "target": "single_target",
+            "amount": 1
+        }
+    ],
+    "flavour_text": "Unstable particles bond to the vessel. Reality frays at the edges."
+}
