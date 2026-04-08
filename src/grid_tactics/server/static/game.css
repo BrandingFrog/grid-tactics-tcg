@@ -3365,3 +3365,44 @@ body {
   .pile-count { font-size: 13px; }
 }
 
+/* =============================================
+   Phase 14.5 Wave 6: Card-draw animations
+   ============================================= */
+
+/* Own-hand draw: card flies from source → settles into hand slot.
+   --draw-fly-dx / --draw-fly-dy are set inline per-instance to
+   carry the (source - target) pixel delta. */
+@keyframes draw-fly-in {
+  0% {
+    transform: translate(var(--draw-fly-dx, 0px), var(--draw-fly-dy, 0px)) scale(0.3);
+    opacity: 0;
+  }
+  30% {
+    opacity: 1;
+  }
+  100% {
+    transform: translate(0, 0) scale(1);
+    opacity: 1;
+  }
+}
+
+.draw-fly-in {
+  position: fixed;
+  z-index: 1000;
+  pointer-events: none;
+  animation: draw-fly-in 600ms ease-out forwards;
+  transform-origin: center center;
+  will-change: transform, opacity;
+}
+
+/* Opponent hand: face-down card back pops into the row. */
+@keyframes opp-back-pop {
+  0%   { transform: scale(0);   opacity: 0; }
+  60%  { transform: scale(1.1); opacity: 1; }
+  100% { transform: scale(1);   opacity: 1; }
+}
+
+.opp-hand-card-back.pop-in {
+  animation: opp-back-pop 400ms ease-out;
+}
+

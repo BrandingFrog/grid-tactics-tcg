@@ -1987,11 +1987,137 @@ function playAnimation(job, done) {
         case 'move':
             playMoveAnimation(job, done);
             return;
+        case 'draw_own':
+            playDrawOwnAnimation(job, done);
+            return;
+        case 'draw_opp':
+            playDrawOppAnimation(job, done);
+            return;
         case 'noop':
         default:
             setTimeout(done, 0);
             return;
     }
+}
+
+// =============================================
+// Phase 14.5 Wave 6: Card-draw animations
+// =============================================
+// Two pure-visual job types that run via the Phase 14.3 AnimationQueue:
+//   draw_own — card flies from a source point into its hand slot (~600ms)
+//   draw_opp — face-down card back pops into #oppHandRow           (~400ms)
+//
+// Both jobs assume state has ALREADY been applied before they run
+// (job.stateApplied === true is set at enqueue time). Targets are resolved
+// lazily at animation time so we read the live post-render DOM.
+//
+// Job shape (draw_own):
+//   { type:'draw_own', cardNumericId:<int>, fromPos:'deck'|'center'|{x,y},
+//     toSlotIndex:<int>, stateApplied:true }
+// Job shape (draw_opp):
+//   { type:'draw_opp', stateApplied:true }
+
+function _resolveDrawFromPoint(fromPos) {
+    // 'deck' → own deck pile button (closest thing to a deck visual);
+    // 'center' → viewport center fallback;
+    // {x,y} → absolute coords.
+    if (fromPos && typeof fromPos === 'object' && typeof fromPos.x === 'number') {
+        return { x: fromPos.x, y: fromPos.y };
+    }
+    if (fromPos === 'deck') {
+        // No dedicated deck pile DOM yet; use the own graveyard pile button
+        // as a proxy origin (sits on the self info bar, visually "off-board").
+        var btn = document.getElementById('pileBtnOwnGraveyard');
+        if (btn) {
+            var r = btn.getBoundingClientRect();
+            return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+        }
+    }
+    // Default: viewport center.
+    return { x: window.innerWidth / 2, y: window.innerHeight / 2 };
+}
+
+function playDrawOwnAnimation(job, done) {
+    var handEl = document.getElementById('hand-container');
+    if (!handEl) { setTimeout(done, 0); return; }
+    var slotIdx = (job && typeof job.toSlotIndex === 'number') ? job.toSlotIndex : -1;
+    var slotEl = slotIdx >= 0
+        ? handEl.querySelector('.card-frame-hand[data-hand-idx="' + slotIdx + '"]')
+        : null;
+    // Fallback: last child of hand-container.
+    if (!slotEl) {
+        var cards = handEl.querySelectorAll('.card-frame-hand');
+        if (cards.length > 0) slotEl = cards[cards.length - 1];
+    }
+    if (!slotEl) { setTimeout(done, 0); return; }
+
+    var def = cardDefs && cardDefs[job.cardNumericId];
+    if (!def) { setTimeout(done, 0); return; }
+
+    var toRect = slotEl.getBoundingClientRect();
+    var toCx = toRect.left + toRect.width / 2;
+    var toCy = toRect.top + toRect.height / 2;
+    var from = _resolveDrawFromPoint(job.fromPos);
+
+    // Build a floating clone of the hand card at the target position.
+    var floater = document.createElement('div');
+    floater.className = 'draw-fly-in';
+    floater.style.left = (toRect.left) + 'px';
+    floater.style.top = (toRect.top) + 'px';
+    floater.style.width = toRect.width + 'px';
+    floater.style.height = toRect.height + 'px';
+    // Starting transform offset (source → target delta), set as CSS vars
+    // consumed by the keyframes.
+    var dx = from.x - toCx;
+    var dy = from.y - toCy;
+    floater.style.setProperty('--draw-fly-dx', dx + 'px');
+    floater.style.setProperty('--draw-fly-dy', dy + 'px');
+    floater.innerHTML = renderCardFrame(def, {
+        context: 'hand',
+        numericId: job.cardNumericId,
+        interactive: false,
+        showReactDeploy: false,
+    });
+    document.body.appendChild(floater);
+
+    // Hide the real slot until the floater lands, so we don't double-render.
+    slotEl.style.visibility = 'hidden';
+
+    playSfx('card_play');
+
+    var finished = false;
+    function finish() {
+        if (finished) return;
+        finished = true;
+        if (floater.parentNode) floater.parentNode.removeChild(floater);
+        slotEl.style.visibility = '';
+        done();
+    }
+    floater.addEventListener('animationend', finish);
+    // Fallback timeout in case animationend is swallowed (e.g. tab hidden).
+    setTimeout(finish, 800);
+}
+
+function playDrawOppAnimation(job, done) {
+    var row = document.getElementById('oppHandRow');
+    if (!row) { setTimeout(done, 0); return; }
+    // State has already been applied, so renderOppHandRow just added a new
+    // .opp-hand-card-back at the end. Stamp the pop-in class on the LAST
+    // child and let the keyframe fire.
+    var backs = row.querySelectorAll('.opp-hand-card-back');
+    if (backs.length === 0) { setTimeout(done, 0); return; }
+    var target = backs[backs.length - 1];
+    target.classList.add('pop-in');
+
+    var finished = false;
+    function finish() {
+        if (finished) return;
+        finished = true;
+        target.classList.remove('pop-in');
+        done();
+    }
+    target.addEventListener('animationend', finish);
+    setTimeout(finish, 600);
 }
 
 // =============================================
