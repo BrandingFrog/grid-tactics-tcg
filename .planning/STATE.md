@@ -190,3 +190,51 @@ Resume file: None
 - c60fda7 fix(audit-followup): tensor PASSIVE pipeline parity (burn aura + heal)
 - c289bbd fix(audit-followup): BURN aura honors JSON amount (Bug 4 clarification)
 - db40f9e test(audit-followup): sweep 42 stale assertions to match current engine
+
+### Tensor parity + Dark Matter sweep (2026-04-08)
+
+Greenfield sweep against the tensor engine with the Python engine as
+source of truth. Inventory found that 4 of 7 brief items (burn boolean,
+effective_attack==0 gate, PASSIVE pipeline owner-gate, LEAP) were
+ALREADY implemented from prior audit followups. Cleared the remaining 3
++ added the Dark Matter source card.
+
+Cleared debt:
+- 69432ce fix(tensor): max_health_bonus + dark_matter_stacks tensor fields
+  (HEAL caps now use card.health + max_health_bonus, mirroring Python
+  _apply_heal_to_minion; both fields reset on game reset and on minion
+  deploy; PASSIVE_HEAL also caps at the effective max)
+- 8bd61e1 feat: ACTIVATE_ABILITY action space slots [1262:1287]
+  (ACTION_SPACE_SIZE bumped 1262 → 1287; Python ActionEncoder gained
+  encode/decode for ACTIVATE_ABILITY using activator pos; tensor engine
+  gained apply_activate_ability_batch hardcoded Ratchanter dispatch
+  + _compute_activate_ability_mask + CardTable is_rat / ratchanter_card_id
+  / rat_card_id columns; engine wires the new dispatch in
+  _step_action_phase. Test harness bumped to assert 1287.)
+- 4254370 feat: Dark Matter Infusion magic card + GRANT_DARK_MATTER
+  (2-mana DARK magic, single_target on_play, +1 dark_matter_stacks;
+  EffectType.GRANT_DARK_MATTER = 16 append-only; Python and tensor
+  effect handlers; closes the synergy loop with Ratchanter)
+
+**RL checkpoint invalidation:** All RL checkpoints trained against the
+prior 1262-slot action space are invalidated by 8bd61e1. They remain
+loadable as binary blobs but the action head is the wrong shape. Plan
+a fresh training run before resuming any tournament/eval work.
+
+**Pre-existing checkpoint staleness from 14.1 / 14.2 (line 175 above)
+still applies on top of this** — checkpoints predating both audits are
+doubly stale.
+
+Test posture: 573 passed, 4 skipped before and after each commit.
+Tensor-specific tests are conftest-gated on torch/sb3 availability and
+were not exercised in this sweep — that gating is unchanged. The new
+Ratchanter / Dark Matter / max_health_bonus tensor paths therefore have
+no direct unit tests yet; the existing Python ratchanter_aura and
+activated_abilities tests cover the source-of-truth behavior.
+
+Out of scope (not done, by design):
+- Generic activated-ability dispatch (only Ratchanter exists; TODO note
+  left in tensor actions.py / card_table.py for the second card)
+- Obsidian vault sync
+- Tensor-side unit tests for the new paths (deferred until torch/sb3
+  conftest gating changes)
