@@ -2269,6 +2269,44 @@ body {
   font-size: 9px;
 }
 
+/* Shared-helper tooltip content (emitted by buildCardTooltipContent).
+   Both #card-tooltip (deck builder) and #game-tooltip (in-game hover)
+   now use the same class names so the CSS is unified. */
+.tooltip-text {
+  color: white;
+  font-family: 'Inter', system-ui, sans-serif;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.5;
+  margin-bottom: 8px;
+}
+.tooltip-flavour {
+  color: var(--cyan);
+  font-family: 'Inter', system-ui, sans-serif;
+  font-size: 11px;
+  font-style: italic;
+  margin-bottom: 8px;
+}
+
+/* Game tooltip: slightly smaller to fit the sidebar */
+.gtt-body .tooltip-text { font-size: 11px; margin-bottom: 6px; }
+.gtt-body .tooltip-flavour { font-size: 10px; margin-bottom: 6px; }
+.gtt-body .tooltip-keyword { margin-bottom: 3px; }
+.gtt-body .tooltip-keyword-name { font-size: 9px; letter-spacing: 0.5px; }
+.gtt-body .tooltip-keyword-desc { font-size: 9px; }
+
+/* Full card art container at the top of the in-game tooltip. Mirrors
+   the deck-builder .tooltip-card layout. */
+.gtt-card {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 10px;
+}
+.gtt-card .card-frame-full {
+  width: 100%;
+  max-width: 200px;
+}
+
 /* ===== Mobile Responsive (max-width 600px) ===== */
 @media (max-width: 600px) {
   /* Header */

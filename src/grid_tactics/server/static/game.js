@@ -1235,21 +1235,16 @@ var KEYWORD_GLOSSARY = {
     'Conjure': 'Summon a card from outside your deck directly to the board.',
 };
 
-function showCardTooltip(numericId) {
-    var defs = allCardDefs || cardDefs;
-    var c = defs[numericId];
-    if (!c) return;
-    var tooltip = document.getElementById('card-tooltip');
-    tooltip.style.display = '';
+// Build the shared content for a card tooltip. Both the deck-builder
+// (#card-tooltip) and the in-game hover (#game-tooltip) call this so
+// they stay in lockstep. Returns { name, statsHtml, bodyHtml } where:
+//   name: plain text (the card name)
+//   statsHtml: <span>…</span> chips for type/tribe/element/cost/atk/hp/range
+//   bodyHtml: card text lines + flavour + matched keywords, all HTML
+function buildCardTooltipContent(c) {
+    if (!c) return { name: '', statsHtml: '', bodyHtml: '' };
 
-    // Full card art preview — reuse the deck-builder card renderer
-    var artHost = document.getElementById('tooltip-card-art');
-    if (artHost) artHost.innerHTML = renderDeckBuilderCard(numericId, -1);
-
-    // Name
-    document.getElementById('tooltip-name').textContent = c.name;
-
-    // Stats line
+    // Stats chips
     var statsHtml = '';
     var typeNames = ['Minion', 'Magic', 'React'];
     statsHtml += '<span style="color:var(--cyan)">' + (typeNames[c.card_type] || '') + '</span>';
@@ -1262,13 +1257,10 @@ function showCardTooltip(numericId) {
     if (c.card_type === 0 && c.attack_range != null) {
         statsHtml += '<span>' + (c.attack_range === 0 ? 'Melee' : 'Range ' + c.attack_range) + '</span>';
     }
-    document.getElementById('tooltip-stats').innerHTML = statsHtml;
 
-    // Keywords
-    var keywordsHtml = '';
-    var effectDesc = (c.effects && c.effects.length > 0) ? getEffectDescription(c.effects, c) : '';
-    // Card-specific text lines
+    // Card text lines (effect, activated ability, transform, react)
     var cardTextLines = [];
+    var effectDesc = (c.effects && c.effects.length > 0) ? getEffectDescription(c.effects, c) : '';
     if (c.summon_sacrifice_tribe) cardTextLines.push('Sacrifice: ' + c.summon_sacrifice_tribe);
     if (c.unique) cardTextLines.push('Unique');
     if (effectDesc) cardTextLines.push(effectDesc);
@@ -1290,39 +1282,50 @@ function showCardTooltip(numericId) {
         });
         cardTextLines.push('Transform: ' + tLines.join(', '));
     }
+    if (c.react_condition != null && c.react_mana_cost != null) {
+        var condMap = {
+            0: 'Enemy plays Magic', 1: 'Enemy summons Minion', 2: 'Enemy attacks',
+            3: 'Enemy plays React', 4: 'Any enemy action',
+            5: 'Enemy plays any Wood', 6: 'Enemy plays any Fire', 7: 'Enemy plays any Earth',
+            8: 'Enemy plays any Water', 9: 'Enemy plays any Metal', 10: 'Enemy plays any Dark',
+            11: 'Enemy plays any Light', 12: 'Enemy sacrifices'
+        };
+        var condText = condMap[c.react_condition] || 'Enemy acts';
+        var extraCond = c.react_requires_no_friendly_minions ? ' & No friendly minions' : '';
+        var costText = c.react_mana_cost > 0 ? ' (' + c.react_mana_cost + ')' : '';
+        cardTextLines.push('React' + costText + ': ' + condText + extraCond + ' ▶ Deploy');
+    }
+
+    var bodyHtml = '';
     if (cardTextLines.length > 0) {
-        keywordsHtml += '<div style="margin-bottom:8px;color:white;font-size:12px;font-weight:700;line-height:1.5;">' + cardTextLines.join('<br>') + '</div>';
+        bodyHtml += '<div class="tooltip-text">' + cardTextLines.join('<br>') + '</div>';
     }
     if (c.flavour_text) {
-        keywordsHtml += '<div style="margin-bottom:8px;color:var(--cyan);font-size:11px;font-style:italic;">"' + c.flavour_text + '"</div>';
+        bodyHtml += '<div class="tooltip-flavour">"' + c.flavour_text + '"</div>';
     }
-    // Match keywords from the effect text and card properties
+
+    // Matched keywords
     var matchedKeywords = [];
-    // From card data
     if (c.unique) matchedKeywords.push('Unique');
     if (c.card_type === 0 && c.attack_range != null && c.attack_range === 0) matchedKeywords.push('Melee');
     if (c.card_type === 0 && c.attack_range != null && c.attack_range > 0) matchedKeywords.push('Range');
     if (c.summon_sacrifice_tribe) { matchedKeywords.push('Cost'); matchedKeywords.push('Discard'); }
     if (c.transform_options && c.transform_options.length > 0) matchedKeywords.push('Transform');
-    if (c.react_condition != null) { matchedKeywords.push('React'); }
-    if (c.react_condition != null && c.react_effect && c.react_effect.type === 5) { matchedKeywords.push('Deploy'); }
-    // From effects
-    // Check if any effect overrides Summon trigger (e.g. Active abilities use on_play trigger but aren't Summon)
+    if (c.react_condition != null) matchedKeywords.push('React');
+    if (c.react_condition != null && c.react_effect && c.react_effect.type === 5) matchedKeywords.push('Deploy');
     var skipSummon = false;
     if (c.effects) { c.effects.forEach(function(eff) { if (eff.type === 11) skipSummon = true; }); }
     if (c.effects && c.effects.length > 0) {
         c.effects.forEach(function(eff) {
-            // Triggers
             if (eff.trigger === 0 && c.card_type === 0 && !skipSummon) { if (matchedKeywords.indexOf('Summon') === -1) matchedKeywords.push('Summon'); }
             if (eff.trigger === 1) { if (matchedKeywords.indexOf('Death') === -1) matchedKeywords.push('Death'); }
             if (eff.trigger === 2) { if (matchedKeywords.indexOf('Attack') === -1) matchedKeywords.push('Attack'); }
             if (eff.trigger === 3) { if (matchedKeywords.indexOf('Damaged') === -1) matchedKeywords.push('Damaged'); }
             if (eff.trigger === 4) { if (matchedKeywords.indexOf('Move') === -1) matchedKeywords.push('Move'); }
             if (eff.trigger === 5) { if (matchedKeywords.indexOf('Passive') === -1) matchedKeywords.push('Passive'); }
-            // Effect types
             if (eff.type === 0) { if (matchedKeywords.indexOf('Deal') === -1) matchedKeywords.push('Deal'); }
             if (eff.type === 1) { if (matchedKeywords.indexOf('Heal') === -1) matchedKeywords.push('Heal'); }
-            if (eff.type === 3) { if (matchedKeywords.indexOf('Heal') === -1) matchedKeywords.push('Heal'); } // buff_health
+            if (eff.type === 3) { if (matchedKeywords.indexOf('Heal') === -1) matchedKeywords.push('Heal'); }
             if (eff.type === 4) { if (matchedKeywords.indexOf('Negate') === -1) matchedKeywords.push('Negate'); }
             if (eff.type === 5) { if (matchedKeywords.indexOf('Deploy') === -1) matchedKeywords.push('Deploy'); }
             if (eff.type === 6) { if (matchedKeywords.indexOf('Rally') === -1) matchedKeywords.push('Rally'); }
@@ -1337,9 +1340,27 @@ function showCardTooltip(numericId) {
         });
     }
     matchedKeywords.forEach(function(kw) {
-        keywordsHtml += '<div class="tooltip-keyword"><span class="tooltip-keyword-name">' + kw + '</span> <span class="tooltip-keyword-desc">— ' + KEYWORD_GLOSSARY[kw] + '</span></div>';
+        bodyHtml += '<div class="tooltip-keyword"><span class="tooltip-keyword-name">' + kw + '</span> <span class="tooltip-keyword-desc">— ' + (KEYWORD_GLOSSARY[kw] || '') + '</span></div>';
     });
-    document.getElementById('tooltip-keywords').innerHTML = keywordsHtml;
+
+    return { name: c.name, statsHtml: statsHtml, bodyHtml: bodyHtml };
+}
+
+function showCardTooltip(numericId) {
+    var defs = allCardDefs || cardDefs;
+    var c = defs[numericId];
+    if (!c) return;
+    var tooltip = document.getElementById('card-tooltip');
+    tooltip.style.display = '';
+
+    // Full card art preview — reuse the deck-builder card renderer
+    var artHost = document.getElementById('tooltip-card-art');
+    if (artHost) artHost.innerHTML = renderDeckBuilderCard(numericId, -1);
+
+    var content = buildCardTooltipContent(c);
+    document.getElementById('tooltip-name').textContent = content.name;
+    document.getElementById('tooltip-stats').innerHTML = content.statsHtml;
+    document.getElementById('tooltip-keywords').innerHTML = content.bodyHtml;
 
     // Related cards
     // Related cards: only direct references (this card mentions them or they mention this card)
@@ -1417,109 +1438,15 @@ function showGameTooltip(numericId, anchorEl) {
     if (!tooltip) return;
     tooltip.style.display = '';
 
-    // Name
-    tooltip.querySelector('.gtt-name').textContent = c.name;
+    // Full card art preview — same renderer as the deck-builder tooltip
+    var artHost = document.getElementById('gtt-card-art');
+    if (artHost) artHost.innerHTML = renderDeckBuilderCard(numericId, -1);
 
-    // Stats line
-    var statsHtml = '';
-    var typeNames = ['Minion', 'Magic', 'React'];
-    statsHtml += '<span style="color:var(--cyan)">' + (typeNames[c.card_type] || '') + '</span>';
-    if (c.tribe) statsHtml += '<span>' + c.tribe + '</span>';
-    var elem = (c.element !== null && c.element !== undefined) ? ELEMENT_MAP[c.element] : NEUTRAL_ELEMENT;
-    statsHtml += '<span style="color:' + elem.color + '">' + elem.name + '</span>';
-    statsHtml += '<span style="color:var(--cyan)">' + c.mana_cost + ' Mana</span>';
-    if (c.attack != null) statsHtml += '<span style="color:var(--red)">' + c.attack + SWORD + '</span>';
-    if (c.health != null) statsHtml += '<span style="color:var(--green)">' + c.health + HEART + '</span>';
-    if (c.card_type === 0 && c.attack_range != null) {
-        statsHtml += '<span>' + (c.attack_range === 0 ? 'Melee' : 'Range ' + c.attack_range) + '</span>';
-    }
-    tooltip.querySelector('.gtt-stats').innerHTML = statsHtml;
-
-    // Card text + keywords
-    var bodyHtml = '';
-    var effectDesc = (c.effects && c.effects.length > 0) ? getEffectDescription(c.effects, c) : '';
-    var cardTextLines = [];
-    if (c.summon_sacrifice_tribe) cardTextLines.push('Sacrifice: ' + c.summon_sacrifice_tribe);
-    if (c.unique) cardTextLines.push('Unique');
-    if (effectDesc) cardTextLines.push(effectDesc);
-    if (c.activated_ability) {
-        var ab = c.activated_ability;
-        var abDesc = 'Active (' + ab.mana_cost + '): ';
-        if (ab.effect_type === 'conjure_rat_and_buff') {
-            abDesc += 'Conjure Common Rat from deck. Ally Rats on board +1' + SWORD + '/+1' + HEART + ' (+Dark Matter × 1).';
-        } else if (ab.effect_type === 'summon_token' && ab.summon_card_id) {
-            abDesc += 'Summon ' + findCardNameById(ab.summon_card_id) + '.';
-        } else {
-            abDesc += (ab.name || ab.effect_type);
-        }
-        cardTextLines.push(abDesc);
-    }
-    if (c.transform_options && c.transform_options.length > 0) {
-        var tLines = c.transform_options.map(function(opt) {
-            return findCardNameById(opt.target) + ' (' + opt.mana_cost + ' mana)';
-        });
-        cardTextLines.push('Transform: ' + tLines.join(', '));
-    }
-    if (c.react_condition != null && c.react_mana_cost != null) {
-        var condMap = {
-            0: 'Enemy plays Magic', 1: 'Enemy summons Minion', 2: 'Enemy attacks',
-            3: 'Enemy plays React', 4: 'Any enemy action',
-            5: 'Enemy plays any Wood', 6: 'Enemy plays any Fire', 7: 'Enemy plays any Earth',
-            8: 'Enemy plays any Water', 9: 'Enemy plays any Metal', 10: 'Enemy plays any Dark',
-            11: 'Enemy plays any Light', 12: 'Enemy sacrifices'
-        };
-        var condText = condMap[c.react_condition] || 'Enemy acts';
-        var extraCond = c.react_requires_no_friendly_minions ? ' & No friendly minions' : '';
-        var costText = c.react_mana_cost > 0 ? ' (' + c.react_mana_cost + ')' : '';
-        cardTextLines.push('React' + costText + ': ' + condText + extraCond + ' ▶ Deploy');
-    }
-    if (cardTextLines.length > 0) {
-        bodyHtml += '<div class="gtt-text">' + cardTextLines.join('<br>') + '</div>';
-    }
-    if (c.flavour_text) {
-        bodyHtml += '<div class="gtt-flavour">"' + c.flavour_text + '"</div>';
-    }
-
-    // Keywords
-    var matchedKeywords = [];
-    if (c.unique) matchedKeywords.push('Unique');
-    if (c.card_type === 0 && c.attack_range != null && c.attack_range === 0) matchedKeywords.push('Melee');
-    if (c.card_type === 0 && c.attack_range != null && c.attack_range > 0) matchedKeywords.push('Range');
-    if (c.summon_sacrifice_tribe) { matchedKeywords.push('Cost'); matchedKeywords.push('Discard'); }
-    if (c.transform_options && c.transform_options.length > 0) matchedKeywords.push('Transform');
-    if (c.react_condition != null) matchedKeywords.push('React');
-    if (c.react_condition != null && c.react_effect && c.react_effect.type === 5) matchedKeywords.push('Deploy');
-    var skipSummon = false;
-    if (c.effects) { c.effects.forEach(function(eff) { if (eff.type === 11) skipSummon = true; }); }
-    if (c.effects && c.effects.length > 0) {
-        c.effects.forEach(function(eff) {
-            if (eff.trigger === 0 && c.card_type === 0 && !skipSummon) { if (matchedKeywords.indexOf('Summon') === -1) matchedKeywords.push('Summon'); }
-            if (eff.trigger === 1) { if (matchedKeywords.indexOf('Death') === -1) matchedKeywords.push('Death'); }
-            if (eff.trigger === 2) { if (matchedKeywords.indexOf('Attack') === -1) matchedKeywords.push('Attack'); }
-            if (eff.trigger === 3) { if (matchedKeywords.indexOf('Damaged') === -1) matchedKeywords.push('Damaged'); }
-            if (eff.trigger === 4) { if (matchedKeywords.indexOf('Move') === -1) matchedKeywords.push('Move'); }
-            if (eff.trigger === 5) { if (matchedKeywords.indexOf('Passive') === -1) matchedKeywords.push('Passive'); }
-            if (eff.type === 0) { if (matchedKeywords.indexOf('Deal') === -1) matchedKeywords.push('Deal'); }
-            if (eff.type === 1) { if (matchedKeywords.indexOf('Heal') === -1) matchedKeywords.push('Heal'); }
-            if (eff.type === 3) { if (matchedKeywords.indexOf('Heal') === -1) matchedKeywords.push('Heal'); }
-            if (eff.type === 4) { if (matchedKeywords.indexOf('Negate') === -1) matchedKeywords.push('Negate'); }
-            if (eff.type === 5) { if (matchedKeywords.indexOf('Deploy') === -1) matchedKeywords.push('Deploy'); }
-            if (eff.type === 6) { if (matchedKeywords.indexOf('Rally') === -1) matchedKeywords.push('Rally'); }
-            if (eff.type === 7) { if (matchedKeywords.indexOf('Promote') === -1) matchedKeywords.push('Promote'); }
-            if (eff.type === 8) { if (matchedKeywords.indexOf('Tutor') === -1) matchedKeywords.push('Tutor'); }
-            if (eff.type === 9) { if (matchedKeywords.indexOf('Destroy') === -1) matchedKeywords.push('Destroy'); }
-            if (eff.type === 10) { if (matchedKeywords.indexOf('Burn') === -1) matchedKeywords.push('Burn'); }
-            if (eff.type === 11) { if (matchedKeywords.indexOf('Active') === -1) matchedKeywords.push('Active'); if (matchedKeywords.indexOf('Dark Matter') === -1) matchedKeywords.push('Dark Matter'); }
-            if (eff.type === 12) { if (matchedKeywords.indexOf('Passive') === -1) matchedKeywords.push('Passive'); if (matchedKeywords.indexOf('Heal') === -1) matchedKeywords.push('Heal'); }
-            if (eff.type === 13) { if (matchedKeywords.indexOf('Leap') === -1) matchedKeywords.push('Leap'); }
-            if (eff.type === 14) { if (matchedKeywords.indexOf('Conjure') === -1) matchedKeywords.push('Conjure'); }
-        });
-    }
-    matchedKeywords.forEach(function(kw) {
-        bodyHtml += '<div class="gtt-keyword"><span class="gtt-kw-name">' + kw + '</span> <span class="gtt-kw-desc">— ' + (KEYWORD_GLOSSARY[kw] || '') + '</span></div>';
-    });
-
-    tooltip.querySelector('.gtt-body').innerHTML = bodyHtml;
+    // Shared content builder
+    var content = buildCardTooltipContent(c);
+    tooltip.querySelector('.gtt-name').textContent = content.name;
+    tooltip.querySelector('.gtt-stats').innerHTML = content.statsHtml;
+    tooltip.querySelector('.gtt-body').innerHTML = content.bodyHtml;
 }
 
 function hideGameTooltip() {
