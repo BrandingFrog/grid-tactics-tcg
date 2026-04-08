@@ -1,6 +1,6 @@
 # Common Rat
 
-| Cost | 🗡️ | ❤️ | Range | Element | Tribe |
+| Cost | 🗡️ | 🤍 | Range | Element | Tribe |
 |------|--------|--------|-------|---------|-------|
 | 1 | 10 | 10 | 0 | [[Elements/Earth\|Earth]] | [[Tribes/Rat\|Rat]] |
 

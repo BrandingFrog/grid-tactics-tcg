@@ -4,4 +4,4 @@
 |------|------|---------|---------|
 | 1 | React | [[Elements/Light\|Light]] | opponent_attacks |
 
-Buffs target +20❤️ in response to attack. See [[Mechanics/React Window]].
+Buffs target +20🤍 in response to attack. See [[Mechanics/React Window]].

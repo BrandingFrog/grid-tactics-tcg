@@ -12,7 +12,7 @@ After every action, the opponent gets a window to play a [[Glossary|React]] card
 ## React Cards
 - [[Cards/Counter Spell]] — negates magic
 - [[Cards/Dark Mirror]] — punishes minion plays
-- [[Cards/Shield Block]] — buffs ❤️ on attack
+- [[Cards/Shield Block]] — buffs 🤍 on attack
 - [[Cards/Dark Sentinel]] — deploy on Light play
 - [[Cards/Surgefed Sparkbot]] — deploy on opponent sacrifice (free)
 

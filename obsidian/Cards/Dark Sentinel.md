@@ -1,6 +1,6 @@
 # Dark Sentinel
 
-| Cost | 🗡️ | ❤️ | Range | Element | Tribe |
+| Cost | 🗡️ | 🤍 | Range | Element | Tribe |
 |------|--------|--------|-------|---------|-------|
 | 3 | 20 | 30 | 0 | [[Elements/Dark\|Dark]] | [[Tribes/Dark Mage\|Dark Mage]] |
 

@@ -28,11 +28,11 @@ Update this file and the matching `KEYWORD_GLOSSARY` in `src/grid_tactics/server
 | Negate | Cancel the effect of an opponent's spell or ability. |
 | React | This card can be played during the opponent's turn in response to their action. |
 | Deploy | Place this card onto the battlefield from your hand during a React window. |
-| Destroy | Remove a target minion from the board regardless of its ❤️. |
+| Destroy | Remove a target minion from the board regardless of its 🤍. |
 | Transform | Pay mana to transform this minion into another form. |
 | Cost | An additional cost that must be paid to play this card. |
 | Discard | Remove a card from your hand. |
-| Heal | Restore ❤️ to a target. |
+| Heal | Restore 🤍 to a target. |
 | Deal | Deal damage to a target. |
 | Burn | A permanent passive debuff that deals damage each turn. |
 | Burning | A burning minion takes 5 damage at the start of its owner's turn. Burning is a boolean status — re-applying it does nothing. It persists until the minion dies. |

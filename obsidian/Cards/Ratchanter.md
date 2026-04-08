@@ -1,6 +1,6 @@
 # Ratchanter
 
-| Cost | 🗡️ | ❤️ | Range | Element | Tribe |
+| Cost | 🗡️ | 🤍 | Range | Element | Tribe |
 |------|--------|--------|-------|---------|-------|
 | 4 | 15 | 30 | 0 | [[Elements/Dark\|Dark]] | [[Tribes/Mage\|Mage]] / [[Tribes/Rat\|Rat]] |
 
