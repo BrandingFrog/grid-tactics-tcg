@@ -11,7 +11,7 @@ Phases are ordered by dependency: foundation and schema first, then infrastructu
 
 ## Phases
 
-### Phase 1: Foundation & Schema Design
+### Phase 1: Foundation & Schema Design ✓
 
 **Goal:** Local dev environment runs MediaWiki + SMW and the SMW property model is fully defined.
 **Depends on:** Nothing
@@ -25,9 +25,10 @@ Phases are ordered by dependency: foundation and schema first, then infrastructu
 
 ---
 
-### Phase 2: MediaWiki + SMW Deployment on Railway
+### Phase 2: MediaWiki + SMW Deployment on Railway ✓
 
 **Goal:** A public HTTPS wiki is live on Railway with a bot account ready to accept API edits.
+**Status:** COMPLETE 2026-04-09. Live at https://mediawiki-production-7169.up.railway.app with SMW 5.1.0. Pivoted mid-phase from Taqasta to `mediawiki:1.42` + composer-installed SMW — see `phases/02-mediawiki-smw-on-railway/02-01-SUMMARY.md` for the deviation log.
 **Depends on:** Phase 1
 **Requirements:** DEPLOY-01, DEPLOY-03, DEPLOY-04
 

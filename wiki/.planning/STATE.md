@@ -1,17 +1,17 @@
 ---
 milestone: v1.0
-status: phase-1-complete
-stopped_at: completed_01-04
+status: phase-2-complete
+stopped_at: completed_02-03
 last_updated: 2026-04-09
 progress:
-  phase: 1
-  phase_name: Foundation & Schema Design
-  plan: 04
+  phase: 2
+  phase_name: MediaWiki+SMW on Railway
+  plan: 03
   phases_total: 9
-  phases_completed: 1
-  plans_completed_in_phase: 4
-  plans_total_in_phase: 4
-  percent: 11
+  phases_completed: 2
+  plans_completed_in_phase: 3
+  plans_total_in_phase: 3
+  percent: 22
 ---
 
 # Project State — Grid Tactics Wiki
@@ -21,16 +21,16 @@ progress:
 See: `.planning/PROJECT.md`
 
 **Core value:** Living, semantically-queryable knowledge base that auto-mirrors Grid Tactics card and mechanic state via git hooks.
-**Current focus:** Phase 1 complete — ready for Phase 2 (Railway deploy)
+**Current focus:** Phase 2 complete — ready for Phase 3 (Card Page Generator)
 
 ## Current Position
 
-Phase: 1 of 9 (Foundation & Schema Design) — **COMPLETE**
-Plan: 04 of 4 complete — Template:Card + Card:Ratchanter sample live, full pipeline proven end-to-end
-Status: Phase complete
-Last activity: 2026-04-09 — Completed 01-04-PLAN.md (Template:Card uploaded, Card:Ratchanter created from real JSON data, SMW ask returns Cost=4 HP=30, PASS)
+Phase: 2 of 9 (MediaWiki+SMW on Railway) — **COMPLETE**
+Plan: 03 of 3 complete — Live wiki at https://mediawiki-production-7169.up.railway.app with SMW 5.1.0, 25 properties, Template:Card, and Card:Ratchanter all validated end-to-end.
+Status: Phase complete (pivoted from Taqasta to mediawiki:1.42 + SMW 5.1 mid-phase; see 02-01-SUMMARY.md)
+Last activity: 2026-04-09 — Completed Phase 2 end-to-end after pivot. bootstrap_schema / bootstrap_template / create_sample_card all run green against the live Railway wiki.
 
-Progress: `██░░░░░░░░` 11%
+Progress: `██░░░░░░░░` 22%
 
 ## Performance Metrics
 

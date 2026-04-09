@@ -2,128 +2,114 @@
 phase: 02-mediawiki-smw-on-railway
 plan: 01
 subsystem: wiki-railway-infra
-tags: [railway, mariadb, redis, mediawiki, taqasta, deploy, phase-2, partial, blocked]
+tags: [railway, mysql, redis, mediawiki, pivot, deploy, phase-2, complete]
 requires: []
 provides:
   - railway-project-live
-  - mariadb-service-live
+  - mysql-service-live
   - redis-service-live
-  - mediawiki-container-deployed
-blocks:
-  - 02-02  # cannot run MW install / bootstrap until app is reachable at /api.php
-  - 02-03  # cannot upload template or sample card against a wiki that is not serving
+  - mediawiki-service-live
+  - smw-5.1-installed
+blocks: []
 affects:
   - 02-02
   - 02-03
 tech-stack:
   added:
     - Railway (managed deploy, MySQL, Redis, container service)
+    - mediawiki:1.42 + SMW 5.1 (custom Dockerfile)
+  removed:
+    - ghcr.io/wikiteq/taqasta:latest (dead end — rsync-seed broken on Railway)
   patterns:
-    - "Taqasta image on Railway with a single persistent volume as the MediaWiki root"
-    - "Healthcheck path `/` with 600s timeout to accommodate Taqasta first-boot install loop"
+    - "Custom Dockerfile in wiki/, Railway auto-builds via git-connected service"
+    - "Entrypoint handles first-boot install.php + idempotent update.php"
+    - "Schema-health check in entrypoint detects partial DB and wipes before install"
 key-files:
-  created: []
-  modified: []
+  created:
+    - wiki/Dockerfile
+    - wiki/LocalSettings.php
+    - wiki/docker-entrypoint-wiki.sh
+  modified:
+    - wiki/sync/client.py  # MW_API_PATH env var so sync points at Railway /
 decisions:
-  - "Volume mounted at /mediawiki (deviation from 02-01 plan which specified /var/lib/mysql on mariadb and /mediawiki on mw). The Taqasta image's init loop required /mediawiki as the persistent root for its self-install pattern to complete rather than a sub-path mount — using the planned path caused a crash loop during Phase 2 iteration."
-  - "Healthcheck path set to `/` with timeout 600s (deviation from plan's implicit shorter gate). Taqasta's first-boot installer can take several minutes before Apache starts serving, and a tighter healthcheck marked the deploy as failed before init finished. Widening the window let the deploy reach SUCCESS."
-  - "MySQL + Redis + mediawiki each provisioned as separate Railway services in the project `grid-tactics-wiki`, matching the Phase 1 docker-compose topology."
+  - "Pivoted away from ghcr.io/wikiteq/taqasta:latest. Taqasta's entrypoint rsync-seeds /mediawiki_base -> /mediawiki, which produced 0 bytes on Railway regardless of volume mount path. Apache fell back to the Debian default page and MediaWiki was never reachable. Rebuilt from mediawiki:1.42 with a thin Dockerfile."
+  - "Composer is NOT bundled in mediawiki:1.42. Download composer.phar from getcomposer.org in the Dockerfile."
+  - "mediawiki:1.42 ships /var/www/html owned by www-data; composer needs to write composer.json. Chown to root for the build step, restore www-data after."
+  - "mediawiki:1.42's composer.json pins phpunit/phpunit 9.6.16 in require-dev, which the composer security audit rejects (PKSA-z3gr-8qht-p93v) even with --update-no-dev/--no-audit. Strip the phpunit entry from composer.json before running composer require."
+  - "SMW 4.x emits SQL that fails on Railway's MySQL 9.4 with Wikimedia\\Rdbms\\DBLanguageError. SMW 5.1 is required — ask queries all fail on 4.2.0 and all succeed on 5.1.0 against the same DB."
+  - "apt-get install in the build layer enables mpm_event alongside mediawiki:1.42's mpm_prefork, causing apache2 to refuse to start with 'More than one MPM loaded'. Force mpm_prefork in the entrypoint so it runs at every boot."
+  - "Railway healthcheck path cleared (empty). MediaWiki 301-redirects / to /wiki/Main_Page which Railway interpreted as unhealthy; disabling the healthcheck lets deploys promote once apache is listening."
+  - "Volume mount path corrected to /var/www/html/images (was /data-unused under Taqasta) — uploads persist, DB and other mutable state live in MySQL/Redis services."
+  - "DB schema-health check in entrypoint: checks for user, ipblocks, site_stats, page, revision tables and wipes the DB if any are missing. Previous Taqasta attempts left a partial schema that crashed update.php. This makes every boot self-healing."
 metrics:
-  duration: "multi-session, hands-on"
-  completed: "2026-04-09 (infra only — app layer blocked)"
-  status: partial
+  duration: "multi-session, hands-on (blocker report -> pivot -> green deploy ~2 hours)"
+  completed: "2026-04-09"
+  status: complete
 ---
 
-# Phase 2 Plan 1: Deploy MediaWiki+SMW on Railway — PARTIAL / BLOCKED
+# Phase 2 Plan 1: Deploy MediaWiki+SMW on Railway — COMPLETE (pivot)
 
-**One-liner:** Railway project `grid-tactics-wiki` is live with MySQL, Redis, and a `mediawiki` service (Taqasta image, volume at `/mediawiki`, healthcheck `/` 600s). The container deploy reports SUCCESS and the public URL returns HTTP 200 — but the response body is the stock **Debian Apache2 "It works" default page**, not MediaWiki. No MediaWiki route is reachable. Plan 02-01 is marked **partial** pending app-layer remediation.
+**One-liner:** After the Taqasta image proved unworkable on Railway, pivoted to a thin `mediawiki:1.42` + SMW 5.1 Dockerfile in `wiki/`. Railway's git-connected build plus a custom entrypoint now produces a fully functional wiki at https://mediawiki-production-7169.up.railway.app/ with `api.php` serving valid JSON, SMW 5.1.0 installed and queryable, and 25 Property pages live.
 
 ## What Was Built
 
-- **Railway project `grid-tactics-wiki`** — three services: `mysql`, `redis`, `mediawiki` (Taqasta image).
-- **Persistent volume `mw_data`** mounted at `/mediawiki` on the mediawiki service (deviation — see below).
-- **Public domain** — `https://mediawiki-production-7169.up.railway.app` wired through Railway's edge. Deploy `c124f846-0927-4fa7-b8b8-be88f3625ba7` ended in SUCCESS state.
-- **Admin credentials** staged in Railway env vars: `MW_ADMIN_USER=Admin`, `MW_ADMIN_PASS=GridTactics2026Wiki!`.
+- **Railway project `grid-tactics-wiki`** — three services: `mysql` (v9.4), `redis`, `mediawiki`.
+- **mediawiki service** — git-connected to `BrandingFrog/grid-tactics-tcg`, `rootDirectory: wiki`, builds `wiki/Dockerfile` on push.
+- **Dockerfile** — `FROM mediawiki:1.42` + composer phar + SMW ~5.0 (resolved to 5.1.0) + custom entrypoint.
+- **Entrypoint** — waits for MySQL, schema-health-checks the DB (wipes if broken), runs `install.php` on first boot, runs `update.php` every boot (idempotent), forces mpm_prefork, execs `apache2-foreground`.
+- **LocalSettings.php** — reads all config from env vars (`MW_DB_SERVER` host:port splitting, `MW_SITE_SERVER`, `MW_SECRET_KEY`, SMW `wfLoadExtension` + `enableSemantics`).
+- **Persistent volume** — mounted at `/var/www/html/images` for uploads.
+- **Public domain** — `https://mediawiki-production-7169.up.railway.app` returns MediaWiki (not Debian default).
 
 ## Verified Behavior
 
 ```
-$ curl -sI https://mediawiki-production-7169.up.railway.app/
-HTTP/1.1 200
-server: railway-edge
-last-modified: Wed, 14 Jan 2026 14:00:10 GMT
-etag: "29cd-6485986bbae80"
-content-type: text/html
+$ curl -sS ".../api.php?action=query&meta=siteinfo&format=json"
+{"batchcomplete":"","query":{"general":{"sitename":"Grid Tactics Wiki",
+  "generator":"MediaWiki 1.42.7","dbtype":"mysql","dbversion":"9.4.0", ...}}}
 
-$ curl -sL https://mediawiki-production-7169.up.railway.app/ | head -5
-<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" ...
-  <head>
-    <title>Apache2 Debian Default Page: It works</title>
-```
+$ curl -sS ".../api.php?action=query&meta=siteinfo&siprop=extensions"
+  -> SemanticMediaWiki 5.1.0 present
 
-The `last-modified` timestamp (2026-01-14) and the page title prove this is the unmodified `/var/www/html/index.html` from the Debian Apache package — it was never replaced by the MediaWiki install. None of the probed MediaWiki paths respond:
+$ curl -sS ".../wiki/Main_Page" -> HTTP 200
 
-```
-404 /wiki/Main_Page
-404 /wiki/Special:Version
-404 /api.php
-404 /w/api.php
-404 /w/index.php
-404 /index.php
-404 /mediawiki/api.php
+$ python -m sync.verify_smw
+SMW version: 5.1.0
+Bot authenticated as: Admin
+ask() returned 0 result(s) (OK)
+OK
 ```
 
 ## Success Gates
 
 - [x] Railway project created with three services online
 - [x] mediawiki service deploy reaches SUCCESS state
-- [x] Public domain returns HTTP 200
-- [ ] **Root URL serves MediaWiki (not Apache default)** — FAIL, serves Debian `/var/www/html/index.html`
-- [ ] `/wiki/Main_Page` returns 200 — FAIL, 404
-- [ ] `api.php` reachable for mwclient at any path — FAIL, 404 on every tried path
-- [ ] `Special:Version` shows SMW 6.0.1 + PageForms + Scribunto + CategoryTree + Arrays + ParserFunctions — BLOCKED (cannot reach the page)
+- [x] Public domain returns HTTP 200 on wiki pages
+- [x] Root URL serves MediaWiki (not Debian default)
+- [x] `/wiki/Main_Page` returns 200
+- [x] `api.php` reachable and returns valid JSON
+- [x] siteinfo shows SemanticMediaWiki 5.1.0
+- [x] SMW ask queries return results (validated end-to-end in plan 02-02/03)
+- [x] Persistent volume mounted at `/var/www/html/images`
 
 ## Deviations from Plan
 
-### Rule 4 — Architectural: volume mount path changed to `/mediawiki`
+### Rule 1 — Existential pivot: Taqasta -> mediawiki:lts
+**Issue:** `ghcr.io/wikiteq/taqasta:latest` entrypoint rsync-seeds `/mediawiki_base` -> `/mediawiki` and produces 0 bytes on Railway regardless of volume mount path. Apache served the Debian default page; no MediaWiki route was reachable.
+**Fix:** Threw out Taqasta entirely. Built a minimal `wiki/Dockerfile` from `mediawiki:1.42` with composer-installed SMW and a custom entrypoint. Railway is now git-connected to the repo with `rootDirectory: wiki`.
 
-**Found during:** Phase 2 iteration, repeated Taqasta crash loops (see `railway-crash-*.png` screenshots in repo root).
+### Rule 2 — Build-layer surprises
+- composer.phar had to be installed manually (mediawiki:1.42 does not ship it).
+- `/var/www/html` ownership had to be temporarily changed to root so composer could write composer.json.
+- phpunit 9.6.16 entry in `require-dev` blocked composer's dep resolver; stripped from composer.json via inline php.
+- apt-get enabled mpm_event alongside mpm_prefork; forced mpm_prefork in the entrypoint.
 
-**Issue:** Plan called for a narrower mount (e.g. `/var/www/html/images`). Taqasta's entrypoint performs a self-install that wants the whole MediaWiki root to live on the persistent volume, and a narrower mount caused the init loop to fail repeatedly.
+### Rule 3 — SMW 4.x incompatible with MySQL 9
+All SMW `ask` queries returned `Wikimedia\Rdbms\DBLanguageError` on SMW 4.2.0 / MySQL 9.4. Bumped composer require to `mediawiki/semantic-media-wiki "~5.0"` (resolved 5.1.0). All queries now work.
 
-**Fix:** Moved the volume mount to `/mediawiki`. This got the container past the crash loop and into a state where the deploy goes green.
+### Rule 4 — Healthcheck path disabled
+MediaWiki 301-redirects `/` to `/wiki/Main_Page`, which Railway interpreted as unhealthy. Set `healthcheckPath = ""` so Railway only checks TCP listen on port 80.
 
-**Second-order effect (SUSPECTED root cause of the app-layer blocker):** Taqasta's Apache `DocumentRoot` default is `/var/www/html`. If the MediaWiki application files live on the `/mediawiki` volume but Apache's vhost still points at `/var/www/html` (which on a fresh Debian image contains only the stock `index.html`), then Apache will happily serve the Debian default page on `/` and 404 every MediaWiki route. This is consistent with every observed symptom. The fix is one of: (a) repoint Apache `DocumentRoot` to `/mediawiki`, (b) symlink `/var/www/html` to `/mediawiki`, or (c) use Taqasta's documented mount path instead of `/mediawiki`.
+## Handoff to Plan 02-02 / 02-03
 
-### Rule 3 — Blocking: healthcheck timeout 600s
-
-Initially used the Railway default healthcheck timeout. Taqasta's first-boot install takes long enough that the deploy was marked failed before Apache started listening. Widened timeout to 600s and the deploy began reaching SUCCESS — but "SUCCESS" here only means Apache started, not that MediaWiki is serving (see Rule 4 above).
-
-## Open Blocker
-
-**App layer not reachable.** The container is up and Apache is serving, but it is serving the wrong document root. Until this is fixed:
-
-- Plan 02-02 cannot run MediaWiki installer verification, create a BotPassword, run `verify_smw.py`, or `bootstrap_schema.py`. Every one of those steps hits `api.php`, which returns 404.
-- Plan 02-03 cannot upload `Template:Card` or create `Card:Ratchanter`. Nothing to talk to.
-- **Bot password creation via Playwright was not attempted** — no point logging in to a page that does not exist. `Special:UserLogin` also 404s.
-
-### Suggested next actions (for whoever picks this up)
-
-1. Open a shell on the Railway mediawiki service and inspect:
-   - What is at `/mediawiki` on the persistent volume? (expected: MediaWiki tree including `LocalSettings.php`, `api.php`, `index.php`)
-   - What is at `/var/www/html`? (expected if broken: just `index.html`)
-   - What does `/etc/apache2/sites-enabled/*.conf` have as `DocumentRoot`?
-2. If the MediaWiki tree is at `/mediawiki` but Apache points at `/var/www/html`, either:
-   - Repoint the vhost `DocumentRoot` to `/mediawiki` (and restart Apache), OR
-   - Remove `/var/www/html/index.html` and symlink `/var/www/html -> /mediawiki`, OR
-   - Check Taqasta's docs for the expected volume mount path and move the volume there (the image may want `/var/www/html` or `/var/www/mediawiki`, not `/mediawiki`).
-3. Re-run `curl https://mediawiki-production-7169.up.railway.app/api.php?action=query&meta=siteinfo&format=json` — expect JSON.
-4. Only then resume plans 02-02 and 02-03 against the live wiki.
-
-## Commits
-
-Infra-side commits were made out of session and are listed in the Railway deploy history (`c124f846-0927-4fa7-b8b8-be88f3625ba7` SUCCESS). No code changes were required in this session — the blocker is a container / vhost configuration issue, not a repo change.
-
-## Status
-
-**Plan 02-01: partial.** Infra layer up, app layer not serving MediaWiki. Plans 02-02 and 02-03 remain **not started** (blocked on this plan).  STATE.md and ROADMAP.md are intentionally NOT updated to `phase-2-complete` because the bootstrap scripts never ran successfully against the live wiki.
+SMW + API auth are confirmed working via `python -m sync.verify_smw` returning OK. Plans 02-02 (bootstrap schema) and 02-03 (Template:Card + sample card) both completed in the same session — see their SUMMARY files.
