@@ -108,6 +108,11 @@ Plans:
 **Goal:** Every card page carries a complete per-patch change history, and deleted cards are preserved with a deprecated marker.
 **Depends on:** Phase 5
 **Requirements:** CARD-05, CARD-06
+**Plans:** 2 plans
+
+Plans:
+- [ ] 06-01-PLAN.md — Pure-function card history module, updated Card template with LastChangedPatch, DeprecatedCard template
+- [ ] 06-02-PLAN.md — Wire history tracking into patch sync pipeline, bootstrap templates on live wiki, end-to-end verification
 
 **Success Criteria:**
 1. After two simulated patch cycles that modify a card, its `== History ==` section lists both versions keyed by patch.
