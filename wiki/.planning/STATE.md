@@ -1,17 +1,17 @@
 ---
 milestone: v1.0
 status: phase-9-in-progress
-stopped_at: completed_09-02
+stopped_at: completed_09-03
 last_updated: 2026-04-09
 progress:
   phase: 9
   phase_name: Launch Polish
-  plan: 02
+  plan: 03
   phases_total: 9
   phases_completed: 8
-  plans_completed_in_phase: 2
+  plans_completed_in_phase: 3
   plans_total_in_phase: 4
-  percent: 92
+  percent: 94
 ---
 
 # Project State — Grid Tactics Wiki
@@ -21,22 +21,22 @@ progress:
 See: `.planning/PROJECT.md`
 
 **Core value:** Living, semantically-queryable knowledge base that auto-mirrors Grid Tactics card and mechanic state via git hooks.
-**Current focus:** Phase 9 in progress. Deck Building Guide page live. Continuing launch polish.
+**Current focus:** Phase 9 in progress. Weekly wiki backup in place. One plan remaining.
 
 ## Current Position
 
 Phase: 9 of 9 (Launch Polish)
-Plan: 02 of 4 complete -- Deck Building Guide with auto-updated archetypes
+Plan: 03 of 4 complete -- Weekly wiki backup via XML export + GitHub Actions
 Status: Phase 9 in progress.
-Last activity: 2026-04-09 -- Completed 09-02 (Deck Building Guide page)
+Last activity: 2026-04-09 -- Completed 09-03 (Weekly wiki backup)
 
-Progress: `█████████░` 92%
+Progress: `█████████░` 94%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 14
-- Average duration: ~11 min/plan
+- Total plans completed: 15
+- Average duration: ~10 min/plan
 
 **By Phase:**
 
@@ -48,7 +48,7 @@ Progress: `█████████░` 92%
 | 6 — Card History Tracking | 2 | 2 | ~5 min | complete |
 | 7 — Semantic Query Showcase & Homepage | 2 | 2 | ~3 min | complete |
 | 8 — Idempotency, Drift Detection & Reliability | 3 | 3 | ~2 min | complete |
-| 9 — Launch Polish | 2 | 4 | ~2 min | in progress |
+| 9 — Launch Polish | 3 | 4 | ~2 min | in progress |
 
 ## Accumulated Context
 
@@ -88,6 +88,7 @@ Progress: `█████████░` 92%
 - **[08-02]** Batch-level try/except catches Exception but not KeyboardInterrupt; per-card try/except stays as-is for graceful individual failures.
 - **[09-02]** Element flavor text derived from element names (Fire=aggressive, Dark=sacrifice/drain, etc.) for deck guide archetypes.
 - **[09-02]** Tribe synergies section only shows tribes with 3+ cards to avoid noise in the guide.
+- **[09-03]** XML export via MediaWiki API (not mysqldump) because Railway doesn't expose MariaDB port externally. Importable via `importDump.php`.
 - Tech stack locked: MediaWiki + SMW, MariaDB, Docker, Railway, Python `mwclient` (tentative), git post-commit hook.
 - JSON in `data/cards/*.json` is canonical; wiki is a projection, never source of truth.
 - Wiki lives as a subproject at `wiki/` inside the grid-tactics repo for direct file access.
@@ -118,7 +119,8 @@ Progress: `█████████░` 92%
 
 ### Pending Todos
 
-- **Phase 9 in progress.** 09-01 and 09-02 complete. Next: 09-03, 09-04.
+- **Phase 9 in progress.** 09-01 through 09-03 complete. Next: 09-04.
+- GitHub secrets (MW_API_URL, MW_BOT_USER, MW_BOT_PASS, MW_API_PATH) must be configured in the repo for wiki-backup.yml workflow to run.
 - Phase 2 watch item: BotPassword must be recreated on the Railway instance (credential lives in the wiki DB, doesn't port across). Automate via `createBotPassword.php` one-shot after deploy.
 - Phase 3 watch item: `CardType`/`Element` Page-type properties with `[[Allows value::X]]` produce red-links until stub pages are created. Decide whether to auto-create stubs or accept red-links.
 - Phase 1 open checkpoints (deferred in 14.x posture, not blocking):
@@ -135,5 +137,5 @@ Progress: `█████████░` 92%
 ## Session Continuity
 
 Last session: 2026-04-09
-Stopped at: Completed 09-02 -- Deck Building Guide page with auto-updated archetypes. Phase 9 in progress.
+Stopped at: Completed 09-03 -- Weekly wiki backup via XML export + GitHub Actions. Phase 9 in progress.
 Resume file: None
