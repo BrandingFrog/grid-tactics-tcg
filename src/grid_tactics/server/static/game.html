@@ -103,22 +103,6 @@
   <!-- Screen: Deck Builder -->
   <div id="screen-deck-builder" class="screen">
     <div class="deck-builder-layout">
-      <!-- Top Bar: Slot Controls -->
-      <div class="deck-topbar">
-        <button class="btn btn-secondary" id="btn-back-lobby">Back to Lobby</button>
-        <div class="slot-controls">
-          <input type="text" id="deck-slot-name" class="input input-slot-name" placeholder="Deck Name" maxlength="20">
-          <button class="btn btn-primary btn-sm" id="btn-save-deck">Save Deck</button>
-          <select id="deck-load-select" class="input select select-sm">
-            <option value="">Load Slot...</option>
-            <!-- 5 slots populated by JS -->
-          </select>
-          <button class="btn btn-danger btn-sm" id="btn-delete-slot">Delete Slot</button>
-          <button class="btn btn-secondary btn-sm" id="btn-export-deck" title="Copy deck as a shareable code">Export Code</button>
-          <button class="btn btn-secondary btn-sm" id="btn-import-deck" title="Paste a deck code to load">Import Code</button>
-        </div>
-      </div>
-
       <div class="deck-builder-body">
         <!-- Card Tooltip Sidebar (left) -->
         <div class="tooltip-sidebar" id="deck-tooltip-sidebar">
@@ -198,15 +182,31 @@
           </div>
         </div>
 
-        <!-- Deck List Sidebar (right) -->
+        <!-- Deck Sidebar (right) -->
         <div class="deck-sidebar">
-          <h3 class="section-heading">Current Deck</h3>
+          <!-- Deck name + save -->
+          <div class="deck-save-row">
+            <input type="text" id="deck-slot-name" class="input input-slot-name" placeholder="Deck Name" maxlength="20">
+            <button class="btn btn-primary btn-sm" id="btn-save-deck">Save</button>
+          </div>
+
+          <!-- Load slot -->
+          <div class="deck-load-row">
+            <select id="deck-load-select" class="input select select-sm" style="flex:1;">
+              <option value="">Load Slot...</option>
+              <!-- 5 slots populated by JS -->
+            </select>
+            <button class="btn btn-danger btn-sm" id="btn-delete-slot" title="Delete this slot">Del</button>
+          </div>
+
+          <!-- Validation -->
           <div class="deck-validation" id="deck-validation">
             <span class="deck-count" id="deck-count">0/30 cards</span>
             <span class="deck-status" id="deck-status">Need 30 cards</span>
           </div>
+
+          <!-- Card list -->
           <div class="deck-list" id="deck-list">
-            <!-- Grouped by type, populated by JS -->
             <div class="deck-group" data-type="minion">
               <h4 class="deck-group-title">Minions</h4>
               <div class="deck-group-items" id="deck-minions"></div>
@@ -219,6 +219,12 @@
               <h4 class="deck-group-title">React</h4>
               <div class="deck-group-items" id="deck-react"></div>
             </div>
+          </div>
+
+          <!-- Share -->
+          <div class="deck-share-row">
+            <button class="btn btn-secondary btn-sm" id="btn-export-deck" title="Copy deck as a shareable code" style="flex:1;">Export</button>
+            <button class="btn btn-secondary btn-sm" id="btn-import-deck" title="Paste a deck code to load" style="flex:1;">Import</button>
           </div>
         </div>
       </div>

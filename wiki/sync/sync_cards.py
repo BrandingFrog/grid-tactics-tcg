@@ -418,11 +418,7 @@ def card_to_wikitext(
     if is_minion and card.get("range") is not None:
         range_val = "[[Melee]]" if card.get("range") == 0 else f"[[Ranged|Range {card.get('range')}]]"
         meta_rows.append(f"{{{{!}}}}-\n! {_row_style} {{{{!}}}} Range\n{{{{!}}}} {_val_style} {{{{!}}}} {range_val}")
-    # Filter Melee/Ranged from keywords — already linked in the Range row
-    display_kws = [kw for kw in keywords if kw not in ("Melee", "Ranged")]
-    if display_kws:
-        kw_links = "<br/>".join(f"[[{kw}]]" for kw in display_kws)
-        meta_rows.append(f"{{{{!}}}}-\n! {_row_style} {{{{!}}}} Keywords\n{{{{!}}}} {_val_style} {{{{!}}}} {kw_links}")
+    # Keywords row removed — keywords are linked inline in effect text instead
     if meta_rows:
         fields["meta_rows"] = "\n".join(meta_rows)
 

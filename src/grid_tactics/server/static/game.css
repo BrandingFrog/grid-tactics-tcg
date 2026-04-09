@@ -367,28 +367,31 @@ body {
 .deck-builder-layout {
   max-width: none;
   margin: 0;
-  padding: 8px 16px;
+  padding: 8px;
   height: calc(100vh - 52px);
   display: flex;
   flex-direction: column;
   overflow: hidden;
 }
 
-.deck-topbar {
+/* Deck sidebar control rows */
+.deck-save-row,
+.deck-load-row,
+.deck-share-row {
   display: flex;
+  gap: 6px;
   align-items: center;
-  gap: 8px;
-  margin-bottom: 8px;
-  flex-wrap: wrap;
-  flex-shrink: 0;
 }
 
-.slot-controls {
-  display: flex;
-  align-items: center;
-  gap: 8px;
+.deck-save-row .input-slot-name {
   flex: 1;
-  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.deck-share-row {
+  margin-top: auto;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
 }
 
 .deck-builder-body {
@@ -547,8 +550,11 @@ body {
   border: 1px solid var(--border);
   border-radius: 10px;
   padding: 12px;
-  overflow-y: auto;
+  overflow: hidden;
   min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
 .deck-validation {
@@ -557,8 +563,14 @@ body {
   justify-content: space-between;
   padding: 8px 12px;
   border-radius: 6px;
-  margin-bottom: 12px;
   background: var(--card2);
+  flex-shrink: 0;
+}
+
+.deck-list {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
 }
 
 .deck-count {
@@ -2323,10 +2335,6 @@ body {
 
   /* Deck Builder */
   .deck-builder-layout { padding: 4px 8px; height: calc(100vh - 44px); }
-  .deck-topbar { gap: 4px; margin-bottom: 4px; }
-  .deck-topbar .btn { padding: 6px 10px; font-size: 10px; }
-  .deck-topbar .input { font-size: 10px; padding: 6px 8px; }
-  .deck-topbar .select { font-size: 10px; }
 
   .deck-builder-body { grid-template-columns: 1fr; }
   .card-browser { padding: 8px; }
