@@ -1234,7 +1234,11 @@ body {
   font-size: 1.6em;
   opacity: 0.8;
   -webkit-text-stroke: 0;
-  filter: none;
+  filter:
+    drop-shadow(0 0 1.2px black)
+    drop-shadow(0 0 1.2px black)
+    drop-shadow(0 0 1.2px black)
+    drop-shadow(0 0 1.2px black);
 }
 
 .stat-num {
