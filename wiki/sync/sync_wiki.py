@@ -360,6 +360,10 @@ def main(argv: list[str] | None = None) -> int:
         help="Verify all taxonomy pages (elements, tribes, keywords, rules)",
     )
     group.add_argument(
+        "--homepage", action="store_true",
+        help="Sync the Main Page (navigation hub)",
+    )
+    group.add_argument(
         "--patch", action="store_true",
         help="Sync pending patch notes to wiki",
     )
@@ -367,11 +371,45 @@ def main(argv: list[str] | None = None) -> int:
         "--patch-commit", type=str, metavar="SHA",
         help="Sync a specific commit's patch notes",
     )
+    group.add_argument(
+        "--showcase", action="store_true",
+        help="Sync the Semantic:Showcase query demonstration page",
+    )
     parser.add_argument(
         "--dry-run", action="store_true",
         help="Show what would change without making edits",
     )
     args = parser.parse_args(argv)
+
+    # --homepage
+    if args.homepage:
+        from sync.sync_homepage import sync_main_page
+
+        try:
+            site = get_site()
+        except MissingCredentialsError as exc:
+            print(f"ERROR: {exc}", file=sys.stderr)
+            return 2
+        dry_label = " (dry run)" if args.dry_run else ""
+        print(f"Syncing Main Page{dry_label}...")
+        status = sync_main_page(site, dry_run=args.dry_run)
+        print(f"Main Page: {status}")
+        return 0
+
+    # --showcase
+    if args.showcase:
+        from sync.sync_showcase import sync_showcase_page
+
+        try:
+            site = get_site()
+        except MissingCredentialsError as exc:
+            print(f"ERROR: {exc}", file=sys.stderr)
+            return 2
+        dry_label = " (dry run)" if args.dry_run else ""
+        print(f"Syncing Semantic:Showcase{dry_label}...")
+        status = sync_showcase_page(site, dry_run=args.dry_run)
+        print(f"Semantic:Showcase: {status}")
+        return 0
 
     # --patch (no card loading needed)
     if args.patch:
