@@ -393,7 +393,7 @@ body {
 
 .deck-builder-body {
   display: grid;
-  grid-template-columns: 220px 1fr 240px;
+  grid-template-columns: 280px 1fr 240px;
   gap: 8px;
   flex: 1;
   min-height: 0;
@@ -655,7 +655,7 @@ body {
 
 .game-layout {
   display: grid;
-  grid-template-columns: 220px 1fr 220px;
+  grid-template-columns: 280px 1fr 220px;
   gap: 8px;
   max-width: none;
   margin: 0;
@@ -2229,6 +2229,7 @@ body {
   flex-direction: column;
   min-height: 0;
   overflow: hidden;
+  overflow-x: hidden;
   position: relative;
 }
 
