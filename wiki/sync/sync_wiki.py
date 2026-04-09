@@ -316,11 +316,67 @@ def main(argv: list[str] | None = None) -> int:
         "--verify-taxonomy", action="store_true",
         help="Verify all taxonomy pages (elements, tribes, keywords, rules)",
     )
+    group.add_argument(
+        "--patch", action="store_true",
+        help="Sync pending patch notes to wiki",
+    )
+    group.add_argument(
+        "--patch-commit", type=str, metavar="SHA",
+        help="Sync a specific commit's patch notes",
+    )
     parser.add_argument(
         "--dry-run", action="store_true",
         help="Show what would change without making edits",
     )
     args = parser.parse_args(argv)
+
+    # --patch (no card loading needed)
+    if args.patch:
+        from sync.sync_patches import bootstrap_patch_template, sync_all_pending
+
+        try:
+            site = get_site()
+        except MissingCredentialsError as exc:
+            print(f"ERROR: {exc}", file=sys.stderr)
+            return 2
+        # Ensure template exists
+        tmpl_status = bootstrap_patch_template(site)
+        if tmpl_status != "unchanged":
+            print(f"  Template:Patch: {tmpl_status}")
+        results = sync_all_pending(site, _REPO_ROOT, args.dry_run)
+        if not results:
+            print("No pending patch changes.")
+        else:
+            for r in results:
+                print(f"  {r.get('page', r.get('version', '?'))}: {r['status']}")
+        return 0
+
+    # --patch-commit SHA
+    if args.patch_commit:
+        import subprocess as _sp
+
+        from sync.sync_patches import bootstrap_patch_template, sync_patch
+
+        try:
+            site = get_site()
+        except MissingCredentialsError as exc:
+            print(f"ERROR: {exc}", file=sys.stderr)
+            return 2
+        tmpl_status = bootstrap_patch_template(site)
+        if tmpl_status != "unchanged":
+            print(f"  Template:Patch: {tmpl_status}")
+        # Get parent of the specified commit
+        result = _sp.run(
+            ["git", "rev-parse", f"{args.patch_commit}^"],
+            capture_output=True, text=True, cwd=str(_REPO_ROOT),
+        )
+        if result.returncode != 0:
+            print(f"ERROR: cannot find parent of {args.patch_commit}", file=sys.stderr)
+            return 1
+        parent = result.stdout.strip()
+        r = sync_patch(site, _REPO_ROOT, parent, args.patch_commit, dry_run=args.dry_run)
+        print(f"  {r.get('page', r.get('version', '?'))}: {r['status']}")
+        return 0
 
     # Load cards
     cards = load_all_cards(_CARDS_DIR)

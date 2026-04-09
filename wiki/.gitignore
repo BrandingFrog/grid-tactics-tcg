@@ -1,3 +1,4 @@
 .env
 *.log
 __pycache__/
+.sync_state.json
