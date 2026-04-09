@@ -146,6 +146,12 @@ Plans:
 **Goal:** The sync pipeline is safe to run repeatedly, detects any drift between JSON and wiki, and fails loudly in CI.
 **Depends on:** Phase 5
 **Requirements:** AUTO-02, AUTO-03, AUTO-04, AUTO-05, AUTO-06
+**Plans:** 3 plans
+
+Plans:
+- [ ] 08-01-PLAN.md — Idempotency and dry-run mock tests
+- [ ] 08-02-PLAN.md — Drift detection CLI (check_drift.py) and resume manifest
+- [ ] 08-03-PLAN.md — GitHub Actions drift-check workflow and check_drift unit tests
 
 **Success Criteria:**
 1. Two sequential sync runs against the same state produce zero edits on the second run (verified by test).
