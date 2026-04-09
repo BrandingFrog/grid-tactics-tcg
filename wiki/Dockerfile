@@ -12,9 +12,14 @@ RUN curl -sSLo /usr/local/bin/composer https://getcomposer.org/download/latest-s
 
 WORKDIR /var/www/html
 
+# mediawiki image ships /var/www/html owned by www-data; composer needs to write
+# composer.json/composer.lock here. Temporarily loosen ownership for the build step.
+RUN chown -R root:root /var/www/html
+
 # Install Semantic MediaWiki via composer
 RUN composer require --no-update mediawiki/semantic-media-wiki "~4.1" \
- && composer update --no-dev --optimize-autoloader
+ && COMPOSER_ALLOW_SUPERUSER=1 composer update --no-dev --optimize-autoloader \
+ && chown -R www-data:www-data /var/www/html
 
 # Stage our LocalSettings template (entrypoint copies it into place post-install)
 COPY LocalSettings.php /tmp/LocalSettings.template.php
