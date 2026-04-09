@@ -16,11 +16,30 @@ for i in $(seq 1 60); do
   sleep 2
 done
 
-# Detect whether MediaWiki tables exist in the target DB
-TABLES_EXIST=$(mysql -h "$DB_HOST" -P "$DB_PORT" -u "$MW_DB_USER" -p"$MW_DB_PASS" -N -B -e \
-  "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='${MW_DB_NAME}' AND table_name='user';" 2>/dev/null || echo 0)
+# Detect whether MediaWiki schema is present and complete. Check for several
+# core tables — previous Taqasta attempts may have left a half-installed DB
+# (e.g. 'user' present but 'ipblocks' missing). If any required table is
+# missing, wipe the DB and run install.php fresh.
+MYSQL_FLAGS=(-h "$DB_HOST" -P "$DB_PORT" -u "$MW_DB_USER" -p"$MW_DB_PASS")
+REQ_TABLES="user ipblocks site_stats page revision"
+SCHEMA_OK=1
+for t in $REQ_TABLES; do
+  exists=$(mysql "${MYSQL_FLAGS[@]}" -N -B -e \
+    "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='${MW_DB_NAME}' AND table_name='${t}';" 2>/dev/null || echo 0)
+  if [ "${exists:-0}" = "0" ]; then
+    echo "[entrypoint] required table '${t}' missing — schema incomplete"
+    SCHEMA_OK=0
+    break
+  fi
+done
 
-if [ "${TABLES_EXIST:-0}" = "0" ]; then
+if [ "$SCHEMA_OK" = "0" ]; then
+  echo "[entrypoint] Dropping any stale tables in ${MW_DB_NAME} before install..."
+  mysql "${MYSQL_FLAGS[@]}" -N -B -e \
+    "SELECT CONCAT('DROP TABLE IF EXISTS \`', table_name, '\`;') FROM information_schema.tables WHERE table_schema='${MW_DB_NAME}';" \
+    "$MW_DB_NAME" 2>/dev/null | \
+    (echo "SET FOREIGN_KEY_CHECKS=0;"; cat; echo "SET FOREIGN_KEY_CHECKS=1;") | \
+    mysql "${MYSQL_FLAGS[@]}" "$MW_DB_NAME" || true
   echo "[entrypoint] MediaWiki not installed — running install.php..."
   php maintenance/install.php \
     --dbtype=mysql \

@@ -3,7 +3,11 @@ FROM mediawiki:1.42
 # Install system deps (git needed by composer for some packages)
 RUN apt-get update && apt-get install -y --no-install-recommends \
       git unzip default-mysql-client ca-certificates curl \
-  && rm -rf /var/lib/apt/lists/*
+  && rm -rf /var/lib/apt/lists/* \
+  # apt upgrade of apache2 packages may enable mpm_event alongside mpm_prefork;
+  # mediawiki:1.42 uses mpm_prefork (required for mod_php). Force it.
+  && a2dismod mpm_event mpm_worker 2>/dev/null || true \
+  && a2enmod mpm_prefork
 
 # Install composer (phar) — mediawiki:1.42 does NOT ship composer
 RUN curl -sSLo /usr/local/bin/composer https://getcomposer.org/download/latest-stable/composer.phar \
