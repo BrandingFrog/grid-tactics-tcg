@@ -1,17 +1,17 @@
 ---
 milestone: v1.0
-status: phase-3-complete
-stopped_at: completed_03-03
+status: phase-4-in-progress
+stopped_at: completed_04-01
 last_updated: 2026-04-09
 progress:
-  phase: 3
-  phase_name: Card Page Generator
-  plan: 03
+  phase: 4
+  phase_name: Taxonomy Pages
+  plan: 01
   phases_total: 9
   phases_completed: 3
-  plans_completed_in_phase: 3
-  plans_total_in_phase: 3
-  percent: 33
+  plans_completed_in_phase: 1
+  plans_total_in_phase: 2
+  percent: 37
 ---
 
 # Project State — Grid Tactics Wiki
@@ -21,16 +21,16 @@ progress:
 See: `.planning/PROJECT.md`
 
 **Core value:** Living, semantically-queryable knowledge base that auto-mirrors Grid Tactics card and mechanic state via git hooks.
-**Current focus:** Phase 3 complete — ready for Phase 4 (Taxonomy Pages)
+**Current focus:** Phase 4 in progress — Taxonomy Pages (element + tribe pages live, keywords/rules next)
 
 ## Current Position
 
-Phase: 3 of 9 (Card Page Generator) -- COMPLETE
-Plan: 03 of 3 complete — sync_wiki.py CLI with bulk card upsert, art upload, and deep verification.
-Status: Phase 3 complete. All 34 cards synced, 15 art PNGs uploaded, idempotent, verified.
-Last activity: 2026-04-09 — Completed 03-03 (sync_wiki.py CLI, all 34 cards live on wiki)
+Phase: 4 of 9 (Taxonomy Pages)
+Plan: 01 of 2 complete — 21 taxonomy pages (7 elements + 14 tribes) synced to live wiki.
+Status: In progress. Plan 02 (keywords + rules pages) next.
+Last activity: 2026-04-09 — Completed 04-01 (sync_taxonomy.py + 21 taxonomy pages live)
 
-Progress: `███░░░░░░░` 33%
+Progress: `████░░░░░░` 37%
 
 ## Performance Metrics
 
@@ -56,6 +56,9 @@ Progress: `███░░░░░░░` 33%
 - **[03-02]** After template changes, existing pages need purge + null edit to force re-categorization (MediaWiki job queue may be slow).
 - **[03-03]** Card:Rat cross-link target is actually Card:Common Rat (the JSON `name` field is "Common Rat"). All cross-links resolve correctly.
 - **[03-03]** MediaWiki `fileexists-no-change` on duplicate art uploads treated as "unchanged" for idempotent re-runs.
+- **[04-01]** Element and tribe page titles are bare names (Fire, Rat), not namespaced. SMW ask queries resolve correctly.
+- **[04-01]** `upsert_taxonomy_pages()` is a generic reusable function for any taxonomy page type (elements, tribes, keywords, rules).
+- **[04-01]** Mage/Rat tribe page works with slash in title (MediaWiki subpage behavior is acceptable here).
 - Tech stack locked: MediaWiki + SMW, MariaDB, Docker, Railway, Python `mwclient` (tentative), git post-commit hook.
 - JSON in `data/cards/*.json` is canonical; wiki is a projection, never source of truth.
 - Wiki lives as a subproject at `wiki/` inside the grid-tactics repo for direct file access.
@@ -107,5 +110,5 @@ Progress: `███░░░░░░░` 33%
 ## Session Continuity
 
 Last session: 2026-04-09
-Stopped at: Completed 03-03 — Phase 3 complete. All 34 card pages live on wiki with art and cross-links.
-Resume file: None (ready for Phase 4)
+Stopped at: Completed 04-01 — 21 taxonomy pages live (7 elements + 14 tribes). sync_taxonomy.py ready for reuse.
+Resume file: None (ready for 04-02)
