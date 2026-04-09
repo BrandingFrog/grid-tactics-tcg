@@ -1,12 +1,12 @@
 ---
 milestone: v1.0
 status: phase-9-in-progress
-stopped_at: completed_09-03
+stopped_at: completed_09-01
 last_updated: 2026-04-09
 progress:
   phase: 9
   phase_name: Launch Polish
-  plan: 03
+  plan: 01
   phases_total: 9
   phases_completed: 8
   plans_completed_in_phase: 3
@@ -21,14 +21,14 @@ progress:
 See: `.planning/PROJECT.md`
 
 **Core value:** Living, semantically-queryable knowledge base that auto-mirrors Grid Tactics card and mechanic state via git hooks.
-**Current focus:** Phase 9 in progress. Weekly wiki backup in place. One plan remaining.
+**Current focus:** Phase 9 in progress. Mobile CSS, logo, favicon, and search verification live. One plan remaining (09-04).
 
 ## Current Position
 
 Phase: 9 of 9 (Launch Polish)
-Plan: 03 of 4 complete -- Weekly wiki backup via XML export + GitHub Actions
-Status: Phase 9 in progress.
-Last activity: 2026-04-09 -- Completed 09-03 (Weekly wiki backup)
+Plan: 01 of 4 complete (also 02, 03 done) -- Mobile CSS, logo/favicon, search verification
+Status: Phase 9 in progress. 3 of 4 plans complete.
+Last activity: 2026-04-09 -- Completed 09-01 (Launch polish: mobile CSS, logo, favicon, search)
 
 Progress: `█████████░` 94%
 
@@ -48,7 +48,7 @@ Progress: `█████████░` 94%
 | 6 — Card History Tracking | 2 | 2 | ~5 min | complete |
 | 7 — Semantic Query Showcase & Homepage | 2 | 2 | ~3 min | complete |
 | 8 — Idempotency, Drift Detection & Reliability | 3 | 3 | ~2 min | complete |
-| 9 — Launch Polish | 3 | 4 | ~2 min | in progress |
+| 9 — Launch Polish | 3 | 4 | ~4 min | in progress |
 
 ## Accumulated Context
 
@@ -88,6 +88,8 @@ Progress: `█████████░` 94%
 - **[08-02]** Batch-level try/except catches Exception but not KeyboardInterrupt; per-card try/except stays as-is for graceful individual failures.
 - **[09-02]** Element flavor text derived from element names (Fire=aggressive, Dark=sacrifice/drain, etc.) for deck guide archetypes.
 - **[09-02]** Tribe synergies section only shows tribes with 3+ cards to avoid noise in the guide.
+- **[09-01]** Favicon uses PNG format (not ICO) because Railway MediaWiki bans ICO uploads. JS injection in Common.js references Favicon.png.
+- **[09-01]** Ranged keyword search uses `srwhat=text` for full-text content matching (default search mode misses template parameters).
 - **[09-03]** XML export via MediaWiki API (not mysqldump) because Railway doesn't expose MariaDB port externally. Importable via `importDump.php`.
 - Tech stack locked: MediaWiki + SMW, MariaDB, Docker, Railway, Python `mwclient` (tentative), git post-commit hook.
 - JSON in `data/cards/*.json` is canonical; wiki is a projection, never source of truth.
@@ -119,7 +121,7 @@ Progress: `█████████░` 94%
 
 ### Pending Todos
 
-- **Phase 9 in progress.** 09-01 through 09-03 complete. Next: 09-04.
+- **Phase 9 in progress.** 09-01, 09-02, 09-03 complete. Next: 09-04.
 - GitHub secrets (MW_API_URL, MW_BOT_USER, MW_BOT_PASS, MW_API_PATH) must be configured in the repo for wiki-backup.yml workflow to run.
 - Phase 2 watch item: BotPassword must be recreated on the Railway instance (credential lives in the wiki DB, doesn't port across). Automate via `createBotPassword.php` one-shot after deploy.
 - Phase 3 watch item: `CardType`/`Element` Page-type properties with `[[Allows value::X]]` produce red-links until stub pages are created. Decide whether to auto-create stubs or accept red-links.
@@ -137,5 +139,5 @@ Progress: `█████████░` 94%
 ## Session Continuity
 
 Last session: 2026-04-09
-Stopped at: Completed 09-03 -- Weekly wiki backup via XML export + GitHub Actions. Phase 9 in progress.
+Stopped at: Completed 09-01 -- Mobile CSS, logo/favicon, search verification pushed to live wiki. Phase 9 in progress (3/4 plans done).
 Resume file: None
