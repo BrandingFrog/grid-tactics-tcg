@@ -1,17 +1,17 @@
 ---
 milestone: v1.0
-status: phase-6-in-progress
-stopped_at: completed_06-01
+status: phase-6-complete
+stopped_at: completed_06-02
 last_updated: 2026-04-09
 progress:
   phase: 6
   phase_name: Card History Tracking
-  plan: 01
+  plan: 02
   phases_total: 9
-  phases_completed: 5
-  plans_completed_in_phase: 1
+  phases_completed: 6
+  plans_completed_in_phase: 2
   plans_total_in_phase: 2
-  percent: 60
+  percent: 66
 ---
 
 # Project State — Grid Tactics Wiki
@@ -21,22 +21,22 @@ progress:
 See: `.planning/PROJECT.md`
 
 **Core value:** Living, semantically-queryable knowledge base that auto-mirrors Grid Tactics card and mechanic state via git hooks.
-**Current focus:** Phase 6 in progress. Plan 01 complete, Plan 02 next.
+**Current focus:** Phase 6 complete. Ready for Phase 7 (Semantic Query Showcase & Homepage).
 
 ## Current Position
 
-Phase: 6 of 9 (Card History Tracking)
-Plan: 01 of 2 complete -- card_history.py module, Card.wiki LastChangedPatch, DeprecatedCard.wiki
-Status: In progress. Plan 02 next (wire into sync pipeline).
-Last activity: 2026-04-09 -- Completed 06-01 (card history building blocks)
+Phase: 6 of 9 (Card History Tracking) -- COMPLETE
+Plan: 02 of 2 complete -- card history wired into sync pipeline, templates bootstrapped on live wiki
+Status: Phase 6 complete. Phase 7 next.
+Last activity: 2026-04-09 -- Completed 06-02 (wire history into sync pipeline)
 
-Progress: `██████░░░░` 60%
+Progress: `███████░░░` 66%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 8
-- Average duration: ~13 min/plan
+- Total plans completed: 10
+- Average duration: ~12 min/plan
 
 **By Phase:**
 
@@ -45,6 +45,7 @@ Progress: `██████░░░░` 60%
 | 1 — Foundation & Schema Design | 4 | 4 | ~18 min | complete |
 | 4 — Taxonomy Pages | 2 | 2 | ~5 min | complete |
 | 5 — Patch Notes Generator | 2 | 2 | ~9 min | complete |
+| 6 — Card History Tracking | 2 | 2 | ~5 min | complete |
 
 ## Accumulated Context
 
@@ -72,6 +73,8 @@ Progress: `██████░░░░` 60%
 - **[06-01]** History entries sorted newest-first by reverse lexicographic version string (consistent with Phase 5).
 - **[06-01]** DeprecatedCard template keeps page in Category:Card AND Category:Deprecated for SMW query discoverability.
 - **[06-01]** LastChangedPatch is a distinct SMW property from FirstPatch (tracks most recent modification vs. introduction).
+- **[06-02]** Template bootstraps (Patch, DeprecatedCard, Card) run unconditionally before patch sync, not gated by dry-run.
+- **[06-02]** Card history entries deduplicated by version string to prevent double-entries on re-run.
 - Tech stack locked: MediaWiki + SMW, MariaDB, Docker, Railway, Python `mwclient` (tentative), git post-commit hook.
 - JSON in `data/cards/*.json` is canonical; wiki is a projection, never source of truth.
 - Wiki lives as a subproject at `wiki/` inside the grid-tactics repo for direct file access.
@@ -102,8 +105,7 @@ Progress: `██████░░░░` 60%
 
 ### Pending Todos
 
-- **Phase 6 Plan 01 complete.** Next action: Phase 6 Plan 02 (wire history into sync pipeline).
-- Plan 06-02 will import card_history.py functions and integrate with sync_cards.py to auto-generate history sections.
+- **Phase 6 complete.** Next action: Phase 7 (Semantic Query Showcase & Homepage).
 - Phase 2 watch item: BotPassword must be recreated on the Railway instance (credential lives in the wiki DB, doesn't port across). Automate via `createBotPassword.php` one-shot after deploy.
 - Phase 3 watch item: `CardType`/`Element` Page-type properties with `[[Allows value::X]]` produce red-links until stub pages are created. Decide whether to auto-create stubs or accept red-links.
 - Phase 1 open checkpoints (deferred in 14.x posture, not blocking):
@@ -120,5 +122,5 @@ Progress: `██████░░░░` 60%
 ## Session Continuity
 
 Last session: 2026-04-09
-Stopped at: Completed 06-01 -- card_history.py, Card.wiki LastChangedPatch, DeprecatedCard.wiki template.
-Resume file: None (ready for 06-02)
+Stopped at: Completed 06-02 -- card history wired into sync pipeline, templates live on wiki.
+Resume file: None (ready for Phase 7)
