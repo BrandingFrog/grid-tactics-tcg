@@ -16,9 +16,14 @@ WORKDIR /var/www/html
 # composer.json/composer.lock here. Temporarily loosen ownership for the build step.
 RUN chown -R root:root /var/www/html
 
-# Install Semantic MediaWiki via composer
-RUN composer require --no-update mediawiki/semantic-media-wiki "~4.1" \
- && COMPOSER_ALLOW_SUPERUSER=1 composer update --no-dev --optimize-autoloader \
+# Install Semantic MediaWiki via composer. mediawiki:1.42 ships with a
+# pinned phpunit dev dep that has a security advisory blocking updates —
+# use --update-no-dev so dev deps are never resolved, and --no-audit to
+# suppress the advisory check entirely.
+ENV COMPOSER_ALLOW_SUPERUSER=1
+RUN composer require --no-interaction --no-audit --update-no-dev \
+      mediawiki/semantic-media-wiki "~4.1" \
+ && composer dump-autoload --optimize --no-dev \
  && chown -R www-data:www-data /var/www/html
 
 # Stage our LocalSettings template (entrypoint copies it into place post-install)
