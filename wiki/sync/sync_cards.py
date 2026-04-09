@@ -62,14 +62,15 @@ _REACT_CONDITION_TEXT_STR: dict[str, str] = {
 # Effect templates
 # ---------------------------------------------------------------------------
 
-# Trigger index -> prefix text (matches game.js triggerMap)
-_TRIGGER_PREFIX: dict[int, str] = {
-    0: "Summon",  # on_play for minions; empty for spells
-    1: "Death",
-    2: "Attack",
-    3: "Damaged",
-    4: "Move",
-    5: "Passive",
+# Trigger -> prefix text (matches game.js triggerMap)
+# Supports both int keys (from tensor engine) and string keys (from card JSON)
+_TRIGGER_PREFIX: dict[int | str, str] = {
+    0: "Summon", "on_play": "Summon",
+    1: "Death", "on_death": "Death",
+    2: "Attack", "on_attack": "Attack",
+    3: "Damaged", "on_damaged": "Damaged",
+    4: "Move", "on_move": "Move",
+    5: "Passive", "passive": "Passive",
 }
 
 
@@ -219,7 +220,7 @@ def build_rules_text(card: dict, name_map: dict[str, str] | None = None) -> str:
         trigger_idx = eff.get("trigger", 0)
         trigger = _TRIGGER_PREFIX.get(trigger_idx, "")
         # on_play trigger only shows "Summon" for minions
-        if trigger_idx == 0 and not is_minion:
+        if trigger_idx in (0, "on_play") and not is_minion:
             trigger = ""
         pfx = f"{trigger}: " if trigger else ""
         amount = eff.get("amount", 0)
@@ -228,7 +229,7 @@ def build_rules_text(card: dict, name_map: dict[str, str] | None = None) -> str:
 
         if eff_type == "damage":
             desc = f"{pfx}Deal {amount} damage"
-            if target == 1:
+            if target in (1, "all"):
                 desc += " to all enemies"
         elif eff_type == "heal":
             desc = f"{pfx}Heal {amount}"
@@ -257,7 +258,11 @@ def build_rules_text(card: dict, name_map: dict[str, str] | None = None) -> str:
         elif eff_type == "destroy":
             desc = f"{pfx}Destroy target"
         elif eff_type == "burn":
-            burn_target = {0: "", 1: " all enemies", 2: " adjacent enemies", 3: ""}.get(target, "")
+            burn_target_map = {
+                0: "", 1: " all enemies", 2: " adjacent enemies", 3: "",
+                "single": "", "all": " all enemies", "adjacent": " adjacent enemies", "self": "",
+            }
+            burn_target = burn_target_map.get(target, "")
             desc = f"{pfx}Burn{burn_target}"
         elif eff_type == "dark_matter_buff":
             desc = f"Active: +{amount}🗡️ (+Dark Matter×1)"
