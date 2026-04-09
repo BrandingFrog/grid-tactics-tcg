@@ -2,12 +2,17 @@ FROM mediawiki:1.42
 
 # Install system deps (git needed by composer for some packages)
 RUN apt-get update && apt-get install -y --no-install-recommends \
-      git unzip default-mysql-client \
+      git unzip default-mysql-client ca-certificates curl \
   && rm -rf /var/lib/apt/lists/*
+
+# Install composer (phar) — mediawiki:1.42 does NOT ship composer
+RUN curl -sSLo /usr/local/bin/composer https://getcomposer.org/download/latest-stable/composer.phar \
+ && chmod +x /usr/local/bin/composer \
+ && composer --version
 
 WORKDIR /var/www/html
 
-# Install Semantic MediaWiki via composer (composer ships in mediawiki image)
+# Install Semantic MediaWiki via composer
 RUN composer require --no-update mediawiki/semantic-media-wiki "~4.1" \
  && composer update --no-dev --optimize-autoloader
 
