@@ -44,6 +44,12 @@ Phases are ordered by dependency: foundation and schema first, then infrastructu
 **Goal:** Every card in `data/cards/*.json` has a live wiki page that visually matches the in-game card, with art uploaded and cross-links working.
 **Depends on:** Phase 2
 **Requirements:** WIKI-02, CARD-01, CARD-02, CARD-03, CARD-04, SEMANTIC-03
+**Plans:** 3 plans
+
+Plans:
+- [ ] 03-01-PLAN.md — Core card-to-wikitext conversion module with keyword derivation, rules text synthesis, and cross-link rendering
+- [ ] 03-02-PLAN.md — Fix Template:Card category name, upload CardBack.png placeholder, verify file upload permissions
+- [ ] 03-03-PLAN.md — sync_wiki.py CLI for bulk card upsert, art upload, and end-to-end verification
 
 **Success Criteria:**
 1. `Template:Card` renders a sample card on the wiki in a layout that matches the in-game look (art, name, cost, element, type, stats, rules text, keywords).
@@ -145,9 +151,9 @@ Phases are ordered by dependency: foundation and schema first, then infrastructu
 
 | Phase | Status | Completed |
 |---|---|---|
-| 1 - Foundation & Schema Design | Not started | — |
-| 2 - MediaWiki + SMW Deployment on Railway | Not started | — |
-| 3 - Card Page Generator | Not started | — |
+| 1 - Foundation & Schema Design | complete | 2026-04-08 |
+| 2 - MediaWiki + SMW Deployment on Railway | complete | 2026-04-09 |
+| 3 - Card Page Generator | planned | — |
 | 4 - Taxonomy Pages | Not started | — |
 | 5 - Patch Notes Generator & Hook Integration | Not started | — |
 | 6 - Card History Tracking | Not started | — |
