@@ -61,16 +61,17 @@ Plans:
 
 ---
 
-### Phase 4: Taxonomy Pages
+### Phase 4: Taxonomy Pages ✓
 
 **Goal:** Elements, tribes, keywords, and conceptual rules pages exist and use SMW queries to auto-list members.
+**Status:** COMPLETE 2026-04-09. 54 taxonomy pages live: 7 elements, 14 tribes, 27 keywords, 6 rules. Full verification passing.
 **Depends on:** Phase 3
 **Requirements:** WIKI-03, WIKI-04, WIKI-05, WIKI-06, SEMANTIC-01
 **Plans:** 2 plans
 
 Plans:
-- [ ] 04-01-PLAN.md — Create sync_taxonomy.py module, upsert 7 element + 14 tribe pages with SMW ask queries
-- [ ] 04-02-PLAN.md — Upsert keyword pages from GLOSSARY.md + 6 conceptual rules pages, full verification
+- [x] 04-01-PLAN.md — Create sync_taxonomy.py module, upsert 7 element + 14 tribe pages with SMW ask queries
+- [x] 04-02-PLAN.md — Upsert keyword pages from GLOSSARY.md + 6 conceptual rules pages, full verification
 
 **Success Criteria:**
 1. All 7 element pages exist; each inline query returns exactly the cards of that element.
@@ -160,7 +161,7 @@ Plans:
 | 1 - Foundation & Schema Design | complete | 2026-04-08 |
 | 2 - MediaWiki + SMW Deployment on Railway | complete | 2026-04-09 |
 | 3 - Card Page Generator | complete | 2026-04-09 |
-| 4 - Taxonomy Pages | Not started | — |
+| 4 - Taxonomy Pages | complete | 2026-04-09 |
 | 5 - Patch Notes Generator & Hook Integration | Not started | — |
 | 6 - Card History Tracking | Not started | — |
 | 7 - Semantic Query Showcase & Homepage | Not started | — |
