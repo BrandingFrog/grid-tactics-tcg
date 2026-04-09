@@ -65,12 +65,12 @@ _REACT_CONDITION_TEXT_STR: dict[str, str] = {
 # Trigger -> prefix text (matches game.js triggerMap)
 # Supports both int keys (from tensor engine) and string keys (from card JSON)
 _TRIGGER_PREFIX: dict[int | str, str] = {
-    0: "Summon", "on_play": "Summon",
-    1: "Death", "on_death": "Death",
+    0: "[[Summon]]", "on_play": "[[Summon]]",
+    1: "[[Death]]", "on_death": "[[Death]]",
     2: "Attack", "on_attack": "Attack",
     3: "Damaged", "on_damaged": "Damaged",
     4: "Move", "on_move": "Move",
-    5: "Passive", "passive": "Passive",
+    5: "[[Passive]]", "passive": "[[Passive]]",
 }
 
 
@@ -208,11 +208,11 @@ def build_rules_text(card: dict, name_map: dict[str, str] | None = None) -> str:
     # Summon sacrifice cost (in-game: "Cost: Discard any Robot")
     sac_tribe = card.get("summon_sacrifice_tribe", "")
     if sac_tribe:
-        parts.append(f"Cost: Discard any [[{sac_tribe}]]")
+        parts.append(f"Cost: [[Sacrifice|Discard]] any [[{sac_tribe}]]")
 
     # Unique tag
     if card.get("unique"):
-        parts.append("Unique")
+        parts.append("[[Unique]]")
 
     # Standard effects — matches game.js getEffectDescription exactly
     is_minion = card.get("card_type", "") == "minion"
@@ -295,12 +295,12 @@ def build_rules_text(card: dict, name_map: dict[str, str] | None = None) -> str:
         effect_type = ability.get("effect_type", "")
         if effect_type == "conjure_rat_and_buff":
             rat_link = _wikilink(ability.get("summon_card_id", "rat"), name_map)
-            text = f"'''Active ({cost}):''' [[Conjure]] {rat_link} from deck. Ally Rats on board +1🗡️/+1🤍 (+[[Dark Matter]] × 1)."
+            text = f"'''[[Active]] ({cost}):''' [[Conjure]] {rat_link} from deck. Ally Rats on board +1🗡️/+1🤍 (+[[Dark Matter]] × 1)."
         elif effect_type == "summon_token" and ability.get("summon_card_id"):
-            text = f"'''Active ({cost}):''' [[Conjure|Summon]] {_wikilink(ability['summon_card_id'], name_map)}."
+            text = f"'''[[Active]] ({cost}):''' [[Conjure|Summon]] {_wikilink(ability['summon_card_id'], name_map)}."
         else:
             name = ability.get("name", "activate")
-            text = f"'''Active ({cost}):''' {name}."
+            text = f"'''[[Active]] ({cost}):''' {name}."
             summon_id = ability.get("summon_card_id")
             if summon_id:
                 text += f" Summons {_wikilink(summon_id, name_map)}."
@@ -324,7 +324,7 @@ def build_rules_text(card: dict, name_map: dict[str, str] | None = None) -> str:
         extra = " & No friendly minions" if card.get("react_requires_no_friendly_minions") else ""
         cost = card.get("react_mana_cost", 0)
         cost_text = f" ({cost})" if cost > 0 else ""
-        parts.append(f"React{cost_text}: {cond_text}{extra}")
+        parts.append(f"[[React]]{cost_text}: {cond_text}{extra}")
 
     return ". ".join(parts)
 
