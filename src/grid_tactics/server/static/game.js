@@ -1442,11 +1442,15 @@ function populateTooltip(hostEl, numericId, opts) {
 // Deck-builder tooltip: includes Related Cards section.
 function showCardTooltip(numericId) {
     populateTooltip(document.getElementById('card-tooltip'), numericId, { showRelated: true });
+    var hint = document.getElementById('deck-tooltip-hint');
+    if (hint) hint.style.display = 'none';
 }
 
 function hideCardTooltip() {
     var tooltip = document.getElementById('card-tooltip');
     if (tooltip) tooltip.style.display = 'none';
+    var hint = document.getElementById('deck-tooltip-hint');
+    if (hint) hint.style.display = '';
 }
 
 // =============================================
@@ -1454,11 +1458,15 @@ function hideCardTooltip() {
 // =============================================
 function showGameTooltip(numericId, anchorEl) {
     populateTooltip(document.getElementById('game-tooltip'), numericId, { showRelated: false });
+    var hint = document.getElementById('game-tooltip-hint');
+    if (hint) hint.style.display = 'none';
 }
 
 function hideGameTooltip() {
     var tooltip = document.getElementById('game-tooltip');
     if (tooltip) tooltip.style.display = 'none';
+    var hint = document.getElementById('game-tooltip-hint');
+    if (hint) hint.style.display = '';
 }
 
 // Auto-fit for hand card names (scaleX for overflow)
@@ -3239,6 +3247,7 @@ function renderGame() {
     // Phase 14.3: do not open tutor modal mid-animation; gated by the
     // AnimationQueue via applyStateFrame as above.
     syncPendingTutorUI();
+    syncPendingConjureDeployUI();
     // Always refresh highlights — even when it's not my turn — so stale
     // .card-playable classes from the previous render are cleared.
     highlightBoard();
@@ -3578,6 +3587,18 @@ function onBoardCellClick(row, col) {
     if (isReactWindow()) return;  // board clicks are inert during react window
     var isMyTurn = legalActions && legalActions.length > 0;
     if (!isMyTurn) return;
+
+    // Phase 14.6: conjure deploy mode. Player picks a tile to deploy the
+    // conjured card. Valid positions are highlighted; everything else is inert.
+    if (interactionMode === 'conjure_deploy') {
+        var validPos = (gameState && gameState.pending_conjure_deploy_positions) || [];
+        var isValid = validPos.some(function(p) { return p[0] === row && p[1] === col; });
+        if (!isValid) return;
+        // ActionType.CONJURE_DEPLOY = 12
+        submitAction({ action_type: 12, position: [row, col] });
+        interactionMode = null;
+        return;
+    }
 
     // Phase 14.1: post-move attack-pick mode. Only valid enemy targets are
     // clickable; everything else is inert (use Decline button to exit).
@@ -4128,6 +4149,95 @@ function hideOpponentTutoringToast() {
     if (existing) existing.remove();
 }
 
+// =============================================
+// Phase 14.6: Conjure deploy tile-picking UI
+// =============================================
+
+var conjureDeployActive = false;
+
+function syncPendingConjureDeployUI() {
+    if (!gameState) {
+        closeConjureDeployUI();
+        return;
+    }
+    var pendingIdx = gameState.pending_conjure_deploy_player_idx;
+    if (pendingIdx == null) {
+        closeConjureDeployUI();
+        return;
+    }
+    if (pendingIdx === myPlayerIdx) {
+        // I'm the deployer - enter conjure deploy mode
+        if (!conjureDeployActive) {
+            conjureDeployActive = true;
+            interactionMode = 'conjure_deploy';
+            showConjureDeployUI();
+        }
+    } else {
+        // Opponent is deploying
+        closeConjureDeployUI();
+        showOpponentConjuringToast();
+    }
+}
+
+function showConjureDeployUI() {
+    // Show a header bar instructing the player to pick a tile
+    closeConjureDeployUI();
+    conjureDeployActive = true;
+
+    var banner = document.createElement('div');
+    banner.id = 'conjure-deploy-banner';
+    banner.className = 'tutor-toast';
+    banner.style.background = '#2a6b3a';
+    banner.style.top = '60px';
+
+    var cardNid = gameState.pending_conjure_deploy_card;
+    var cardName = cardNid != null ? findCardNameByNid(cardNid) : 'card';
+    banner.textContent = 'Deploy ' + cardName + ' — click a valid tile';
+
+    var skipBtn = document.createElement('button');
+    skipBtn.className = 'tutor-skip-button';
+    skipBtn.style.marginLeft = '12px';
+    skipBtn.style.display = 'inline';
+    skipBtn.textContent = 'To Hand';
+    skipBtn.title = 'Send the conjured card to your hand instead of deploying';
+    skipBtn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        // ActionType.DECLINE_CONJURE = 13
+        submitAction({ action_type: 13 });
+    });
+    banner.appendChild(skipBtn);
+
+    document.body.appendChild(banner);
+
+    // Highlight valid deploy tiles
+    highlightBoard();
+}
+
+function closeConjureDeployUI() {
+    var existing = document.getElementById('conjure-deploy-banner');
+    if (existing) existing.remove();
+    var toast = document.getElementById('opponent-conjuring-toast');
+    if (toast) toast.remove();
+    if (conjureDeployActive) {
+        conjureDeployActive = false;
+        if (interactionMode === 'conjure_deploy') interactionMode = null;
+    }
+}
+
+function showOpponentConjuringToast() {
+    if (document.getElementById('opponent-conjuring-toast')) return;
+    var toast = document.createElement('div');
+    toast.id = 'opponent-conjuring-toast';
+    toast.className = 'tutor-toast';
+    toast.textContent = 'Opponent is deploying a conjured card\u2026';
+    document.body.appendChild(toast);
+}
+
+function findCardNameByNid(nid) {
+    if (cardDefsMap && cardDefsMap[nid]) return cardDefsMap[nid].name || ('Card #' + nid);
+    return 'Card #' + nid;
+}
+
 // Highlight valid board cells based on current selection
 function highlightBoard() {
     document.querySelectorAll('.board-cell').forEach(function(cell) {
@@ -4157,6 +4267,16 @@ function highlightBoard() {
             }
         });
         return;  // Skip the regular selection-driven highlighting
+    }
+
+    // Phase 14.6: conjure deploy tile highlighting.
+    if (interactionMode === 'conjure_deploy' && gameState) {
+        var deployPositions = gameState.pending_conjure_deploy_positions || [];
+        deployPositions.forEach(function(p) {
+            var cell = document.querySelector('.board-cell[data-row="' + p[0] + '"][data-col="' + p[1] + '"]');
+            if (cell) cell.classList.add('cell-valid');
+        });
+        return;  // Skip regular highlighting
     }
 
     if (interactionMode === 'play' && selectedHandIdx !== null) {

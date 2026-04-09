@@ -120,7 +120,20 @@
       </div>
 
       <div class="deck-builder-body">
-        <!-- Card Browser (left) -->
+        <!-- Card Tooltip Sidebar (left) -->
+        <div class="tooltip-sidebar" id="deck-tooltip-sidebar">
+          <div class="card-tooltip" id="card-tooltip" style="display:none;">
+            <div class="tooltip-card tooltip-card-art"></div>
+            <div class="tooltip-header tooltip-name"></div>
+            <div class="tooltip-stats"></div>
+            <div class="tooltip-section tooltip-keywords"></div>
+            <div class="tooltip-section tooltip-related-label" style="display:none;">Related Cards</div>
+            <div class="tooltip-related"></div>
+          </div>
+          <div class="tooltip-sidebar-hint" id="deck-tooltip-hint">Hover a card to see details</div>
+        </div>
+
+        <!-- Card Browser (center) -->
         <div class="card-browser">
           <h3 class="section-heading">All Cards</h3>
           <div class="card-browser-filters">
@@ -185,16 +198,6 @@
           </div>
         </div>
 
-        <!-- Card Tooltip (hover preview) -->
-        <div class="card-tooltip" id="card-tooltip" style="display:none;">
-          <div class="tooltip-card tooltip-card-art"></div>
-          <div class="tooltip-header tooltip-name"></div>
-          <div class="tooltip-stats"></div>
-          <div class="tooltip-section tooltip-keywords"></div>
-          <div class="tooltip-section tooltip-related-label" style="display:none;">Related Cards</div>
-          <div class="tooltip-related"></div>
-        </div>
-
         <!-- Deck List Sidebar (right) -->
         <div class="deck-sidebar">
           <h3 class="section-heading">Current Deck</h3>
@@ -225,6 +228,17 @@
 <!-- Screen: Game -->
   <div id="screen-game" class="screen">
     <div class="game-layout">
+      <!-- Game Tooltip Sidebar (left) -->
+      <div class="tooltip-sidebar game-tooltip-sidebar" id="game-tooltip-sidebar">
+        <div class="card-tooltip game-tooltip" id="game-tooltip" style="display:none;">
+          <div class="tooltip-card tooltip-card-art"></div>
+          <div class="tooltip-header tooltip-name"></div>
+          <div class="tooltip-stats"></div>
+          <div class="tooltip-section tooltip-keywords"></div>
+        </div>
+        <div class="tooltip-sidebar-hint" id="game-tooltip-hint">Hover a card to see details</div>
+      </div>
+
       <div class="game-main">
 
         <!-- Room Bar -->
@@ -329,18 +343,8 @@
 
       </div>
 
-      <!-- Game Sidebar -->
+      <!-- Game Sidebar (right — log/chat) -->
       <div class="game-sidebar">
-        <!-- Game Tooltip (hover preview for hand cards & board minions).
-             Uses the SAME inner structure + class names as the deck-builder
-             tooltip (#card-tooltip) so populateTooltip() can target either. -->
-        <div class="card-tooltip game-tooltip" id="game-tooltip" style="display:none;">
-          <div class="tooltip-card tooltip-card-art"></div>
-          <div class="tooltip-header tooltip-name"></div>
-          <div class="tooltip-stats"></div>
-          <div class="tooltip-section tooltip-keywords"></div>
-        </div>
-
         <div class="sidebar-section" id="activity-panel">
           <div class="activity-tabs">
             <button class="activity-tab active" data-tab="log">Log</button>

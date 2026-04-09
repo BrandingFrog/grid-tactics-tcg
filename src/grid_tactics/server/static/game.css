@@ -393,7 +393,7 @@ body {
 
 .deck-builder-body {
   display: grid;
-  grid-template-columns: 1fr 240px;
+  grid-template-columns: 220px 1fr 240px;
   gap: 8px;
   flex: 1;
   min-height: 0;
@@ -405,6 +405,7 @@ body {
   .deck-builder-body {
     grid-template-columns: 1fr;
   }
+  .deck-builder-body > .tooltip-sidebar { display: none; }
 }
 
 /* Card Browser */
@@ -654,7 +655,7 @@ body {
 
 .game-layout {
   display: grid;
-  grid-template-columns: 1fr 220px;
+  grid-template-columns: 220px 1fr 220px;
   gap: 8px;
   max-width: none;
   margin: 0;
@@ -667,6 +668,7 @@ body {
   .game-layout {
     grid-template-columns: 1fr;
   }
+  .game-layout > .tooltip-sidebar { display: none; }
 }
 
 .game-main {
@@ -1376,10 +1378,8 @@ body {
 
 /* ===== Card Tooltip (hover preview panel) ===== */
 .card-tooltip {
-  position: absolute;
-  top: 0;
-  right: 0;
-  width: 260px;
+  position: relative;
+  width: auto;
   max-height: 100%;
   background: var(--card);
   border: 1px solid var(--cyan);
@@ -2220,13 +2220,47 @@ body {
    Uses the same inner DOM + class names as #card-tooltip, so the shared
    .tooltip-* rules above drive its appearance. Only the outer container
    styling and a few size tweaks are specific to the sidebar context. */
+/* =======================================
+   TOOLTIP SIDEBAR (left panel — duel & deck builder)
+   ======================================= */
+
+.tooltip-sidebar {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+  position: relative;
+}
+
+.tooltip-sidebar .card-tooltip {
+  position: relative;
+  top: auto;
+  right: auto;
+  width: auto;
+  max-height: 100%;
+  overflow-y: auto;
+}
+
+.tooltip-sidebar-hint {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: var(--muted);
+  font-family: 'Inter', system-ui, sans-serif;
+  font-size: 12px;
+  text-align: center;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--card);
+}
+
 .game-tooltip {
-  /* Absolutely positioned within .game-sidebar so showing/hiding the
-     tooltip does NOT push the log/chat panel around (no layout reflow). */
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
+  position: relative;
+  top: auto;
+  left: auto;
+  right: auto;
   z-index: 10;
   width: auto;
   background: var(--card);
@@ -2234,7 +2268,7 @@ body {
   border-radius: 10px;
   padding: 12px;
   overflow-y: auto;
-  max-height: 50vh;
+  max-height: 100%;
   box-shadow: 0 0 20px rgba(0, 212, 255, 0.15);
 }
 
@@ -2312,8 +2346,8 @@ body {
   /* Deck sidebar on mobile = collapsed below */
   .deck-sidebar { padding: 8px; max-height: 150px; }
 
-  /* Tooltip */
-  .card-tooltip { width: 100%; position: fixed; bottom: 0; top: auto; right: 0; left: 0; max-height: 40vh; border-radius: 10px 10px 0 0; }
+  /* Tooltip sidebar hidden on mobile */
+  .tooltip-sidebar { display: none; }
 
   /* Game Layout */
   .game-layout { grid-template-columns: 1fr; height: calc(100vh - 44px); padding: 4px; gap: 4px; }
