@@ -82,16 +82,17 @@ Plans:
 
 ---
 
-### Phase 5: Patch Notes Generator & Hook Integration
+### Phase 5: Patch Notes Generator & Hook Integration ✓
 
 **Goal:** Every commit that touches card, glossary, or enum files auto-creates or updates a `Patch:X.Y.Z` page through a git hook.
+**Status:** COMPLETE 2026-04-09. Template:Patch bootstrapped, Patch:0.2.20 created on wiki, post-commit hook active, .sync_state.json tracking HEAD.
 **Depends on:** Phase 3
 **Requirements:** PATCH-01, PATCH-02, PATCH-03, PATCH-04, PATCH-05, AUTO-01, AUTO-07
 **Plans:** 2 plans
 
 Plans:
-- [ ] 05-01-PLAN.md — Core diff engine (patch_diff.py) and wikitext generator (patch_page.py)
-- [ ] 05-02-PLAN.md — Patch sync CLI, Patch:Index, .sync_state.json tracking, post-commit hook
+- [x] 05-01-PLAN.md — Core diff engine (patch_diff.py) and wikitext generator (patch_page.py)
+- [x] 05-02-PLAN.md — Patch sync CLI, Patch:Index, .sync_state.json tracking, post-commit hook
 
 **Success Criteria:**
 1. A commit touching a card JSON triggers the `post-commit` hook which runs `sync/sync_wiki.py` and produces a `Patch:X.Y.Z` page matching `VERSION.json`.
@@ -167,7 +168,7 @@ Plans:
 | 2 - MediaWiki + SMW Deployment on Railway | complete | 2026-04-09 |
 | 3 - Card Page Generator | complete | 2026-04-09 |
 | 4 - Taxonomy Pages | complete | 2026-04-09 |
-| 5 - Patch Notes Generator & Hook Integration | Not started | — |
+| 5 - Patch Notes Generator & Hook Integration | complete | 2026-04-09 |
 | 6 - Card History Tracking | Not started | — |
 | 7 - Semantic Query Showcase & Homepage | Not started | — |
 | 8 - Idempotency, Drift Detection & Reliability | Not started | — |
