@@ -360,11 +360,11 @@ def card_to_wikitext(
     if element:
         fields["element"] = element.capitalize()
 
-    # Tribe — split multi-tribes (e.g. "Mage/Rat") into separate linked lines
+    # Tribe
     tribe = card.get("tribe", "")
     if tribe:
         tribe_parts = [t.strip() for t in tribe.split("/")]
-        fields["tribe"] = "<br/>".join(f"[[{t}]]" for t in tribe_parts)
+        fields["tribe"] = "/".join(tribe_parts)  # raw for SMW
 
     # Cost
     cost = card.get("mana_cost")
@@ -396,11 +396,27 @@ def card_to_wikitext(
     # Keywords
     keywords = derive_keywords(card)
     if keywords:
-        fields["keywords"] = "<br/>".join(f"[[{kw}]]" for kw in keywords)
         # Pre-generate SMW keyword annotations (replaces #arraymap in template)
         fields["keyword_annotations"] = "".join(
             f"[[Keyword::{kw}| ]]" for kw in keywords
         )
+
+    # Build metadata table rows (Tribe, Range, Keywords) as pre-rendered wikitext
+    # This avoids {{#if:0}} issues and conditional row breakage in the template
+    _row_style = 'style="padding:4px 10px; background:#222; text-align:left; color:#888; font-weight:normal; font-size:0.85em;"'
+    _val_style = 'style="padding:4px 10px; background:#222;"'
+    meta_rows = []
+    if tribe:
+        tribe_links = "<br/>".join(f"[[{t.strip()}]]" for t in tribe.split("/"))
+        meta_rows.append(f"{{{{!}}}}-\n! {_row_style} {{{{!}}}} Tribe\n{{{{!}}}} {_val_style} {{{{!}}}} {tribe_links}")
+    if is_minion and card.get("range") is not None:
+        range_val = "Melee" if card.get("range") == 0 else f"Range {card.get('range')}"
+        meta_rows.append(f"{{{{!}}}}-\n! {_row_style} {{{{!}}}} Range\n{{{{!}}}} {_val_style} {{{{!}}}} {range_val}")
+    if keywords:
+        kw_links = "<br/>".join(f"[[{kw}]]" for kw in keywords)
+        meta_rows.append(f"{{{{!}}}}-\n! {_row_style} {{{{!}}}} Keywords\n{{{{!}}}} {_val_style} {{{{!}}}} {kw_links}")
+    if meta_rows:
+        fields["meta_rows"] = "\n".join(meta_rows)
 
     # Art
     if art_exists:
