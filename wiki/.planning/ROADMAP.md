@@ -87,6 +87,11 @@ Plans:
 **Goal:** Every commit that touches card, glossary, or enum files auto-creates or updates a `Patch:X.Y.Z` page through a git hook.
 **Depends on:** Phase 3
 **Requirements:** PATCH-01, PATCH-02, PATCH-03, PATCH-04, PATCH-05, AUTO-01, AUTO-07
+**Plans:** 2 plans
+
+Plans:
+- [ ] 05-01-PLAN.md — Core diff engine (patch_diff.py) and wikitext generator (patch_page.py)
+- [ ] 05-02-PLAN.md — Patch sync CLI, Patch:Index, .sync_state.json tracking, post-commit hook
 
 **Success Criteria:**
 1. A commit touching a card JSON triggers the `post-commit` hook which runs `sync/sync_wiki.py` and produces a `Patch:X.Y.Z` page matching `VERSION.json`.
