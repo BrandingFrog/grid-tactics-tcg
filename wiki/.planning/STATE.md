@@ -1,17 +1,17 @@
 ---
 milestone: v1.0
 status: phase-8-in-progress
-stopped_at: completed_08-01
+stopped_at: completed_08-02
 last_updated: 2026-04-09
 progress:
   phase: 8
   phase_name: Idempotency, Drift Detection & Reliability
-  plan: 01
+  plan: 02
   phases_total: 9
   phases_completed: 7
-  plans_completed_in_phase: 1
+  plans_completed_in_phase: 2
   plans_total_in_phase: 3
-  percent: 84
+  percent: 88
 ---
 
 # Project State — Grid Tactics Wiki
@@ -21,21 +21,21 @@ progress:
 See: `.planning/PROJECT.md`
 
 **Core value:** Living, semantically-queryable knowledge base that auto-mirrors Grid Tactics card and mechanic state via git hooks.
-**Current focus:** Phase 8 in progress. Idempotency & dry-run tests complete (08-01). Next: drift detection (08-02).
+**Current focus:** Phase 8 in progress. Drift detection & resume manifest complete (08-02). Next: 08-03 (reliability/retry).
 
 ## Current Position
 
 Phase: 8 of 9 (Idempotency, Drift Detection & Reliability) -- IN PROGRESS
-Plan: 01 of 3 complete -- Idempotency & dry-run test coverage (10 tests)
-Status: Phase 8 in progress. 08-02 next.
-Last activity: 2026-04-09 -- Completed 08-01 (idempotency & dry-run tests)
+Plan: 02 of 3 complete -- Drift detection CLI + resume manifest for batch sync
+Status: Phase 8 in progress. 08-03 next.
+Last activity: 2026-04-09 -- Completed 08-02 (check_drift.py + resume manifest)
 
-Progress: `████████░░` 84%
+Progress: `████████░░` 88%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 10
+- Total plans completed: 12
 - Average duration: ~12 min/plan
 
 **By Phase:**
@@ -47,7 +47,7 @@ Progress: `████████░░` 84%
 | 5 — Patch Notes Generator | 2 | 2 | ~9 min | complete |
 | 6 — Card History Tracking | 2 | 2 | ~5 min | complete |
 | 7 — Semantic Query Showcase & Homepage | 2 | 2 | ~3 min | complete |
-| 8 — Idempotency, Drift Detection & Reliability | 1 | 3 | ~2 min | in progress |
+| 8 — Idempotency, Drift Detection & Reliability | 2 | 3 | ~2 min | in progress |
 
 ## Accumulated Context
 
@@ -82,6 +82,9 @@ Progress: `████████░░` 84%
 - **[07-02]** Showcase page uses Semantic:Showcase title (colon namespace) under Category:Rules.
 - **[08-01]** Mock site pattern: `page_store` dict with `__getitem__` override for realistic page lookup simulation in tests.
 - **[08-01]** MediaWiki `rstrip()` behavior replicated in mocks — stored text has trailing whitespace stripped to match real API.
+- **[08-02]** DriftReport uses drift_type string enum (content_mismatch, missing_page, extra_page) rather than booleans.
+- **[08-02]** Resume manifest uses .sync_resume.json in wiki/ root, gitignored, deleted on successful completion.
+- **[08-02]** Batch-level try/except catches Exception but not KeyboardInterrupt; per-card try/except stays as-is for graceful individual failures.
 - Tech stack locked: MediaWiki + SMW, MariaDB, Docker, Railway, Python `mwclient` (tentative), git post-commit hook.
 - JSON in `data/cards/*.json` is canonical; wiki is a projection, never source of truth.
 - Wiki lives as a subproject at `wiki/` inside the grid-tactics repo for direct file access.
@@ -112,7 +115,7 @@ Progress: `████████░░` 84%
 
 ### Pending Todos
 
-- **Phase 8 plan 01 complete.** Next action: 08-02 (drift detection) and 08-03 (reliability/retry).
+- **Phase 8 plan 02 complete.** Next action: 08-03 (reliability/retry).
 - Phase 2 watch item: BotPassword must be recreated on the Railway instance (credential lives in the wiki DB, doesn't port across). Automate via `createBotPassword.php` one-shot after deploy.
 - Phase 3 watch item: `CardType`/`Element` Page-type properties with `[[Allows value::X]]` produce red-links until stub pages are created. Decide whether to auto-create stubs or accept red-links.
 - Phase 1 open checkpoints (deferred in 14.x posture, not blocking):
@@ -129,5 +132,5 @@ Progress: `████████░░` 84%
 ## Session Continuity
 
 Last session: 2026-04-09
-Stopped at: Completed 08-01 -- Idempotency & dry-run test coverage (10 tests, all pass).
-Resume file: None (ready for 08-02)
+Stopped at: Completed 08-02 -- check_drift.py CLI + resume manifest in sync_wiki.py.
+Resume file: None (ready for 08-03)
