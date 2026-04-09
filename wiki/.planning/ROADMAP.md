@@ -163,18 +163,19 @@ Plans:
 
 ---
 
-### Phase 9: Launch Polish
+### Phase 9: Launch Polish ✓
 
 **Goal:** The wiki is presentable, backed up, reachable at a real domain, and ready for public announcement.
+**Status:** COMPLETE 2026-04-09. Mobile CSS, logo/favicon, deck guide, backups, search all verified. Custom domain deferred (Railway URL sufficient).
 **Depends on:** Phase 7, Phase 8
 **Requirements:** DEPLOY-05, DEPLOY-06, WIKI-07, POLISH-01, POLISH-02, POLISH-03
 **Plans:** 4 plans
 
 Plans:
-- [ ] 09-01-PLAN.md — Mobile CSS, site logo/favicon, and search verification
-- [ ] 09-02-PLAN.md — Deck-building guide page with auto-updated archetypes
-- [ ] 09-03-PLAN.md — Weekly backup via GitHub Actions (XML export)
-- [ ] 09-04-PLAN.md — Custom domain decision and final Phase 9 verification
+- [x] 09-01-PLAN.md — Mobile CSS, site logo/favicon, and search verification
+- [x] 09-02-PLAN.md — Deck-building guide page with auto-updated archetypes
+- [x] 09-03-PLAN.md — Weekly backup via GitHub Actions (XML export)
+- [x] 09-04-PLAN.md — Custom domain decision and final Phase 9 verification
 
 **Success Criteria:**
 1. Wiki is reachable at the chosen custom domain with a valid HTTPS cert.
@@ -198,7 +199,7 @@ Plans:
 | 6 - Card History Tracking | complete | 2026-04-09 |
 | 7 - Semantic Query Showcase & Homepage | complete | 2026-04-09 |
 | 8 - Idempotency, Drift Detection & Reliability | complete | 2026-04-09 |
-| 9 - Launch Polish | Not started | — |
+| 9 - Launch Polish | complete | 2026-04-09 |
 
 ## Coverage
 

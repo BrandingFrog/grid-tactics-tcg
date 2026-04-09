@@ -1,17 +1,17 @@
 ---
 milestone: v1.0
-status: phase-9-in-progress
-stopped_at: completed_09-01
+status: complete
+stopped_at: completed_09-04
 last_updated: 2026-04-09
 progress:
   phase: 9
   phase_name: Launch Polish
-  plan: 01
+  plan: 04
   phases_total: 9
-  phases_completed: 8
-  plans_completed_in_phase: 3
+  phases_completed: 9
+  plans_completed_in_phase: 4
   plans_total_in_phase: 4
-  percent: 94
+  percent: 100
 ---
 
 # Project State — Grid Tactics Wiki
@@ -21,16 +21,16 @@ progress:
 See: `.planning/PROJECT.md`
 
 **Core value:** Living, semantically-queryable knowledge base that auto-mirrors Grid Tactics card and mechanic state via git hooks.
-**Current focus:** Phase 9 in progress. Mobile CSS, logo, favicon, and search verification live. One plan remaining (09-04).
+**Current focus:** All phases complete. Wiki v1.0 milestone achieved.
 
 ## Current Position
 
 Phase: 9 of 9 (Launch Polish)
-Plan: 01 of 4 complete (also 02, 03 done) -- Mobile CSS, logo/favicon, search verification
-Status: Phase 9 in progress. 3 of 4 plans complete.
-Last activity: 2026-04-09 -- Completed 09-01 (Launch polish: mobile CSS, logo, favicon, search)
+Plan: 04 of 4 complete -- Final verification passed
+Status: COMPLETE. All 9 phases, all 16 plans done.
+Last activity: 2026-04-09 -- Completed 09-04 (Final verification, all Phase 9 criteria pass)
 
-Progress: `█████████░` 94%
+Progress: `██████████` 100%
 
 ## Performance Metrics
 
@@ -48,7 +48,7 @@ Progress: `█████████░` 94%
 | 6 — Card History Tracking | 2 | 2 | ~5 min | complete |
 | 7 — Semantic Query Showcase & Homepage | 2 | 2 | ~3 min | complete |
 | 8 — Idempotency, Drift Detection & Reliability | 3 | 3 | ~2 min | complete |
-| 9 — Launch Polish | 3 | 4 | ~4 min | in progress |
+| 9 — Launch Polish | 4 | 4 | ~3 min | complete |
 
 ## Accumulated Context
 
@@ -121,7 +121,7 @@ Progress: `█████████░` 94%
 
 ### Pending Todos
 
-- **Phase 9 in progress.** 09-01, 09-02, 09-03 complete. Next: 09-04.
+- **All phases complete.** v1.0 milestone achieved.
 - GitHub secrets (MW_API_URL, MW_BOT_USER, MW_BOT_PASS, MW_API_PATH) must be configured in the repo for wiki-backup.yml workflow to run.
 - Phase 2 watch item: BotPassword must be recreated on the Railway instance (credential lives in the wiki DB, doesn't port across). Automate via `createBotPassword.php` one-shot after deploy.
 - Phase 3 watch item: `CardType`/`Element` Page-type properties with `[[Allows value::X]]` produce red-links until stub pages are created. Decide whether to auto-create stubs or accept red-links.
@@ -139,5 +139,5 @@ Progress: `█████████░` 94%
 ## Session Continuity
 
 Last session: 2026-04-09
-Stopped at: Completed 09-01 -- Mobile CSS, logo/favicon, search verification pushed to live wiki. Phase 9 in progress (3/4 plans done).
+Stopped at: Completed 09-04 -- All Phase 9 criteria verified. v1.0 milestone complete.
 Resume file: None
