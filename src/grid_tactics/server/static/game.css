@@ -1231,10 +1231,10 @@ body {
 
 .stat-emoji-bg {
   position: absolute;
-  font-size: 1.4em;
-  opacity: 0.35;
+  font-size: 1.6em;
+  opacity: 0.8;
   -webkit-text-stroke: 0;
-  filter: grayscale(0.3);
+  filter: none;
 }
 
 .stat-num {
