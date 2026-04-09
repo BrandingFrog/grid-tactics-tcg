@@ -199,6 +199,8 @@ def _git(args: list[str], repo_root: Path) -> str:
         capture_output=True,
         text=True,
         cwd=str(repo_root),
+        encoding="utf-8",
+        errors="replace",
     )
     if result.returncode != 0:
         raise RuntimeError(f"git {' '.join(args)}: {result.stderr.strip()}")

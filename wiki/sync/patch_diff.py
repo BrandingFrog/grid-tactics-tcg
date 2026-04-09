@@ -71,6 +71,8 @@ def _git_show(sha: str, path: str, repo_root: Path) -> str | None:
         capture_output=True,
         text=True,
         cwd=str(repo_root),
+        encoding="utf-8",
+        errors="replace",
     )
     if result.returncode == 0:
         return result.stdout
@@ -84,6 +86,8 @@ def _git_ls_tree(sha: str, dir_path: str, repo_root: Path) -> list[str]:
         capture_output=True,
         text=True,
         cwd=str(repo_root),
+        encoding="utf-8",
+        errors="replace",
     )
     if result.returncode != 0:
         return []
@@ -248,10 +252,12 @@ def build_patch_diff(old_sha: str, new_sha: str, repo_root: Path) -> PatchDiff:
 
     # Get commit date
     result = subprocess.run(
-        ["git", "log", "-1", "--format=%Y-%m-%d", new_sha],
+        ["git", "log", "-1", "--format=%cs", new_sha],
         capture_output=True,
         text=True,
         cwd=str(repo_root),
+        encoding="utf-8",
+        errors="replace",
     )
     commit_date = result.stdout.strip() if result.returncode == 0 else "unknown"
 
