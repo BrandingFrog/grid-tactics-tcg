@@ -232,44 +232,44 @@ def build_rules_text(card: dict, name_map: dict[str, str] | None = None) -> str:
             if target in (1, "all"):
                 desc += " to all enemies"
         elif eff_type == "heal":
-            desc = f"{pfx}Heal {amount}"
+            desc = f"{pfx}[[Heal]] {amount}"
         elif eff_type == "buff_attack":
             desc = f"{pfx}+{amount}🗡️"
         elif eff_type == "buff_health":
             desc = f"{pfx}+{amount}🤍"
         elif eff_type == "negate":
-            desc = f"{pfx}Negate"
+            desc = f"{pfx}[[Negate]]"
         elif eff_type == "deploy_self":
-            desc = f"{pfx}Deploy"
+            desc = f"{pfx}[[Deploy]]"
         elif eff_type == "rally_forward":
             card_name = card.get("name", "this unit")
-            desc = f"Move: Rally friendly {card_name}"
+            desc = f"Move: [[Rally]] friendly {card_name}"
         elif eff_type == "promote":
             target_id = card.get("promote_target", "")
             if target_id:
                 promote_tribe = card.get("tribe") or _wikilink(target_id, name_map)
-                desc = f"{pfx}Promote any {promote_tribe} to {card.get('name', '?')}"
+                desc = f"{pfx}[[Promote]] any {promote_tribe} to {card.get('name', '?')}"
             else:
-                desc = f"{pfx}Promote"
+                desc = f"{pfx}[[Promote]]"
         elif eff_type == "tutor":
             target_id = card.get("tutor_target", "")
             target_link = _wikilink(target_id, name_map) if target_id else "a card"
-            desc = f"{pfx}Tutor {target_link}"
+            desc = f"{pfx}[[Tutor]] {target_link}"
         elif eff_type == "destroy":
-            desc = f"{pfx}Destroy target"
+            desc = f"{pfx}[[Destroy]] target"
         elif eff_type == "burn":
             burn_target_map = {
                 0: "", 1: " all enemies", 2: " adjacent enemies", 3: "",
                 "single": "", "all": " all enemies", "adjacent": " adjacent enemies", "self": "",
             }
             burn_target = burn_target_map.get(target, "")
-            desc = f"{pfx}Burn{burn_target}"
+            desc = f"{pfx}[[Burn]]{burn_target}"
         elif eff_type == "dark_matter_buff":
-            desc = f"Active: +{amount}🗡️ (+Dark Matter×1)"
+            desc = f"Active: +{amount}🗡️ (+[[Dark Matter]]×1)"
         elif eff_type == "passive_heal":
-            desc = f"Passive: Heal {amount} per turn"
+            desc = f"Passive: [[Heal]] {amount} per turn"
         elif eff_type == "leap":
-            desc = "Move: Leap over enemies"
+            desc = "Move: [[Leap]] over enemies"
         else:
             desc = f"{pfx}Effect"
         parts.append(desc)
@@ -282,11 +282,11 @@ def build_rules_text(card: dict, name_map: dict[str, str] | None = None) -> str:
         if eff_type == "damage":
             parts.append(f"Deal {amount} damage")
         elif eff_type == "heal":
-            parts.append(f"Heal {amount}")
+            parts.append(f"[[Heal]] {amount}")
         elif eff_type == "deploy_self":
-            parts.append("Deploy")
+            parts.append("[[Deploy]]")
         elif eff_type == "negate":
-            parts.append("Negate")
+            parts.append("[[Negate]]")
 
     # Activated ability
     ability = card.get("activated_ability")
@@ -294,9 +294,10 @@ def build_rules_text(card: dict, name_map: dict[str, str] | None = None) -> str:
         cost = ability.get("mana_cost", 0)
         effect_type = ability.get("effect_type", "")
         if effect_type == "conjure_rat_and_buff":
-            text = f"'''Active ({cost}):''' Conjure Common Rat from deck. Ally Rats on board +1🗡️/+1🤍 (+Dark Matter × 1)."
+            rat_link = _wikilink(ability.get("summon_card_id", "rat"), name_map)
+            text = f"'''Active ({cost}):''' [[Conjure]] {rat_link} from deck. Ally Rats on board +1🗡️/+1🤍 (+[[Dark Matter]] × 1)."
         elif effect_type == "summon_token" and ability.get("summon_card_id"):
-            text = f"'''Active ({cost}):''' Summon {_wikilink(ability['summon_card_id'], name_map)}."
+            text = f"'''Active ({cost}):''' [[Conjure|Summon]] {_wikilink(ability['summon_card_id'], name_map)}."
         else:
             name = ability.get("name", "activate")
             text = f"'''Active ({cost}):''' {name}."
@@ -415,10 +416,12 @@ def card_to_wikitext(
         tribe_links = "<br/>".join(f"[[{t.strip()}]]" for t in tribe.split("/"))
         meta_rows.append(f"{{{{!}}}}-\n! {_row_style} {{{{!}}}} Tribe\n{{{{!}}}} {_val_style} {{{{!}}}} {tribe_links}")
     if is_minion and card.get("range") is not None:
-        range_val = "Melee" if card.get("range") == 0 else f"Range {card.get('range')}"
+        range_val = "[[Melee]]" if card.get("range") == 0 else f"[[Ranged|Range {card.get('range')}]]"
         meta_rows.append(f"{{{{!}}}}-\n! {_row_style} {{{{!}}}} Range\n{{{{!}}}} {_val_style} {{{{!}}}} {range_val}")
-    if keywords:
-        kw_links = "<br/>".join(f"[[{kw}]]" for kw in keywords)
+    # Filter Melee/Ranged from keywords — already linked in the Range row
+    display_kws = [kw for kw in keywords if kw not in ("Melee", "Ranged")]
+    if display_kws:
+        kw_links = "<br/>".join(f"[[{kw}]]" for kw in display_kws)
         meta_rows.append(f"{{{{!}}}}-\n! {_row_style} {{{{!}}}} Keywords\n{{{{!}}}} {_val_style} {{{{!}}}} {kw_links}")
     if meta_rows:
         fields["meta_rows"] = "\n".join(meta_rows)

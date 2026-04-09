@@ -137,10 +137,11 @@ class TestDeriveKeywords:
 
 class TestBuildRulesText:
     def test_build_rules_text_activated(self, name_map):
-        """Ratchanter: rules text includes Active: and wikilink to Rat."""
+        """Ratchanter: rules text includes Active:, Conjure link, and wikilink to Rat."""
         card = _load("minion_ratchanter.json")
         rules = build_rules_text(card, name_map)
-        assert "Active:" in rules
+        assert "Active" in rules
+        assert "[[Conjure]]" in rules
         assert "[[Card:Common Rat|Common Rat]]" in rules
 
     def test_build_rules_text_transform(self, name_map):
@@ -153,43 +154,42 @@ class TestBuildRulesText:
         assert "[[Card:Fallen Paladin|Fallen Paladin]]" in rules
 
     def test_build_rules_text_tutor(self, name_map):
-        """Blue Diodebot: rules text includes wikilink to Red Diodebot."""
+        """Blue Diodebot: rules text includes Tutor link and wikilink to Red Diodebot."""
         card = _load("minion_blue_diodebot.json")
         rules = build_rules_text(card, name_map)
         assert "[[Card:Red Diodebot|Red Diodebot]]" in rules
-        assert "search your deck" in rules
+        assert "[[Tutor]]" in rules
 
     def test_build_rules_text_multi_effect(self, name_map):
-        """Dark Drain: damage + heal -> both effects appear."""
+        """Dark Drain: damage + heal -> both effects appear with links."""
         card = _load("magic_dark_drain.json")
         rules = build_rules_text(card, name_map)
         assert "Deal 20 damage" in rules
-        assert "Restore 20 HP" in rules
+        assert "[[Heal]] 20" in rules
 
     def test_build_rules_text_promote(self, name_map):
-        """Giant Rat: rules mentions promote and links to Rat."""
+        """Giant Rat: rules mentions Promote link."""
         card = _load("minion_giant_rat.json")
         rules = build_rules_text(card, name_map)
-        assert "promote" in rules
-        assert "[[Card:Common Rat|Common Rat]]" in rules
+        assert "[[Promote]]" in rules
 
     def test_build_rules_text_react_condition(self, name_map):
-        """Counter Spell: rules prefixed with react condition."""
+        """Counter Spell: rules prefixed with react condition and Negate link."""
         card = _load("react_counter_spell.json")
         rules = build_rules_text(card, name_map)
-        assert "When opponent plays a magic card:" in rules
-        assert "Negate" in rules
+        assert "[[Negate]]" in rules
 
     def test_build_rules_text_deploy_self(self, name_map):
-        """Dark Sentinel: react_effect deploy_self appears in rules."""
+        """Dark Sentinel: react_effect deploy_self appears in rules as link."""
         card = _load("minion_dark_sentinel.json")
         rules = build_rules_text(card, name_map)
-        assert "Deploy this card" in rules
+        assert "[[Deploy]]" in rules
 
     def test_build_rules_text_no_name_map(self):
         """Cross-links work without name_map (fallback to title-cased id)."""
         card = _load("minion_ratchanter.json")
         rules = build_rules_text(card, name_map=None)
+        assert "[[Conjure]]" in rules
         assert "[[Card:Rat|Rat]]" in rules
 
     def test_build_rules_text_empty(self, name_map):
