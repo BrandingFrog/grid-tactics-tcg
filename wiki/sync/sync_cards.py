@@ -31,12 +31,30 @@ _VERSION_PATH = _REPO_ROOT / "src" / "grid_tactics" / "server" / "static" / "VER
 # React condition human-readable labels
 # ---------------------------------------------------------------------------
 
-_REACT_CONDITION_TEXT: dict[str, str] = {
-    "opponent_plays_magic": "When opponent plays a magic card: ",
-    "opponent_plays_minion": "When opponent plays a minion: ",
-    "opponent_attacks": "When opponent attacks: ",
-    "opponent_sacrifices": "When opponent sacrifices: ",
-    "opponent_plays_light": "When opponent plays a light card: ",
+# React condition map — matches game.js condMap (int keys from card JSON)
+_REACT_CONDITION_TEXT: dict[int, str] = {
+    0: "Enemy plays Magic",
+    1: "Enemy summons Minion",
+    2: "Enemy attacks",
+    3: "Enemy plays React",
+    4: "Any enemy action",
+    5: "Enemy plays any Wood",
+    6: "Enemy plays any Fire",
+    7: "Enemy plays any Earth",
+    8: "Enemy plays any Water",
+    9: "Enemy plays any Metal",
+    10: "Enemy plays any Dark",
+    11: "Enemy plays any Light",
+    12: "Enemy sacrifices",
+}
+# Also support string keys (some card JSONs use strings)
+_REACT_CONDITION_TEXT_STR: dict[str, str] = {
+    "opponent_plays_magic": "Enemy plays Magic",
+    "opponent_plays_minion": "Enemy summons Minion",
+    "opponent_attacks": "Enemy attacks",
+    "opponent_plays_react": "Enemy plays React",
+    "opponent_sacrifices": "Enemy sacrifices",
+    "opponent_plays_light": "Enemy plays any Light",
 }
 
 
@@ -186,11 +204,14 @@ def build_rules_text(card: dict, name_map: dict[str, str] | None = None) -> str:
     parts: list[str] = []
     effects = card.get("effects", [])
 
-    # React condition prefix
-    react_cond = card.get("react_condition", "")
-    prefix = ""
-    if react_cond:
-        prefix = _REACT_CONDITION_TEXT.get(react_cond, f"React ({react_cond}): ")
+    # Summon sacrifice cost (in-game: "Cost: Discard any Robot")
+    sac_tribe = card.get("summon_sacrifice_tribe", "")
+    if sac_tribe:
+        parts.append(f"Cost: Discard any [[{sac_tribe}]]")
+
+    # Unique tag
+    if card.get("unique"):
+        parts.append("Unique")
 
     # Standard effects — matches game.js getEffectDescription exactly
     is_minion = card.get("card_type", "") == "minion"
@@ -290,11 +311,16 @@ def build_rules_text(card: dict, name_map: dict[str, str] | None = None) -> str:
             options.append(f"Pay {cost} mana -> {target_link}")
         parts.append(f"'''Transform:''' {', '.join(options)}.")
 
-    # Combine with prefix
-    body = " ".join(parts)
-    if prefix and body:
-        return prefix + body
-    return body
+    # React condition (multi-purpose minions like Dark Sentinel, Surgefed Sparkbot)
+    react_cond = card.get("react_condition")
+    if react_cond is not None and card.get("react_mana_cost") is not None:
+        cond_text = _REACT_CONDITION_TEXT.get(react_cond) or _REACT_CONDITION_TEXT_STR.get(str(react_cond), "Enemy acts")
+        extra = " & No friendly minions" if card.get("react_requires_no_friendly_minions") else ""
+        cost = card.get("react_mana_cost", 0)
+        cost_text = f" ({cost})" if cost > 0 else ""
+        parts.append(f"React{cost_text}: {cond_text}{extra}")
+
+    return ". ".join(parts)
 
 
 def card_to_wikitext(
