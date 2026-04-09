@@ -474,6 +474,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.polish:
         from sync.sync_polish import (
             configure_logo_and_favicon,
+            push_font_css,
             push_mobile_css,
             upload_favicon,
             upload_logo,
@@ -486,6 +487,9 @@ def main(argv: list[str] | None = None) -> int:
             return 2
         dry_label = " (dry run)" if args.dry_run else ""
         print(f"Running launch polish{dry_label}...")
+
+        print("\n=== Font CSS ===")
+        push_font_css(site, dry_run=args.dry_run)
 
         print("\n=== Mobile CSS ===")
         css_status = push_mobile_css(site, dry_run=args.dry_run)

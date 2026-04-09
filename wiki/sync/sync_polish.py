@@ -6,7 +6,7 @@ in :mod:`sync.sync_wiki`.
 
 Usage::
 
-    from sync.sync_polish import push_mobile_css, upload_logo, upload_favicon
+    from sync.sync_polish import push_font_css, push_mobile_css, upload_logo, upload_favicon
     from sync.sync_polish import configure_logo_and_favicon, verify_search
     from sync.client import get_site
 
@@ -67,6 +67,50 @@ _MOBILE_CSS_BLOCK = f"""{_MOBILE_CSS_MARKER}
   }}
 }}
 """
+
+# ---------------------------------------------------------------------------
+# Font CSS
+# ---------------------------------------------------------------------------
+
+_FONT_CSS_MARKER = "/* --- Grid Tactics Fonts --- */"
+
+_FONT_CSS_BLOCK = f"""{_FONT_CSS_MARKER}
+@import url('https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;700&display=swap');
+"""
+
+
+def push_font_css(site, dry_run: bool = False) -> str:
+    """Append Google Fonts import to MediaWiki:Common.css (idempotent).
+
+    Returns ``"created"``, ``"updated"``, or ``"unchanged"``.
+    """
+    page = site.pages["MediaWiki:Common.css"]
+
+    if not page.exists:
+        if dry_run:
+            print("  MediaWiki:Common.css: would-create (font CSS)")
+            return "would-create"
+        page.edit(_FONT_CSS_BLOCK, summary="add Google Fonts import for card names")
+        print("  MediaWiki:Common.css: created (font CSS)")
+        return "created"
+
+    current = page.text()
+
+    if _FONT_CSS_MARKER in current:
+        print("  MediaWiki:Common.css: unchanged (font CSS already present)")
+        return "unchanged"
+
+    # Prepend font import before existing CSS so it loads first
+    new_text = _FONT_CSS_BLOCK + "\n" + current
+
+    if dry_run:
+        print("  MediaWiki:Common.css: would-update (prepend font CSS)")
+        return "would-update"
+
+    page.edit(new_text, summary="prepend Google Fonts import for card names")
+    print("  MediaWiki:Common.css: updated (prepended font CSS)")
+    return "updated"
+
 
 # ---------------------------------------------------------------------------
 # Mobile CSS
