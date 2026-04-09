@@ -30,7 +30,7 @@ ENV COMPOSER_ALLOW_SUPERUSER=1
 # --update-no-dev. Strip phpunit from require-dev before calling composer require.
 RUN php -r '$j = json_decode(file_get_contents("composer.json"), true); unset($j["require-dev"]["phpunit/phpunit"]); file_put_contents("composer.json", json_encode($j, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));' \
  && composer require --no-interaction --no-audit --update-no-dev \
-      mediawiki/semantic-media-wiki "~4.1" \
+      mediawiki/semantic-media-wiki "~5.0" \
  && composer dump-autoload --optimize --no-dev \
  && chown -R www-data:www-data /var/www/html
 
