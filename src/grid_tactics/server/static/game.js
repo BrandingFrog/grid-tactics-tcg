@@ -1546,12 +1546,12 @@ function renderCardFrame(c, opts) {
         var tribe = c.tribe || '';
         var rangeText = (c.attack_range != null) ? (c.attack_range === 0 ? 'MELEE' : 'RANGE ' + c.attack_range) : '';
         html += '<div class="card-bottom-section">';
-        html += '<div class="card-stat-atk">' + c.attack + SWORD + '</div>';
+        html += '<div class="card-stat-atk"><span class="stat-emoji-bg">🗡️</span><span class="stat-num">' + c.attack + '</span></div>';
         html += '<div class="card-bottom-center">';
         if (tribe) html += '<div class="card-bottom-tribe">' + tribe + '</div>';
         if (rangeText) html += '<div class="card-bottom-range">' + rangeText + '</div>';
         html += '</div>';
-        html += '<div class="card-stat-hp">' + c.health + HEART + '</div>';
+        html += '<div class="card-stat-hp"><span class="stat-emoji-bg">🤍</span><span class="stat-num">' + c.health + '</span></div>';
         html += '</div>';
     }
     // Summon sacrifice cost
@@ -4643,8 +4643,8 @@ function renderBoardMinion(minion) {
         + '<div class="attr-circle-sm ' + elem.css + '"><span class="attr-text-sm">' + elem.name + '</span></div>'
         + '<div class="board-minion-name">' + cardDef.name + '</div>'
         + '<div class="board-minion-stats">'
-        + '<span class="board-minion-atk">' + atk + SWORD + '</span>'
-        + '<span class="board-minion-hp">' + hp + HEART + '</span>'
+        + '<span class="board-minion-atk"><span class="stat-emoji-bg">🗡️</span><span class="stat-num">' + atk + '</span></span>'
+        + '<span class="board-minion-hp"><span class="stat-emoji-bg">🤍</span><span class="stat-num">' + hp + '</span></span>'
         + '</div>'
         + badgesHtml
         + '</div>';

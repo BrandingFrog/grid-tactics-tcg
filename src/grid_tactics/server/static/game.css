@@ -1226,6 +1226,20 @@ body {
   paint-order: stroke fill;
   border: 2px solid rgb(30, 25, 20);
   flex-shrink: 0;
+  position: relative;
+}
+
+.stat-emoji-bg {
+  position: absolute;
+  font-size: 1.4em;
+  opacity: 0.35;
+  -webkit-text-stroke: 0;
+  filter: grayscale(0.3);
+}
+
+.stat-num {
+  position: relative;
+  z-index: 1;
 }
 
 .card-stat-atk {
