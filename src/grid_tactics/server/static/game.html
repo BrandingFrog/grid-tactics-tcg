@@ -20,7 +20,7 @@
     <nav class="nav">
       <button class="nav-btn active" data-screen="lobby">Duel</button>
       <button class="nav-btn" data-screen="deck-builder">Deck Builder</button>
-      <button class="nav-btn" data-screen="wiki">Wiki</button>
+      <a class="nav-btn" href="https://mediawiki-production-7169.up.railway.app" target="_blank" style="text-decoration:none;">Wiki</a>
     </nav>
     <div class="header-right">
       <div id="patch-badge" class="patch-badge" aria-live="polite"></div>
@@ -222,12 +222,7 @@
     </div>
   </div>
 
-  <!-- Screen: Wiki -->
-  <div id="screen-wiki" class="screen">
-    <iframe id="wiki-iframe" src="https://mediawiki-production-7169.up.railway.app" style="width:100%;height:calc(100vh - 48px);border:none;"></iframe>
-  </div>
-
-  <!-- Screen: Game -->
+<!-- Screen: Game -->
   <div id="screen-game" class="screen">
     <div class="game-layout">
       <div class="game-main">
