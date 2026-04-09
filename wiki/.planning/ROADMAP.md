@@ -122,16 +122,17 @@ Plans:
 
 ---
 
-### Phase 7: Semantic Query Showcase & Homepage
+### Phase 7: Semantic Query Showcase & Homepage ✓
 
 **Goal:** The wiki has a navigable homepage and a showcase of powerful semantic queries that designers and players can actually use.
+**Status:** COMPLETE 2026-04-09. Main Page with navigation hub and Semantic:Showcase page with 7 live SMW queries on Railway wiki.
 **Depends on:** Phase 4, Phase 6
 **Requirements:** WIKI-08, SEMANTIC-02
 **Plans:** 2 plans
 
 Plans:
-- [ ] 07-01-PLAN.md — Main Page with navigation links to all index pages
-- [ ] 07-02-PLAN.md — Semantic:Showcase page with 7 live SMW queries
+- [x] 07-01-PLAN.md — Main Page with navigation links to all index pages
+- [x] 07-02-PLAN.md — Semantic:Showcase page with 7 live SMW queries
 
 **Success Criteria:**
 1. The Main Page links to element, tribe, keyword, rules, and patch indexes, and all links resolve.
@@ -181,7 +182,7 @@ Plans:
 | 4 - Taxonomy Pages | complete | 2026-04-09 |
 | 5 - Patch Notes Generator & Hook Integration | complete | 2026-04-09 |
 | 6 - Card History Tracking | complete | 2026-04-09 |
-| 7 - Semantic Query Showcase & Homepage | Not started | — |
+| 7 - Semantic Query Showcase & Homepage | complete | 2026-04-09 |
 | 8 - Idempotency, Drift Detection & Reliability | Not started | — |
 | 9 - Launch Polish | Not started | — |
 
