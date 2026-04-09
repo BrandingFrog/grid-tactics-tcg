@@ -44,19 +44,14 @@ _REACT_CONDITION_TEXT: dict[str, str] = {
 # Effect templates
 # ---------------------------------------------------------------------------
 
-EFFECT_TEMPLATES: dict[str, str] = {
-    "damage": "Deal {amount} damage to a target.",
-    "heal": "Restore {amount} HP.",
-    "burn": "Apply {amount} burn damage over time.",
-    "negate": "Negate the target spell.",
-    "destroy": "Destroy a target minion.",
-    "leap": "Leap {amount} spaces forward.",
-    "rally_forward": "Push all friendly minions forward {amount} space(s).",
-    "deploy_self": "Deploy this card to the board.",
-    "grant_dark_matter": "Grant Dark Matter to a target.",
-    "buff_health": "Grant +{amount} HP to a target.",
-    "dark_matter_buff": "Buff a minion with Dark Matter (+{amount}).",
-    "passive_heal": "Passively heal for {amount} each turn.",
+# Trigger index -> prefix text (matches game.js triggerMap)
+_TRIGGER_PREFIX: dict[int, str] = {
+    0: "Summon",  # on_play for minions; empty for spells
+    1: "Death",
+    2: "Attack",
+    3: "Damaged",
+    4: "Move",
+    5: "Passive",
 }
 
 
@@ -197,44 +192,91 @@ def build_rules_text(card: dict, name_map: dict[str, str] | None = None) -> str:
     if react_cond:
         prefix = _REACT_CONDITION_TEXT.get(react_cond, f"React ({react_cond}): ")
 
-    # Standard effects
+    # Standard effects — matches game.js getEffectDescription exactly
+    is_minion = card.get("card_type", "") == "minion"
     for eff in effects:
-        eff_type = eff.get("type", "")
+        trigger_idx = eff.get("trigger", 0)
+        trigger = _TRIGGER_PREFIX.get(trigger_idx, "")
+        # on_play trigger only shows "Summon" for minions
+        if trigger_idx == 0 and not is_minion:
+            trigger = ""
+        pfx = f"{trigger}: " if trigger else ""
         amount = eff.get("amount", 0)
+        eff_type = eff.get("type", "")
+        target = eff.get("target", 0)
 
-        if eff_type == "promote":
-            # Special: promote uses promote_target
+        if eff_type == "damage":
+            desc = f"{pfx}Deal {amount} damage"
+            if target == 1:
+                desc += " to all enemies"
+        elif eff_type == "heal":
+            desc = f"{pfx}Heal {amount}"
+        elif eff_type == "buff_attack":
+            desc = f"{pfx}+{amount}🗡️"
+        elif eff_type == "buff_health":
+            desc = f"{pfx}+{amount}🤍"
+        elif eff_type == "negate":
+            desc = f"{pfx}Negate"
+        elif eff_type == "deploy_self":
+            desc = f"{pfx}Deploy"
+        elif eff_type == "rally_forward":
+            card_name = card.get("name", "this unit")
+            desc = f"Move: Rally friendly {card_name}"
+        elif eff_type == "promote":
             target_id = card.get("promote_target", "")
-            target_link = _wikilink(target_id, name_map) if target_id else "a new form"
-            parts.append(f"On death: promote to {target_link}.")
+            if target_id:
+                promote_tribe = card.get("tribe") or _wikilink(target_id, name_map)
+                desc = f"{pfx}Promote any {promote_tribe} to {card.get('name', '?')}"
+            else:
+                desc = f"{pfx}Promote"
         elif eff_type == "tutor":
-            # Special: tutor uses tutor_target
             target_id = card.get("tutor_target", "")
             target_link = _wikilink(target_id, name_map) if target_id else "a card"
-            parts.append(
-                f"On play: search your deck for {target_link} and add it to your hand."
-            )
-        elif eff_type in EFFECT_TEMPLATES:
-            text = EFFECT_TEMPLATES[eff_type].format(amount=amount)
-            parts.append(text)
+            desc = f"{pfx}Tutor {target_link}"
+        elif eff_type == "destroy":
+            desc = f"{pfx}Destroy target"
+        elif eff_type == "burn":
+            burn_target = {0: "", 1: " all enemies", 2: " adjacent enemies", 3: ""}.get(target, "")
+            desc = f"{pfx}Burn{burn_target}"
+        elif eff_type == "dark_matter_buff":
+            desc = f"Active: +{amount}🗡️ (+Dark Matter×1)"
+        elif eff_type == "passive_heal":
+            desc = f"Passive: Heal {amount} per turn"
+        elif eff_type == "leap":
+            desc = "Move: Leap over enemies"
+        else:
+            desc = f"{pfx}Effect"
+        parts.append(desc)
 
     # React effect (separate field from effects array)
     react_eff = card.get("react_effect")
     if react_eff:
         eff_type = react_eff.get("type", "")
         amount = react_eff.get("amount", 0)
-        if eff_type in EFFECT_TEMPLATES:
-            parts.append(EFFECT_TEMPLATES[eff_type].format(amount=amount))
+        if eff_type == "damage":
+            parts.append(f"Deal {amount} damage")
+        elif eff_type == "heal":
+            parts.append(f"Heal {amount}")
+        elif eff_type == "deploy_self":
+            parts.append("Deploy")
+        elif eff_type == "negate":
+            parts.append("Negate")
 
     # Activated ability
     ability = card.get("activated_ability")
     if ability:
         cost = ability.get("mana_cost", 0)
-        name = ability.get("name", "activate")
-        text = f"'''Active:''' Pay {cost} mana to {name}."
-        summon_id = ability.get("summon_card_id")
-        if summon_id:
-            text += f" Summons {_wikilink(summon_id, name_map)}."
+        effect_type = ability.get("effect_type", "")
+        if effect_type == "conjure_rat_and_buff":
+            text = f"'''Active ({cost}):''' Conjure Common Rat from deck. Ally Rats on board +1🗡️/+1🤍 (+Dark Matter × 1)."
+        elif effect_type == "summon_token" and ability.get("summon_card_id"):
+            text = f"'''Active ({cost}):''' Summon {_wikilink(ability['summon_card_id'], name_map)}."
+        else:
+            name = ability.get("name", "activate")
+            text = f"'''Active ({cost}):''' {name}."
+            summon_id = ability.get("summon_card_id")
+            if summon_id:
+                text += f" Summons {_wikilink(summon_id, name_map)}."
         parts.append(text)
 
     # Transform options
