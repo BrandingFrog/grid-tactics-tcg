@@ -191,6 +191,44 @@ def generate_favicon_ico(output_path: str | Path) -> Path:
     return output_path
 
 
+def generate_favicon_png(output_path: str | Path) -> Path:
+    """Generate a 32x32 PNG favicon with 'GT' text.
+
+    PNG fallback for MediaWiki instances that ban ICO uploads.
+    Returns the output path.
+    """
+    output_path = Path(output_path)
+    try:
+        from PIL import Image, ImageDraw, ImageFont
+
+        img = Image.new("RGBA", (32, 32), (26, 26, 26, 255))
+        draw = ImageDraw.Draw(img)
+
+        draw.rectangle([1, 1, 30, 30], outline=(100, 100, 100, 255), width=1)
+
+        try:
+            font = ImageFont.truetype("arial.ttf", 16)
+        except (OSError, IOError):
+            try:
+                font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 16)
+            except (OSError, IOError):
+                font = ImageFont.load_default()
+
+        bbox = draw.textbbox((0, 0), "GT", font=font)
+        text_w = bbox[2] - bbox[0]
+        text_h = bbox[3] - bbox[1]
+        x = (32 - text_w) // 2
+        y = (32 - text_h) // 2 - bbox[1]
+        draw.text((x, y), "GT", fill=(255, 255, 255, 255), font=font)
+
+        img.save(str(output_path), "PNG")
+    except ImportError:
+        print("  WARNING: Pillow not available, creating placeholder favicon PNG")
+        _write_minimal_png(output_path, 32, 32)
+
+    return output_path
+
+
 def _write_minimal_png(path: Path, width: int, height: int) -> None:
     """Write a minimal valid 1-pixel transparent PNG (fallback)."""
     import io
@@ -301,28 +339,29 @@ def upload_logo(site, dry_run: bool = False) -> str:
 
 
 def upload_favicon(site, dry_run: bool = False) -> str:
-    """Generate and upload the favicon as File:Favicon.ico.
+    """Generate and upload the favicon as File:Favicon.png.
 
+    Uses PNG format because MediaWiki instances commonly ban ICO uploads.
     Returns status string.
     """
     if dry_run:
-        print("  Favicon: would-upload File:Favicon.ico")
+        print("  Favicon: would-upload File:Favicon.png")
         return "would-upload"
 
-    with tempfile.NamedTemporaryFile(suffix=".ico", delete=False) as tmp:
+    with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
         tmp_path = Path(tmp.name)
 
     try:
-        generate_favicon_ico(tmp_path)
+        generate_favicon_png(tmp_path)
         with open(tmp_path, "rb") as f:
             site.upload(
                 file=f,
-                filename="Favicon.ico",
+                filename="Favicon.png",
                 description="Grid Tactics Wiki favicon (32x32)",
                 ignore=True,
                 comment="upload site favicon",
             )
-        print("  Favicon: uploaded File:Favicon.ico")
+        print("  Favicon: uploaded File:Favicon.png")
         return "uploaded"
     except Exception as exc:
         exc_str = str(exc)
@@ -361,8 +400,8 @@ _FAVICON_JS_BLOCK = f"""{_FAVICON_JS_MARKER}
 (function() {{
   var link = document.createElement('link');
   link.rel = 'icon';
-  link.type = 'image/x-icon';
-  link.href = '/w/images/Favicon.ico';
+  link.type = 'image/png';
+  link.href = '/w/images/Favicon.png';
   document.head.appendChild(link);
 }})();
 """
@@ -405,8 +444,34 @@ def configure_logo_and_favicon(site, dry_run: bool = False) -> str:
         js_text = ""
 
     if _FAVICON_JS_MARKER in js_text:
-        print("  Favicon JS: unchanged (already present)")
-        statuses.append("unchanged")
+        # Check if content matches (may need update if favicon format changed)
+        # Extract the existing block and compare
+        if "Favicon.png" in js_text:
+            print("  Favicon JS: unchanged (already present)")
+            statuses.append("unchanged")
+        elif dry_run:
+            print("  Favicon JS: would-update (fix favicon reference)")
+            statuses.append("would-update")
+        else:
+            # Replace old favicon block with new one
+            lines = js_text.split("\n")
+            new_lines = []
+            skip = False
+            for line in lines:
+                if _FAVICON_JS_MARKER in line:
+                    skip = True
+                    continue
+                if skip and line.strip() == "":
+                    skip = False
+                    continue
+                if skip:
+                    continue
+                new_lines.append(line)
+            cleaned = "\n".join(new_lines).rstrip()
+            new_js = cleaned + "\n\n" + _FAVICON_JS_BLOCK if cleaned else _FAVICON_JS_BLOCK
+            js_page.edit(new_js, summary="update favicon JS (PNG format)")
+            print("  Favicon JS: updated (fixed favicon reference)")
+            statuses.append("updated")
     elif dry_run:
         print("  Favicon JS: would-update")
         statuses.append("would-update")
@@ -457,10 +522,13 @@ def verify_search(site) -> bool:
         print(f"    ERROR: search failed: {exc}")
         all_pass = False
 
-    # Search for "Ranged"
+    # Search for "Ranged" (use srwhat=text for full-text search of page content)
     print("  Searching for 'Ranged'...")
     try:
-        result = site.api("query", list="search", srsearch="Ranged", srlimit=20)
+        result = site.api(
+            "query", list="search", srsearch="Ranged",
+            srlimit=20, srwhat="text",
+        )
         hits = result.get("query", {}).get("search", [])
         titles = [h["title"] for h in hits]
         print(f"    Found {len(hits)} results: {', '.join(titles[:10])}")
