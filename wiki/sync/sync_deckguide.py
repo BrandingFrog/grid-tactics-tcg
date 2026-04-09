@@ -167,6 +167,7 @@ def generate_deckguide_wikitext(cards_dir: Path) -> str:
             f" |?Attack\n"
             f" |?HP\n"
             f" |format=table\n"
+            f" |link=subject\n"
             f" |limit=50\n"
             f"}}}}"
         )
@@ -179,7 +180,7 @@ def generate_deckguide_wikitext(cards_dir: Path) -> str:
             parts.append(
                 f"* '''[[{tribe}]]''' ({count} cards) -- "
                 f"{{{{#ask:[[Category:Card]][[Tribe::{tribe}]]"
-                f"|?Name|format=list|limit=50}}}}"
+                f"|format=list|limit=50}}}}"
             )
 
     parts.append("\n<!-- AUTO-ARCHETYPES-END -->")

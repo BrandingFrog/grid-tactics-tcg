@@ -1,0 +1,4 @@
+<noinclude>
+A marker template for pages maintained by hand (not auto-synced).
+Place {{ManuallyMaintained}} at the bottom of any manually-curated page.
+</noinclude><includeonly><div style="font-size:0.85em; color:#888; margin-top:1em; border-top:1px solid #444; padding-top:0.5em;">This page is manually maintained.</div>[[Category:Rules]]</includeonly>

@@ -87,6 +87,7 @@ def element_page_wikitext(element: str) -> str:
         f" |?HP\n"
         f" |?Tribe\n"
         f" |format=broadtable\n"
+        f" |link=subject\n"
         f" |limit=50\n"
         f" |sort=Name\n"
         f"}}}}\n"
@@ -113,6 +114,7 @@ def tribe_page_wikitext(tribe: str) -> str:
         f" |?Attack\n"
         f" |?HP\n"
         f" |format=broadtable\n"
+        f" |link=subject\n"
         f" |limit=50\n"
         f" |sort=Name\n"
         f"}}}}\n"
@@ -260,7 +262,7 @@ def keyword_page_wikitext(keyword: str, description: str, category: str) -> str:
     Includes an ``{{#ask:}}`` query that auto-lists cards with this keyword.
     """
     return (
-        f"'''{keyword}''' is a [[{category} keyword]] in [[Grid Tactics TCG]].\n"
+        f"'''{keyword}''' is a [[:Category:{category} Keyword|{category.lower()} keyword]] in [[Grid Tactics TCG]].\n"
         f"\n"
         f"== Description ==\n"
         f"{description}\n"
@@ -274,6 +276,7 @@ def keyword_page_wikitext(keyword: str, description: str, category: str) -> str:
         f" |?Tribe\n"
         f" |?CardType\n"
         f" |format=broadtable\n"
+        f" |link=subject\n"
         f" |limit=50\n"
         f" |sort=Name\n"
         f"}}}}\n"
