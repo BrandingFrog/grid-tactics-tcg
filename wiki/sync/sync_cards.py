@@ -259,6 +259,7 @@ def card_to_wikitext(
     card: dict,
     name_map: dict[str, str] | None = None,
     art_exists: bool = True,
+    last_changed_patch: str | None = None,
 ) -> str:
     """Build a complete ``{{Card ... }}`` template invocation from card JSON.
 
@@ -333,6 +334,10 @@ def card_to_wikitext(
 
     # Patch version
     fields["patch"] = get_version()
+
+    # Last changed patch (set by caller when history tracking is active)
+    if last_changed_patch:
+        fields["last_changed_patch"] = last_changed_patch
 
     # Stable ID
     stable_id = card.get("card_id", "")

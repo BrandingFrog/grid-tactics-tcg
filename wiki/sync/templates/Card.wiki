@@ -60,6 +60,7 @@ data/cards/*.json automatically.
 {{#if:{{{flavor|}}}|[[FlavorText::{{{flavor}}}| ]]}}
 {{#if:{{{art|}}}|[[ArtFile::File:{{{art}}}| ]]}}
 {{#if:{{{patch|}}}|[[FirstPatch::{{{patch}}}| ]]}}
+{{#if:{{{last_changed_patch|}}}|[[LastChangedPatch::{{{last_changed_patch}}}| ]]}}
 {{#if:{{{deckable|}}}|[[Deckable::{{{deckable}}}| ]]}}
 {{#arraymap:{{{keywords|}}}|,|@@@|[[Keyword::@@@| ]]}}
 [[LastModified::{{CURRENTTIMESTAMP}}| ]]
