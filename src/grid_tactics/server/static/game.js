@@ -1365,7 +1365,7 @@ function populateTooltip(hostEl, numericId, opts) {
 
     // Full card art preview — shared renderer
     var artHost = hostEl.querySelector('.tooltip-card-art');
-    if (artHost) artHost.innerHTML = renderDeckBuilderCard(numericId, -1);
+    if (artHost) artHost.innerHTML = renderDeckBuilderCard(numericId, undefined);
 
     // Shared content (name, stats chips, body)
     var content = buildCardTooltipContent(c);
