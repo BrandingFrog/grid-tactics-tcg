@@ -31,6 +31,7 @@ ENV COMPOSER_ALLOW_SUPERUSER=1
 RUN php -r '$j = json_decode(file_get_contents("composer.json"), true); unset($j["require-dev"]["phpunit/phpunit"]); file_put_contents("composer.json", json_encode($j, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));' \
  && composer require --no-interaction --no-audit --update-no-dev \
       mediawiki/semantic-media-wiki "~5.0" \
+      mediawiki/parser-functions "*" \
  && composer dump-autoload --optimize --no-dev \
  && chown -R www-data:www-data /var/www/html
 
