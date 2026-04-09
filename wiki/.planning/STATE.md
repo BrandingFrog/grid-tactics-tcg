@@ -1,17 +1,17 @@
 ---
 milestone: v1.0
-status: phase-4-in-progress
-stopped_at: completed_04-01
+status: phase-4-complete
+stopped_at: completed_04-02
 last_updated: 2026-04-09
 progress:
   phase: 4
   phase_name: Taxonomy Pages
-  plan: 01
+  plan: 02
   phases_total: 9
-  phases_completed: 3
-  plans_completed_in_phase: 1
+  phases_completed: 4
+  plans_completed_in_phase: 2
   plans_total_in_phase: 2
-  percent: 37
+  percent: 44
 ---
 
 # Project State — Grid Tactics Wiki
@@ -21,28 +21,29 @@ progress:
 See: `.planning/PROJECT.md`
 
 **Core value:** Living, semantically-queryable knowledge base that auto-mirrors Grid Tactics card and mechanic state via git hooks.
-**Current focus:** Phase 4 in progress — Taxonomy Pages (element + tribe pages live, keywords/rules next)
+**Current focus:** Phase 4 complete — Taxonomy Pages (54 pages: 7 elements + 14 tribes + 27 keywords + 6 rules). Next: Phase 5 (Patch Notes).
 
 ## Current Position
 
-Phase: 4 of 9 (Taxonomy Pages)
-Plan: 01 of 2 complete — 21 taxonomy pages (7 elements + 14 tribes) synced to live wiki.
-Status: In progress. Plan 02 (keywords + rules pages) next.
-Last activity: 2026-04-09 — Completed 04-01 (sync_taxonomy.py + 21 taxonomy pages live)
+Phase: 4 of 9 (Taxonomy Pages) -- COMPLETE
+Plan: 02 of 2 complete — 54 taxonomy pages on live wiki.
+Status: Phase complete. Ready for Phase 5 (Patch Notes Generator).
+Last activity: 2026-04-09 — Completed 04-02 (keywords + rules pages + verification)
 
-Progress: `████░░░░░░` 37%
+Progress: `████░░░░░░` 44%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 4
-- Average duration: ~18 min/plan
+- Total plans completed: 6
+- Average duration: ~14 min/plan
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan | Status |
 |---|---|---|---|---|
 | 1 — Foundation & Schema Design | 4 | 4 | ~18 min | complete |
+| 4 — Taxonomy Pages | 2 | 2 | ~5 min | complete |
 
 ## Accumulated Context
 
@@ -58,6 +59,9 @@ Progress: `████░░░░░░` 37%
 - **[03-03]** MediaWiki `fileexists-no-change` on duplicate art uploads treated as "unchanged" for idempotent re-runs.
 - **[04-01]** Element and tribe page titles are bare names (Fire, Rat), not namespaced. SMW ask queries resolve correctly.
 - **[04-01]** `upsert_taxonomy_pages()` is a generic reusable function for any taxonomy page type (elements, tribes, keywords, rules).
+- **[04-02]** 27 keywords parsed from GLOSSARY.md (7 trigger + 20 mechanic). Keyword pages use bare names matching SMW property values.
+- **[04-02]** Rules pages use descriptive titles (Grid Tactics TCG, 5x5 Board, Mana, React Window, Win Conditions, Turn Structure) with ManuallyMaintained marker.
+- **[04-02]** `verify_taxonomy()` is the comprehensive gate for Phase 4 correctness -- 5 check groups covering category counts, spot checks, content, and rules pages.
 - **[04-01]** Mage/Rat tribe page works with slash in title (MediaWiki subpage behavior is acceptable here).
 - Tech stack locked: MediaWiki + SMW, MariaDB, Docker, Railway, Python `mwclient` (tentative), git post-commit hook.
 - JSON in `data/cards/*.json` is canonical; wiki is a projection, never source of truth.
@@ -110,5 +114,5 @@ Progress: `████░░░░░░` 37%
 ## Session Continuity
 
 Last session: 2026-04-09
-Stopped at: Completed 04-01 — 21 taxonomy pages live (7 elements + 14 tribes). sync_taxonomy.py ready for reuse.
-Resume file: None (ready for 04-02)
+Stopped at: Completed 04-02 — Phase 4 complete. 54 taxonomy pages live. All verification passing.
+Resume file: None (ready for Phase 5)
