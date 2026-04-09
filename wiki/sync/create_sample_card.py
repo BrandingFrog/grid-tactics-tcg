@@ -117,11 +117,18 @@ def _verify_via_ask(site, card: dict) -> bool:
         cost_vals = printouts.get("Cost", [])
         hp_vals = printouts.get("HP", [])
         print(f"  found {title}: Cost={cost_vals}, HP={hp_vals}")
+        # SMW may return plain numbers OR OrderedDicts with a "fulltext" key
+        # depending on MediaWiki/SMW version. Normalize to string for comparison.
+        def _smw_val(v):
+            if isinstance(v, dict):
+                return v.get("fulltext", v)
+            return v
+
         if (
             cost_vals
             and hp_vals
-            and float(cost_vals[0]) == float(expected_cost)
-            and float(hp_vals[0]) == float(expected_hp)
+            and float(_smw_val(cost_vals[0])) == float(expected_cost)
+            and float(_smw_val(hp_vals[0])) == float(expected_hp)
         ):
             found = True
     return found

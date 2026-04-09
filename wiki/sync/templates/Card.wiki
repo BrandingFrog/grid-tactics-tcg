@@ -63,6 +63,6 @@ data/cards/*.json automatically.
 {{#if:{{{deckable|}}}|[[Deckable::{{{deckable}}}| ]]}}
 {{#arraymap:{{{keywords|}}}|,|@@@|[[Keyword::@@@| ]]}}
 [[LastModified::{{CURRENTTIMESTAMP}}| ]]
-[[Category:Cards]]
+[[Category:Card]]
 {{#if:{{{element|}}}|[[Category:{{{element}}} cards]]}}
 {{#if:{{{type|}}}|[[Category:{{{type}}}s]]}}</includeonly>
