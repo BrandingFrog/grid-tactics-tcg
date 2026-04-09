@@ -1,17 +1,17 @@
 ---
 milestone: v1.0
-status: phase-2-complete
-stopped_at: completed_02-03
+status: phase-3-in-progress
+stopped_at: completed_03-02
 last_updated: 2026-04-09
 progress:
-  phase: 2
-  phase_name: MediaWiki+SMW on Railway
-  plan: 03
+  phase: 3
+  phase_name: Card Page Generator
+  plan: 02
   phases_total: 9
   phases_completed: 2
-  plans_completed_in_phase: 3
+  plans_completed_in_phase: 2
   plans_total_in_phase: 3
-  percent: 22
+  percent: 27
 ---
 
 # Project State — Grid Tactics Wiki
@@ -25,12 +25,12 @@ See: `.planning/PROJECT.md`
 
 ## Current Position
 
-Phase: 2 of 9 (MediaWiki+SMW on Railway) — **COMPLETE**
-Plan: 03 of 3 complete — Live wiki at https://mediawiki-production-7169.up.railway.app with SMW 5.1.0, 25 properties, Template:Card, and Card:Ratchanter all validated end-to-end.
-Status: Phase complete (pivoted from Taqasta to mediawiki:1.42 + SMW 5.1 mid-phase; see 02-01-SUMMARY.md)
-Last activity: 2026-04-09 — Completed Phase 2 end-to-end after pivot. bootstrap_schema / bootstrap_template / create_sample_card all run green against the live Railway wiki.
+Phase: 3 of 9 (Card Page Generator)
+Plan: 02 of 3 complete — Template:Card category fixed to singular, CardBack.png placeholder uploaded, file upload confirmed working.
+Status: In progress
+Last activity: 2026-04-09 — Completed 03-02 (Template category fix + placeholder art + upload verification)
 
-Progress: `██░░░░░░░░` 22%
+Progress: `██▓░░░░░░░` 27%
 
 ## Performance Metrics
 
@@ -48,6 +48,9 @@ Progress: `██░░░░░░░░` 22%
 
 ### Decisions
 
+- **[03-02]** CardBack.png is a solid #1a1a1a (280x400) dark gray PNG matching the card template background color. Serves as art fallback.
+- **[03-02]** SMW ask results on Railway mediawiki:1.42 return OrderedDict values (not plain numbers). Use `_smw_val()` helper pattern to extract `fulltext`.
+- **[03-02]** After template changes, existing pages need purge + null edit to force re-categorization (MediaWiki job queue may be slow).
 - Tech stack locked: MediaWiki + SMW, MariaDB, Docker, Railway, Python `mwclient` (tentative), git post-commit hook.
 - JSON in `data/cards/*.json` is canonical; wiki is a projection, never source of truth.
 - Wiki lives as a subproject at `wiki/` inside the grid-tactics repo for direct file access.
@@ -99,5 +102,5 @@ Progress: `██░░░░░░░░` 22%
 ## Session Continuity
 
 Last session: 2026-04-09
-Stopped at: Phase 1 complete — Template:Card live, Card:Ratchanter renders with real JSON data, SMW #ask returns Cost=4 HP=30 PASS
-Resume file: None (ready for Phase 2 Railway deploy)
+Stopped at: Completed 03-02 — Template:Card category fixed, CardBack.png uploaded, upload permissions verified
+Resume file: None (ready for 03-03)
