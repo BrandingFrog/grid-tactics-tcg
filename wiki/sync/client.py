@@ -54,8 +54,12 @@ def get_site() -> mwclient.Site:
     scheme = parsed.scheme or "http"
     host = parsed.netloc or parsed.path  # handles "localhost:8080" with no scheme
 
-    # Taqasta / this Taqasta build confirmed to serve api.php at /w/ in plan 01-02.
-    path = "/w/"
+    # Path where api.php lives on the wiki. Local Taqasta dev used /w/;
+    # Railway mediawiki:1.42 deploy (Phase 2) serves api.php at /. Override
+    # via MW_API_PATH env var; default to / for the live wiki.
+    path = os.environ.get("MW_API_PATH", "/").strip() or "/"
+    if not path.endswith("/"):
+        path += "/"
 
     site = mwclient.Site(host, path=path, scheme=scheme)
     site.login(bot_user, bot_pass)
