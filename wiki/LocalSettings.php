@@ -47,6 +47,10 @@ if ( !empty($_SERVER['HTTP_X_FORWARDED_PROTO']) && $_SERVER['HTTP_X_FORWARDED_PR
     $_SERVER['HTTPS'] = 'on';
 }
 
+# Allow DISPLAYTITLE to hide namespace prefix (e.g. Card:Ratchanter -> Ratchanter)
+$wgAllowDisplayTitle = true;
+$wgRestrictDisplayTitle = false;
+
 # Permissions — API + edit usable by logged-in users (default is fine)
 $wgGroupPermissions['*']['createaccount'] = false;
 $wgGroupPermissions['*']['edit'] = false;

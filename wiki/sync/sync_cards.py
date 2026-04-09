@@ -369,7 +369,7 @@ def card_to_wikitext(
     # Keywords
     keywords = derive_keywords(card)
     if keywords:
-        fields["keywords"] = ", ".join(keywords)
+        fields["keywords"] = "<br/>".join(f"[[{kw}]]" for kw in keywords)
         # Pre-generate SMW keyword annotations (replaces #arraymap in template)
         fields["keyword_annotations"] = "".join(
             f"[[Keyword::{kw}| ]]" for kw in keywords

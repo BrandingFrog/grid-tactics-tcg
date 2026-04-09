@@ -29,7 +29,24 @@ data/cards/*.json automatically.
 |-
 | colspan="2" style="padding:0;" | [[File:{{{art|CardBack.png}}}|280px|center|link=]]
 |-
-| colspan="2" style="padding:4px 10px; font-style:italic; border-top:1px solid #444; border-bottom:1px solid #444; background:#222;" | {{{type|Minion}}} &mdash; {{{element|Neutral}}}{{#if:{{{tribe|}}}| &middot; {{{tribe}}}}}{{#if:{{{keywords|}}}| &middot; {{{keywords}}}}}
+! style="padding:4px 10px; background:#222; border-top:1px solid #444; text-align:left; width:80px; color:#888; font-weight:normal; font-size:0.85em;" {{!}} Type
+| style="padding:4px 10px; background:#222; border-top:1px solid #444;" {{!}} [[{{{type|Minion}}}]]
+|-
+! style="padding:4px 10px; background:#222; text-align:left; color:#888; font-weight:normal; font-size:0.85em;" {{!}} Element
+| style="padding:4px 10px; background:#222;" {{!}} [[{{{element|Neutral}}}]]
+{{#if:{{{tribe|}}}|
+{{!}}-
+! style="padding:4px 10px; background:#222; text-align:left; color:#888; font-weight:normal; font-size:0.85em;" {{!}} Tribe
+{{!}} style="padding:4px 10px; background:#222;" {{!}} {{#switch:{{{tribe|}}}|Mage/Rat=[[Mage]]<br/>[[Rat]]|#default=[[{{{tribe}}}]]}}
+}}{{#if:{{{range|}}}|
+{{!}}-
+! style="padding:4px 10px; background:#222; text-align:left; color:#888; font-weight:normal; font-size:0.85em;" {{!}} Range
+{{!}} style="padding:4px 10px; background:#222;" {{!}} {{#ifeq:{{{range}}}|0|Melee|Range {{{range}}}}}
+}}{{#if:{{{keywords|}}}|
+{{!}}-
+! style="padding:4px 10px; background:#222; border-bottom:1px solid #444; text-align:left; color:#888; font-weight:normal; font-size:0.85em;" {{!}} Keywords
+{{!}} style="padding:4px 10px; background:#222; border-bottom:1px solid #444;" {{!}} {{{keywords}}}
+}}
 |-
 | colspan="2" style="padding:8px 10px; min-height:60px;" | {{{rules|}}}{{#if:{{{flavor|}}}|<hr style="border:0;border-top:1px dashed #555;"/><span style="color:#888;font-style:italic;">{{{flavor}}}</span>}}
 |-
@@ -39,4 +56,4 @@ data/cards/*.json automatically.
 }}
 |}
 
-{{#set:Name={{{name|{{PAGENAME}}}}} }}{{#if:{{{stable_id|}}}|{{#set:StableId={{{stable_id}}} }}}}{{#if:{{{type|}}}|{{#set:CardType={{{type}}} }}}}{{#if:{{{element|}}}|{{#set:Element={{{element}}} }}}}{{#if:{{{tribe|}}}|{{#set:Tribe={{{tribe}}} }}}}{{#if:{{{cost|}}}|{{#set:Cost={{{cost}}} }}}}{{#if:{{{attack|}}}|{{#set:Attack={{{attack}}} }}}}{{#if:{{{hp|}}}|{{#set:HP={{{hp}}} }}}}{{#if:{{{range|}}}|{{#set:Range={{{range}}} }}}}{{#if:{{{art|}}}|{{#set:ArtFile=File:{{{art}}} }}}}{{#if:{{{patch|}}}|{{#set:FirstPatch={{{patch}}} }}}}{{#if:{{{last_changed_patch|}}}|{{#set:LastChangedPatch={{{last_changed_patch}}} }}}}{{#if:{{{deckable|}}}|{{#set:Deckable={{{deckable}}} }}}}{{{keyword_annotations|}}}{{#set:LastModified={{CURRENTTIMESTAMP}} }}[[Category:Card]]{{#if:{{{element|}}}|[[Category:{{{element}}} cards]]}}{{#if:{{{type|}}}|[[Category:{{{type}}}s]]}}</includeonly>
+{{DISPLAYTITLE:{{{name|{{PAGENAME}}}}}}}{{#set:Name={{{name|{{PAGENAME}}}}} }}{{#if:{{{stable_id|}}}|{{#set:StableId={{{stable_id}}} }}}}{{#if:{{{type|}}}|{{#set:CardType={{{type}}} }}}}{{#if:{{{element|}}}|{{#set:Element={{{element}}} }}}}{{#if:{{{tribe|}}}|{{#set:Tribe={{{tribe}}} }}}}{{#if:{{{cost|}}}|{{#set:Cost={{{cost}}} }}}}{{#if:{{{attack|}}}|{{#set:Attack={{{attack}}} }}}}{{#if:{{{hp|}}}|{{#set:HP={{{hp}}} }}}}{{#if:{{{range|}}}|{{#set:Range={{{range}}} }}}}{{#if:{{{art|}}}|{{#set:ArtFile=File:{{{art}}} }}}}{{#if:{{{patch|}}}|{{#set:FirstPatch={{{patch}}} }}}}{{#if:{{{last_changed_patch|}}}|{{#set:LastChangedPatch={{{last_changed_patch}}} }}}}{{#if:{{{deckable|}}}|{{#set:Deckable={{{deckable}}} }}}}{{{keyword_annotations|}}}{{#set:LastModified={{CURRENTTIMESTAMP}} }}[[Category:Card]]{{#if:{{{element|}}}|[[Category:{{{element}}} cards]]}}{{#if:{{{type|}}}|[[Category:{{{type}}}s]]}}</includeonly>
