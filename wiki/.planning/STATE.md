@@ -1,12 +1,12 @@
 ---
 milestone: v1.0
 status: phase-3-in-progress
-stopped_at: completed_03-02
+stopped_at: completed_03-01
 last_updated: 2026-04-09
 progress:
   phase: 3
   phase_name: Card Page Generator
-  plan: 02
+  plan: 01
   phases_total: 9
   phases_completed: 2
   plans_completed_in_phase: 2
@@ -26,9 +26,9 @@ See: `.planning/PROJECT.md`
 ## Current Position
 
 Phase: 3 of 9 (Card Page Generator)
-Plan: 02 of 3 complete — Template:Card category fixed to singular, CardBack.png placeholder uploaded, file upload confirmed working.
-Status: In progress
-Last activity: 2026-04-09 — Completed 03-02 (Template category fix + placeholder art + upload verification)
+Plan: 01 + 02 of 3 complete — sync_cards.py pure-function wikitext conversion (03-01), Template:Card category fix + CardBack.png upload (03-02).
+Status: In progress (03-03 remaining)
+Last activity: 2026-04-09 — Completed 03-01 (pure-function card-to-wikitext conversion with 30 passing tests)
 
 Progress: `██▓░░░░░░░` 27%
 
@@ -48,6 +48,9 @@ Progress: `██▓░░░░░░░` 27%
 
 ### Decisions
 
+- **[03-01]** Keywords derived from JSON structure, never hard-coded per card. `derive_keywords()` inspects `card_type`, `range`, `effects`, `activated_ability`, `transform_options`, `tutor_target`, `promote_target`, `summon_sacrifice_tribe`, `react_condition`, `react_effect`.
+- **[03-01]** Cross-links use `[[Card:Display Name|Display Name]]` format via name_map lookup with title-case fallback.
+- **[03-01]** `react_effect` field (separate from `effects[]` array) is processed for both keywords and rules text (affects Dark Sentinel, Surgefed Sparkbot).
 - **[03-02]** CardBack.png is a solid #1a1a1a (280x400) dark gray PNG matching the card template background color. Serves as art fallback.
 - **[03-02]** SMW ask results on Railway mediawiki:1.42 return OrderedDict values (not plain numbers). Use `_smw_val()` helper pattern to extract `fulltext`.
 - **[03-02]** After template changes, existing pages need purge + null edit to force re-categorization (MediaWiki job queue may be slow).
@@ -87,7 +90,7 @@ Progress: `██▓░░░░░░░` 27%
 - Phase 2 watch item: post-deploy bootstrap sequence on Railway must run in order — `bootstrap_schema.py` → `verify_schema.py` → `bootstrap_template.py` → `create_sample_card.py`. All four scripts are idempotent.
 - Phase 3 watch item: `CardType`/`Element` Page-type properties with `[[Allows value::X]]` produce red-links until stub pages are created. Decide whether to auto-create stubs or accept red-links.
 - Phase 3 watch item: widen BotPassword grants to include `upload` before card art sync begins.
-- Phase 3 watch item: formalize rules-text synthesis helper (activated_ability/effects → human-readable rules string) in `sync_cards.py`.
+- Phase 3 watch item: ~~formalize rules-text synthesis helper~~ DONE in 03-01: `build_rules_text()` in `sync_cards.py`.
 - Phase 1 open checkpoints (deferred in 14.x posture, not blocking):
   - 01-02 Task 3 — visual check of Special:Version + bot login UI
   - 01-04 Task 3 — visual check of Card:Ratchanter infobox + Factbox
@@ -102,5 +105,5 @@ Progress: `██▓░░░░░░░` 27%
 ## Session Continuity
 
 Last session: 2026-04-09
-Stopped at: Completed 03-02 — Template:Card category fixed, CardBack.png uploaded, upload permissions verified
+Stopped at: Completed 03-01 — sync_cards.py with 5 exported functions, 30 passing tests, all 34 cards convert cleanly
 Resume file: None (ready for 03-03)
