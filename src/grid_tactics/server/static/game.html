@@ -20,6 +20,7 @@
     <nav class="nav">
       <button class="nav-btn active" data-screen="lobby">Duel</button>
       <button class="nav-btn" data-screen="deck-builder">Deck Builder</button>
+      <button class="nav-btn" data-screen="wiki">Wiki</button>
     </nav>
     <div class="header-right">
       <div id="patch-badge" class="patch-badge" aria-live="polite"></div>
@@ -186,12 +187,12 @@
 
         <!-- Card Tooltip (hover preview) -->
         <div class="card-tooltip" id="card-tooltip" style="display:none;">
-          <div class="tooltip-card" id="tooltip-card-art"></div>
-          <div class="tooltip-header" id="tooltip-name"></div>
-          <div class="tooltip-stats" id="tooltip-stats"></div>
-          <div class="tooltip-section" id="tooltip-keywords"></div>
-          <div class="tooltip-section tooltip-related-label" id="tooltip-related-label" style="display:none;">Related Cards</div>
-          <div class="tooltip-related" id="tooltip-related"></div>
+          <div class="tooltip-card tooltip-card-art"></div>
+          <div class="tooltip-header tooltip-name"></div>
+          <div class="tooltip-stats"></div>
+          <div class="tooltip-section tooltip-keywords"></div>
+          <div class="tooltip-section tooltip-related-label" style="display:none;">Related Cards</div>
+          <div class="tooltip-related"></div>
         </div>
 
         <!-- Deck List Sidebar (right) -->
@@ -219,6 +220,11 @@
         </div>
       </div>
     </div>
+  </div>
+
+  <!-- Screen: Wiki -->
+  <div id="screen-wiki" class="screen">
+    <iframe id="wiki-iframe" src="https://mediawiki-production-7169.up.railway.app" style="width:100%;height:calc(100vh - 48px);border:none;"></iframe>
   </div>
 
   <!-- Screen: Game -->
@@ -330,12 +336,14 @@
 
       <!-- Game Sidebar -->
       <div class="game-sidebar">
-        <!-- Game Tooltip (hover preview for hand cards & board minions) -->
-        <div class="game-tooltip" id="game-tooltip" style="display:none;">
-          <div class="gtt-card" id="gtt-card-art"></div>
-          <div class="gtt-name"></div>
-          <div class="gtt-stats"></div>
-          <div class="gtt-body"></div>
+        <!-- Game Tooltip (hover preview for hand cards & board minions).
+             Uses the SAME inner structure + class names as the deck-builder
+             tooltip (#card-tooltip) so populateTooltip() can target either. -->
+        <div class="card-tooltip game-tooltip" id="game-tooltip" style="display:none;">
+          <div class="tooltip-card tooltip-card-art"></div>
+          <div class="tooltip-header tooltip-name"></div>
+          <div class="tooltip-stats"></div>
+          <div class="tooltip-section tooltip-keywords"></div>
         </div>
 
         <div class="sidebar-section" id="activity-panel">

@@ -1346,26 +1346,46 @@ function buildCardTooltipContent(c) {
     return { name: c.name, statsHtml: statsHtml, bodyHtml: bodyHtml };
 }
 
-function showCardTooltip(numericId) {
+// =============================================
+// Unified tooltip renderer — populates ANY host element that has the
+// standard child class structure (.tooltip-card-art, .tooltip-name,
+// .tooltip-stats, .tooltip-keywords, and optionally .tooltip-related-label
+// + .tooltip-related). Both #card-tooltip (deck builder) and #game-tooltip
+// (in-game hover) share this exact inner structure, so one function drives
+// both. Pass opts.showRelated=true to render the "Related Cards" section.
+// =============================================
+function populateTooltip(hostEl, numericId, opts) {
+    if (!hostEl) return;
+    opts = opts || {};
     var defs = allCardDefs || cardDefs;
     var c = defs[numericId];
     if (!c) return;
-    var tooltip = document.getElementById('card-tooltip');
-    tooltip.style.display = '';
 
-    // Full card art preview — reuse the deck-builder card renderer
-    var artHost = document.getElementById('tooltip-card-art');
+    hostEl.style.display = '';
+
+    // Full card art preview — shared renderer
+    var artHost = hostEl.querySelector('.tooltip-card-art');
     if (artHost) artHost.innerHTML = renderDeckBuilderCard(numericId, -1);
 
+    // Shared content (name, stats chips, body)
     var content = buildCardTooltipContent(c);
-    document.getElementById('tooltip-name').textContent = content.name;
-    document.getElementById('tooltip-stats').innerHTML = content.statsHtml;
-    document.getElementById('tooltip-keywords').innerHTML = content.bodyHtml;
+    var nameEl = hostEl.querySelector('.tooltip-name');
+    if (nameEl) nameEl.textContent = content.name;
+    var statsEl = hostEl.querySelector('.tooltip-stats');
+    if (statsEl) statsEl.innerHTML = content.statsHtml;
+    var bodyEl = hostEl.querySelector('.tooltip-keywords');
+    if (bodyEl) bodyEl.innerHTML = content.bodyHtml;
 
-    // Related cards
-    // Related cards: only direct references (this card mentions them or they mention this card)
+    // Related cards (deck-builder only — game tooltip omits)
+    var relatedLabel = hostEl.querySelector('.tooltip-related-label');
+    var relatedContainer = hostEl.querySelector('.tooltip-related');
+    if (!opts.showRelated || !relatedLabel || !relatedContainer) {
+        if (relatedLabel) relatedLabel.style.display = 'none';
+        if (relatedContainer) relatedContainer.innerHTML = '';
+        return;
+    }
+
     var relatedIds = [];
-    // This card references:
     if (c.tutor_target) relatedIds.push(c.tutor_target);
     if (c.promote_target) relatedIds.push(c.promote_target);
     if (c.transform_options) {
@@ -1373,7 +1393,6 @@ function showCardTooltip(numericId) {
             if (relatedIds.indexOf(opt.target) === -1) relatedIds.push(opt.target);
         });
     }
-    // Other cards that reference this card:
     for (var nid2 in defs) {
         var d = defs[nid2];
         if (d.card_id === c.card_id) continue;
@@ -1386,8 +1405,6 @@ function showCardTooltip(numericId) {
         }
     }
 
-    var relatedLabel = document.getElementById('tooltip-related-label');
-    var relatedContainer = document.getElementById('tooltip-related');
     if (relatedIds.length > 0) {
         relatedLabel.style.display = '';
         var relHtml = '';
@@ -1422,31 +1439,21 @@ function showCardTooltip(numericId) {
     }
 }
 
+// Deck-builder tooltip: includes Related Cards section.
+function showCardTooltip(numericId) {
+    populateTooltip(document.getElementById('card-tooltip'), numericId, { showRelated: true });
+}
+
 function hideCardTooltip() {
     var tooltip = document.getElementById('card-tooltip');
     if (tooltip) tooltip.style.display = 'none';
 }
 
 // =============================================
-// Game Tooltip (for hand cards and board minions)
+// Game Tooltip (hand cards + board minions) — same renderer, no related.
 // =============================================
-
 function showGameTooltip(numericId, anchorEl) {
-    var c = cardDefs[numericId];
-    if (!c) return;
-    var tooltip = document.getElementById('game-tooltip');
-    if (!tooltip) return;
-    tooltip.style.display = '';
-
-    // Full card art preview — same renderer as the deck-builder tooltip
-    var artHost = document.getElementById('gtt-card-art');
-    if (artHost) artHost.innerHTML = renderDeckBuilderCard(numericId, -1);
-
-    // Shared content builder
-    var content = buildCardTooltipContent(c);
-    tooltip.querySelector('.gtt-name').textContent = content.name;
-    tooltip.querySelector('.gtt-stats').innerHTML = content.statsHtml;
-    tooltip.querySelector('.gtt-body').innerHTML = content.bodyHtml;
+    populateTooltip(document.getElementById('game-tooltip'), numericId, { showRelated: false });
 }
 
 function hideGameTooltip() {
