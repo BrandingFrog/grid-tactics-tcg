@@ -1,17 +1,17 @@
 ---
 milestone: v1.0
-status: phase-5-complete
-stopped_at: completed_05-02
+status: phase-6-in-progress
+stopped_at: completed_06-01
 last_updated: 2026-04-09
 progress:
-  phase: 5
-  phase_name: Patch Notes Generator
-  plan: 02
+  phase: 6
+  phase_name: Card History Tracking
+  plan: 01
   phases_total: 9
   phases_completed: 5
-  plans_completed_in_phase: 2
+  plans_completed_in_phase: 1
   plans_total_in_phase: 2
-  percent: 55
+  percent: 60
 ---
 
 # Project State — Grid Tactics Wiki
@@ -21,16 +21,16 @@ progress:
 See: `.planning/PROJECT.md`
 
 **Core value:** Living, semantically-queryable knowledge base that auto-mirrors Grid Tactics card and mechanic state via git hooks.
-**Current focus:** Phase 5 complete. Next: Phase 6 (Card History Tracking).
+**Current focus:** Phase 6 in progress. Plan 01 complete, Plan 02 next.
 
 ## Current Position
 
-Phase: 5 of 9 (Patch Notes Generator) -- COMPLETE
-Plan: 02 of 2 complete -- patch sync CLI, Patch:Index, .sync_state.json, post-commit hook.
-Status: Phase 5 complete. Ready for Phase 6.
-Last activity: 2026-04-09 -- Completed 05-02 (sync_patches.py, CLI, hook)
+Phase: 6 of 9 (Card History Tracking)
+Plan: 01 of 2 complete -- card_history.py module, Card.wiki LastChangedPatch, DeprecatedCard.wiki
+Status: In progress. Plan 02 next (wire into sync pipeline).
+Last activity: 2026-04-09 -- Completed 06-01 (card history building blocks)
 
-Progress: `██████░░░░` 55%
+Progress: `██████░░░░` 60%
 
 ## Performance Metrics
 
@@ -69,6 +69,9 @@ Progress: `██████░░░░` 55%
 - **[05-02]** Category:Patch used to discover patch pages for index (not namespace prefix search).
 - **[05-02]** post-commit hook checks wiki/.env existence before attempting sync.
 - **[05-02]** First-ever sync diffs HEAD~1..HEAD only (not full history).
+- **[06-01]** History entries sorted newest-first by reverse lexicographic version string (consistent with Phase 5).
+- **[06-01]** DeprecatedCard template keeps page in Category:Card AND Category:Deprecated for SMW query discoverability.
+- **[06-01]** LastChangedPatch is a distinct SMW property from FirstPatch (tracks most recent modification vs. introduction).
 - Tech stack locked: MediaWiki + SMW, MariaDB, Docker, Railway, Python `mwclient` (tentative), git post-commit hook.
 - JSON in `data/cards/*.json` is canonical; wiki is a projection, never source of truth.
 - Wiki lives as a subproject at `wiki/` inside the grid-tactics repo for direct file access.
@@ -99,8 +102,8 @@ Progress: `██████░░░░` 55%
 
 ### Pending Todos
 
-- **Phase 5 is complete.** Next action: Phase 6 (Card History Tracking).
-- Phase 6 will build on patch infrastructure (sync_patches.py, PatchDiff) to add per-card history sections.
+- **Phase 6 Plan 01 complete.** Next action: Phase 6 Plan 02 (wire history into sync pipeline).
+- Plan 06-02 will import card_history.py functions and integrate with sync_cards.py to auto-generate history sections.
 - Phase 2 watch item: BotPassword must be recreated on the Railway instance (credential lives in the wiki DB, doesn't port across). Automate via `createBotPassword.php` one-shot after deploy.
 - Phase 3 watch item: `CardType`/`Element` Page-type properties with `[[Allows value::X]]` produce red-links until stub pages are created. Decide whether to auto-create stubs or accept red-links.
 - Phase 1 open checkpoints (deferred in 14.x posture, not blocking):
@@ -117,5 +120,5 @@ Progress: `██████░░░░` 55%
 ## Session Continuity
 
 Last session: 2026-04-09
-Stopped at: Completed 05-02 -- Patch sync CLI, Patch:Index, .sync_state.json, post-commit hook. Phase 5 complete.
-Resume file: None (ready for Phase 6)
+Stopped at: Completed 06-01 -- card_history.py, Card.wiki LastChangedPatch, DeprecatedCard.wiki template.
+Resume file: None (ready for 06-02)
