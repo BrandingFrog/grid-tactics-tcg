@@ -1,17 +1,17 @@
 ---
 milestone: v1.0
-status: phase-5-in-progress
-stopped_at: completed_05-01
+status: phase-5-complete
+stopped_at: completed_05-02
 last_updated: 2026-04-09
 progress:
   phase: 5
   phase_name: Patch Notes Generator
-  plan: 01
+  plan: 02
   phases_total: 9
-  phases_completed: 4
-  plans_completed_in_phase: 1
+  phases_completed: 5
+  plans_completed_in_phase: 2
   plans_total_in_phase: 2
-  percent: 50
+  percent: 55
 ---
 
 # Project State — Grid Tactics Wiki
@@ -21,22 +21,22 @@ progress:
 See: `.planning/PROJECT.md`
 
 **Core value:** Living, semantically-queryable knowledge base that auto-mirrors Grid Tactics card and mechanic state via git hooks.
-**Current focus:** Phase 5 in progress — Patch Notes Generator. Plan 01 (diff engine + wikitext) complete. Next: Plan 02 (hook integration).
+**Current focus:** Phase 5 complete. Next: Phase 6 (Card History Tracking).
 
 ## Current Position
 
-Phase: 5 of 9 (Patch Notes Generator)
-Plan: 01 of 2 complete — diff engine + wikitext generator.
-Status: In progress. Plan 05-02 (hook integration) next.
-Last activity: 2026-04-09 — Completed 05-01 (patch_diff.py + patch_page.py)
+Phase: 5 of 9 (Patch Notes Generator) -- COMPLETE
+Plan: 02 of 2 complete -- patch sync CLI, Patch:Index, .sync_state.json, post-commit hook.
+Status: Phase 5 complete. Ready for Phase 6.
+Last activity: 2026-04-09 -- Completed 05-02 (sync_patches.py, CLI, hook)
 
-Progress: `█████░░░░░` 50%
+Progress: `██████░░░░` 55%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 6
-- Average duration: ~14 min/plan
+- Total plans completed: 8
+- Average duration: ~13 min/plan
 
 **By Phase:**
 
@@ -44,6 +44,7 @@ Progress: `█████░░░░░` 50%
 |---|---|---|---|---|
 | 1 — Foundation & Schema Design | 4 | 4 | ~18 min | complete |
 | 4 — Taxonomy Pages | 2 | 2 | ~5 min | complete |
+| 5 — Patch Notes Generator | 2 | 2 | ~9 min | complete |
 
 ## Accumulated Context
 
@@ -65,6 +66,9 @@ Progress: `█████░░░░░` 50%
 - **[04-01]** Mage/Rat tribe page works with slash in title (MediaWiki subpage behavior is acceptable here).
 - **[05-01]** EffectType is the only enum tracked for patch diffs (others rarely change). Lexicographic version sort for 0.x.y range.
 - **[05-01]** Card diffs report field-level changes (not just "changed"). Glossary parsed from markdown table rows.
+- **[05-02]** Category:Patch used to discover patch pages for index (not namespace prefix search).
+- **[05-02]** post-commit hook checks wiki/.env existence before attempting sync.
+- **[05-02]** First-ever sync diffs HEAD~1..HEAD only (not full history).
 - Tech stack locked: MediaWiki + SMW, MariaDB, Docker, Railway, Python `mwclient` (tentative), git post-commit hook.
 - JSON in `data/cards/*.json` is canonical; wiki is a projection, never source of truth.
 - Wiki lives as a subproject at `wiki/` inside the grid-tactics repo for direct file access.
@@ -95,13 +99,10 @@ Progress: `█████░░░░░` 50%
 
 ### Pending Todos
 
-- **Phase 1 is complete.** Next action: Phase 2 (Railway deploy).
-- Phase 2 watch item: the `MW_DB_INSTALLDB_USER == MW_DB_USER` trick and the db-init SQL must be preserved in the Railway deploy — do NOT point installer at root credentials.
+- **Phase 5 is complete.** Next action: Phase 6 (Card History Tracking).
+- Phase 6 will build on patch infrastructure (sync_patches.py, PatchDiff) to add per-card history sections.
 - Phase 2 watch item: BotPassword must be recreated on the Railway instance (credential lives in the wiki DB, doesn't port across). Automate via `createBotPassword.php` one-shot after deploy.
-- Phase 2 watch item: post-deploy bootstrap sequence on Railway must run in order — `bootstrap_schema.py` → `verify_schema.py` → `bootstrap_template.py` → `create_sample_card.py`. All four scripts are idempotent.
 - Phase 3 watch item: `CardType`/`Element` Page-type properties with `[[Allows value::X]]` produce red-links until stub pages are created. Decide whether to auto-create stubs or accept red-links.
-- Phase 3 watch item: widen BotPassword grants to include `upload` before card art sync begins.
-- Phase 3 watch item: ~~formalize rules-text synthesis helper~~ DONE in 03-01: `build_rules_text()` in `sync_cards.py`.
 - Phase 1 open checkpoints (deferred in 14.x posture, not blocking):
   - 01-02 Task 3 — visual check of Special:Version + bot login UI
   - 01-04 Task 3 — visual check of Card:Ratchanter infobox + Factbox
@@ -116,5 +117,5 @@ Progress: `█████░░░░░` 50%
 ## Session Continuity
 
 Last session: 2026-04-09
-Stopped at: Completed 05-01 — Patch diff engine + wikitext generator. Pure functions, no wiki connection needed.
-Resume file: None (ready for 05-02)
+Stopped at: Completed 05-02 -- Patch sync CLI, Patch:Index, .sync_state.json, post-commit hook. Phase 5 complete.
+Resume file: None (ready for Phase 6)
