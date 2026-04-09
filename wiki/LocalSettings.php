@@ -58,9 +58,6 @@ wfLoadSkin('Vector');
 wfLoadExtension('ParserFunctions');
 $wgPFEnableStringFunctions = true;
 
-# Debug marker — remove after confirming deploy picks up this file
-$wgSitename .= ' [PF-CHECK]';
-
 # Load Semantic MediaWiki
 wfLoadExtension('SemanticMediaWiki');
 $smwNamespace = parse_url($wgServer, PHP_URL_HOST) ?: 'grid-tactics.wiki';
