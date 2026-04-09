@@ -5,6 +5,9 @@ if ( !defined( 'MEDIAWIKI' ) ) {
     exit;
 }
 
+# MediaWiki install path — required for wfLoadExtension/wfLoadSkin
+$IP = getenv('MW_INSTALL_PATH') ?: '/var/www/html';
+
 $wgSitename = getenv('MW_SITE_NAME') ?: 'Grid Tactics Wiki';
 $wgMetaNamespace = 'Grid_Tactics_Wiki';
 
