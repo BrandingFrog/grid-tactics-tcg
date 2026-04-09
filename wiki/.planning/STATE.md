@@ -1,17 +1,17 @@
 ---
 milestone: v1.0
-status: phase-3-in-progress
-stopped_at: completed_03-01
+status: phase-3-complete
+stopped_at: completed_03-03
 last_updated: 2026-04-09
 progress:
   phase: 3
   phase_name: Card Page Generator
-  plan: 01
+  plan: 03
   phases_total: 9
-  phases_completed: 2
-  plans_completed_in_phase: 2
+  phases_completed: 3
+  plans_completed_in_phase: 3
   plans_total_in_phase: 3
-  percent: 27
+  percent: 33
 ---
 
 # Project State — Grid Tactics Wiki
@@ -21,16 +21,16 @@ progress:
 See: `.planning/PROJECT.md`
 
 **Core value:** Living, semantically-queryable knowledge base that auto-mirrors Grid Tactics card and mechanic state via git hooks.
-**Current focus:** Phase 2 complete — ready for Phase 3 (Card Page Generator)
+**Current focus:** Phase 3 complete — ready for Phase 4 (Taxonomy Pages)
 
 ## Current Position
 
-Phase: 3 of 9 (Card Page Generator)
-Plan: 01 + 02 of 3 complete — sync_cards.py pure-function wikitext conversion (03-01), Template:Card category fix + CardBack.png upload (03-02).
-Status: In progress (03-03 remaining)
-Last activity: 2026-04-09 — Completed 03-01 (pure-function card-to-wikitext conversion with 30 passing tests)
+Phase: 3 of 9 (Card Page Generator) -- COMPLETE
+Plan: 03 of 3 complete — sync_wiki.py CLI with bulk card upsert, art upload, and deep verification.
+Status: Phase 3 complete. All 34 cards synced, 15 art PNGs uploaded, idempotent, verified.
+Last activity: 2026-04-09 — Completed 03-03 (sync_wiki.py CLI, all 34 cards live on wiki)
 
-Progress: `██▓░░░░░░░` 27%
+Progress: `███░░░░░░░` 33%
 
 ## Performance Metrics
 
@@ -54,6 +54,8 @@ Progress: `██▓░░░░░░░` 27%
 - **[03-02]** CardBack.png is a solid #1a1a1a (280x400) dark gray PNG matching the card template background color. Serves as art fallback.
 - **[03-02]** SMW ask results on Railway mediawiki:1.42 return OrderedDict values (not plain numbers). Use `_smw_val()` helper pattern to extract `fulltext`.
 - **[03-02]** After template changes, existing pages need purge + null edit to force re-categorization (MediaWiki job queue may be slow).
+- **[03-03]** Card:Rat cross-link target is actually Card:Common Rat (the JSON `name` field is "Common Rat"). All cross-links resolve correctly.
+- **[03-03]** MediaWiki `fileexists-no-change` on duplicate art uploads treated as "unchanged" for idempotent re-runs.
 - Tech stack locked: MediaWiki + SMW, MariaDB, Docker, Railway, Python `mwclient` (tentative), git post-commit hook.
 - JSON in `data/cards/*.json` is canonical; wiki is a projection, never source of truth.
 - Wiki lives as a subproject at `wiki/` inside the grid-tactics repo for direct file access.
@@ -105,5 +107,5 @@ Progress: `██▓░░░░░░░` 27%
 ## Session Continuity
 
 Last session: 2026-04-09
-Stopped at: Completed 03-01 — sync_cards.py with 5 exported functions, 30 passing tests, all 34 cards convert cleanly
-Resume file: None (ready for 03-03)
+Stopped at: Completed 03-03 — Phase 3 complete. All 34 card pages live on wiki with art and cross-links.
+Resume file: None (ready for Phase 4)
