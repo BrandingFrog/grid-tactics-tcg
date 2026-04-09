@@ -1030,6 +1030,7 @@ body {
   overflow-x: auto;
   padding: 8px 4px;
   flex-shrink: 0;
+  min-height: 120px;
   max-height: 312px;
   justify-content: center;
 }
@@ -2003,6 +2004,7 @@ body {
   gap: 8px;
   min-height: 0;
   overflow: hidden;
+  position: relative;
 }
 
 .sidebar-section {
@@ -2201,9 +2203,13 @@ body {
    .tooltip-* rules above drive its appearance. Only the outer container
    styling and a few size tweaks are specific to the sidebar context. */
 .game-tooltip {
-  /* Override the absolutely-positioned deck-builder .card-tooltip: in the
-     game sidebar we want it to flow inline. */
-  position: static;
+  /* Absolutely positioned within .game-sidebar so showing/hiding the
+     tooltip does NOT push the log/chat panel around (no layout reflow). */
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 10;
   width: auto;
   background: var(--card);
   border: 1px solid var(--cyan);
@@ -2212,7 +2218,6 @@ body {
   overflow-y: auto;
   max-height: 50vh;
   box-shadow: 0 0 20px rgba(0, 212, 255, 0.15);
-  flex-shrink: 0;
 }
 
 /* Slightly smaller card preview to fit the sidebar column */
@@ -2302,10 +2307,10 @@ body {
   .stat-value { font-size: 14px; }
   .stat-group { gap: 12px; }
   .board-container { padding: 4px; }
-  .hand-container { max-height: 132px; }
+  .hand-container { max-height: 132px; min-height: 80px; }
   .card-frame { width: 70px; }
   .card-frame-hand { width: 132px; }
-  .hand-container { max-height: 228px; }
+  .hand-container { max-height: 228px; min-height: 80px; }
 }
 
 /* ===== Phase 14 PLAY-02: React Window UI ===== */
