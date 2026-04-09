@@ -1,0 +1,40 @@
+name: Wiki Drift Check
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - 'data/cards/**'
+      - 'data/GLOSSARY.md'
+      - 'wiki/sync/**'
+      - 'src/grid_tactics/server/static/VERSION.json'
+  workflow_dispatch:  # manual trigger
+
+jobs:
+  drift-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        working-directory: wiki
+        run: |
+          pip install -e .
+          pip install pytest
+
+      - name: Run unit tests
+        working-directory: wiki
+        run: python -m pytest tests/ -v
+
+      - name: Check wiki drift
+        working-directory: wiki
+        env:
+          MW_API_URL: ${{ secrets.MW_API_URL }}
+          MW_BOT_USER: ${{ secrets.MW_BOT_USER }}
+          MW_BOT_PASS: ${{ secrets.MW_BOT_PASS }}
+          MW_API_PATH: ${{ secrets.MW_API_PATH }}
+        run: python -m sync.check_drift --cards-only
