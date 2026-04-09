@@ -371,7 +371,9 @@ def test_conjure_skipped_when_deck_has_no_rats():
     assert state.phase == TurnPhase.REACT
 
 
-def test_tutor_select_adds_rat_to_hand_and_opens_react():
+def test_tutor_select_enters_conjure_deploy_then_deploys():
+    """After TUTOR_SELECT during conjure, card enters pending_conjure_deploy.
+    Then CONJURE_DEPLOY places it on the board (not hand)."""
     lib = _lib()
     rat_id = lib.get_numeric_id("rat")
     rc_id = lib.get_numeric_id("ratchanter")
@@ -383,12 +385,54 @@ def test_tutor_select_adds_rat_to_hand_and_opens_react():
     ))
     state = resolve_action(state, _activate(1), lib)
     assert state.pending_tutor_player_idx == 0
+    assert state.pending_tutor_is_conjure is True
 
+    # Step 1: Select the rat from deck -> enters pending_conjure_deploy
     select = Action(action_type=ActionType.TUTOR_SELECT, card_index=0)
     state = resolve_action(state, select, lib)
-    assert rat_id in state.players[0].hand
+    assert rat_id not in state.players[0].hand  # NOT in hand
     assert state.players[0].deck == ()
     assert state.pending_tutor_player_idx is None
+    assert state.pending_conjure_deploy_card == rat_id
+    assert state.pending_conjure_deploy_player_idx == 0
+    assert state.phase == TurnPhase.ACTION  # still in action phase, waiting for deploy
+
+    # Step 2: Deploy the rat to an empty tile on PLAYER_1's side (rows 0-1)
+    deploy = Action(action_type=ActionType.CONJURE_DEPLOY, position=(1, 0))
+    state = resolve_action(state, deploy, lib)
+    assert state.pending_conjure_deploy_card is None
+    assert state.phase == TurnPhase.REACT  # now react window opens
+    # Rat should be on the board at (1, 0)
+    deployed_rat = None
+    for m in state.minions:
+        if m.card_numeric_id == rat_id and m.position == (1, 0):
+            deployed_rat = m
+    assert deployed_rat is not None, "Conjured rat should be on the board"
+    assert deployed_rat.owner == PlayerSide.PLAYER_1
+    assert deployed_rat.from_deck is True
+
+
+def test_decline_conjure_sends_to_hand():
+    """DECLINE_CONJURE sends the conjured card to hand instead of field."""
+    lib = _lib()
+    rat_id = lib.get_numeric_id("rat")
+    rc_id = lib.get_numeric_id("ratchanter")
+
+    state = _empty_state(lib, mana=5, deck=(rat_id,))
+    state = _put(state, MinionInstance(
+        instance_id=1, card_numeric_id=rc_id,
+        owner=PlayerSide.PLAYER_1, position=(4, 2), current_health=30,
+    ))
+    state = resolve_action(state, _activate(1), lib)
+    select = Action(action_type=ActionType.TUTOR_SELECT, card_index=0)
+    state = resolve_action(state, select, lib)
+    assert state.pending_conjure_deploy_card == rat_id
+
+    # Decline deploy -> card goes to hand
+    decline = Action(action_type=ActionType.DECLINE_CONJURE)
+    state = resolve_action(state, decline, lib)
+    assert rat_id in state.players[0].hand
+    assert state.pending_conjure_deploy_card is None
     assert state.phase == TurnPhase.REACT
 
 
