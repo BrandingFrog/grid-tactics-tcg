@@ -312,6 +312,10 @@ def main(argv: list[str] | None = None) -> int:
         "--taxonomy", action="store_true",
         help="Sync element, tribe, keyword, and rules pages",
     )
+    group.add_argument(
+        "--verify-taxonomy", action="store_true",
+        help="Verify all taxonomy pages (elements, tribes, keywords, rules)",
+    )
     parser.add_argument(
         "--dry-run", action="store_true",
         help="Show what would change without making edits",
@@ -346,9 +350,9 @@ def main(argv: list[str] | None = None) -> int:
         print(f"\nOverall: {'PASS' if ok else 'FAIL'}")
         return 0 if ok else 1
 
-    # --taxonomy
-    if args.taxonomy:
-        from sync.sync_taxonomy import sync_elements, sync_tribes
+    # --verify-taxonomy
+    if args.verify_taxonomy:
+        from sync.sync_taxonomy import verify_taxonomy
 
         try:
             site = get_site()
@@ -356,6 +360,24 @@ def main(argv: list[str] | None = None) -> int:
             print(f"ERROR: {exc}", file=sys.stderr)
             return 2
 
+        glossary_path = _REPO_ROOT / "data" / "GLOSSARY.md"
+        print("Running taxonomy verification...")
+        ok = verify_taxonomy(site, _CARDS_DIR, glossary_path)
+        return 0 if ok else 1
+
+    # --taxonomy
+    if args.taxonomy:
+        from sync.sync_taxonomy import (
+            sync_elements, sync_tribes, sync_keywords, sync_rules_pages,
+        )
+
+        try:
+            site = get_site()
+        except MissingCredentialsError as exc:
+            print(f"ERROR: {exc}", file=sys.stderr)
+            return 2
+
+        glossary_path = _REPO_ROOT / "data" / "GLOSSARY.md"
         dry_label = " (dry run)" if args.dry_run else ""
         print(f"Syncing taxonomy pages{dry_label}...")
 
@@ -365,69 +387,25 @@ def main(argv: list[str] | None = None) -> int:
         print("\n=== Tribes ===")
         tribe_counts = sync_tribes(site, _CARDS_DIR, dry_run=args.dry_run)
 
+        print("\n=== Keywords ===")
+        kw_counts = sync_keywords(site, glossary_path, dry_run=args.dry_run)
+
+        print("\n=== Rules Pages ===")
+        rules_counts = sync_rules_pages(site, dry_run=args.dry_run)
+
         # Summary
-        total_created = elem_counts["created"] + tribe_counts["created"]
-        total_updated = elem_counts["updated"] + tribe_counts["updated"]
-        total_unchanged = elem_counts["unchanged"] + tribe_counts["unchanged"]
+        all_counts = [elem_counts, tribe_counts, kw_counts, rules_counts]
+        total_created = sum(c["created"] for c in all_counts)
+        total_updated = sum(c["updated"] for c in all_counts)
+        total_unchanged = sum(c["unchanged"] for c in all_counts)
         total = total_created + total_updated + total_unchanged
         print(f"\nTaxonomy sync complete: {total} pages "
               f"({total_created} created, {total_updated} updated, "
               f"{total_unchanged} unchanged)")
-
-        # Inline verification (only on real runs, not dry-run)
-        if not args.dry_run:
-            print("\n=== Verification ===")
-            all_pass = True
-
-            # Check Category:Element count
-            elem_results = list(site.ask("[[Category:Element]]|limit=20"))
-            elem_count = len(elem_results)
-            if elem_count == 7:
-                print(f"  PASS  Category:Element: {elem_count} members")
-            else:
-                print(f"  FAIL  Category:Element: {elem_count} members (expected 7)")
-                all_pass = False
-
-            # Check Category:Tribe count
-            tribe_results = list(site.ask("[[Category:Tribe]]|limit=30"))
-            tribe_count = len(tribe_results)
-            if tribe_count == 14:
-                print(f"  PASS  Category:Tribe: {tribe_count} members")
-            else:
-                print(f"  FAIL  Category:Tribe: {tribe_count} members (expected 14)")
-                all_pass = False
-
-            # Spot check: Fire element cards
-            fire_results = list(site.ask(
-                "[[Category:Card]][[Element::Fire]]|?Name|limit=50"
-            ))
-            fire_count = len(fire_results)
-            if fire_count > 0:
-                fire_names = [r.get("fulltext", "?") for r in fire_results]
-                print(f"  PASS  Fire element: {fire_count} cards - "
-                      f"{', '.join(fire_names)}")
-            else:
-                print(f"  FAIL  Fire element: 0 cards returned")
-                all_pass = False
-
-            # Spot check: Rat tribe cards
-            rat_results = list(site.ask(
-                "[[Category:Card]][[Tribe::Rat]]|?Name|limit=50"
-            ))
-            rat_count = len(rat_results)
-            if rat_count > 0:
-                rat_names = [r.get("fulltext", "?") for r in rat_results]
-                print(f"  PASS  Rat tribe: {rat_count} cards - "
-                      f"{', '.join(rat_names)}")
-            else:
-                print(f"  FAIL  Rat tribe: 0 cards returned")
-                all_pass = False
-
-            if all_pass:
-                print("\nAll verification checks PASSED.")
-            else:
-                print("\nSome verification checks FAILED.")
-                return 1
+        print(f"  Elements: {sum(elem_counts.values())}, "
+              f"Tribes: {sum(tribe_counts.values())}, "
+              f"Keywords: {sum(kw_counts.values())}, "
+              f"Rules: {sum(rules_counts.values())}")
 
         return 0
 
