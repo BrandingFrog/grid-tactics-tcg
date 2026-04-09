@@ -334,10 +334,11 @@ def card_to_wikitext(
     if element:
         fields["element"] = element.capitalize()
 
-    # Tribe
+    # Tribe — split multi-tribes (e.g. "Mage/Rat") into separate linked lines
     tribe = card.get("tribe", "")
     if tribe:
-        fields["tribe"] = tribe
+        tribe_parts = [t.strip() for t in tribe.split("/")]
+        fields["tribe"] = "<br/>".join(f"[[{t}]]" for t in tribe_parts)
 
     # Cost
     cost = card.get("mana_cost")

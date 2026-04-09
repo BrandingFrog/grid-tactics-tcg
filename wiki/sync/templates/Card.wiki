@@ -37,7 +37,7 @@ data/cards/*.json automatically.
 {{#if:{{{tribe|}}}|
 {{!}}-
 ! style="padding:4px 10px; background:#222; text-align:left; color:#888; font-weight:normal; font-size:0.85em;" {{!}} Tribe
-{{!}} style="padding:4px 10px; background:#222;" {{!}} {{#switch:{{{tribe|}}}|Mage/Rat=[[Mage]]<br/>[[Rat]]|#default=[[{{{tribe}}}]]}}
+{{!}} style="padding:4px 10px; background:#222;" {{!}} {{{tribe}}}
 }}{{#if:{{{range|}}}|
 {{!}}-
 ! style="padding:4px 10px; background:#222; text-align:left; color:#888; font-weight:normal; font-size:0.85em;" {{!}} Range
