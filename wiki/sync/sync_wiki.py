@@ -21,6 +21,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
 from sync.client import MissingCredentialsError, get_site
@@ -33,6 +34,8 @@ from sync.sync_cards import build_card_name_map, card_to_wikitext
 _REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 _CARDS_DIR = _REPO_ROOT / "data" / "cards"
 _ART_DIR = _REPO_ROOT / "src" / "grid_tactics" / "server" / "static" / "art"
+_WIKI_DIR = Path(__file__).resolve().parent.parent
+_RESUME_PATH = _WIKI_DIR / ".sync_resume.json"
 
 # ---------------------------------------------------------------------------
 # Core functions
@@ -379,6 +382,10 @@ def main(argv: list[str] | None = None) -> int:
         "--dry-run", action="store_true",
         help="Show what would change without making edits",
     )
+    parser.add_argument(
+        "--no-resume", action="store_true",
+        help="Ignore any existing resume manifest and do a full sync",
+    )
     args = parser.parse_args(argv)
 
     # --homepage
@@ -594,31 +601,88 @@ def main(argv: list[str] | None = None) -> int:
     # --all-cards
     if args.all_cards:
         dry_label = " (dry run)" if args.dry_run else ""
+
+        # --- Resume manifest handling ---
+        resuming = False
+        completed_ids: list[str] = []
+
+        if args.no_resume and _RESUME_PATH.exists():
+            _RESUME_PATH.unlink()
+            print("Deleted existing resume manifest (--no-resume).")
+
+        if not args.no_resume and _RESUME_PATH.exists():
+            try:
+                manifest = json.loads(_RESUME_PATH.read_text(encoding="utf-8"))
+                remaining_ids = set(manifest.get("remaining_card_ids", []))
+                completed_ids = manifest.get("completed_card_ids", [])
+                prev_count = len(completed_ids)
+                cards = [c for c in cards if c.get("card_id", "") in remaining_ids]
+                card_count = len(cards)
+                resuming = True
+                print(f"Resuming from manifest: {card_count} remaining cards "
+                      f"({prev_count} previously completed).")
+            except (json.JSONDecodeError, KeyError) as exc:
+                print(f"Warning: corrupt resume manifest, starting fresh: {exc}")
+                _RESUME_PATH.unlink(missing_ok=True)
+
         print(f"Syncing {card_count} cards to wiki{dry_label}...")
 
         page_counts = {"created": 0, "updated": 0, "unchanged": 0,
                        "would-create": 0, "would-update": 0, "error": 0}
         art_counts = {"uploaded": 0, "no-art": 0, "dry-run": 0, "unchanged": 0, "error": 0}
 
-        for card in cards:
-            card_id = card.get("card_id", "")
-            card_name = card.get("name", "")
-            # Upsert page
-            try:
-                result = upsert_card_page(site, card, name_map, _ART_DIR, args.dry_run)
-                status = result["status"]
-                page_counts[status] = page_counts.get(status, 0) + 1
-                print(f"  {result['page']}: {status}")
-            except Exception as exc:
-                page_counts["error"] += 1
-                print(f"  Card:{card_name}: ERROR - {exc}")
-                continue
+        all_card_ids = [c.get("card_id", "") for c in cards]
+        started_at = datetime.now(timezone.utc).isoformat()
 
-            # Upload art
-            art_status = upload_card_art(
-                site, card_id, card_name, _ART_DIR, args.dry_run,
+        try:
+            for i, card in enumerate(cards):
+                card_id = card.get("card_id", "")
+                card_name = card.get("name", "")
+                # Upsert page
+                try:
+                    result = upsert_card_page(site, card, name_map, _ART_DIR, args.dry_run)
+                    status = result["status"]
+                    page_counts[status] = page_counts.get(status, 0) + 1
+                    print(f"  {result['page']}: {status}")
+                except Exception as exc:
+                    page_counts["error"] += 1
+                    print(f"  Card:{card_name}: ERROR - {exc}")
+                    completed_ids.append(card_id)
+                    continue
+
+                # Upload art
+                art_status = upload_card_art(
+                    site, card_id, card_name, _ART_DIR, args.dry_run,
+                )
+                art_counts[art_status] = art_counts.get(art_status, 0) + 1
+
+                completed_ids.append(card_id)
+
+        except KeyboardInterrupt:
+            raise
+        except Exception as exc:
+            # Batch-level failure: write resume manifest
+            remaining = all_card_ids[i:]  # noqa: F821 — i is defined from the loop
+            manifest = {
+                "command": "all-cards",
+                "started_at": started_at,
+                "failed_at": datetime.now(timezone.utc).isoformat(),
+                "completed_card_ids": completed_ids,
+                "remaining_card_ids": remaining,
+                "dry_run": args.dry_run,
+            }
+            _RESUME_PATH.write_text(
+                json.dumps(manifest, indent=2), encoding="utf-8",
             )
-            art_counts[art_status] = art_counts.get(art_status, 0) + 1
+            total = len(completed_ids) + len(remaining)
+            print(f"\nBATCH FAILED after {len(completed_ids)}/{total} cards. "
+                  f"Resume manifest written to .sync_resume.json. "
+                  f"Rerun --all-cards to continue.")
+            print(f"Error: {exc}")
+            return 1
+
+        # Successful completion: delete resume manifest if it exists
+        _RESUME_PATH.unlink(missing_ok=True)
 
         # Summary
         print(f"\nSynced {card_count} cards: "

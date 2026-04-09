@@ -2,3 +2,4 @@
 *.log
 __pycache__/
 .sync_state.json
+.sync_resume.json
