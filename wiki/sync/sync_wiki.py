@@ -279,6 +279,49 @@ def verify_deep(site, expected_count: int) -> bool:
 
 
 # ---------------------------------------------------------------------------
+# Template bootstrapping
+# ---------------------------------------------------------------------------
+
+_TEMPLATES_DIR = Path(__file__).resolve().parent / "templates"
+
+
+def _bootstrap_deprecated_template(site) -> str:
+    """Upsert Template:DeprecatedCard on the wiki (idempotent).
+
+    Returns ``"created"``, ``"updated"``, or ``"unchanged"``.
+    """
+    template_path = _TEMPLATES_DIR / "DeprecatedCard.wiki"
+    expected = template_path.read_text(encoding="utf-8")
+    page = site.pages["Template:DeprecatedCard"]
+    if page.exists:
+        current = page.text()
+        if current.rstrip() == expected.rstrip():
+            return "unchanged"
+        page.edit(expected, summary="update Template:DeprecatedCard")
+        return "updated"
+    page.edit(expected, summary="bootstrap Template:DeprecatedCard")
+    return "created"
+
+
+def _bootstrap_card_template(site) -> str:
+    """Upsert Template:Card on the wiki (idempotent).
+
+    Returns ``"created"``, ``"updated"``, or ``"unchanged"``.
+    """
+    template_path = _TEMPLATES_DIR / "Card.wiki"
+    expected = template_path.read_text(encoding="utf-8")
+    page = site.pages["Template:Card"]
+    if page.exists:
+        current = page.text()
+        if current.rstrip() == expected.rstrip():
+            return "unchanged"
+        page.edit(expected, summary="update Template:Card (add LastChangedPatch)")
+        return "updated"
+    page.edit(expected, summary="bootstrap Template:Card")
+    return "created"
+
+
+# ---------------------------------------------------------------------------
 # CLI
 # ---------------------------------------------------------------------------
 
@@ -339,10 +382,16 @@ def main(argv: list[str] | None = None) -> int:
         except MissingCredentialsError as exc:
             print(f"ERROR: {exc}", file=sys.stderr)
             return 2
-        # Ensure template exists
+        # Bootstrap all templates needed for patch sync
         tmpl_status = bootstrap_patch_template(site)
         if tmpl_status != "unchanged":
             print(f"  Template:Patch: {tmpl_status}")
+        dep_status = _bootstrap_deprecated_template(site)
+        if dep_status != "unchanged":
+            print(f"  Template:DeprecatedCard: {dep_status}")
+        card_status = _bootstrap_card_template(site)
+        if card_status != "unchanged":
+            print(f"  Template:Card: {card_status}")
         results = sync_all_pending(site, _REPO_ROOT, args.dry_run)
         if not results:
             print("No pending patch changes.")

@@ -15,13 +15,19 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
+from sync.card_history import (
+    build_deprecated_wikitext,
+    build_history_section,
+    extract_history_section,
+)
 from sync.client import MissingCredentialsError, get_site
-from sync.patch_diff import build_patch_diff
+from sync.patch_diff import PatchDiff, _git_ls_tree, _git_show, build_patch_diff
 from sync.patch_page import (
     PATCH_TEMPLATE_WIKITEXT,
     patch_index_wikitext,
     patch_to_wikitext,
 )
+from sync.sync_cards import build_rules_text, card_to_wikitext, derive_keywords
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -88,6 +94,167 @@ def bootstrap_patch_template(site) -> str:
 
 
 # ---------------------------------------------------------------------------
+# Card history updates
+# ---------------------------------------------------------------------------
+
+
+def _load_name_map_at_sha(sha: str, repo_root: Path) -> dict[str, str]:
+    """Build {card_id: display_name} from all card JSONs at a specific commit."""
+    name_map: dict[str, str] = {}
+    filenames = _git_ls_tree(sha, "data/cards", repo_root)
+    for fname in filenames:
+        if not fname.endswith(".json"):
+            continue
+        raw = _git_show(sha, f"data/cards/{fname}", repo_root)
+        if raw is None:
+            continue
+        try:
+            card = json.loads(raw)
+            name_map[card["card_id"]] = card["name"]
+        except (json.JSONDecodeError, KeyError):
+            continue
+    return name_map
+
+
+def _load_card_at_sha(sha: str, card_id: str, repo_root: Path) -> dict | None:
+    """Load a single card JSON by card_id at a specific commit.
+
+    Scans all files in data/cards/ to find the one matching card_id.
+    """
+    filenames = _git_ls_tree(sha, "data/cards", repo_root)
+    for fname in filenames:
+        if not fname.endswith(".json"):
+            continue
+        raw = _git_show(sha, f"data/cards/{fname}", repo_root)
+        if raw is None:
+            continue
+        try:
+            card = json.loads(raw)
+            if card.get("card_id") == card_id:
+                return card
+        except (json.JSONDecodeError, KeyError):
+            continue
+    return None
+
+
+def update_card_histories(
+    site,
+    diff: PatchDiff,
+    repo_root: Path,
+    dry_run: bool = False,
+) -> list[dict]:
+    """Update card pages with history sections based on patch diff.
+
+    For each CardChange in the diff:
+    - Added cards: append "added" history entry, re-render with last_changed_patch.
+    - Changed cards: append "changed" history entry, re-render from new JSON.
+    - Removed cards: wrap with DeprecatedCard template.
+
+    Returns list of result dicts {card_name, page, status}.
+    """
+    results: list[dict] = []
+
+    if not diff.cards:
+        return results
+
+    # Pre-load name_map at new commit for rendering changed/added cards
+    name_map = _load_name_map_at_sha(diff.commit_sha, repo_root)
+
+    for card_change in diff.cards:
+        page_title = f"Card:{card_change.card_name}"
+
+        if dry_run:
+            results.append({
+                "card_name": card_change.card_name,
+                "page": page_title,
+                "status": f"dry-run ({card_change.change_type})",
+            })
+            continue
+
+        page = site.pages[page_title]
+
+        if card_change.change_type == "removed":
+            # Wrap existing page with DeprecatedCard
+            if page.exists:
+                existing_text = page.text()
+                new_text = build_deprecated_wikitext(
+                    card_change.card_name, diff.version, existing_text,
+                )
+                page.edit(
+                    new_text,
+                    summary=f"mark {card_change.card_name} as deprecated (removed in {diff.version})",
+                )
+                results.append({
+                    "card_name": card_change.card_name,
+                    "page": page_title,
+                    "status": "deprecated",
+                })
+            else:
+                results.append({
+                    "card_name": card_change.card_name,
+                    "page": page_title,
+                    "status": "skipped (page not found)",
+                })
+            continue
+
+        # Added or changed: load card JSON at new commit
+        card = _load_card_at_sha(diff.commit_sha, card_change.card_id, repo_root)
+        if card is None:
+            results.append({
+                "card_name": card_change.card_name,
+                "page": page_title,
+                "status": "error (card JSON not found at commit)",
+            })
+            continue
+
+        # Extract existing history from current page (if it exists)
+        existing_entries: list[dict] = []
+        if page.exists:
+            _, existing_entries = extract_history_section(page.text())
+
+        # Build new history entry
+        new_entry = {
+            "version": diff.version,
+            "date": diff.commit_date,
+            "change_type": card_change.change_type,
+            "changed_fields": card_change.changed_fields,
+        }
+
+        # Deduplicate: skip if this version already in history
+        existing_versions = {e["version"] for e in existing_entries}
+        if diff.version not in existing_versions:
+            existing_entries.append(new_entry)
+
+        # Re-render card template invocation with last_changed_patch
+        card_wikitext = card_to_wikitext(
+            card,
+            name_map,
+            art_exists=True,
+            last_changed_patch=diff.version,
+        )
+
+        # Build history section
+        history_section = build_history_section(existing_entries)
+
+        # Combine: card template + blank line + history section
+        if history_section:
+            full_text = card_wikitext + "\n\n" + history_section
+        else:
+            full_text = card_wikitext
+
+        summary = f"update {card_change.card_name} history ({card_change.change_type} in {diff.version})"
+        page.edit(full_text, summary=summary)
+
+        results.append({
+            "card_name": card_change.card_name,
+            "page": page_title,
+            "status": card_change.change_type,
+        })
+
+    return results
+
+
+# ---------------------------------------------------------------------------
 # Core sync
 # ---------------------------------------------------------------------------
 
@@ -101,7 +268,11 @@ def sync_patch(
 ) -> dict:
     """Sync a single patch (diff between old_sha and new_sha) to the wiki.
 
-    Returns dict with keys: status, version, page (if applicable).
+    Creates/updates the patch page, then updates card history sections for
+    any cards that were added, changed, or removed.
+
+    Returns dict with keys: status, version, page (if applicable),
+    card_results (list of card history update results).
     """
     diff = build_patch_diff(old_sha, new_sha, repo_root)
 
@@ -113,10 +284,13 @@ def sync_patch(
     page_title = f"Patch:{diff.version}"
 
     if dry_run:
+        # Still run card history in dry-run mode for reporting
+        card_results = update_card_histories(site, diff, repo_root, dry_run=True)
         return {
             "status": "dry-run",
             "version": diff.version,
             "page": page_title,
+            "card_results": card_results,
         }
 
     page = site.pages[page_title]
@@ -124,14 +298,27 @@ def sync_patch(
 
     if not page.exists:
         page.edit(wikitext, summary=summary)
-        return {"status": "created", "version": diff.version, "page": page_title}
+        patch_status = "created"
+    else:
+        current = page.text()
+        if current.rstrip() == wikitext.rstrip():
+            patch_status = "unchanged"
+        else:
+            page.edit(wikitext, summary=summary)
+            patch_status = "updated"
 
-    current = page.text()
-    if current.rstrip() == wikitext.rstrip():
-        return {"status": "unchanged", "version": diff.version, "page": page_title}
+    # Update card history sections for affected cards
+    card_results = update_card_histories(site, diff, repo_root, dry_run=False)
+    if card_results:
+        for cr in card_results:
+            print(f"    card history: {cr['page']}: {cr['status']}")
 
-    page.edit(wikitext, summary=summary)
-    return {"status": "updated", "version": diff.version, "page": page_title}
+    return {
+        "status": patch_status,
+        "version": diff.version,
+        "page": page_title,
+        "card_results": card_results,
+    }
 
 
 def sync_patch_index(
