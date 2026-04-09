@@ -57,6 +57,8 @@ $wgGroupPermissions['*']['edit'] = false;
 
 # Skins
 wfLoadSkin('Vector');
+$wgVectorResponsive = true;
+$wgVectorDefaultSkinVersion = '2';  # Vector 2022 — built-in mobile support
 
 # Extensions
 wfLoadExtension('ParserFunctions');
