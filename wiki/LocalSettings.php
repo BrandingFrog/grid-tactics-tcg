@@ -51,6 +51,10 @@ $wgGroupPermissions['*']['edit'] = false;
 # Skins
 wfLoadSkin('Vector');
 
+# Extensions
+wfLoadExtension('ParserFunctions');
+$wgPFEnableStringFunctions = true;
+
 # Load Semantic MediaWiki
 wfLoadExtension('SemanticMediaWiki');
 $smwNamespace = parse_url($wgServer, PHP_URL_HOST) ?: 'grid-tactics.wiki';

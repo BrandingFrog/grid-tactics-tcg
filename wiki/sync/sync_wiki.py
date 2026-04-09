@@ -64,16 +64,42 @@ def upsert_card_page(
 ) -> dict:
     """Upsert a single card page on the wiki.
 
+    Preserves any existing ``== History ==`` section on the page, or seeds
+    an initial "Card added" entry when no history exists yet.
+
     Returns dict with card_id, page title, and status.
     """
+    from sync.card_history import extract_history_section
+    from sync.sync_cards import get_version
+
     card_id = card.get("card_id", "")
     card_name = card.get("name", "")
     art_exists = (art_dir / f"{card_id}.png").exists()
-    wikitext = card_to_wikitext(card, name_map, art_exists=art_exists)
     page_title = f"Card:{card_name}"
 
+    # Check existing page for history section to preserve
+    page = site.pages[page_title]
+    existing_history: list[dict] = []
+    if page.exists:
+        current_text = page.text()
+        _, existing_history = extract_history_section(current_text)
+
+    # Seed initial history if none exists
+    if not existing_history:
+        version = get_version()
+        existing_history = [{
+            "version": version,
+            "date": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
+            "change_type": "added",
+            "changed_fields": [],
+        }]
+
+    wikitext = card_to_wikitext(
+        card, name_map, art_exists=art_exists,
+        history_entries=existing_history,
+    )
+
     if dry_run:
-        page = site.pages[page_title]
         if not page.exists:
             return {"card_id": card_id, "page": page_title, "status": "would-create"}
         current = page.text()
@@ -81,7 +107,6 @@ def upsert_card_page(
             return {"card_id": card_id, "page": page_title, "status": "unchanged"}
         return {"card_id": card_id, "page": page_title, "status": "would-update"}
 
-    page = site.pages[page_title]
     summary = f"sync {card_name} from data/cards/{card_id}.json"
 
     if not page.exists:

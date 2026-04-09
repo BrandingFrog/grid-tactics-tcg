@@ -106,12 +106,25 @@ class TestDryRunNoWrites:
 
     def test_card_unchanged_dry_run(self, ratchanter_card, name_map):
         """Dry-run on existing card with matching content: 'unchanged', no .edit()."""
+        from sync.sync_cards import get_version
+
         card = ratchanter_card
         card_id = card["card_id"]
         card_name = card["name"]
         page_title = f"Card:{card_name}"
         art_exists = (ART_DIR / f"{card_id}.png").exists()
-        expected_wikitext = card_to_wikitext(card, name_map, art_exists=art_exists)
+        # upsert_card_page seeds an "added" history entry when none exists,
+        # so we must include a history section for the content to match.
+        version = get_version()
+        history = [{
+            "version": version,
+            "date": "2026-01-01",  # any date
+            "change_type": "added",
+            "changed_fields": [],
+        }]
+        expected_wikitext = card_to_wikitext(
+            card, name_map, art_exists=art_exists, history_entries=history,
+        )
 
         page_store: dict[str, MagicMock] = {}
         # Page exists with matching content (stripped, as MediaWiki does)

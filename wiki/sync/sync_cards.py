@@ -260,6 +260,7 @@ def card_to_wikitext(
     name_map: dict[str, str] | None = None,
     art_exists: bool = True,
     last_changed_patch: str | None = None,
+    history_entries: list[dict] | None = None,
 ) -> str:
     """Build a complete ``{{Card ... }}`` template invocation from card JSON.
 
@@ -272,6 +273,8 @@ def card_to_wikitext(
     art_exists:
         If ``False``, omit the ``art`` field so Template:Card falls back to
         ``CardBack.png``.
+    history_entries:
+        Optional list of history dicts for ``build_history_section()``.
     """
     card_type = card.get("card_type", "")
     is_minion = card_type == "minion"
@@ -325,6 +328,10 @@ def card_to_wikitext(
     keywords = derive_keywords(card)
     if keywords:
         fields["keywords"] = ", ".join(keywords)
+        # Pre-generate SMW keyword annotations (replaces #arraymap in template)
+        fields["keyword_annotations"] = "".join(
+            f"[[Keyword::{kw}| ]]" for kw in keywords
+        )
 
     # Art
     if art_exists:
@@ -355,4 +362,14 @@ def card_to_wikitext(
             lines.append(f"| {key:9s}= {value}")
     lines.append("}}")
 
-    return "\n".join(lines)
+    result = "\n".join(lines)
+
+    # Append history section if provided
+    if history_entries:
+        from sync.card_history import build_history_section
+
+        history_text = build_history_section(history_entries)
+        if history_text:
+            result += "\n\n" + history_text
+
+    return result
