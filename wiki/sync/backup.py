@@ -107,14 +107,13 @@ def _export_pages(site: mwclient.Site, titles: list[str]) -> str:
             "query",
             titles=titles_param,
             export=1,
-            exportnowrap=1,
         )
 
-        # The result contains an 'export' key with the XML string when
-        # exportnowrap is used.  mwclient parses the outer JSON for us.
-        xml_str = result.get("export", {})
-        if isinstance(xml_str, dict):
-            xml_str = xml_str.get("*", "")
+        # Without exportnowrap, the XML is nested under
+        # result['query']['export']['*'].
+        query = result.get("query", {})
+        export_obj = query.get("export", {})
+        xml_str = export_obj.get("*", "") if isinstance(export_obj, dict) else ""
         if not xml_str:
             continue
 
