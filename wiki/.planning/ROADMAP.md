@@ -103,16 +103,17 @@ Plans:
 
 ---
 
-### Phase 6: Card History Tracking
+### Phase 6: Card History Tracking ✓
 
 **Goal:** Every card page carries a complete per-patch change history, and deleted cards are preserved with a deprecated marker.
+**Status:** COMPLETE 2026-04-09. card_history.py pure functions, DeprecatedCard template, LastChangedPatch SMW property, history tracking wired into patch sync pipeline. Templates live on Railway wiki.
 **Depends on:** Phase 5
 **Requirements:** CARD-05, CARD-06
 **Plans:** 2 plans
 
 Plans:
-- [ ] 06-01-PLAN.md — Pure-function card history module, updated Card template with LastChangedPatch, DeprecatedCard template
-- [ ] 06-02-PLAN.md — Wire history tracking into patch sync pipeline, bootstrap templates on live wiki, end-to-end verification
+- [x] 06-01-PLAN.md — Pure-function card history module, updated Card template with LastChangedPatch, DeprecatedCard template
+- [x] 06-02-PLAN.md — Wire history tracking into patch sync pipeline, bootstrap templates on live wiki, end-to-end verification
 
 **Success Criteria:**
 1. After two simulated patch cycles that modify a card, its `== History ==` section lists both versions keyed by patch.
@@ -174,7 +175,7 @@ Plans:
 | 3 - Card Page Generator | complete | 2026-04-09 |
 | 4 - Taxonomy Pages | complete | 2026-04-09 |
 | 5 - Patch Notes Generator & Hook Integration | complete | 2026-04-09 |
-| 6 - Card History Tracking | Not started | — |
+| 6 - Card History Tracking | complete | 2026-04-09 |
 | 7 - Semantic Query Showcase & Homepage | Not started | — |
 | 8 - Idempotency, Drift Detection & Reliability | Not started | — |
 | 9 - Launch Polish | Not started | — |
