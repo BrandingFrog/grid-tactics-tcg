@@ -214,7 +214,11 @@ class TestCardToWikitext:
         assert "| attack   = 15" in wt
         assert "| hp       = 30" in wt
         assert "| range    = 0" in wt
-        assert wt.endswith("}}")
+        assert "== History ==" in wt
+        assert "== Gallery ==" in wt
+        assert "== Tips ==" in wt
+        assert "== Rulings ==" in wt
+        assert "== Trivia ==" in wt
 
     def test_card_to_wikitext_magic(self, name_map):
         """Dark Drain (magic): no attack/hp/range fields in output."""

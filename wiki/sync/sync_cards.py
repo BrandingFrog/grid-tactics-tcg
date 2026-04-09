@@ -453,12 +453,20 @@ def card_to_wikitext(
 
     result = "\n".join(lines)
 
-    # Append history section if provided
+    # Standard card page sections
+    result += "\n\n== Gallery =="
+    result += "\n\n== Tips =="
+    result += "\n\n== Rulings =="
+    result += "\n\n== Trivia =="
+
+    # Append history section (auto-generated from patch tracking)
     if history_entries:
         from sync.card_history import build_history_section
 
         history_text = build_history_section(history_entries)
         if history_text:
             result += "\n\n" + history_text
+    else:
+        result += "\n\n== History =="
 
     return result
