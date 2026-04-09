@@ -2,6 +2,12 @@
 set -e
 cd /var/www/html
 
+# Force single MPM — apt-get install in the build layer can enable mpm_event
+# alongside mediawiki:1.42's mpm_prefork. Apache refuses to start with both.
+a2dismod -f mpm_event 2>/dev/null || true
+a2dismod -f mpm_worker 2>/dev/null || true
+a2enmod mpm_prefork 2>/dev/null || true
+
 DB_HOST="${MW_DB_SERVER%%:*}"
 DB_PORT="${MW_DB_SERVER#*:}"
 if [ "$DB_PORT" = "$MW_DB_SERVER" ]; then DB_PORT=3306; fi
