@@ -1,17 +1,17 @@
 ---
 milestone: v1.0
-status: phase-7-complete
-stopped_at: completed_07-02
+status: phase-8-in-progress
+stopped_at: completed_08-01
 last_updated: 2026-04-09
 progress:
-  phase: 7
-  phase_name: Semantic Query Showcase & Homepage
-  plan: 02
+  phase: 8
+  phase_name: Idempotency, Drift Detection & Reliability
+  plan: 01
   phases_total: 9
   phases_completed: 7
-  plans_completed_in_phase: 2
-  plans_total_in_phase: 2
-  percent: 77
+  plans_completed_in_phase: 1
+  plans_total_in_phase: 3
+  percent: 84
 ---
 
 # Project State — Grid Tactics Wiki
@@ -21,16 +21,16 @@ progress:
 See: `.planning/PROJECT.md`
 
 **Core value:** Living, semantically-queryable knowledge base that auto-mirrors Grid Tactics card and mechanic state via git hooks.
-**Current focus:** Phase 7 complete. Ready for Phase 8 (Idempotency, Drift Detection & Reliability).
+**Current focus:** Phase 8 in progress. Idempotency & dry-run tests complete (08-01). Next: drift detection (08-02).
 
 ## Current Position
 
-Phase: 7 of 9 (Semantic Query Showcase & Homepage) -- COMPLETE
-Plan: 02 of 2 complete -- Semantic:Showcase page with 7 live SMW queries on Railway wiki
-Status: Phase 7 complete. Phase 8 next.
-Last activity: 2026-04-09 -- Completed 07-02 (Semantic Query Showcase page)
+Phase: 8 of 9 (Idempotency, Drift Detection & Reliability) -- IN PROGRESS
+Plan: 01 of 3 complete -- Idempotency & dry-run test coverage (10 tests)
+Status: Phase 8 in progress. 08-02 next.
+Last activity: 2026-04-09 -- Completed 08-01 (idempotency & dry-run tests)
 
-Progress: `████████░░` 77%
+Progress: `████████░░` 84%
 
 ## Performance Metrics
 
@@ -47,6 +47,7 @@ Progress: `████████░░` 77%
 | 5 — Patch Notes Generator | 2 | 2 | ~9 min | complete |
 | 6 — Card History Tracking | 2 | 2 | ~5 min | complete |
 | 7 — Semantic Query Showcase & Homepage | 2 | 2 | ~3 min | complete |
+| 8 — Idempotency, Drift Detection & Reliability | 1 | 3 | ~2 min | in progress |
 
 ## Accumulated Context
 
@@ -79,6 +80,8 @@ Progress: `████████░░` 77%
 - **[07-01]** Main Page uses direct upsert (not upsert_taxonomy_pages) since it's a single special page.
 - **[07-01]** Main Page placed in Category:Rules for discoverability via existing taxonomy.
 - **[07-02]** Showcase page uses Semantic:Showcase title (colon namespace) under Category:Rules.
+- **[08-01]** Mock site pattern: `page_store` dict with `__getitem__` override for realistic page lookup simulation in tests.
+- **[08-01]** MediaWiki `rstrip()` behavior replicated in mocks — stored text has trailing whitespace stripped to match real API.
 - Tech stack locked: MediaWiki + SMW, MariaDB, Docker, Railway, Python `mwclient` (tentative), git post-commit hook.
 - JSON in `data/cards/*.json` is canonical; wiki is a projection, never source of truth.
 - Wiki lives as a subproject at `wiki/` inside the grid-tactics repo for direct file access.
@@ -109,7 +112,7 @@ Progress: `████████░░` 77%
 
 ### Pending Todos
 
-- **Phase 7 complete.** Next action: Phase 8 (Idempotency, Drift Detection & Reliability).
+- **Phase 8 plan 01 complete.** Next action: 08-02 (drift detection) and 08-03 (reliability/retry).
 - Phase 2 watch item: BotPassword must be recreated on the Railway instance (credential lives in the wiki DB, doesn't port across). Automate via `createBotPassword.php` one-shot after deploy.
 - Phase 3 watch item: `CardType`/`Element` Page-type properties with `[[Allows value::X]]` produce red-links until stub pages are created. Decide whether to auto-create stubs or accept red-links.
 - Phase 1 open checkpoints (deferred in 14.x posture, not blocking):
@@ -126,5 +129,5 @@ Progress: `████████░░` 77%
 ## Session Continuity
 
 Last session: 2026-04-09
-Stopped at: Completed 07-02 -- Semantic:Showcase page live with 7 SMW queries. Phase 7 complete.
-Resume file: None (ready for Phase 8)
+Stopped at: Completed 08-01 -- Idempotency & dry-run test coverage (10 tests, all pass).
+Resume file: None (ready for 08-02)
