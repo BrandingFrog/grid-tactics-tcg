@@ -66,6 +66,11 @@ Plans:
 **Goal:** Elements, tribes, keywords, and conceptual rules pages exist and use SMW queries to auto-list members.
 **Depends on:** Phase 3
 **Requirements:** WIKI-03, WIKI-04, WIKI-05, WIKI-06, SEMANTIC-01
+**Plans:** 2 plans
+
+Plans:
+- [ ] 04-01-PLAN.md — Create sync_taxonomy.py module, upsert 7 element + 14 tribe pages with SMW ask queries
+- [ ] 04-02-PLAN.md — Upsert keyword pages from GLOSSARY.md + 6 conceptual rules pages, full verification
 
 **Success Criteria:**
 1. All 7 element pages exist; each inline query returns exactly the cards of that element.
