@@ -54,6 +54,7 @@ def main_page_wikitext() -> str:
         "* [[React Window]] -- Counter-play mechanic\n"
         "* [[Win Conditions]] -- How to win\n"
         "* [[Turn Structure]] -- Turn phases\n"
+        "* [[Deck Building Guide]] -- Archetypes and strategy\n"
         "\n"
         "== Patch Notes ==\n"
         "* [[Patch:Index]] -- All patch notes\n"

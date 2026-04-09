@@ -378,6 +378,18 @@ def main(argv: list[str] | None = None) -> int:
         "--showcase", action="store_true",
         help="Sync the Semantic:Showcase query demonstration page",
     )
+    group.add_argument(
+        "--deckguide", action="store_true",
+        help="Sync the Deck Building Guide page (strategy + auto archetypes)",
+    )
+    group.add_argument(
+        "--polish", action="store_true",
+        help="Push mobile CSS, logo, favicon, and configure branding",
+    )
+    group.add_argument(
+        "--verify-search", action="store_true",
+        help="Verify MediaWiki search returns expected card results",
+    )
     parser.add_argument(
         "--dry-run", action="store_true",
         help="Show what would change without making edits",
@@ -417,6 +429,68 @@ def main(argv: list[str] | None = None) -> int:
         status = sync_showcase_page(site, dry_run=args.dry_run)
         print(f"Semantic:Showcase: {status}")
         return 0
+
+    # --deckguide
+    if args.deckguide:
+        from sync.sync_deckguide import sync_deckguide
+
+        try:
+            site = get_site()
+        except MissingCredentialsError as exc:
+            print(f"ERROR: {exc}", file=sys.stderr)
+            return 2
+        dry_label = " (dry run)" if args.dry_run else ""
+        print(f"Syncing Deck Building Guide{dry_label}...")
+        status = sync_deckguide(site, _CARDS_DIR, dry_run=args.dry_run)
+        print(f"Deck Building Guide: {status}")
+        return 0
+
+    # --polish
+    if args.polish:
+        from sync.sync_polish import (
+            configure_logo_and_favicon,
+            push_mobile_css,
+            upload_favicon,
+            upload_logo,
+        )
+
+        try:
+            site = get_site()
+        except MissingCredentialsError as exc:
+            print(f"ERROR: {exc}", file=sys.stderr)
+            return 2
+        dry_label = " (dry run)" if args.dry_run else ""
+        print(f"Running launch polish{dry_label}...")
+
+        print("\n=== Mobile CSS ===")
+        css_status = push_mobile_css(site, dry_run=args.dry_run)
+
+        print("\n=== Logo ===")
+        logo_status = upload_logo(site, dry_run=args.dry_run)
+
+        print("\n=== Favicon ===")
+        fav_status = upload_favicon(site, dry_run=args.dry_run)
+
+        print("\n=== Logo & Favicon Configuration ===")
+        config_status = configure_logo_and_favicon(site, dry_run=args.dry_run)
+
+        print(f"\nPolish complete: CSS={css_status}, Logo={logo_status}, "
+              f"Favicon={fav_status}, Config={config_status}")
+        return 0
+
+    # --verify-search
+    if args.verify_search:
+        from sync.sync_polish import verify_search
+
+        try:
+            site = get_site()
+        except MissingCredentialsError as exc:
+            print(f"ERROR: {exc}", file=sys.stderr)
+            return 2
+        print("Verifying search...")
+        ok = verify_search(site)
+        print(f"\nSearch verification: {'PASS' if ok else 'FAIL'}")
+        return 0 if ok else 1
 
     # --patch (no card loading needed)
     if args.patch:
