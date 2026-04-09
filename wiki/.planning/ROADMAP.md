@@ -141,17 +141,18 @@ Plans:
 
 ---
 
-### Phase 8: Idempotency, Drift Detection & Reliability
+### Phase 8: Idempotency, Drift Detection & Reliability ✓
 
 **Goal:** The sync pipeline is safe to run repeatedly, detects any drift between JSON and wiki, and fails loudly in CI.
+**Status:** COMPLETE 2026-04-09. 46 tests passing (idempotency, dry-run, drift detection, CLI). GitHub Actions workflow triggers on push to master.
 **Depends on:** Phase 5
 **Requirements:** AUTO-02, AUTO-03, AUTO-04, AUTO-05, AUTO-06
 **Plans:** 3 plans
 
 Plans:
-- [ ] 08-01-PLAN.md — Idempotency and dry-run mock tests
-- [ ] 08-02-PLAN.md — Drift detection CLI (check_drift.py) and resume manifest
-- [ ] 08-03-PLAN.md — GitHub Actions drift-check workflow and check_drift unit tests
+- [x] 08-01-PLAN.md — Idempotency and dry-run mock tests
+- [x] 08-02-PLAN.md — Drift detection CLI (check_drift.py) and resume manifest
+- [x] 08-03-PLAN.md — GitHub Actions drift-check workflow and check_drift unit tests
 
 **Success Criteria:**
 1. Two sequential sync runs against the same state produce zero edits on the second run (verified by test).
@@ -189,7 +190,7 @@ Plans:
 | 5 - Patch Notes Generator & Hook Integration | complete | 2026-04-09 |
 | 6 - Card History Tracking | complete | 2026-04-09 |
 | 7 - Semantic Query Showcase & Homepage | complete | 2026-04-09 |
-| 8 - Idempotency, Drift Detection & Reliability | Not started | — |
+| 8 - Idempotency, Drift Detection & Reliability | complete | 2026-04-09 |
 | 9 - Launch Polish | Not started | — |
 
 ## Coverage

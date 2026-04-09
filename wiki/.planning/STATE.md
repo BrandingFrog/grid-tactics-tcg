@@ -1,15 +1,15 @@
 ---
 milestone: v1.0
-status: phase-8-in-progress
-stopped_at: completed_08-02
+status: phase-8-complete
+stopped_at: completed_08-03
 last_updated: 2026-04-09
 progress:
   phase: 8
   phase_name: Idempotency, Drift Detection & Reliability
-  plan: 02
+  plan: 03
   phases_total: 9
-  phases_completed: 7
-  plans_completed_in_phase: 2
+  phases_completed: 8
+  plans_completed_in_phase: 3
   plans_total_in_phase: 3
   percent: 88
 ---
@@ -21,14 +21,14 @@ progress:
 See: `.planning/PROJECT.md`
 
 **Core value:** Living, semantically-queryable knowledge base that auto-mirrors Grid Tactics card and mechanic state via git hooks.
-**Current focus:** Phase 8 in progress. Drift detection & resume manifest complete (08-02). Next: 08-03 (reliability/retry).
+**Current focus:** Phase 8 complete. All idempotency, drift detection, and CI reliability work done. Next: Phase 9 (Launch Polish).
 
 ## Current Position
 
-Phase: 8 of 9 (Idempotency, Drift Detection & Reliability) -- IN PROGRESS
-Plan: 02 of 3 complete -- Drift detection CLI + resume manifest for batch sync
-Status: Phase 8 in progress. 08-03 next.
-Last activity: 2026-04-09 -- Completed 08-02 (check_drift.py + resume manifest)
+Phase: 8 of 9 (Idempotency, Drift Detection & Reliability) -- COMPLETE
+Plan: 03 of 3 complete -- CI drift-check workflow + check_drift unit tests
+Status: Phase 8 complete. Ready for Phase 9.
+Last activity: 2026-04-09 -- Completed 08-03 (GitHub Actions workflow + unit tests)
 
 Progress: `████████░░` 88%
 
@@ -47,7 +47,7 @@ Progress: `████████░░` 88%
 | 5 — Patch Notes Generator | 2 | 2 | ~9 min | complete |
 | 6 — Card History Tracking | 2 | 2 | ~5 min | complete |
 | 7 — Semantic Query Showcase & Homepage | 2 | 2 | ~3 min | complete |
-| 8 — Idempotency, Drift Detection & Reliability | 2 | 3 | ~2 min | in progress |
+| 8 — Idempotency, Drift Detection & Reliability | 3 | 3 | ~2 min | complete |
 
 ## Accumulated Context
 
@@ -115,7 +115,7 @@ Progress: `████████░░` 88%
 
 ### Pending Todos
 
-- **Phase 8 plan 02 complete.** Next action: 08-03 (reliability/retry).
+- **Phase 8 complete.** All 3 plans done (idempotency tests, drift detection, CI workflow). Next action: Phase 9 (Launch Polish).
 - Phase 2 watch item: BotPassword must be recreated on the Railway instance (credential lives in the wiki DB, doesn't port across). Automate via `createBotPassword.php` one-shot after deploy.
 - Phase 3 watch item: `CardType`/`Element` Page-type properties with `[[Allows value::X]]` produce red-links until stub pages are created. Decide whether to auto-create stubs or accept red-links.
 - Phase 1 open checkpoints (deferred in 14.x posture, not blocking):
@@ -132,5 +132,5 @@ Progress: `████████░░` 88%
 ## Session Continuity
 
 Last session: 2026-04-09
-Stopped at: Completed 08-02 -- check_drift.py CLI + resume manifest in sync_wiki.py.
-Resume file: None (ready for 08-03)
+Stopped at: Completed 08-03 -- GitHub Actions drift-check workflow + check_drift unit tests. Phase 8 complete.
+Resume file: None (ready for Phase 9)
