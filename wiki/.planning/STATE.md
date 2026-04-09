@@ -1,17 +1,17 @@
 ---
 milestone: v1.0
-status: phase-4-complete
-stopped_at: completed_04-02
+status: phase-5-in-progress
+stopped_at: completed_05-01
 last_updated: 2026-04-09
 progress:
-  phase: 4
-  phase_name: Taxonomy Pages
-  plan: 02
+  phase: 5
+  phase_name: Patch Notes Generator
+  plan: 01
   phases_total: 9
   phases_completed: 4
-  plans_completed_in_phase: 2
+  plans_completed_in_phase: 1
   plans_total_in_phase: 2
-  percent: 44
+  percent: 50
 ---
 
 # Project State — Grid Tactics Wiki
@@ -21,16 +21,16 @@ progress:
 See: `.planning/PROJECT.md`
 
 **Core value:** Living, semantically-queryable knowledge base that auto-mirrors Grid Tactics card and mechanic state via git hooks.
-**Current focus:** Phase 4 complete — Taxonomy Pages (54 pages: 7 elements + 14 tribes + 27 keywords + 6 rules). Next: Phase 5 (Patch Notes).
+**Current focus:** Phase 5 in progress — Patch Notes Generator. Plan 01 (diff engine + wikitext) complete. Next: Plan 02 (hook integration).
 
 ## Current Position
 
-Phase: 4 of 9 (Taxonomy Pages) -- COMPLETE
-Plan: 02 of 2 complete — 54 taxonomy pages on live wiki.
-Status: Phase complete. Ready for Phase 5 (Patch Notes Generator).
-Last activity: 2026-04-09 — Completed 04-02 (keywords + rules pages + verification)
+Phase: 5 of 9 (Patch Notes Generator)
+Plan: 01 of 2 complete — diff engine + wikitext generator.
+Status: In progress. Plan 05-02 (hook integration) next.
+Last activity: 2026-04-09 — Completed 05-01 (patch_diff.py + patch_page.py)
 
-Progress: `████░░░░░░` 44%
+Progress: `█████░░░░░` 50%
 
 ## Performance Metrics
 
@@ -63,6 +63,8 @@ Progress: `████░░░░░░` 44%
 - **[04-02]** Rules pages use descriptive titles (Grid Tactics TCG, 5x5 Board, Mana, React Window, Win Conditions, Turn Structure) with ManuallyMaintained marker.
 - **[04-02]** `verify_taxonomy()` is the comprehensive gate for Phase 4 correctness -- 5 check groups covering category counts, spot checks, content, and rules pages.
 - **[04-01]** Mage/Rat tribe page works with slash in title (MediaWiki subpage behavior is acceptable here).
+- **[05-01]** EffectType is the only enum tracked for patch diffs (others rarely change). Lexicographic version sort for 0.x.y range.
+- **[05-01]** Card diffs report field-level changes (not just "changed"). Glossary parsed from markdown table rows.
 - Tech stack locked: MediaWiki + SMW, MariaDB, Docker, Railway, Python `mwclient` (tentative), git post-commit hook.
 - JSON in `data/cards/*.json` is canonical; wiki is a projection, never source of truth.
 - Wiki lives as a subproject at `wiki/` inside the grid-tactics repo for direct file access.
@@ -114,5 +116,5 @@ Progress: `████░░░░░░` 44%
 ## Session Continuity
 
 Last session: 2026-04-09
-Stopped at: Completed 04-02 — Phase 4 complete. 54 taxonomy pages live. All verification passing.
-Resume file: None (ready for Phase 5)
+Stopped at: Completed 05-01 — Patch diff engine + wikitext generator. Pure functions, no wiki connection needed.
+Resume file: None (ready for 05-02)
