@@ -15,19 +15,68 @@ Usage::
 
 from __future__ import annotations
 
+import hashlib
+import json
+from datetime import date
+from pathlib import Path
 
-def main_page_wikitext() -> str:
+
+def _pick_card_of_the_day(cards_dir: Path | None = None) -> dict | None:
+    """Pick a deterministic random card based on today's date.
+
+    Uses a hash of the date string to seed selection so every viewer
+    sees the same card on the same day, and it rotates at midnight.
+    Only deckable cards are eligible.
+    """
+    if cards_dir is None:
+        cards_dir = Path(__file__).resolve().parent.parent.parent / "data" / "cards"
+    if not cards_dir.exists():
+        return None
+
+    cards = []
+    for f in sorted(cards_dir.glob("*.json")):
+        try:
+            card = json.loads(f.read_text(encoding="utf-8"))
+            if card.get("deckable", True):
+                cards.append(card)
+        except (json.JSONDecodeError, KeyError):
+            continue
+
+    if not cards:
+        return None
+
+    today = date.today().isoformat()
+    h = int(hashlib.sha256(today.encode()).hexdigest(), 16)
+    return cards[h % len(cards)]
+
+
+def main_page_wikitext(cards_dir: Path | None = None) -> str:
     """Return the wikitext for the wiki Main Page.
 
     The Main Page serves as the entry point with navigation links to all
-    major index pages created in Phases 3-6.
+    major index pages created in Phases 3-6. Includes a Card of the Day
+    section that rotates daily.
     """
+    # Card of the Day
+    cotd = _pick_card_of_the_day(cards_dir)
+    if cotd:
+        card_name = cotd.get("name", "Unknown")
+        cotd_section = (
+            f"== Card of the Day ==\n"
+            f"{{{{:Card:{card_name}}}}}\n"
+            f"''Read more: [[Card:{card_name}|{card_name}]]''\n"
+            f"\n"
+        )
+    else:
+        cotd_section = ""
+
     return (
         "= Welcome to the Grid Tactics Wiki =\n"
         "This is the knowledge base for '''Grid Tactics TCG''', a fantasy "
         "trading card game played on a 5x5 grid. Here you'll find cards, "
         "mechanics, element interactions, and patch history.\n"
         "\n"
+        + cotd_section +
         "== Card Database ==\n"
         "* [[:Category:Card|All Cards]] -- Browse every card in the game\n"
         "* [[Semantic:Showcase|Semantic Queries]] -- Explore cards with "

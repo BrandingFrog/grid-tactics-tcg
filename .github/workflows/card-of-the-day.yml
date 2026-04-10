@@ -1,0 +1,29 @@
+name: Card of the Day
+
+on:
+  schedule:
+    - cron: '5 0 * * *'  # Daily at 00:05 UTC
+  workflow_dispatch: {}   # Allow manual trigger
+
+jobs:
+  update-homepage:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        working-directory: wiki
+        run: pip install -e .
+
+      - name: Update Main Page with Card of the Day
+        working-directory: wiki
+        env:
+          MW_API_URL: ${{ secrets.MW_API_URL }}
+          MW_BOT_USER: ${{ secrets.MW_BOT_USER }}
+          MW_BOT_PASS: ${{ secrets.MW_BOT_PASS }}
+          MW_API_PATH: ${{ secrets.MW_API_PATH }}
+        run: python -m sync.sync_wiki --homepage
