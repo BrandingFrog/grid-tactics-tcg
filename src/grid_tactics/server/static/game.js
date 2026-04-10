@@ -1110,7 +1110,7 @@ function renderCardBrowser() {
             else if (kw === 'promote' && c.promote_target) hasKeyword = true;
             else if (kw === 'rally' && c.effects && c.effects.some(function(e) { return e.type === 6; })) hasKeyword = true;
             else if (kw === 'transform' && c.transform_options && c.transform_options.length > 0) hasKeyword = true;
-            else if (kw === 'discard' && c.summon_sacrifice_tribe) hasKeyword = true;
+            else if (kw === 'exhaust' && c.summon_sacrifice_tribe) hasKeyword = true;
             else if (kw === 'react' && c.react_condition != null) hasKeyword = true;
             else if (kw === 'unique' && c.unique) hasKeyword = true;
             else if (kw === 'negate' && c.effects && c.effects.some(function(e) { return e.type === 4; })) hasKeyword = true;
@@ -1225,7 +1225,7 @@ var KEYWORD_GLOSSARY = {
     'Destroy': 'Remove a target minion from the board regardless of its 🤍.',
     'Transform': 'Pay mana to transform this minion into another form.',
     'Cost': 'An additional cost that must be paid to play this card.',
-    'Discard': 'Remove a card from your hand.',
+    'Exhaust': 'Send a card from your hand to the Exhaust Pile as a cost.',
     'Heal': 'Restore 🤍 to a target.',
     'Deal': 'Deal damage to a target.',
     'Burn': 'Applies Burning to affected enemies. A burning minion takes 5🤍 damage at the start of its owner\'s turn. Persists until the minion dies.',
@@ -1263,7 +1263,7 @@ function buildCardTooltipContent(c) {
     var effectDesc = (c.effects && c.effects.length > 0) ? getEffectDescription(c.effects, c) : '';
     if (c.summon_sacrifice_tribe) {
         var sacCount = c.summon_sacrifice_count || 1;
-        cardTextLines.push('Cost: Discard any ' + (sacCount > 1 ? sacCount + ' ' : '') + c.summon_sacrifice_tribe + (sacCount > 1 ? 's' : ''));
+        cardTextLines.push('Cost: Exhaust any ' + (sacCount > 1 ? sacCount + ' ' : '') + c.summon_sacrifice_tribe + (sacCount > 1 ? 's' : ''));
     }
     if (c.unique) cardTextLines.push('Unique');
     if (effectDesc) cardTextLines.push(effectDesc);
@@ -1312,7 +1312,7 @@ function buildCardTooltipContent(c) {
     if (c.unique) matchedKeywords.push('Unique');
     if (c.card_type === 0 && c.attack_range != null && c.attack_range === 0) matchedKeywords.push('Melee');
     if (c.card_type === 0 && c.attack_range != null && c.attack_range > 0) matchedKeywords.push('Range');
-    if (c.summon_sacrifice_tribe) { matchedKeywords.push('Cost'); matchedKeywords.push('Discard'); }
+    if (c.summon_sacrifice_tribe) { matchedKeywords.push('Cost'); matchedKeywords.push('Exhaust'); }
     if (c.transform_options && c.transform_options.length > 0) matchedKeywords.push('Transform');
     if (c.react_condition != null) matchedKeywords.push('React');
     if (c.react_condition != null && c.react_effect && c.react_effect.type === 5) matchedKeywords.push('Deploy');
@@ -3922,7 +3922,7 @@ function showSacrificePicker(handIdx, deployPos, targetPos, sacChoices) {
     inner.className = 'sacrifice-picker-modal';
     var title = document.createElement('div');
     title.className = 'sacrifice-picker-title';
-    title.textContent = 'Choose card to discard';
+    title.textContent = 'Choose card to exhaust';
     inner.appendChild(title);
     var row = document.createElement('div');
     row.className = 'sacrifice-picker-row';

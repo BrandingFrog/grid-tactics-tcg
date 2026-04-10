@@ -31,7 +31,7 @@ Update this file and the matching `KEYWORD_GLOSSARY` in `src/grid_tactics/server
 | Destroy | Remove a target minion from the board regardless of its 🤍. |
 | Transform | Pay mana to transform this minion into another form. |
 | Cost | An additional cost that must be paid to play this card. |
-| Discard | Remove a card from your hand. |
+| Exhaust | Send a card from your hand to the Exhaust Pile as a cost. |
 | Heal | Restore 🤍 to a target. |
 | Deal | Deal damage to a target. |
 | Burn | Applies Burning to affected enemies. A burning minion takes 5🤍 damage at the start of its owner's turn. Persists until the minion dies. |
