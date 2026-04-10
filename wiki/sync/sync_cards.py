@@ -67,9 +67,9 @@ _REACT_CONDITION_TEXT_STR: dict[str, str] = {
 _TRIGGER_PREFIX: dict[int | str, str] = {
     0: "[[Summon]]", "on_play": "[[Summon]]",
     1: "[[Death]]", "on_death": "[[Death]]",
-    2: "Attack", "on_attack": "Attack",
-    3: "Damaged", "on_damaged": "Damaged",
-    4: "Move", "on_move": "Move",
+    2: "[[Attack]]", "on_attack": "[[Attack]]",
+    3: "[[Damaged]]", "on_damaged": "[[Damaged]]",
+    4: "[[Move]]", "on_move": "[[Move]]",
     5: "[[Passive]]", "passive": "[[Passive]]",
 }
 
