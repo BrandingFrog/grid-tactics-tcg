@@ -97,11 +97,12 @@ class TestDeriveKeywords:
         kws = derive_keywords(card)
         assert "Promote" in kws
 
-    def test_derive_keywords_sacrifice(self):
-        """RGB Lasercannon: summon_sacrifice_tribe -> Sacrifice."""
+    def test_derive_keywords_discard_cost(self):
+        """RGB Lasercannon: summon_sacrifice_tribe -> Cost, Discard."""
         card = _load("minion_rgb_lasercannon.json")
         kws = derive_keywords(card)
-        assert "Sacrifice" in kws
+        assert "Cost" in kws
+        assert "Discard" in kws
 
     def test_derive_keywords_passive(self):
         """Emberplague Rat: passive burn -> Passive, Burn."""

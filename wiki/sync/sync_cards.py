@@ -139,9 +139,10 @@ def derive_keywords(card: dict) -> list[str]:
         if str(ability.get("effect_type", "")).startswith("conjure"):
             kws.add("Conjure")
 
-    # Sacrifice tribe
+    # Discard cost (e.g. "Cost: Discard any 2 Robots")
     if card.get("summon_sacrifice_tribe"):
-        kws.add("Sacrifice")
+        kws.add("Cost")
+        kws.add("Discard")
 
     # Effect-derived keywords
     for eff in effects:
@@ -211,7 +212,7 @@ def build_rules_text(card: dict, name_map: dict[str, str] | None = None) -> str:
         sac_count = card.get("summon_sacrifice_count", 1)
         count_text = f"{sac_count} " if sac_count > 1 else ""
         plural = "s" if sac_count > 1 else ""
-        parts.append(f"Cost: [[Sacrifice|Discard]] any {count_text}[[{sac_tribe}]]{plural}")
+        parts.append(f"[[Cost]]: [[Discard]] any {count_text}[[{sac_tribe}]]{plural}")
 
     # Unique tag
     if card.get("unique"):
