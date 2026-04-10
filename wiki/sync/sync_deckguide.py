@@ -163,7 +163,7 @@ def generate_deckguide_wikitext(cards_dir: Path) -> str:
             f"{{{{#ask:\n"
             f" [[Category:Card]]\n"
             f" [[Element::{element}]]\n"
-            f" |?Cost\n"
+            f" |?ManaCost\n"
             f" |?Attack\n"
             f" |?HP\n"
             f" |format=table\n"

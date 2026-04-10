@@ -203,7 +203,7 @@ def _smw_val(v):
 
 def _verify_smw_properties(site) -> tuple[int, int]:
     """Run an #ask query and spot-check a few card properties."""
-    query = "[[Category:Card]]|?Name|?CardType|?Element|?Cost|?Attack|?HP|limit=50"
+    query = "[[Category:Card]]|?Name|?CardType|?Element|?ManaCost|?Attack|?HP|limit=50"
     print(f"    Query: {query}")
     results = list(site.ask(query))
     count = len(results)

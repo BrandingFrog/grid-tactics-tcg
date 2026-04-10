@@ -102,21 +102,21 @@ def _same_text(current: str, expected: str) -> bool:
 
 def _verify_via_ask(site, card: dict) -> bool:
     """Run an #ask query and assert Ratchanter comes back with expected values."""
-    query = "[[CardType::Minion]][[Element::Dark]]|?Cost|?HP|limit=25"
+    query = "[[CardType::Minion]][[Element::Dark]]|?ManaCost|?HP|limit=25"
     print(f"\nVerifying via ask: {query}")
     expected_cost = card.get("mana_cost")
     expected_hp = card.get("health")
     found = False
     # mwclient yields flat dicts shaped like
-    #   {"fulltext": "Card:Ratchanter", "printouts": {"Cost": [4], "HP": [30]}}
+    #   {"fulltext": "Card:Ratchanter", "printouts": {"ManaCost": [4], "HP": [30]}}
     for result in site.ask(query):
         title = result.get("fulltext") if isinstance(result, dict) else None
         if title != PAGE_TITLE:
             continue
         printouts = result.get("printouts", {})
-        cost_vals = printouts.get("Cost", [])
+        cost_vals = printouts.get("ManaCost", [])
         hp_vals = printouts.get("HP", [])
-        print(f"  found {title}: Cost={cost_vals}, HP={hp_vals}")
+        print(f"  found {title}: ManaCost={cost_vals}, HP={hp_vals}")
         # SMW may return plain numbers OR OrderedDicts with a "fulltext" key
         # depending on MediaWiki/SMW version. Normalize to string for comparison.
         def _smw_val(v):
