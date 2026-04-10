@@ -146,7 +146,7 @@ def push_dark_search_css(site, dry_run: bool = False) -> str:
 _FONT_CSS_MARKER = "/* --- Grid Tactics Fonts --- */"
 
 _FONT_CSS_BLOCK = f"""{_FONT_CSS_MARKER}
-@import url('https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@900&display=swap');
 """
 
 

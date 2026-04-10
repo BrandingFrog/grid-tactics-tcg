@@ -343,7 +343,7 @@ function onChatMessage(data) {
 // the given inner HTML + duration, removes itself when done.
 // No-action fatigue nudge — fires when the player has zero legal
 // actions and the engine auto-passes, dealing 5 player HP damage.
-// Big skull + -5❤️ + "NO ACTION AVAILABLE" in Luckiest Guy.
+// Big skull + -5❤️ + "NO ACTION AVAILABLE" in Montserrat Black.
 function triggerNoActionNudge() {
     playSfx('defeat');
     runNudge('nudge-no-action',

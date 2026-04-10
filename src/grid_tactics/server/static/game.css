@@ -992,14 +992,14 @@ body {
 .board-minion .attr-text-sm {
   font-size: 11px;
   letter-spacing: 0;
-  font-family: 'Luckiest Guy', cursive;
+  font-family: 'Montserrat', sans-serif; font-weight: 900; text-transform: uppercase;
   font-weight: 400;
   -webkit-text-stroke: 3px black;
 }
 
 /* Board minion name */
 .board-minion-name {
-  font-family: 'Source Sans 3', 'Source Sans Pro', sans-serif;
+  font-family: 'Montserrat', sans-serif; font-weight: 900; text-transform: uppercase;
   font-size: 10px;
   font-weight: 700;
   line-height: 1.1;
@@ -1019,7 +1019,7 @@ body {
 .board-minion-stats {
   display: flex;
   gap: 6px;
-  font-family: 'Luckiest Guy', cursive;
+  font-family: 'Montserrat', sans-serif; font-weight: 900; text-transform: uppercase;
   font-size: 13px;
   font-weight: 400;
   -webkit-text-stroke: 1px black;
@@ -1069,7 +1069,7 @@ body {
   border: 2px solid rgb(30, 25, 20);
   border-radius: 3%;
   position: relative;
-  font-family: 'Luckiest Guy', cursive;
+  font-family: 'Montserrat', sans-serif; font-weight: 900; text-transform: uppercase;
   overflow: hidden;
   cursor: default;
   transition: transform 150ms ease, box-shadow 150ms ease;
@@ -1187,7 +1187,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-family: 'Luckiest Guy', cursive;
+  font-family: 'Montserrat', sans-serif; font-weight: 900; text-transform: uppercase;
   font-size: 16px;
   -webkit-text-stroke: 3px black;
   paint-order: stroke fill;
@@ -1201,7 +1201,7 @@ body {
   color: white;
   -webkit-text-stroke: 3px black;
   paint-order: stroke fill;
-  font-family: 'Source Sans 3', 'Source Sans Pro', sans-serif;
+  font-family: 'Montserrat', sans-serif; font-weight: 900; text-transform: uppercase;
   font-size: 14px;
   font-weight: 700;
   line-height: 1.1;
@@ -1233,7 +1233,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-family: 'Luckiest Guy', cursive;
+  font-family: 'Montserrat', sans-serif; font-weight: 900; text-transform: uppercase;
   font-size: 16px;
   color: white;
   -webkit-text-stroke: 3px black;
@@ -1348,7 +1348,7 @@ body {
   left: 4%;
   right: 4%;
   color: white;
-  font-family: 'Source Sans 3', 'Source Sans Pro', sans-serif;
+  font-family: 'Montserrat', sans-serif; font-weight: 900; text-transform: uppercase;
   font-size: 16px;
   font-weight: 700;
   -webkit-text-stroke: 3px black;
@@ -1414,7 +1414,7 @@ body {
 }
 
 .tooltip-header {
-  font-family: 'Luckiest Guy', cursive;
+  font-family: 'Montserrat', sans-serif; font-weight: 900; text-transform: uppercase;
   font-size: 18px;
   color: white;
   -webkit-text-stroke: 1px black;
@@ -1501,7 +1501,7 @@ body {
 }
 
 .tooltip-related-name {
-  font-family: 'Luckiest Guy', cursive;
+  font-family: 'Montserrat', sans-serif; font-weight: 900; text-transform: uppercase;
   font-size: 11px;
   color: white;
   -webkit-text-stroke: 0.5px black;
@@ -2758,7 +2758,7 @@ body {
   transform-origin: center;
 }
 .no-action-damage {
-  font-family: 'Luckiest Guy', cursive;
+  font-family: 'Montserrat', sans-serif; font-weight: 900; text-transform: uppercase;
   font-size: 120px;
   color: #ff3030;
   line-height: 1;
@@ -2775,7 +2775,7 @@ body {
   animation: no-action-pop 400ms 250ms cubic-bezier(.16,1.5,.3,1) backwards;
 }
 .no-action-text {
-  font-family: 'Luckiest Guy', cursive;
+  font-family: 'Montserrat', sans-serif; font-weight: 900; text-transform: uppercase;
   font-size: 80px;
   color: #ffffff;
   line-height: 1.1;
@@ -2884,7 +2884,7 @@ body {
   gap: 10px;
 }
 .deck-code-modal-title {
-  font-family: 'Luckiest Guy', cursive;
+  font-family: 'Montserrat', sans-serif; font-weight: 900; text-transform: uppercase;
   font-size: 22px;
   color: var(--cyan);
   letter-spacing: 1px;
@@ -3088,9 +3088,10 @@ body {
   left: 50%;
   top: 30%;
   transform: translate(-50%, 0);
-  font-family: 'Luckiest Guy', system-ui, sans-serif;
+  font-family: 'Montserrat', sans-serif;
   font-size: 26px;
-  font-weight: 400;
+  font-weight: 900;
+  text-transform: uppercase;
   letter-spacing: 1px;
   -webkit-text-stroke: 4px #000;
   paint-order: stroke fill;
