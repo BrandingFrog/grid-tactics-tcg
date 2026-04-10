@@ -28,6 +28,52 @@ from pathlib import Path
 # Constants
 # ---------------------------------------------------------------------------
 
+_DARK_SEARCH_CSS_MARKER = "/* --- Grid Tactics Dark Search --- */"
+
+_DARK_SEARCH_CSS_BLOCK = f"""{_DARK_SEARCH_CSS_MARKER}
+/* Search page: dark background for namespace filter and results */
+.mw-search-profile-tabs,
+.search-types,
+fieldset#mw-searchoptions {{
+  background: #1a1a1a !important;
+  border-color: #333 !important;
+  color: #eee !important;
+}}
+
+fieldset#mw-searchoptions legend {{
+  color: #888 !important;
+}}
+
+fieldset#mw-searchoptions label {{
+  color: #ccc !important;
+}}
+
+.mw-search-profile-tabs a {{
+  color: var(--color-link, #00d4ff) !important;
+}}
+
+/* Search input */
+#searchText, .mw-searchInput, input[type="search"] {{
+  background: #222 !important;
+  color: #eee !important;
+  border-color: #444 !important;
+}}
+
+/* Search results */
+.mw-search-results li,
+.searchresults {{
+  color: #ccc;
+}}
+
+.searchresult {{
+  color: #ccc !important;
+}}
+
+.mw-search-result-data {{
+  color: #888 !important;
+}}
+"""
+
 _MOBILE_CSS_MARKER = "/* --- Grid Tactics Mobile --- */"
 
 _MOBILE_CSS_BLOCK = f"""{_MOBILE_CSS_MARKER}
@@ -67,6 +113,31 @@ _MOBILE_CSS_BLOCK = f"""{_MOBILE_CSS_MARKER}
   }}
 }}
 """
+
+# ---------------------------------------------------------------------------
+# Dark Search CSS
+# ---------------------------------------------------------------------------
+
+
+def push_dark_search_css(site, dry_run: bool = False) -> str:
+    """Append dark search page CSS to MediaWiki:Common.css (idempotent)."""
+    page = site.pages["MediaWiki:Common.css"]
+    current = page.text() if page.exists else ""
+
+    if _DARK_SEARCH_CSS_MARKER in current:
+        print("  MediaWiki:Common.css: unchanged (dark search CSS already present)")
+        return "unchanged"
+
+    new_text = (current.rstrip() + "\n\n" + _DARK_SEARCH_CSS_BLOCK) if current else _DARK_SEARCH_CSS_BLOCK
+
+    if dry_run:
+        print("  MediaWiki:Common.css: would-update (dark search CSS)")
+        return "would-update"
+
+    page.edit(new_text, summary="add dark theme CSS for search page")
+    print("  MediaWiki:Common.css: updated (dark search CSS)")
+    return "updated"
+
 
 # ---------------------------------------------------------------------------
 # Font CSS

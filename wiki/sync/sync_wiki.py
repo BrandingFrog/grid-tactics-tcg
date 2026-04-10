@@ -474,6 +474,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.polish:
         from sync.sync_polish import (
             configure_logo_and_favicon,
+            push_dark_search_css,
             push_font_css,
             push_mobile_css,
             upload_favicon,
@@ -490,6 +491,9 @@ def main(argv: list[str] | None = None) -> int:
 
         print("\n=== Font CSS ===")
         push_font_css(site, dry_run=args.dry_run)
+
+        print("\n=== Dark Search CSS ===")
+        push_dark_search_css(site, dry_run=args.dry_run)
 
         print("\n=== Mobile CSS ===")
         css_status = push_mobile_css(site, dry_run=args.dry_run)
