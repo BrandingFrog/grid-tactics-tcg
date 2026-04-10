@@ -17,7 +17,7 @@ from pathlib import Path
 
 from sync.card_history import (
     build_deprecated_wikitext,
-    build_history_section,
+
     extract_history_section,
 )
 from sync.client import MissingCredentialsError, get_site
@@ -227,22 +227,14 @@ def update_card_histories(
         if diff.version not in existing_versions:
             existing_entries.append(new_entry)
 
-        # Re-render card template invocation with last_changed_patch
-        card_wikitext = card_to_wikitext(
+        # Re-render full card page with history entries
+        full_text = card_to_wikitext(
             card,
             name_map,
             art_exists=True,
             last_changed_patch=diff.version,
+            history_entries=existing_entries,
         )
-
-        # Build history section
-        history_section = build_history_section(existing_entries)
-
-        # Combine: card template + blank line + history section
-        if history_section:
-            full_text = card_wikitext + "\n\n" + history_section
-        else:
-            full_text = card_wikitext
 
         summary = f"update {card_change.card_name} history ({card_change.change_type} in {diff.version})"
         page.edit(full_text, summary=summary)
