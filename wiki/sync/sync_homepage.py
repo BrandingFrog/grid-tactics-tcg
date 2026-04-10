@@ -130,7 +130,7 @@ def main_page_wikitext(cards_dir: Path | None = None) -> str:
             f'display:inline-block; text-align:center; line-height:28px; '
             f"font-family:'Montserrat',sans-serif; font-weight:900; font-size:8px; "
             f'text-transform:uppercase; -webkit-text-stroke:1px black; paint-order:stroke fill; '
-            f'white-space:nowrap; overflow:hidden;">{element}</span>\n'
+            f'white-space:nowrap; overflow:hidden;">{element.upper()}</span>\n'
             f'|-\n'
             f'| colspan="2" style="padding:0;" | [[File:{card_id}.png|280px|center|link=Card:{card_name}]]\n'
             f'{meta}'
