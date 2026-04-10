@@ -298,7 +298,7 @@ def test_buff_does_not_affect_non_rat_allies():
         if cd.health is None:
             continue
         tribe = (cd.tribe or "").lower()
-        if cd.card_id == "rat" or "rat" in tribe.split("/"):
+        if cd.card_id == "rat" or "rat" in tribe.split():
             continue
         non_rat_id = nid
         non_rat_def = cd

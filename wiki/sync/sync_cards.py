@@ -372,8 +372,8 @@ def card_to_wikitext(
     # Tribe
     tribe = card.get("tribe", "")
     if tribe:
-        tribe_parts = [t.strip() for t in tribe.split("/")]
-        fields["tribe"] = "/".join(tribe_parts)  # raw for SMW
+        tribe_parts = tribe.split()
+        fields["tribe"] = " ".join(tribe_parts)  # raw for SMW
 
     # Cost
     cost = card.get("mana_cost")
@@ -416,7 +416,7 @@ def card_to_wikitext(
     _val_style = 'style="padding:4px 10px; background:#222;"'
     meta_rows = []
     if tribe:
-        tribe_links = "<br/>".join(f"[[{t.strip()}]]" for t in tribe.split("/"))
+        tribe_links = "<br/>".join(f"[[{t}]]" for t in tribe.split())
         meta_rows.append(f"{{{{!}}}}-\n! {_row_style} {{{{!}}}} Tribe\n{{{{!}}}} {_val_style} {{{{!}}}} {tribe_links}")
     if is_minion and card.get("range") is not None:
         range_val = "[[Melee]]" if card.get("range") == 0 else f"[[Ranged|Range {card.get('range')}]]"

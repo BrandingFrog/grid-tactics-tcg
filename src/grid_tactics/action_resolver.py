@@ -320,13 +320,13 @@ def _apply_play_card(
                     candidate_id = player.hand[sac_idx]
                     # Verify it's still in new_player.hand and tribe matches
                     cand_def = library.get_by_id(candidate_id)
-                    if cand_def.tribe == card_def.summon_sacrifice_tribe and candidate_id in new_player.hand:
+                    if card_def.summon_sacrifice_tribe in (cand_def.tribe or "").split() and candidate_id in new_player.hand:
                         sacrifice_id = candidate_id
             if sacrifice_id is None:
                 # Fallback: auto-pick first matching card
                 for hand_card_id in new_player.hand:
                     hand_card_def = library.get_by_id(hand_card_id)
-                    if hand_card_def.tribe == card_def.summon_sacrifice_tribe:
+                    if card_def.summon_sacrifice_tribe in (hand_card_def.tribe or "").split():
                         sacrifice_id = hand_card_id
                         break
             if sacrifice_id is None:
@@ -703,7 +703,7 @@ def _is_rat_card(card_def) -> bool:
         return True
     if not card_def.tribe:
         return False
-    parts = [p.strip().lower() for p in card_def.tribe.split("/")]
+    parts = [p.strip().lower() for p in card_def.tribe.split()]
     return "rat" in parts
 
 

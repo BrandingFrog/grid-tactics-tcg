@@ -8,7 +8,7 @@
     "health": 30,
     "range": 0,
     "element": "dark",
-    "tribe": "Mage/Rat",
+    "tribe": "Mage Rat",
     "activated_ability": {
         "name": "Conjure Common Rat",
         "mana_cost": 2,

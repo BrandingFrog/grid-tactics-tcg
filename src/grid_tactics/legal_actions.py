@@ -151,7 +151,7 @@ def _action_phase_actions(
                 if j == idx:
                     continue
                 hand_card = library.get_by_id(player.hand[j])
-                if hand_card.tribe == card_def.summon_sacrifice_tribe:
+                if card_def.summon_sacrifice_tribe in (hand_card.tribe or "").split():
                     sacrifice_choices.append(j)
             sac_needed = card_def.summon_sacrifice_count
             if len(sacrifice_choices) < sac_needed:

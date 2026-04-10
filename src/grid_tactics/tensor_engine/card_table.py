@@ -277,7 +277,7 @@ class CardTable:
             if card.card_id == "rat":
                 is_rat[i] = True
             elif card.tribe:
-                parts = [p.strip().lower() for p in card.tribe.split("/")]
+                parts = [p.strip().lower() for p in card.tribe.split()]
                 if "rat" in parts:
                     is_rat[i] = True
 

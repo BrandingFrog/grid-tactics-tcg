@@ -8,7 +8,7 @@
     "health": 5,
     "range": 2,
     "element": "fire",
-    "tribe": "Undead/Archer",
+    "tribe": "Archer Undead",
     "deckable": false,
     "effects": [
         {
