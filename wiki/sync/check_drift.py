@@ -111,7 +111,6 @@ def _check_card_drift(
         card_id = card.get("card_id", "")
         card_name = card.get("name", "")
         art_exists = (art_dir / f"{card_id}.png").exists()
-        expected = card_to_wikitext(card, name_map, art_exists=art_exists)
         page_title = f"Card:{card_name}"
 
         page = site.pages[page_title]
@@ -123,6 +122,15 @@ def _check_card_drift(
             continue
 
         live = page.text()
+
+        # Extract history from live page so we compare like-for-like
+        from sync.card_history import extract_history_section
+        _, live_history = extract_history_section(live)
+
+        expected = card_to_wikitext(
+            card, name_map, art_exists=art_exists,
+            history_entries=live_history if live_history else None,
+        )
         if live.rstrip() != expected.rstrip():
             details = _unified_diff_snippet(expected, live, page_title)
             reports.append(DriftReport(
