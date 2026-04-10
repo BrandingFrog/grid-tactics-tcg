@@ -5,6 +5,7 @@ Pure functions -- no wiki connection needed. Produces wikitext strings from Patc
 
 from __future__ import annotations
 
+from sync.card_history import _FIELD_LABELS, _format_value
 from sync.patch_diff import PatchDiff
 
 
@@ -61,8 +62,19 @@ def patch_to_wikitext(diff: PatchDiff) -> str:
             lines.append("")
             lines.append("=== Changed ===")
             for c in changed:
-                fields = ", ".join(f.replace("_", " ") for f in c.changed_fields)
-                lines.append(f"* [[Card:{c.card_name}|{c.card_name}]] — updated: {fields}")
+                lines.append(f"* [[Card:{c.card_name}|{c.card_name}]]")
+                if c.old_values and c.new_values:
+                    for f in c.changed_fields:
+                        label = _FIELD_LABELS.get(f, f.replace("_", " ").capitalize())
+                        old_v = _format_value(f, c.old_values.get(f))
+                        new_v = _format_value(f, c.new_values.get(f))
+                        lines.append(f"** {label}: {old_v} → {new_v}")
+                else:
+                    fields = ", ".join(
+                        _FIELD_LABELS.get(f, f.replace("_", " ").capitalize())
+                        for f in c.changed_fields
+                    )
+                    lines.append(f"** Updated: {fields}")
 
         if removed:
             lines.append("")
