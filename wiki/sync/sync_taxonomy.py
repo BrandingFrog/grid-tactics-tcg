@@ -256,12 +256,15 @@ def parse_glossary(glossary_path: Path) -> list[dict]:
 # ---------------------------------------------------------------------------
 
 
-def keyword_page_wikitext(keyword: str, description: str, category: str) -> str:
+def keyword_page_wikitext(
+    keyword: str, description: str, category: str,
+    history_entries: list[dict] | None = None,
+) -> str:
     """Generate wikitext for a keyword page.
 
     Includes an ``{{#ask:}}`` query that auto-lists cards with this keyword.
     """
-    return (
+    text = (
         f"'''{keyword}''' is a [[:Category:{category} Keyword|{category.lower()} keyword]] in [[Grid Tactics TCG]].\n"
         f"\n"
         f"== Description ==\n"
@@ -281,9 +284,24 @@ def keyword_page_wikitext(keyword: str, description: str, category: str) -> str:
         f" |sort=Name\n"
         f"}}}}\n"
         f"\n"
+    )
+
+    # History section
+    if history_entries:
+        from sync.card_history import build_history_section
+        history_text = build_history_section(history_entries)
+        if history_text:
+            text += history_text + "\n\n"
+        else:
+            text += "== History ==\n\n"
+    else:
+        text += "== History ==\n\n"
+
+    text += (
         f"[[Category:Keyword]]\n"
         f"[[Category:{category} Keyword]]"
     )
+    return text
 
 
 # ---------------------------------------------------------------------------
@@ -502,16 +520,23 @@ def sync_keywords(
     dry_run: bool = False,
 ) -> dict[str, int]:
     """Parse GLOSSARY.md and upsert keyword pages to the wiki."""
+    from sync.card_history import extract_history_section
+
     keywords = parse_glossary(glossary_path)
     print(f"Found {len(keywords)} keywords: "
           f"{', '.join(k['keyword'] for k in keywords)}")
 
-    pages = {
-        kw["keyword"]: keyword_page_wikitext(
-            kw["keyword"], kw["description"], kw["category"]
+    pages = {}
+    for kw in keywords:
+        # Preserve existing history from the live wiki page
+        existing_history: list[dict] = []
+        page = site.pages[kw["keyword"]]
+        if page.exists:
+            _, existing_history = extract_history_section(page.text())
+        pages[kw["keyword"]] = keyword_page_wikitext(
+            kw["keyword"], kw["description"], kw["category"],
+            history_entries=existing_history if existing_history else None,
         )
-        for kw in keywords
-    }
     return upsert_taxonomy_pages(site, pages, dry_run=dry_run)
 
 

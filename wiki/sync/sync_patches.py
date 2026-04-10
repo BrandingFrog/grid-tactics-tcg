@@ -256,6 +256,74 @@ def update_card_histories(
 
 
 # ---------------------------------------------------------------------------
+# Keyword history updates
+# ---------------------------------------------------------------------------
+
+
+def _update_keyword_histories(site, diff: PatchDiff) -> None:
+    """Update keyword page History sections for changed/added/removed keywords."""
+    for kw_change in diff.keywords:
+        page = site.pages[kw_change.keyword]
+        if not page.exists:
+            continue
+
+        # Extract existing history
+        current_text = page.text()
+        _, existing_entries = extract_history_section(current_text)
+
+        # Build new entry
+        if kw_change.change_type == "added":
+            desc = "Keyword added."
+        elif kw_change.change_type == "removed":
+            desc = "Keyword removed."
+        else:
+            old_desc = kw_change.old_description or ""
+            new_desc = kw_change.new_description or ""
+            desc = f"{old_desc} → {new_desc}" if old_desc != new_desc else "Updated."
+
+        new_entry = {
+            "version": diff.version,
+            "date": diff.commit_date,
+            "change_type": kw_change.change_type,
+            "changed_fields": [],
+            "raw_description": desc if kw_change.change_type == "changed" else "",
+        }
+
+        # Replace or append
+        replaced = False
+        for i, e in enumerate(existing_entries):
+            if e["version"] == diff.version:
+                existing_entries[i] = new_entry
+                replaced = True
+                break
+        if not replaced:
+            existing_entries.append(new_entry)
+
+        # Rebuild page: strip old history, regenerate with entries
+        body = current_text
+        import re
+        history_match = re.search(r"^== History ==\s*$", current_text, re.MULTILINE)
+        if history_match:
+            body = current_text[:history_match.start()].rstrip()
+
+        from sync.card_history import build_history_section
+        history_text = build_history_section(existing_entries)
+        new_text = body + "\n\n" + history_text if history_text else body + "\n\n== History =="
+
+        # Preserve categories at the end
+        if "[[Category:" in current_text and "[[Category:" not in new_text:
+            cats = "\n".join(
+                line for line in current_text.splitlines()
+                if line.startswith("[[Category:")
+            )
+            new_text += "\n\n" + cats
+
+        if new_text.rstrip() != current_text.rstrip():
+            page.edit(new_text, summary=f"update {kw_change.keyword} history ({kw_change.change_type} in {diff.version})")
+            print(f"    keyword history: {kw_change.keyword}: {kw_change.change_type}")
+
+
+# ---------------------------------------------------------------------------
 # Core sync
 # ---------------------------------------------------------------------------
 
@@ -313,6 +381,10 @@ def sync_patch(
     if card_results:
         for cr in card_results:
             print(f"    card history: {cr['page']}: {cr['status']}")
+
+    # Update keyword page history for affected keywords
+    if diff.keywords:
+        _update_keyword_histories(site, diff)
 
     return {
         "status": patch_status,
