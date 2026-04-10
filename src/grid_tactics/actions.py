@@ -140,6 +140,27 @@ def play_react_action(
     )
 
 
+def conjure_deploy_action(position: tuple[int, int]) -> Action:
+    """Create a CONJURE_DEPLOY action (Phase 14.6).
+
+    Only legal while ``state.pending_conjure_deploy_card`` is set.
+    ``position`` is the board tile to deploy the conjured card onto.
+    Encoded on the integer action space by reusing the PLAY_CARD slot
+    space [0:250]; the encoder disambiguates via the pending state.
+    """
+    return Action(action_type=ActionType.CONJURE_DEPLOY, position=position)
+
+
+def decline_conjure_action() -> Action:
+    """Create a DECLINE_CONJURE action (Phase 14.6).
+
+    Only legal while ``state.pending_conjure_deploy_card`` is set.
+    The conjured card goes to hand instead of to the field.
+    Encoded on slot 1001 (PASS); disambiguated via pending state.
+    """
+    return Action(action_type=ActionType.DECLINE_CONJURE)
+
+
 def transform_action(
     minion_id: int,
     transform_target: str,

@@ -63,6 +63,15 @@ class GameState:
     # Mutually exclusive with pending_post_move_attacker_id (asserted).
     pending_tutor_player_idx: Optional[int] = None      # Which player must pick
     pending_tutor_matches: tuple = ()                    # Deck indices of matching cards (in deck order)
+    pending_tutor_is_conjure: bool = False               # True when tutor is for conjure-to-field (not hand)
+
+    # Phase 14.6: Pending conjure-deploy state (conjure-to-field flow).
+    # After TUTOR_SELECT resolves during a conjure (pending_tutor_is_conjure),
+    # instead of adding the card to hand, we enter this state so the player
+    # picks a deployment tile. The card is held here until CONJURE_DEPLOY
+    # resolves it onto the board.
+    pending_conjure_deploy_card: Optional[int] = None        # card_numeric_id to deploy
+    pending_conjure_deploy_player_idx: Optional[int] = None  # Which player is deploying
 
     @property
     def active_player(self) -> Player:

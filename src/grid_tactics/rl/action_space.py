@@ -34,6 +34,8 @@ import numpy as np
 from grid_tactics.actions import (
     Action,
     attack_action,
+    conjure_deploy_action,
+    decline_conjure_action,
     decline_post_move_attack_action,
     decline_tutor_action,
     draw_action,
@@ -120,10 +122,21 @@ class ActionEncoder:
         if atype == ActionType.DECLINE_POST_MOVE_ATTACK:
             return PASS_IDX
 
+        # Phase 14.6: DECLINE_CONJURE reuses slot 1001 (PASS).
+        # Disambiguated at decode time by state.pending_conjure_deploy_card.
+        if atype == ActionType.DECLINE_CONJURE:
+            return PASS_IDX
+
         # Phase 14.2: DECLINE_TUTOR reuses slot 1001 (PASS).
         # Disambiguated at decode time by state.pending_tutor_player_idx.
         if atype == ActionType.DECLINE_TUTOR:
             return PASS_IDX
+
+        # Phase 14.6: CONJURE_DEPLOY reuses the PLAY_CARD slot space [0:250].
+        # card_index is fixed at 0, cell = deploy position flat index.
+        if atype == ActionType.CONJURE_DEPLOY:
+            cell = pos_to_flat(action.position) if action.position is not None else 0
+            return PLAY_CARD_BASE + cell
 
         # Phase 14.2: TUTOR_SELECT reuses the PLAY_CARD slot space [0:250].
         # The match index lives on Action.card_index. We pin cell=0 so the
@@ -175,6 +188,10 @@ class ActionEncoder:
             Action object.
         """
         if action_int == PASS_IDX:
+            # Phase 14.6: slot 1001 reinterpreted as DECLINE_CONJURE while
+            # a conjure deployment is pending.
+            if state.pending_conjure_deploy_card is not None:
+                return decline_conjure_action()
             # Phase 14.2: slot 1001 reinterpreted as DECLINE_TUTOR while a
             # tutor pick is pending. Checked first because pending_tutor and
             # pending_post_move_attacker are mutually exclusive.
@@ -185,6 +202,16 @@ class ActionEncoder:
             if state.pending_post_move_attacker_id is not None:
                 return decline_post_move_attack_action()
             return pass_action()
+
+        # Phase 14.6: PLAY_CARD slot space reinterpreted as CONJURE_DEPLOY
+        # while a conjure deployment is pending. cell = flat position.
+        if (
+            state.pending_conjure_deploy_card is not None
+            and PLAY_CARD_BASE <= action_int < MOVE_BASE
+        ):
+            cell_flat = action_int - PLAY_CARD_BASE
+            pos = flat_to_pos(cell_flat)
+            return conjure_deploy_action(position=pos)
 
         # Phase 14.2: PLAY_CARD slot space reinterpreted as TUTOR_SELECT while
         # a tutor pick is pending. The slot's hand_idx field carries the match

@@ -14,7 +14,10 @@ from __future__ import annotations
 import copy
 
 from grid_tactics.board import Board
-from grid_tactics.types import GRID_COLS, GRID_ROWS
+from grid_tactics.types import (
+    BACK_ROW_P1, BACK_ROW_P2, GRID_COLS, GRID_ROWS,
+    PLAYER_1_ROWS, PLAYER_2_ROWS,
+)
 
 
 def filter_state_for_player(state_dict: dict, viewer_idx: int) -> dict:
@@ -289,6 +292,56 @@ def enrich_pending_tutor_for_viewer(
             key = str(nid)
             totals[key] = totals.get(key, 0) + 1
     filtered_dict["pending_tutor_total_copies_owned"] = totals
+
+
+def enrich_pending_conjure_deploy(
+    state, filtered_dict: dict, viewer_idx: int, library
+) -> None:
+    """Add Phase 14.6 pending_conjure_deploy fields to a per-viewer filtered state dict.
+
+    The deploying player sees which card they're placing and the valid deploy
+    tiles. The opponent sees only that a conjure deploy is in progress.
+
+    Mutates filtered_dict in place. Adds:
+      - pending_conjure_deploy_player_idx: int | None
+      - pending_conjure_deploy_card: int | None  (deployer only)
+      - pending_conjure_deploy_positions: list[[row, col]]  (deployer only)
+    """
+    pending_idx = getattr(state, "pending_conjure_deploy_player_idx", None)
+    card_nid = getattr(state, "pending_conjure_deploy_card", None)
+
+    filtered_dict["pending_conjure_deploy_player_idx"] = pending_idx
+    filtered_dict["pending_conjure_deploy_card"] = None
+    filtered_dict["pending_conjure_deploy_positions"] = []
+
+    if pending_idx is None or card_nid is None:
+        return
+
+    if viewer_idx != pending_idx:
+        # Opponent view — only player index exposed.
+        return
+
+    filtered_dict["pending_conjure_deploy_card"] = card_nid
+
+    # Compute valid deploy positions for the conjured card.
+    try:
+        card_def = library.get_by_id(card_nid)
+    except Exception:
+        return
+
+    deployer_side = state.players[pending_idx].side
+    if card_def.attack_range == 0:
+        rows = PLAYER_1_ROWS if deployer_side.value == 0 else PLAYER_2_ROWS
+    else:
+        back_row = BACK_ROW_P1 if deployer_side.value == 0 else BACK_ROW_P2
+        rows = (back_row,)
+
+    positions: list[list[int]] = []
+    for row in rows:
+        for col in range(GRID_COLS):
+            if state.board.get(row, col) is None:
+                positions.append([row, col])
+    filtered_dict["pending_conjure_deploy_positions"] = positions
 
 
 def filter_state_for_spectator(
