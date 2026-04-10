@@ -611,6 +611,139 @@ def configure_logo_and_favicon(site, dry_run: bool = False) -> str:
 
 
 # ---------------------------------------------------------------------------
+# Prominent search bar (top of every page)
+# ---------------------------------------------------------------------------
+
+_SEARCH_BAR_CSS_MARKER = "/* --- Grid Tactics Search Bar --- */"
+
+_SEARCH_BAR_CSS_BLOCK = f"""{_SEARCH_BAR_CSS_MARKER}
+/* Prominent search bar injected at top of content */
+.gt-search-bar {{
+  display: flex;
+  justify-content: center;
+  padding: 12px 16px;
+  margin: 0 0 16px 0;
+}}
+
+.gt-search-bar form {{
+  display: flex;
+  width: 100%;
+  max-width: 600px;
+  position: relative;
+}}
+
+.gt-search-bar input[type="search"] {{
+  width: 100%;
+  padding: 12px 44px 12px 16px;
+  font-size: 16px;
+  font-family: 'Inter', system-ui, sans-serif;
+  background: #222;
+  color: #eee;
+  border: 2px solid #444;
+  border-radius: 8px;
+  outline: none;
+  transition: border-color 0.2s;
+}}
+
+.gt-search-bar input[type="search"]::placeholder {{
+  color: #777;
+}}
+
+.gt-search-bar input[type="search"]:focus {{
+  border-color: #00d4ff;
+}}
+
+.gt-search-bar button {{
+  position: absolute;
+  right: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  color: #888;
+  cursor: pointer;
+  padding: 8px;
+  font-size: 18px;
+  line-height: 1;
+}}
+
+.gt-search-bar button:hover {{
+  color: #00d4ff;
+}}
+
+@media (max-width: 720px) {{
+  .gt-search-bar {{
+    padding: 8px;
+  }}
+  .gt-search-bar input[type="search"] {{
+    font-size: 14px;
+    padding: 10px 40px 10px 12px;
+  }}
+}}
+"""
+
+_SEARCH_BAR_JS_MARKER = "/* --- Grid Tactics Search Bar --- */"
+
+_SEARCH_BAR_JS_BLOCK = f"""{_SEARCH_BAR_JS_MARKER}
+(function() {{
+  'use strict';
+  var target = document.getElementById('mw-content-text')
+             || document.querySelector('.mw-body-content')
+             || document.querySelector('.mw-body');
+  if (!target) return;
+
+  var bar = document.createElement('div');
+  bar.className = 'gt-search-bar';
+  bar.innerHTML = '<form action="/wiki/Special:Search" method="get">'
+    + '<input type="search" name="search" placeholder="Search cards, keywords, elements…" autocomplete="off" />'
+    + '<button type="submit" aria-label="Search">&#128269;</button>'
+    + '</form>';
+  target.parentNode.insertBefore(bar, target);
+}})();
+"""
+
+
+def push_search_bar_css(site, dry_run: bool = False) -> str:
+    """Append prominent search bar CSS to MediaWiki:Common.css (idempotent)."""
+    page = site.pages["MediaWiki:Common.css"]
+    current = page.text() if page.exists else ""
+
+    if _SEARCH_BAR_CSS_MARKER in current:
+        print("  MediaWiki:Common.css: unchanged (search bar CSS already present)")
+        return "unchanged"
+
+    new_text = (current.rstrip() + "\n\n" + _SEARCH_BAR_CSS_BLOCK) if current else _SEARCH_BAR_CSS_BLOCK
+
+    if dry_run:
+        print("  MediaWiki:Common.css: would-update (search bar CSS)")
+        return "would-update"
+
+    page.edit(new_text, summary="add prominent search bar CSS")
+    print("  MediaWiki:Common.css: updated (search bar CSS)")
+    return "updated"
+
+
+def push_search_bar_js(site, dry_run: bool = False) -> str:
+    """Append search bar injection JS to MediaWiki:Common.js (idempotent)."""
+    page = site.pages["MediaWiki:Common.js"]
+    current = page.text() if page.exists else ""
+
+    if _SEARCH_BAR_JS_MARKER in current:
+        print("  MediaWiki:Common.js: unchanged (search bar JS already present)")
+        return "unchanged"
+
+    new_text = (current.rstrip() + "\n\n" + _SEARCH_BAR_JS_BLOCK) if current else _SEARCH_BAR_JS_BLOCK
+
+    if dry_run:
+        print("  MediaWiki:Common.js: would-update (search bar JS)")
+        return "would-update"
+
+    page.edit(new_text, summary="add prominent search bar JS injection")
+    print("  MediaWiki:Common.js: updated (search bar JS)")
+    return "updated"
+
+
+# ---------------------------------------------------------------------------
 # Search verification
 # ---------------------------------------------------------------------------
 

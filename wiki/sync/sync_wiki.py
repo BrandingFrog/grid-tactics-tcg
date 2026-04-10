@@ -477,6 +477,8 @@ def main(argv: list[str] | None = None) -> int:
             push_dark_search_css,
             push_font_css,
             push_mobile_css,
+            push_search_bar_css,
+            push_search_bar_js,
             upload_favicon,
             upload_logo,
         )
@@ -504,11 +506,16 @@ def main(argv: list[str] | None = None) -> int:
         print("\n=== Favicon ===")
         fav_status = upload_favicon(site, dry_run=args.dry_run)
 
+        print("\n=== Search Bar ===")
+        search_css_status = push_search_bar_css(site, dry_run=args.dry_run)
+        search_js_status = push_search_bar_js(site, dry_run=args.dry_run)
+
         print("\n=== Logo & Favicon Configuration ===")
         config_status = configure_logo_and_favicon(site, dry_run=args.dry_run)
 
         print(f"\nPolish complete: CSS={css_status}, Logo={logo_status}, "
-              f"Favicon={fav_status}, Config={config_status}")
+              f"Favicon={fav_status}, Config={config_status}, "
+              f"SearchBar={search_css_status}/{search_js_status}")
         return 0
 
     # --verify-search
