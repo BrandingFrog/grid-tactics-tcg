@@ -97,7 +97,7 @@ _MOBILE_CSS_BLOCK = f"""{_MOBILE_CSS_MARKER}
   }}
 
   /* Hide sidebar on mobile */
-  .mw-sidebar, #mw-panel, .vector-menu-portal {{
+  .mw-sidebar, #mw-panel, .citizen-drawer {{
     display: none !important;
   }}
 
@@ -497,6 +497,7 @@ _LOGO_CSS_MARKER = "/* --- Grid Tactics Logo --- */"
 
 _LOGO_CSS_BLOCK = f"""{_LOGO_CSS_MARKER}
 /* Override default MediaWiki logo with uploaded Wiki.png */
+.citizen-header__logo img,
 .mw-logo-icon {{
   background-image: url('/w/images/Wiki.png') !important;
   background-size: contain;

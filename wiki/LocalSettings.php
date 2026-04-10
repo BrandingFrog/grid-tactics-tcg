@@ -39,7 +39,7 @@ $wgMainCacheType = CACHE_NONE;
 $wgMemCachedServers = [];
 
 $wgLanguageCode = 'en';
-$wgDefaultSkin = 'vector';
+$wgDefaultSkin = 'citizen';
 
 # Behind Railway edge proxy — trust X-Forwarded-* so $wgServer works over https
 $wgUsePrivateIPs = false;
@@ -56,9 +56,8 @@ $wgGroupPermissions['*']['createaccount'] = false;
 $wgGroupPermissions['*']['edit'] = false;
 
 # Skins
-wfLoadSkin('Vector');
-$wgVectorResponsive = true;
-$wgVectorDefaultSkinVersion = '2';  # Vector 2022 — built-in mobile support
+wfLoadSkin('Citizen');
+$wgCitizenThemeDefault = 'dark';
 
 # Extensions
 wfLoadExtension('ParserFunctions');
