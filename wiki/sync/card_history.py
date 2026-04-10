@@ -130,10 +130,14 @@ def build_history_section(history_entries: list[dict]) -> str:
         elif change_type == "changed":
             old_rules = entry.get("old_rules", "")
             new_rules = entry.get("new_rules", "")
+            raw_desc = entry.get("raw_description", "")
             if old_rules and new_rules and old_rules != new_rules:
                 lines.append(f": {old_rules} → {new_rules}")
             elif new_rules:
                 lines.append(f": {new_rules}")
+            elif raw_desc:
+                # Preserved from existing wiki page
+                lines.append(f": {raw_desc}")
             else:
                 # Legacy entries without rules text
                 readable = [
@@ -231,6 +235,7 @@ def extract_history_section(page_text: str) -> tuple[str, list[dict]]:
                 break
 
         # Parse description into change_type and changed_fields
+        raw_desc = ""
         if desc_text == "Card added.":
             change_type = "added"
             changed_fields: list[str] = []
@@ -241,16 +246,23 @@ def extract_history_section(page_text: str) -> tuple[str, list[dict]]:
             change_type = "changed"
             fields_str = desc_text[len("Changed:") :].strip()
             changed_fields = [f.strip() for f in fields_str.split(",")]
+        elif "→" in desc_text:
+            # Rules text diff format: "old text → new text"
+            change_type = "changed"
+            changed_fields = []
+            raw_desc = desc_text
         else:
-            # Unknown format -- treat as "changed" with raw description
+            # Unknown format -- preserve raw description
             change_type = "changed"
             changed_fields = [desc_text] if desc_text else []
+            raw_desc = desc_text
 
         entries.append({
             "version": version,
             "date": date,
             "change_type": change_type,
             "changed_fields": changed_fields,
+            "raw_description": raw_desc,
         })
 
     return (body, entries)
