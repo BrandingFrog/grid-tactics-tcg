@@ -60,6 +60,7 @@ class EffectType(IntEnum):
     CONJURE = 14       # Create a card from outside the deck (specified by summon_token_target)
     APPLY_BURNING = 15  # Phase 14.3: grant N burning_stacks to the target minion (stacks additively)
     GRANT_DARK_MATTER = 16  # Add `amount` Dark Matter stacks to a target minion. Currently only consumed by Ratchanter's activated ability (magnitude scales with caster.dark_matter_stacks).
+    REVIVE = 17  # Summon up to `amount` copies of revive_card_id from grave to the board
 
 
 class ReactCondition(IntEnum):
