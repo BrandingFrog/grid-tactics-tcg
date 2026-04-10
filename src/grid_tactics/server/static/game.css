@@ -1201,7 +1201,7 @@ body {
   color: white;
   -webkit-text-stroke: 3px black;
   paint-order: stroke fill;
-  font-family: 'Montserrat', sans-serif; font-weight: 900; text-transform: uppercase;
+  font-family: 'Source Sans 3', 'Source Sans Pro', sans-serif;
   font-size: 14px;
   font-weight: 700;
   line-height: 1.1;
@@ -1348,7 +1348,7 @@ body {
   left: 4%;
   right: 4%;
   color: white;
-  font-family: 'Montserrat', sans-serif; font-weight: 900; text-transform: uppercase;
+  font-family: 'Source Sans 3', 'Source Sans Pro', sans-serif;
   font-size: 16px;
   font-weight: 700;
   -webkit-text-stroke: 3px black;
