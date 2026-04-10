@@ -50,10 +50,21 @@ _FIELD_LABELS: dict[str, str] = {
 }
 
 
+_FIELD_DEFAULTS: dict[str, object] = {
+    "summon_sacrifice_count": 1,
+    "unique": False,
+    "deckable": True,
+}
+
+
 def _format_value(field: str, value: object) -> str:
     """Format a card field value for display in patch notes."""
     if value is None:
-        return "none"
+        default = _FIELD_DEFAULTS.get(field)
+        if default is not None:
+            value = default
+        else:
+            return "none"
     if isinstance(value, bool):
         return "Yes" if value else "No"
     if isinstance(value, list):
