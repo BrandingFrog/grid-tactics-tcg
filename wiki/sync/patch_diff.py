@@ -26,6 +26,8 @@ class CardChange:
     card_name: str
     change_type: Literal["added", "changed", "removed"]
     changed_fields: list[str] = field(default_factory=list)
+    old_values: dict[str, object] = field(default_factory=dict)
+    new_values: dict[str, object] = field(default_factory=dict)
 
 
 @dataclass
@@ -151,6 +153,8 @@ def diff_cards(old_sha: str, new_sha: str, repo_root: Path) -> list[CardChange]:
                 card_name=new_card.get("name", fname),
                 change_type="changed",
                 changed_fields=changed_fields,
+                old_values={k: old_card.get(k) for k in changed_fields},
+                new_values={k: new_card.get(k) for k in changed_fields},
             ))
 
     # Sort by card_name

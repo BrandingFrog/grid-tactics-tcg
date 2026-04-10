@@ -30,6 +30,51 @@ import re
 # ---------------------------------------------------------------------------
 
 
+_FIELD_LABELS: dict[str, str] = {
+    "mana_cost": "Mana cost",
+    "attack": "Attack",
+    "health": "Health",
+    "card_type": "Type",
+    "element": "Element",
+    "tribe": "Tribe",
+    "range": "Range",
+    "summon_sacrifice_tribe": "Sacrifice tribe",
+    "summon_sacrifice_count": "Sacrifice count",
+    "unique": "Unique",
+    "deckable": "Deckable",
+    "tutor_target": "Tutor target",
+    "promote_target": "Promote target",
+    "flavour_text": "Flavor text",
+    "react_condition": "React condition",
+    "react_mana_cost": "React cost",
+}
+
+
+def _format_value(field: str, value: object) -> str:
+    """Format a card field value for display in patch notes."""
+    if value is None:
+        return "none"
+    if isinstance(value, bool):
+        return "Yes" if value else "No"
+    if isinstance(value, list):
+        if not value:
+            return "none"
+        # Effects array — summarize trigger:type pairs
+        if value and isinstance(value[0], dict) and "type" in value[0]:
+            parts = []
+            for eff in value:
+                trigger = eff.get("trigger", "")
+                etype = eff.get("type", "")
+                amount = eff.get("amount", "")
+                label = f"{trigger}:{etype}" if trigger else etype
+                if amount:
+                    label += f"({amount})"
+                parts.append(label)
+            return ", ".join(parts)
+        return str(value)
+    return str(value)
+
+
 def build_history_section(history_entries: list[dict]) -> str:
     """Build a ``== History ==`` wikitext section from structured entries.
 
@@ -39,6 +84,7 @@ def build_history_section(history_entries: list[dict]) -> str:
         List of dicts with keys: ``version`` (str), ``date`` (str),
         ``change_type`` (Literal["added", "changed", "removed"]),
         ``changed_fields`` (list[str], empty for added/removed).
+        Optionally ``old_values`` and ``new_values`` dicts for detailed diffs.
 
     Returns
     -------
@@ -61,6 +107,8 @@ def build_history_section(history_entries: list[dict]) -> str:
         date = entry["date"]
         change_type = entry["change_type"]
         changed_fields = entry.get("changed_fields", [])
+        old_values = entry.get("old_values", {})
+        new_values = entry.get("new_values", {})
 
         lines.append(f"; [[Patch:{version}|{version}]] ({date})")
 
@@ -69,9 +117,20 @@ def build_history_section(history_entries: list[dict]) -> str:
         elif change_type == "removed":
             lines.append(": Card removed.")
         elif change_type == "changed":
-            # Replace underscores with spaces in field names
-            readable = [f.replace("_", " ") for f in changed_fields]
-            lines.append(f": Changed: {', '.join(readable)}")
+            if old_values and new_values:
+                # Detailed per-field diffs
+                for f in changed_fields:
+                    label = _FIELD_LABELS.get(f, f.replace("_", " ").capitalize())
+                    old_v = _format_value(f, old_values.get(f))
+                    new_v = _format_value(f, new_values.get(f))
+                    lines.append(f":* {label}: {old_v} → {new_v}")
+            else:
+                # Legacy entries without old/new values
+                readable = [
+                    _FIELD_LABELS.get(f, f.replace("_", " ").capitalize())
+                    for f in changed_fields
+                ]
+                lines.append(f": Changed: {', '.join(readable)}")
 
     return "\n".join(lines)
 
