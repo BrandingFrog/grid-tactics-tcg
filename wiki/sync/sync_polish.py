@@ -611,135 +611,298 @@ def configure_logo_and_favicon(site, dry_run: bool = False) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Prominent search bar (top of every page)
+# Top header bar (matches game site header)
 # ---------------------------------------------------------------------------
 
-_SEARCH_BAR_CSS_MARKER = "/* --- Grid Tactics Search Bar --- */"
+_HEADER_BAR_CSS_MARKER = "/* --- Grid Tactics Header Bar --- */"
 
-_SEARCH_BAR_CSS_BLOCK = f"""{_SEARCH_BAR_CSS_MARKER}
-/* Prominent search bar injected at top of content */
-.gt-search-bar {{
+_HEADER_BAR_CSS_BLOCK = f"""{_HEADER_BAR_CSS_MARKER}
+/* Top nav bar matching the game site header */
+.gt-header {{
+  background: linear-gradient(135deg, #0f0f24, #161638);
+  border-bottom: 1px solid #252545;
+  padding: 0 20px;
   display: flex;
-  justify-content: center;
-  padding: 12px 16px;
-  margin: 0 0 16px 0;
+  align-items: center;
+  height: 52px;
+  position: sticky;
+  top: 0;
+  z-index: 1000;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  box-sizing: border-box;
 }}
 
-.gt-search-bar form {{
+.gt-header * {{
+  box-sizing: border-box;
+}}
+
+.gt-header-logo {{
+  font-size: 15px;
+  font-weight: 800;
+  color: #00d4ff;
+  letter-spacing: 2px;
+  margin-right: 32px;
+  white-space: nowrap;
+  text-decoration: none;
+}}
+
+.gt-header-logo:hover {{
+  color: #00d4ff;
+  text-decoration: none;
+}}
+
+.gt-header-nav {{
   display: flex;
-  width: 100%;
-  max-width: 600px;
+  gap: 2px;
+  flex: 1;
+}}
+
+.gt-header-nav a {{
+  background: none;
+  border: none;
+  color: #777;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 14px 16px;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  transition: all 0.15s;
+  text-decoration: none;
+  display: inline-block;
+  line-height: calc(52px - 28px);
+}}
+
+.gt-header-nav a:hover {{
+  color: #e0e0e0;
+  text-decoration: none;
+}}
+
+.gt-header-nav a.gt-active {{
+  color: #00d4ff;
+  border-bottom-color: #00d4ff;
+}}
+
+.gt-header-right {{
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}}
+
+.gt-header-search {{
   position: relative;
 }}
 
-.gt-search-bar input[type="search"] {{
-  width: 100%;
-  padding: 12px 44px 12px 16px;
-  font-size: 16px;
+.gt-header-search input {{
+  width: 200px;
+  padding: 6px 32px 6px 12px;
+  font-size: 13px;
   font-family: 'Inter', system-ui, sans-serif;
-  background: #222;
-  color: #eee;
-  border: 2px solid #444;
-  border-radius: 8px;
+  background: rgba(255,255,255,0.07);
+  color: #e0e0e0;
+  border: 1px solid #333;
+  border-radius: 6px;
   outline: none;
-  transition: border-color 0.2s;
+  transition: border-color 0.2s, width 0.2s;
 }}
 
-.gt-search-bar input[type="search"]::placeholder {{
-  color: #777;
+.gt-header-search input::placeholder {{
+  color: #555;
 }}
 
-.gt-search-bar input[type="search"]:focus {{
+.gt-header-search input:focus {{
   border-color: #00d4ff;
+  width: 260px;
 }}
 
-.gt-search-bar button {{
+.gt-header-search button {{
   position: absolute;
-  right: 4px;
+  right: 2px;
   top: 50%;
   transform: translateY(-50%);
   background: none;
   border: none;
-  color: #888;
+  color: #555;
   cursor: pointer;
-  padding: 8px;
-  font-size: 18px;
+  padding: 4px 6px;
+  font-size: 14px;
   line-height: 1;
 }}
 
-.gt-search-bar button:hover {{
+.gt-header-search button:hover {{
   color: #00d4ff;
 }}
 
-@media (max-width: 720px) {{
-  .gt-search-bar {{
-    padding: 8px;
+/* Push Citizen skin content below the sticky header */
+.citizen-header {{
+  top: 52px !important;
+}}
+
+body {{
+  padding-top: 52px;
+}}
+
+.gt-header {{
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+}}
+
+@media (max-width: 600px) {{
+  .gt-header {{
+    padding: 0 8px;
+    height: 44px;
   }}
-  .gt-search-bar input[type="search"] {{
-    font-size: 14px;
-    padding: 10px 40px 10px 12px;
+  .gt-header-logo {{
+    font-size: 12px;
+    margin-right: 12px;
+    letter-spacing: 1px;
+  }}
+  .gt-header-nav a {{
+    padding: 10px 8px;
+    font-size: 11px;
+    line-height: calc(44px - 20px);
+  }}
+  .gt-header-search input {{
+    width: 120px;
+    font-size: 12px;
+    padding: 5px 28px 5px 8px;
+  }}
+  .gt-header-search input:focus {{
+    width: 160px;
+  }}
+  body {{
+    padding-top: 44px;
+  }}
+  .citizen-header {{
+    top: 44px !important;
   }}
 }}
 """
 
-_SEARCH_BAR_JS_MARKER = "/* --- Grid Tactics Search Bar --- */"
+_HEADER_BAR_JS_MARKER = "/* --- Grid Tactics Header Bar --- */"
 
-_SEARCH_BAR_JS_BLOCK = f"""{_SEARCH_BAR_JS_MARKER}
+_HEADER_BAR_JS_BLOCK = f"""{_HEADER_BAR_JS_MARKER}
 (function() {{
   'use strict';
-  var target = document.getElementById('mw-content-text')
-             || document.querySelector('.mw-body-content')
-             || document.querySelector('.mw-body');
-  if (!target) return;
+  if (document.querySelector('.gt-header')) return;
 
-  var bar = document.createElement('div');
-  bar.className = 'gt-search-bar';
-  bar.innerHTML = '<form action="/wiki/Special:Search" method="get">'
-    + '<input type="search" name="search" placeholder="Search cards, keywords, elements…" autocomplete="off" />'
-    + '<button type="submit" aria-label="Search">&#128269;</button>'
-    + '</form>';
-  target.parentNode.insertBefore(bar, target);
+  var header = document.createElement('header');
+  header.className = 'gt-header';
+  header.innerHTML = ''
+    + '<a class="gt-header-logo" href="/wiki/Main_Page">GRID TACTICS</a>'
+    + '<nav class="gt-header-nav">'
+    +   '<a href="/wiki/Main_Page">Home</a>'
+    +   '<a href="/wiki/Category:Card">Cards</a>'
+    +   '<a href="/wiki/Deck_Building_Guide">Decks</a>'
+    +   '<a href="/wiki/Patch:Index">Patches</a>'
+    + '</nav>'
+    + '<div class="gt-header-right">'
+    +   '<div class="gt-header-search">'
+    +     '<form action="/wiki/Special:Search" method="get">'
+    +       '<input type="search" name="search" placeholder="Search wiki…" autocomplete="off" />'
+    +       '<button type="submit" aria-label="Search">&#128269;</button>'
+    +     '</form>'
+    +   '</div>'
+    + '</div>';
+
+  document.body.insertBefore(header, document.body.firstChild);
 }})();
 """
 
+# Legacy marker cleanup: remove old search bar blocks if present
+_OLD_SEARCH_BAR_CSS_MARKER = "/* --- Grid Tactics Search Bar --- */"
+_OLD_SEARCH_BAR_JS_MARKER = "/* --- Grid Tactics Search Bar --- */"
 
-def push_search_bar_css(site, dry_run: bool = False) -> str:
-    """Append prominent search bar CSS to MediaWiki:Common.css (idempotent)."""
+
+def _remove_old_block(text: str, marker: str) -> str:
+    """Remove a marker-delimited CSS/JS block from page text."""
+    if marker not in text:
+        return text
+    lines = text.split("\n")
+    result: list[str] = []
+    skip = False
+    for line in lines:
+        if marker in line:
+            skip = True
+            continue
+        if skip:
+            # End of block: next marker or blank line after a closing brace/paren
+            if line.strip() == "" and result and result[-1].strip() == "":
+                continue  # skip extra blank lines
+            if line.strip() == "":
+                skip = False
+                continue
+            continue
+        result.append(line)
+    return "\n".join(result)
+
+
+def push_header_bar_css(site, dry_run: bool = False) -> str:
+    """Push header bar CSS to MediaWiki:Common.css (idempotent).
+
+    Also removes the old search bar CSS block if present.
+    """
     page = site.pages["MediaWiki:Common.css"]
     current = page.text() if page.exists else ""
 
-    if _SEARCH_BAR_CSS_MARKER in current:
-        print("  MediaWiki:Common.css: unchanged (search bar CSS already present)")
+    # Remove old search bar CSS if present
+    cleaned = _remove_old_block(current, _OLD_SEARCH_BAR_CSS_MARKER)
+    had_old = cleaned != current
+
+    if _HEADER_BAR_CSS_MARKER in cleaned:
+        if had_old:
+            if dry_run:
+                print("  MediaWiki:Common.css: would-update (remove old search bar CSS)")
+                return "would-update"
+            page.edit(cleaned, summary="remove old search bar CSS (replaced by header bar)")
+            print("  MediaWiki:Common.css: updated (removed old search bar CSS)")
+            return "updated"
+        print("  MediaWiki:Common.css: unchanged (header bar CSS already present)")
         return "unchanged"
 
-    new_text = (current.rstrip() + "\n\n" + _SEARCH_BAR_CSS_BLOCK) if current else _SEARCH_BAR_CSS_BLOCK
+    new_text = (cleaned.rstrip() + "\n\n" + _HEADER_BAR_CSS_BLOCK) if cleaned.strip() else _HEADER_BAR_CSS_BLOCK
 
     if dry_run:
-        print("  MediaWiki:Common.css: would-update (search bar CSS)")
+        print("  MediaWiki:Common.css: would-update (header bar CSS)")
         return "would-update"
 
-    page.edit(new_text, summary="add prominent search bar CSS")
-    print("  MediaWiki:Common.css: updated (search bar CSS)")
+    page.edit(new_text, summary="add header bar CSS (matches game site)")
+    print("  MediaWiki:Common.css: updated (header bar CSS)")
     return "updated"
 
 
-def push_search_bar_js(site, dry_run: bool = False) -> str:
-    """Append search bar injection JS to MediaWiki:Common.js (idempotent)."""
+def push_header_bar_js(site, dry_run: bool = False) -> str:
+    """Push header bar JS to MediaWiki:Common.js (idempotent).
+
+    Also removes the old search bar JS block if present.
+    """
     page = site.pages["MediaWiki:Common.js"]
     current = page.text() if page.exists else ""
 
-    if _SEARCH_BAR_JS_MARKER in current:
-        print("  MediaWiki:Common.js: unchanged (search bar JS already present)")
+    # Remove old search bar JS if present
+    cleaned = _remove_old_block(current, _OLD_SEARCH_BAR_JS_MARKER)
+    had_old = cleaned != current
+
+    if _HEADER_BAR_JS_MARKER in cleaned:
+        if had_old:
+            if dry_run:
+                print("  MediaWiki:Common.js: would-update (remove old search bar JS)")
+                return "would-update"
+            page.edit(cleaned, summary="remove old search bar JS (replaced by header bar)")
+            print("  MediaWiki:Common.js: updated (removed old search bar JS)")
+            return "updated"
+        print("  MediaWiki:Common.js: unchanged (header bar JS already present)")
         return "unchanged"
 
-    new_text = (current.rstrip() + "\n\n" + _SEARCH_BAR_JS_BLOCK) if current else _SEARCH_BAR_JS_BLOCK
+    new_text = (cleaned.rstrip() + "\n\n" + _HEADER_BAR_JS_BLOCK) if cleaned.strip() else _HEADER_BAR_JS_BLOCK
 
     if dry_run:
-        print("  MediaWiki:Common.js: would-update (search bar JS)")
+        print("  MediaWiki:Common.js: would-update (header bar JS)")
         return "would-update"
 
-    page.edit(new_text, summary="add prominent search bar JS injection")
-    print("  MediaWiki:Common.js: updated (search bar JS)")
+    page.edit(new_text, summary="add header bar JS (matches game site)")
+    print("  MediaWiki:Common.js: updated (header bar JS)")
     return "updated"
 
 
