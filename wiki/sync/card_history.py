@@ -130,21 +130,38 @@ def build_history_section(history_entries: list[dict]) -> str:
         elif change_type == "changed":
             old_rules = entry.get("old_rules", "")
             new_rules = entry.get("new_rules", "")
+            old_values = entry.get("old_values", {})
+            new_values = entry.get("new_values", {})
             raw_desc = entry.get("raw_description", "")
+            has_output = False
+            # Show rules text diff if rules changed
             if old_rules and new_rules and old_rules != new_rules:
                 lines.append(f": {old_rules} → {new_rules}")
-            elif new_rules:
-                lines.append(f": {new_rules}")
-            elif raw_desc:
-                # Preserved from existing wiki page
-                lines.append(f": {raw_desc}")
-            else:
-                # Legacy entries without rules text
-                readable = [
-                    _FIELD_LABELS.get(f, f.replace("_", " ").capitalize())
-                    for f in changed_fields
-                ]
-                lines.append(f": Changed: {', '.join(readable)}")
+                has_output = True
+            # Show per-field diffs for stat/metadata changes
+            if old_values and new_values:
+                rules_fields = {"effects", "react_effect", "activated_ability",
+                                "transform_options", "react_condition", "react_mana_cost",
+                                "summon_sacrifice_tribe", "summon_sacrifice_count",
+                                "tutor_target", "promote_target", "unique",
+                                "react_requires_no_friendly_minions"}
+                for f in changed_fields:
+                    if old_rules != new_rules and f in rules_fields:
+                        continue
+                    label = _FIELD_LABELS.get(f, f.replace("_", " ").capitalize())
+                    old_v = _format_value(f, old_values.get(f))
+                    new_v = _format_value(f, new_values.get(f))
+                    lines.append(f": {label}: {old_v} → {new_v}")
+                    has_output = True
+            if not has_output:
+                if raw_desc:
+                    lines.append(f": {raw_desc}")
+                else:
+                    readable = [
+                        _FIELD_LABELS.get(f, f.replace("_", " ").capitalize())
+                        for f in changed_fields
+                    ]
+                    lines.append(f": Changed: {', '.join(readable)}")
 
     return "\n".join(lines)
 

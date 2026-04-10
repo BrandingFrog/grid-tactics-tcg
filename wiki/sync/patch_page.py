@@ -5,6 +5,7 @@ Pure functions -- no wiki connection needed. Produces wikitext strings from Patc
 
 from __future__ import annotations
 
+from sync.card_history import _FIELD_DEFAULTS, _FIELD_LABELS, _format_value
 from sync.patch_diff import PatchDiff
 
 
@@ -62,13 +63,24 @@ def patch_to_wikitext(diff: PatchDiff) -> str:
             lines.append("=== Changed ===")
             for c in changed:
                 lines.append(f"* [[Card:{c.card_name}|{c.card_name}]]")
+                # Show rules text diff if rules changed
                 if c.old_rules and c.new_rules and c.old_rules != c.new_rules:
                     lines.append(f"** {c.old_rules} → {c.new_rules}")
-                elif c.new_rules:
-                    lines.append(f"** {c.new_rules}")
-                else:
-                    fields = ", ".join(f.replace("_", " ") for f in c.changed_fields)
-                    lines.append(f"** Updated: {fields}")
+                # Show per-field diffs for stat/metadata changes
+                if c.old_values and c.new_values:
+                    # Skip fields already covered by rules text diff
+                    rules_fields = {"effects", "react_effect", "activated_ability",
+                                    "transform_options", "react_condition", "react_mana_cost",
+                                    "summon_sacrifice_tribe", "summon_sacrifice_count",
+                                    "tutor_target", "promote_target", "unique",
+                                    "react_requires_no_friendly_minions"}
+                    for f in c.changed_fields:
+                        if c.old_rules != c.new_rules and f in rules_fields:
+                            continue  # already shown in rules diff
+                        label = _FIELD_LABELS.get(f, f.replace("_", " ").capitalize())
+                        old_v = _format_value(f, c.old_values.get(f))
+                        new_v = _format_value(f, c.new_values.get(f))
+                        lines.append(f"** {label}: {old_v} → {new_v}")
 
         if removed:
             lines.append("")

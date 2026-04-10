@@ -220,6 +220,8 @@ def update_card_histories(
             "changed_fields": card_change.changed_fields,
             "old_rules": card_change.old_rules,
             "new_rules": card_change.new_rules,
+            "old_values": card_change.old_values,
+            "new_values": card_change.new_values,
         }
 
         # Replace existing entry for this version, or append new
