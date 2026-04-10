@@ -77,12 +77,19 @@ fieldset#mw-searchoptions label {{
 _MOBILE_CSS_MARKER = "/* --- Grid Tactics Mobile --- */"
 
 _MOBILE_CSS_BLOCK = f"""{_MOBILE_CSS_MARKER}
-@media (max-width: 480px) {{
-  /* Card infobox: full width on mobile */
-  .infobox, .card-infobox {{
+@media (max-width: 720px) {{
+  /* Card infobox: full width, no float on mobile */
+  .gt-card, .infobox, .card-infobox {{
     width: 100% !important;
+    max-width: 100% !important;
     float: none !important;
     margin: 0 0 1em 0 !important;
+  }}
+
+  /* Card art: scale to container */
+  .gt-card img {{
+    max-width: 100% !important;
+    height: auto !important;
   }}
 
   /* SMW result tables: horizontal scroll */
