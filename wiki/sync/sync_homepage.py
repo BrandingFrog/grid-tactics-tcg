@@ -61,31 +61,12 @@ def main_page_wikitext(cards_dir: Path | None = None) -> str:
     cotd = _pick_card_of_the_day(cards_dir)
     if cotd:
         card_name = cotd.get("name", "Unknown")
-        card_id = cotd.get("card_id", "")
-        card_type = cotd.get("card_type", "").capitalize()
-        element = cotd.get("element", "").capitalize()
-        tribe = cotd.get("tribe", "")
-        mana = cotd.get("mana_cost", "?")
-        attack = cotd.get("attack", "")
-        health = cotd.get("health", "")
-        atk_hp = f" | {attack}🗡️ / {health}🤍" if attack else ""
-        stats_line = f"{mana} Mana"
-        if attack:
-            stats_line += f" · {attack}🗡️ · {health}🤍"
-
         cotd_section = (
             f'== Card of the Day ==\n'
-            f'<div style="text-align:center; background:#1a1a1a; border:2px solid #222; '
-            f'border-radius:10px; padding:16px; max-width:280px; margin:0 auto 1em auto;">\n'
-            f'[[File:{card_id}.png|240px|center|link=Card:{card_name}]]\n'
-            f"<div style=\"font-family:'Source Sans 3','Source Sans Pro',sans-serif; "
-            f'font-weight:700; font-size:1.3em; color:#eee; margin:8px 0 2px; '
-            f'-webkit-text-stroke:1px black; paint-order:stroke fill;\">'
-            f'[[Card:{card_name}|{card_name}]]</div>\n'
-            f'<div style="color:#aaa; font-size:0.8em;">'
-            f'{card_type}{" · " + tribe if tribe else ""} · {element}</div>\n'
-            f'<div style="color:#888; font-size:0.8em; margin-top:2px;">'
-            f'{stats_line}</div>\n'
+            f'<div class="cotd-wrapper" style="display:flex; justify-content:center; margin-bottom:1em;">\n'
+            f'<div style="float:none !important; margin:0 !important;">\n'
+            f'{{{{:Card:{card_name}}}}}\n'
+            f'</div>\n'
             f'</div>\n'
             f'\n'
         )
