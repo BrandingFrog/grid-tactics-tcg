@@ -258,8 +258,18 @@ def build_rules_text(card: dict, name_map: dict[str, str] | None = None) -> str:
                 desc = f"{pfx}[[Promote]]"
         elif eff_type == "tutor":
             target_id = card.get("tutor_target", "")
-            target_link = _wikilink(target_id, name_map) if target_id else "a card"
-            desc = f"{pfx}[[Tutor]] {target_link}"
+            count = amount if amount > 1 else 0
+            count_text = f"{count} " if count else ""
+            if isinstance(target_id, dict):
+                # Selector-based tutor (e.g. {"tribe": "Rat"})
+                tribe = target_id.get("tribe", "")
+                plural = "s" if count > 1 else ""
+                target_link = f"[[{tribe}]]{plural}" if tribe else "cards"
+            elif target_id:
+                target_link = _wikilink(target_id, name_map)
+            else:
+                target_link = "a card"
+            desc = f"{pfx}[[Tutor]] {count_text}{target_link}"
         elif eff_type == "destroy":
             desc = f"{pfx}[[Destroy]] target"
         elif eff_type == "burn":

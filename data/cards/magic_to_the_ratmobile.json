@@ -1,0 +1,17 @@
+{
+    "card_id": "to_the_ratmobile",
+    "stable_id": 36,
+    "name": "To The Ratmobile!",
+    "card_type": "magic",
+    "mana_cost": 3,
+    "element": "metal",
+    "tutor_target": {"tribe": "Rat"},
+    "effects": [
+        {
+            "type": "tutor",
+            "trigger": "on_play",
+            "target": "self_owner",
+            "amount": 2
+        }
+    ]
+}
