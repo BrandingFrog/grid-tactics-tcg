@@ -32,9 +32,9 @@ class Player:
     max_mana: int
     hand: tuple[int, ...]
     deck: tuple[int, ...]
-    graveyard: tuple[int, ...]
+    grave: tuple[int, ...]
     # Phase 14.5: cards removed from hand as a COST (e.g. summon_sacrifice_tribe
-    # discard) go here instead of graveyard. Exhaust is shown in a separate pile
+    # discard) go here instead of grave. Exhaust is shown in a separate pile
     # in the UI and is NOT considered "played" for card-effect purposes.
     exhaust: tuple[int, ...] = ()
 
@@ -50,19 +50,19 @@ class Player:
             max_mana=STARTING_MANA,
             hand=(),
             deck=deck,
-            graveyard=(),
+            grave=(),
             exhaust=(),
         )
 
-    # -- Phase 14.5: hand removal without graveyard side-effect ------------
+    # -- Phase 14.5: hand removal without grave side-effect ------------
 
     def remove_from_hand(self, card_id: int) -> Player:
         """Remove a card from hand WITHOUT adding to any pile.
 
         Used by the minion PLAY_CARD path — deployed minions live on the board
-        and only enter the graveyard if/when they die (gated on from_deck).
+        and only enter the grave if/when they die (gated on from_deck).
         Magic/react one-shots continue to use ``discard_from_hand`` which does
-        route to graveyard.
+        route to grave.
         """
         if card_id not in self.hand:
             raise ValueError(f"Card {card_id} not in hand: {self.hand}")
@@ -123,7 +123,7 @@ class Player:
         )
 
     def discard_from_hand(self, card_id: int) -> Player:
-        """Move a card from hand to graveyard. Raises if card not in hand."""
+        """Move a card from hand to grave. Raises if card not in hand."""
         if card_id not in self.hand:
             raise ValueError(f"Card {card_id} not in hand: {self.hand}")
         hand_list = list(self.hand)
@@ -131,7 +131,7 @@ class Player:
         return replace(
             self,
             hand=tuple(hand_list),
-            graveyard=self.graveyard + (card_id,),
+            grave=self.grave + (card_id,),
         )
 
     # -- HP / damage --------------------------------------------------------

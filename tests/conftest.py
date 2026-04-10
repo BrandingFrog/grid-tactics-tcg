@@ -59,7 +59,7 @@ def make_player():
         max_mana=STARTING_MANA,
         hand=(),
         deck=(),
-        graveyard=(),
+        grave=(),
     ):
         from grid_tactics.player import Player
 
@@ -70,7 +70,7 @@ def make_player():
             max_mana=max_mana,
             hand=hand,
             deck=deck,
-            graveyard=graveyard,
+            grave=grave,
         )
 
     return _make_player

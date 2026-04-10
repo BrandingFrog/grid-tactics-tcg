@@ -1,0 +1,17 @@
+{
+    "card_id": "ratical_resurrection",
+    "stable_id": 35,
+    "name": "Ratical Resurrection",
+    "card_type": "magic",
+    "mana_cost": 3,
+    "element": "earth",
+    "effects": [
+        {
+            "type": "revive",
+            "trigger": "on_play",
+            "target": "grave",
+            "amount": 3,
+            "revive_card_id": "rat"
+        }
+    ]
+}

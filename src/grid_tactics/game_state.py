@@ -154,7 +154,7 @@ class GameState:
                     "max_mana": p.max_mana,
                     "hand": list(p.hand),
                     "deck": list(p.deck),
-                    "graveyard": list(p.graveyard),
+                    "grave": list(p.grave),
                     "exhaust": list(p.exhaust),
                 }
                 for p in self.players
@@ -227,7 +227,7 @@ class GameState:
                 max_mana=p["max_mana"],
                 hand=tuple(p["hand"]),
                 deck=tuple(p["deck"]),
-                graveyard=tuple(p["graveyard"]),
+                grave=tuple(p["grave"]),
                 exhaust=tuple(p.get("exhaust", ())),
             )
             for p in d["players"]

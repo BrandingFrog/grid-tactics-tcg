@@ -33,7 +33,7 @@ def filter_state_for_player(state_dict: dict, viewer_idx: int) -> dict:
         active_player_idx, react_player_idx, pending_action,
         fatigue_counts, winner, is_game_over, next_minion_id,
         react_stack -- all public info.
-      - Phase 14.5: BOTH players' ``graveyard`` and ``exhaust`` piles are
+      - Phase 14.5: BOTH players' ``grave`` and ``exhaust`` piles are
         serialized PUBLICLY as full card_numeric_id lists to every viewer.
         These piles are face-up info in Grid Tactics; only the opponent's
         hand (and both decks) remain hidden.

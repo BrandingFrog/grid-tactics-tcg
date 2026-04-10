@@ -151,11 +151,11 @@ class TestEncodeDecodeMOVE:
         board = Board.empty().place(1, 2, 0)
         p1 = Player(
             side=PlayerSide.PLAYER_1, hp=STARTING_HP, current_mana=STARTING_MANA,
-            max_mana=STARTING_MANA, hand=(), deck=(), graveyard=(),
+            max_mana=STARTING_MANA, hand=(), deck=(), grave=(),
         )
         p2 = Player(
             side=PlayerSide.PLAYER_2, hp=STARTING_HP, current_mana=STARTING_MANA,
-            max_mana=STARTING_MANA, hand=(), deck=(), graveyard=(),
+            max_mana=STARTING_MANA, hand=(), deck=(), grave=(),
         )
         state = GameState(
             board=board, players=(p1, p2), active_player_idx=0,
@@ -203,11 +203,11 @@ class TestEncodeDecodeATTACK:
         board = Board.empty().place(1, 2, 0).place(2, 2, 1)
         p1 = Player(
             side=PlayerSide.PLAYER_1, hp=STARTING_HP, current_mana=STARTING_MANA,
-            max_mana=STARTING_MANA, hand=(), deck=(), graveyard=(),
+            max_mana=STARTING_MANA, hand=(), deck=(), grave=(),
         )
         p2 = Player(
             side=PlayerSide.PLAYER_2, hp=STARTING_HP, current_mana=STARTING_MANA,
-            max_mana=STARTING_MANA, hand=(), deck=(), graveyard=(),
+            max_mana=STARTING_MANA, hand=(), deck=(), grave=(),
         )
         state = GameState(
             board=board, players=(p1, p2), active_player_idx=0,
@@ -265,11 +265,11 @@ class TestEncodeDecodePLAY_CARD:
         board = Board.empty().place(3, 0, 0)
         p1 = Player(
             side=PlayerSide.PLAYER_1, hp=STARTING_HP, current_mana=5,
-            max_mana=5, hand=(fireball_id,), deck=(), graveyard=(),
+            max_mana=5, hand=(fireball_id,), deck=(), grave=(),
         )
         p2 = Player(
             side=PlayerSide.PLAYER_2, hp=STARTING_HP, current_mana=1,
-            max_mana=1, hand=(), deck=(), graveyard=(),
+            max_mana=1, hand=(), deck=(), grave=(),
         )
         state = GameState(
             board=board, players=(p1, p2), active_player_idx=0,
@@ -310,11 +310,11 @@ class TestEncodeDecodeSACRIFICE:
         board = Board.empty().place(4, 3, 0)
         p1 = Player(
             side=PlayerSide.PLAYER_1, hp=STARTING_HP, current_mana=STARTING_MANA,
-            max_mana=STARTING_MANA, hand=(), deck=(), graveyard=(),
+            max_mana=STARTING_MANA, hand=(), deck=(), grave=(),
         )
         p2 = Player(
             side=PlayerSide.PLAYER_2, hp=STARTING_HP, current_mana=STARTING_MANA,
-            max_mana=STARTING_MANA, hand=(), deck=(), graveyard=(),
+            max_mana=STARTING_MANA, hand=(), deck=(), grave=(),
         )
         state = GameState(
             board=board, players=(p1, p2), active_player_idx=0,
@@ -356,11 +356,11 @@ class TestEncodeDecodeREACT:
         board = Board.empty().place(1, 0, 0)
         p1 = Player(
             side=PlayerSide.PLAYER_1, hp=STARTING_HP, current_mana=5,
-            max_mana=5, hand=(), deck=(), graveyard=(),
+            max_mana=5, hand=(), deck=(), grave=(),
         )
         p2 = Player(
             side=PlayerSide.PLAYER_2, hp=STARTING_HP, current_mana=5,
-            max_mana=5, hand=(counter_spell_id,), deck=(), graveyard=(),
+            max_mana=5, hand=(counter_spell_id,), deck=(), grave=(),
         )
         state = GameState(
             board=board, players=(p1, p2), active_player_idx=0,
@@ -392,11 +392,11 @@ class TestEncodeDecodeREACT:
         board = Board.empty()
         p1 = Player(
             side=PlayerSide.PLAYER_1, hp=STARTING_HP, current_mana=5,
-            max_mana=5, hand=(), deck=(), graveyard=(),
+            max_mana=5, hand=(), deck=(), grave=(),
         )
         p2 = Player(
             side=PlayerSide.PLAYER_2, hp=STARTING_HP, current_mana=5,
-            max_mana=5, hand=(counter_spell_id,), deck=(), graveyard=(),
+            max_mana=5, hand=(counter_spell_id,), deck=(), grave=(),
         )
         state = GameState(
             board=board, players=(p1, p2), active_player_idx=0,

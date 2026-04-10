@@ -185,8 +185,8 @@ def _make_state(
     p2_mana=5,
     p1_deck=(),
     p2_deck=(),
-    p1_graveyard=(),
-    p2_graveyard=(),
+    p1_grave=(),
+    p2_grave=(),
     minions=(),
     active_player_idx=0,
     phase=TurnPhase.ACTION,
@@ -205,11 +205,11 @@ def _make_state(
 
     p1 = Player(
         side=PlayerSide.PLAYER_1, hp=STARTING_HP, current_mana=p1_mana,
-        max_mana=5, hand=p1_hand, deck=p1_deck, graveyard=p1_graveyard,
+        max_mana=5, hand=p1_hand, deck=p1_deck, grave=p1_grave,
     )
     p2 = Player(
         side=PlayerSide.PLAYER_2, hp=STARTING_HP, current_mana=p2_mana,
-        max_mana=5, hand=p2_hand, deck=p2_deck, graveyard=p2_graveyard,
+        max_mana=5, hand=p2_hand, deck=p2_deck, grave=p2_grave,
     )
     return GameState(
         board=board,
@@ -393,10 +393,10 @@ class TestPlayCardMinion:
         assert new_state.players[0].current_mana == 3  # 5 - 2
         # Card removed from hand
         assert len(new_state.players[0].hand) == 0
-        # Phase 14.5: minion plays do NOT route to graveyard on play — the
-        # card only enters graveyard if/when the minion dies (and only if
+        # Phase 14.5: minion plays do NOT route to grave on play — the
+        # card only enters grave if/when the minion dies (and only if
         # from_deck=True).
-        assert 1 not in new_state.players[0].graveyard
+        assert 1 not in new_state.players[0].grave
         # Minion created on board
         assert len(new_state.minions) == 1
         m = new_state.minions[0]
@@ -491,9 +491,9 @@ class TestPlayCardMagic:
 
         # Mana deducted
         assert new_state.players[0].current_mana == 3  # 5 - 2
-        # Card removed from hand, added to graveyard
+        # Card removed from hand, added to grave
         assert len(new_state.players[0].hand) == 0
-        assert 0 in new_state.players[0].graveyard
+        assert 0 in new_state.players[0].grave
         # Effect applied: enemy took 2 damage
         assert new_state.get_minion(0).current_health == 3  # 5 - 2
 
@@ -696,7 +696,7 @@ class TestDeadMinionCleanup:
         # death_minion is removed
         assert new_state.get_minion(1) is None
 
-    def test_dead_minion_card_goes_to_graveyard(self):
+    def test_dead_minion_card_goes_to_grave(self):
         from grid_tactics.action_resolver import resolve_action
 
         lib = _make_test_library()
@@ -712,8 +712,8 @@ class TestDeadMinionCleanup:
         action = Action(action_type=ActionType.ATTACK, minion_id=0, target_id=1)
         new_state = resolve_action(state, action, lib)
 
-        # Defender's card_numeric_id (1) should be in P2's graveyard
-        assert 1 in new_state.players[1].graveyard
+        # Defender's card_numeric_id (1) should be in P2's grave
+        assert 1 in new_state.players[1].grave
 
 
 # ---------------------------------------------------------------------------
@@ -1052,9 +1052,9 @@ def test_zero_effective_attack_minion_has_no_attack_actions():
     )
     board = Board.empty().place(2, 2, 0).place(2, 3, 1)
     p1 = Player(side=PlayerSide.PLAYER_1, hp=STARTING_HP, current_mana=5,
-                max_mana=5, hand=(), deck=(), graveyard=())
+                max_mana=5, hand=(), deck=(), grave=())
     p2 = Player(side=PlayerSide.PLAYER_2, hp=STARTING_HP, current_mana=5,
-                max_mana=5, hand=(), deck=(), graveyard=())
+                max_mana=5, hand=(), deck=(), grave=())
     state = GameState(
         board=board, players=(p1, p2), active_player_idx=0,
         phase=TurnPhase.ACTION, turn_number=3, seed=42,
@@ -1078,12 +1078,12 @@ def test_zero_effective_attack_minion_has_no_attack_actions():
 
 
 # ---------------------------------------------------------------------------
-# Phase 14.5: graveyard / exhaust / token exclusion
+# Phase 14.5: grave / exhaust / token exclusion
 # ---------------------------------------------------------------------------
 
 
 class TestPilesPhase145:
-    """Phase 14.5 pile semantics: graveyard tracks from_deck cards that died
+    """Phase 14.5 pile semantics: grave tracks from_deck cards that died
     or were played as one-shots; exhaust tracks discard-for-cost; tokens
     (from_deck=False) vanish on death."""
 
@@ -1118,9 +1118,9 @@ class TestPilesPhase145:
         }
         return CardLibrary(cards)
 
-    def test_minion_death_adds_to_graveyard(self):
+    def test_minion_death_adds_to_grave(self):
         """A deck-origin minion killed by damage has its card_numeric_id
-        appended to its owner's graveyard."""
+        appended to its owner's grave."""
         from grid_tactics.action_resolver import _cleanup_dead_minions
 
         lib = self._ratchanter_library()
@@ -1133,14 +1133,14 @@ class TestPilesPhase145:
         )
         state = _make_state(minions=[dead])
         new_state = _cleanup_dead_minions(state, lib)
-        assert melee_nid in new_state.players[0].graveyard
+        assert melee_nid in new_state.players[0].grave
         # Board cleared, minion removed
         assert new_state.board.get(1, 0) is None
         assert new_state.get_minion(0) is None
 
-    def test_token_death_does_not_add_to_graveyard(self):
+    def test_token_death_does_not_add_to_grave(self):
         """A from_deck=False token (e.g. summon_token spawn) vanishes on
-        death — nothing is appended to the owner's graveyard."""
+        death — nothing is appended to the owner's grave."""
         from grid_tactics.action_resolver import _cleanup_dead_minions
 
         lib = self._ratchanter_library()
@@ -1153,15 +1153,15 @@ class TestPilesPhase145:
         )
         state = _make_state(minions=[token])
         new_state = _cleanup_dead_minions(state, lib)
-        assert new_state.players[0].graveyard == ()
-        assert new_state.players[1].graveyard == ()
+        assert new_state.players[0].grave == ()
+        assert new_state.players[1].grave == ()
         # Board cleanup still happens
         assert new_state.board.get(1, 0) is None
         assert new_state.get_minion(0) is None
 
-    def test_magic_play_goes_to_graveyard(self):
+    def test_magic_play_goes_to_grave(self):
         """Casting a magic card routes its card_numeric_id to the caster's
-        graveyard immediately (one-shot play)."""
+        grave immediately (one-shot play)."""
         from grid_tactics.action_resolver import resolve_action
 
         lib = self._ratchanter_library()
@@ -1176,12 +1176,12 @@ class TestPilesPhase145:
             action_type=ActionType.PLAY_CARD, card_index=0, target_pos=(3, 0),
         )
         new_state = resolve_action(state, action, lib)
-        assert magic_nid in new_state.players[0].graveyard
+        assert magic_nid in new_state.players[0].grave
         assert len(new_state.players[0].hand) == 0
 
     def test_discard_for_cost_goes_to_exhaust(self):
         """summon_sacrifice_tribe removes a hand card as a COST; it goes to
-        the exhaust pile, NOT the graveyard."""
+        the exhaust pile, NOT the grave."""
         from grid_tactics.action_resolver import resolve_action
 
         lib = self._ratchanter_library()
@@ -1197,15 +1197,15 @@ class TestPilesPhase145:
         )
         new_state = resolve_action(state, action, lib)
         p1 = new_state.players[0]
-        # Pricey rat deployed (minion NOT in graveyard), sacrificed rat in exhaust
+        # Pricey rat deployed (minion NOT in grave), sacrificed rat in exhaust
         assert rat_nid in p1.exhaust, (
             f"expected {rat_nid} in exhaust, got {p1.exhaust}"
         )
-        assert rat_nid not in p1.graveyard, (
-            f"sacrificed card must not be in graveyard, got {p1.graveyard}"
+        assert rat_nid not in p1.grave, (
+            f"sacrificed card must not be in grave, got {p1.grave}"
         )
-        assert pricey_nid not in p1.graveyard, (
-            "deployed minion must not enter graveyard on play"
+        assert pricey_nid not in p1.grave, (
+            "deployed minion must not enter grave on play"
         )
         # Pricey rat is on the board
         assert len(new_state.minions) == 1

@@ -33,9 +33,9 @@ def _state_with_ratchanter(
 ) -> tuple[GameState, int]:
     rc_id = lib.get_numeric_id("ratchanter")
     p1 = Player(side=PlayerSide.PLAYER_1, hp=STARTING_HP, current_mana=mana,
-                max_mana=10, hand=(), deck=deck, graveyard=())
+                max_mana=10, hand=(), deck=deck, grave=())
     p2 = Player(side=PlayerSide.PLAYER_2, hp=STARTING_HP, current_mana=10,
-                max_mana=10, hand=(), deck=(), graveyard=())
+                max_mana=10, hand=(), deck=(), grave=())
     rc = MinionInstance(
         instance_id=1, card_numeric_id=rc_id,
         owner=PlayerSide.PLAYER_1, position=(0, 2), current_health=30,

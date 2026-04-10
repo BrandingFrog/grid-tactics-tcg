@@ -6,7 +6,7 @@ Encodes the game state from a specific player's perspective into a flat
 Sections:
   - Board state (250): 25 cells x 10 features per cell
   - My hand (20): up to 10 cards x 2 features each
-  - My resources (5): mana, max_mana, hp, deck_size, graveyard_size
+  - My resources (5): mana, max_mana, hp, deck_size, grave_size
   - Opponent visible (4): hp, mana, hand_size, deck_size (NO hand contents)
   - Game context (3): turn_number, is_action_phase, am_i_active
   - React context (10): in_react_window, stack_depth, 8 reserved
@@ -42,7 +42,7 @@ OBSERVATION_SIZE: int = 292
 OBSERVATION_SPEC: dict = {
     "board": {"offset": 0, "size": 250, "description": "5x5 grid, 10 features per cell"},
     "my_hand": {"offset": 250, "size": 20, "description": "Up to 10 cards, 2 features each"},
-    "my_resources": {"offset": 270, "size": 5, "description": "mana, max_mana, hp, deck_size, graveyard_size"},
+    "my_resources": {"offset": 270, "size": 5, "description": "mana, max_mana, hp, deck_size, grave_size"},
     "opponent_visible": {"offset": 275, "size": 4, "description": "opponent hp, mana, hand_size, deck_size"},
     "game_context": {"offset": 279, "size": 3, "description": "turn_number, is_action_phase, am_i_active"},
     "react_context": {"offset": 282, "size": 10, "description": "in_react_window, react_stack_depth, 8 reserved"},
@@ -88,7 +88,7 @@ def encode_observation(
     obs[offset + 1] = me.max_mana / MAX_MANA_CAP
     obs[offset + 2] = me.hp / STARTING_HP
     obs[offset + 3] = len(me.deck) / MIN_DECK_SIZE
-    obs[offset + 4] = len(me.graveyard) / MIN_DECK_SIZE
+    obs[offset + 4] = len(me.grave) / MIN_DECK_SIZE
 
     # ---- Opponent visible: 4 features (NO hand contents per D-02) ----
     offset = OBSERVATION_SPEC["opponent_visible"]["offset"]

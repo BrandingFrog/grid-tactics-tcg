@@ -64,10 +64,10 @@ def library():
     return CardLibrary.from_directory(Path("data/cards"))
 
 
-def _make_player(side, hand=(), deck=(), mana=5, graveyard=()):
+def _make_player(side, hand=(), deck=(), mana=5, grave=()):
     return Player(
         side=side, hp=STARTING_HP, current_mana=mana,
-        max_mana=5, hand=hand, deck=deck, graveyard=graveyard,
+        max_mana=5, hand=hand, deck=deck, grave=grave,
     )
 
 

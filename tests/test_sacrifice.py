@@ -2,7 +2,7 @@
 
 Covers:
   - sacrifice_action convenience constructor
-  - _apply_sacrifice handler: removes minion, deals damage, adds to graveyard
+  - _apply_sacrifice handler: removes minion, deals damage, adds to grave
   - Sacrifice with attack_bonus deals boosted damage
   - Cannot sacrifice minion not on back row
   - Cannot sacrifice opponent's minion
@@ -77,11 +77,11 @@ def _make_state_with_minion_at(
     board = Board.empty().place(position[0], position[1], 0)
     p1 = Player(
         side=PlayerSide.PLAYER_1, hp=p1_hp, current_mana=5, max_mana=5,
-        hand=p1_hand, deck=p1_deck, graveyard=(),
+        hand=p1_hand, deck=p1_deck, grave=(),
     )
     p2 = Player(
         side=PlayerSide.PLAYER_2, hp=p2_hp, current_mana=5, max_mana=5,
-        hand=p2_hand, deck=p2_deck, graveyard=(),
+        hand=p2_hand, deck=p2_deck, grave=(),
     )
     return GameState(
         board=board,
@@ -166,15 +166,15 @@ class TestApplySacrifice:
         new_state = _apply_sacrifice(state, action, lib)
         assert new_state.players[1].hp == STARTING_HP - 5
 
-    def test_adds_card_to_owner_graveyard(self):
-        """Sacrificed minion's card goes to the owner's graveyard."""
+    def test_adds_card_to_owner_grave(self):
+        """Sacrificed minion's card goes to the owner's grave."""
         lib = _make_test_library()
         state = _make_state_with_minion_at((4, 2), card_numeric_id=0)
         action = sacrifice_action(minion_id=0)
 
         new_state = _apply_sacrifice(state, action, lib)
         # Owner is P1 (idx 0)
-        assert 0 in new_state.players[0].graveyard
+        assert 0 in new_state.players[0].grave
 
     def test_p2_minion_sacrifices_on_p1_back_row(self):
         """P2 minion at row 0 (P1 back row) can sacrifice, dealing damage to P1."""

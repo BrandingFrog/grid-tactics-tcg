@@ -28,7 +28,7 @@ def _make_minimal_state(seed: int = 42, **overrides) -> GameState:
         max_mana=STARTING_MANA,
         hand=(),
         deck=(),
-        graveyard=(),
+        grave=(),
     )
     p2 = Player(
         side=PlayerSide.PLAYER_2,
@@ -37,7 +37,7 @@ def _make_minimal_state(seed: int = 42, **overrides) -> GameState:
         max_mana=STARTING_MANA,
         hand=(),
         deck=(),
-        graveyard=(),
+        grave=(),
     )
     defaults = dict(
         board=Board.empty(),

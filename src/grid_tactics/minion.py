@@ -42,7 +42,7 @@ class MinionInstance:
     is_burning: bool = False     # Boolean burn status. Tick fires for BURN_DAMAGE at the start of the owner's turn. Persists until death.
     dark_matter_stacks: int = 0  # Dark Matter counters on this minion. Currently only Ratchanter consumes these (buff scales with DM). No card grants DM yet; reserved for future cards.
     max_health_bonus: int = 0    # Cumulative max-HP buff. Effective max HP = card_def.health + max_health_bonus. Heals cap at the effective max. Added on top of current_health when the buff is applied so it is immediately usable.
-    from_deck: bool = True       # Phase 14.5: True for minions deployed from a deck-origin hand card (normal PLAY_CARD). False for tokens/conjures spawned outside the deck (summon_token, future conjure paths). Death cleanup appends card_numeric_id to graveyard only when from_deck=True; tokens vanish silently.
+    from_deck: bool = True       # True for minions that originated from a deck card (PLAY_CARD or Conjure). False only for tokens spawned by activated abilities (summon_token). Death cleanup adds card to owner's grave only when from_deck=True; tokens vanish silently.
 
     @property
     def is_alive(self) -> bool:

@@ -332,7 +332,7 @@ class TestSerializationPhase3:
                     "max_mana": p.max_mana,
                     "hand": list(p.hand),
                     "deck": list(p.deck),
-                    "graveyard": list(p.graveyard),
+                    "grave": list(p.grave),
                 }
                 for p in state.players
             ],

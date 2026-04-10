@@ -69,7 +69,7 @@ def react_state_empty_stack(library):
         max_mana=5,
         hand=(counter_spell_id, fire_imp_id),  # P1 has counter_spell + fire_imp
         deck=(),
-        graveyard=(),
+        grave=(),
     )
     p2 = Player(
         side=PlayerSide.PLAYER_2,
@@ -78,7 +78,7 @@ def react_state_empty_stack(library):
         max_mana=5,
         hand=(shield_block_id, dark_sentinel_id, fire_imp_id),  # P2 has shield_block + dark_sentinel + fire_imp
         deck=(),
-        graveyard=(),
+        grave=(),
     )
 
     # Place a P1 minion on the board for targeting

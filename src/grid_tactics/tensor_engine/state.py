@@ -48,13 +48,13 @@ class TensorGameState:
     deck_sizes: torch.Tensor      # [N, 2] int32 (total cards in each deck)
 
     # Graveyards
-    graveyards: torch.Tensor      # [N, 2, MAX_GRAVEYARD] int32
-    graveyard_sizes: torch.Tensor  # [N, 2] int32
+    graves: torch.Tensor      # [N, 2, MAX_GRAVEYARD] int32
+    grave_sizes: torch.Tensor  # [N, 2] int32
 
     # Phase 14.5: Exhaust piles (discard-for-cost destination). Parallel to
-    # graveyards: same [N, 2, MAX_GRAVEYARD] capacity/pointer pattern. Mirrors
+    # graves: same [N, 2, MAX_GRAVEYARD] capacity/pointer pattern. Mirrors
     # Python Player.exhaust. `summon_sacrifice_tribe` discards route here
-    # instead of the graveyard.
+    # instead of the grave.
     exhausts: torch.Tensor        # [N, 2, MAX_GRAVEYARD] int32
     exhaust_sizes: torch.Tensor   # [N, 2] int32
 
@@ -69,7 +69,7 @@ class TensorGameState:
     # Phase 14.5: from_deck flag mirroring Python MinionInstance.from_deck.
     # True = minion originated from the owner's deck/hand (normal PLAY_CARD or
     # pending_tutor conjure). False = token spawned via activated abilities.
-    # Death cleanup only appends from_deck=True minions to the graveyard so
+    # Death cleanup only appends from_deck=True minions to the grave so
     # tokens vanish silently.
     minion_from_deck: torch.Tensor  # [N, MAX_MINIONS] bool
     next_minion_slot: torch.Tensor  # [N] int32
@@ -137,8 +137,8 @@ class TensorGameState:
             decks=self.decks.clone(),
             deck_tops=self.deck_tops.clone(),
             deck_sizes=self.deck_sizes.clone(),
-            graveyards=self.graveyards.clone(),
-            graveyard_sizes=self.graveyard_sizes.clone(),
+            graves=self.graves.clone(),
+            grave_sizes=self.grave_sizes.clone(),
             exhausts=self.exhausts.clone(),
             exhaust_sizes=self.exhaust_sizes.clone(),
             minion_card_id=self.minion_card_id.clone(),
@@ -186,8 +186,8 @@ def create_initial_state(
         decks=torch.full((n_envs, 2, MAX_DECK), EMPTY, dtype=torch.int32, device=device),
         deck_tops=torch.zeros((n_envs, 2), dtype=torch.int32, device=device),
         deck_sizes=torch.zeros((n_envs, 2), dtype=torch.int32, device=device),
-        graveyards=torch.full((n_envs, 2, MAX_GRAVEYARD), EMPTY, dtype=torch.int32, device=device),
-        graveyard_sizes=torch.zeros((n_envs, 2), dtype=torch.int32, device=device),
+        graves=torch.full((n_envs, 2, MAX_GRAVEYARD), EMPTY, dtype=torch.int32, device=device),
+        grave_sizes=torch.zeros((n_envs, 2), dtype=torch.int32, device=device),
         exhausts=torch.full((n_envs, 2, MAX_GRAVEYARD), EMPTY, dtype=torch.int32, device=device),
         exhaust_sizes=torch.zeros((n_envs, 2), dtype=torch.int32, device=device),
         minion_card_id=torch.full((n_envs, MAX_MINIONS), EMPTY, dtype=torch.int32, device=device),

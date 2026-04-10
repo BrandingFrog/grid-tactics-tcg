@@ -147,13 +147,13 @@ def encode_observations_batch(
     my_max_mana = state.player_max_mana[arange_n, observer_idx.long()]
     my_hp = state.player_hp[arange_n, observer_idx.long()]
     my_deck_remaining = state.deck_sizes[arange_n, observer_idx.long()] - state.deck_tops[arange_n, observer_idx.long()]
-    my_graveyard_size = state.graveyard_sizes[arange_n, observer_idx.long()]
+    my_grave_size = state.grave_sizes[arange_n, observer_idx.long()]
 
     obs[:, res_offset + 0] = my_mana.float() / MAX_MANA_CAP
     obs[:, res_offset + 1] = my_max_mana.float() / MAX_MANA_CAP
     obs[:, res_offset + 2] = my_hp.float() / max(STARTING_HP, 1)
     obs[:, res_offset + 3] = my_deck_remaining.float() / max(MIN_DECK_SIZE, 1)
-    obs[:, res_offset + 4] = my_graveyard_size.float() / max(MIN_DECK_SIZE, 1)
+    obs[:, res_offset + 4] = my_grave_size.float() / max(MIN_DECK_SIZE, 1)
 
     # --- Opponent visible [275:279] ---
     opp_offset = 275

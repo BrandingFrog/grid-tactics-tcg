@@ -97,7 +97,7 @@ def _make_state_with_minions(
         max_mana=5,
         hand=(),
         deck=(),
-        graveyard=(),
+        grave=(),
     )
     p2 = Player(
         side=PlayerSide.PLAYER_2,
@@ -106,7 +106,7 @@ def _make_state_with_minions(
         max_mana=5,
         hand=(),
         deck=(),
-        graveyard=(),
+        grave=(),
     )
     return GameState(
         board=board,
@@ -669,7 +669,7 @@ def _make_tutor_state(library, deck_card_ids, p1_hand=()):
         max_mana=5,
         hand=tuple(library.get_numeric_id(c) for c in p1_hand),
         deck=deck,
-        graveyard=(),
+        grave=(),
     )
     p2 = Player(
         side=PlayerSide.PLAYER_2,
@@ -678,7 +678,7 @@ def _make_tutor_state(library, deck_card_ids, p1_hand=()):
         max_mana=5,
         hand=(),
         deck=(),
-        graveyard=(),
+        grave=(),
     )
     return GameState(
         board=Board.empty(),

@@ -411,11 +411,11 @@ class TestBothReceiveUpdates:
 
 
 class TestReactCardVisibility:
-    """D-03: After a react card is played, both players see it in graveyard."""
+    """D-03: After a react card is played, both players see it in grave."""
 
-    def test_react_card_visible_in_graveyard(self, app):
-        """When a react card is played, both players' state updates show it in graveyard."""
-        # This is a smoke test -- we play a game and check that graveyards
+    def test_react_card_visible_in_grave(self, app):
+        """When a react card is played, both players' state updates show it in grave."""
+        # This is a smoke test -- we play a game and check that graves
         # are visible to both players after actions resolve
         c1, c2, gs1, gs2 = _create_game(app)
         active_idx = gs1["state"]["active_player_idx"]
@@ -437,16 +437,16 @@ class TestReactCardVisibility:
         passive_updates = [m for m in passive_msgs if m["name"] == "state_update"]
 
         if len(active_updates) >= 1 and len(passive_updates) >= 1:
-            # Both should have the same graveyard data (graveyards are public info)
+            # Both should have the same grave data (graves are public info)
             a_state = active_updates[0]["args"][0]["state"]
             p_state = passive_updates[0]["args"][0]["state"]
 
-            # Graveyards should exist and be lists
+            # Graves should exist and be lists
             for idx in (0, 1):
-                assert isinstance(a_state["players"][idx]["graveyard"], list)
-                assert isinstance(p_state["players"][idx]["graveyard"], list)
-                # Both views should see the same graveyard contents
-                assert a_state["players"][idx]["graveyard"] == p_state["players"][idx]["graveyard"]
+                assert isinstance(a_state["players"][idx]["grave"], list)
+                assert isinstance(p_state["players"][idx]["grave"], list)
+                # Both views should see the same grave contents
+                assert a_state["players"][idx]["grave"] == p_state["players"][idx]["grave"]
 
 
 # -----------------------------------------------------------------------

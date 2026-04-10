@@ -55,11 +55,11 @@ def _make_state(p1_hp=STARTING_HP, p2_hp=STARTING_HP, **kwargs):
     """Helper: create a GameState with configurable player HP."""
     p1 = Player(
         side=PlayerSide.PLAYER_1, hp=p1_hp, current_mana=5, max_mana=5,
-        hand=(), deck=(0, 0, 0), graveyard=(),
+        hand=(), deck=(0, 0, 0), grave=(),
     )
     p2 = Player(
         side=PlayerSide.PLAYER_2, hp=p2_hp, current_mana=5, max_mana=5,
-        hand=(), deck=(0, 0, 0), graveyard=(),
+        hand=(), deck=(0, 0, 0), grave=(),
     )
     defaults = dict(
         board=Board.empty(),
@@ -144,11 +144,11 @@ class TestLethalSacrifice:
         board = Board.empty().place(4, 2, 0)
         p1 = Player(
             side=PlayerSide.PLAYER_1, hp=20, current_mana=5, max_mana=5,
-            hand=(), deck=(0, 0, 0), graveyard=(),
+            hand=(), deck=(0, 0, 0), grave=(),
         )
         p2 = Player(
             side=PlayerSide.PLAYER_2, hp=3, current_mana=5, max_mana=5,
-            hand=(), deck=(0, 0, 0), graveyard=(),
+            hand=(), deck=(0, 0, 0), grave=(),
         )
         state = GameState(
             board=board, players=(p1, p2), active_player_idx=0,
@@ -170,11 +170,11 @@ class TestLethalSacrifice:
         board = Board.empty().place(4, 2, 0)
         p1 = Player(
             side=PlayerSide.PLAYER_1, hp=20, current_mana=5, max_mana=5,
-            hand=(), deck=(0, 0, 0), graveyard=(),
+            hand=(), deck=(0, 0, 0), grave=(),
         )
         p2 = Player(
             side=PlayerSide.PLAYER_2, hp=20, current_mana=5, max_mana=5,
-            hand=(), deck=(0, 0, 0), graveyard=(),
+            hand=(), deck=(0, 0, 0), grave=(),
         )
         state = GameState(
             board=board, players=(p1, p2), active_player_idx=0,

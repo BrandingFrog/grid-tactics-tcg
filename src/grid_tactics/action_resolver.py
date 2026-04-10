@@ -294,9 +294,9 @@ def _apply_play_card(
 
     # Phase 14.5 pile semantics:
     #   - MINION plays are removed from hand and placed on the board; the card
-    #     only enters graveyard if/when the minion dies (and only if it was
+    #     only enters grave if/when the minion dies (and only if it was
     #     from_deck=True — tokens vanish).
-    #   - MAGIC plays are one-shots and route to graveyard immediately via
+    #   - MAGIC plays are one-shots and route to grave immediately via
     #     discard_from_hand (the card is "played").
     new_player = player.spend_mana(card_def.mana_cost)
     if card_def.card_type == CardType.MINION:
@@ -333,7 +333,7 @@ def _apply_play_card(
                 raise ValueError(
                     f"No {card_def.summon_sacrifice_tribe} card in hand to sacrifice"
                 )
-            # Phase 14.5: discard-for-cost goes to EXHAUST, not graveyard.
+            # Phase 14.5: discard-for-cost goes to EXHAUST, not grave.
             new_player = new_player.exhaust_from_hand(sacrifice_id)
 
     new_players = _replace_player(state.players, active_idx, new_player)
@@ -460,7 +460,7 @@ def _apply_sacrifice(
       1. Look up card definition for base attack
       2. Calculate effective attack (base + attack_bonus)
       3. Remove minion from board and minions tuple
-      4. Add minion's card to owner's graveyard
+      4. Add minion's card to owner's grave
       5. Deal effective attack as damage to opponent
     """
     active_side = _get_active_side(state)
@@ -499,11 +499,11 @@ def _apply_sacrifice(
     # Remove minion from minions tuple
     new_minions = tuple(m for m in state.minions if m.instance_id != minion.instance_id)
 
-    # Add card to owner's graveyard (tokens vanish silently — Phase 14.5).
+    # Add card to owner's grave (tokens vanish silently — Phase 14.5).
     owner_idx = int(minion.owner)
     owner_player = state.players[owner_idx]
     if minion.from_deck:
-        new_owner = replace(owner_player, graveyard=owner_player.graveyard + (minion.card_numeric_id,))
+        new_owner = replace(owner_player, grave=owner_player.grave + (minion.card_numeric_id,))
         new_players = _replace_player(state.players, owner_idx, new_owner)
     else:
         new_players = state.players
@@ -664,7 +664,7 @@ def _apply_activate_ability(
             )
         token_def = library.get_by_id(token_numeric_id)
         # Phase 14.5: tokens spawned by activated abilities are NOT from the
-        # caster's deck — they vanish on death (no graveyard entry).
+        # caster's deck — they vanish on death (no grave entry).
         token = MinionInstance(
             instance_id=state.next_minion_id,
             card_numeric_id=token_numeric_id,
@@ -894,7 +894,7 @@ def _cleanup_dead_minions(
 
     1. Find all dead minions (is_alive == False)
     2. Remove them from board and minions tuple
-    3. Add their card_numeric_id to their owner's graveyard
+    3. Add their card_numeric_id to their owner's grave
     4. Trigger on_death effects in instance_id order (ascending)
     """
     dead_minions = [m for m in state.minions if not m.is_alive]
@@ -911,15 +911,15 @@ def _cleanup_dead_minions(
     dead_ids = {m.instance_id for m in dead_minions}
     alive_minions = tuple(m for m in state.minions if m.instance_id not in dead_ids)
 
-    # Add dead minion cards to their owner's graveyard.
-    # Phase 14.5: tokens (from_deck=False) vanish silently — no graveyard entry.
+    # Add dead minion cards to their owner's grave.
+    # Phase 14.5: tokens (from_deck=False) vanish silently — no grave entry.
     new_players = state.players
     for m in dead_minions:
         if not m.from_deck:
             continue
         player_idx = int(m.owner)
         player = new_players[player_idx]
-        new_player = replace(player, graveyard=player.graveyard + (m.card_numeric_id,))
+        new_player = replace(player, grave=player.grave + (m.card_numeric_id,))
         new_players = _replace_player(new_players, player_idx, new_player)
 
     state = replace(state, board=new_board, minions=alive_minions, players=new_players)

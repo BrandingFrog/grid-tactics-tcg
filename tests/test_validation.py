@@ -117,7 +117,7 @@ class TestValidateStatePlayerErrors:
             max_mana=STARTING_MANA,
             hand=state.players[0].hand,
             deck=state.players[0].deck,
-            graveyard=(),
+            grave=(),
         )
         bad_state = GameState(
             board=state.board,
@@ -140,7 +140,7 @@ class TestValidateStatePlayerErrors:
             max_mana=STARTING_MANA,
             hand=state.players[0].hand,
             deck=state.players[0].deck,
-            graveyard=(),
+            grave=(),
         )
         bad_state = GameState(
             board=state.board,
@@ -163,7 +163,7 @@ class TestValidateStatePlayerErrors:
             max_mana=MAX_MANA_CAP + 1,
             hand=state.players[0].hand,
             deck=state.players[0].deck,
-            graveyard=(),
+            grave=(),
         )
         bad_state = GameState(
             board=state.board,
@@ -199,7 +199,7 @@ class TestValidateStatePlayerErrors:
             max_mana=MAX_MANA_CAP + 1,
             hand=state.players[0].hand,
             deck=state.players[0].deck,
-            graveyard=(),
+            grave=(),
         )
         bad_state = GameState(
             board=state.board,

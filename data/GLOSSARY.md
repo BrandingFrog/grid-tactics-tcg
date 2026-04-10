@@ -39,3 +39,4 @@ Update this file and the matching `KEYWORD_GLOSSARY` in `src/grid_tactics/server
 | Dark Matter | Buff scales with Dark Matter stacks. |
 | Leap | If blocked by an enemy, advance to the next available tile instead. |
 | Conjure | Summon a card from outside your deck directly to the board. |
+| Revive | Summon a card from the Grave to the board. |

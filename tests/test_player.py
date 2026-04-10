@@ -27,7 +27,7 @@ from grid_tactics.types import (
 
 class TestPlayerConstruction:
     def test_new_player_defaults(self, make_player):
-        """Player.new(side, deck) has hp=20, mana=1, empty hand, empty graveyard."""
+        """Player.new(side, deck) has hp=20, mana=1, empty hand, empty grave."""
         from grid_tactics.player import Player
 
         deck = (1, 2, 3, 4, 5)
@@ -38,7 +38,7 @@ class TestPlayerConstruction:
         assert p.max_mana == STARTING_MANA
         assert p.hand == ()
         assert p.deck == deck
-        assert p.graveyard == ()
+        assert p.grave == ()
 
     def test_starting_hp(self, make_player):
         """Player starts with hp=100 (audit-followup: scaled from 20)."""
@@ -54,11 +54,11 @@ class TestPlayerConstruction:
             p.hp = 99
 
     def test_player_collections_are_tuples(self, make_player):
-        """hand, deck, graveyard are all tuple type."""
-        p = make_player(hand=(1,), deck=(2, 3), graveyard=(4,))
+        """hand, deck, grave are all tuple type."""
+        p = make_player(hand=(1,), deck=(2, 3), grave=(4,))
         assert isinstance(p.hand, tuple)
         assert isinstance(p.deck, tuple)
-        assert isinstance(p.graveyard, tuple)
+        assert isinstance(p.grave, tuple)
 
 
 # ---------------------------------------------------------------------------
@@ -220,11 +220,11 @@ class TestHandManagement:
         assert p.deck == (40,)
 
     def test_discard_from_hand(self, make_player):
-        """hand=(10,20), discard(10) -> hand=(20,), graveyard=(10,)."""
+        """hand=(10,20), discard(10) -> hand=(20,), grave=(10,)."""
         p = make_player(hand=(10, 20))
         p2 = p.discard_from_hand(10)
         assert p2.hand == (20,)
-        assert p2.graveyard == (10,)
+        assert p2.grave == (10,)
 
     def test_discard_invalid_card_raises(self, make_player):
         """Discarding card not in hand raises ValueError."""

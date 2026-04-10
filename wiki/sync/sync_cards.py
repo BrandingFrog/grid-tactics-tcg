@@ -168,6 +168,7 @@ def derive_keywords(card: dict) -> list[str]:
             "rally_forward": "Rally",
             "deploy_self": "Deploy",
             "grant_dark_matter": "Dark Matter",
+            "revive": "Revive",
         }
         if eff_type in _EFFECT_KW:
             kws.add(_EFFECT_KW[eff_type])
@@ -274,6 +275,11 @@ def build_rules_text(card: dict, name_map: dict[str, str] | None = None) -> str:
             desc = f"Passive: [[Heal]] {amount} per turn"
         elif eff_type == "leap":
             desc = "[[Move]]: [[Leap]]"
+        elif eff_type == "revive":
+            revive_id = eff.get("revive_card_id", "")
+            revive_link = _wikilink(revive_id, name_map) if revive_id else "a card"
+            up_to = f"up to {amount} " if amount > 1 else ""
+            desc = f"{pfx}[[Revive]] {up_to}{revive_link}"
         else:
             desc = f"{pfx}Effect"
         parts.append(desc)

@@ -458,9 +458,9 @@ def _check_react_condition(
             # Check if the played card was magic
             acting_player = state.players[state.active_player_idx]
             # pending_action was recorded before the card was removed from hand,
-            # so look up the card in graveyard (most recently added)
-            if acting_player.graveyard:
-                last_played_id = acting_player.graveyard[-1]
+            # so look up the card in grave (most recently added)
+            if acting_player.grave:
+                last_played_id = acting_player.grave[-1]
                 card_def = library.get_by_id(last_played_id)
                 return card_def.card_type == CardType.MAGIC
         return False
@@ -495,11 +495,11 @@ def _check_react_condition(
         if pending.action_type == ActionType.PLAY_CARD:
             # Check element of the card that was just played
             acting_player = state.players[state.active_player_idx]
-            if acting_player.graveyard:
-                last_played_id = acting_player.graveyard[-1]
+            if acting_player.grave:
+                last_played_id = acting_player.grave[-1]
                 card_def = library.get_by_id(last_played_id)
                 return card_def.element == required_elem
-            # Check newly deployed minions (minion cards go to board, not graveyard)
+            # Check newly deployed minions (minion cards go to board, not grave)
             if pending.position is not None and state.minions:
                 # Find minion at the deploy position
                 for m in state.minions:

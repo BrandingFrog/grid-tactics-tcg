@@ -34,9 +34,9 @@ def _lib() -> CardLibrary:
 
 def _empty_state(lib: CardLibrary, mana: int = 10, deck: tuple = ()) -> GameState:
     p1 = Player(side=PlayerSide.PLAYER_1, hp=STARTING_HP, current_mana=mana,
-                max_mana=10, hand=(), deck=deck, graveyard=())
+                max_mana=10, hand=(), deck=deck, grave=())
     p2 = Player(side=PlayerSide.PLAYER_2, hp=STARTING_HP, current_mana=10,
-                max_mana=10, hand=(), deck=(), graveyard=())
+                max_mana=10, hand=(), deck=(), grave=())
     return GameState(
         board=Board.empty(),
         players=(p1, p2),

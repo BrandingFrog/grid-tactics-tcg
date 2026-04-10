@@ -47,9 +47,9 @@ def _make_state(minions, active_idx=0) -> GameState:
     for m in minions:
         board = board.place(m.position[0], m.position[1], m.instance_id)
     p1 = Player(side=PlayerSide.PLAYER_1, hp=STARTING_HP, current_mana=5,
-                max_mana=5, hand=(), deck=(), graveyard=())
+                max_mana=5, hand=(), deck=(), grave=())
     p2 = Player(side=PlayerSide.PLAYER_2, hp=STARTING_HP, current_mana=5,
-                max_mana=5, hand=(), deck=(), graveyard=())
+                max_mana=5, hand=(), deck=(), grave=())
     return GameState(
         board=board,
         players=(p1, p2),

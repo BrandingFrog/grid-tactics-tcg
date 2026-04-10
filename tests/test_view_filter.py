@@ -33,7 +33,7 @@ def _make_state_dict() -> dict:
                 "max_mana": 5,
                 "hand": [1, 2, 3],
                 "deck": [4, 5, 6, 7],
-                "graveyard": [8],
+                "grave": [8],
                 "exhaust": [15, 16],
             },
             {
@@ -43,7 +43,7 @@ def _make_state_dict() -> dict:
                 "max_mana": 4,
                 "hand": [10, 11],
                 "deck": [12, 13, 14],
-                "graveyard": [17, 18, 19],
+                "grave": [17, 18, 19],
                 "exhaust": [],
             },
         ],
@@ -122,7 +122,7 @@ class TestFilterStateForPlayer:
         assert "seed" not in filtered
 
     def test_public_fields_preserved(self):
-        """Board, minions, HP, mana, graveyard, phase, turn_number, active_player_idx all preserved."""
+        """Board, minions, HP, mana, grave, phase, turn_number, active_player_idx all preserved."""
         state = _make_state_dict()
         filtered = filter_state_for_player(state, viewer_idx=0)
         assert filtered["board"] == [0] * 25
@@ -136,9 +136,9 @@ class TestFilterStateForPlayer:
         assert filtered["players"][0]["current_mana"] == 3
         assert filtered["players"][0]["max_mana"] == 5
         assert filtered["players"][1]["hp"] == 95
-        # Graveyard preserved
-        assert filtered["players"][0]["graveyard"] == [8]
-        assert filtered["players"][1]["graveyard"] == [17, 18, 19]
+        # Grave preserved
+        assert filtered["players"][0]["grave"] == [8]
+        assert filtered["players"][1]["grave"] == [17, 18, 19]
         # Fatigue counts preserved
         assert filtered["fatigue_counts"] == [0, 0]
         # Winner and game over preserved
@@ -177,17 +177,17 @@ class TestFilterStateForPlayer:
 
     # -- Phase 14.5-03: piles serialization -------------------------------
 
-    def test_view_filter_emits_both_graveyards(self):
-        """Both players' graveyards are serialized as public card_numeric_id lists."""
+    def test_view_filter_emits_both_graves(self):
+        """Both players' graves are serialized as public card_numeric_id lists."""
         state = _make_state_dict()
-        # Viewer is P0; both own and opponent graveyard must be present.
+        # Viewer is P0; both own and opponent grave must be present.
         filtered_p0 = filter_state_for_player(state, viewer_idx=0)
-        assert filtered_p0["players"][0]["graveyard"] == [8]
-        assert filtered_p0["players"][1]["graveyard"] == [17, 18, 19]
+        assert filtered_p0["players"][0]["grave"] == [8]
+        assert filtered_p0["players"][1]["grave"] == [17, 18, 19]
         # Symmetric from P1 perspective.
         filtered_p1 = filter_state_for_player(state, viewer_idx=1)
-        assert filtered_p1["players"][0]["graveyard"] == [8]
-        assert filtered_p1["players"][1]["graveyard"] == [17, 18, 19]
+        assert filtered_p1["players"][0]["grave"] == [8]
+        assert filtered_p1["players"][1]["grave"] == [17, 18, 19]
 
     def test_view_filter_emits_both_exhausts(self):
         """Both players' exhaust piles are serialized as public card_numeric_id lists."""

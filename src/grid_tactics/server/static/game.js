@@ -1233,6 +1233,7 @@ var KEYWORD_GLOSSARY = {
     'Dark Matter': 'Buff scales with Dark Matter stacks.',
     'Leap': 'If blocked by an enemy, advance to the next available tile instead.',
     'Conjure': 'Summon a card from outside your deck directly to the board.',
+    'Revive': 'Summon a card from the Grave to the board.',
 };
 
 // Build the shared content for a card tooltip. Both the deck-builder
@@ -1833,7 +1834,7 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 // =============================================
-// Phase 14.5 Wave 5: Pile UI (graveyard / exhaust viewer + opp hand row)
+// Phase 14.5 Wave 5: Pile UI (grave / exhaust viewer + opp hand row)
 // =============================================
 
 // Shared modal for all four pile buttons. Renders every card in the pile as
@@ -1897,9 +1898,9 @@ function updatePileButtonCounts() {
         var countEl = btn.querySelector('.pile-count');
         if (countEl) countEl.textContent = n | 0;
     }
-    setCount('pileBtnOwnGraveyard', (me && me.graveyard) ? me.graveyard.length : 0);
+    setCount('pileBtnOwnGrave', (me && me.grave) ? me.grave.length : 0);
     setCount('pileBtnOwnExhaust',   (me && me.exhaust)   ? me.exhaust.length   : 0);
-    setCount('pileBtnOppGraveyard', (opp && opp.graveyard) ? opp.graveyard.length : 0);
+    setCount('pileBtnOppGrave', (opp && opp.grave) ? opp.grave.length : 0);
     setCount('pileBtnOppExhaust',   (opp && opp.exhaust)   ? opp.exhaust.length   : 0);
 }
 
@@ -1912,15 +1913,15 @@ function setupPileHandlers() {
             showPileModal(titleFn(), idsFn() || []);
         });
     }
-    bind('pileBtnOwnGraveyard',
-        function() { return 'Your Graveyard'; },
-        function() { return gameState.players[myPlayerIdx].graveyard; });
+    bind('pileBtnOwnGrave',
+        function() { return 'Your Grave'; },
+        function() { return gameState.players[myPlayerIdx].grave; });
     bind('pileBtnOwnExhaust',
         function() { return 'Your Exhaust'; },
         function() { return gameState.players[myPlayerIdx].exhaust; });
-    bind('pileBtnOppGraveyard',
-        function() { return "Opponent's Graveyard"; },
-        function() { return gameState.players[1 - myPlayerIdx].graveyard; });
+    bind('pileBtnOppGrave',
+        function() { return "Opponent's Grave"; },
+        function() { return gameState.players[1 - myPlayerIdx].grave; });
     bind('pileBtnOppExhaust',
         function() { return "Opponent's Exhaust"; },
         function() { return gameState.players[1 - myPlayerIdx].exhaust; });
@@ -2044,9 +2045,9 @@ function _resolveDrawFromPoint(fromPos) {
         return { x: fromPos.x, y: fromPos.y };
     }
     if (fromPos === 'deck') {
-        // No dedicated deck pile DOM yet; use the own graveyard pile button
+        // No dedicated deck pile DOM yet; use the own grave pile button
         // as a proxy origin (sits on the self info bar, visually "off-board").
-        var btn = document.getElementById('pileBtnOwnGraveyard');
+        var btn = document.getElementById('pileBtnOwnGrave');
         if (btn) {
             var r = btn.getBoundingClientRect();
             return { x: r.left + r.width / 2, y: r.top + r.height / 2 };

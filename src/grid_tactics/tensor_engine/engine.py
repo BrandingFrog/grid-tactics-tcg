@@ -103,9 +103,9 @@ class TensorGameEngine:
         s.hands = torch.where(mask.view(N, 1, 1), torch.tensor(EMPTY, device=device, dtype=torch.int32), s.hands)
         s.hand_sizes = torch.where(mask.view(N, 1), torch.tensor(0, device=device, dtype=torch.int32), s.hand_sizes)
 
-        # Clear graveyards
-        s.graveyards = torch.where(mask.view(N, 1, 1), torch.tensor(EMPTY, device=device, dtype=torch.int32), s.graveyards)
-        s.graveyard_sizes = torch.where(mask.view(N, 1), torch.tensor(0, device=device, dtype=torch.int32), s.graveyard_sizes)
+        # Clear graves
+        s.graves = torch.where(mask.view(N, 1, 1), torch.tensor(EMPTY, device=device, dtype=torch.int32), s.graves)
+        s.grave_sizes = torch.where(mask.view(N, 1), torch.tensor(0, device=device, dtype=torch.int32), s.grave_sizes)
 
         # Phase 14.5: clear exhaust piles
         s.exhausts = torch.where(mask.view(N, 1, 1), torch.tensor(EMPTY, device=device, dtype=torch.int32), s.exhausts)
@@ -319,12 +319,12 @@ class TensorGameEngine:
         ap = s.active_player
         is_play = normal_mask & (action_type == 0)
         if is_play.any():
-            # The card was already removed from hand. Look at the last graveyard entry.
-            gs = s.graveyard_sizes[arange_n, ap]  # [N]
+            # The card was already removed from hand. Look at the last grave entry.
+            gs = s.grave_sizes[arange_n, ap]  # [N]
             safe_gs = (gs - 1).clamp(0, 79).long()
-            last_gy_cid = s.graveyards[arange_n, ap, safe_gs]  # [N]
+            last_gy_cid = s.graves[arange_n, ap, safe_gs]  # [N]
 
-            # Only update for games that actually played a card and have graveyard entries
+            # Only update for games that actually played a card and have grave entries
             has_gy = is_play & (gs > 0)
             s.pending_action_card_id = torch.where(has_gy, last_gy_cid, s.pending_action_card_id)
             # Default to True for has_position (could be minion deploy)
@@ -625,26 +625,26 @@ class TensorGameEngine:
                     s.minion_from_deck[:, slot]
                 )
 
-                # Add to graveyard (batched per-slot)
+                # Add to grave (batched per-slot)
                 cid = dead_cid[:, slot]
                 owner = dead_owner[:, slot]
 
                 # Phase 14.5: tokens (from_deck=False) vanish silently on
-                # death; only deck-origin minions enter the graveyard.
+                # death; only deck-origin minions enter the grave.
                 slot_from_deck = dead_from_deck[:, slot]
                 # Graveyard add for player 0 owners (gated on from_deck)
                 for p in range(2):
                     is_p = slot_dead & slot_from_deck & (owner == p)
                     if not is_p.any():
                         continue
-                    gs = s.graveyard_sizes[:, p]  # [N]
+                    gs = s.grave_sizes[:, p]  # [N]
                     can_add = is_p & (gs < 80)
                     if can_add.any():
                         safe_gs = gs.clamp(0, 79).long()
-                        s.graveyards[arange_n, p, safe_gs] = torch.where(
-                            can_add, cid, s.graveyards[arange_n, p, safe_gs]
+                        s.graves[arange_n, p, safe_gs] = torch.where(
+                            can_add, cid, s.graves[arange_n, p, safe_gs]
                         )
-                        s.graveyard_sizes[:, p] = torch.where(
+                        s.grave_sizes[:, p] = torch.where(
                             can_add, gs + 1, gs
                         )
 
