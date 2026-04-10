@@ -10,6 +10,7 @@
     "element": "metal",
     "tribe": "Robot",
     "summon_sacrifice_tribe": "Robot",
+    "summon_sacrifice_count": 2,
     "effects": [
         {
             "type": "destroy",

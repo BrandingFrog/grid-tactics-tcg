@@ -1261,7 +1261,10 @@ function buildCardTooltipContent(c) {
     // Card text lines (effect, activated ability, transform, react)
     var cardTextLines = [];
     var effectDesc = (c.effects && c.effects.length > 0) ? getEffectDescription(c.effects, c) : '';
-    if (c.summon_sacrifice_tribe) cardTextLines.push('Sacrifice: ' + c.summon_sacrifice_tribe);
+    if (c.summon_sacrifice_tribe) {
+        var sacCount = c.summon_sacrifice_count || 1;
+        cardTextLines.push('Cost: Discard any ' + (sacCount > 1 ? sacCount + ' ' : '') + c.summon_sacrifice_tribe + (sacCount > 1 ? 's' : ''));
+    }
     if (c.unique) cardTextLines.push('Unique');
     if (effectDesc) cardTextLines.push(effectDesc);
     if (c.activated_ability) {
@@ -1564,7 +1567,8 @@ function renderCardFrame(c, opts) {
     }
     // Summon sacrifice cost
     if (c.summon_sacrifice_tribe) {
-        html += '<div class="card-effect-full">Cost: Discard any ' + c.summon_sacrifice_tribe + '</div>';
+        var sacN = c.summon_sacrifice_count || 1;
+        html += '<div class="card-effect-full">Cost: Discard any ' + (sacN > 1 ? sacN + ' ' : '') + c.summon_sacrifice_tribe + (sacN > 1 ? 's' : '') + '</div>';
     }
     // Unique tag
     if (c.unique) {

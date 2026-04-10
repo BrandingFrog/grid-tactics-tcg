@@ -11,6 +11,7 @@ from grid_tactics.server.app import socketio
 from grid_tactics.server.room_manager import RoomManager
 from grid_tactics.server.view_filter import (
     enrich_last_action,
+    enrich_pending_conjure_deploy,
     enrich_pending_post_move_attack,
     enrich_pending_tutor_for_viewer,
     filter_state_for_player,
@@ -69,6 +70,7 @@ def _build_card_defs(library):
                 "promote_target": card.promote_target,
                 "tutor_target": card.tutor_target,
                 "summon_sacrifice_tribe": card.summon_sacrifice_tribe,
+                "summon_sacrifice_count": card.summon_sacrifice_count,
                 "unique": getattr(card, 'unique', False),
                 "deckable": getattr(card, 'deckable', True),
                 "transform_options": [
@@ -122,6 +124,7 @@ def _emit_state_to_players(session, state, prev_state=None, resolved_action=None
     for idx in (0, 1):
         filtered = filter_state_for_player(state_dict, idx)
         enrich_pending_tutor_for_viewer(state, filtered, idx, session.library)
+        enrich_pending_conjure_deploy(state, filtered, idx, session.library)
         emit("state_update", {
             "state": filtered,
             "legal_actions": serialized_actions if idx == decision_idx else [],
@@ -148,9 +151,10 @@ def _fanout_state_to_spectators(session, state, base_state_dict, resolved_action
         spec_state = filter_state_for_spectator(
             base_state_dict, god_mode=slot.god_mode, perspective_idx=0,
         )
-        # Spectators inherit the same pending-tutor enrichment as their perspective seat.
+        # Spectators inherit the same pending-tutor/conjure enrichment as their perspective seat.
         if not slot.god_mode:
             enrich_pending_tutor_for_viewer(state, spec_state, 0, session.library)
+            enrich_pending_conjure_deploy(state, spec_state, 0, session.library)
         if event_name == "state_update":
             emit("state_update", {
                 "state": spec_state,
@@ -174,6 +178,7 @@ def _emit_game_over(session, state):
     for idx in (0, 1):
         filtered = filter_state_for_player(state_dict, idx)
         enrich_pending_tutor_for_viewer(state, filtered, idx, session.library)
+        enrich_pending_conjure_deploy(state, filtered, idx, session.library)
         emit("game_over", {
             "winner": int(state.winner) if state.winner is not None else None,
             "final_state": filtered,
@@ -199,6 +204,7 @@ def _fanout_game_start_to_spectators(session, base_state_dict, card_defs):
         )
         if not slot.god_mode:
             enrich_pending_tutor_for_viewer(session.state, spec_state, 0, session.library)
+            enrich_pending_conjure_deploy(session.state, spec_state, 0, session.library)
         emit(
             "game_start",
             {
@@ -361,6 +367,7 @@ def register_events(room_manager: RoomManager) -> None:
             )
             if not god_mode:
                 enrich_pending_tutor_for_viewer(session.state, spec_state, 0, session.library)
+                enrich_pending_conjure_deploy(session.state, spec_state, 0, session.library)
             card_defs = _build_card_defs(session.library)
             emit("game_start", {
                 "your_player_idx": 0,

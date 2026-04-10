@@ -304,35 +304,37 @@ def _apply_play_card(
     else:
         new_player = new_player.discard_from_hand(card_numeric_id)
 
-    # Summon sacrifice: exhaust a card of the required tribe from hand (cost).
+    # Summon sacrifice: exhaust card(s) of the required tribe from hand (cost).
     # Use the user's chosen sacrifice_card_index if provided; otherwise auto-pick first.
     if card_def.summon_sacrifice_tribe:
-        sacrifice_id = None
-        if action.sacrifice_card_index is not None:
-            # Note: action.sacrifice_card_index references the ORIGINAL hand
-            # (before this card was discarded). We recompute the index
-            # by using the original `player.hand`, since `new_player.hand`
-            # has the played card removed.
-            sac_idx = action.sacrifice_card_index
-            if 0 <= sac_idx < len(player.hand):
-                candidate_id = player.hand[sac_idx]
-                # Verify it's still in new_player.hand and tribe matches
-                cand_def = library.get_by_id(candidate_id)
-                if cand_def.tribe == card_def.summon_sacrifice_tribe and candidate_id in new_player.hand:
-                    sacrifice_id = candidate_id
-        if sacrifice_id is None:
-            # Fallback: auto-pick first matching card
-            for hand_card_id in new_player.hand:
-                hand_card_def = library.get_by_id(hand_card_id)
-                if hand_card_def.tribe == card_def.summon_sacrifice_tribe:
-                    sacrifice_id = hand_card_id
-                    break
-        if sacrifice_id is None:
-            raise ValueError(
-                f"No {card_def.summon_sacrifice_tribe} card in hand to sacrifice"
-            )
-        # Phase 14.5: discard-for-cost goes to EXHAUST, not graveyard.
-        new_player = new_player.exhaust_from_hand(sacrifice_id)
+        sac_count = card_def.summon_sacrifice_count
+        for _sac_i in range(sac_count):
+            sacrifice_id = None
+            if _sac_i == 0 and action.sacrifice_card_index is not None:
+                # Note: action.sacrifice_card_index references the ORIGINAL hand
+                # (before this card was discarded). We recompute the index
+                # by using the original `player.hand`, since `new_player.hand`
+                # has the played card removed.
+                sac_idx = action.sacrifice_card_index
+                if 0 <= sac_idx < len(player.hand):
+                    candidate_id = player.hand[sac_idx]
+                    # Verify it's still in new_player.hand and tribe matches
+                    cand_def = library.get_by_id(candidate_id)
+                    if cand_def.tribe == card_def.summon_sacrifice_tribe and candidate_id in new_player.hand:
+                        sacrifice_id = candidate_id
+            if sacrifice_id is None:
+                # Fallback: auto-pick first matching card
+                for hand_card_id in new_player.hand:
+                    hand_card_def = library.get_by_id(hand_card_id)
+                    if hand_card_def.tribe == card_def.summon_sacrifice_tribe:
+                        sacrifice_id = hand_card_id
+                        break
+            if sacrifice_id is None:
+                raise ValueError(
+                    f"No {card_def.summon_sacrifice_tribe} card in hand to sacrifice"
+                )
+            # Phase 14.5: discard-for-cost goes to EXHAUST, not graveyard.
+            new_player = new_player.exhaust_from_hand(sacrifice_id)
 
     new_players = _replace_player(state.players, active_idx, new_player)
     state = replace(state, players=new_players)
@@ -770,6 +772,7 @@ def _apply_conjure_rat_and_buff(
         state,
         pending_tutor_player_idx=active_idx,
         pending_tutor_matches=matches,
+        pending_tutor_is_conjure=True,
     )
 
 
@@ -1004,6 +1007,84 @@ def resolve_action(
             f"Cannot resolve action in phase {state.phase.name}, expected ACTION"
         )
 
+    # Phase 14.6: pending-conjure-deploy gate.
+    # After TUTOR_SELECT resolves during a conjure flow, the player must pick
+    # a deployment tile (CONJURE_DEPLOY) or decline (DECLINE_CONJURE -> to hand).
+    if state.pending_conjure_deploy_card is not None:
+        assert state.pending_tutor_player_idx is None, (
+            "pending_conjure_deploy and pending_tutor cannot coexist"
+        )
+        deployer_idx = state.pending_conjure_deploy_player_idx
+        deployer_side = state.players[deployer_idx].side
+        if action.action_type == ActionType.CONJURE_DEPLOY:
+            target_pos = action.position
+            if target_pos is None:
+                raise ValueError("CONJURE_DEPLOY requires a position")
+            own_rows = PLAYER_1_ROWS if deployer_side == PlayerSide.PLAYER_1 else PLAYER_2_ROWS
+            if target_pos[0] not in own_rows:
+                raise ValueError(f"CONJURE_DEPLOY target {target_pos} not on deployer's side")
+            if state.board.get(target_pos[0], target_pos[1]) is not None:
+                raise ValueError(f"CONJURE_DEPLOY target {target_pos} is occupied")
+
+            card_numeric_id = state.pending_conjure_deploy_card
+            card_def = library.get_by_id(card_numeric_id)
+            new_minion = MinionInstance(
+                instance_id=state.next_minion_id,
+                card_numeric_id=card_numeric_id,
+                owner=deployer_side,
+                position=target_pos,
+                current_health=card_def.health,
+                from_deck=True,
+            )
+            new_board = state.board.place(target_pos[0], target_pos[1], new_minion.instance_id)
+            new_minions = state.minions + (new_minion,)
+            state = replace(
+                state,
+                board=new_board,
+                minions=new_minions,
+                next_minion_id=state.next_minion_id + 1,
+                pending_conjure_deploy_card=None,
+                pending_conjure_deploy_player_idx=None,
+            )
+        elif action.action_type == ActionType.DECLINE_CONJURE:
+            # Decline deployment — card goes to hand instead
+            card_numeric_id = state.pending_conjure_deploy_card
+            deployer = state.players[deployer_idx]
+            new_deployer = replace(
+                deployer,
+                hand=deployer.hand + (card_numeric_id,),
+            )
+            new_players = _replace_player(state.players, deployer_idx, new_deployer)
+            state = replace(
+                state,
+                players=new_players,
+                pending_conjure_deploy_card=None,
+                pending_conjure_deploy_player_idx=None,
+            )
+        else:
+            raise ValueError(
+                "Pending conjure deploy: must CONJURE_DEPLOY or DECLINE_CONJURE"
+            )
+
+        # React window fires after conjure deployment resolves.
+        state = _cleanup_dead_minions(state, library)
+        state = _check_game_over(state)
+        if state.is_game_over:
+            return state
+        state = replace(
+            state,
+            phase=TurnPhase.REACT,
+            react_player_idx=1 - state.active_player_idx,
+            pending_action=action,
+        )
+        return state
+
+    # Not in pending conjure deploy: CONJURE_DEPLOY / DECLINE_CONJURE are illegal
+    if action.action_type in (ActionType.CONJURE_DEPLOY, ActionType.DECLINE_CONJURE):
+        raise ValueError(
+            f"{action.action_type.name} only legal during pending_conjure_deploy state"
+        )
+
     # Phase 14.2: pending-tutor gate.
     # If a card with TUTOR on_play just played and matches exist in deck, the
     # caster MUST TUTOR_SELECT (with index into pending_tutor_matches) or
@@ -1014,6 +1095,7 @@ def resolve_action(
         assert state.pending_post_move_attacker_id is None, (
             "pending_tutor and pending_post_move_attacker cannot coexist"
         )
+        is_conjure = state.pending_tutor_is_conjure
         if action.action_type == ActionType.TUTOR_SELECT:
             match_idx = action.card_index  # reuse card_index payload
             if match_idx is None or match_idx < 0 or match_idx >= len(state.pending_tutor_matches):
@@ -1030,28 +1112,51 @@ def resolve_action(
                 )
             chosen_card = caster.deck[deck_idx]
             new_deck = caster.deck[:deck_idx] + caster.deck[deck_idx + 1:]
-            new_caster = replace(
-                caster,
-                deck=new_deck,
-                hand=caster.hand + (chosen_card,),
-            )
-            new_players = _replace_player(state.players, caster_idx, new_caster)
-            state = replace(
-                state,
-                players=new_players,
-                pending_tutor_player_idx=None,
-                pending_tutor_matches=(),
-            )
+
+            if is_conjure:
+                # Phase 14.6: conjure-to-field — remove from deck, enter
+                # pending_conjure_deploy so player picks a tile next.
+                new_caster = replace(caster, deck=new_deck)
+                new_players = _replace_player(state.players, caster_idx, new_caster)
+                state = replace(
+                    state,
+                    players=new_players,
+                    pending_tutor_player_idx=None,
+                    pending_tutor_matches=(),
+                    pending_tutor_is_conjure=False,
+                    pending_conjure_deploy_card=chosen_card,
+                    pending_conjure_deploy_player_idx=caster_idx,
+                )
+            else:
+                # Standard tutor: add to hand
+                new_caster = replace(
+                    caster,
+                    deck=new_deck,
+                    hand=caster.hand + (chosen_card,),
+                )
+                new_players = _replace_player(state.players, caster_idx, new_caster)
+                state = replace(
+                    state,
+                    players=new_players,
+                    pending_tutor_player_idx=None,
+                    pending_tutor_matches=(),
+                    pending_tutor_is_conjure=False,
+                )
         elif action.action_type == ActionType.DECLINE_TUTOR:
             state = replace(
                 state,
                 pending_tutor_player_idx=None,
                 pending_tutor_matches=(),
+                pending_tutor_is_conjure=False,
             )
         else:
             raise ValueError(
                 "Pending tutor: must TUTOR_SELECT or DECLINE_TUTOR"
             )
+
+        # If we just entered pending_conjure_deploy, defer the react window.
+        if state.pending_conjure_deploy_card is not None:
+            return state
 
         # Single react window for the original on_play fires now.
         state = _cleanup_dead_minions(state, library)
@@ -1148,6 +1253,11 @@ def resolve_action(
     # the react window until TUTOR_SELECT/DECLINE_TUTOR clears it. One react
     # window per logical card play.
     if state.pending_tutor_player_idx is not None:
+        return state
+
+    # Phase 14.6: If conjure-deploy is pending, defer the react window until
+    # CONJURE_DEPLOY/DECLINE_CONJURE clears it.
+    if state.pending_conjure_deploy_card is not None:
         return state
 
     # Transition to REACT phase (D-13)

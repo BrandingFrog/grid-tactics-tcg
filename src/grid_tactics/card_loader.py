@@ -95,6 +95,7 @@ class CardLoader:
             unique=data.get("unique", False),
             tutor_target=CardLoader._parse_tutor_target(data, card_id),
             summon_sacrifice_tribe=data.get("summon_sacrifice_tribe"),
+            summon_sacrifice_count=data.get("summon_sacrifice_count", 1),
             transform_options=CardLoader._parse_transform_options(data, card_id),
             deckable=data.get("deckable", True),
             flavour_text=data.get("flavour_text"),

@@ -113,8 +113,9 @@ class CardDefinition:
     # selector keys must match (AND), case-insensitive string compare.
     tutor_target: Optional[Union[str, Dict[str, str]]] = None
 
-    # Summoning cost: sacrifice a card of this tribe from hand
+    # Summoning cost: sacrifice card(s) of this tribe from hand
     summon_sacrifice_tribe: Optional[str] = None
+    summon_sacrifice_count: int = 1
 
     # Transform: on-board minion can be transformed into these cards (costs mana)
     # Each entry is (card_id, mana_cost)

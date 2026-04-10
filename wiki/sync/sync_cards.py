@@ -205,10 +205,13 @@ def build_rules_text(card: dict, name_map: dict[str, str] | None = None) -> str:
     parts: list[str] = []
     effects = card.get("effects", [])
 
-    # Summon sacrifice cost (in-game: "Cost: Discard any Robot")
+    # Summon sacrifice cost (in-game: "Cost: Discard any 2 Robots")
     sac_tribe = card.get("summon_sacrifice_tribe", "")
     if sac_tribe:
-        parts.append(f"Cost: [[Sacrifice|Discard]] any [[{sac_tribe}]]")
+        sac_count = card.get("summon_sacrifice_count", 1)
+        count_text = f"{sac_count} " if sac_count > 1 else ""
+        plural = "s" if sac_count > 1 else ""
+        parts.append(f"Cost: [[Sacrifice|Discard]] any {count_text}[[{sac_tribe}]]{plural}")
 
     # Unique tag
     if card.get("unique"):

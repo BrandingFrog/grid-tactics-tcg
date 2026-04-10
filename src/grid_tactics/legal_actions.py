@@ -25,6 +25,8 @@ from grid_tactics.action_resolver import _can_attack, _is_orthogonal
 from grid_tactics.actions import (
     Action,
     attack_action,
+    conjure_deploy_action,
+    decline_conjure_action,
     decline_post_move_attack_action,
     decline_tutor_action,
     draw_action,
@@ -78,6 +80,16 @@ def legal_actions(
         state.pending_tutor_player_idx is not None
         and state.pending_post_move_attacker_id is not None
     ), "pending_tutor and pending_post_move_attacker cannot coexist"
+
+    # Phase 14.6: while pending_conjure_deploy is set, the ONLY legal actions
+    # are CONJURE_DEPLOY (one per valid empty tile on deployer's side) and
+    # DECLINE_CONJURE (card goes to hand instead). Slot reinterpretation:
+    #   - CONJURE_DEPLOY reuses PLAY_CARD slots [0:250] with card_index=0,
+    #     position = deploy tile. The encoder/decoder disambiguate using
+    #     state.pending_conjure_deploy_card.
+    #   - DECLINE_CONJURE reuses slot 1001 (PASS).
+    if state.pending_conjure_deploy_card is not None:
+        return _pending_conjure_deploy_actions(state, library)
 
     # Phase 14.2: while pending_tutor is set, the ONLY legal actions are
     # TUTOR_SELECT (one per match index in state.pending_tutor_matches) and
@@ -141,8 +153,9 @@ def _action_phase_actions(
                 hand_card = library.get_by_id(player.hand[j])
                 if hand_card.tribe == card_def.summon_sacrifice_tribe:
                     sacrifice_choices.append(j)
-            if not sacrifice_choices:
-                continue  # no valid sacrifice card -> can't play
+            sac_needed = card_def.summon_sacrifice_count
+            if len(sacrifice_choices) < sac_needed:
+                continue  # not enough sacrifice cards -> can't play
 
         for sac_idx in sacrifice_choices:
             if card_def.card_type == CardType.MINION:
@@ -333,6 +346,38 @@ def _pending_tutor_actions(state: GameState) -> tuple[Action, ...]:
         for i in range(len(state.pending_tutor_matches))
     ]
     actions.append(decline_tutor_action())
+    return tuple(actions)
+
+
+# ---------------------------------------------------------------------------
+# Pending conjure deploy enumeration (Phase 14.6)
+# ---------------------------------------------------------------------------
+
+
+def _pending_conjure_deploy_actions(
+    state: GameState, library: CardLibrary,
+) -> tuple[Action, ...]:
+    """Enumerate the only-legal actions while pending_conjure_deploy is set.
+
+    Legal:
+      - CONJURE_DEPLOY(position) for each valid empty tile on deployer's side
+      - DECLINE_CONJURE (card goes to hand)
+
+    The conjured card uses standard deploy rules (melee = any friendly tile,
+    ranged = back row only).
+    """
+    deployer_idx = state.pending_conjure_deploy_player_idx
+    deployer_side = state.players[deployer_idx].side
+    card_numeric_id = state.pending_conjure_deploy_card
+    card_def = library.get_by_id(card_numeric_id)
+
+    deploy_positions = _valid_deploy_positions(state, card_def, deployer_side)
+
+    actions: list[Action] = [
+        conjure_deploy_action(position=pos)
+        for pos in deploy_positions
+    ]
+    actions.append(decline_conjure_action())
     return tuple(actions)
 
 
