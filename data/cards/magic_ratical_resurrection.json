@@ -9,7 +9,7 @@
         {
             "type": "revive",
             "trigger": "on_play",
-            "target": "grave",
+            "target": "self_owner",
             "amount": 3,
             "revive_card_id": "rat"
         }
