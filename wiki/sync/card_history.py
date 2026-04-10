@@ -128,15 +128,14 @@ def build_history_section(history_entries: list[dict]) -> str:
         elif change_type == "removed":
             lines.append(": Card removed.")
         elif change_type == "changed":
-            if old_values and new_values:
-                # Detailed per-field diffs
-                for f in changed_fields:
-                    label = _FIELD_LABELS.get(f, f.replace("_", " ").capitalize())
-                    old_v = _format_value(f, old_values.get(f))
-                    new_v = _format_value(f, new_values.get(f))
-                    lines.append(f":* {label}: {old_v} → {new_v}")
+            old_rules = entry.get("old_rules", "")
+            new_rules = entry.get("new_rules", "")
+            if old_rules and new_rules and old_rules != new_rules:
+                lines.append(f": {old_rules} → {new_rules}")
+            elif new_rules:
+                lines.append(f": {new_rules}")
             else:
-                # Legacy entries without old/new values
+                # Legacy entries without rules text
                 readable = [
                     _FIELD_LABELS.get(f, f.replace("_", " ").capitalize())
                     for f in changed_fields

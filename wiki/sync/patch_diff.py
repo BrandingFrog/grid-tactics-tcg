@@ -8,6 +8,8 @@ from __future__ import annotations
 import json
 import re
 import subprocess
+
+from sync.sync_cards import build_rules_text
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Literal
@@ -28,6 +30,8 @@ class CardChange:
     changed_fields: list[str] = field(default_factory=list)
     old_values: dict[str, object] = field(default_factory=dict)
     new_values: dict[str, object] = field(default_factory=dict)
+    old_rules: str = ""
+    new_rules: str = ""
 
 
 @dataclass
@@ -155,6 +159,8 @@ def diff_cards(old_sha: str, new_sha: str, repo_root: Path) -> list[CardChange]:
                 changed_fields=changed_fields,
                 old_values={k: old_card.get(k) for k in changed_fields},
                 new_values={k: new_card.get(k) for k in changed_fields},
+                old_rules=build_rules_text(old_card),
+                new_rules=build_rules_text(new_card),
             ))
 
     # Sort by card_name

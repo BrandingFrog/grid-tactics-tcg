@@ -218,8 +218,8 @@ def update_card_histories(
             "date": diff.commit_date,
             "change_type": card_change.change_type,
             "changed_fields": card_change.changed_fields,
-            "old_values": card_change.old_values,
-            "new_values": card_change.new_values,
+            "old_rules": card_change.old_rules,
+            "new_rules": card_change.new_rules,
         }
 
         # Deduplicate: skip if this version already in history
