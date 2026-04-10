@@ -8,7 +8,7 @@
     "health": 13,
     "range": 1,
     "element": "dark",
-    "tribe": "Undead",
+    "tribe": "Undead/Mage",
     "deckable": false,
     "effects": [
         {
