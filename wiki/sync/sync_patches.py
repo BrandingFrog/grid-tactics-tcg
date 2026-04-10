@@ -222,9 +222,14 @@ def update_card_histories(
             "new_rules": card_change.new_rules,
         }
 
-        # Deduplicate: skip if this version already in history
-        existing_versions = {e["version"] for e in existing_entries}
-        if diff.version not in existing_versions:
+        # Replace existing entry for this version, or append new
+        replaced = False
+        for i, e in enumerate(existing_entries):
+            if e["version"] == diff.version:
+                existing_entries[i] = new_entry
+                replaced = True
+                break
+        if not replaced:
             existing_entries.append(new_entry)
 
         # Re-render full card page with history entries
