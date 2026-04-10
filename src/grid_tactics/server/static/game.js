@@ -4903,7 +4903,7 @@ function getEffectDescription(effects, cardData) {
         } else if (type === 12) { // Passive Heal
             desc = 'Passive: Heal ' + amount + ' per turn';
         } else if (type === 13) { // Leap
-            desc = 'Move: Leap over enemies';
+            desc = 'Move: Leap';
         } else if (type === 14) { // Conjure
             var conjureName = (cardData && cardData.summon_token_target) ? findCardNameById(cardData.summon_token_target) : 'a card';
             var conjureCost = (cardData && cardData.summon_token_cost) ? ' (' + cardData.summon_token_cost + ')' : '';

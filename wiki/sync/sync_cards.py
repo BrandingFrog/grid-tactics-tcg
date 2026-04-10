@@ -273,7 +273,7 @@ def build_rules_text(card: dict, name_map: dict[str, str] | None = None) -> str:
         elif eff_type == "passive_heal":
             desc = f"Passive: [[Heal]] {amount} per turn"
         elif eff_type == "leap":
-            desc = "Move: [[Leap]] over enemies"
+            desc = "[[Move]]: [[Leap]]"
         else:
             desc = f"{pfx}Effect"
         parts.append(desc)
