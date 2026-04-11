@@ -338,7 +338,7 @@ RULES_PAGES: dict[str, str] = {
         "* [[Win Conditions]] -- Sacrifice or HP depletion.\n"
         "\n"
         "== See Also ==\n"
-        "* [[:Category:Card|All Cards]]\n"
+        "* [[Special:BrowseData/Card|All Cards]]\n"
         "* [[:Category:Element|Elements]]\n"
         "* [[:Category:Tribe|Tribes]]\n"
         "* [[:Category:Keyword|Keywords]]\n"

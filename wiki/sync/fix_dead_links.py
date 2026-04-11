@@ -48,11 +48,10 @@ def bootstrap_manually_maintained(site, dry_run: bool = False) -> str:
 # ---------------------------------------------------------------------------
 
 CATEGORY_PAGES: dict[str, str] = {
-    "Category:Card": (
-        "This category contains all cards in [[Grid Tactics TCG]].\n"
-        "\n"
-        "[[Category:Grid Tactics]]"
-    ),
+    # NOTE: Category:Card is owned by sync/sync_filters.py as of Phase 9.2.
+    # Do NOT re-add it here — single-writer invariant. sync_filters.py upserts
+    # Category:Card with a {{#drilldowninfo:}} body that drives
+    # Special:BrowseData/Card faceted search.
     "Category:Element": (
         "This category lists the seven elements in [[Grid Tactics TCG]]: "
         "Wood, Fire, Earth, Water, Metal, Dark, and Light.\n"

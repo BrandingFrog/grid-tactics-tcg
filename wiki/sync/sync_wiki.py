@@ -404,6 +404,10 @@ def main(argv: list[str] | None = None) -> int:
         help="Sync the Semantic:Showcase query demonstration page",
     )
     group.add_argument(
+        "--filters", action="store_true",
+        help="Phase 9.2: upsert Category:Card #drilldowninfo for Semantic Drilldown",
+    )
+    group.add_argument(
         "--deckguide", action="store_true",
         help="Sync the Deck Building Guide page (strategy + auto archetypes)",
     )
@@ -453,6 +457,21 @@ def main(argv: list[str] | None = None) -> int:
         print(f"Syncing Semantic:Showcase{dry_label}...")
         status = sync_showcase_page(site, dry_run=args.dry_run)
         print(f"Semantic:Showcase: {status}")
+        return 0
+
+    # --filters (Phase 9.2)
+    if args.filters:
+        from sync.sync_filters import sync_drilldown_filters
+
+        try:
+            site = get_site()
+        except MissingCredentialsError as exc:
+            print(f"ERROR: {exc}", file=sys.stderr)
+            return 2
+        dry_label = " (dry run)" if args.dry_run else ""
+        print(f"Syncing Category:Card #drilldowninfo{dry_label}...")
+        status = sync_drilldown_filters(site, dry_run=args.dry_run)
+        print(f"Category:Card: {status}")
         return 0
 
     # --deckguide

@@ -172,7 +172,7 @@ def main_page_wikitext(cards_dir: Path | None = None) -> str:
         "\n"
         + cotd_section +
         "== Card Database ==\n"
-        "* [[:Category:Card|All Cards]] -- Browse every card in the game\n"
+        "* [[Special:BrowseData/Card|All Cards]] -- Browse every card in the game\n"
         "* [[Semantic:Showcase|Semantic Queries]] -- Explore cards with "
         "advanced queries\n"
         "\n"
