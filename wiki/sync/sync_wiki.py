@@ -476,6 +476,7 @@ def main(argv: list[str] | None = None) -> int:
             configure_logo_and_favicon,
             push_dark_search_css,
             push_font_css,
+            push_hero_search,
             push_mobile_css,
             upload_favicon,
             upload_logo,
@@ -507,8 +508,12 @@ def main(argv: list[str] | None = None) -> int:
         print("\n=== Logo & Favicon Configuration ===")
         config_status = configure_logo_and_favicon(site, dry_run=args.dry_run)
 
+        print("\n=== Hero Search Bar ===")
+        hero_status = push_hero_search(site, dry_run=args.dry_run)
+
         print(f"\nPolish complete: CSS={css_status}, Logo={logo_status}, "
-              f"Favicon={fav_status}, Config={config_status}")
+              f"Favicon={fav_status}, Config={config_status}, "
+              f"HeroSearch={hero_status}")
         return 0
 
     # --verify-search

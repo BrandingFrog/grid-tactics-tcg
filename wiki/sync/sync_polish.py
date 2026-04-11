@@ -530,6 +530,156 @@ _FAVICON_JS_BLOCK = f"""{_FAVICON_JS_MARKER}
 """
 
 
+_HERO_SEARCH_CSS_MARKER = "/* --- Grid Tactics Hero Search --- */"
+
+_HERO_SEARCH_CSS_BLOCK = f"""{_HERO_SEARCH_CSS_MARKER}
+#gt-hero-search {{
+  text-align: center;
+  margin: 1.5em auto 2em;
+  max-width: 560px;
+  padding: 0 1em;
+}}
+
+#gt-hero-search form {{
+  display: flex;
+  gap: 0;
+}}
+
+#gt-hero-search input[type="search"] {{
+  flex: 1;
+  padding: 0.85em 1.2em;
+  font-size: 1.05rem;
+  background: #0d0d2b !important;
+  color: #e0e0ff !important;
+  border: 2px solid #2a2a5a !important;
+  border-right: none !important;
+  border-radius: 8px 0 0 8px !important;
+  outline: none !important;
+  box-shadow: none !important;
+  transition: border-color 0.2s, box-shadow 0.2s;
+  font-family: 'Source Sans 3', 'Source Sans Pro', system-ui, sans-serif;
+}}
+
+#gt-hero-search input[type="search"]:focus {{
+  border-color: #00d4ff !important;
+  box-shadow: 0 0 12px rgba(0, 212, 255, 0.25) !important;
+}}
+
+#gt-hero-search input[type="search"]::placeholder {{
+  color: #5a5a8a !important;
+}}
+
+#gt-hero-search button[type="submit"] {{
+  padding: 0.85em 1.6em;
+  background: #00d4ff !important;
+  color: #0a0a1a !important;
+  border: 2px solid #00d4ff !important;
+  border-radius: 0 8px 8px 0 !important;
+  font-weight: 700;
+  font-size: 1rem;
+  cursor: pointer;
+  font-family: 'Montserrat', sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  transition: background 0.2s, box-shadow 0.2s;
+}}
+
+#gt-hero-search button[type="submit"]:hover {{
+  background: #33e0ff !important;
+  box-shadow: 0 0 16px rgba(0, 212, 255, 0.4) !important;
+}}
+"""
+
+_HERO_SEARCH_JS_MARKER = "/* --- Grid Tactics Hero Search --- */"
+
+_HERO_SEARCH_JS_BLOCK = f"""{_HERO_SEARCH_JS_MARKER}
+(function gtHeroSearch() {{
+  function inject() {{
+    var el = document.getElementById('gt-hero-search');
+    if (!el || el.children.length > 0) return;
+
+    var form = document.createElement('form');
+    form.action = '/wiki/Special:Search';
+    form.method = 'get';
+    form.setAttribute('role', 'search');
+    form.setAttribute('aria-label', 'Search Grid Tactics Wiki');
+
+    var label = document.createElement('label');
+    label.setAttribute('for', 'gt-main-search');
+    label.style.cssText = 'position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);';
+    label.textContent = 'Search Grid Tactics Wiki';
+
+    var input = document.createElement('input');
+    input.type = 'search';
+    input.name = 'search';
+    input.id = 'gt-main-search';
+    input.placeholder = 'Search cards, keywords, elements, rules\\u2026';
+    input.autocomplete = 'off';
+    input.spellcheck = false;
+
+    var btn = document.createElement('button');
+    btn.type = 'submit';
+    btn.textContent = 'Search';
+
+    form.appendChild(label);
+    form.appendChild(input);
+    form.appendChild(btn);
+    el.appendChild(form);
+  }}
+
+  if (document.readyState === 'loading') {{
+    document.addEventListener('DOMContentLoaded', inject);
+  }} else {{
+    inject();
+  }}
+}})();
+"""
+
+
+def push_hero_search(site, dry_run: bool = False) -> str:
+    """Push hero search bar CSS and JS to the wiki (idempotent).
+
+    Returns combined status string.
+    """
+    statuses = []
+
+    # --- CSS ---
+    css_page = site.pages["MediaWiki:Common.css"]
+    css_text = css_page.text() if css_page.exists else ""
+
+    if _HERO_SEARCH_CSS_MARKER in css_text:
+        print("  Hero search CSS: unchanged (already present)")
+        statuses.append("unchanged")
+    elif dry_run:
+        print("  Hero search CSS: would-update")
+        statuses.append("would-update")
+    else:
+        new_css = css_text.rstrip() + "\n\n" + _HERO_SEARCH_CSS_BLOCK
+        css_page.edit(new_css, summary="add hero search bar CSS")
+        print("  Hero search CSS: updated")
+        statuses.append("updated")
+
+    # --- JS ---
+    js_page = site.pages["MediaWiki:Common.js"]
+    js_text = js_page.text() if js_page.exists else ""
+
+    if _HERO_SEARCH_JS_MARKER in js_text:
+        print("  Hero search JS: unchanged (already present)")
+        statuses.append("unchanged")
+    elif dry_run:
+        print("  Hero search JS: would-update")
+        statuses.append("would-update")
+    else:
+        new_js = js_text.rstrip() + "\n\n" + _HERO_SEARCH_JS_BLOCK if js_text.strip() else _HERO_SEARCH_JS_BLOCK
+        js_page.edit(new_js, summary="add hero search bar JS")
+        print("  Hero search JS: updated")
+        statuses.append("updated")
+
+    if all(s == "unchanged" for s in statuses):
+        return "unchanged"
+    return ", ".join(statuses)
+
+
 def configure_logo_and_favicon(site, dry_run: bool = False) -> str:
     """Push CSS logo override and JS favicon injection (idempotent).
 
