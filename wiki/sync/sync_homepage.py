@@ -142,7 +142,8 @@ def main_page_wikitext(cards_dir: Path | None = None) -> str:
             f"background:rgb(30,100,220); border-radius:50%; width:36px; height:36px; "
             f"display:inline-block; text-align:center; line-height:36px; "
             f"font-family:'Montserrat',sans-serif; font-weight:900; text-transform:uppercase; "
-            f'-webkit-text-stroke:2px black; paint-order:stroke fill;">{mana}</span> '
+            f'-webkit-text-stroke:3px black; paint-order:stroke fill; '
+            f'text-shadow:0 0 3px #000, 0 0 4px #000;">{mana}</span> '
             f"<span style=\"font-size:1.2em; font-family:'Source Sans 3','Source Sans Pro',sans-serif; "
             f'font-weight:700; -webkit-text-stroke:1px black; paint-order:stroke fill;\">'
             f'[[Card:{card_name}|{card_name}]]</span> '
@@ -150,7 +151,8 @@ def main_page_wikitext(cards_dir: Path | None = None) -> str:
             f'background:{elem_bg}; border-radius:50%; width:36px; height:36px; '
             f"display:inline-block; text-align:center; line-height:36px; font-family:'Montserrat',sans-serif; "
             f"font-weight:900; font-size:0.55em; text-transform:uppercase; white-space:nowrap; overflow:hidden; "
-            f'-webkit-text-stroke:2px black; paint-order:stroke fill;">{element}</span>\n'
+            f'-webkit-text-stroke:3px black; paint-order:stroke fill; '
+            f'text-shadow:0 0 3px #000, 0 0 4px #000;">{element}</span>\n'
             f'|-\n'
             f'| colspan="2" style="padding:0;" | [[File:{card_id}.png|280px|center|link=Card:{card_name}]]\n'
             f'{meta}'
