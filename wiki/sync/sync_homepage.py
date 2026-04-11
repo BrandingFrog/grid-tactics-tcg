@@ -147,9 +147,10 @@ def main_page_wikitext(cards_dir: Path | None = None) -> str:
             f'font-weight:700; -webkit-text-stroke:1px black; paint-order:stroke fill;\">'
             f'[[Card:{card_name}|{card_name}]]</span> '
             f'<span style="position:absolute; right:10px; top:50%; transform:translateY(-50%); '
-            f'background:{elem_bg}; border-radius:50%; width:28px; height:28px; '
-            f"display:inline-block; text-align:center; line-height:28px; font-family:'Montserrat',sans-serif; "
-            f"font-weight:900; font-size:0.7em; text-transform:uppercase;\">{element}</span>\n"
+            f'background:{elem_bg}; border-radius:50%; width:40px; height:40px; '
+            f"display:inline-block; text-align:center; line-height:40px; font-family:'Montserrat',sans-serif; "
+            f"font-weight:900; font-size:0.55em; text-transform:uppercase; white-space:nowrap; overflow:hidden; "
+            f'-webkit-text-stroke:1px black; paint-order:stroke fill;">{element}</span>\n'
             f'|-\n'
             f'| colspan="2" style="padding:0;" | [[File:{card_id}.png|280px|center|link=Card:{card_name}]]\n'
             f'{meta}'
