@@ -27,13 +27,13 @@ RUN chown -R root:root /var/www/html
 # use --update-no-dev so dev deps are never resolved, and --no-audit to
 # suppress the advisory check entirely.
 ENV COMPOSER_ALLOW_SUPERUSER=1
-# Cache bust: 2026-04-09T17 — force rebuild for ParserFunctions
+# Cache bust: 2026-04-11T-SMW6 — force rebuild for SMW 6.0.x upgrade (fixes DisplayTitleLookup backtick bug, upstream PR #6172)
 # mediawiki:1.43 ships composer.json with phpunit/phpunit 9.6.16 in require-dev,
 # which composer's security audit rejects (PKSA-z3gr-8qht-p93v) even when we
 # --update-no-dev. Strip phpunit from require-dev before calling composer require.
 RUN php -r '$j = json_decode(file_get_contents("composer.json"), true); unset($j["require-dev"]["phpunit/phpunit"]); file_put_contents("composer.json", json_encode($j, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));' \
  && composer require --no-interaction --no-audit --update-no-dev \
-      mediawiki/semantic-media-wiki "~5.0" \
+      mediawiki/semantic-media-wiki "~6.0" \
  && composer dump-autoload --optimize --no-dev \
  && chown -R www-data:www-data /var/www/html
 
