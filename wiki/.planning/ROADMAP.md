@@ -221,9 +221,10 @@ Plans:
 
 ---
 
-### Phase 9.2: Semantic Drilldown Faceted Card Search (INSERTED)
+### Phase 9.2: Semantic Drilldown Faceted Card Search (INSERTED) ✓
 
 **Goal:** "All Cards" on the wiki becomes a faceted card-search UI (Element / CardType / Tribe / ManaCost / Attack / HP / Keyword) backed by the existing SMW property annotations from `sync_cards.py`, with URL-bookmarkable filter state and multi-select facets.
+**Status:** COMPLETE 2026-04-11. Semantic Drilldown 5.0.0-beta1 (@7ca8f802) live on Railway wiki. 8 facets on `Special:BrowseData/Card` (Element, CardType, Tribe, ManaCost, Attack, HP, Range, Keyword). Element narrowing verified (6 Fire cards), two-facet narrowing verified (4 Fire Minions via Element=Fire + CardType=Minion), bookmarkable URLs, Keyword multi-select verified (5-card OR-union from Tutor + Promote). Entry points repointed: `game.html:24` in-game nav link, `Main_Page` "All Cards", `sync_taxonomy.py:341` See Also. `MW_DEBUG` flipped back to 0. All 9.1 baselines preserved.
 **Depends on:** Phase 9.1 ✓ (9.1 verified 2026-04-11 — DisplayTitleLookup prefetch no longer crashes on SMW 6.0.x; ask API returns correct results)
 **Plans:** 1 plan (wave 1, non-autonomous: has one user-verification checkpoint between Drilldown install verification and entry-point rewrites)
 
@@ -267,7 +268,7 @@ The SMW enrichment pipeline (`wiki/sync/schema.py`, `wiki/sync/templates/Card.wi
 | 8 - Idempotency, Drift Detection & Reliability | complete | 2026-04-09 |
 | 9 - Launch Polish | complete | 2026-04-09 |
 | 9.1 - SMW DisplayTitleLookup Backtick Fix (INSERTED) | complete | 2026-04-11 |
-| 9.2 - Semantic Drilldown Faceted Card Search (INSERTED) | planned | - |
+| 9.2 - Semantic Drilldown Faceted Card Search (INSERTED) | complete | 2026-04-11 |
 
 ## Coverage
 

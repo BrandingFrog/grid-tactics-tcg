@@ -14,7 +14,7 @@ progress:
   percent: 100
 inserted_phases:
   - 9.1: SMW DisplayTitleLookup Backtick Fix — complete (2026-04-11)
-  - 9.2: Semantic Drilldown Faceted Card Search — not planned
+  - 9.2: Semantic Drilldown Faceted Card Search — complete (2026-04-11)
 ---
 
 # Project State — Grid Tactics Wiki
@@ -28,10 +28,10 @@ See: `.planning/PROJECT.md`
 
 ## Current Position
 
-Phase: 9 of 9 (Launch Polish) + inserted 9.1 complete, 9.2 pending
-Plan: 09.1-01 of 1 complete
-Status: COMPLETE. All 9 phases + 9.1 done; 9.2 pending.
-Last activity: 2026-04-11 -- Completed 09.1-01 (SMW 6.0.x upgrade, DisplayTitleLookup backtick fix verified across 9 SMW-backed category pages, Special:Browse, and Semantic:Showcase's 7 #ask queries)
+Phase: 9 of 9 (Launch Polish) + inserted 9.1, 9.2 complete
+Plan: 09.2-01 of 1 complete
+Status: COMPLETE. All 9 phases + 9.1 + 9.2 done.
+Last activity: 2026-04-11 -- Completed 09.2-01 (Semantic Drilldown 5.0.0-beta1 live, 8 facets on Special:BrowseData/Card, bookmarkable URLs, Keyword multi-select, entry points repointed)
 
 Progress: `██████████` 100%
 
@@ -128,12 +128,22 @@ Progress: `██████████` 100%
 - **[09.1-01]** `Card:Ratchanter` title rendering is the canonical DISPLAYTITLE round-trip smoke test for SMW changes. Check the rendered `<h1>` or `<title>` — if it starts with `Card:`, DISPLAYTITLE is broken and the `_DTITLE` → `smw_fpt_dtitle` pipeline regressed. Under SMW 6.0.x this renders correctly as just "Ratchanter".
 - **[09.1-01]** **SMW upgrades require an authenticated null-edit to invalidate rendered `#ask` query output.** MediaWiki's `action=purge` (even with `forcerecursivelinkupdate=1`) only invalidates page link data, not the parser cache for inline SMW queries. After the 9.1 upgrade, `Semantic:Showcase` was still showing partial pre-upgrade renders (only 2 of 7 queries had tables) until `python -m sync.sync_showcase` ran an authenticated edit. Phase 9.2 execution must re-run the taxonomy/showcase sync scripts post-install so the faceted pages don't serve stale results.
 - **[09.1-01]** Canonical category names on this wiki are **element + " cards"** (e.g. `Category:Fire cards`, `Category:Dark cards`) and type-pluralized (`Category:Minions`, NOT `Category:Minion`). The plan's test case used `Category:Minion` which is a legitimate 404, not a 500. Future verification should pull category names from `wiki/sync/sync_taxonomy.py::scan_elements` + explicit knowledge of the type-plural convention, not ad-hoc guesses.
+- **[09.2-01]** Semantic Drilldown is **NOT on Packagist**. Install via `git clone --depth 1 --branch 5.0.0-beta1 https://github.com/SemanticMediaWiki/SemanticDrilldown.git` + `git checkout 7ca8f802ce73fbe1046beec83b88170abdb9c79e`. Pin commit SHA (not branch tag) for bit-reproducible rebuilds. Confirmed via Packagist search + `repo.packagist.org/p2/mediawiki/semantic-drilldown.json` 404.
+- **[09.2-01]** SD 5.0.0-beta1 filters are configured via `{{#drilldowninfo:}}` parser function on the Category page — **NOT** via a legacy `Filter:` namespace (the 4.x rewrite removed that path, which also removed the Page Forms dependency). `sync_filters.py` is the sole writer of `Category:Card`'s description wikitext (entry removed from `fix_dead_links.py::CATEGORY_PAGES`).
+- **[09.2-01]** SMW property drift documented but NOT fixed: `wiki/sync/schema.py:70` declares `Cost`, but `wiki/sync/templates/Card.wiki:47` actually writes `{{#set:ManaCost=...}}`. The live SMW store has `ManaCost` values (not `Cost`). Drilldown targets `property=ManaCost`. A tactical hotfix during 9.2 execution: created `Property:ManaCost` with `[[Has type::Number]]` via mwclient so Drilldown's ManaCost facet could render. The drift in `schema.py` itself remains unfixed — a proper fix would require `bootstrap_schema.py` run + full card re-sync, out of scope for 9.2.
+- **[09.2-01]** `$sdgNumRangesForNumberFilters=5` tuned for ManaCost 0–10 bucketing; `$sdgNumResultsPerPage=50` (our card count is ~36); `$sdgHideFiltersWithoutValues=true` for cleaner drilling UX. In practice Attack and HP render 5 ranges; Mana Cost and Range render as individual values because the distinct value count is small.
+- **[09.2-01]** `Deckable` facet deliberately dropped from the sidebar for density — Boolean facet on ~36 cards adds clutter without discovery value. Include the 8 listed above instead.
+- **[09.2-01]** Keyword multi-select uses URL bracket syntax `?Keyword[0]=Tutor&Keyword[1]=Promote` — SD renders the OR-union. Cross-verified against ask API: Tutor (4 cards) ∪ Promote (1 card) = 5 unique cards, matches the Drilldown result exactly.
+- **[09.2-01]** In-game Wiki nav link (`src/grid_tactics/server/static/game.html:24`) was previously pointing at the wiki homepage root, not `Category:Card` (the original roadmap text was based on an outdated assumption about game.html). Rewrote to `Special:BrowseData/Card` directly — same target Phase 9.2 intended.
+- **[09.2-01]** **Known issue — SMW ask/Drilldown split on ManaCost.** `action=ask [[ManaCost::>0]]` returns 1 card (Grave Caller only) while Drilldown's internal query returns the full 36-card set. Cause: SMW's store is split across two backing tables for ManaCost — old Page-type entries (which Drilldown reads) and new Number-type entries (which ask API reads). `page.edit(page.text(), ...)` null-edits don't trigger SMW re-parse hooks because MW treats identical-content edits as no-ops. Touching Template:Card didn't fully cascade. **User-visible impact: NONE** (Drilldown UI works perfectly). **Developer-visible impact:** `#ask` queries filtering on ManaCost may be incomplete. Only affected surface is `Semantic:Showcase` Query 1 (Fire Minions Under 3 Mana). **Proper fix (follow-up phase):** run `php maintenance/rebuildData.php` on the MediaWiki container — requires shell access to the Railway pod.
+- **[09.2-01]** **Known issue — Railway mesh-DNS staleness persists.** Same as [09.1-01] — fresh MW containers on env-var flips or deploys stall on `mysql.railway.internal:3306` resolution for 60-240 seconds before breaking through. Observed 3 times during 9.2 execution (install commit, wire commit, MW_DEBUG flip). Fix is always: wait or `serviceInstanceRedeploy`. Never touch MySQL.
 
 ### Roadmap Evolution
 
 - **2026-04-11** — Phase **9.1** inserted after Phase 9: *SMW DisplayTitleLookup Backtick Fix* (URGENT). `Category:Card` returns HTTP 500 on SMW 5.1.0 + MW 1.43.8. Root cause captured via `MW_DEBUG=1` on Railway deployment `ad905e6e`: `SMW\SQLStore\Lookup\DisplayTitleLookup.php:124` pre-wraps table name in backticks, MW 1.43's Rdbms `SQLPlatform::addIdentifierQuotes` rejects pre-quoted identifiers. Blocking the in-game "Wiki" nav link and any Drilldown UI work. Fix options: Dockerfile sed patch, composer-patches, or SMW upstream upgrade if a patch release lands.
 - **2026-04-11** — Phase **9.1 COMPLETED**. SMW bumped from `~5.0` (5.1.0, obsolete, crash on MW 1.43.8) → `~6.0` (6.0.1, supports MW 1.43-1.44). Two-line Dockerfile change (cache-bust comment + composer pin), no schema migration required. `Category:Card` and 8 sibling SMW-backed category pages return HTTP 200. `Special:Browse/Card:Ratchanter` renders all typed properties including "Display title of" (the property backing `smw_fpt_dtitle`). `Semantic:Showcase`'s 7 `#ask` queries all render correct live data after a null-edit re-parse via `sync_showcase.py`. SMW ask API returned 26 Minion results, confirming Phase 9.2 is unblocked. `MW_DEBUG` flipped back to 0. Commit `2712922` → Railway deployment `5486d08f` (build) → `87bd7f5e` (active after manual redeploy to break MySQL mesh-DNS retry loop).
 - **2026-04-11** — Phase **9.2** inserted after Phase 9.1: *Semantic Drilldown Faceted Card Search*. Tier-2 upgrade on the existing SMW enrichment (20 typed properties per card already populated by `sync_cards.py`). Will install `mediawiki/semantic-drilldown`, create `Filter:Element`, `Filter:CardType`, `Filter:Tribe`, `Filter:ManaCost`, `Filter:Attack`, `Filter:HP`, `Filter:Keyword` via a new `sync_filters.py`, and point "All Cards" at `Special:BrowseData/Card`. Hard-blocked by 9.1 because Drilldown's landing hits the same DisplayTitleLookup prefetch path. **Unblocked as of 2026-04-11.**
+- **2026-04-11** — Phase **9.2 COMPLETED**. Semantic Drilldown 5.0.0-beta1 pinned to commit `7ca8f802` installed via `git clone` in `wiki/Dockerfile` (NOT composer — SD is not on Packagist, contrary to the original ROADMAP text). Filters configured via `{{#drilldowninfo:}}` on `Category:Card` (NOT a Filter: namespace, contrary to the original ROADMAP text — SD 4.x removed the Filter namespace workflow). 8 facets live: Element, CardType, Tribe, ManaCost, Attack, HP, Range, Keyword. Verified narrowing behavior (Fire=6 → Fire+Minion=4), bookmarkability, Keyword multi-select OR-union (Tutor∪Promote=5). Entry points repointed: `game.html:24` game-client Wiki nav, `Main_Page` All Cards, `sync_taxonomy.py:341`. Commits: `608a3c9` (install), `194ae77` (wire), `fe73a2e`… (docs). Railway deployments: `afc689a3` (install, SUCCESS, 2 min full composer rebuild), `9d88d448` (wire, SUCCESS, cached layer rebuild). `MW_DEBUG` flipped back to 0 after verification. Tactical hotfix during execution: created `Property:ManaCost` with `[[Has type::Number]]` to unblock Drilldown's numeric bucketing. Deep store-level mismatch on ManaCost discovered but out of scope (see [09.2-01] decision).
 
 ### Pending Todos
 
@@ -155,5 +165,5 @@ Progress: `██████████` 100%
 ## Session Continuity
 
 Last session: 2026-04-11
-Stopped at: Completed 09.1-01 -- SMW 6.0.x verified green on live Railway wiki. Phase 9.2 Drilldown unblocked.
+Stopped at: Completed 09.2-01 -- Semantic Drilldown 5.0.0-beta1 installed + 8 facets live on Special:BrowseData/Card + entry points repointed + MW_DEBUG=0. Wiki v1.1 milestone faceted-search UX now live.
 Resume file: None
