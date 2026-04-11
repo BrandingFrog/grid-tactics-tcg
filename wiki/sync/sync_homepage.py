@@ -168,8 +168,6 @@ def main_page_wikitext(cards_dir: Path | None = None) -> str:
         "trading card game played on a 5x5 grid. Here you'll find cards, "
         "mechanics, element interactions, and patch history.\n"
         "\n"
-        '<div id="gt-hero-search"></div>\n'
-        "\n"
         + cotd_section +
         "== Card Database ==\n"
         "* [[:Category:Card|All Cards]] -- Browse every card in the game\n"
