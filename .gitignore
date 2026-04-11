@@ -14,3 +14,7 @@ build/
 tb_logs/
 wandb/
 .coverage
+
+# Phase 14.6: sandbox slot files are user-local, not committed
+data/sandbox_saves/*
+!data/sandbox_saves/.gitkeep
