@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Online PvP Dueling
 status: in_progress
-stopped_at: "Phase 14.6 Plan 01 COMPLETE. SandboxSession backend surface shipped: zone editing, cheat inputs, undo/redo, save slots, 16 Socket.IO handlers, 62 backend tests passing. No real-game code path touched (game_session.py / view_filter.py byte-unchanged). Ready for 14.6-02 frontend wiring."
-last_updated: "2026-04-11T10:55:00.000Z"
+stopped_at: "Phase 14.6 Plan 02 COMPLETE. Sandbox frontend scaffold shipped: nav tab + #screen-sandbox fixed-layout (P1 top / P2 bottom, god view), renderBoard/renderHand opts refactor (backward-compatible with all zero-arg call sites), sandboxActivate/Deactivate global-swap pair, setupSandboxSocketHandlers with sandbox_card_defs/sandbox_state/sandbox_save_blob listeners, renderSandbox + renderSandboxStats that mount the SAME live-game renderers into sandbox DOM targets, 4 anchor comments (SANDBOX-SECTION-START/END + SANDBOX-STATE-HANDLER-START/END) for plan 14.6-03 to grep-locate. No view-filter calls in sandbox path. Zero modifications to onStateUpdate / onGameStart / onHandCardClick / onBoardCellClick / submitAction function bodies. Backend round-trip smoke-tested against live pvp_server: HP 100 / Mana 1 / active_player_idx 0 / 36 card defs; cheat-mode set_player_field -> HP 42 with undo_depth 1. 62 backend tests still green. Ready for 14.6-03 interactive controls."
+last_updated: "2026-04-11T10:53:00.000Z"
 last_activity: 2026-04-11
 progress:
   total_phases: 5
   completed_phases: 3
-  total_plans: 8
-  completed_plans: 8
+  total_plans: 9
+  completed_plans: 9
   percent: 0
 ---
 
@@ -26,10 +26,10 @@ See: .planning/PROJECT.md (updated 2026-04-04)
 ## Current Position
 
 Phase: 14.6 (sandbox-mode) — IN PROGRESS
-Plan: 1 of N (backend surface) — COMPLETE
-Next: 14.6-02 (frontend wiring against the SandboxSession API)
-Status: Phase 14.6 Plan 01 shipped. SandboxSession class wraps the existing immutable engine — every state mutator goes through dataclasses.replace (15 callsites), apply_action validates via legal_actions and applies via resolve_action, zone helpers cover hand/deck_top/deck_bottom/graveyard/exhaust for both players, set_player_field is full cheat mode (no rule validation), undo_depth/redo_depth public properties expose deque depth (HISTORY_MAX=64 satisfies DEV-09 >= 50). Empty starting state built via _empty_state classmethod (NOT GameState.new_game which crashes on empty decks). Slot persistence reuses to_dict/load_dict verbatim, slot-name validation is one regex + one os.path.basename check, data/sandbox_saves/ gitignored except .gitkeep. RoomManager._sandboxes parallel dict keyed by SID with create/get/remove helpers — purely additive. events.py has 16 sandbox_* handlers + _emit_sandbox_state god-view helper + disconnect cleanup; handle_submit_action / view_filter / GameSession byte-unchanged. 62 backend tests (36 unit + 26 Socket.IO via flask_socketio test client) all green; pre-existing test_spectator_receives_state_update failure verified independent of this plan. Phase 14.5 (piles-and-hand-vis) and Phase 14.4 (spectator-mode) remain fully shipped from prior sessions.
-Last activity: 2026-04-11 — Completed 14.6-01-PLAN.md (sandbox backend surface: SandboxSession + 16 Socket.IO handlers + 62 backend tests; engine reuse contract enforced)
+Plan: 2 of N (frontend scaffold) — COMPLETE
+Next: 14.6-03 (interactive controls + click-handler reuse via global-swap)
+Status: Phase 14.6 Plan 02 shipped. Sandbox nav tab in game.html line 23 (before Wiki line 24), #screen-sandbox block with fixed-layout mounts (#sandbox-hand-p0 at line 429, #sandbox-board at line 432, #sandbox-hand-p1 at line 435 -- P1 top / P2 bottom, no flip controls). renderBoard(opts) at game.js line 4696 and renderHand(opts) at 4826 -- both additive and backward-compatible via `opts = opts || {}` + `opts.mount || document.getElementById(legacy)` + `opts.state || gameState` fall-throughs; every zero-arg legacy call site (lines 2567, 2608, 3268, 3270) remains byte-identical. renderHand.opts.godView branch renders ONLY ownerIdx face-up; spectator dual-hand branch preserved unchanged for the live-game path. Sandbox module globals (sandboxMode / sandboxState / sandboxLegalActions / sandboxActiveViewIdx / sandboxUndoDepth / sandboxRedoDepth / sandboxCardDefs / _sandboxPreSnapshot) declared at lines 110-126. sandboxActivate snapshots + reassigns 5 live globals (gameState, myPlayerIdx, legalActions, isSpectator, spectatorGodMode) + animatingTiles; sandboxDeactivate restores. showScreen hook at lines 185-193 dispatches enter/exit. setupSandboxSocketHandlers at line 5089 registers sandbox_card_defs (additive mirror into cardDefs + allCardDefs, no key overwrites), sandbox_state, sandbox_save_blob. renderSandbox mounts the SAME renderBoard / renderHand into the sandbox DOM targets with raw god-view state. Four anchor comments wrap the sandbox section: SANDBOX-SECTION-START (line 5017), SANDBOX-STATE-HANDLER-START (line 5111), SANDBOX-STATE-HANDLER-END (line 5127), SANDBOX-SECTION-END (line 5209). No view-filter calls in the sandbox path (verified by awk). Zero modifications to onStateUpdate / onGameStart / onHandCardClick / onBoardCellClick / submitAction function bodies (verified by git diff grep). Backend round-trip smoke-tested against live pvp_server.py: sandbox_create -> sandbox_card_defs + sandbox_state returns HP 100 / Mana 1 / active_player_idx 0 / turn 1 / 36 card defs; sandbox_set_player_field cheat -> new state with HP 42 and undo_depth 1. `node -c` passes syntax. 62 backend tests from 14.6-01 still green (no regressions). Auto-fixed two Rule 2 defensive-check omissions: cardDefs mirror (plan only said allCardDefs but renderers read cardDefs) + null-state guards in renderBoard/renderHand/renderSandboxStats (sandbox can fire between activate and first state frame). Phase 14.5 (piles-and-hand-vis), 14.4 (spectator-mode), 14.6-01 (sandbox backend surface) remain fully shipped.
+Last activity: 2026-04-11 — Completed 14.6-02-PLAN.md (sandbox frontend scaffold: opts-refactored renderers + global-swap pair + anchor-wrapped sandbox section; live Flask round-trip verified)
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -60,6 +60,8 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 13-board-hand-ui P01 | 5min | 2 tasks | 4 files |
 | Phase 13-board-hand-ui P02 | 5min | 2 tasks | 3 files |
 | Phase 13-board-hand-ui P03 | 6min | 1 tasks | 1 files |
+| Phase 14.6-sandbox-mode P01 | ~25min | 4 tasks | 8 files |
+| Phase 14.6-sandbox-mode P02 | ~20min | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -190,6 +192,14 @@ Key decisions:
 - [Phase 14.6-01]: Disconnect cleanup runs unconditionally for SID — sandbox users have no session token, so the prior token-gated early-return would have leaked sandboxes. Spectator path remains functionally identical (token-gated as before). Restructure documented as Rule 1 deviation in 14.6-01-SUMMARY.
 - [Phase 14.6-01]: Tests live under tests/server/ subdirectory (new — existing repo is flat tests/). Used create_app(testing=True) instead of importing a non-existent global `app`, matching existing tests/test_pvp_server.py pattern. isolated_slot_dir fixture monkeypatches sandbox_session.SLOT_DIR to tmp_path so slot tests never touch the real data/sandbox_saves/.
 - [Phase 14.6-01]: legal_actions does NOT include PASS unconditionally during ACTION phase despite the stale module docstring — fatigue bleed at the GameSession layer handles the no-actions case via auto-PASS in submit_action. Tests adapted to drive apply_action via the engine's legal_actions tuple (DRAW becomes legal once a deck card is seeded) rather than assuming PASS is always present.
+- [Phase 14.6-02]: renderBoard/renderHand opts refactor is ADDITIVE and backward-compatible. Pattern: `function fn(opts) { opts = opts || {}; var target = opts.mount || document.getElementById('legacy-id'); var state = opts.state || gameState; var idx = (opts.perspectiveIdx != null) ? opts.perspectiveIdx : myPlayerIdx; ... }`. Every legacy zero-arg call site remains byte-identical. No signature change to any other render function.
+- [Phase 14.6-02]: renderHand.opts.godView renders ONLY ownerIdx face-up (single-hand mount). The spectator dual-hand branch (isSpectator && spectatorGodMode) is UNCHANGED for the live-game spectator path — sandbox calls renderHand twice with distinct mounts instead of using a dual-hand code path.
+- [Phase 14.6-02]: Global-swap pattern for screen-isolation. sandboxActivate snapshots 5 live globals (gameState, myPlayerIdx, legalActions, isSpectator, spectatorGodMode) + animatingTiles into _sandboxPreSnapshot, reassigns them to sandbox values, and sandboxDeactivate restores. The opts-refactored renderers take mount targets via opts so they render into sandbox DOM while the globals are sandbox-owned. Makes plan 14.6-03's click-handler reuse trivial — no 50+ global-read refactor needed.
+- [Phase 14.6-02]: sandbox_card_defs is ADDITIVELY mirrored into both cardDefs AND allCardDefs. cardDefs is the primary render-time lookup (renderBoardMinion / renderHandCard read it); allCardDefs is only set when null. Plan originally mirrored only allCardDefs but renderers read from cardDefs — the additive merge (only set keys not already present) avoids both the missing-render bug and the stomping risk. Auto-fixed as Rule 2 deviation.
+- [Phase 14.6-02]: Null-state guards added to renderBoard/renderHand opts path and to renderSandboxStats. The sandbox can fire renderSandbox between sandboxActivate and the first sandbox_state frame (Socket.IO ordering). Legacy zero-arg callers are unaffected because live-game code never renders before game_start. Auto-fixed as Rule 2 deviation.
+- [Phase 14.6-02]: Anchor comments are CONTRACTUAL: // === SANDBOX-SECTION-START === (line 5017), // === SANDBOX-STATE-HANDLER-START === (line 5111), // === SANDBOX-STATE-HANDLER-END === (line 5127), // === SANDBOX-SECTION-END === (line 5209). Plan 14.6-03 greps these anchors for insertion points — line numbers will drift, anchors will not. Nested SANDBOX-STATE-HANDLER envelope lets 14.6-03 target the state handler specifically.
+- [Phase 14.6-02]: Sandbox layout is FIXED at the DOM level: #sandbox-hand-p0 (P1) before #sandbox-board before #sandbox-hand-p1 (P2). No flip / view-toggle / perspective-swap controls exist anywhere. The plan 14.6-03 "Controlling: P1/P2" button mutates state.active_player_idx server-side; it does NOT change which DOM mount renders which player's hand.
+- [Phase 14.6-02]: Browser smoke test performed via python-socketio client + curl against live pvp_server.py (Playwright MCP tool not available in this execution session). The round trip covers the full Flask + Socket.IO path a browser would exercise, validates the HP/mana/hand/deck/turn payload, and confirms the DOM markup served to clients. JS additionally validated via `node -c`.
 
 ### Pending Todos
 
