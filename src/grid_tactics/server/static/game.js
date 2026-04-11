@@ -107,6 +107,24 @@ let myName = '';             // display name entered in lobby
 let isSpectator = false;
 let spectatorGodMode = false;
 
+// Phase 14.6: Sandbox mode state. These live alongside (not inside) the
+// live-game globals. While screen-sandbox is active, sandboxActivate()
+// snapshots the live-game globals into _sandboxPreSnapshot and reassigns
+// gameState/myPlayerIdx/legalActions/isSpectator/spectatorGodMode/animatingTiles
+// to sandbox-owned values so the existing renderers and click handlers
+// (which read from module scope) see sandbox state without touching their
+// 50+ read sites. Deactivation restores from the snapshot.
+let sandboxMode = false;            // true while screen-sandbox is active
+let sandboxState = null;            // latest sandbox state dict (god view, raw -- never filtered)
+let sandboxLegalActions = [];       // current legal actions array
+let sandboxActiveViewIdx = 0;       // which player the user is "controlling" (mirrors state.active_player_idx)
+let sandboxUndoDepth = 0;
+let sandboxRedoDepth = 0;
+let sandboxCardDefs = null;         // separate from allCardDefs to avoid lobby pollution
+
+// Phase 14.6: snapshot of pre-sandbox globals for restore on screen exit
+let _sandboxPreSnapshot = null;
+
 // Game interaction state
 let selectedHandIdx = null;  // index of selected hand card (for PLAY_CARD)
 let selectedMinionId = null; // id of selected board minion (for MOVE/ATTACK)
@@ -162,6 +180,16 @@ function showScreen(screenId) {
     // Render deck builder when switching to it
     if (screenId === 'screen-deck-builder' && allCardDefs) {
         renderDeckBuilder();
+    }
+    // Phase 14.6: Sandbox screen activation / deactivation
+    if (screenId === 'screen-sandbox') {
+        if (!sandboxMode) {
+            sandboxActivate();
+        }
+    } else {
+        if (sandboxMode) {
+            sandboxDeactivate();
+        }
     }
 }
 window.showScreen = showScreen;
@@ -228,6 +256,8 @@ function initSocket() {
     socket.on('chat_message', onChatMessage);
     socket.on('rematch_waiting', onRematchWaiting);
     socket.on('spectator_joined', onSpectatorJoined);
+    // Phase 14.6: sandbox mode socket handlers
+    setupSandboxSocketHandlers();
 }
 
 // Phase 14.4: ack from server after spectate_room. Flips client into
@@ -4663,14 +4693,25 @@ function renderSelfInfo() {
 // Section 14: renderBoard() (UI-01, D-03, D-10)
 // =============================================
 
-function renderBoard() {
-    var boardEl = document.getElementById('game-board');
+function renderBoard(opts) {
+    // Phase 14.6: opts param is additive + backward-compatible.
+    // Zero-arg calls (existing live-game sites) fall through to the original
+    // globals-driven behavior. Sandbox passes { mount, state, perspectiveIdx,
+    // legalActions } to route rendering to a different DOM target.
+    opts = opts || {};
+    var boardEl = opts.mount || document.getElementById('game-board');
+    var state = opts.state || gameState;
+    var perspectiveIdx = (opts.perspectiveIdx != null) ? opts.perspectiveIdx : myPlayerIdx;
+    // legal is accepted for signature parity with renderHand; renderBoard
+    // itself doesn't gate on legal actions (click handlers do).
+    var legal = opts.legalActions || legalActions;  // eslint-disable-line no-unused-vars
     if (!boardEl) return;
+    if (!state) return;
     boardEl.innerHTML = '';
 
     // Build minion lookup: "row,col" -> minion object (Pitfall 6)
     var minionMap = {};
-    (gameState.minions || []).forEach(function(m) {
+    (state.minions || []).forEach(function(m) {
         minionMap[m.position[0] + ',' + m.position[1]] = m;
     });
 
@@ -4679,13 +4720,13 @@ function renderBoard() {
     // their own back row at the BOTTOM (standard TCG convention).
     // P1 (idx 0): render rows 4,3,2,1,0 top-to-bottom -> row 0 (P1 back) at bottom
     // P2 (idx 1): render rows 0,1,2,3,4 top-to-bottom -> row 4 (P2 back) at bottom
-    var rowOrder = myPlayerIdx === 0
+    var rowOrder = perspectiveIdx === 0
         ? [4, 3, 2, 1, 0]
         : [0, 1, 2, 3, 4];
 
     // Zone classification matches engine: P1 zone = rows 0,1; P2 zone = rows 3,4.
-    var selfRows = myPlayerIdx === 0 ? [0, 1] : [3, 4];
-    var oppRows = myPlayerIdx === 0 ? [3, 4] : [0, 1];
+    var selfRows = perspectiveIdx === 0 ? [0, 1] : [3, 4];
+    var oppRows = perspectiveIdx === 0 ? [3, 4] : [0, 1];
 
     rowOrder.forEach(function(row) {
         for (var col = 0; col < 5; col++) {
@@ -4782,14 +4823,29 @@ function renderBoardMinion(minion) {
 // Section 15: renderHand() (UI-02, D-05)
 // =============================================
 
-function renderHand() {
-    var handEl = document.getElementById('hand-container');
+function renderHand(opts) {
+    // Phase 14.6: opts param is additive + backward-compatible.
+    // Zero-arg calls (existing live-game sites) fall through to the original
+    // globals-driven behavior. Sandbox passes { mount, state, ownerIdx,
+    // godView, legalActions } to mount ONE player's hand into a sandbox
+    // DOM target without walking the god-view spectator branch.
+    //
+    // When opts.godView is true (sandbox), we render ONLY the ownerIdx
+    // player's hand face-up into the provided mount -- this is called
+    // twice by renderSandbox(), once for P0 into #sandbox-hand-p0, once
+    // for P1 into #sandbox-hand-p1. The spectator god-view branch below
+    // is unchanged; it still fires for the live-game spectator path.
+    opts = opts || {};
+    var handEl = opts.mount || document.getElementById('hand-container');
+    var state = opts.state || gameState;
+    var ownerIdx = (opts.ownerIdx != null) ? opts.ownerIdx : myPlayerIdx;
+    var legal = opts.legalActions || legalActions;
     if (!handEl) return;
+    if (!state) return;
     handEl.innerHTML = '';
 
-    var myPlayer = gameState.players[myPlayerIdx];
-    var myMana = myPlayer.current_mana;
-    var isMyTurn = legalActions && legalActions.length > 0;
+    var myPlayer = state.players[ownerIdx];
+    var isMyTurn = legal && legal.length > 0;
 
     function appendHand(playerObj, label) {
         if (!playerObj || !playerObj.hand) return;
@@ -4818,10 +4874,15 @@ function renderHand() {
 
     // Phase 14.4: god-mode spectators see BOTH hands; non-god spectators
     // see only the perspective player (server sends the opponent as count).
-    if (isSpectator && spectatorGodMode) {
-        var oppIdx = 1 - myPlayerIdx;
-        appendHand(gameState.players[oppIdx], 'Player ' + (oppIdx + 1) + ' hand');
-        appendHand(myPlayer, 'Player ' + (myPlayerIdx + 1) + ' hand');
+    // Phase 14.6: opts.godView (sandbox) renders ONLY the ownerIdx hand
+    // face-up -- the sandbox calls renderHand twice with distinct mounts,
+    // once per player, so each mount shows exactly one hand.
+    if (opts && opts.godView) {
+        appendHand(myPlayer, null);
+    } else if (isSpectator && spectatorGodMode) {
+        var oppIdx = 1 - ownerIdx;
+        appendHand(state.players[oppIdx], 'Player ' + (oppIdx + 1) + ' hand');
+        appendHand(myPlayer, 'Player ' + (ownerIdx + 1) + ' hand');
     } else {
         appendHand(myPlayer, null);
     }
@@ -4952,3 +5013,197 @@ function findCardNameById(cardId) {
     }
     return cardId; // fallback to raw id
 }
+
+// === SANDBOX-SECTION-START ===
+// Phase 14.6 sandbox screen. All sandbox-related JS lives between
+// SANDBOX-SECTION-START and SANDBOX-SECTION-END so plan 14.6-03 (and any
+// future sandbox extension) can locate insertion points by grep, not by
+// fragile line numbers.
+//
+// LAYOUT INVARIANT (D1): The sandbox is fixed dual-perspective god view.
+// P1 hand mounts at #sandbox-hand-p0 (visually TOP), P2 hand mounts at
+// #sandbox-hand-p1 (visually BOTTOM). Both render with godView:true. The
+// sandbox NEVER calls filter_state_for_player or filter_state_for_spectator
+// -- it renders the raw state from the server. There is NO view-toggle,
+// NO flip button, NO perspective-swap. The plan 14.6-03 "Controlling:
+// P1 / P2" button mutates state.active_player_idx server-side; it does
+// NOT change which DOM mount renders which player's hand.
+
+// ----- Global-swap strategy ------------------------------------------------
+// The live game's renderers and click handlers read 5 module-level globals:
+//   gameState, myPlayerIdx, legalActions, isSpectator, spectatorGodMode
+// (plus animatingTiles, which we reset to {} on activation).
+//
+// Refactoring 50+ read sites in onHandCardClick / onBoardCellClick /
+// submitAction is infeasible. Instead, while the sandbox screen is visible,
+// the sandbox OWNS those globals. On activation we snapshot them; on
+// deactivation we restore them. The opts-refactored renderBoard/renderHand
+// take the sandbox mount targets via opts, so the sandbox renders into
+// #sandbox-board / #sandbox-hand-p0 / #sandbox-hand-p1 even while the
+// globals are pointing at the sandbox state.
+
+function sandboxActivate() {
+    sandboxMode = true;
+    // Snapshot the 5 globals + animatingTiles so we can restore on exit
+    _sandboxPreSnapshot = {
+        gameState: gameState,
+        myPlayerIdx: myPlayerIdx,
+        legalActions: legalActions,
+        isSpectator: isSpectator,
+        spectatorGodMode: spectatorGodMode,
+        animatingTiles: animatingTiles,
+    };
+    // While in sandbox: god view, no spectator filter, no animations queued
+    // (they'd target the live #game-board which isn't visible).
+    isSpectator = false;
+    spectatorGodMode = true;
+    animatingTiles = {};
+    // gameState / myPlayerIdx / legalActions get assigned by the
+    // sandbox_state handler when payload arrives.
+    initSandboxScreen();
+}
+
+function sandboxDeactivate() {
+    sandboxMode = false;
+    if (_sandboxPreSnapshot) {
+        gameState = _sandboxPreSnapshot.gameState;
+        myPlayerIdx = _sandboxPreSnapshot.myPlayerIdx;
+        legalActions = _sandboxPreSnapshot.legalActions;
+        isSpectator = _sandboxPreSnapshot.isSpectator;
+        spectatorGodMode = _sandboxPreSnapshot.spectatorGodMode;
+        animatingTiles = _sandboxPreSnapshot.animatingTiles;
+        _sandboxPreSnapshot = null;
+    }
+}
+
+function initSandboxScreen() {
+    // Always create a fresh sandbox on (re)entering the screen -- one per tab.
+    // Plan 14.6-03 will replace this with a localStorage-restore-then-create flow.
+    if (!socket || !socket.connected) {
+        console.warn('[sandbox] socket not connected yet');
+        return;
+    }
+    socket.emit('sandbox_create');
+}
+
+function setupSandboxSocketHandlers() {
+    if (!socket) return;
+
+    socket.on('sandbox_card_defs', function(data) {
+        sandboxCardDefs = (data && data.card_defs) || {};
+        // Mirror into allCardDefs only if it isn't already populated by the live game,
+        // so the existing renderers (which read allCardDefs/cardDefs) work inside the sandbox.
+        if (!allCardDefs) {
+            allCardDefs = sandboxCardDefs;
+        }
+        // cardDefs is the primary render-time lookup -- mirror into it too
+        // (additively, so we don't stomp existing entries) so renderBoardMinion
+        // / renderHandCard can resolve numeric ids inside the sandbox.
+        if (cardDefs && typeof cardDefs === 'object') {
+            for (var k in sandboxCardDefs) {
+                if (!cardDefs[k]) cardDefs[k] = sandboxCardDefs[k];
+            }
+        } else {
+            cardDefs = sandboxCardDefs;
+        }
+    });
+
+    // === SANDBOX-STATE-HANDLER-START ===
+    socket.on('sandbox_state', function(payload) {
+        sandboxState = payload.state;
+        sandboxLegalActions = payload.legal_actions || [];
+        sandboxActiveViewIdx = payload.active_view_idx || 0;
+        sandboxUndoDepth = payload.undo_depth || 0;
+        sandboxRedoDepth = payload.redo_depth || 0;
+        // Push sandbox state into the swapped globals so the renderers and
+        // (in plan 14.6-03) the click handlers see it as "the current state".
+        if (sandboxMode) {
+            gameState = sandboxState;
+            myPlayerIdx = sandboxActiveViewIdx;
+            legalActions = sandboxLegalActions;
+        }
+        renderSandbox();
+    });
+    // === SANDBOX-STATE-HANDLER-END ===
+
+    socket.on('sandbox_save_blob', function(data) {
+        // Plan 14.6-03 will wire this to download / share-code / localStorage.
+        // For plan 14.6-02 we just stash it on window for manual smoke testing.
+        window.__lastSandboxBlob = data && data.payload;
+    });
+}
+
+function renderSandbox() {
+    if (!sandboxState) return;
+
+    // Renderer reuse contract: call the SAME renderBoard / renderHand,
+    // passing sandbox mount targets via opts. The sandbox state is RAW
+    // god view from the server -- we never call filter_state_for_player
+    // or filter_state_for_spectator. P1 hand always lands at #sandbox-hand-p0
+    // (top), P2 hand always lands at #sandbox-hand-p1 (bottom). Fixed (D1).
+
+    var boardMount = document.getElementById('sandbox-board');
+    var handP0Mount = document.getElementById('sandbox-hand-p0');  // P1 visual TOP
+    var handP1Mount = document.getElementById('sandbox-hand-p1');  // P2 visual BOTTOM
+
+    if (boardMount && typeof renderBoard === 'function') {
+        renderBoard({
+            mount: boardMount,
+            state: sandboxState,
+            perspectiveIdx: sandboxActiveViewIdx,
+            legalActions: sandboxLegalActions,
+        });
+    }
+    if (handP0Mount && typeof renderHand === 'function') {
+        renderHand({
+            mount: handP0Mount,
+            state: sandboxState,
+            ownerIdx: 0,
+            godView: true,
+            legalActions: sandboxLegalActions,
+        });
+    }
+    if (handP1Mount && typeof renderHand === 'function') {
+        renderHand({
+            mount: handP1Mount,
+            state: sandboxState,
+            ownerIdx: 1,
+            godView: true,
+            legalActions: sandboxLegalActions,
+        });
+    }
+    renderSandboxStats();
+}
+
+function renderSandboxStats() {
+    var target = document.getElementById('sandbox-stats');
+    if (!target) return;
+    if (!sandboxState || !sandboxState.players) return;
+    // Lightweight HP/mana/hand-size display. The toolbar-state renderer in
+    // plan 14.6-03 sits next to this; both read from the sandboxState dict.
+    var p0 = sandboxState.players[0];
+    var p1 = sandboxState.players[1];
+    if (!p0 || !p1) return;
+    target.innerHTML =
+        '<div class="player-stats">' +
+            '<strong>P1</strong>' +
+            '<span>HP ' + p0.hp + '</span>' +
+            '<span>Mana ' + p0.current_mana + '/' + p0.max_mana + '</span>' +
+            '<span>Hand ' + (p0.hand ? p0.hand.length : 0) + '</span>' +
+            '<span>Deck ' + (p0.deck ? p0.deck.length : 0) + '</span>' +
+        '</div>' +
+        '<div class="player-stats">' +
+            '<strong>Active: P' + ((sandboxState.active_player_idx || 0) + 1) + '</strong>' +
+            '<span>Phase ' + sandboxState.phase + '</span>' +
+            '<span>Turn ' + sandboxState.turn_number + '</span>' +
+        '</div>' +
+        '<div class="player-stats">' +
+            '<strong>P2</strong>' +
+            '<span>HP ' + p1.hp + '</span>' +
+            '<span>Mana ' + p1.current_mana + '/' + p1.max_mana + '</span>' +
+            '<span>Hand ' + (p1.hand ? p1.hand.length : 0) + '</span>' +
+            '<span>Deck ' + (p1.deck ? p1.deck.length : 0) + '</span>' +
+        '</div>';
+}
+
+// === SANDBOX-SECTION-END ===
