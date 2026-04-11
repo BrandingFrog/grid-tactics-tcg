@@ -113,6 +113,16 @@ $smwgEnabledQueryDependencyLinksStore = true;
 $smwgQMaxSize = 16;
 $smwgQDefaultLimit = 50;
 
+# --- Semantic Drilldown (Phase 9.2) -------------------------------------------
+# Faceted card search at Special:BrowseData/Card. Configured via {{#drilldowninfo:}}
+# on Category:Card (see wiki/sync/sync_filters.py). SD 5.0.0-beta1 @ 7ca8f802.
+# NOTE: leave this block clearly delimited so Phase 9.2 rollback is a clean
+# section-cut. Do NOT merge these assignments into the SMW block above.
+wfLoadExtension( 'SemanticDrilldown' );
+$sdgNumRangesForNumberFilters = 5;   # default 6 → 5 so ManaCost (0-10) buckets cleanly (0-2/3-4/5-6/7-8/9-10)
+$sdgNumResultsPerPage         = 50;  # default 250 → 50 (we have ~36 cards)
+$sdgHideFiltersWithoutValues  = true; # cleaner drilling UX — drop facets with zero values in current result set
+
 # --- Error logging (operational) ---------------------------------------------
 # Gated on MW_DEBUG=1 env var so it can be turned off once the investigation
 # is done. When enabled:

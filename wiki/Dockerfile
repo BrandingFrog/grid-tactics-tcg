@@ -27,7 +27,7 @@ RUN chown -R root:root /var/www/html
 # use --update-no-dev so dev deps are never resolved, and --no-audit to
 # suppress the advisory check entirely.
 ENV COMPOSER_ALLOW_SUPERUSER=1
-# Cache bust: 2026-04-11T-SMW6 — force rebuild for SMW 6.0.x upgrade (fixes DisplayTitleLookup backtick bug, upstream PR #6172)
+# Cache bust: 2026-04-11T-9.2 — SMW 6.0.x + Semantic Drilldown 5.0.0-beta1 (PR #6172 + drilldown install)
 # mediawiki:1.43 ships composer.json with phpunit/phpunit 9.6.16 in require-dev,
 # which composer's security audit rejects (PKSA-z3gr-8qht-p93v) even when we
 # --update-no-dev. Strip phpunit from require-dev before calling composer require.
@@ -44,6 +44,21 @@ RUN test -f extensions/ParserFunctions/extension.json && echo "ParserFunctions O
 RUN composer require --no-interaction --no-audit --update-no-dev \
       starcitizentools/citizen-skin \
  && composer dump-autoload --optimize --no-dev
+
+# Install Semantic Drilldown 5.0.0-beta1 (pinned to commit 7ca8f802 for reproducibility).
+# NOT published on Packagist — must be installed via git clone, not composer require.
+# No update.php / schema migration needed (uses CREATE TEMPORARY TABLE only).
+# CI-tested on MW 1.43 + SMW 6.0.1 + PHP 8.2 + MariaDB 11.2 — matches our live stack.
+RUN git clone --depth 1 --branch 5.0.0-beta1 \
+      https://github.com/SemanticMediaWiki/SemanticDrilldown.git \
+      extensions/SemanticDrilldown \
+ && cd extensions/SemanticDrilldown \
+ && git fetch --depth 1 origin 7ca8f802ce73fbe1046beec83b88170abdb9c79e \
+ && git checkout 7ca8f802ce73fbe1046beec83b88170abdb9c79e \
+ && cd /var/www/html \
+ && chown -R www-data:www-data extensions/SemanticDrilldown \
+ && test -f extensions/SemanticDrilldown/extension.json \
+ && echo "SemanticDrilldown @ 7ca8f802 OK"
 
 # PHP OPcache tuning — cache compiled PHP bytecode in memory
 RUN echo '\
