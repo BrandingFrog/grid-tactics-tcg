@@ -225,7 +225,10 @@ Plans:
 
 **Goal:** "All Cards" on the wiki becomes a faceted card-search UI (Element / CardType / Tribe / ManaCost / Attack / HP / Keyword) backed by the existing SMW property annotations from `sync_cards.py`, with URL-bookmarkable filter state and multi-select facets.
 **Depends on:** Phase 9.1 ✓ (9.1 verified 2026-04-11 — DisplayTitleLookup prefetch no longer crashes on SMW 6.0.x; ask API returns correct results)
-**Plans:** TBD (run `/gsd:plan-phase 9.2` to break down)
+**Plans:** 1 plan (wave 1, non-autonomous: has one user-verification checkpoint between Drilldown install verification and entry-point rewrites)
+
+Plans:
+- [ ] 09.2-01-PLAN.md — install Semantic Drilldown 5.0.0-beta1 (@7ca8f802) via Dockerfile git clone, wire wfLoadExtension + $sdg* config in LocalSettings.php, create wiki/sync/sync_filters.py (single-writer of Category:Card, {{#drilldowninfo:}} with 8 facets), rewrite "All Cards" entry points (game.html:24 + sync_homepage.py + sync_taxonomy.py), run Playwright faceted-search smoke test, flip MW_DEBUG=0, close phase
 
 **Context:**
 
@@ -264,7 +267,7 @@ The SMW enrichment pipeline (`wiki/sync/schema.py`, `wiki/sync/templates/Card.wi
 | 8 - Idempotency, Drift Detection & Reliability | complete | 2026-04-09 |
 | 9 - Launch Polish | complete | 2026-04-09 |
 | 9.1 - SMW DisplayTitleLookup Backtick Fix (INSERTED) | complete | 2026-04-11 |
-| 9.2 - Semantic Drilldown Faceted Card Search (INSERTED) | not planned | - |
+| 9.2 - Semantic Drilldown Faceted Card Search (INSERTED) | planned | - |
 
 ## Coverage
 
