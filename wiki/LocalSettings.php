@@ -55,6 +55,19 @@ if ( $redisServer ) {
 }
 $wgMemCachedServers = [];
 
+# Parser cache — keep compiled pages for 7 days (default 1 day)
+$wgParserCacheExpireTime = 86400 * 7;
+
+# Sidebar cache — avoid re-rendering navigation on every page load
+$wgEnableSidebarCache = true;
+$wgSidebarCacheExpiry = 86400;
+
+# ResourceLoader — aggressive caching for versioned assets
+$wgResourceLoaderMaxage = [
+    'versioned'   => 30 * 24 * 3600,
+    'unversioned' => 300,
+];
+
 $wgLanguageCode = 'en';
 $wgDefaultSkin = 'citizen';
 
@@ -87,3 +100,15 @@ $wgPFEnableStringFunctions = true;
 wfLoadExtension('SemanticMediaWiki');
 $smwNamespace = parse_url($wgServer, PHP_URL_HOST) ?: 'grid-tactics.wiki';
 enableSemantics( $smwNamespace );
+
+# --- SMW Performance Tuning ---
+# Cache query results in Redis (uses $wgMainCacheType backend)
+$smwgQueryResultCacheType = CACHE_ANYTHING;
+$smwgQueryResultCacheLifetime = 3600;
+
+# Auto-invalidate cached results when properties change
+$smwgEnabledQueryDependencyLinksStore = true;
+
+# Query limits — sensible defaults for a ~20 card wiki
+$smwgQMaxSize = 16;
+$smwgQDefaultLimit = 50;

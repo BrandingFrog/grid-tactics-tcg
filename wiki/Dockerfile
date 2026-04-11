@@ -43,6 +43,28 @@ RUN composer require --no-interaction --no-audit --update-no-dev \
       starcitizentools/citizen-skin \
  && composer dump-autoload --optimize --no-dev
 
+# PHP OPcache tuning — cache compiled PHP bytecode in memory
+RUN echo '\
+opcache.enable=1\n\
+opcache.memory_consumption=256\n\
+opcache.interned_strings_buffer=16\n\
+opcache.max_accelerated_files=10000\n\
+opcache.revalidate_freq=60\n\
+opcache.validate_timestamps=1\n\
+' > /usr/local/etc/php/conf.d/opcache-tuning.ini
+
+# Apache mpm_prefork tuning — limit workers for Railway container
+RUN echo '\
+<IfModule mpm_prefork_module>\n\
+    StartServers           2\n\
+    MinSpareServers        2\n\
+    MaxSpareServers        5\n\
+    MaxRequestWorkers      25\n\
+    MaxConnectionsPerChild 1000\n\
+</IfModule>\n\
+' > /etc/apache2/conf-available/mpm-tuning.conf \
+ && a2enconf mpm-tuning
+
 # Stage our LocalSettings template (entrypoint copies it into place post-install)
 COPY LocalSettings.php /tmp/LocalSettings.template.php
 COPY docker-entrypoint-wiki.sh /usr/local/bin/docker-entrypoint-wiki.sh
