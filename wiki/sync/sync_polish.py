@@ -535,9 +535,11 @@ _HERO_SEARCH_CSS_MARKER = "/* --- Grid Tactics Hero Search --- */"
 _HERO_SEARCH_CSS_BLOCK = f"""{_HERO_SEARCH_CSS_MARKER}
 #gt-hero-search {{
   text-align: center;
-  margin: 0 auto 0.5em;
+  margin: 0 auto;
   max-width: 560px;
-  padding: 0.8em 1em;
+  padding: 1em 1em 0.5em;
+  width: 100%;
+  box-sizing: border-box;
 }}
 
 #gt-hero-search form {{
@@ -594,9 +596,7 @@ _HERO_SEARCH_JS_MARKER = "/* --- Grid Tactics Hero Search --- */"
 
 _HERO_SEARCH_JS_BLOCK = f"""{_HERO_SEARCH_JS_MARKER}
 (function gtHeroSearch() {{
-  function inject() {{
-    if (document.getElementById('gt-hero-search')) return;
-
+  function build() {{
     var wrapper = document.createElement('div');
     wrapper.id = 'gt-hero-search';
 
@@ -627,20 +627,30 @@ _HERO_SEARCH_JS_BLOCK = f"""{_HERO_SEARCH_JS_MARKER}
     form.appendChild(input);
     form.appendChild(btn);
     wrapper.appendChild(form);
-
-    /* Insert at the top of the content area, before the page heading */
-    var content = document.getElementById('mw-content-text')
-      || document.getElementById('bodyContent')
-      || document.querySelector('.mw-body-content');
-    if (content) {{
-      content.parentNode.insertBefore(wrapper, content);
-    }}
+    return wrapper;
   }}
 
-  if (document.readyState === 'loading') {{
-    document.addEventListener('DOMContentLoaded', inject);
-  }} else {{
-    inject();
+  function tryInject() {{
+    if (document.getElementById('gt-hero-search')) return true;
+    /* Insert BEFORE <main> to get a full-width row above the page title.
+       (Citizen skin uses flex inside <main>, so siblings would sit beside the title.) */
+    var main = document.getElementById('content')
+      || document.querySelector('main.mw-body')
+      || document.querySelector('main');
+    if (main && main.parentNode) {{
+      main.parentNode.insertBefore(build(), main);
+      return true;
+    }}
+    return false;
+  }}
+
+  /* Try immediately, then poll for the header (it appears as the body parses) */
+  if (!tryInject()) {{
+    var poll = setInterval(function() {{
+      if (tryInject()) clearInterval(poll);
+    }}, 30);
+    /* Fallback: stop polling after 5s */
+    setTimeout(function() {{ clearInterval(poll); }}, 5000);
   }}
 }})();
 """
