@@ -192,7 +192,10 @@ Plans:
 **Goal:** `/wiki/Category:Card` (and every other SMW-prefetched category page) returns HTTP 200 instead of HTTP 500 under the pinned SMW 5.1.0 + MW 1.43.8 pairing.
 **Depends on:** Phase 9 (runs against the already-live wiki)
 **Urgency:** Blocking — `Category:Card` is the primary entry point from the game client's in-app "Wiki" nav link (`src/grid_tactics/server/static/game.html:24`) and from `Main Page → All Cards`. Also a hard prerequisite for Phase 9.2 (Drilldown) because the Drilldown landing page hits the same `DisplayTitleLookup` prefetch codepath.
-**Plans:** TBD (run `/gsd:plan-phase 9.1` to break down)
+Plans:
+- [ ] 09.1-01-PLAN.md — bump SMW composer pin to ~6.0 in wiki/Dockerfile, deploy via Railway, verify live wiki, flip MW_DEBUG=0 after user sign-off
+
+**Plans:** 1 plan (created by /gsd:plan-phase — wave 1, non-autonomous: has checkpoint for user verification)
 
 **Root cause** (captured via `MW_DEBUG=1` on Railway deployment `ad905e6e`, 2026-04-11):
 
