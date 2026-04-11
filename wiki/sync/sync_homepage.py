@@ -165,7 +165,6 @@ def main_page_wikitext(cards_dir: Path | None = None) -> str:
         cotd_section = ""
 
     return (
-        '<div style="text-align:center;">\n'
         "= Welcome to the Grid Tactics Wiki =\n"
         "This is the knowledge base for '''Grid Tactics TCG''', a fantasy "
         "trading card game played on a 5x5 grid. Here you'll find cards, "
@@ -202,7 +201,6 @@ def main_page_wikitext(cards_dir: Path | None = None) -> str:
         "\n"
         "== Patch Notes ==\n"
         "* [[Patch:Index]] -- All patch notes\n"
-        "</div>\n"
         "\n"
         "[[Category:Rules]]"
     )
