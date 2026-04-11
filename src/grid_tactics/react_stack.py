@@ -363,6 +363,13 @@ def resolve_react_stack(
             pending_action=None,
         )
 
+    # If the cleanup opened a death-trigger modal, defer turn advancement
+    # until the dying minion's owner resolves the pick. The modal is
+    # driven by resolve_action's pending_death_target gate; once drained,
+    # it re-enters the turn-advance tail inline (see action_resolver.py).
+    if state.pending_death_target is not None:
+        return state
+
     # Advance turn: flip active player, increment turn number, clear react state
     new_active_idx = 1 - state.active_player_idx
     state = replace(

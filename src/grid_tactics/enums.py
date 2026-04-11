@@ -131,3 +131,4 @@ class ActionType(IntEnum):
     ACTIVATE_ABILITY = 11   # Use a minion's activated ability (mana + turn action)
     CONJURE_DEPLOY = 12     # Deploy a conjured card to a board tile (Phase 14.6)
     DECLINE_CONJURE = 13    # Decline conjure deployment — card goes to hand instead
+    DEATH_TARGET_PICK = 14  # Pick a target for a death-triggered modal effect (e.g. Lasercannon on_death destroy)

@@ -20,6 +20,58 @@ from grid_tactics.types import STARTING_HAND_P1, STARTING_HAND_P2
 
 
 @dataclass(frozen=True, slots=True)
+class PendingDeathWork:
+    """A dead minion whose on_death effects have not yet been fully resolved.
+
+    Captured snapshot of the dying minion at death time: the card_numeric_id
+    drives effect lookup, owner determines "whose death effect this is" (for
+    active-player-first ordering and for modal-prompt routing), and
+    instance_id is the deterministic tiebreaker. The position is captured so
+    that SELF_OWNER / position-relative effects can still resolve after the
+    minion has been removed from the board.
+
+    ``next_effect_idx`` records which effect on the card is next to fire. It
+    advances past effects that have already resolved (including those that
+    were resolved via a modal). Zero means "start from the beginning".
+    """
+
+    card_numeric_id: int
+    owner: PlayerSide
+    position: tuple[int, int]
+    instance_id: int
+    next_effect_idx: int = 0
+
+
+@dataclass(frozen=True, slots=True)
+class PendingDeathTarget:
+    """A death-triggered effect waiting for a click-target modal pick.
+
+    Currently the only shape that uses this is ``DESTROY / SINGLE_TARGET``
+    (Lasercannon on_death) — the dying minion's owner picks an enemy minion
+    to destroy. The schema intentionally carries enough information that
+    future death-trigger modals (damage-single-target, buff-friendly, etc.)
+    can be added without changing the state shape.
+
+    Fields:
+        card_numeric_id: The dying minion's card (for prompt text).
+        owner_idx: Which player picks the target (0 or 1). ALWAYS the dying
+            minion's owner — it's their card's effect.
+        dying_instance_id: The dying minion's instance_id (for UI correlation).
+        effect_idx: Which slot in the card's effects tuple this modal is for,
+            so the drain logic can advance ``PendingDeathWork.next_effect_idx``.
+        filter: Short string tag describing what the picker may click.
+            Currently always "enemy_minion". Future: "friendly_minion",
+            "any_minion", "empty_tile", etc.
+    """
+
+    card_numeric_id: int
+    owner_idx: int
+    dying_instance_id: int
+    effect_idx: int
+    filter: str = "enemy_minion"
+
+
+@dataclass(frozen=True, slots=True)
 class GameState:
     """Complete immutable game state snapshot.
 
@@ -72,6 +124,21 @@ class GameState:
     # resolves it onto the board.
     pending_conjure_deploy_card: Optional[int] = None        # card_numeric_id to deploy
     pending_conjure_deploy_player_idx: Optional[int] = None  # Which player is deploying
+
+    # Pending death-effect machinery (supports modal click-target death
+    # triggers and chain-reaction death cleanup).
+    #
+    # ``pending_death_queue`` is the list of dead minions whose on_death
+    # effects have not been fully resolved yet. It's processed front-to-back
+    # by ``_cleanup_dead_minions``. When an effect needs a click-target
+    # modal (e.g. Lasercannon DESTROY/SINGLE_TARGET on_death), processing
+    # halts and ``pending_death_target`` is set — the engine then waits
+    # for a DEATH_TARGET_PICK action from the dying minion's owner before
+    # continuing. While either field is non-empty, the regular react
+    # window / turn-advance is deferred in exactly the same way as the
+    # other pending_* states.
+    pending_death_queue: tuple = ()                          # tuple[PendingDeathWork, ...]
+    pending_death_target: Optional["PendingDeathTarget"] = None
 
     @property
     def active_player(self) -> Player:

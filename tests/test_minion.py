@@ -27,9 +27,9 @@ class TestActionTypeEnum:
         Audit-followup test sweep: PLAY_CARD, MOVE, ATTACK, DRAW, PASS,
         PLAY_REACT, SACRIFICE, TRANSFORM, DECLINE_POST_MOVE_ATTACK,
         TUTOR_SELECT, DECLINE_TUTOR, ACTIVATE_ABILITY,
-        CONJURE_DEPLOY, DECLINE_CONJURE.
+        CONJURE_DEPLOY, DECLINE_CONJURE, DEATH_TARGET_PICK.
         """
-        assert len(ActionType) == 14
+        assert len(ActionType) == 15
 
     def test_action_type_is_int(self):
         """ActionType values are ints (IntEnum pattern)."""

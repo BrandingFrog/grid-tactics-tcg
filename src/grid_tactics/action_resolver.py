@@ -887,18 +887,29 @@ def _apply_attack(
 # ---------------------------------------------------------------------------
 
 
-def _cleanup_dead_minions(
-    state: GameState, library: CardLibrary,
+_CHAIN_DEATH_SAFETY_LIMIT = 16
+
+
+def _enqueue_dead_minions_and_cleanup_zones(
+    state: GameState,
 ) -> GameState:
-    """Remove dead minions (health <= 0) and trigger on_death effects (D-02).
+    """Collect all currently-dead minions, remove them from the board, add
+    deck-origin cards to their owner's grave, and append the dead minions
+    as ``PendingDeathWork`` entries to ``state.pending_death_queue`` in
+    the canonical death-resolution order.
 
-    1. Find all dead minions (is_alive == False)
-    2. Remove them from board and minions tuple
-    3. Add their card_numeric_id to their owner's grave
-    4. Trigger on_death effects in instance_id order (ascending)
+    Canonical order (locked): active player's deaths first, then opponent's.
+    Within each side, instance_id ascending = play order.
+
+    Returns a new state with:
+      - board: dead minions' cells cleared
+      - minions: dead minions removed
+      - players: grave updated (tokens still vanish silently per 14.5)
+      - pending_death_queue: extended with new work entries in order
     """
-    dead_minions = [m for m in state.minions if not m.is_alive]
+    from grid_tactics.game_state import PendingDeathWork
 
+    dead_minions = [m for m in state.minions if not m.is_alive]
     if not dead_minions:
         return state
 
@@ -911,8 +922,8 @@ def _cleanup_dead_minions(
     dead_ids = {m.instance_id for m in dead_minions}
     alive_minions = tuple(m for m in state.minions if m.instance_id not in dead_ids)
 
-    # Add dead minion cards to their owner's grave.
-    # Phase 14.5: tokens (from_deck=False) vanish silently — no grave entry.
+    # Add dead minion cards to their owner's grave (Phase 14.5: tokens
+    # with from_deck=False vanish silently — no grave entry).
     new_players = state.players
     for m in dead_minions:
         if not m.from_deck:
@@ -922,14 +933,139 @@ def _cleanup_dead_minions(
         new_player = replace(player, grave=player.grave + (m.card_numeric_id,))
         new_players = _replace_player(new_players, player_idx, new_player)
 
-    state = replace(state, board=new_board, minions=alive_minions, players=new_players)
+    # Canonical sort: active player's deaths first, then by instance_id
+    # ascending (play order) within each side. Stable and deterministic.
+    active_side = state.players[state.active_player_idx].side
+    ordered = sorted(
+        dead_minions,
+        key=lambda m: (0 if m.owner == active_side else 1, m.instance_id),
+    )
 
-    # Trigger on_death effects in instance_id order (ascending)
-    sorted_dead = sorted(dead_minions, key=lambda m: m.instance_id)
-    for dead_m in sorted_dead:
-        state = resolve_effects_for_trigger(
-            state, TriggerType.ON_DEATH, dead_m, library,
+    # Build PendingDeathWork entries — snapshots of what the cleanup loop
+    # needs to resolve on_death effects even after the minion is gone.
+    new_work = tuple(
+        PendingDeathWork(
+            card_numeric_id=m.card_numeric_id,
+            owner=m.owner,
+            position=m.position,
+            instance_id=m.instance_id,
+            next_effect_idx=0,
         )
+        for m in ordered
+    )
+
+    return replace(
+        state,
+        board=new_board,
+        minions=alive_minions,
+        players=new_players,
+        pending_death_queue=state.pending_death_queue + new_work,
+    )
+
+
+def _drain_pending_death_queue(
+    state: GameState, library: CardLibrary,
+) -> GameState:
+    """Process ``state.pending_death_queue`` front-to-back, firing on_death
+    effects in canonical order. Returns early if any effect opens a modal
+    (``pending_death_target`` becomes non-None) — the caller is responsible
+    for NOT advancing to the react window until the modal is resolved.
+
+    After the queue drains, re-scans for newly-dead minions (chain
+    reactions, e.g. Lasercannon's destroy killing another on_death
+    minion) and continues processing. Bounded by
+    ``_CHAIN_DEATH_SAFETY_LIMIT`` iterations.
+    """
+    from grid_tactics.effect_resolver import resolve_death_effects_or_enter_modal
+
+    safety = 0
+    while True:
+        safety += 1
+        if safety > _CHAIN_DEATH_SAFETY_LIMIT:
+            # Pathological loop: promote + on_death that creates another
+            # promote + ... — break and log. Should be impossible with
+            # current cards (unique constraint on promote).
+            import sys
+            print(
+                f"[WARN] _drain_pending_death_queue hit safety limit "
+                f"({_CHAIN_DEATH_SAFETY_LIMIT}); breaking",
+                file=sys.stderr,
+            )
+            break
+
+        # If a modal is already pending, stop — the caller/external driver
+        # must resolve it before we can continue.
+        if state.pending_death_target is not None:
+            return state
+
+        queue = state.pending_death_queue
+        if not queue:
+            # Queue empty — re-scan for any newly-dead minions produced by
+            # the most recent effects (chain reaction).
+            dead_now = [m for m in state.minions if not m.is_alive]
+            if not dead_now:
+                return state
+            state = _enqueue_dead_minions_and_cleanup_zones(state)
+            continue
+
+        head = queue[0]
+        state, next_idx = resolve_death_effects_or_enter_modal(
+            state,
+            card_numeric_id=head.card_numeric_id,
+            owner=head.owner,
+            position=head.position,
+            instance_id=head.instance_id,
+            library=library,
+            start_idx=head.next_effect_idx,
+        )
+
+        if next_idx >= 0:
+            # A modal was opened at effect index next_idx. Update the head
+            # so when the modal resolves, we resume at the right slot via
+            # apply_death_target_pick (which advances next_effect_idx by 1).
+            new_head = replace(head, next_effect_idx=next_idx)
+            new_queue = (new_head,) + tuple(queue[1:])
+            state = replace(state, pending_death_queue=new_queue)
+            return state
+
+        # Head fully drained — pop it and continue the loop to process
+        # either the next queued death or a re-scan for chain reactions.
+        new_queue = tuple(queue[1:])
+        state = replace(state, pending_death_queue=new_queue)
+
+
+def _cleanup_dead_minions(
+    state: GameState, library: CardLibrary,
+) -> GameState:
+    """Remove dead minions (health <= 0) and trigger on_death effects (D-02).
+
+    Processing order (locked 2026-04-11):
+      1. Collect dead minions, remove from board + zones, stash into
+         ``state.pending_death_queue`` sorted active-player-first, then
+         instance_id ascending.
+      2. Drain the queue front-to-back, firing each dying minion's on_death
+         effects. If an effect needs a click-target modal (e.g. Lasercannon
+         destroy/single_target), sets ``state.pending_death_target`` and
+         returns early — the outer flow must defer the react window until
+         the modal resolves.
+      3. After each effect, re-scans for newly-dead minions (chain reaction
+         support: Lasercannon's destroy can kill another on_death minion
+         whose own effect also needs to fire). Bounded by
+         ``_CHAIN_DEATH_SAFETY_LIMIT`` iterations.
+
+    Idempotent: if ``pending_death_queue`` already contains work (because
+    a previous call stopped at a modal), resumes from where it left off.
+    """
+    # If a modal is still pending from a previous call, don't touch the
+    # queue — wait for the caller to submit DEATH_TARGET_PICK.
+    if state.pending_death_target is not None:
+        return state
+
+    # Enqueue any newly-dead minions (with active-player-first ordering).
+    state = _enqueue_dead_minions_and_cleanup_zones(state)
+
+    # Drain the queue (may open a modal and stop early).
+    state = _drain_pending_death_queue(state, library)
 
     return state
 
@@ -996,6 +1132,89 @@ def resolve_action(
     Raises:
         ValueError: If the action is invalid (wrong phase, illegal action, etc.).
     """
+    # Pending death-target gate (phase-agnostic): while a death-triggered
+    # modal is open, the ONLY legal action is DEATH_TARGET_PICK from the
+    # dying minion's owner. This gate must run BEFORE the REACT-phase
+    # dispatch so that deaths produced during react-stack resolution can
+    # be handled without routing through handle_react_action.
+    if state.pending_death_target is not None:
+        if action.action_type != ActionType.DEATH_TARGET_PICK:
+            raise ValueError(
+                "Pending death target: only DEATH_TARGET_PICK is legal"
+            )
+        if action.target_pos is None:
+            raise ValueError("DEATH_TARGET_PICK requires a target_pos")
+        from grid_tactics.effect_resolver import apply_death_target_pick
+        state = apply_death_target_pick(state, action.target_pos, library)
+        # Continue draining the queue — may open another modal.
+        state = _drain_pending_death_queue(state, library)
+        state = _check_game_over(state)
+        if state.is_game_over:
+            return state
+        # If ANOTHER modal is now pending, defer again.
+        if state.pending_death_target is not None:
+            return state
+        # The queue is fully drained. Two resume paths:
+        #   (a) The death was produced during ACTION-phase cleanup, so we
+        #       still need to open the react window. Detect by
+        #       phase == ACTION and the triggering action still recorded
+        #       in pending_action.
+        #   (b) The death was produced during react-stack resolution (from
+        #       a react card's effect). In that case phase is already
+        #       REACT (the stack is mid-resolve) — we need to continue the
+        #       stack resolution by re-entering it. Since the stack state
+        #       has already been partially consumed when the cleanup was
+        #       called, safest is to finish turn advancement inline here.
+        if state.phase == TurnPhase.ACTION:
+            if state.pending_post_move_attacker_id is not None:
+                return state
+            if state.pending_tutor_player_idx is not None:
+                return state
+            if state.pending_conjure_deploy_card is not None:
+                return state
+            state = replace(
+                state,
+                phase=TurnPhase.REACT,
+                react_player_idx=1 - state.active_player_idx,
+            )
+            return state
+        else:
+            # Phase 14.1+: a react-triggered death cleared its modal.
+            # Re-run the tail of resolve_react_stack (turn advance + status
+            # ticks + passive effects + regen + auto-draw). Since we can't
+            # easily resume mid-function, we mirror those steps here.
+            from grid_tactics.react_stack import (
+                _fire_passive_effects, tick_status_effects,
+            )
+            from grid_tactics.types import AUTO_DRAW_ENABLED
+            new_active_idx = 1 - state.active_player_idx
+            state = replace(
+                state,
+                react_stack=(),
+                react_player_idx=None,
+                pending_action=None,
+                phase=TurnPhase.ACTION,
+                active_player_idx=new_active_idx,
+                turn_number=state.turn_number + 1,
+            )
+            state = tick_status_effects(state, library)
+            if state.is_game_over:
+                return state
+            state = _fire_passive_effects(state, library)
+            if state.is_game_over:
+                return state
+            if state.turn_number > 2:
+                new_active_player = state.players[new_active_idx].regenerate_mana()
+                new_players = _replace_player(state.players, new_active_idx, new_active_player)
+                state = replace(state, players=new_players)
+            if AUTO_DRAW_ENABLED:
+                active_player = state.players[new_active_idx]
+                if active_player.deck:
+                    drawn_player, _card_id = active_player.draw_card()
+                    new_players = _replace_player(state.players, new_active_idx, drawn_player)
+                    state = replace(state, players=new_players)
+            return state
+
     # REACT phase: delegate to react handler
     if state.phase == TurnPhase.REACT:
         from grid_tactics.react_stack import handle_react_action
@@ -1005,6 +1224,12 @@ def resolve_action(
     if state.phase != TurnPhase.ACTION:
         raise ValueError(
             f"Cannot resolve action in phase {state.phase.name}, expected ACTION"
+        )
+
+    # Not in pending death target: DEATH_TARGET_PICK is illegal
+    if action.action_type == ActionType.DEATH_TARGET_PICK:
+        raise ValueError(
+            "DEATH_TARGET_PICK only legal during pending_death_target state"
         )
 
     # Phase 14.6: pending-conjure-deploy gate.
@@ -1067,15 +1292,18 @@ def resolve_action(
             )
 
         # React window fires after conjure deployment resolves.
+        # Record pending_action before cleanup so a death modal can defer.
+        state = replace(state, pending_action=action)
         state = _cleanup_dead_minions(state, library)
         state = _check_game_over(state)
         if state.is_game_over:
+            return state
+        if state.pending_death_target is not None:
             return state
         state = replace(
             state,
             phase=TurnPhase.REACT,
             react_player_idx=1 - state.active_player_idx,
-            pending_action=action,
         )
         return state
 
@@ -1159,15 +1387,17 @@ def resolve_action(
             return state
 
         # Single react window for the original on_play fires now.
+        state = replace(state, pending_action=action)
         state = _cleanup_dead_minions(state, library)
         state = _check_game_over(state)
         if state.is_game_over:
+            return state
+        if state.pending_death_target is not None:
             return state
         state = replace(
             state,
             phase=TurnPhase.REACT,
             react_player_idx=1 - state.active_player_idx,
-            pending_action=action,
         )
         return state
 
@@ -1199,15 +1429,17 @@ def resolve_action(
             )
 
         # Dead minion cleanup + game-over check, then react window (single).
+        state = replace(state, pending_action=action)
         state = _cleanup_dead_minions(state, library)
         state = _check_game_over(state)
         if state.is_game_over:
+            return state
+        if state.pending_death_target is not None:
             return state
         state = replace(
             state,
             phase=TurnPhase.REACT,
             react_player_idx=1 - state.active_player_idx,
-            pending_action=action,
         )
         return state
 
@@ -1235,12 +1467,23 @@ def resolve_action(
     else:
         raise ValueError(f"Unsupported action type for main phase: {action.action_type}")
 
+    # Record the pending_action BEFORE cleanup so that a death modal can
+    # defer the react window without losing the triggering action.
+    state = replace(state, pending_action=action)
+
     # Dead minion cleanup (D-02)
     state = _cleanup_dead_minions(state, library)
 
     # Win/draw detection (Phase 4) -- after cleanup, before react transition
     state = _check_game_over(state)
     if state.is_game_over:
+        return state
+
+    # If a death-trigger modal was opened during cleanup, defer the react
+    # window until the dying minion's owner picks a target. pending_action
+    # is already stashed on state so the banner text is correct when the
+    # window eventually opens.
+    if state.pending_death_target is not None:
         return state
 
     # Phase 14.1: If MOVE entered pending-post-move-attack state, do NOT
@@ -1265,7 +1508,6 @@ def resolve_action(
         state,
         phase=TurnPhase.REACT,
         react_player_idx=1 - state.active_player_idx,
-        pending_action=action,
     )
 
     return state

@@ -45,6 +45,47 @@ from grid_tactics.tensor_engine.effects import apply_effects_batch
 from grid_tactics.tensor_engine.react import resolve_react_stack_batch
 
 
+def _compute_auto_death_target(
+    s,  # TensorGameState
+    dying_owner: torch.Tensor,  # [N] int32 (owner side of the dying slot)
+    active_games: torch.Tensor,  # [N] bool (which games in the batch are firing this death)
+    arange_n: torch.Tensor,
+    device: torch.device,
+    N: int,
+) -> torch.Tensor:
+    """Deterministically auto-pick a target for death-triggered modal effects.
+
+    Used by ``cleanup_dead_minions_batch`` to feed a ``target_flat_pos`` into
+    ``apply_effects_batch`` for ON_DEATH calls. The tensor engine has no UI,
+    so death modals (Lasercannon's DESTROY/SINGLE_TARGET on_death) must be
+    auto-resolved.
+
+    Policy (locked): lowest-slot alive enemy of ``dying_owner``. "Enemy"
+    here means "owner != dying_owner" — on_death effects target what the
+    dying card considers opponents, which is always the other side.
+    Returns ``EMPTY`` (-1 equivalent) for games where no valid target
+    exists; downstream effects silently no-op on invalid targets.
+
+    NOTE: If a future on_death card needs different auto-pick semantics
+    (e.g. "random" vs "lowest"), branch on card_id here rather than
+    trying to match on effect shape — effect shape is ambiguous across
+    cards.
+    """
+    # Scan slots ascending; first match wins.
+    result = torch.full((N,), EMPTY, dtype=torch.int32, device=device)
+    taken = torch.zeros(N, dtype=torch.bool, device=device)
+    for slot in range(MAX_MINIONS):
+        is_alive = s.minion_alive[:, slot]
+        is_enemy = s.minion_owner[:, slot] != dying_owner
+        candidate = active_games & is_alive & is_enemy & ~taken
+        if not candidate.any():
+            continue
+        flat = s.minion_row[:, slot] * GRID_COLS + s.minion_col[:, slot]
+        result = torch.where(candidate, flat.int(), result)
+        taken = taken | candidate
+    return result
+
+
 class TensorGameEngine:
     """Batched game engine running N games as tensor operations.
 
@@ -572,15 +613,34 @@ class TensorGameEngine:
     def cleanup_dead_minions_batch(self):
         """Remove minions with health <= 0. Trigger ON_DEATH effects.
 
-        Two-pass cleanup per Python engine convention. Loops over MAX_MINIONS
-        slots (fixed 25) and 2 cleanup passes -- NOT over batch dimension N.
+        Ordering (locked 2026-04-11): death triggers fire in canonical
+        order — active player's dying minions first (slots where
+        ``minion_owner == active_player``), then opponent's. Within each
+        side, slot index ascending = instance_id order = play order. This
+        mirrors the Python engine's sort key and matches the user-facing
+        rule "active player's deaths first, then by play order."
+
+        Chain reactions (an on_death effect killing another minion with
+        its own on_death) are handled by a fixed number of cleanup
+        passes (``_CHAIN_DEATH_PASSES``). Each pass re-scans for newly-
+        dead minions and fires their on_death effects. Bounded to prevent
+        pathological infinite loops.
+
+        Death-trigger modals (Lasercannon destroy/single_target on_death)
+        cannot open interactive modals in the tensor engine — RL training
+        has no UI and must be deterministic. Instead, such effects are
+        auto-resolved by picking the lowest-slot alive enemy minion of
+        the dying minion's owner as the target. If no valid target
+        exists, the effect silently no-ops. Document any future
+        modal-death card here if its auto-pick differs.
         """
+        _CHAIN_DEATH_PASSES = 8
         s = self.state
         N = self.n_envs
         device = self.device
         arange_n = torch.arange(N, device=device)
 
-        for cleanup_pass in range(2):  # Two passes per Python engine convention
+        for cleanup_pass in range(_CHAIN_DEATH_PASSES):
             # Find dead minions: [N, MAX_MINIONS]
             dead = s.minion_alive & (s.minion_health <= 0)
             if not dead.any():
@@ -648,23 +708,45 @@ class TensorGameEngine:
                             can_add, gs + 1, gs
                         )
 
-            # Trigger ON_DEATH effects -- iterate over slots (constant MAX_MINIONS=25)
-            # Sorted by slot = instance_id equivalent (ascending)
-            for slot in range(MAX_MINIONS):
-                slot_dead = dead[:, slot]  # [N]
-                if not slot_dead.any():
-                    continue
+            # Trigger ON_DEATH effects in canonical order: active player
+            # first, opponent second. Within each side, slot index
+            # ascending (= play order).
+            for priority in (0, 1):
+                # priority=0 -> active_player's deaths; priority=1 -> opponent's
+                for slot in range(MAX_MINIONS):
+                    slot_dead = dead[:, slot]  # [N]
+                    if not slot_dead.any():
+                        continue
 
-                cid = dead_cid[:, slot]
-                owner = dead_owner[:, slot]
-                safe_cid = cid.clamp(0).long()
+                    cid = dead_cid[:, slot]
+                    owner = dead_owner[:, slot]
+                    safe_cid = cid.clamp(0).long()
 
-                apply_effects_batch(
-                    s, safe_cid.int(), 1, owner,
-                    torch.full((N,), slot, dtype=torch.int32, device=device),
-                    torch.full((N,), EMPTY, dtype=torch.int32, device=device),
-                    self.card_table, slot_dead,
-                )  # trigger=ON_DEATH=1
+                    # Per-game priority mask: this slot fires this pass
+                    # only if its owner matches the current priority.
+                    if priority == 0:
+                        priority_mask = slot_dead & (owner == s.active_player)
+                    else:
+                        priority_mask = slot_dead & (owner != s.active_player)
+                    if not priority_mask.any():
+                        continue
+
+                    # Auto-pick deterministic target for death modals: for
+                    # DESTROY/SINGLE_TARGET on_death we pick the lowest-slot
+                    # alive enemy of the dying minion's owner. target_pos is
+                    # passed to apply_effects_batch — if the card's death
+                    # effect doesn't use SINGLE_TARGET, the value is
+                    # ignored downstream.
+                    auto_target_flat = _compute_auto_death_target(
+                        s, owner, priority_mask, arange_n, device, N,
+                    )
+
+                    apply_effects_batch(
+                        s, safe_cid.int(), 1, owner,
+                        torch.full((N,), slot, dtype=torch.int32, device=device),
+                        auto_target_flat,
+                        self.card_table, priority_mask,
+                    )  # trigger=ON_DEATH=1
 
     def check_game_over_batch(self):
         """Set is_game_over and winner based on player HP."""

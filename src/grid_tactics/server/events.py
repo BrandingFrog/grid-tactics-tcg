@@ -12,6 +12,7 @@ from grid_tactics.server.room_manager import RoomManager
 from grid_tactics.server.view_filter import (
     enrich_last_action,
     enrich_pending_conjure_deploy,
+    enrich_pending_death_target,
     enrich_pending_post_move_attack,
     enrich_pending_tutor_for_viewer,
     filter_state_for_player,
@@ -116,8 +117,12 @@ def _emit_state_to_players(session, state, prev_state=None, resolved_action=None
     actions = legal_actions(state, session.library) if not state.is_game_over else ()
     serialized_actions = [serialize_action(a) for a in actions]
 
-    # Determine decision-maker
-    if state.phase == TurnPhase.REACT:
+    # Determine decision-maker. Pending death-target overrides phase because
+    # a death modal routes control to the dying minion's owner (which may
+    # not be the active player nor the react player).
+    if getattr(state, "pending_death_target", None) is not None:
+        decision_idx = int(state.pending_death_target.owner_idx)
+    elif state.phase == TurnPhase.REACT:
         decision_idx = state.react_player_idx
     else:
         decision_idx = state.active_player_idx
@@ -126,6 +131,7 @@ def _emit_state_to_players(session, state, prev_state=None, resolved_action=None
         filtered = filter_state_for_player(state_dict, idx)
         enrich_pending_tutor_for_viewer(state, filtered, idx, session.library)
         enrich_pending_conjure_deploy(state, filtered, idx, session.library)
+        enrich_pending_death_target(state, filtered, idx, session.library)
         emit("state_update", {
             "state": filtered,
             "legal_actions": serialized_actions if idx == decision_idx else [],
@@ -156,6 +162,7 @@ def _fanout_state_to_spectators(session, state, base_state_dict, resolved_action
         if not slot.god_mode:
             enrich_pending_tutor_for_viewer(state, spec_state, 0, session.library)
             enrich_pending_conjure_deploy(state, spec_state, 0, session.library)
+            enrich_pending_death_target(state, spec_state, 0, session.library)
         if event_name == "state_update":
             emit("state_update", {
                 "state": spec_state,
@@ -180,6 +187,7 @@ def _emit_game_over(session, state):
         filtered = filter_state_for_player(state_dict, idx)
         enrich_pending_tutor_for_viewer(state, filtered, idx, session.library)
         enrich_pending_conjure_deploy(state, filtered, idx, session.library)
+        enrich_pending_death_target(state, filtered, idx, session.library)
         emit("game_over", {
             "winner": int(state.winner) if state.winner is not None else None,
             "final_state": filtered,
@@ -206,6 +214,7 @@ def _fanout_game_start_to_spectators(session, base_state_dict, card_defs):
         if not slot.god_mode:
             enrich_pending_tutor_for_viewer(session.state, spec_state, 0, session.library)
             enrich_pending_conjure_deploy(session.state, spec_state, 0, session.library)
+            enrich_pending_death_target(session.state, spec_state, 0, session.library)
         emit(
             "game_start",
             {
@@ -320,6 +329,8 @@ def register_events(room_manager: RoomManager) -> None:
                 opponent_idx = 1 - idx
                 filtered = filter_state_for_player(state_dict, idx)
                 enrich_pending_tutor_for_viewer(session.state, filtered, idx, session.library)
+                enrich_pending_conjure_deploy(session.state, filtered, idx, session.library)
+                enrich_pending_death_target(session.state, filtered, idx, session.library)
                 emit(
                     "game_start",
                     {
@@ -369,6 +380,7 @@ def register_events(room_manager: RoomManager) -> None:
             if not god_mode:
                 enrich_pending_tutor_for_viewer(session.state, spec_state, 0, session.library)
                 enrich_pending_conjure_deploy(session.state, spec_state, 0, session.library)
+                enrich_pending_death_target(session.state, spec_state, 0, session.library)
             card_defs = _build_card_defs(session.library)
             emit("game_start", {
                 "your_player_idx": 0,
@@ -427,6 +439,8 @@ def register_events(room_manager: RoomManager) -> None:
             opponent_idx = 1 - idx
             filtered = filter_state_for_player(state_dict, idx)
             enrich_pending_tutor_for_viewer(new_session.state, filtered, idx, new_session.library)
+            enrich_pending_conjure_deploy(new_session.state, filtered, idx, new_session.library)
+            enrich_pending_death_target(new_session.state, filtered, idx, new_session.library)
             sid = new_session.player_sids[idx]
             if sid is None:
                 continue
@@ -522,8 +536,12 @@ def register_events(room_manager: RoomManager) -> None:
             emit("error", {"msg": "Game is already over"})
             return
 
-        # Step f: Determine decision-maker
-        if session.state.phase == TurnPhase.REACT:
+        # Step f: Determine decision-maker. Pending death-target overrides
+        # phase because a death modal routes control to the dying minion's
+        # owner (which may not be the active player nor the react player).
+        if getattr(session.state, "pending_death_target", None) is not None:
+            decision_idx = int(session.state.pending_death_target.owner_idx)
+        elif session.state.phase == TurnPhase.REACT:
             decision_idx = session.state.react_player_idx
         else:
             decision_idx = session.state.active_player_idx

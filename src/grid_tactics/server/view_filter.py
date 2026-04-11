@@ -294,6 +294,65 @@ def enrich_pending_tutor_for_viewer(
     filtered_dict["pending_tutor_total_copies_owned"] = totals
 
 
+def enrich_pending_death_target(
+    state, filtered_dict: dict, viewer_idx: int, library
+) -> None:
+    """Expose death-trigger modal state to the client.
+
+    Asymmetric: the dying minion's owner (the "picker") gets the full
+    payload — card identity, valid target positions, prompt text. The
+    opponent gets only a passive flag so they can show a "Waiting on
+    opponent to resolve Death effect" toast.
+
+    Mutates filtered_dict in place. Adds:
+      - pending_death_target_owner_idx: int | None (always)
+      - pending_death_card_numeric_id: int | None (picker only)
+      - pending_death_card_name: str | None (picker only)
+      - pending_death_filter: str | None (picker only, e.g. "enemy_minion")
+      - pending_death_valid_targets: list[[row, col]] (picker only)
+    """
+    target = getattr(state, "pending_death_target", None)
+
+    filtered_dict["pending_death_target_owner_idx"] = None
+    filtered_dict["pending_death_card_numeric_id"] = None
+    filtered_dict["pending_death_card_name"] = None
+    filtered_dict["pending_death_filter"] = None
+    filtered_dict["pending_death_valid_targets"] = []
+
+    if target is None:
+        return
+
+    filtered_dict["pending_death_target_owner_idx"] = int(target.owner_idx)
+
+    if viewer_idx != int(target.owner_idx):
+        # Opponent view — only the owner index is exposed (enough to
+        # render a "waiting on opponent" toast).
+        return
+
+    # Picker view: resolve card name + enumerate valid targets.
+    try:
+        card_def = library.get_by_id(int(target.card_numeric_id))
+    except Exception:
+        return
+
+    filtered_dict["pending_death_card_numeric_id"] = int(target.card_numeric_id)
+    filtered_dict["pending_death_card_name"] = card_def.name
+    filtered_dict["pending_death_filter"] = target.filter
+
+    # Valid targets: mirror legal_actions._pending_death_target_actions.
+    valid: list[list[int]] = []
+    if target.filter == "enemy_minion":
+        from grid_tactics.enums import PlayerSide
+        owner_side = PlayerSide(int(target.owner_idx))
+        for m in state.minions:
+            if m.owner == owner_side:
+                continue
+            if not m.is_alive:
+                continue
+            valid.append([int(m.position[0]), int(m.position[1])])
+    filtered_dict["pending_death_valid_targets"] = valid
+
+
 def enrich_pending_conjure_deploy(
     state, filtered_dict: dict, viewer_idx: int, library
 ) -> None:

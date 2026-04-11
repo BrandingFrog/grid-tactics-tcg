@@ -26,6 +26,7 @@ from grid_tactics.actions import (
     Action,
     attack_action,
     conjure_deploy_action,
+    death_target_pick_action,
     decline_conjure_action,
     decline_post_move_attack_action,
     decline_tutor_action,
@@ -73,6 +74,15 @@ def legal_actions(
     # Game is over -- no actions allowed
     if state.is_game_over:
         return ()
+
+    # Pending death-target (phase-agnostic): while a death-triggered modal
+    # is open, the only legal action is DEATH_TARGET_PICK targeting an
+    # eligible minion per the filter. This gate must come BEFORE every
+    # other pending/phase gate so cleanup-triggered modals are handled
+    # correctly regardless of whether the death happened during ACTION or
+    # REACT phase.
+    if state.pending_death_target is not None:
+        return _pending_death_target_actions(state)
 
     # Mutex: the two pending flavours must never coexist. Loud assert (defense
     # in depth on top of the asserts in _enter_pending_tutor / action_resolver).
@@ -346,6 +356,46 @@ def _pending_tutor_actions(state: GameState) -> tuple[Action, ...]:
         for i in range(len(state.pending_tutor_matches))
     ]
     actions.append(decline_tutor_action())
+    return tuple(actions)
+
+
+# ---------------------------------------------------------------------------
+# Pending death-target enumeration (death-triggered modal)
+# ---------------------------------------------------------------------------
+
+
+def _pending_death_target_actions(state: GameState) -> tuple[Action, ...]:
+    """Enumerate legal DEATH_TARGET_PICK actions while a death modal is open.
+
+    The filter on ``state.pending_death_target`` determines which minions
+    are eligible. Currently the only filter is ``enemy_minion`` — pick an
+    alive enemy of the dying minion's owner.
+
+    If no eligible targets exist (shouldn't happen in practice because
+    resolve_death_effects_or_enter_modal checks this and falls through to
+    no-op), returns an empty tuple — the caller (sandbox auto-pass, test
+    harness) should handle that gracefully.
+    """
+    target = state.pending_death_target
+    if target is None:
+        return ()
+
+    owner_side = PlayerSide(target.owner_idx)
+    actions: list[Action] = []
+
+    if target.filter == "enemy_minion":
+        for m in state.minions:
+            if m.owner == owner_side:
+                continue
+            if not m.is_alive:
+                continue
+            actions.append(death_target_pick_action(target_pos=m.position))
+    else:
+        # Future filters ("friendly_minion", "any_minion", etc.)
+        raise ValueError(
+            f"Unknown pending_death_target filter: {target.filter}"
+        )
+
     return tuple(actions)
 
 

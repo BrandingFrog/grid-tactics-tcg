@@ -717,6 +717,430 @@ class TestDeadMinionCleanup:
 
 
 # ---------------------------------------------------------------------------
+# Death-keyword tests: ordering, chain reactions, modal targeting, PROMOTE
+# parity. Added 2026-04-11 for the death-keyword-and-ordering fix. These
+# verify the four defects documented in
+# .planning/debug/death-keyword-and-ordering.md are resolved.
+# ---------------------------------------------------------------------------
+
+
+def _make_death_test_library() -> CardLibrary:
+    """Extended test library with cards exercising every on_death shape.
+
+    Card IDs (alphabetical ordering assigns numeric IDs):
+      0 = "test_die_destroy"    : DESTROY / SINGLE_TARGET on_death (modal path)
+      1 = "test_die_damage_all" : DAMAGE ALL_ENEMIES on_death (synchronous path)
+      2 = "test_die_promote"    : PROMOTE on_death (unique), promote_target=test_rat
+      3 = "test_melee"          : vanilla melee minion for bystanders
+      4 = "test_rat"            : small minion, target of promote
+    """
+    cards = {
+        "test_die_destroy": CardDefinition(
+            card_id="test_die_destroy", name="Destroy-on-Death",
+            card_type=CardType.MINION, mana_cost=3, attack=1, health=1, attack_range=0,
+            effects=(
+                EffectDefinition(
+                    effect_type=EffectType.DESTROY,
+                    trigger=TriggerType.ON_DEATH,
+                    target=TargetType.SINGLE_TARGET,
+                    amount=1,
+                ),
+            ),
+        ),
+        "test_die_damage_all": CardDefinition(
+            card_id="test_die_damage_all", name="Damage-on-Death",
+            card_type=CardType.MINION, mana_cost=2, attack=1, health=1, attack_range=0,
+            effects=(
+                EffectDefinition(
+                    effect_type=EffectType.DAMAGE,
+                    trigger=TriggerType.ON_DEATH,
+                    target=TargetType.ALL_ENEMIES,
+                    amount=1,
+                ),
+            ),
+        ),
+        "test_die_promote": CardDefinition(
+            card_id="test_die_promote", name="Promote-on-Death",
+            card_type=CardType.MINION, mana_cost=3, attack=3, health=3, attack_range=0,
+            effects=(
+                EffectDefinition(
+                    effect_type=EffectType.PROMOTE,
+                    trigger=TriggerType.ON_DEATH,
+                    target=TargetType.SELF_OWNER,
+                    amount=1,
+                ),
+            ),
+            promote_target="test_rat",
+            unique=True,
+        ),
+        "test_melee": CardDefinition(
+            card_id="test_melee", name="Test Melee",
+            card_type=CardType.MINION, mana_cost=2, attack=2, health=5, attack_range=0,
+        ),
+        "test_rat": CardDefinition(
+            card_id="test_rat", name="Test Rat",
+            card_type=CardType.MINION, mana_cost=1, attack=1, health=1, attack_range=0,
+        ),
+    }
+    return CardLibrary(cards)
+
+
+class TestDeathKeywordPromote:
+    """PROMOTE on_death parity: the Python engine now runs _apply_promote
+    (previously silently skipped). Mirrors the tensor engine implementation.
+    """
+
+    def test_promote_on_death_transforms_friendly_rat(self):
+        from grid_tactics.action_resolver import _cleanup_dead_minions
+
+        lib = _make_death_test_library()
+        promote_nid = lib.get_numeric_id("test_die_promote")
+        rat_nid = lib.get_numeric_id("test_rat")
+
+        # A dying "Promote-on-Death" (already at 0 hp) plus a friendly rat
+        # to promote into it. unique=True, no other live copy — should
+        # promote the rat.
+        dying = MinionInstance(
+            instance_id=0, card_numeric_id=promote_nid,
+            owner=PlayerSide.PLAYER_1, position=(2, 2), current_health=0,
+        )
+        rat = MinionInstance(
+            instance_id=1, card_numeric_id=rat_nid,
+            owner=PlayerSide.PLAYER_1, position=(1, 0), current_health=1,
+        )
+        state = _make_state(minions=[dying, rat])
+        new_state = _cleanup_dead_minions(state, lib)
+
+        # Dying minion is gone; rat has been transformed into promote.
+        assert new_state.get_minion(0) is None
+        rat_after = new_state.get_minion(1)
+        assert rat_after is not None
+        assert rat_after.card_numeric_id == promote_nid
+        assert rat_after.current_health == 3  # promote card base hp
+        assert rat_after.attack_bonus == 0
+
+    def test_promote_unique_constraint_skips_when_copy_alive(self):
+        from grid_tactics.action_resolver import _cleanup_dead_minions
+
+        lib = _make_death_test_library()
+        promote_nid = lib.get_numeric_id("test_die_promote")
+        rat_nid = lib.get_numeric_id("test_rat")
+
+        dying = MinionInstance(
+            instance_id=0, card_numeric_id=promote_nid,
+            owner=PlayerSide.PLAYER_1, position=(2, 2), current_health=0,
+        )
+        live_copy = MinionInstance(
+            instance_id=1, card_numeric_id=promote_nid,
+            owner=PlayerSide.PLAYER_1, position=(3, 3), current_health=3,
+        )
+        rat = MinionInstance(
+            instance_id=2, card_numeric_id=rat_nid,
+            owner=PlayerSide.PLAYER_1, position=(1, 0), current_health=1,
+        )
+        state = _make_state(minions=[dying, live_copy, rat])
+        new_state = _cleanup_dead_minions(state, lib)
+
+        # unique=True + another live copy exists -> promote is skipped.
+        rat_after = new_state.get_minion(2)
+        assert rat_after is not None
+        assert rat_after.card_numeric_id == rat_nid  # unchanged
+
+    def test_promote_picks_most_advanced_friendly(self):
+        from grid_tactics.action_resolver import _cleanup_dead_minions
+
+        lib = _make_death_test_library()
+        promote_nid = lib.get_numeric_id("test_die_promote")
+        rat_nid = lib.get_numeric_id("test_rat")
+
+        dying = MinionInstance(
+            instance_id=0, card_numeric_id=promote_nid,
+            owner=PlayerSide.PLAYER_1, position=(2, 2), current_health=0,
+        )
+        back_rat = MinionInstance(
+            instance_id=1, card_numeric_id=rat_nid,
+            owner=PlayerSide.PLAYER_1, position=(0, 0), current_health=1,
+        )
+        forward_rat = MinionInstance(
+            instance_id=2, card_numeric_id=rat_nid,
+            owner=PlayerSide.PLAYER_1, position=(3, 0), current_health=1,
+        )
+        state = _make_state(minions=[dying, back_rat, forward_rat])
+        new_state = _cleanup_dead_minions(state, lib)
+
+        # P1 forward = higher row. forward_rat (row 3) is the pick.
+        forward_after = new_state.get_minion(2)
+        back_after = new_state.get_minion(1)
+        assert forward_after is not None
+        assert forward_after.card_numeric_id == promote_nid
+        assert back_after.card_numeric_id == rat_nid  # unchanged
+
+
+class TestDeathKeywordOrdering:
+    """Active-player-first death ordering: when minions from both sides die
+    in the same cleanup pass, the active player's on_death effects fire
+    first (within each side, instance_id ascending = play order)."""
+
+    def test_active_player_deaths_fire_before_opponent(self):
+        from grid_tactics.action_resolver import _cleanup_dead_minions
+
+        lib = _make_death_test_library()
+        damage_nid = lib.get_numeric_id("test_die_damage_all")
+        melee_nid = lib.get_numeric_id("test_melee")
+
+        # Two dying minions, one per side, active player = P2.
+        # Each has DAMAGE ALL_ENEMIES on_death (amount=1).
+        # P2 is active, so P2's dying minion fires first. Its "enemies"
+        # are P1 minions (including the other dying minion, which is
+        # already at 0 hp — no change). P1's dying effect fires second;
+        # its enemy is a live P2 bystander.
+        p1_dying = MinionInstance(
+            instance_id=0, card_numeric_id=damage_nid,
+            owner=PlayerSide.PLAYER_1, position=(1, 0), current_health=0,
+        )
+        p2_dying = MinionInstance(
+            instance_id=1, card_numeric_id=damage_nid,
+            owner=PlayerSide.PLAYER_2, position=(3, 0), current_health=0,
+        )
+        p2_bystander = MinionInstance(
+            instance_id=2, card_numeric_id=melee_nid,
+            owner=PlayerSide.PLAYER_2, position=(4, 4), current_health=5,
+        )
+        p1_bystander = MinionInstance(
+            instance_id=3, card_numeric_id=melee_nid,
+            owner=PlayerSide.PLAYER_1, position=(0, 4), current_health=5,
+        )
+        state = _make_state(
+            minions=[p1_dying, p2_dying, p2_bystander, p1_bystander],
+            active_player_idx=1,  # P2 active
+        )
+        new_state = _cleanup_dead_minions(state, lib)
+
+        # Both bystanders took 1 damage from their opposing dying minion.
+        assert new_state.get_minion(2).current_health == 4  # P2 bystander
+        assert new_state.get_minion(3).current_health == 4  # P1 bystander
+        # Both dying minions removed.
+        assert new_state.get_minion(0) is None
+        assert new_state.get_minion(1) is None
+        # Queue is empty post-drain.
+        assert new_state.pending_death_queue == ()
+        assert new_state.pending_death_target is None
+
+    def test_ordering_tiebreak_by_instance_id(self):
+        from grid_tactics.action_resolver import _cleanup_dead_minions
+
+        lib = _make_death_test_library()
+        damage_nid = lib.get_numeric_id("test_die_damage_all")
+        melee_nid = lib.get_numeric_id("test_melee")
+
+        # Two P1 dying minions with different instance_ids; P1 is active.
+        # Both fire DAMAGE ALL_ENEMIES 1 in order. Verify instance_id
+        # ordering by observing that the bystander takes the full 2
+        # damage (both effects resolved, order doesn't affect final
+        # value here but confirms both were processed).
+        dying_a = MinionInstance(
+            instance_id=5, card_numeric_id=damage_nid,
+            owner=PlayerSide.PLAYER_1, position=(1, 0), current_health=0,
+        )
+        dying_b = MinionInstance(
+            instance_id=3, card_numeric_id=damage_nid,
+            owner=PlayerSide.PLAYER_1, position=(2, 0), current_health=0,
+        )
+        bystander = MinionInstance(
+            instance_id=1, card_numeric_id=melee_nid,
+            owner=PlayerSide.PLAYER_2, position=(4, 4), current_health=5,
+        )
+        state = _make_state(
+            minions=[dying_a, dying_b, bystander],
+            active_player_idx=0,
+        )
+        new_state = _cleanup_dead_minions(state, lib)
+
+        # Bystander took 2 damage (one per dying minion's on_death).
+        assert new_state.get_minion(1).current_health == 3
+
+
+class TestDeathKeywordChainReaction:
+    """Chain-reaction death cleanup: an on_death effect that kills another
+    minion causes that minion's on_death to fire in the same cleanup call.
+    Previously the Python engine was one-pass and leaked chain deaths."""
+
+    def test_chain_death_damage_kills_another_minion_with_on_death(self):
+        from grid_tactics.action_resolver import _cleanup_dead_minions
+
+        lib = _make_death_test_library()
+        damage_nid = lib.get_numeric_id("test_die_damage_all")
+        melee_nid = lib.get_numeric_id("test_melee")
+
+        # P1 dying with DAMAGE ALL_ENEMIES 1. A P2 minion with
+        # DAMAGE ALL_ENEMIES on_death has 1 hp — will be killed by the
+        # chain. Its on_death should then fire in the same cleanup pass
+        # and damage a P1 bystander.
+        p1_dying = MinionInstance(
+            instance_id=0, card_numeric_id=damage_nid,
+            owner=PlayerSide.PLAYER_1, position=(1, 0), current_health=0,
+        )
+        p2_chain = MinionInstance(
+            instance_id=1, card_numeric_id=damage_nid,
+            owner=PlayerSide.PLAYER_2, position=(3, 0), current_health=1,
+        )
+        p1_bystander = MinionInstance(
+            instance_id=2, card_numeric_id=melee_nid,
+            owner=PlayerSide.PLAYER_1, position=(0, 4), current_health=5,
+        )
+        state = _make_state(
+            minions=[p1_dying, p2_chain, p1_bystander],
+            active_player_idx=0,
+        )
+        new_state = _cleanup_dead_minions(state, lib)
+
+        # Chain resolved: p2_chain killed by p1_dying's effect, then its
+        # own on_death damaged p1_bystander (5 - 1 = 4).
+        assert new_state.get_minion(0) is None
+        assert new_state.get_minion(1) is None
+        assert new_state.get_minion(2).current_health == 4
+        assert new_state.pending_death_queue == ()
+
+
+class TestDeathKeywordLasercannonModal:
+    """Lasercannon's DESTROY / SINGLE_TARGET on_death opens a click-target
+    modal. The dying minion's owner picks an enemy to destroy; between the
+    death and the pick, the engine is parked in pending_death_target state
+    and blocks other actions."""
+
+    def test_modal_opens_when_destroy_on_death_has_enemy_targets(self):
+        from grid_tactics.action_resolver import _cleanup_dead_minions
+
+        lib = _make_death_test_library()
+        destroy_nid = lib.get_numeric_id("test_die_destroy")
+        melee_nid = lib.get_numeric_id("test_melee")
+
+        # P1 Lasercannon-alike dies; P2 has two melee bystanders; the
+        # modal should fire and wait for P1 to pick one to destroy.
+        dying = MinionInstance(
+            instance_id=0, card_numeric_id=destroy_nid,
+            owner=PlayerSide.PLAYER_1, position=(2, 2), current_health=0,
+        )
+        enemy_a = MinionInstance(
+            instance_id=1, card_numeric_id=melee_nid,
+            owner=PlayerSide.PLAYER_2, position=(3, 0), current_health=5,
+        )
+        enemy_b = MinionInstance(
+            instance_id=2, card_numeric_id=melee_nid,
+            owner=PlayerSide.PLAYER_2, position=(3, 4), current_health=5,
+        )
+        state = _make_state(
+            minions=[dying, enemy_a, enemy_b],
+            active_player_idx=0,
+        )
+        new_state = _cleanup_dead_minions(state, lib)
+
+        assert new_state.pending_death_target is not None
+        assert new_state.pending_death_target.owner_idx == 0
+        assert new_state.pending_death_target.card_numeric_id == destroy_nid
+        assert new_state.pending_death_target.filter == "enemy_minion"
+        # Both enemies still alive, modal parks waiting for the pick.
+        assert new_state.get_minion(1) is not None
+        assert new_state.get_minion(2) is not None
+
+    def test_modal_no_op_when_no_legal_target(self):
+        from grid_tactics.action_resolver import _cleanup_dead_minions
+
+        lib = _make_death_test_library()
+        destroy_nid = lib.get_numeric_id("test_die_destroy")
+
+        # Dying minion, no enemies on the board -> modal auto-skips.
+        dying = MinionInstance(
+            instance_id=0, card_numeric_id=destroy_nid,
+            owner=PlayerSide.PLAYER_1, position=(2, 2), current_health=0,
+        )
+        state = _make_state(minions=[dying], active_player_idx=0)
+        new_state = _cleanup_dead_minions(state, lib)
+
+        assert new_state.pending_death_target is None
+        assert new_state.pending_death_queue == ()
+
+    def test_modal_pick_resolves_and_destroys_picked_enemy(self):
+        from grid_tactics.action_resolver import resolve_action
+        from grid_tactics.effect_resolver import apply_death_target_pick
+
+        lib = _make_death_test_library()
+        destroy_nid = lib.get_numeric_id("test_die_destroy")
+        melee_nid = lib.get_numeric_id("test_melee")
+
+        attacker = MinionInstance(
+            instance_id=0, card_numeric_id=melee_nid,
+            owner=PlayerSide.PLAYER_1, position=(1, 0), current_health=5,
+        )
+        defender = MinionInstance(
+            instance_id=1, card_numeric_id=destroy_nid,
+            owner=PlayerSide.PLAYER_2, position=(2, 0), current_health=1,
+        )
+        target_a = MinionInstance(
+            instance_id=2, card_numeric_id=melee_nid,
+            owner=PlayerSide.PLAYER_1, position=(4, 2), current_health=5,
+        )
+        state = _make_state(minions=[attacker, defender, target_a])
+        # P1 attacks, killing defender -> defender's modal opens for P2.
+        action = Action(action_type=ActionType.ATTACK, minion_id=0, target_id=1)
+        new_state = resolve_action(state, action, lib)
+
+        assert new_state.pending_death_target is not None
+        assert new_state.pending_death_target.owner_idx == 1  # P2 (defender's owner)
+
+        # P2 submits DEATH_TARGET_PICK at target_a's position.
+        pick = Action(
+            action_type=ActionType.DEATH_TARGET_PICK,
+            target_pos=(4, 2),
+        )
+        final = resolve_action(new_state, pick, lib)
+
+        # Defender destroyed, target_a destroyed by the modal DESTROY
+        # effect (health set to 0 then cleanup removed it).
+        assert final.get_minion(1) is None
+        assert final.get_minion(2) is None
+        assert final.pending_death_target is None
+        assert final.pending_death_queue == ()
+        # Phase transitioned to REACT after the modal drained.
+        assert final.phase == TurnPhase.REACT
+        assert final.react_player_idx == 1
+
+    def test_legal_actions_during_pending_death_modal(self):
+        from grid_tactics.action_resolver import _cleanup_dead_minions
+        from grid_tactics.legal_actions import legal_actions
+
+        lib = _make_death_test_library()
+        destroy_nid = lib.get_numeric_id("test_die_destroy")
+        melee_nid = lib.get_numeric_id("test_melee")
+
+        dying = MinionInstance(
+            instance_id=0, card_numeric_id=destroy_nid,
+            owner=PlayerSide.PLAYER_1, position=(2, 2), current_health=0,
+        )
+        enemy_a = MinionInstance(
+            instance_id=1, card_numeric_id=melee_nid,
+            owner=PlayerSide.PLAYER_2, position=(3, 0), current_health=5,
+        )
+        enemy_b = MinionInstance(
+            instance_id=2, card_numeric_id=melee_nid,
+            owner=PlayerSide.PLAYER_2, position=(3, 4), current_health=5,
+        )
+        state = _make_state(
+            minions=[dying, enemy_a, enemy_b],
+            active_player_idx=0,
+        )
+        new_state = _cleanup_dead_minions(state, lib)
+
+        assert new_state.pending_death_target is not None
+        la = legal_actions(new_state, lib)
+        # Only DEATH_TARGET_PICK actions, one per valid enemy minion tile.
+        assert len(la) == 2
+        for a in la:
+            assert a.action_type == ActionType.DEATH_TARGET_PICK
+            assert a.target_pos in ((3, 0), (3, 4))
+
+
+# ---------------------------------------------------------------------------
 # Phase transition tests
 # ---------------------------------------------------------------------------
 

@@ -18,7 +18,7 @@ from grid_tactics.board import Board
 from grid_tactics.card_library import CardLibrary
 from grid_tactics.cards import CardDefinition, EffectDefinition
 from grid_tactics.enums import EffectType, PlayerSide, TargetType, TriggerType
-from grid_tactics.game_state import GameState
+from grid_tactics.game_state import GameState, PendingDeathTarget
 from grid_tactics.minion import MinionInstance
 from grid_tactics.player import Player
 from grid_tactics.types import STARTING_HP
@@ -126,9 +126,12 @@ def _apply_effect_to_minion(
     """Apply an effect to a single minion based on effect_type.
 
     Effect types that don't apply to a minion (CONJURE, TUTOR, RALLY,
-    PROMOTE, NEGATE, DEPLOY_SELF, LEAP, DARK_MATTER_BUFF) are silently
-    skipped here — they're handled by other code paths or are
-    informational/state markers that don't mutate minion stats directly.
+    NEGATE, DEPLOY_SELF, LEAP, DARK_MATTER_BUFF) are silently skipped
+    here — they're handled by other code paths or are informational/
+    state markers that don't mutate minion stats directly. PROMOTE
+    is handled by ``_apply_promote_on_death`` dispatched from
+    ``resolve_effects_for_trigger``; it transforms a friendly minion
+    rather than mutating the dying one, so it doesn't fit this helper.
     """
     if effect.effect_type == EffectType.DAMAGE:
         return _apply_damage_to_minion(state, minion, effect.amount)
@@ -418,11 +421,289 @@ def resolve_effects_for_trigger(
             state = _resolve_conjure(state, card_def, minion.owner, library)
         elif effect.effect_type == EffectType.RALLY_FORWARD:
             state = _apply_rally_forward(state, minion)
+        elif effect.effect_type == EffectType.PROMOTE:
+            state = _apply_promote_on_death(
+                state, minion.card_numeric_id, minion.owner, library,
+            )
         else:
             state = resolve_effect(
                 state, effect, minion.position, minion.owner, library, target_pos,
             )
     return state
+
+
+def _death_effect_needs_modal(effect: EffectDefinition) -> bool:
+    """Return True if a death-trigger effect requires a click-target modal.
+
+    Currently the only such shape is ``DESTROY / SINGLE_TARGET`` (Lasercannon
+    on_death). The dying minion's owner must click an enemy minion to
+    destroy it — there's no automatic target resolution path that makes
+    sense, so we enter the modal. Future shapes (DAMAGE / SINGLE_TARGET
+    on death, BUFF_HEALTH / SINGLE_TARGET on death, etc.) can be added
+    here as they come up.
+    """
+    return (
+        effect.trigger == TriggerType.ON_DEATH
+        and effect.target == TargetType.SINGLE_TARGET
+        and effect.effect_type == EffectType.DESTROY
+    )
+
+
+def resolve_death_effects_or_enter_modal(
+    state: GameState,
+    card_numeric_id: int,
+    owner: PlayerSide,
+    position: tuple[int, int],
+    instance_id: int,
+    library: CardLibrary,
+    start_idx: int,
+) -> tuple[GameState, int]:
+    """Resolve a dead minion's on_death effects sequentially, with modal support.
+
+    Iterates the card's effects tuple starting at ``start_idx``. For each
+    ON_DEATH effect:
+
+      - If the effect needs a click-target modal and no legal auto-target
+        exists (e.g. Lasercannon destroy/single_target with enemy minions
+        on the board), set ``state.pending_death_target`` and STOP.
+        Returns ``(state, idx)`` where ``idx`` is the index of the
+        modal-pending effect (the caller uses this to resume after the
+        user submits DEATH_TARGET_PICK).
+
+      - If the modal effect has no valid target available (no enemy
+        minions on the board), auto-skip it as a silent no-op.
+
+      - Otherwise, resolve the effect synchronously via the standard
+        path (``_apply_promote_on_death``, ``_resolve_conjure``, etc.).
+
+    Returns:
+        (new_state, next_idx) — next_idx == len(effects) means "fully drained,
+        move on to the next dead minion". next_idx in [0, len(effects)) means
+        "a modal was opened at that index; resume there after the pick
+        resolves".
+    """
+    try:
+        card_def = library.get_by_id(card_numeric_id)
+    except KeyError:
+        return state, -1
+
+    effects = card_def.effects
+
+    # Collect the indices of ON_DEATH effects (preserve ordering).
+    death_indices = [
+        i for i, e in enumerate(effects) if e.trigger == TriggerType.ON_DEATH
+    ]
+    if not death_indices:
+        return state, -1
+
+    # Find our resume point in the death-effects list.
+    remaining = [i for i in death_indices if i >= start_idx]
+
+    for i in remaining:
+        effect = effects[i]
+
+        if _death_effect_needs_modal(effect):
+            # Check that at least one legal target exists; otherwise no-op.
+            has_target = any(
+                m.owner != owner and m.is_alive for m in state.minions
+            )
+            if not has_target:
+                # No valid targets — silent no-op, advance past this effect.
+                continue
+
+            # Defense: don't clobber an already-set modal. The cleanup
+            # driver always drains before re-entering.
+            assert state.pending_death_target is None, (
+                "resolve_death_effects_or_enter_modal called while "
+                "pending_death_target already set"
+            )
+            target = PendingDeathTarget(
+                card_numeric_id=card_numeric_id,
+                owner_idx=int(owner),
+                dying_instance_id=instance_id,
+                effect_idx=i,
+                filter="enemy_minion",
+            )
+            return replace(state, pending_death_target=target), i
+
+        # Synchronous resolution path.
+        if effect.effect_type == EffectType.TUTOR:
+            # Death-triggered tutor not currently used by any card; if it
+            # shows up it will enter pending_tutor just like on_play tutor.
+            state = _enter_pending_tutor(state, card_def, owner, library)
+        elif effect.effect_type == EffectType.CONJURE:
+            state = _resolve_conjure(state, card_def, owner, library)
+        elif effect.effect_type == EffectType.PROMOTE:
+            state = _apply_promote_on_death(
+                state, card_numeric_id, owner, library,
+            )
+        elif effect.effect_type == EffectType.RALLY_FORWARD:
+            # RALLY_FORWARD on death would need a mover reference; no live
+            # card uses it, but keep the dispatch symmetric with
+            # resolve_effects_for_trigger so a future card can slot in.
+            pass
+        else:
+            state = resolve_effect(
+                state, effect, position, owner, library, target_pos=None,
+            )
+
+    return state, -1
+
+
+def apply_death_target_pick(
+    state: GameState,
+    target_pos: tuple[int, int],
+    library: CardLibrary,
+) -> GameState:
+    """Resolve the pending death-target modal with the user's pick.
+
+    Called from ``action_resolver`` when a DEATH_TARGET_PICK action lands.
+    Looks up the pending effect via ``state.pending_death_target``, applies
+    it to the chosen target_pos, clears the pending-target field, and
+    advances the head of ``state.pending_death_queue`` past the resolved
+    effect. The caller (``_drain_pending_death_queue`` in
+    action_resolver) is responsible for continuing the death-cleanup
+    loop after this returns.
+
+    Validation: raises ``ValueError`` if there is no pending death target,
+    if the picked position doesn't contain a valid target, or if the
+    effect_idx is stale.
+    """
+    target = state.pending_death_target
+    if target is None:
+        raise ValueError("DEATH_TARGET_PICK submitted with no pending_death_target")
+
+    card_def = library.get_by_id(target.card_numeric_id)
+    if target.effect_idx < 0 or target.effect_idx >= len(card_def.effects):
+        raise ValueError(
+            f"DEATH_TARGET_PICK: stale effect_idx {target.effect_idx} "
+            f"on card {card_def.card_id}"
+        )
+    effect = card_def.effects[target.effect_idx]
+    if effect.trigger != TriggerType.ON_DEATH:
+        raise ValueError(
+            f"DEATH_TARGET_PICK: effect at index {target.effect_idx} "
+            f"is not an ON_DEATH trigger"
+        )
+
+    # Validate the click target against the filter.
+    picked = _find_minion_at_pos(state.minions, target_pos)
+    if picked is None or not picked.is_alive:
+        raise ValueError(f"DEATH_TARGET_PICK: no alive minion at {target_pos}")
+    if target.filter == "enemy_minion":
+        owner_side = PlayerSide(target.owner_idx)
+        if picked.owner == owner_side:
+            raise ValueError(
+                f"DEATH_TARGET_PICK: target {target_pos} is friendly to the "
+                f"dying minion's owner (filter=enemy_minion)"
+            )
+
+    # Resolve the effect. For DESTROY, kill the picked minion by zeroing
+    # its health — regular cleanup will remove it and fire its own on_death
+    # as a chain-reaction on the next pass.
+    if effect.effect_type == EffectType.DESTROY:
+        new_picked = replace(picked, current_health=0)
+        new_minions = _replace_minion(state.minions, picked.instance_id, new_picked)
+        state = replace(state, minions=new_minions)
+    else:
+        # Future-proof: other effect types that could use this modal path.
+        state = resolve_effect(
+            state,
+            effect,
+            caster_pos=(0, 0),
+            caster_owner=PlayerSide(target.owner_idx),
+            library=library,
+            target_pos=target_pos,
+        )
+
+    # Advance the head of the pending queue past this effect.
+    queue = list(state.pending_death_queue)
+    if queue:
+        head = queue[0]
+        queue[0] = replace(head, next_effect_idx=target.effect_idx + 1)
+    state = replace(
+        state,
+        pending_death_target=None,
+        pending_death_queue=tuple(queue),
+    )
+    return state
+
+
+def _apply_promote_on_death(
+    state: GameState,
+    dying_card_numeric_id: int,
+    dying_owner: PlayerSide,
+    library: CardLibrary,
+) -> GameState:
+    """PROMOTE on death: transform a friendly ``promote_target`` minion into
+    the dying card. Mirrors ``tensor_engine/effects.py::_apply_promote``.
+
+    Rules (locked, matches tensor engine):
+      - Find all friendly, alive minions whose card_id == ``promote_target``.
+      - If the dying card is ``unique``, skip entirely when another copy of
+        the dying card is still alive on the owner's board.
+      - Among candidates, pick the most advanced one (closest to the
+        enemy's back row). Tiebreak by lowest column, then lowest
+        instance_id, for determinism.
+      - Transform in-place: set ``card_numeric_id`` to the dying card,
+        reset ``current_health`` to the dying card's base health, clear
+        ``attack_bonus`` (base attack now comes from the new card def),
+        clear ``max_health_bonus``.
+
+    Returns a new GameState. No-op if promote_target is unset, no valid
+    candidate exists, or the unique constraint is violated.
+    """
+    try:
+        dying_card_def = library.get_by_id(dying_card_numeric_id)
+    except KeyError:
+        return state
+
+    if not dying_card_def.promote_target:
+        return state
+
+    try:
+        target_card_numeric_id = library.get_numeric_id(dying_card_def.promote_target)
+    except KeyError:
+        return state
+
+    # Unique constraint: bail if another copy of the dying card is alive.
+    if dying_card_def.unique:
+        for m in state.minions:
+            if m.owner != dying_owner:
+                continue
+            if not m.is_alive:
+                continue
+            if m.card_numeric_id == dying_card_numeric_id:
+                return state
+
+    # Find candidates: friendly, alive, correct card_id.
+    candidates = [
+        m for m in state.minions
+        if m.owner == dying_owner
+        and m.is_alive
+        and m.card_numeric_id == target_card_numeric_id
+    ]
+    if not candidates:
+        return state
+
+    # Pick the most advanced: P1 wants highest row (forward = +1 toward row 4),
+    # P2 wants lowest row (forward = -1 toward row 0). Tiebreak by column
+    # then instance_id for determinism.
+    if dying_owner == PlayerSide.PLAYER_1:
+        candidates.sort(key=lambda m: (-m.position[0], m.position[1], m.instance_id))
+    else:
+        candidates.sort(key=lambda m: (m.position[0], m.position[1], m.instance_id))
+
+    chosen = candidates[0]
+    promoted = replace(
+        chosen,
+        card_numeric_id=dying_card_numeric_id,
+        current_health=dying_card_def.health,
+        attack_bonus=0,
+        max_health_bonus=0,
+    )
+    new_minions = _replace_minion(state.minions, chosen.instance_id, promoted)
+    return replace(state, minions=new_minions)
 
 
 def _apply_rally_forward(

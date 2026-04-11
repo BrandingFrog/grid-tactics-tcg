@@ -3304,6 +3304,7 @@ function renderGame() {
     // AnimationQueue via applyStateFrame as above.
     syncPendingTutorUI();
     syncPendingConjureDeployUI();
+    syncPendingDeathTargetUI();
     // Always refresh highlights — even when it's not my turn — so stale
     // .card-playable classes from the previous render are cleared.
     highlightBoard();
@@ -3646,9 +3647,24 @@ function onHandCardClick(handIdx) {
 // Handle clicking a board cell
 function onBoardCellClick(row, col) {
     if (isSpectator) return;  // spectators are read-only
-    if (isReactWindow()) return;  // board clicks are inert during react window
+    // Board clicks are inert during react window EXCEPT when a death
+    // target pick is pending — the modal routes through the cell click
+    // handler and must not be blocked by react-window gating.
+    if (isReactWindow() && interactionMode !== 'death_target_pick') return;
     var isMyTurn = legalActions && legalActions.length > 0;
     if (!isMyTurn) return;
+
+    // Death-target pick mode. Click a valid enemy minion tile to submit
+    // DEATH_TARGET_PICK. Valid targets come from pending_death_valid_targets
+    // on the state frame. Everything else is inert.
+    if (interactionMode === 'death_target_pick') {
+        var validDeath = (gameState && gameState.pending_death_valid_targets) || [];
+        var isValidDeath = validDeath.some(function(p) { return p[0] === row && p[1] === col; });
+        if (!isValidDeath) return;
+        // ActionType.DEATH_TARGET_PICK = 14
+        submitAction({ action_type: 14, target_pos: [row, col] });
+        return;
+    }
 
     // Phase 14.6: conjure deploy mode. Player picks a tile to deploy the
     // conjured card. Valid positions are highlighted; everything else is inert.
@@ -3779,13 +3795,22 @@ function onBoardCellClick(row, col) {
 // Handle clicking a board minion
 function onBoardMinionClick(minion) {
     if (isSpectator) return;  // spectators are read-only
-    if (isReactWindow()) return;  // board clicks are inert during react window
+    // Board clicks are inert during react window EXCEPT when a death
+    // target pick is pending (see onBoardCellClick comment).
+    if (isReactWindow() && interactionMode !== 'death_target_pick') return;
     var isMyTurn = legalActions && legalActions.length > 0;
     if (!isMyTurn) return;
 
     // Phase 14.1: in post-move attack-pick mode, only enemy clicks on valid
     // target tiles are honored — selecting other minions is inert.
     if (interactionMode === 'post_move_attack_pick') {
+        onBoardCellClick(minion.position[0], minion.position[1]);
+        return;
+    }
+
+    // Death-target pick mode: defer to the cell click path so the same
+    // valid-target filter runs.
+    if (interactionMode === 'death_target_pick') {
         onBoardCellClick(minion.position[0], minion.position[1]);
         return;
     }
@@ -4295,6 +4320,75 @@ function showOpponentConjuringToast() {
     document.body.appendChild(toast);
 }
 
+// =============================================
+// Death-trigger modal UI (e.g. Lasercannon on_death destroy)
+// =============================================
+
+var deathTargetActive = false;
+
+function syncPendingDeathTargetUI() {
+    if (!gameState) {
+        closeDeathTargetUI();
+        return;
+    }
+    var ownerIdx = gameState.pending_death_target_owner_idx;
+    if (ownerIdx == null) {
+        closeDeathTargetUI();
+        return;
+    }
+    if (ownerIdx === myPlayerIdx) {
+        // I'm the picker — enter death-target mode. Click an enemy minion
+        // (highlighted as a valid target) to submit DEATH_TARGET_PICK.
+        if (!deathTargetActive) {
+            deathTargetActive = true;
+            interactionMode = 'death_target_pick';
+            showDeathTargetPickerUI();
+        }
+    } else {
+        // Opponent is picking — passive toast, no modal.
+        closeDeathTargetUI();
+        showOpponentDeathPickToast();
+    }
+}
+
+function showDeathTargetPickerUI() {
+    closeDeathTargetUI();
+    deathTargetActive = true;
+
+    var banner = document.createElement('div');
+    banner.id = 'death-target-banner';
+    banner.className = 'tutor-toast';
+    banner.style.background = '#7a1b1b';
+    banner.style.top = '60px';
+
+    var cardName = gameState.pending_death_card_name || 'Death effect';
+    banner.textContent = 'Pick an enemy to destroy (' + cardName + ' death)';
+    document.body.appendChild(banner);
+
+    highlightBoard();
+}
+
+function closeDeathTargetUI() {
+    var existing = document.getElementById('death-target-banner');
+    if (existing) existing.remove();
+    var toast = document.getElementById('opponent-death-pick-toast');
+    if (toast) toast.remove();
+    if (deathTargetActive) {
+        deathTargetActive = false;
+        if (interactionMode === 'death_target_pick') interactionMode = null;
+    }
+}
+
+function showOpponentDeathPickToast() {
+    if (document.getElementById('opponent-death-pick-toast')) return;
+    var toast = document.createElement('div');
+    toast.id = 'opponent-death-pick-toast';
+    toast.className = 'tutor-toast';
+    toast.style.background = '#7a1b1b';
+    toast.textContent = 'Opponent is choosing a target for a Death effect\u2026';
+    document.body.appendChild(toast);
+}
+
 function findCardNameByNid(nid) {
     if (cardDefsMap && cardDefsMap[nid]) return cardDefsMap[nid].name || ('Card #' + nid);
     return 'Card #' + nid;
@@ -4329,6 +4423,19 @@ function highlightBoard() {
             }
         });
         return;  // Skip the regular selection-driven highlighting
+    }
+
+    // Death-target pick tile highlighting (click-target death modal).
+    if (interactionMode === 'death_target_pick' && gameState) {
+        var deathTargets = gameState.pending_death_valid_targets || [];
+        deathTargets.forEach(function(p) {
+            var cell = document.querySelector('.board-cell[data-row="' + p[0] + '"][data-col="' + p[1] + '"]');
+            if (cell) {
+                cell.classList.add('cell-attack');
+                cell.classList.add('attack-valid-target');
+            }
+        });
+        return;  // Skip regular highlighting
     }
 
     // Phase 14.6: conjure deploy tile highlighting.

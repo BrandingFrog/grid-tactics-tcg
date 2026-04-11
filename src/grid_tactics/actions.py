@@ -161,6 +161,20 @@ def decline_conjure_action() -> Action:
     return Action(action_type=ActionType.DECLINE_CONJURE)
 
 
+def death_target_pick_action(target_pos: tuple[int, int]) -> Action:
+    """Create a DEATH_TARGET_PICK action for resolving a pending death modal.
+
+    Only legal while ``state.pending_death_target`` is set. ``target_pos`` is
+    the board tile of the minion the owner selected. Server-only; not part
+    of the RL tensor action space (the tensor engine auto-resolves death
+    modals deterministically — see tensor_engine/engine.py::cleanup_dead_minions_batch).
+    """
+    return Action(
+        action_type=ActionType.DEATH_TARGET_PICK,
+        target_pos=target_pos,
+    )
+
+
 def transform_action(
     minion_id: int,
     transform_target: str,
