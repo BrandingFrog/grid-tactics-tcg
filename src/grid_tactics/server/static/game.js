@@ -5625,17 +5625,18 @@ function renderSandboxSlotList(slots) {
     sandboxKnownSlots.forEach(function(name) {
         var row = document.createElement('div');
         row.className = 'sandbox-slot-row';
+        row.dataset.slotName = name;  // stable test hook
         var nameSpan = document.createElement('span');
         nameSpan.className = 'sandbox-slot-name';
         nameSpan.textContent = name;
         var loadBtn = document.createElement('button');
-        loadBtn.className = 'btn btn-sm';
+        loadBtn.className = 'btn btn-sm sandbox-slot-load-btn';
         loadBtn.textContent = 'Load';
         loadBtn.addEventListener('click', function() {
             socket.emit('sandbox_load_slot', { slot_name: name });
         });
         var deleteBtn = document.createElement('button');
-        deleteBtn.className = 'btn btn-sm';
+        deleteBtn.className = 'btn btn-sm sandbox-slot-delete-btn';
         deleteBtn.textContent = 'Delete';
         deleteBtn.addEventListener('click', function() {
             if (confirm('Delete server slot "' + name + '"? This cannot be undone.')) {
