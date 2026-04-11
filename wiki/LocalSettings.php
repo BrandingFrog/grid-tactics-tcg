@@ -112,3 +112,30 @@ $smwgEnabledQueryDependencyLinksStore = true;
 # Query limits — sensible defaults for a ~20 card wiki
 $smwgQMaxSize = 16;
 $smwgQDefaultLimit = 50;
+
+# --- Error logging (operational) ---------------------------------------------
+# Gated on MW_DEBUG=1 env var so it can be turned off once the investigation
+# is done. When enabled:
+#   - exception traces show up in the HTTP 500 response body
+#   - PHP errors + MediaWiki debug log are funneled to stderr, which Railway
+#     captures in its log stream (fetchable via deploymentLogs GraphQL query)
+#   - SMW-specific log groups are included because the current 500 is on
+#     Category:Card, which is an SMW-heavy page
+$mwDebug = getenv('MW_DEBUG') === '1';
+if ( $mwDebug ) {
+    $wgShowExceptionDetails = true;
+    $wgShowDBErrorBacktrace = true;
+    $wgDevelopmentWarnings  = false;  # deprecation noise, not useful here
+
+    ini_set('log_errors', '1');
+    ini_set('error_log', 'php://stderr');
+
+    $wgDebugLogFile = 'php://stderr';
+    $wgDebugLogGroups = [
+        'exception' => 'php://stderr',
+        'error'     => 'php://stderr',
+        'fatal'     => 'php://stderr',
+        'smw'       => 'php://stderr',
+        'SMW'       => 'php://stderr',
+    ];
+}
