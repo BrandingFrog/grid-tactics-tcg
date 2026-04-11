@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Online PvP Dueling
-status: verifying
-stopped_at: "Phase 14.5 COMPLETE (all 7 waves). from_deck flag + exhaust pile in Python and tensor engines, symmetric view_filter piles, uniform renderCardFrame, 4 pile buttons + shared modal, opponent face-down hand row, draw animations via AnimationQueue. Wave 7 closeout deferred multi-tab UAT to post-deploy Playwright E2E (standard 14.x posture). Next up: Phase 15 Resilience & Polish."
-last_updated: "2026-04-08T22:45:00.000Z"
-last_activity: 2026-04-08
+status: in_progress
+stopped_at: "Phase 14.6 Plan 01 COMPLETE. SandboxSession backend surface shipped: zone editing, cheat inputs, undo/redo, save slots, 16 Socket.IO handlers, 62 backend tests passing. No real-game code path touched (game_session.py / view_filter.py byte-unchanged). Ready for 14.6-02 frontend wiring."
+last_updated: "2026-04-11T10:55:00.000Z"
+last_activity: 2026-04-11
 progress:
   total_phases: 5
   completed_phases: 3
-  total_plans: 7
-  completed_plans: 7
+  total_plans: 8
+  completed_plans: 8
   percent: 0
 ---
 
@@ -25,11 +25,11 @@ See: .planning/PROJECT.md (updated 2026-04-04)
 
 ## Current Position
 
-Phase: 14.5 (piles-and-hand-vis) — COMPLETE (all 7 waves)
-Plan: 7 of 7 (roadmap/STATE closeout) — COMPLETE
-Next: Phase 15 Resilience & Polish
-Status: Phase 14.5 fully shipped. MinionInstance.from_deck + Player.exhaust shipped in Python and tensor engines; minion plays no longer double-count in graveyard; tokens vanish silently on death; discard-for-cost routes to exhaust. Tensor parity deferred to Wave 2. Phase 14.4 spectator mode fully shipped (waves 1-5). Backend: RoomManager._room_spectators manager-level dict survives the WaitingRoom→GameSession transition; filter_state_for_spectator is a pure function (god = deepcopy, non-god = delegate to filter_state_for_player(0)); events.py has spectate_room handler, submit_action gate ("Spectators cannot submit actions"), _fanout_state_to_spectators / _fanout_game_start_to_spectators wired into _emit_state_to_players / _emit_game_over / handle_ready / handle_request_rematch, chat broadcast inclusive of spectators, disconnect handler scoped to spectators only (player-disconnect still Phase 15 territory). Frontend: Lobby Spectate Room button + God Mode checkbox, isSpectator / spectatorGodMode flags re-synced from every state frame, early-return at all 5 action seams (submitAction + 3 click handlers + renderActionBar), dual-hand god view via renderHand appendHand helper, SPECTATING badge. Mid-game join supported via synthetic game_start from handle_spectate_room. Multi-tab smoke test deferred to post-deploy Playwright E2E.
-Last activity: 2026-04-08 — Completed 14.5-07-PLAN.md (Phase 14.5 closeout: ROADMAP + STATE updated, SUMMARY written, multi-tab UAT deferred to post-deploy Playwright E2E per standard 14.x posture)
+Phase: 14.6 (sandbox-mode) — IN PROGRESS
+Plan: 1 of N (backend surface) — COMPLETE
+Next: 14.6-02 (frontend wiring against the SandboxSession API)
+Status: Phase 14.6 Plan 01 shipped. SandboxSession class wraps the existing immutable engine — every state mutator goes through dataclasses.replace (15 callsites), apply_action validates via legal_actions and applies via resolve_action, zone helpers cover hand/deck_top/deck_bottom/graveyard/exhaust for both players, set_player_field is full cheat mode (no rule validation), undo_depth/redo_depth public properties expose deque depth (HISTORY_MAX=64 satisfies DEV-09 >= 50). Empty starting state built via _empty_state classmethod (NOT GameState.new_game which crashes on empty decks). Slot persistence reuses to_dict/load_dict verbatim, slot-name validation is one regex + one os.path.basename check, data/sandbox_saves/ gitignored except .gitkeep. RoomManager._sandboxes parallel dict keyed by SID with create/get/remove helpers — purely additive. events.py has 16 sandbox_* handlers + _emit_sandbox_state god-view helper + disconnect cleanup; handle_submit_action / view_filter / GameSession byte-unchanged. 62 backend tests (36 unit + 26 Socket.IO via flask_socketio test client) all green; pre-existing test_spectator_receives_state_update failure verified independent of this plan. Phase 14.5 (piles-and-hand-vis) and Phase 14.4 (spectator-mode) remain fully shipped from prior sessions.
+Last activity: 2026-04-11 — Completed 14.6-01-PLAN.md (sandbox backend surface: SandboxSession + 16 Socket.IO handlers + 62 backend tests; engine reuse contract enforced)
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -178,6 +178,18 @@ Key decisions:
 - [Phase 14.5-04]: Task 2 visual smoke test deferred to post-deploy Playwright E2E (same posture as 14.1-04 / 14.2-04 / 14.3-01/04/07 / 14.4-05). Structural review confirmed: data attrs preserved, context classes preserved, dim logic preserved, tooltip path preserved, mobile media query still valid.
 - [Phase 14.5-07]: Phase 14.5 closeout — `from_deck` flag on MinionInstance gates graveyard population; tokens vanish silently on death. Exhaust pile introduced alongside graveyard for discard-for-cost mechanics (summon_sacrifice_tribe). Uniform card rendering via shared `renderCardFrame` — one source of truth for hand / deck builder / tooltip. Pile buttons are symmetric — both players see own and opponent ⚰️ / 🌀 with live counts and clickable modals. Draw animations triggered structurally via multiset hand diff in `onStateUpdate`, never per-action-site.
 - [Phase 14.5-07]: Task 2 (multi-tab visual UAT) deferred to post-deploy Playwright E2E against Railway, same posture as every prior 14.x closeout.
+- [Phase 14.6-01]: SandboxSession is the entire sandbox API — a thin per-tab harness that wraps the existing immutable engine. Every state mutator rebuilds frozen Player + GameState via dataclasses.replace (15 callsites). NO new state classes, NO copies of engine code, NO in-place mutation, NO RNG attribute on the session. apply_action validates via legal_actions() and resolves via resolve_action() — same engine the real game uses.
+- [Phase 14.6-01]: Empty starting state built via _empty_state classmethod (Board.empty + Player.new(side, ())) — NOT GameState.new_game, which unconditionally draws STARTING_HAND_P1/P2 cards via Player.draw_card and crashes on empty decks (player.py:111-114).
+- [Phase 14.6-01]: Five zones supported uniformly: hand / deck_top / deck_bottom / graveyard / exhaust. deck_top means index 0 (next-draw side) of Player.deck; deck_bottom means appended. Zone-as-attribute helper maps deck_top/deck_bottom → "deck", graveyard → "grave", hand/exhaust unchanged.
+- [Phase 14.6-01]: set_player_field is FULL CHEAT MODE — validates field name against PLAYER_FIELDS allow-list (current_mana / max_mana / hp) but does NOT validate value against any game rule. Negative HP, 9999 mana, etc. all allowed. The whole point of sandbox is god-mode scratch space.
+- [Phase 14.6-01]: undo_depth / redo_depth are PUBLIC read-only properties wrapping internal deques. HISTORY_MAX=64 satisfies DEV-09 (>=50). Whole-state snapshots stored (frozen dataclass references — no deep copy needed).
+- [Phase 14.6-01]: Slot-name validation is exactly ONE regex (^[a-zA-Z0-9_-]{1,64}$) plus ONE os.path.basename identity check. NO sanitization library, NO Unicode normalization, NO retry. Bad names raise; user picks a different name. Slot persistence reuses to_dict / load_dict verbatim — NO new serialization format, NO schema migration code.
+- [Phase 14.6-01]: RoomManager._sandboxes is a parallel dict keyed by SID (NOT session token). Sandboxes have no session-token concept — one per browser tab, no multi-user sharing. The dict + create/get/remove helpers are purely additive; existing room/game/spectator code paths byte-unchanged.
+- [Phase 14.6-01]: Sandbox handlers NEVER call filter_state_for_player or filter_state_for_spectator — sandbox is god view always. _emit_sandbox_state is the single source of truth for state emission and reads sandbox.undo_depth / sandbox.redo_depth public properties only, never the underscore-prefixed deques.
+- [Phase 14.6-01]: Legacy sandbox_add_card (hand-only) is REPLACED by sandbox_add_card_to_zone, NOT registered alongside. 16 sandbox_* handlers total: create, apply_action, add_card_to_zone, move_card, import_deck, set_player_field, set_active_player, undo, redo, reset, save, load, save_slot, load_slot, list_slots, delete_slot.
+- [Phase 14.6-01]: Disconnect cleanup runs unconditionally for SID — sandbox users have no session token, so the prior token-gated early-return would have leaked sandboxes. Spectator path remains functionally identical (token-gated as before). Restructure documented as Rule 1 deviation in 14.6-01-SUMMARY.
+- [Phase 14.6-01]: Tests live under tests/server/ subdirectory (new — existing repo is flat tests/). Used create_app(testing=True) instead of importing a non-existent global `app`, matching existing tests/test_pvp_server.py pattern. isolated_slot_dir fixture monkeypatches sandbox_session.SLOT_DIR to tmp_path so slot tests never touch the real data/sandbox_saves/.
+- [Phase 14.6-01]: legal_actions does NOT include PASS unconditionally during ACTION phase despite the stale module docstring — fatigue bleed at the GameSession layer handles the no-actions case via auto-PASS in submit_action. Tests adapted to drive apply_action via the engine's legal_actions tuple (DRAW becomes legal once a deck card is seeded) rather than assuming PASS is always present.
 
 ### Pending Todos
 
@@ -192,8 +204,8 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-04-08T22:45:00.000Z — Completed 14.5-07 (Phase 14.5 closeout). Previous: 2026-04-08T22:28:00.000Z (14.5-06 draw animations).
-Stopped at: Phase 14.5 (piles-and-hand-vis) fully shipped, all 7 waves. ROADMAP updated with Phase 14.5 entry + details block, STATE updated with Phase 14.5-07 decisions and compounded RL checkpoint staleness note, SUMMARY written at .planning/phases/14.5-piles-and-hand-vis/14.5-07-SUMMARY.md. Multi-tab visual UAT deferred to post-deploy Playwright E2E against Railway (standard 14.x posture). Next: Phase 15 Resilience & Polish (reconnection, scrollable game log, rematch flow).
+Last session: 2026-04-11T10:55:00.000Z — Completed 14.6-01 (sandbox backend surface). Previous: 2026-04-08T22:45:00.000Z (14.5-07 phase closeout).
+Stopped at: Phase 14.6 Plan 01 fully shipped. SandboxSession class + RoomManager._sandboxes dict + 16 sandbox_* Socket.IO handlers + 62 backend tests (36 unit + 26 Socket.IO) all green. Real-game code path byte-unchanged outside additive insertion points (game_session.py / view_filter.py have empty git diffs). data/sandbox_saves/ exists with .gitkeep, gitignored. Plan committed in 4 atomic task commits (eed0d77, 4eb4bd2, fafc7f1, 2603ec7) plus this metadata commit. SUMMARY at .planning/phases/14.6-sandbox-mode/14.6-01-SUMMARY.md. Next: 14.6-02 (frontend wiring against the SandboxSession API).
 
 Previous session (2026-04-07T20:45:00.000Z): Card-effects-and-action-flow audit followups complete. Tensor-engine parity for LEAP (CardTable.leap_amount precompute + _compute_move_mask LEAP override + apply_move_batch leap landing) and PASSIVE pipeline (CardTable.passive_burn_amount/passive_heal_amount + engine._fire_passive_effects_batch at turn flip, mirroring Python react_stack._fire_passive_effects). Bug-4 design clarification: BURN handler now stacks `int(effect.amount)` per tick so Emberplague's JSON amount=5 takes effect; tensor side already uses passive_burn_amount from the same JSON field. ActionEncoder _encode_move/_decode_move now leap-aware (collapse multi-step forward to unit cardinal on encode, walk over blockers on decode). 42 stale-assertion test failures swept to zero — pure test maintenance, no engine behavior changes. tests/conftest.py grew collect_ignore_glob for RL/tensor/server test files when torch/sb3/flask_socketio missing (single source of truth for ML-dep gating). Final: 538 passed, 4 skipped, 0 failed locally. Next: Phase 15 Resilience & Polish.
 Resume file: None
