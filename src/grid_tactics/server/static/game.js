@@ -1341,6 +1341,9 @@ function buildCardTooltipContent(c) {
             if (eff.type === 12) { if (matchedKeywords.indexOf('Passive') === -1) matchedKeywords.push('Passive'); if (matchedKeywords.indexOf('Heal') === -1) matchedKeywords.push('Heal'); }
             if (eff.type === 13) { if (matchedKeywords.indexOf('Leap') === -1) matchedKeywords.push('Leap'); }
             if (eff.type === 14) { if (matchedKeywords.indexOf('Conjure') === -1) matchedKeywords.push('Conjure'); }
+            if (eff.type === 15) { if (matchedKeywords.indexOf('Burning') === -1) matchedKeywords.push('Burning'); }
+            if (eff.type === 16) { if (matchedKeywords.indexOf('Dark Matter') === -1) matchedKeywords.push('Dark Matter'); }
+            if (eff.type === 17) { if (matchedKeywords.indexOf('Revive') === -1) matchedKeywords.push('Revive'); }
         });
     }
     matchedKeywords.forEach(function(kw) {
@@ -4912,7 +4915,16 @@ function getEffectDescription(effects, cardData) {
             if (cardData && cardData.conjure_buff === 'dark_matter') {
                 desc += '. Buff all ' + conjureName + ' by Dark Matter';
             }
+        } else if (type === 15) { // Apply Burning
+            var burnAmt = amount || 1;
+            desc = prefix + 'Apply ' + burnAmt + ' Burning';
+        } else if (type === 16) { // Grant Dark Matter
+            desc = prefix + 'Grant ' + amount + ' Dark Matter';
+        } else if (type === 17) { // Revive
+            var reviveName = (cardData && cardData.revive_card_id) ? findCardNameById(cardData.revive_card_id) : 'minion';
+            desc = prefix + 'Revive ' + amount + ' ' + reviveName + (amount > 1 ? 's' : '') + ' from Grave';
         } else {
+            console.warn('[getEffectDescription] Unhandled effect type ' + type + ' on card "' + (cardData && cardData.card_id) + '". Add a case for EffectType ' + type + ' in getEffectDescription().');
             desc = prefix + 'Effect';
         }
         parts.push(desc);

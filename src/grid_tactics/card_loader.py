@@ -103,6 +103,7 @@ class CardLoader:
             summon_token_target=data.get("summon_token_target"),
             summon_token_cost=data.get("summon_token_cost"),
             conjure_buff=data.get("conjure_buff"),
+            revive_card_id=CardLoader._parse_revive_card_id(data),
             activated_ability=CardLoader._parse_activated_ability(data, card_id),
         )
 
@@ -208,6 +209,14 @@ class CardLoader:
         raise ValueError(
             f"Card '{card_id}': tutor_target must be str or dict, got {type(raw).__name__}"
         )
+
+    @staticmethod
+    def _parse_revive_card_id(data: dict) -> str | None:
+        """Extract revive_card_id from effects list (REVIVE effect metadata)."""
+        for eff in data.get("effects", []):
+            if eff.get("type") == "revive" and "revive_card_id" in eff:
+                return eff["revive_card_id"]
+        return None
 
     @staticmethod
     def _parse_transform_options(

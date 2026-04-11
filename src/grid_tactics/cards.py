@@ -135,6 +135,9 @@ class CardDefinition:
     summon_token_cost: Optional[int] = None    # mana cost for the conjure ability
     conjure_buff: Optional[str] = None         # buff type applied on conjure (e.g. 'dark_matter')
 
+    # Revive mechanic: card_id of the minion to revive from grave
+    revive_card_id: Optional[str] = None
+
     # Activated ability: spend mana + turn action to trigger an effect
     # while the minion is on the board. See ActivatedAbility.
     activated_ability: Optional[ActivatedAbility] = None
