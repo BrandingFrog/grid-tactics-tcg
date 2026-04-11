@@ -1,8 +1,10 @@
 FROM mediawiki:1.43
 
 # Install system deps (git needed by composer for some packages)
+# php-redis: required for RedisBagOStuff ($wgMainCacheType = 'redis')
 RUN apt-get update && apt-get install -y --no-install-recommends \
       git unzip default-mysql-client ca-certificates curl \
+  && pecl install redis && docker-php-ext-enable redis \
   && rm -rf /var/lib/apt/lists/* \
   # apt upgrade of apache2 packages may enable mpm_event alongside mpm_prefork;
   # mediawiki:1.43 uses mpm_prefork (required for mod_php). Force it.

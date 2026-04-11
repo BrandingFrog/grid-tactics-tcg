@@ -35,10 +35,10 @@ $wgSecretKey = getenv('MW_SECRET_KEY') ?: 'changeme-in-env-please';
 $wgUpgradeKey = getenv('MW_UPGRADE_KEY') ?: 'changeme-in-env';
 $wgAuthenticationTokenVersion = "1";
 
-# Cache — use Redis if available, fall back to APCu, then none
+# Cache — use Redis if available (requires php-redis), fall back to APCu, then none
 $redisServer = getenv('MW_REDIS_SERVER');
 $redisPass   = getenv('MW_REDIS_PASSWORD');
-if ( $redisServer ) {
+if ( $redisServer && extension_loaded('redis') ) {
     $wgObjectCaches['redis'] = [
         'class'       => 'RedisBagOStuff',
         'servers'     => [ $redisServer ],
