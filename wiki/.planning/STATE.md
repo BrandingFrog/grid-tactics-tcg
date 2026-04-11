@@ -2,7 +2,7 @@
 milestone: v1.0
 status: complete
 stopped_at: completed_09-04
-last_updated: 2026-04-09
+last_updated: 2026-04-11
 progress:
   phase: 9
   phase_name: Launch Polish
@@ -12,6 +12,9 @@ progress:
   plans_completed_in_phase: 4
   plans_total_in_phase: 4
   percent: 100
+inserted_phases:
+  - 9.1: SMW DisplayTitleLookup Backtick Fix — not planned
+  - 9.2: Semantic Drilldown Faceted Card Search — not planned
 ---
 
 # Project State — Grid Tactics Wiki
@@ -118,6 +121,11 @@ Progress: `██████████` 100%
 - **[01-04]** Sample cards source values from the real `data/cards/*.json`, not from illustrative values in plan text. This makes Phase 1's sample an honest dry-run of Phase 3's sync path.
 - **[01-04]** Rules-text synthesis for cards without a `rules_text` field: derive from `activated_ability` or `effects` blocks. Phase 3 should formalize this as a dedicated helper in `sync_cards.py`.
 - **[01-04]** Subobject emission (`{{#subobject:}}`) intentionally deferred to Phase 3 — Phase 1 sample proves basic property annotations only.
+
+### Roadmap Evolution
+
+- **2026-04-11** — Phase **9.1** inserted after Phase 9: *SMW DisplayTitleLookup Backtick Fix* (URGENT). `Category:Card` returns HTTP 500 on SMW 5.1.0 + MW 1.43.8. Root cause captured via `MW_DEBUG=1` on Railway deployment `ad905e6e`: `SMW\SQLStore\Lookup\DisplayTitleLookup.php:124` pre-wraps table name in backticks, MW 1.43's Rdbms `SQLPlatform::addIdentifierQuotes` rejects pre-quoted identifiers. Blocking the in-game "Wiki" nav link and any Drilldown UI work. Fix options: Dockerfile sed patch, composer-patches, or SMW upstream upgrade if a patch release lands.
+- **2026-04-11** — Phase **9.2** inserted after Phase 9.1: *Semantic Drilldown Faceted Card Search*. Tier-2 upgrade on the existing SMW enrichment (20 typed properties per card already populated by `sync_cards.py`). Will install `mediawiki/semantic-drilldown`, create `Filter:Element`, `Filter:CardType`, `Filter:Tribe`, `Filter:ManaCost`, `Filter:Attack`, `Filter:HP`, `Filter:Keyword` via a new `sync_filters.py`, and point "All Cards" at `Special:BrowseData/Card`. Hard-blocked by 9.1 because Drilldown's landing hits the same DisplayTitleLookup prefetch path.
 
 ### Pending Todos
 

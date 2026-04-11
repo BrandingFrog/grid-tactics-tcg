@@ -187,6 +187,65 @@ Plans:
 
 ---
 
+### Phase 9.1: SMW DisplayTitleLookup Backtick Fix (INSERTED)
+
+**Goal:** `/wiki/Category:Card` (and every other SMW-prefetched category page) returns HTTP 200 instead of HTTP 500 under the pinned SMW 5.1.0 + MW 1.43.8 pairing.
+**Depends on:** Phase 9 (runs against the already-live wiki)
+**Urgency:** Blocking — `Category:Card` is the primary entry point from the game client's in-app "Wiki" nav link (`src/grid_tactics/server/static/game.html:24`) and from `Main Page → All Cards`. Also a hard prerequisite for Phase 9.2 (Drilldown) because the Drilldown landing page hits the same `DisplayTitleLookup` prefetch codepath.
+**Plans:** TBD (run `/gsd:plan-phase 9.1` to break down)
+
+**Root cause** (captured via `MW_DEBUG=1` on Railway deployment `ad905e6e`, 2026-04-11):
+
+- Exception: `InvalidArgumentException: cannot contain quote, dot or null characters: got '` `smw_fpt_dtitle` `'`
+- Call chain: `Category:Card` render → `SMW\SQLStore\EntityStore\CacheWarmer::prepareCache` → `SMW\DisplayTitleFinder::prefetchFromList` → `SMW\SQLStore\Lookup\DisplayTitleLookup::fetchFromTable` (line 124) → `$db->select('` `smw_fpt_dtitle` `', ...)` → `Wikimedia\Rdbms\Platform\SQLPlatform::addIdentifierQuotes` rejects the pre-quoted identifier.
+- SMW `DisplayTitleLookup.php:124` pre-wraps the table name in backticks; MW 1.43's Rdbms layer was hardened to reject pre-quoted identifiers. Bug is live in SMW 5.1.0 (latest stable on Packagist as of 2025-07-24) against MW 1.43.8.
+
+**Success Criteria:**
+
+1. `GET /wiki/Category:Card` returns HTTP 200 on the production Railway wiki.
+2. Every other SMW-populated category page (e.g. `Category:Minion`, `Category:Fire cards`) renders without 500.
+3. The fix survives a clean Docker image rebuild — it is codified in `wiki/Dockerfile`, not a one-off patch on a running container.
+4. The fix is minimal and auditable (targeted, surgical — not a blanket disable of DisplayTitle or a rollback of MW).
+5. `MW_DEBUG` env var can be flipped back to `0` (the ops-commit error-logging gate stays in place but disabled by default) once 9.1 lands and the fix is verified.
+
+**Fix options to evaluate in the plan step:**
+
+- (a) Dockerfile `sed` patch stripping the backticks from `extensions/SemanticMediaWiki/src/SQLStore/Lookup/DisplayTitleLookup.php:124` during image build.
+- (b) `cweagans/composer-patches` with a `.patch` file committed under `wiki/patches/` — cleaner, versionable, survives SMW upgrades that don't touch the same line.
+- (c) Check SMW GitHub for an already-merged fix on `master` or a pending `5.1.x` patch release; upgrade the composer constraint if a fix is available.
+- (d) Open an upstream PR (parallel track, not blocking the production fix).
+
+---
+
+### Phase 9.2: Semantic Drilldown Faceted Card Search (INSERTED)
+
+**Goal:** "All Cards" on the wiki becomes a faceted card-search UI (Element / CardType / Tribe / ManaCost / Attack / HP / Keyword) backed by the existing SMW property annotations from `sync_cards.py`, with URL-bookmarkable filter state and multi-select facets.
+**Depends on:** Phase 9.1 (blocking — Drilldown's `Special:BrowseData/Card` landing hits the DisplayTitleLookup prefetch codepath)
+**Plans:** TBD (run `/gsd:plan-phase 9.2` to break down)
+
+**Context:**
+
+The SMW enrichment pipeline (`wiki/sync/schema.py`, `wiki/sync/templates/Card.wiki`, `wiki/sync/sync_cards.py`) already annotates every card page with 20 typed properties (Name, CardType, Element, Tribe, ManaCost, Attack, HP, Range, Keyword, RulesText, FirstPatch, LastChangedPatch, etc.). Consumers today: 54 taxonomy pages and 7 canned `#ask` queries on `Semantic:Showcase`. Drilldown is the natural payoff on that investment — it turns the flat set of typed properties into a faceted product feature without any change to the sync pipeline.
+
+**Success Criteria:**
+
+1. A Semantic Drilldown release compatible with SMW 5.1.0 + MW 1.43.8 + PHP 8.3 is installed via composer in `wiki/Dockerfile`, loaded in `LocalSettings.php`, and survives clean rebuild.
+2. Filter pages exist for at least: `Element`, `CardType`, `Tribe`, `ManaCost` (numeric-range), `Attack` (numeric-range), `HP` (numeric-range), `Keyword` (multi-select). A new `wiki/sync/sync_filters.py` idempotently upserts them.
+3. `Special:BrowseData/Card` renders a faceted sidebar showing all facets with live counts.
+4. Picking `Element=Fire` narrows the result set to only Fire cards; picking `ManaCost 1–3` additionally filters to budget cards; the URL is bookmarkable and round-trips on reload.
+5. `Keyword` facet allows multiple simultaneous selections (e.g. `Tutor` OR `Promote`).
+6. `Main Page` "All Cards" link and the game client's in-app "Wiki" nav link (`src/grid_tactics/server/static/game.html:24`) both point at `Special:BrowseData/Card` instead of `Category:Card`.
+7. Playwright smoke test walks the landing page, applies a 2-facet filter, asserts the result set narrows correctly, and asserts the URL contains the filter state.
+8. Rollback path is documented: remove the composer line, remove the `wfLoadExtension`, redeploy — filter pages and `sync_filters.py` are harmless orphans if Drilldown is later removed.
+
+**Compatibility research must complete in plan step 1, before any code change:**
+
+- Verify Semantic Drilldown's current release is compatible with SMW 5.1.0 + MW 1.43.8 + PHP 8.3 (the live stack).
+- Confirm install method (composer `mediawiki/semantic-drilldown` vs. drop-in tarball) and whether Page Forms is still a hard dependency (older SD versions required it).
+- Confirm no regression on the SMW DisplayTitleLookup bug from 9.1 — Drilldown's category browsing uses the same prefetch path.
+
+---
+
 ## Progress
 
 | Phase | Status | Completed |
@@ -200,6 +259,8 @@ Plans:
 | 7 - Semantic Query Showcase & Homepage | complete | 2026-04-09 |
 | 8 - Idempotency, Drift Detection & Reliability | complete | 2026-04-09 |
 | 9 - Launch Polish | complete | 2026-04-09 |
+| 9.1 - SMW DisplayTitleLookup Backtick Fix (INSERTED) | not planned | - |
+| 9.2 - Semantic Drilldown Faceted Card Search (INSERTED) | not planned | - |
 
 ## Coverage
 
