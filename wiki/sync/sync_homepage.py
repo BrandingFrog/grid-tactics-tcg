@@ -20,6 +20,8 @@ import json
 from datetime import date
 from pathlib import Path
 
+from sync.sync_cards import build_rules_text
+
 
 def _pick_card_of_the_day(cards_dir: Path | None = None) -> dict | None:
     """Pick a deterministic random card based on today's date.
@@ -85,6 +87,25 @@ def main_page_wikitext(cards_dir: Path | None = None) -> str:
             range_text = "[[Melee]]" if atk_range == 0 else f"[[Ranged|Range {atk_range}]]"
             meta += f'|-\n! {_rs} | Range\n| {_vs} | {range_text}\n'
 
+        # Rules text + flavour text row
+        rules = build_rules_text(cotd)
+        flavor = cotd.get("flavour_text", "")
+        rules_row = ""
+        if rules or flavor:
+            text_parts = []
+            if rules:
+                text_parts.append(rules)
+            if flavor:
+                text_parts.append(
+                    f'<hr style="border:0;border-top:1px dashed #555;"/>'
+                    f'<span style="color:#888;font-style:italic;">{flavor}</span>'
+                )
+            rules_row = (
+                f'|-\n'
+                f'| colspan="2" style="padding:8px 10px; min-height:60px;" '
+                f'| {"".join(text_parts)}\n'
+            )
+
         # ATK/HP row for minions
         atk_hp_row = ""
         if attack is not None and health is not None:
@@ -132,6 +153,7 @@ def main_page_wikitext(cards_dir: Path | None = None) -> str:
             f'|-\n'
             f'| colspan="2" style="padding:0;" | [[File:{card_id}.png|280px|center|link=Card:{card_name}]]\n'
             f'{meta}'
+            f'{rules_row}'
             f'{atk_hp_row}'
             f'|}}\n'
             f'</div>\n'
