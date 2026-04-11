@@ -174,6 +174,7 @@ Plans:
 - [x] **Phase 14.3: Game Juice (Animation Layer)** - Client-side AnimationQueue serializing summon / move / attack / burn / floating-popup visuals; pending UIs (react, tutor, post-move-attack) gate behind queue drain via applyStateFrame (completed 2026-04-07)
 - [x] **Phase 14.4: Spectator Mode** - Lobby Spectate button + optional God Mode, server-side join_as_spectator + spectator fanout + action gating, dual-hand god view and P1-perspective non-god view (completed 2026-04-07)
 - [x] **Phase 14.5: Piles & Hand Visibility** - from_deck flag + exhaust pile, tensor parity, view_filter piles, uniform card renderer, symmetric pile buttons with modal, opponent face-down hand row, AnimationQueue-integrated draw animations (completed 2026-04-08)
+- [ ] **Phase 14.6: Sandbox Mode (Dev Tooling)** - Single-tab manual game state editor reusing the live engine: search/add cards, toggle active player, play any action, undo/redo stack, save/load via to_dict/from_dict, shareable base64 codes for bug reports
 - [ ] **Phase 15: Resilience & Polish** - Reconnection handling, scrollable game log, and rematch flow
 
 ## Phase Details
@@ -296,6 +297,26 @@ Plans:
 - [x] 14.5-06-PLAN.md -- Card-draw animations via AnimationQueue (draw_own + draw_opp) driven by multiset hand diff
 - [x] 14.5-07-PLAN.md -- Roadmap/STATE closeout + UAT (UAT deferred to post-deploy E2E)
 
+### Phase 14.6: Sandbox Mode (Dev Tooling)
+**Goal**: A "Sandbox" tab in the top nav lets a single user open a manual editor over the live game engine — search/add cards to either hand, toggle active player, take any legal action, undo/redo, save and reload state via JSON, and share state as a base64 code for bug reports — all reusing the existing GameState/CardLibrary/resolve_action/legal_actions code with no engine duplication.
+**Depends on**: Phase 14.5
+**Requirements**: DEV-01, DEV-02, DEV-03, DEV-04, DEV-05
+**Success Criteria** (what must be TRUE):
+  1. A new "Sandbox" tab appears in the top nav before the Wiki link, opens a sandbox screen, and starts a fresh empty session without going through lobby/room codes
+  2. User can search the full card library by name and add any card to either player's hand; the sandbox state mutates only via in-engine state operations (no parallel "fake hand" data structure)
+  3. User can take any legal action (play / move / attack / pass / react / tutor / sacrifice) and the state is advanced by the same `resolve_action()` and validated by the same `legal_actions()` used in real games
+  4. User can switch which player they are controlling at any time without resetting the game state
+  5. User can save the current state to a downloadable JSON file, load it back, restore from localStorage on page reload, and copy/paste a base64 share code that round-trips to the same state
+  6. User can undo (and redo) at least 50 prior actions in one session
+  7. Existing `GameSession`, `RoomManager`, real-game Socket.IO handlers, and game.js board/hand renderers are NOT modified beyond purely additive hooks (new dict on RoomManager, new event handlers in events.py, new screen branch in game.js — zero behavior change to existing code paths)
+**Plans:** 4 plans
+Plans:
+- [ ] 14.6-01-PLAN.md -- SandboxSession + RoomManager._sandboxes + 9 Socket.IO handlers + backend tests
+- [ ] 14.6-02-PLAN.md -- Sandbox screen scaffold: nav tab, screen div, render reuse via existing renderBoard/renderHand
+- [ ] 14.6-03-PLAN.md -- Sandbox toolbar: search, add-card, control toggle, undo/redo, save/load/share/paste, localStorage autosave, action submission via reused click handlers
+- [ ] 14.6-04-PLAN.md -- Playwright E2E smoke test + manual UAT + ROADMAP/STATE closeout
+**UI hint**: yes
+
 ### Phase 15: Resilience & Polish
 **Goal**: The game handles real-world conditions -- disconnections recover gracefully, a game log tracks what happened, and players can rematch without creating a new room
 **Depends on**: Phase 14
@@ -332,4 +353,6 @@ Phases execute in numeric order: 11 -> 12 -> 13 -> 14 -> 15
 | 14.2 Tutor Choice Prompt | v1.1 | 5/5 | Complete | 2026-04-07 |
 | 14.3 Game Juice (Animation Layer) | v1.1 | 7/7 | Complete | 2026-04-07 |
 | 14.4 Spectator Mode | v1.1 | 5/5 | Complete | 2026-04-07 |
+| 14.5 Piles & Hand Visibility | v1.1 | 7/7 | Complete | 2026-04-08 |
+| 14.6 Sandbox Mode (Dev Tooling) | v1.1 | 0/4 | Not started | - |
 | 15. Resilience & Polish | v1.1 | 0/TBD | Not started | - |
