@@ -3420,3 +3420,46 @@ body {
   animation: opp-back-pop 400ms ease-out;
 }
 
+/* ============================================== */
+/* Phase 14.6: Sandbox screen layout              */
+/* (FIXED god view: P1 top, P2 bottom -- no flip) */
+/* ============================================== */
+#screen-sandbox .sandbox-container {
+  display: grid;
+  grid-template-rows: auto auto auto 1fr auto;
+  gap: 12px;
+  padding: 16px;
+  height: 100%;
+  box-sizing: border-box;
+}
+#screen-sandbox .sandbox-toolbar {
+  background: var(--panel-bg, #1a1a2e);
+  border-radius: 8px;
+  padding: 12px;
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+#screen-sandbox .sandbox-stats {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+}
+#screen-sandbox .sandbox-board {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+#screen-sandbox .sandbox-hand {
+  min-height: 120px;
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  align-items: center;
+}
+#screen-sandbox .sandbox-toolbar-placeholder {
+  color: #888;
+  font-style: italic;
+}
+

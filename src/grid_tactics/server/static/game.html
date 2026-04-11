@@ -20,6 +20,7 @@
     <nav class="nav">
       <button class="nav-btn active" data-screen="lobby">Duel</button>
       <button class="nav-btn" data-screen="deck-builder">Deck Builder</button>
+      <button class="nav-btn" data-screen="sandbox">Sandbox</button>
       <a class="nav-btn" href="https://mediawiki-production-7169.up.railway.app" target="_blank" style="text-decoration:none;">Wiki</a>
     </nav>
     <div class="header-right">
@@ -406,6 +407,33 @@
             <button class="btn btn-secondary" id="btn-back-to-lobby">Back to Lobby</button>
           </div>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Screen: Sandbox (Phase 14.6) -->
+  <!-- LAYOUT IS FIXED dual-perspective god view per CONTEXT D1.       -->
+  <!-- P1 hand on TOP, P2 hand on BOTTOM. No flip-grid button, no      -->
+  <!-- view-toggle button, no spectator-style perspective swap. The    -->
+  <!-- "Controlling: P1 / P2" button added in plan 14.6-03 mutates     -->
+  <!-- state.active_player_idx server-side; it does NOT change layout. -->
+  <div id="screen-sandbox" class="screen">
+    <div class="sandbox-container">
+      <div class="sandbox-toolbar" id="sandbox-toolbar">
+        <!-- Controls injected by plan 14.6-03 -->
+        <div class="sandbox-toolbar-placeholder">Sandbox loaded -- controls coming in next plan</div>
+      </div>
+      <div class="sandbox-stats" id="sandbox-stats">
+        <!-- HP / mana / hand-size summary rendered by renderSandboxStats() -->
+      </div>
+      <div class="sandbox-hand sandbox-hand-p0-top" id="sandbox-hand-p0">
+        <!-- Player 1 hand (TOP, fixed): renderHand({ mount: this, state, ownerIdx: 0, godView: true }) -->
+      </div>
+      <div class="sandbox-board" id="sandbox-board">
+        <!-- 5x5 grid: renderBoard({ mount: this, state, perspectiveIdx }) -->
+      </div>
+      <div class="sandbox-hand sandbox-hand-p1-bottom" id="sandbox-hand-p1">
+        <!-- Player 2 hand (BOTTOM, fixed): renderHand({ mount: this, state, ownerIdx: 1, godView: true }) -->
       </div>
     </div>
   </div>
