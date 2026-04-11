@@ -19,6 +19,7 @@ from grid_tactics.card_library import CardLibrary
 from grid_tactics.game_state import GameState
 from grid_tactics.server.game_session import GameSession
 from grid_tactics.server.preset_deck import get_preset_deck
+from grid_tactics.server.sandbox_session import SandboxSession
 
 
 @dataclass
@@ -63,6 +64,7 @@ class RoomManager:
         self._sid_to_token: dict[str, str] = {}            # sid -> token
         self._token_role: dict[str, str] = {}              # token -> 'player' | 'spectator'
         self._room_spectators: dict[str, dict[str, SpectatorSlot]] = {}  # room_code -> token -> slot
+        self._sandboxes: dict[str, SandboxSession] = {}    # sid -> SandboxSession (Phase 14.6)
         self._lock = threading.Lock()
 
     def _generate_code(self) -> str:
@@ -322,3 +324,26 @@ class RoomManager:
             if slot is not None and self._sid_to_token.get(slot.sid) == token:
                 self._sid_to_token.pop(slot.sid, None)
             return room_code
+
+    # ------------------------------------------------------------------
+    # Sandbox API (Phase 14.6)
+    # ------------------------------------------------------------------
+    # Sandboxes are keyed by socket SID, not by session token, and live in a
+    # parallel dict so the existing room/game/spectator code paths are 100%
+    # untouched. One sandbox per browser tab. No multi-user sharing.
+
+    def create_sandbox(self, sid: str) -> SandboxSession:
+        """Create (or replace) the sandbox session for this SID."""
+        with self._lock:
+            session = SandboxSession(self._library, sid)
+            self._sandboxes[sid] = session
+            return session
+
+    def get_sandbox(self, sid: str) -> SandboxSession | None:
+        """Look up the sandbox session for this SID, if any."""
+        return self._sandboxes.get(sid)
+
+    def remove_sandbox(self, sid: str) -> None:
+        """Drop the sandbox for this SID (called on disconnect)."""
+        with self._lock:
+            self._sandboxes.pop(sid, None)
