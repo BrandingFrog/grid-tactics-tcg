@@ -535,9 +535,9 @@ _HERO_SEARCH_CSS_MARKER = "/* --- Grid Tactics Hero Search --- */"
 _HERO_SEARCH_CSS_BLOCK = f"""{_HERO_SEARCH_CSS_MARKER}
 #gt-hero-search {{
   text-align: center;
-  margin: 0 auto 0.5em;
+  margin: 1.5em auto 2em;
   max-width: 560px;
-  padding: 0.8em 1em;
+  padding: 0 1em;
 }}
 
 #gt-hero-search form {{
@@ -547,8 +547,8 @@ _HERO_SEARCH_CSS_BLOCK = f"""{_HERO_SEARCH_CSS_MARKER}
 
 #gt-hero-search input[type="search"] {{
   flex: 1;
-  padding: 0.75em 1.1em;
-  font-size: 1rem;
+  padding: 0.85em 1.2em;
+  font-size: 1.05rem;
   background: #0d0d2b !important;
   color: #e0e0ff !important;
   border: 2px solid #2a2a5a !important;
@@ -570,13 +570,13 @@ _HERO_SEARCH_CSS_BLOCK = f"""{_HERO_SEARCH_CSS_MARKER}
 }}
 
 #gt-hero-search button[type="submit"] {{
-  padding: 0.75em 1.4em;
+  padding: 0.85em 1.6em;
   background: #00d4ff !important;
   color: #0a0a1a !important;
   border: 2px solid #00d4ff !important;
   border-radius: 0 8px 8px 0 !important;
   font-weight: 700;
-  font-size: 0.95rem;
+  font-size: 1rem;
   cursor: pointer;
   font-family: 'Montserrat', sans-serif;
   text-transform: uppercase;
@@ -595,10 +595,8 @@ _HERO_SEARCH_JS_MARKER = "/* --- Grid Tactics Hero Search --- */"
 _HERO_SEARCH_JS_BLOCK = f"""{_HERO_SEARCH_JS_MARKER}
 (function gtHeroSearch() {{
   function inject() {{
-    if (document.getElementById('gt-hero-search')) return;
-
-    var wrapper = document.createElement('div');
-    wrapper.id = 'gt-hero-search';
+    var el = document.getElementById('gt-hero-search');
+    if (!el || el.children.length > 0) return;
 
     var form = document.createElement('form');
     form.action = '/wiki/Special:Search';
@@ -626,15 +624,7 @@ _HERO_SEARCH_JS_BLOCK = f"""{_HERO_SEARCH_JS_MARKER}
     form.appendChild(label);
     form.appendChild(input);
     form.appendChild(btn);
-    wrapper.appendChild(form);
-
-    /* Insert at the top of the content area, before the page heading */
-    var content = document.getElementById('mw-content-text')
-      || document.getElementById('bodyContent')
-      || document.querySelector('.mw-body-content');
-    if (content) {{
-      content.parentNode.insertBefore(wrapper, content);
-    }}
+    el.appendChild(form);
   }}
 
   if (document.readyState === 'loading') {{
