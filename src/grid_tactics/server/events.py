@@ -578,6 +578,290 @@ def register_events(room_manager: RoomManager) -> None:
         if new_state.is_game_over:
             _emit_game_over(session, new_state)
 
+    # ------------------------------------------------------------------
+    # Sandbox Mode (Phase 14.6)
+    # ------------------------------------------------------------------
+    # Sandboxes run in a parallel dict on RoomManager keyed by SID. They
+    # NEVER touch the real-game code path (submit_action, view_filter,
+    # spectator fanout). Every handler loads the sandbox via _get_sandbox_or_error,
+    # mutates through SandboxSession (which validates real actions through
+    # legal_actions/resolve_action and edits zones via dataclasses.replace),
+    # and re-emits the full god-view state via _emit_sandbox_state.
+
+    def _emit_sandbox_state(sandbox, sid):
+        """Single source of truth for sandbox state emission. God view, no filter."""
+        state_dict = sandbox.state.to_dict()
+        enrich_pending_post_move_attack(sandbox.state, state_dict, sandbox.library)
+        actions = sandbox.legal_actions() if not sandbox.state.is_game_over else ()
+        serialized = [serialize_action(a) for a in actions]
+        emit("sandbox_state", {
+            "state": state_dict,
+            "legal_actions": serialized,
+            "active_view_idx": sandbox.active_view_idx,
+            "undo_depth": sandbox.undo_depth,
+            "redo_depth": sandbox.redo_depth,
+        })
+
+    def _get_sandbox_or_error():
+        sandbox = _room_manager.get_sandbox(request.sid)
+        if sandbox is None:
+            emit("error", {"msg": "No sandbox session"})
+            return None
+        return sandbox
+
+    @socketio.on("sandbox_create")
+    def handle_sandbox_create(_data=None):
+        sandbox = _room_manager.create_sandbox(request.sid)
+        emit("sandbox_card_defs", {"card_defs": _build_card_defs(sandbox.library)})
+        _emit_sandbox_state(sandbox, request.sid)
+
+    @socketio.on("sandbox_apply_action")
+    def handle_sandbox_apply_action(data):
+        sandbox = _get_sandbox_or_error()
+        if sandbox is None:
+            return
+        try:
+            action = reconstruct_action(data)
+        except (ValueError, KeyError, TypeError) as e:
+            emit("error", {"msg": f"Invalid action: {e}"})
+            return
+        with sandbox.lock:
+            try:
+                sandbox.apply_action(action)
+            except ValueError as e:
+                emit("error", {"msg": str(e)})
+                return
+            except Exception as e:
+                import traceback
+                print(f"[ERROR] sandbox apply_action: {e}", flush=True)
+                traceback.print_exc()
+                emit("error", {"msg": f"Server error: {e}"})
+                return
+        _emit_sandbox_state(sandbox, request.sid)
+
+    @socketio.on("sandbox_add_card_to_zone")
+    def handle_sandbox_add_card_to_zone(data):
+        sandbox = _get_sandbox_or_error()
+        if sandbox is None:
+            return
+        try:
+            player_idx = int(data["player_idx"])
+            card_numeric_id = int(data["card_numeric_id"])
+            zone = str(data["zone"])
+        except (KeyError, TypeError, ValueError):
+            emit("error", {"msg": "Invalid sandbox_add_card_to_zone payload"})
+            return
+        with sandbox.lock:
+            try:
+                sandbox.add_card_to_zone(player_idx, card_numeric_id, zone)
+            except ValueError as e:
+                emit("error", {"msg": str(e)})
+                return
+        _emit_sandbox_state(sandbox, request.sid)
+
+    @socketio.on("sandbox_move_card")
+    def handle_sandbox_move_card(data):
+        sandbox = _get_sandbox_or_error()
+        if sandbox is None:
+            return
+        try:
+            player_idx = int(data["player_idx"])
+            card_numeric_id = int(data["card_numeric_id"])
+            src_zone = str(data["src_zone"])
+            dst_zone = str(data["dst_zone"])
+        except (KeyError, TypeError, ValueError):
+            emit("error", {"msg": "Invalid sandbox_move_card payload"})
+            return
+        with sandbox.lock:
+            try:
+                sandbox.move_card_between_zones(player_idx, card_numeric_id, src_zone, dst_zone)
+            except ValueError as e:
+                emit("error", {"msg": str(e)})
+                return
+        _emit_sandbox_state(sandbox, request.sid)
+
+    @socketio.on("sandbox_import_deck")
+    def handle_sandbox_import_deck(data):
+        sandbox = _get_sandbox_or_error()
+        if sandbox is None:
+            return
+        try:
+            player_idx = int(data["player_idx"])
+            deck = data["deck_card_ids"]
+            if not isinstance(deck, list):
+                raise ValueError("deck_card_ids must be a list")
+        except (KeyError, TypeError, ValueError) as e:
+            emit("error", {"msg": f"Invalid sandbox_import_deck payload: {e}"})
+            return
+        with sandbox.lock:
+            try:
+                sandbox.import_deck(player_idx, deck)
+            except ValueError as e:
+                emit("error", {"msg": str(e)})
+                return
+        _emit_sandbox_state(sandbox, request.sid)
+
+    @socketio.on("sandbox_set_player_field")
+    def handle_sandbox_set_player_field(data):
+        sandbox = _get_sandbox_or_error()
+        if sandbox is None:
+            return
+        try:
+            player_idx = int(data["player_idx"])
+            field = str(data["field"])
+            value = int(data["value"])
+        except (KeyError, TypeError, ValueError):
+            emit("error", {"msg": "Invalid sandbox_set_player_field payload"})
+            return
+        with sandbox.lock:
+            try:
+                sandbox.set_player_field(player_idx, field, value)
+            except ValueError as e:
+                emit("error", {"msg": str(e)})
+                return
+        _emit_sandbox_state(sandbox, request.sid)
+
+    @socketio.on("sandbox_set_active_player")
+    def handle_sandbox_set_active_player(data):
+        sandbox = _get_sandbox_or_error()
+        if sandbox is None:
+            return
+        try:
+            player_idx = int(data["player_idx"])
+        except (KeyError, TypeError, ValueError):
+            emit("error", {"msg": "Invalid payload"})
+            return
+        with sandbox.lock:
+            try:
+                sandbox.set_active_player(player_idx)
+            except ValueError as e:
+                emit("error", {"msg": str(e)})
+                return
+        _emit_sandbox_state(sandbox, request.sid)
+
+    @socketio.on("sandbox_undo")
+    def handle_sandbox_undo(_data=None):
+        sandbox = _get_sandbox_or_error()
+        if sandbox is None:
+            return
+        with sandbox.lock:
+            sandbox.undo()
+        _emit_sandbox_state(sandbox, request.sid)
+
+    @socketio.on("sandbox_redo")
+    def handle_sandbox_redo(_data=None):
+        sandbox = _get_sandbox_or_error()
+        if sandbox is None:
+            return
+        with sandbox.lock:
+            sandbox.redo()
+        _emit_sandbox_state(sandbox, request.sid)
+
+    @socketio.on("sandbox_reset")
+    def handle_sandbox_reset(_data=None):
+        sandbox = _get_sandbox_or_error()
+        if sandbox is None:
+            return
+        with sandbox.lock:
+            sandbox.reset()
+        _emit_sandbox_state(sandbox, request.sid)
+
+    @socketio.on("sandbox_save")
+    def handle_sandbox_save(_data=None):
+        sandbox = _get_sandbox_or_error()
+        if sandbox is None:
+            return
+        emit("sandbox_save_blob", {"payload": sandbox.to_dict()})
+
+    @socketio.on("sandbox_load")
+    def handle_sandbox_load(data):
+        sandbox = _room_manager.get_sandbox(request.sid)
+        if sandbox is None:
+            sandbox = _room_manager.create_sandbox(request.sid)
+            emit("sandbox_card_defs", {"card_defs": _build_card_defs(sandbox.library)})
+        try:
+            payload = data["payload"]
+        except (KeyError, TypeError):
+            emit("error", {"msg": "Invalid sandbox_load payload"})
+            return
+        with sandbox.lock:
+            try:
+                sandbox.load_dict(payload)
+            except Exception as e:
+                emit("error", {"msg": f"Failed to load: {e}"})
+                return
+        _emit_sandbox_state(sandbox, request.sid)
+
+    # ----- Server-side save slots (DEV-08) -------------------------------
+
+    @socketio.on("sandbox_save_slot")
+    def handle_sandbox_save_slot(data):
+        sandbox = _get_sandbox_or_error()
+        if sandbox is None:
+            return
+        try:
+            slot_name = str(data["slot_name"])
+        except (KeyError, TypeError):
+            emit("error", {"msg": "Invalid sandbox_save_slot payload"})
+            return
+        with sandbox.lock:
+            try:
+                sandbox.save_to_slot(slot_name)
+            except (ValueError, OSError) as e:
+                emit("error", {"msg": f"Failed to save slot: {e}"})
+                return
+        emit("sandbox_slot_saved", {"slot_name": slot_name})
+        # Also send refreshed slot list so the client UI doesn't need a separate roundtrip
+        emit("sandbox_slot_list", {"slots": sandbox.list_slots()})
+
+    @socketio.on("sandbox_load_slot")
+    def handle_sandbox_load_slot(data):
+        sandbox = _room_manager.get_sandbox(request.sid)
+        if sandbox is None:
+            sandbox = _room_manager.create_sandbox(request.sid)
+            emit("sandbox_card_defs", {"card_defs": _build_card_defs(sandbox.library)})
+        try:
+            slot_name = str(data["slot_name"])
+        except (KeyError, TypeError):
+            emit("error", {"msg": "Invalid sandbox_load_slot payload"})
+            return
+        with sandbox.lock:
+            try:
+                sandbox.load_from_slot(slot_name)
+            except FileNotFoundError:
+                emit("error", {"msg": f"Slot not found: {slot_name}"})
+                return
+            except (ValueError, OSError) as e:
+                emit("error", {"msg": f"Failed to load slot: {e}"})
+                return
+        _emit_sandbox_state(sandbox, request.sid)
+
+    @socketio.on("sandbox_list_slots")
+    def handle_sandbox_list_slots(_data=None):
+        from grid_tactics.server.sandbox_session import SandboxSession
+        try:
+            slots = SandboxSession.list_slots()
+        except OSError as e:
+            emit("error", {"msg": f"Failed to list slots: {e}"})
+            return
+        emit("sandbox_slot_list", {"slots": slots})
+
+    @socketio.on("sandbox_delete_slot")
+    def handle_sandbox_delete_slot(data):
+        from grid_tactics.server.sandbox_session import SandboxSession
+        try:
+            slot_name = str(data["slot_name"])
+        except (KeyError, TypeError):
+            emit("error", {"msg": "Invalid sandbox_delete_slot payload"})
+            return
+        try:
+            existed = SandboxSession.delete_slot(slot_name)
+        except (ValueError, OSError) as e:
+            emit("error", {"msg": f"Failed to delete slot: {e}"})
+            return
+        emit("sandbox_slot_deleted", {"slot_name": slot_name, "existed": existed})
+        emit("sandbox_slot_list", {"slots": SandboxSession.list_slots()})
+
     @socketio.on("disconnect")
     def handle_disconnect():
         """Phase 14.4: clean up spectator entries on disconnect.
@@ -587,7 +871,8 @@ def register_events(room_manager: RoomManager) -> None:
         reconnection story, so we drop them eagerly.
         """
         token = _room_manager.get_token_by_sid(request.sid)
-        if token is None:
-            return
-        if _room_manager.get_role(token) == "spectator":
+        if token is not None and _room_manager.get_role(token) == "spectator":
             _room_manager.remove_spectator(token)
+        # Phase 14.6: drop any sandbox attached to this SID (sandbox users have
+        # no session token, so cleanup must run regardless of the token path).
+        _room_manager.remove_sandbox(request.sid)
