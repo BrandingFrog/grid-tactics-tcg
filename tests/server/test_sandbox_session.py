@@ -268,6 +268,106 @@ def test_apply_action_legal_path_round_trip(session: SandboxSession) -> None:
     assert session.undo_depth == depth_before + 1
 
 
+def _find_numeric_id(library: CardLibrary, card_id: str) -> int:
+    """Helper: look up a card's numeric_id by its string card_id."""
+    for nid in range(library.card_count):
+        if library.get_by_id(nid).card_id == card_id:
+            return nid
+    raise LookupError(f"card_id {card_id!r} not in library")
+
+
+def test_apply_action_drains_trivial_react_window(
+    session: SandboxSession, library: CardLibrary
+) -> None:
+    """Regression: sandbox deploy must NOT leave the session stuck in REACT phase.
+
+    Repro for the 2026-04-11 "sandbox deploy silent-fail" bug: after playing a
+    card that opens a react window, the sandbox was left sitting in REACT phase
+    waiting for a PASS that no UI could issue (active_view_idx=0 but
+    react_player_idx=1, so isReactWindow() returned false client-side).
+
+    The fix is for ``SandboxSession.apply_action`` to auto-drain trivial react
+    windows (where PASS is the ONLY legal action) immediately — matching what
+    the real multiplayer client does via its auto-skip-empty-react block in
+    renderActionBar. This mirrors how an empty-hand P2 would auto-pass in a
+    real duel.
+
+    Assertions after deploying a Common Rat from P1 with 1 mana:
+      - mana deducted (1 -> 0)
+      - rat on the board (minions count = 1)
+      - phase back to ACTION (not stuck in REACT)
+      - active player advanced to P2 (turn actually ended)
+    """
+    rat_nid = _find_numeric_id(library, "rat")
+    session.set_player_field(0, "current_mana", 1)
+    session.add_card_to_zone(0, rat_nid, "hand")
+
+    play_actions = [
+        a for a in session.legal_actions() if a.action_type == ActionType.PLAY_CARD
+    ]
+    assert play_actions, "Expected at least one legal PLAY_CARD for rat with 1 mana"
+
+    session.apply_action(play_actions[0])
+
+    from grid_tactics.enums import TurnPhase
+
+    assert session.state.players[0].current_mana == 0, "mana not deducted"
+    assert len(session.state.minions) == 1, "rat not deployed to board"
+    assert session.state.phase == TurnPhase.ACTION, (
+        f"session stuck in {session.state.phase.name} instead of ACTION — "
+        "trivial react window was not drained"
+    )
+    assert session.state.active_player_idx == 1, "turn did not advance to P2"
+    assert session.state.react_player_idx is None, "react state not cleared"
+
+
+def test_apply_action_preserves_react_window_when_opponent_has_reacts(
+    session: SandboxSession, library: CardLibrary
+) -> None:
+    """When P2 has a legal react card, the sandbox must NOT auto-pass.
+
+    The auto-drain is strictly the "only PASS is legal" case (mirrors the real
+    client's auto-skip-empty-react). If P2 actually has a react card that
+    could counter the play, the sandbox user should be able to choose — so
+    the session stays in REACT phase.
+
+    We load P2's hand with a Shield Block (a react-eligible card) and give
+    them enough mana to play it; after P1 plays a rat the session should
+    remain in REACT.
+    """
+    rat_nid = _find_numeric_id(library, "rat")
+    # Dark Mirror is CardType.REACT with condition OPPONENT_PLAYS_MINION — it's
+    # a legal react against P1 deploying a rat.
+    mirror_nid = _find_numeric_id(library, "dark_mirror")
+    mirror_cost = library.get_by_id(mirror_nid).mana_cost
+
+    session.set_player_field(0, "current_mana", 1)
+    session.add_card_to_zone(0, rat_nid, "hand")
+    session.add_card_to_zone(1, mirror_nid, "hand")
+    session.set_player_field(1, "current_mana", max(mirror_cost, 1))
+
+    play_actions = [
+        a for a in session.legal_actions() if a.action_type == ActionType.PLAY_CARD
+    ]
+    assert play_actions
+    session.apply_action(play_actions[0])
+
+    from grid_tactics.enums import TurnPhase
+
+    # Engine state IS advanced (mana spent, rat on board) even during the react
+    # window — that part is baseline engine behavior.
+    assert session.state.players[0].current_mana == 0
+    assert len(session.state.minions) == 1
+
+    # BUT because P2 has a legal react, the sandbox must leave the state in
+    # REACT phase so the user can decide whether to counter.
+    assert session.state.phase == TurnPhase.REACT, (
+        "auto-drain fired despite P2 having a legal react card — it should "
+        "only drain trivial (PASS-only) react windows"
+    )
+    assert session.state.react_player_idx == 1
+
+
 # ---------------------------------------------------------------------------
 # Undo / redo / reset
 # ---------------------------------------------------------------------------

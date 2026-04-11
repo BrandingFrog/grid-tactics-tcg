@@ -277,6 +277,25 @@ def test_03_click_to_deploy_reuses_live_game_handlers(sandbox_page: Page):
     )
     assert deployed is not None, "board-minion DOM not rendered after deploy click"
 
+    # Regression guard for the 2026-04-11 sandbox deploy silent-fail bug:
+    # after a PLAY_CARD with no legal reacts for P2, the session must drain
+    # the trivial react window and return to ACTION phase on P2. If we stop
+    # at REACT phase with react_player_idx=1 the sandbox UI has no path to
+    # issue PASS and the session is "silently stuck" from the user's POV.
+    phase = page.evaluate("() => sandboxState.phase")
+    assert phase == 0, (
+        f"sandbox stuck in REACT phase (phase={phase}) after deploy — "
+        "trivial react window was not drained"
+    )
+    react_idx = page.evaluate("() => sandboxState.react_player_idx")
+    assert react_idx is None, (
+        f"react_player_idx should be cleared after deploy, got {react_idx}"
+    )
+    active_idx = page.evaluate("() => sandboxState.active_player_idx")
+    assert active_idx == 1, (
+        f"active_player_idx should advance to P2 after P1 deploys, got {active_idx}"
+    )
+
 
 # ---------------------------------------------------------------------------
 # Test 4 — cheat inputs + pile modal (including the body-level #pileModal fix)

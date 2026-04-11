@@ -35,11 +35,11 @@ from collections import deque
 from dataclasses import replace
 from pathlib import Path
 
-from grid_tactics.actions import Action
+from grid_tactics.actions import Action, pass_action
 from grid_tactics.action_resolver import resolve_action
 from grid_tactics.board import Board
 from grid_tactics.card_library import CardLibrary
-from grid_tactics.enums import PlayerSide, TurnPhase
+from grid_tactics.enums import ActionType, PlayerSide, TurnPhase
 from grid_tactics.game_state import GameState
 from grid_tactics.legal_actions import legal_actions
 from grid_tactics.player import Player
@@ -150,12 +150,39 @@ class SandboxSession:
 
         Raises ``ValueError("Illegal action")`` if the action is not present
         in the current legal-actions tuple.
+
+        Auto-drain for trivial react windows: in real multiplayer the non-
+        active player's client auto-passes empty react windows (see
+        ``renderActionBar`` in ``game.js`` around the ``gameState.phase === 1
+        && legalActions.length === 1`` block). Sandbox has only one human
+        driving god view with ``active_view_idx`` pinned to ``0``, so when a
+        PLAY_CARD / ATTACK / SACRIFICE opens a react window and the opponent
+        has no legal react cards, nothing in the UI can issue the required
+        PASS and the session silently "hangs" in REACT phase from the user's
+        POV. Mirror the multiplayer auto-skip here: while the state is in
+        REACT phase AND the only legal action is PASS, keep resolving PASS
+        until we're back in ACTION (or a pending gate). Legal react branches
+        (opponent has a react card they can actually play) are preserved so
+        the user can still exercise them.
         """
         valid = legal_actions(self._state, self.library)
         if action not in valid:
             raise ValueError("Illegal action")
         self._push_undo()
         self._state = resolve_action(self._state, action, self.library)
+        # Drain trivial react windows — empty hand / no reactive cards means
+        # the only legal action is PASS. Bounded by an attempt counter so a
+        # pathological engine state can never spin forever.
+        for _ in range(16):
+            if self._state.phase != TurnPhase.REACT:
+                break
+            react_legals = legal_actions(self._state, self.library)
+            if len(react_legals) != 1:
+                break
+            only = react_legals[0]
+            if only.action_type != ActionType.PASS:
+                break
+            self._state = resolve_action(self._state, pass_action(), self.library)
 
     # ------------------------------------------------------------------
     # Zone editing (DEV-02 / DEV-03)
