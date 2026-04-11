@@ -4891,9 +4891,22 @@ function getEffectDescription(effects, cardData) {
                 desc = prefix + 'Promote';
             }
         } else if (type === 8) { // Tutor
+            var tutorCount = amount > 1 ? amount + ' ' : '';
             if (cardData && cardData.tutor_target) {
-                var tutorName = findCardNameById(cardData.tutor_target);
-                desc = prefix + 'Tutor ' + tutorName;
+                var tt = cardData.tutor_target;
+                if (typeof tt === 'string') {
+                    var tutorName = findCardNameById(tt);
+                    desc = prefix + 'Tutor ' + tutorCount + tutorName;
+                } else if (typeof tt === 'object') {
+                    // Selector dict: {tribe: "Rat"} etc.
+                    var selParts = [];
+                    if (tt.tribe) selParts.push(tt.tribe + (amount > 1 ? 's' : ''));
+                    if (tt.element) selParts.push(tt.element);
+                    if (tt.card_type) selParts.push(tt.card_type);
+                    desc = prefix + 'Tutor ' + tutorCount + (selParts.join(' ') || 'card');
+                } else {
+                    desc = prefix + 'Tutor ' + tutorCount + tt;
+                }
             } else {
                 desc = prefix + 'Tutor';
             }
