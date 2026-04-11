@@ -48,6 +48,10 @@ COPY LocalSettings.php /tmp/LocalSettings.template.php
 COPY docker-entrypoint-wiki.sh /usr/local/bin/docker-entrypoint-wiki.sh
 RUN chmod +x /usr/local/bin/docker-entrypoint-wiki.sh
 
+# Healthcheck — Railway waits for this before routing traffic
+HEALTHCHECK --interval=10s --timeout=5s --start-period=90s --retries=3 \
+  CMD curl -sf http://localhost/api.php?action=query&meta=siteinfo&format=json || exit 1
+
 EXPOSE 80
 ENTRYPOINT ["docker-entrypoint-wiki.sh"]
 CMD ["apache2-foreground"]

@@ -35,7 +35,24 @@ $wgSecretKey = getenv('MW_SECRET_KEY') ?: 'changeme-in-env-please';
 $wgUpgradeKey = getenv('MW_UPGRADE_KEY') ?: 'changeme-in-env';
 $wgAuthenticationTokenVersion = "1";
 
-$wgMainCacheType = CACHE_NONE;
+# Cache — use Redis if available, fall back to APCu, then none
+$redisServer = getenv('MW_REDIS_SERVER');
+$redisPass   = getenv('MW_REDIS_PASSWORD');
+if ( $redisServer ) {
+    $wgObjectCaches['redis'] = [
+        'class'       => 'RedisBagOStuff',
+        'servers'     => [ $redisServer ],
+        'password'    => $redisPass ?: null,
+        'persistent'  => true,
+    ];
+    $wgMainCacheType    = 'redis';
+    $wgSessionCacheType = 'redis';
+    $wgParserCacheType  = 'redis';
+} elseif ( function_exists('apcu_fetch') ) {
+    $wgMainCacheType = CACHE_ACCEL;
+} else {
+    $wgMainCacheType = CACHE_NONE;
+}
 $wgMemCachedServers = [];
 
 $wgLanguageCode = 'en';
@@ -51,8 +68,8 @@ if ( !empty($_SERVER['HTTP_X_FORWARDED_PROTO']) && $_SERVER['HTTP_X_FORWARDED_PR
 $wgAllowDisplayTitle = true;
 $wgRestrictDisplayTitle = false;
 
-# Job queue — run 2 jobs per web request to drain the queue
-$wgJobRunRate = 2;
+# Job queue — run 1 job per request (lighter than 2, still drains queue)
+$wgJobRunRate = 1;
 
 # Permissions — API + edit usable by logged-in users (default is fine)
 $wgGroupPermissions['*']['createaccount'] = false;
