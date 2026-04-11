@@ -1069,7 +1069,7 @@ body {
   border: 2px solid rgb(30, 25, 20);
   border-radius: 3%;
   position: relative;
-  font-family: 'Montserrat', sans-serif; font-weight: 900; text-transform: uppercase;
+  font-family: 'Source Sans 3', 'Source Sans Pro', sans-serif;
   overflow: hidden;
   cursor: default;
   transition: transform 150ms ease, box-shadow 150ms ease;
