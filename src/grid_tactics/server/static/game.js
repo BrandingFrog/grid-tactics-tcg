@@ -5185,19 +5185,19 @@ function renderSandboxStats() {
     var p1 = sandboxState.players[1];
     if (!p0 || !p1) return;
     target.innerHTML =
-        '<div class="player-stats">' +
+        '<div class="player-stats sandbox-player-row" data-player="0">' +
             '<strong>P1</strong>' +
             '<span>HP ' + p0.hp + '</span>' +
             '<span>Mana ' + p0.current_mana + '/' + p0.max_mana + '</span>' +
             '<span>Hand ' + (p0.hand ? p0.hand.length : 0) + '</span>' +
             '<span>Deck ' + (p0.deck ? p0.deck.length : 0) + '</span>' +
         '</div>' +
-        '<div class="player-stats">' +
+        '<div class="player-stats sandbox-meta-row">' +
             '<strong>Active: P' + ((sandboxState.active_player_idx || 0) + 1) + '</strong>' +
             '<span>Phase ' + sandboxState.phase + '</span>' +
             '<span>Turn ' + sandboxState.turn_number + '</span>' +
         '</div>' +
-        '<div class="player-stats">' +
+        '<div class="player-stats sandbox-player-row" data-player="1">' +
             '<strong>P2</strong>' +
             '<span>HP ' + p1.hp + '</span>' +
             '<span>Mana ' + p1.current_mana + '/' + p1.max_mana + '</span>' +

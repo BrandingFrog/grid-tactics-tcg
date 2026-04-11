@@ -3437,9 +3437,9 @@ body {
   border-radius: 8px;
   padding: 12px;
   display: flex;
-  gap: 12px;
-  align-items: center;
-  flex-wrap: wrap;
+  flex-direction: column;
+  gap: 10px;
+  align-items: stretch;
 }
 #screen-sandbox .sandbox-stats {
   display: flex;
@@ -3462,4 +3462,137 @@ body {
   color: #888;
   font-style: italic;
 }
+
+/* ============================================== */
+/* Phase 14.6-03: Sandbox toolbar controls        */
+/* ============================================== */
+#screen-sandbox .sandbox-row {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+  width: 100%;
+}
+#screen-sandbox .sandbox-search-wrap {
+  position: relative;
+  flex: 1 1 200px;
+  min-width: 200px;
+}
+#screen-sandbox .sandbox-search-results {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  max-height: 280px;
+  overflow-y: auto;
+  background: var(--panel-bg, #1a1a2e);
+  border: 1px solid #444;
+  border-radius: 6px;
+  z-index: 100;
+  margin-top: 4px;
+}
+#screen-sandbox .sandbox-search-result {
+  padding: 6px 10px;
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  border-bottom: 1px solid #2a2a3e;
+}
+#screen-sandbox .sandbox-search-result:hover { background: #2a2a3e; }
+#screen-sandbox .sandbox-search-result-name { font-weight: 600; }
+#screen-sandbox .sandbox-search-result-meta { color: #aaa; font-size: 0.85em; }
+#screen-sandbox .sandbox-target-toggle,
+#screen-sandbox .sandbox-zone-toggle,
+#screen-sandbox .sandbox-control-toggle,
+#screen-sandbox .sandbox-actions {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+#screen-sandbox .sandbox-target-btn.active,
+#screen-sandbox .sandbox-control-btn.active {
+  background: var(--accent, #4a90e2);
+  color: white;
+}
+#screen-sandbox .sandbox-history-status {
+  margin-left: 8px;
+  font-family: monospace;
+  font-size: 0.85em;
+  color: #888;
+}
+#screen-sandbox .sandbox-cheat-col {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 6px 10px;
+  background: #14142a;
+  border-radius: 6px;
+}
+#screen-sandbox .sandbox-cheat-col label {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  font-size: 0.85em;
+}
+#screen-sandbox .sandbox-cheat-input {
+  width: 70px;
+}
+#screen-sandbox .sandbox-slots-header {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+  width: 100%;
+}
+#screen-sandbox .sandbox-slots-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 100%;
+  margin-top: 6px;
+  max-height: 200px;
+  overflow-y: auto;
+}
+#screen-sandbox .sandbox-slot-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 4px 8px;
+  background: #14142a;
+  border-radius: 4px;
+}
+#screen-sandbox .sandbox-slot-name {
+  flex: 1;
+  font-family: monospace;
+}
+#screen-sandbox .sandbox-slots-empty {
+  color: #888;
+  font-style: italic;
+  padding: 4px 8px;
+}
+/* "Move to..." popover for cards in pile modals + hand rows */
+#screen-sandbox .sandbox-move-popover,
+.pile-modal .sandbox-move-popover,
+.sandbox-move-popover {
+  position: absolute;
+  background: #14142a;
+  border: 1px solid #444;
+  border-radius: 6px;
+  padding: 4px;
+  z-index: 200;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.sandbox-move-btn {
+  font-size: 0.8em;
+  padding: 2px 6px;
+  background: transparent;
+  border: 1px solid #444;
+  color: #ddd;
+  cursor: pointer;
+  border-radius: 3px;
+}
+.sandbox-move-btn:hover { background: #2a2a3e; }
 
