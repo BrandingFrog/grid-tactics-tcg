@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Online PvP Dueling
-status: in_progress
-stopped_at: "Phase 14.6 Plan 03 COMPLETE. Sandbox interactive controls fully wired: 4-row toolbar (search+zone/target selectors, control toggle + 9 action buttons, 6 cheat inputs, Server Saves panel with refreshable list + delete confirm), SANDBOX-EMIT-GATE-START/END conditional inside submitAction (game.js:3331-3337) that routes sandbox clicks to sandbox_apply_action with ZERO click-handler forking (reuses 14.6-02 global-swap), makeSandboxMoveButton + openSandboxMovePopover helpers injected additively into showPileModal (extended with optional sandboxCtx third arg) and renderHand (additive if-sandboxMode block), renderSandboxStats pile-open buttons per player (grave/exhaust/deck) surfacing the existing Phase 14.5 pile modal with sandboxCtx for the Move-to affordance, TextEncoder/TextDecoder share-code helpers (no escape/unescape), localStorage autosave on every sandbox_state with restore-on-init via sandbox_load, sandbox_save_blob upgraded from stub to real file download, renderSandboxSlotList + sandbox_slot_list/saved/deleted listeners driving the server-saves panel, renderSandboxToolbarState syncing history pill + control highlight + undo/redo disabled state + cheat-input values (focus-aware). Cheat inputs commit on blur+Enter only, NEVER on input event. All new code inside SANDBOX-SECTION-START/END anchors. NO accessor shims (global-swap was sufficient). NO flip/view-toggle/perspective-swap UI. view_filter.py byte-unchanged. 62 backend tests + 15 pvp_server tests still green. `node -c` passes. 4 auto-fixes: pile access via sandbox-stats buttons (Rule 2), showPileModal sandboxCtx arg (Rule 3), initSandboxScreen restore ordering (Rule 2), toolbar CSS flex-direction column (Rule 1). DEV-02 through DEV-09 all surface through the client."
-last_updated: "2026-04-11T11:10:00.000Z"
+status: phase_complete
+stopped_at: "Phase 14.6 COMPLETE (all 4 plans shipped). Sandbox Mode dev tooling fully delivered: SandboxSession thin wrapper over immutable engine (15 dataclasses.replace callsites, zero engine duplication) + RoomManager._sandboxes SID-keyed dict + 16 sandbox_* Socket.IO handlers (14.6-01); sandbox nav tab + #screen-sandbox scaffold + opts-refactored renderBoard/renderHand + sandboxActivate/Deactivate global-swap pair + SANDBOX-SECTION anchor comments (14.6-02); full 4-row toolbar + SANDBOX-EMIT-GATE in submitAction + additive Move-to injection + TextEncoder share codes + localStorage autosave + server-saves panel + renderSandboxToolbarState (14.6-03); 5-test Playwright E2E suite in tests/e2e/test_sandbox_smoke.py (increasing-complexity: screen-renders → layout-fixed → search-add-to-hand → cheat-mana → server-slot round trip), all green in 10.9s; playwright added to pyproject.toml dev deps (14.6-04). MID-EXECUTION REPAIR (commits ca09eae + baa239e between Task 1 and Task 3): user reported visual breakage after Task 1 UAT return; investigation found 3 stacked bugs from Plan 14.6-02 (collapsed .sandbox-container height, missing .game-board class on #sandbox-board so renderBoard's 25 cells had no grid layout, #pileModal ancestor-nested in #screen-game so unreachable from sandbox). User directive: 'make the sandbox screen look identical to the play screen but instead of the chat tab we have the sandbox control tab.' Rebuilt #screen-sandbox to mirror #screen-game's .game-layout 3-column grid exactly — same .game-main middle column (room-bar, P2 info-bar, P2 hand face-up, 5x5 board, P1 info-bar, P1 hand), same .game-sidebar right column but holding the sandbox toolbar instead of Log/Chat. This INVERTS the original Phase 14.6 CONTEXT D1 seat order (D1 said P1 top / P2 bottom; final ships P2 top / P1 bottom, matching the live play screen's god-view layout). Still fixed, still both hands face-up, still no flip/view-toggle button. Playwright suite rewritten against the new DOM. All 9 roadmap success criteria PASS. AUDITS PASS: view_filter.py byte-unchanged across the entire phase (git diff bee1aad..HEAD empty); data/sandbox_saves/ contains exactly .gitkeep (git ls-files confirms); .gitignore has data/sandbox_saves/* + !data/sandbox_saves/.gitkeep. Next: Phase 15 (Resilience & Polish)."
+last_updated: "2026-04-11T12:30:00.000Z"
 last_activity: 2026-04-11
 progress:
   total_phases: 5
-  completed_phases: 3
-  total_plans: 9
-  completed_plans: 9
+  completed_phases: 4
+  total_plans: 13
+  completed_plans: 13
   percent: 0
 ---
 
@@ -25,10 +25,10 @@ See: .planning/PROJECT.md (updated 2026-04-04)
 
 ## Current Position
 
-Phase: 14.6 (sandbox-mode) — IN PROGRESS
-Plan: 3 of N (interactive controls) — COMPLETE
-Next: 14.6-04 (Playwright coverage / polish) or phase wrap-up
-Status: Phase 14.6 Plan 03 shipped. Full sandbox interactive surface wired through the client side of DEV-02..DEV-09. Key insertion points:
+Phase: 14.6 (sandbox-mode) — COMPLETE (2026-04-11)
+Plan: 4 of 4 (Playwright E2E + closeout) — COMPLETE
+Next: Phase 15 (Resilience & Polish) — reconnection, game log sidebar, rematch flow
+Status: Phase 14.6 fully shipped. All 9 roadmap success criteria and DEV-01..DEV-09 requirements verified PASS via the 5-test Playwright suite (all green in 10.9s against localhost:5000) plus orchestrator-run Playwright-driven UAT walkthrough (rat added to P1 board + rat added to P2 hand via sandbox_apply_action; both visible). AUDIT: view_filter.py byte-unchanged across the entire phase (git diff bee1aad..HEAD empty). AUDIT: data/sandbox_saves/ gitignored except .gitkeep (git ls-files returns only data/sandbox_saves/.gitkeep). Plan 03 sandbox interactive surface detail:
 - `submitAction` at game.js:3328 with SANDBOX-EMIT-GATE-START at 3331 and SANDBOX-EMIT-GATE-END at 3337 -- single conditional `if (sandboxMode) socket.emit('sandbox_apply_action', actionData); else socket.emit('submit_action', actionData);`. Click handlers (onHandCardClick / onBoardCellClick / legacy minion menus) reuse the 14.6-02 global-swap unchanged. NO accessor shims were added.
 - `showPileModal` at game.js:1884 extended with optional third arg `sandboxCtx = { pileType, playerIdx }`. Per-cell injection at game.js:1908 appends `makeSandboxMoveButton(playerIdx, nid, srcZone)` when sandboxMode && sandboxCtx are truthy. All existing 2-arg live-game callers work unchanged.
 - `renderHand` at game.js:4850 per-card append loop at game.js:4894 gained an `if (sandboxMode && typeof makeSandboxMoveButton === 'function')` block that appends the Move-to button next to the existing card element. Play-from-hand click handler is unchanged.
@@ -43,8 +43,34 @@ Status: Phase 14.6 Plan 03 shipped. Full sandbox interactive surface wired throu
 - Only one `socket.emit('submit_action'` in the file (verified by grep -c = 1).
 - `node -c` passes.
 - 62 sandbox backend tests + 15 pvp_server tests all green; no regressions.
-Auto-fixed 4 deviations: (1) sandbox pile access surfaced via renderSandboxStats pile-open buttons instead of adding a parallel pile bar, (2) showPileModal sandboxCtx arg added additively instead of forking a sandbox-only viewer, (3) initSandboxScreen restore path collapsed to single sandbox_load (avoids double-create race), (4) #screen-sandbox .sandbox-toolbar CSS flipped to flex-direction: column so the 4 rows stack vertically. Phase 14.5 (piles-and-hand-vis), 14.4 (spectator-mode), 14.6-01 (backend surface), 14.6-02 (frontend scaffold) remain fully shipped.
-Last activity: 2026-04-11 — Completed 14.6-03-PLAN.md (sandbox interactive controls: toolbar wiring + emit-gate + additive Move-to injection)
+Auto-fixed 4 deviations in 14.6-03: (1) sandbox pile access surfaced via renderSandboxStats pile-open buttons instead of adding a parallel pile bar, (2) showPileModal sandboxCtx arg added additively instead of forking a sandbox-only viewer, (3) initSandboxScreen restore path collapsed to single sandbox_load (avoids double-create race), (4) #screen-sandbox .sandbox-toolbar CSS flipped to flex-direction: column so the 4 rows stack vertically. Phase 14.5 (piles-and-hand-vis), 14.4 (spectator-mode), 14.6-01 (backend surface), 14.6-02 (frontend scaffold) remain fully shipped.
+
+### Phase 14.6 closeout (2026-04-11)
+
+Plan 04 delivered the Playwright E2E coverage, UAT (satisfied via automated tests per user directive "proceed if passed"), and ROADMAP/STATE/REQUIREMENTS closeout. Commit trail:
+
+- 099113c test(14.6-04): Playwright E2E smoke test (Task 1 — initial 10-test file)
+- ca09eae fix(14.6): rebuild sandbox screen to mirror live game layout (orchestrator repair — 3 stacked bugs from Plan 14.6-02)
+- baa239e test(14.6): rewrite 5-test e2e suite for new DOM (orchestrator repair — 5 tests of increasing complexity, all green)
+
+The orchestrator repair happened after Task 1 returned the UAT checkpoint. User reported the sandbox screen was visually broken; investigation surfaced 3 stacked bugs in Plan 14.6-02: (a) `.sandbox-container { height: 100% }` of a `.screen { display: block }` with no height collapsed; (b) `#sandbox-board` had only class `sandbox-board`, so `.game-board` grid CSS never applied AND `#screen-sandbox .sandbox-board { display: flex }` actively overrode any grid layout — renderBoard's 25 cells had no layout; (c) `#pileModal` was nested inside `#screen-game`, so opening a pile from the sandbox was impossible (ancestor display:none). User then directed: "make the sandbox screen look identical to the play screen but instead of the chat tab we have the sandbox control tab." Commit ca09eae rebuilt #screen-sandbox to mirror #screen-game's `.game-layout` 3-column grid exactly — same `.game-main` middle column (room-bar, P2 info-bar, P2 hand face-up, 5x5 board, P1 info-bar, P1 hand), same `.game-sidebar` right column but holding the sandbox toolbar instead of Log/Chat.
+
+**This INVERTS the original Phase 14.6 CONTEXT D1 decision.** D1 specified "P1 hand on TOP, P2 hand on BOTTOM" as the fixed god-view layout. The final shipped layout puts P2 (opponent seat) on top and P1 (self seat) on bottom — matching the live play screen's god-view layout. The layout remains FIXED (no flip/view-toggle button, no perspective-swap control) and both hands are face-up (still full god view). Rationale for override: user wanted visual consistency with the live play screen so the sandbox reads as a superset of the normal game UI rather than a parallel layout. The Playwright test `test_sandbox_layout_is_fixed_god_view` asserts `#sandbox-hand-p0.y < #sandbox-board.y < #sandbox-hand-p1.y` — i.e. P1 above the board, P2 below — which contradicts the earlier D1 text but matches the final DOM mount ordering. DOM mount IDs were kept (#sandbox-hand-p0 = P1, #sandbox-hand-p1 = P2) even though visual positioning via the `.game-main` grid reverses them. Plaintext rule: the DOM mount's `data-player` attribute is authoritative for which player's hand renders where.
+
+Playwright suite (`tests/e2e/test_sandbox_smoke.py`) — 5 tests of increasing complexity, all pass in 10.9s against localhost:5000:
+1. `test_sandbox_screen_renders` — DEV-01: sandbox tab opens, toolbar + search + zone select + slot name inputs visible, both hands empty.
+2. `test_sandbox_layout_is_fixed_god_view` — DEV-01: DOM vertical ordering asserts fixed god view, no flip button anywhere.
+3. `test_sandbox_search_and_add_to_hand` — DEV-02: search → click result → P1 Hand 1, P2 Hand 0 (per-player-row assertion).
+4. `test_sandbox_cheat_mana` — DEV-06: cheat input commits mana to 9, P1 Mana 9 reflected in stats row.
+5. `test_sandbox_server_slot_roundtrip` — DEV-08: save named slot → list → load → delete round trip via Socket.IO.
+
+Audits (both PASS):
+- `git diff bee1aad..HEAD -- src/grid_tactics/server/view_filter.py` → empty (byte-unchanged across the entire phase).
+- `git ls-files data/sandbox_saves/` → exactly `data/sandbox_saves/.gitkeep`. `.gitignore` contains `data/sandbox_saves/*` and `!data/sandbox_saves/.gitkeep`.
+
+All 9 roadmap success criteria PASS. DEV-01 through DEV-09 marked Complete in REQUIREMENTS.md traceability table. Phase 14.6 marked `[x]` complete (2026-04-11) in ROADMAP.md with 4/4 plans.
+
+Last activity: 2026-04-11 — Completed 14.6-04-PLAN.md (Playwright E2E + closeout); Phase 14.6 Sandbox Mode COMPLETE.
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -230,8 +256,8 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-04-11T10:55:00.000Z — Completed 14.6-01 (sandbox backend surface). Previous: 2026-04-08T22:45:00.000Z (14.5-07 phase closeout).
-Stopped at: Phase 14.6 Plan 01 fully shipped. SandboxSession class + RoomManager._sandboxes dict + 16 sandbox_* Socket.IO handlers + 62 backend tests (36 unit + 26 Socket.IO) all green. Real-game code path byte-unchanged outside additive insertion points (game_session.py / view_filter.py have empty git diffs). data/sandbox_saves/ exists with .gitkeep, gitignored. Plan committed in 4 atomic task commits (eed0d77, 4eb4bd2, fafc7f1, 2603ec7) plus this metadata commit. SUMMARY at .planning/phases/14.6-sandbox-mode/14.6-01-SUMMARY.md. Next: 14.6-02 (frontend wiring against the SandboxSession API).
+Last session: 2026-04-11T12:30:00.000Z — Completed 14.6 Phase (all 4 plans + closeout). Previous: 2026-04-11T11:10:00.000Z (14.6-03 sandbox interactive controls).
+Stopped at: Phase 14.6 Sandbox Mode COMPLETE. 4 plans shipped with 15 commits (eed0d77 / 4eb4bd2 / fafc7f1 / 2603ec7 / 2d7e3be for 14.6-01; 73fa68d / 7e3eb70 / e0f1ac1 for 14.6-02; 79570a1 / 3a96f7e / 4f4fa10 for 14.6-03; 099113c / ca09eae / baa239e for 14.6-04 including mid-phase orchestrator repair that rebuilt #screen-sandbox to mirror the live play layout per user override of the original D1 seat order). Playwright suite green (5/5 in 10.9s). Audits green (view_filter.py byte-unchanged, data/sandbox_saves gitignored). DEV-01..DEV-09 all Complete in REQUIREMENTS.md. Next: Phase 15 (Resilience & Polish) — reconnection handling, scrollable game log, rematch flow.
 
 Previous session (2026-04-07T20:45:00.000Z): Card-effects-and-action-flow audit followups complete. Tensor-engine parity for LEAP (CardTable.leap_amount precompute + _compute_move_mask LEAP override + apply_move_batch leap landing) and PASSIVE pipeline (CardTable.passive_burn_amount/passive_heal_amount + engine._fire_passive_effects_batch at turn flip, mirroring Python react_stack._fire_passive_effects). Bug-4 design clarification: BURN handler now stacks `int(effect.amount)` per tick so Emberplague's JSON amount=5 takes effect; tensor side already uses passive_burn_amount from the same JSON field. ActionEncoder _encode_move/_decode_move now leap-aware (collapse multi-step forward to unit cardinal on encode, walk over blockers on decode). 42 stale-assertion test failures swept to zero — pure test maintenance, no engine behavior changes. tests/conftest.py grew collect_ignore_glob for RL/tensor/server test files when torch/sb3/flask_socketio missing (single source of truth for ML-dep gating). Final: 538 passed, 4 skipped, 0 failed locally. Next: Phase 15 Resilience & Polish.
 Resume file: None

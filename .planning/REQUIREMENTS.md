@@ -38,6 +38,18 @@ Requirements for online PvP dueling milestone. Each maps to roadmap phases.
 - [ ] **POLISH-02**: User can see a scrollable game log showing action history
 - [ ] **POLISH-03**: User can click "Rematch" after game ends to start a new game in the same room
 
+### Dev Tooling — Sandbox
+
+- [x] **DEV-01**: User can open a Sandbox tab from the top nav and start an empty game session without going through lobby/room codes; layout is fixed dual-perspective (P1 top, P2 bottom, both hands face-up — full god view) — _Completed 2026-04-11. Note: mid-execution user override — the final layout mirrors the live play screen exactly (P2 opponent seat on top, P1 self seat on bottom), inverting the original D1 seat order. Still fixed, still full god view (both hands face-up), no flip/view-toggle button. See 14.6-04-SUMMARY.md._
+- [x] **DEV-02**: User can search the card library by name and add any card to a chosen ZONE (hand / deck top / deck bottom / graveyard / exhaust) for either player (completed 2026-04-11)
+- [x] **DEV-03**: User can move cards between zones (e.g. deck → hand, hand → grave, grave → exhaust) via the existing pile modals and hand row, and import a saved deck (deck-builder JSON shape) into a player's deck zone (completed 2026-04-11)
+- [x] **DEV-04**: User can take any legal action in the sandbox (play / move / attack / pass / react / tutor / sacrifice) using the same `legal_actions()` and `resolve_action()` code paths as real games (completed 2026-04-11)
+- [x] **DEV-05**: User can manually toggle which player is the active player (sets `state.active_player_idx`); engine-driven transitions during react/tutor phases still happen automatically (completed 2026-04-11)
+- [x] **DEV-06**: User can edit either player's `current_mana`, `max_mana`, and `hp` to any value at any time (full cheat mode — no rules enforcement on inputs) (completed 2026-04-11)
+- [x] **DEV-07**: User can save sandbox state to a downloadable JSON file, load it back, autosave to localStorage on every action, and share state as a base64 code that round-trips perfectly (completed 2026-04-11)
+- [x] **DEV-08**: User can save sandbox state to a NAMED server-side slot (`data/sandbox_saves/<slot>.json`), list slots, load by slot name, and delete slots — all via Socket.IO handlers (completed 2026-04-11)
+- [x] **DEV-09**: User can undo and redo at least 50 prior sandbox operations in one session (every state-mutating operation pushes the undo stack) (completed 2026-04-11)
+
 ## v1.0 Requirements (Completed)
 
 ### Game Engine
@@ -144,6 +156,15 @@ Which phases cover which requirements. Updated during roadmap creation.
 | POLISH-01 | Phase 15 | Pending |
 | POLISH-02 | Phase 15 | Pending |
 | POLISH-03 | Phase 15 | Pending |
+| DEV-01 | Phase 14.6 | Complete |
+| DEV-02 | Phase 14.6 | Complete |
+| DEV-03 | Phase 14.6 | Complete |
+| DEV-04 | Phase 14.6 | Complete |
+| DEV-05 | Phase 14.6 | Complete |
+| DEV-06 | Phase 14.6 | Complete |
+| DEV-07 | Phase 14.6 | Complete |
+| DEV-08 | Phase 14.6 | Complete |
+| DEV-09 | Phase 14.6 | Complete |
 
 ### v1.0 — Game Engine & RL (Historical)
 
