@@ -122,6 +122,13 @@ let sandboxUndoDepth = 0;
 let sandboxRedoDepth = 0;
 let sandboxCardDefs = null;         // separate from allCardDefs to avoid lobby pollution
 
+// Phase 14.6-03: Sandbox toolbar state
+let sandboxAddTargetIdx = 0;        // which player's zone the next added card goes into
+let sandboxAddZone = 'hand';        // which zone the next added card goes into
+let sandboxKnownSlots = [];         // last list of server slots from sandbox_slot_list
+const SANDBOX_AUTOSAVE_KEY = 'gt_sandbox_autosave_v1';
+let _sandboxToolbarBound = false;
+
 // Phase 14.6: snapshot of pre-sandbox globals for restore on screen exit
 let _sandboxPreSnapshot = null;
 
@@ -1872,7 +1879,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
 // Shared modal for all four pile buttons. Renders every card in the pile as
 // a full YGO-style frame via renderCardFrame(context: 'pile').
-function showPileModal(title, cardNumericIds) {
+// Phase 14.6-03: Optional third arg `sandboxCtx = { pileType, playerIdx }`
+// injects a "Move to..." button into each card cell when sandboxMode is true.
+function showPileModal(title, cardNumericIds, sandboxCtx) {
     var modal = document.getElementById('pileModal');
     var titleEl = document.getElementById('pileModalTitle');
     var grid = document.getElementById('pileModalGrid');
@@ -1896,6 +1905,15 @@ function showPileModal(title, cardNumericIds) {
                 numericId: nid,
                 showReactDeploy: false
             });
+            // Phase 14.6-03: Move-to button in sandbox mode
+            if (sandboxMode && sandboxCtx && typeof makeSandboxMoveButton === 'function') {
+                var pileType = sandboxCtx.pileType;
+                var srcZone;
+                if (pileType === 'graveyard') srcZone = 'graveyard';
+                else if (pileType === 'exhaust') srcZone = 'exhaust';
+                else srcZone = 'deck_top';
+                cell.appendChild(makeSandboxMoveButton(sandboxCtx.playerIdx, nid, srcZone));
+            }
             grid.appendChild(cell);
         });
     }
@@ -3310,7 +3328,13 @@ function clearSelection() {
 function submitAction(actionData) {
     if (isSpectator) { console.warn('spectator cannot submit action'); return; }
     if (socket) {
-        socket.emit('submit_action', actionData);
+        // === SANDBOX-EMIT-GATE-START ===
+        if (sandboxMode) {
+            socket.emit('sandbox_apply_action', actionData);
+        } else {
+            socket.emit('submit_action', actionData);
+        }
+        // === SANDBOX-EMIT-GATE-END ===
     }
     clearSelection();
 }
@@ -4867,6 +4891,12 @@ function renderHand(opts) {
                 (function(idx) {
                     cardEl.addEventListener('click', function() { onHandCardClick(idx); });
                 })(handIndex);
+                // Phase 14.6-03: additive "Move to..." affordance in sandbox
+                // mode. The existing play-from-hand click handler above is
+                // unchanged; this button is a sibling affordance.
+                if (sandboxMode && typeof makeSandboxMoveButton === 'function') {
+                    cardEl.appendChild(makeSandboxMoveButton(ownerIdx, numericId, 'hand'));
+                }
                 handEl.appendChild(cardEl);
             }
         });
@@ -5077,13 +5107,29 @@ function sandboxDeactivate() {
 }
 
 function initSandboxScreen() {
-    // Always create a fresh sandbox on (re)entering the screen -- one per tab.
-    // Plan 14.6-03 will replace this with a localStorage-restore-then-create flow.
     if (!socket || !socket.connected) {
         console.warn('[sandbox] socket not connected yet');
         return;
     }
-    socket.emit('sandbox_create');
+    setupSandboxToolbar();
+    // Try restore from localStorage; fall back to a fresh sandbox.
+    // Note: sandbox_load auto-creates the session server-side if it doesn't
+    // exist (see events.py:handle_sandbox_load) and also emits sandbox_card_defs
+    // so the renderers can resolve numeric ids.
+    var restored = false;
+    try {
+        var raw = localStorage.getItem(SANDBOX_AUTOSAVE_KEY);
+        if (raw) {
+            var payload = JSON.parse(raw);
+            socket.emit('sandbox_load', { payload: payload });
+            restored = true;
+        }
+    } catch (e) { /* corrupt -- just create fresh */ }
+    if (!restored) {
+        socket.emit('sandbox_create');
+    }
+    // Refresh server slot list every time the screen activates
+    socket.emit('sandbox_list_slots');
 }
 
 function setupSandboxSocketHandlers() {
@@ -5116,20 +5162,53 @@ function setupSandboxSocketHandlers() {
         sandboxUndoDepth = payload.undo_depth || 0;
         sandboxRedoDepth = payload.redo_depth || 0;
         // Push sandbox state into the swapped globals so the renderers and
-        // (in plan 14.6-03) the click handlers see it as "the current state".
+        // the click handlers see it as "the current state".
         if (sandboxMode) {
             gameState = sandboxState;
             myPlayerIdx = sandboxActiveViewIdx;
             legalActions = sandboxLegalActions;
         }
+        // Plan 14.6-03: autosave + toolbar state sync
+        try {
+            localStorage.setItem(SANDBOX_AUTOSAVE_KEY, JSON.stringify({
+                state: sandboxState,
+                active_view_idx: sandboxActiveViewIdx,
+            }));
+        } catch (e) { /* quota exceeded -- ignore */ }
+        if (typeof renderSandboxToolbarState === 'function') renderSandboxToolbarState();
         renderSandbox();
     });
     // === SANDBOX-STATE-HANDLER-END ===
 
     socket.on('sandbox_save_blob', function(data) {
-        // Plan 14.6-03 will wire this to download / share-code / localStorage.
-        // For plan 14.6-02 we just stash it on window for manual smoke testing.
-        window.__lastSandboxBlob = data && data.payload;
+        // Plan 14.6-03: download the blob as a JSON file
+        var payload = data && data.payload;
+        if (!payload) return;
+        var json = JSON.stringify(payload, null, 2);
+        var blob = new Blob([json], { type: 'application/json' });
+        var url = URL.createObjectURL(blob);
+        var a = document.createElement('a');
+        a.href = url;
+        var ts = new Date().toISOString().replace(/[:.]/g, '-');
+        a.download = 'sandbox-' + ts + '.json';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    });
+
+    // Phase 14.6-03: Server-side save slot events
+    socket.on('sandbox_slot_list', function(data) {
+        if (typeof renderSandboxSlotList === 'function') {
+            renderSandboxSlotList((data && data.slots) || []);
+        }
+    });
+    socket.on('sandbox_slot_saved', function(data) {
+        var input = document.getElementById('sandbox-slot-name');
+        if (input && data && input.value === data.slot_name) input.value = '';
+    });
+    socket.on('sandbox_slot_deleted', function(_data) {
+        // No-op; the slot list refresh handles UI update via sandbox_slot_list
     });
 }
 
@@ -5179,18 +5258,25 @@ function renderSandboxStats() {
     var target = document.getElementById('sandbox-stats');
     if (!target) return;
     if (!sandboxState || !sandboxState.players) return;
-    // Lightweight HP/mana/hand-size display. The toolbar-state renderer in
-    // plan 14.6-03 sits next to this; both read from the sandboxState dict.
+    // Lightweight HP/mana/hand-size display with pile-open buttons that
+    // surface the existing Phase 14.5 pile modal. In sandbox mode the pile
+    // modal injects a "Move to..." button per card row (see showPileModal
+    // sandboxCtx branch).
     var p0 = sandboxState.players[0];
     var p1 = sandboxState.players[1];
     if (!p0 || !p1) return;
+    function pileBtns(idx, p) {
+        return '<button class="btn btn-sm sandbox-pile-btn" data-pile="graveyard" data-player="' + idx + '">Grave ' + (p.grave ? p.grave.length : 0) + '</button>' +
+               '<button class="btn btn-sm sandbox-pile-btn" data-pile="exhaust" data-player="' + idx + '">Exhaust ' + (p.exhaust ? p.exhaust.length : 0) + '</button>' +
+               '<button class="btn btn-sm sandbox-pile-btn" data-pile="deck_top" data-player="' + idx + '">Deck ' + (p.deck ? p.deck.length : 0) + '</button>';
+    }
     target.innerHTML =
         '<div class="player-stats sandbox-player-row" data-player="0">' +
             '<strong>P1</strong>' +
             '<span>HP ' + p0.hp + '</span>' +
             '<span>Mana ' + p0.current_mana + '/' + p0.max_mana + '</span>' +
             '<span>Hand ' + (p0.hand ? p0.hand.length : 0) + '</span>' +
-            '<span>Deck ' + (p0.deck ? p0.deck.length : 0) + '</span>' +
+            pileBtns(0, p0) +
         '</div>' +
         '<div class="player-stats sandbox-meta-row">' +
             '<strong>Active: P' + ((sandboxState.active_player_idx || 0) + 1) + '</strong>' +
@@ -5202,8 +5288,400 @@ function renderSandboxStats() {
             '<span>HP ' + p1.hp + '</span>' +
             '<span>Mana ' + p1.current_mana + '/' + p1.max_mana + '</span>' +
             '<span>Hand ' + (p1.hand ? p1.hand.length : 0) + '</span>' +
-            '<span>Deck ' + (p1.deck ? p1.deck.length : 0) + '</span>' +
+            pileBtns(1, p1) +
         '</div>';
+    // Wire pile-open buttons (sandbox-only) to showPileModal with sandboxCtx
+    target.querySelectorAll('.sandbox-pile-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            var pileKey = btn.dataset.pile;
+            var playerIdx = parseInt(btn.dataset.player, 10);
+            var player = sandboxState.players[playerIdx];
+            if (!player) return;
+            var ids;
+            var title;
+            if (pileKey === 'graveyard') {
+                ids = player.grave || [];
+                title = 'P' + (playerIdx + 1) + ' Grave';
+            } else if (pileKey === 'exhaust') {
+                ids = player.exhaust || [];
+                title = 'P' + (playerIdx + 1) + ' Exhaust';
+            } else {
+                ids = player.deck || [];
+                title = 'P' + (playerIdx + 1) + ' Deck';
+            }
+            showPileModal(title, ids, { pileType: pileKey, playerIdx: playerIdx });
+        });
+    });
+}
+
+// ---------------------------------------------------------------------------
+// Phase 14.6-03: Interactive toolbar wiring
+// ---------------------------------------------------------------------------
+
+function setupSandboxToolbar() {
+    if (_sandboxToolbarBound) return;
+    _sandboxToolbarBound = true;
+
+    // ---- A1. Card search + zone-aware add (DEV-02) ----
+    var searchInput = document.getElementById('sandbox-search');
+    var resultsBox = document.getElementById('sandbox-search-results');
+    if (searchInput && resultsBox) {
+        searchInput.addEventListener('input', function() {
+            var q = searchInput.value.trim().toLowerCase();
+            if (!q) { resultsBox.hidden = true; resultsBox.innerHTML = ''; return; }
+            if (!sandboxCardDefs) return;
+            var matches = [];
+            var keys = Object.keys(sandboxCardDefs);
+            for (var i = 0; i < keys.length; i++) {
+                var nidStr = keys[i];
+                var def = sandboxCardDefs[nidStr];
+                if (def && def.name && def.name.toLowerCase().indexOf(q) !== -1) {
+                    matches.push({ nid: parseInt(nidStr, 10), def: def });
+                    if (matches.length >= 30) break;
+                }
+            }
+            resultsBox.innerHTML = matches.map(function(m) {
+                var cost = (m.def.mana_cost != null) ? m.def.mana_cost : '-';
+                return '<div class="sandbox-search-result" data-nid="' + m.nid + '">' +
+                       '<span class="sandbox-search-result-name">' + escapeHtml(m.def.name) + '</span>' +
+                       '<span class="sandbox-search-result-meta">cost ' + cost + '</span>' +
+                       '</div>';
+            }).join('');
+            resultsBox.hidden = matches.length === 0;
+        });
+        resultsBox.addEventListener('click', function(e) {
+            var row = e.target.closest('.sandbox-search-result');
+            if (!row) return;
+            var nid = parseInt(row.dataset.nid, 10);
+            socket.emit('sandbox_add_card_to_zone', {
+                player_idx: sandboxAddTargetIdx,
+                card_numeric_id: nid,
+                zone: sandboxAddZone,
+            });
+        });
+        document.addEventListener('click', function(e) {
+            if (!e.target.closest('.sandbox-search-wrap')) resultsBox.hidden = true;
+        });
+    }
+
+    // ---- A2. Target toggle (which player to add to) ----
+    document.querySelectorAll('.sandbox-target-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            sandboxAddTargetIdx = parseInt(btn.dataset.target, 10);
+            document.querySelectorAll('.sandbox-target-btn').forEach(function(b) {
+                b.classList.toggle('active', b === btn);
+            });
+        });
+    });
+
+    // ---- A3. Zone selector (which zone to add to) ----
+    var zoneSelect = document.getElementById('sandbox-zone-select');
+    if (zoneSelect) {
+        zoneSelect.addEventListener('change', function() {
+            sandboxAddZone = zoneSelect.value;
+        });
+    }
+
+    // ---- A4. Control toggle (set active_player_idx server-side; layout does NOT change) ----
+    document.querySelectorAll('.sandbox-control-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            var idx = parseInt(btn.dataset.control, 10);
+            socket.emit('sandbox_set_active_player', { player_idx: idx });
+        });
+    });
+
+    // ---- A5. Undo / Redo / Reset ----
+    var undoBtn = document.getElementById('sandbox-undo-btn');
+    if (undoBtn) undoBtn.addEventListener('click', function() { socket.emit('sandbox_undo'); });
+    var redoBtn = document.getElementById('sandbox-redo-btn');
+    if (redoBtn) redoBtn.addEventListener('click', function() { socket.emit('sandbox_redo'); });
+    var resetBtn = document.getElementById('sandbox-reset-btn');
+    if (resetBtn) resetBtn.addEventListener('click', function() {
+        if (confirm('Reset sandbox to empty? This will clear undo history.')) {
+            socket.emit('sandbox_reset');
+        }
+    });
+
+    // ---- A6. Save / Load (client-side JSON file) ----
+    var saveBtn = document.getElementById('sandbox-save-btn');
+    if (saveBtn) saveBtn.addEventListener('click', function() { socket.emit('sandbox_save'); });
+    var loadBtn = document.getElementById('sandbox-load-btn');
+    var fileInput = document.getElementById('sandbox-load-file');
+    if (loadBtn && fileInput) {
+        loadBtn.addEventListener('click', function() { fileInput.click(); });
+        fileInput.addEventListener('change', function(e) {
+            var file = e.target.files[0];
+            if (!file) return;
+            var reader = new FileReader();
+            reader.onload = function(ev) {
+                try {
+                    var payload = JSON.parse(ev.target.result);
+                    socket.emit('sandbox_load', { payload: payload });
+                } catch (err) {
+                    alert('Invalid JSON file: ' + err.message);
+                }
+                fileInput.value = '';
+            };
+            reader.readAsText(file);
+        });
+    }
+
+    // ---- A7. Share code (TextEncoder/TextDecoder -- NEVER escape/unescape) ----
+    var shareBtn = document.getElementById('sandbox-share-btn');
+    if (shareBtn) shareBtn.addEventListener('click', function() {
+        if (!sandboxState) return;
+        var payload = { state: sandboxState, active_view_idx: sandboxActiveViewIdx };
+        var code = sandboxEncodeShareCode(payload);
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(code).then(function() {
+                alert('Sandbox code copied to clipboard (' + code.length + ' chars)');
+            }, function() {
+                window.prompt('Copy this sandbox code:', code);
+            });
+        } else {
+            window.prompt('Copy this sandbox code:', code);
+        }
+    });
+    var pasteBtn = document.getElementById('sandbox-paste-btn');
+    if (pasteBtn) pasteBtn.addEventListener('click', function() {
+        var code = window.prompt('Paste sandbox code:');
+        if (!code) return;
+        try {
+            var payload = sandboxDecodeShareCode(code.trim());
+            socket.emit('sandbox_load', { payload: payload });
+        } catch (err) {
+            alert('Invalid sandbox code: ' + err.message);
+        }
+    });
+
+    // ---- B. Cheat inputs (DEV-06) --------------------------------------
+    // Emit on blur OR Enter -- NEVER on every keystroke (would spam the
+    // server and feel laggy). The server applies the value with NO
+    // validation -- full cheat mode.
+    document.querySelectorAll('.sandbox-cheat-input').forEach(function(input) {
+        function commit() {
+            var playerIdx = parseInt(input.dataset.player, 10);
+            var field = input.dataset.field;
+            var raw = input.value.trim();
+            if (raw === '') return;
+            var value = parseInt(raw, 10);
+            if (Number.isNaN(value)) return;
+            socket.emit('sandbox_set_player_field', {
+                player_idx: playerIdx,
+                field: field,
+                value: value,
+            });
+        }
+        input.addEventListener('blur', commit);
+        input.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                input.blur();  // triggers commit
+            }
+        });
+    });
+
+    // ---- C. Deck import (DEV-03) ---------------------------------------
+    // Reuses the existing deck-builder localStorage helper loadDeckSlots()
+    // which returns [{name, cards: {numericId: count}}, ...]
+    var importDeckBtn = document.getElementById('sandbox-import-deck-btn');
+    if (importDeckBtn) importDeckBtn.addEventListener('click', function() {
+        var slots = (typeof loadDeckSlots === 'function') ? loadDeckSlots() : [];
+        if (!slots.length) {
+            alert('No saved decks found. Build one in the Deck Builder first.');
+            return;
+        }
+        var lines = slots.map(function(s, i) {
+            var total = (typeof getDeckTotal === 'function') ? getDeckTotal(s.cards) : '?';
+            return i + ': ' + s.name + ' (' + total + ' cards)';
+        });
+        var choiceStr = window.prompt('Pick a deck to import:\n' + lines.join('\n') + '\n\nEnter index:');
+        if (choiceStr == null) return;
+        var choice = parseInt(choiceStr, 10);
+        if (Number.isNaN(choice) || choice < 0 || choice >= slots.length) {
+            alert('Invalid choice');
+            return;
+        }
+        var targetStr = window.prompt('Import to which player? Enter 1 or 2:');
+        if (targetStr == null) return;
+        var targetIdx = parseInt(targetStr, 10) - 1;
+        if (targetIdx !== 0 && targetIdx !== 1) {
+            alert('Player must be 1 or 2');
+            return;
+        }
+        var deckMap = slots[choice].cards || {};
+        var flat = [];
+        Object.keys(deckMap).forEach(function(nidStr) {
+            var nid = parseInt(nidStr, 10);
+            var count = deckMap[nidStr];
+            for (var k = 0; k < count; k++) flat.push(nid);
+        });
+        socket.emit('sandbox_import_deck', {
+            player_idx: targetIdx,
+            deck_card_ids: flat,
+        });
+    });
+
+    // ---- D. Server save slots (DEV-08) ---------------------------------
+    var slotSaveBtn = document.getElementById('sandbox-slot-save-btn');
+    if (slotSaveBtn) slotSaveBtn.addEventListener('click', function() {
+        var input = document.getElementById('sandbox-slot-name');
+        var name = (input && input.value || '').trim();
+        if (!name) { alert('Enter a slot name'); return; }
+        if (!/^[a-zA-Z0-9_-]{1,64}$/.test(name)) {
+            alert('Slot name must be 1-64 chars of letters, digits, underscore, or dash.');
+            return;
+        }
+        socket.emit('sandbox_save_slot', { slot_name: name });
+    });
+    var slotRefreshBtn = document.getElementById('sandbox-slot-refresh-btn');
+    if (slotRefreshBtn) slotRefreshBtn.addEventListener('click', function() {
+        socket.emit('sandbox_list_slots');
+    });
+}
+
+// ---- E. Move-card popover (DEV-03) ----------------------------------------
+// Called from showPileModal (in sandbox mode) and from renderHand (when
+// sandboxMode is true). Opens a small zone-picker popover anchored to the
+// clicked button; emits sandbox_move_card.
+var SANDBOX_ALL_ZONES = [
+    { value: 'hand',        label: 'Hand' },
+    { value: 'deck_top',    label: 'Deck top' },
+    { value: 'deck_bottom', label: 'Deck bottom' },
+    { value: 'graveyard',   label: 'Graveyard' },
+    { value: 'exhaust',     label: 'Exhaust' },
+];
+
+function openSandboxMovePopover(anchorEl, playerIdx, cardNumericId, srcZone) {
+    document.querySelectorAll('.sandbox-move-popover').forEach(function(el) { el.remove(); });
+    var pop = document.createElement('div');
+    pop.className = 'sandbox-move-popover';
+    SANDBOX_ALL_ZONES.forEach(function(z) {
+        if (z.value === srcZone) return;
+        var btn = document.createElement('button');
+        btn.className = 'sandbox-move-btn';
+        btn.textContent = z.label;
+        btn.addEventListener('click', function(e) {
+            e.stopPropagation();
+            socket.emit('sandbox_move_card', {
+                player_idx: playerIdx,
+                card_numeric_id: cardNumericId,
+                src_zone: srcZone,
+                dst_zone: z.value,
+            });
+            pop.remove();
+        });
+        pop.appendChild(btn);
+    });
+    var rect = anchorEl.getBoundingClientRect();
+    pop.style.top = (rect.bottom + window.scrollY) + 'px';
+    pop.style.left = (rect.left + window.scrollX) + 'px';
+    document.body.appendChild(pop);
+    setTimeout(function() {
+        document.addEventListener('click', function closeOnce(ev) {
+            if (!pop.contains(ev.target)) {
+                pop.remove();
+                document.removeEventListener('click', closeOnce);
+            }
+        });
+    }, 0);
+}
+
+function makeSandboxMoveButton(playerIdx, cardNumericId, srcZone) {
+    var btn = document.createElement('button');
+    btn.className = 'sandbox-move-btn';
+    btn.textContent = 'Move to...';
+    btn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        openSandboxMovePopover(btn, playerIdx, cardNumericId, srcZone);
+    });
+    return btn;
+}
+
+// ---- F. Server-saves list rendering --------------------------------------
+function renderSandboxSlotList(slots) {
+    sandboxKnownSlots = slots || [];
+    var list = document.getElementById('sandbox-slots-list');
+    if (!list) return;
+    list.innerHTML = '';
+    if (!sandboxKnownSlots.length) {
+        list.innerHTML = '<div class="sandbox-slots-empty">No server slots yet</div>';
+        return;
+    }
+    sandboxKnownSlots.forEach(function(name) {
+        var row = document.createElement('div');
+        row.className = 'sandbox-slot-row';
+        var nameSpan = document.createElement('span');
+        nameSpan.className = 'sandbox-slot-name';
+        nameSpan.textContent = name;
+        var loadBtn = document.createElement('button');
+        loadBtn.className = 'btn btn-sm';
+        loadBtn.textContent = 'Load';
+        loadBtn.addEventListener('click', function() {
+            socket.emit('sandbox_load_slot', { slot_name: name });
+        });
+        var deleteBtn = document.createElement('button');
+        deleteBtn.className = 'btn btn-sm';
+        deleteBtn.textContent = 'Delete';
+        deleteBtn.addEventListener('click', function() {
+            if (confirm('Delete server slot "' + name + '"? This cannot be undone.')) {
+                socket.emit('sandbox_delete_slot', { slot_name: name });
+            }
+        });
+        row.appendChild(nameSpan);
+        row.appendChild(loadBtn);
+        row.appendChild(deleteBtn);
+        list.appendChild(row);
+    });
+}
+
+// ---- G. Share-code helpers (TextEncoder/TextDecoder, NOT escape/unescape) ----
+function sandboxEncodeShareCode(stateDict) {
+    var json = JSON.stringify(stateDict);
+    var bytes = new TextEncoder().encode(json);
+    var binary = '';
+    for (var i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+    return btoa(binary);
+}
+function sandboxDecodeShareCode(code) {
+    var binary = atob(code);
+    var bytes = Uint8Array.from(binary, function(c) { return c.charCodeAt(0); });
+    var json = new TextDecoder().decode(bytes);
+    return JSON.parse(json);
+}
+function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, function(c) {
+        return { '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c];
+    });
+}
+
+// ---- H. Toolbar-state renderer --------------------------------------------
+// Called from the sandbox_state handler. Updates history pill, active-control
+// highlight, undo/redo enabled state, and syncs cheat inputs (without firing
+// blur, which would cause a feedback loop).
+function renderSandboxToolbarState() {
+    var status = document.getElementById('sandbox-history-status');
+    if (status) status.textContent = 'undo:' + sandboxUndoDepth + ' redo:' + sandboxRedoDepth;
+    document.querySelectorAll('.sandbox-control-btn').forEach(function(btn) {
+        var idx = parseInt(btn.dataset.control, 10);
+        btn.classList.toggle('active', idx === sandboxActiveViewIdx);
+    });
+    var undoBtn = document.getElementById('sandbox-undo-btn');
+    var redoBtn = document.getElementById('sandbox-redo-btn');
+    if (undoBtn) undoBtn.disabled = sandboxUndoDepth === 0;
+    if (redoBtn) redoBtn.disabled = sandboxRedoDepth === 0;
+    // Sync cheat input values (skip focused input so we don't clobber typing)
+    if (sandboxState && sandboxState.players) {
+        document.querySelectorAll('.sandbox-cheat-input').forEach(function(input) {
+            if (document.activeElement === input) return;
+            var playerIdx = parseInt(input.dataset.player, 10);
+            var field = input.dataset.field;
+            var player = sandboxState.players[playerIdx];
+            if (player && player[field] != null) {
+                input.value = String(player[field]);
+            }
+        });
+    }
 }
 
 // === SANDBOX-SECTION-END ===
