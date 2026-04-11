@@ -1125,10 +1125,10 @@ body {
   left: 50%;
   transform: translate(-50%, -50%);
   font-family: 'Inter', system-ui, sans-serif;
-  font-size: 5px;
+  font-size: 9px;
   font-weight: 900;
   color: white;
-  -webkit-text-stroke: 1px black;
+  -webkit-text-stroke: 3px black;
   paint-order: stroke fill;
   text-transform: uppercase;
   letter-spacing: 0;
@@ -1138,8 +1138,8 @@ body {
 
 .card-frame-full .attr-text,
 .card-frame-hand .attr-text {
-  font-size: 6px;
-  -webkit-text-stroke: 1px black;
+  font-size: 11px;
+  -webkit-text-stroke: 3px black;
 }
 
 .attr-wood {
