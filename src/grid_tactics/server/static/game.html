@@ -375,17 +375,6 @@
         <button class="btn btn-secondary full-width" id="btn-leave">Leave Game</button>
       </div>
 
-      <!-- Phase 14.5 Wave 5: Shared Pile Modal (grave / exhaust viewer) -->
-      <div id="pileModal" class="pile-modal-overlay" style="display:none;">
-        <div class="pile-modal">
-          <div class="pile-modal-header">
-            <div class="pile-modal-title" id="pileModalTitle">Pile</div>
-            <button class="pile-modal-close" id="pileModalClose" title="Close">×</button>
-          </div>
-          <div class="pile-grid" id="pileModalGrid"></div>
-        </div>
-      </div>
-
       <!-- Phase 14 PLAY-03: Game Over Overlay (hidden by default) -->
       <div id="game-over-overlay" class="game-over-overlay" style="display:none;">
         <div class="game-over-modal">
@@ -412,28 +401,110 @@
   </div>
 
   <!-- Screen: Sandbox (Phase 14.6) -->
-  <!-- LAYOUT IS FIXED dual-perspective god view per CONTEXT D1.       -->
-  <!-- P1 hand on TOP, P2 hand on BOTTOM. No flip-grid button, no      -->
-  <!-- view-toggle button, no spectator-style perspective swap. The    -->
-  <!-- "Controlling: P1 / P2" button added in plan 14.6-03 mutates     -->
-  <!-- state.active_player_idx server-side; it does NOT change layout. -->
+  <!-- Mirrors the #screen-game layout exactly (.game-layout > tooltip +     -->
+  <!-- game-main + game-sidebar), so renderBoard / renderHand render with    -->
+  <!-- the same CSS they use in a live game. The only difference is the      -->
+  <!-- right-hand sidebar: instead of Log/Chat, it holds all sandbox         -->
+  <!-- controls (search, zone picker, cheat inputs, save/load, slots).      -->
+  <!-- All IDs are sandbox-prefixed to avoid collision with #screen-game.    -->
   <div id="screen-sandbox" class="screen">
-    <div class="sandbox-container">
-      <div class="sandbox-toolbar" id="sandbox-toolbar">
+    <div class="game-layout sandbox-layout">
+      <!-- Left: empty tooltip sidebar slot (keeps 3-col grid parity with
+           #screen-game so the board sizes the same way). Hidden on mobile
+           via the existing .game-layout > .tooltip-sidebar media query. -->
+      <div class="tooltip-sidebar game-tooltip-sidebar">
+        <div class="tooltip-sidebar-hint">Sandbox mode</div>
+      </div>
 
-        <!-- Row 1: search + add-to-zone affordance -->
-        <div class="sandbox-row sandbox-row-search">
-          <div class="sandbox-search-wrap">
-            <input type="text" id="sandbox-search" class="input" placeholder="Search cards by name..." autocomplete="off">
-            <div id="sandbox-search-results" class="sandbox-search-results" hidden></div>
+      <!-- Middle: game-main (identical structure to live game) -->
+      <div class="game-main">
+        <div class="room-bar">
+          <span class="room-bar-code">SANDBOX</span>
+          <div class="turn-banner">
+            <span class="turn-text" id="sandbox-active-label">Active: P1</span>
           </div>
-          <div class="sandbox-target-toggle">
-            <span>Player:</span>
-            <button class="btn btn-sm sandbox-target-btn active" data-target="0">P1</button>
-            <button class="btn btn-sm sandbox-target-btn" data-target="1">P2</button>
+          <div class="phase-badge-container">
+            <span class="phase-badge phase-action" id="sandbox-phase-badge">ACTION</span>
+            <span class="turn-number" id="sandbox-turn-number">Turn 1</span>
           </div>
-          <div class="sandbox-zone-toggle">
-            <span>Zone:</span>
+          <span class="sandbox-history-status" id="sandbox-history-status" style="margin-left:auto;">undo:0 redo:0</span>
+        </div>
+
+        <!-- Player 2 info bar (top — mirrors opp-bar in live game) -->
+        <div class="info-bar opp-bar">
+          <span class="player-tag opp-tag">PLAYER 2</span>
+          <div class="stat-group">
+            <div class="stat"><span class="stat-label">HP</span><span class="stat-value stat-hp-opp" id="sandbox-p1-hp">20</span></div>
+            <div class="stat"><span class="stat-label">MANA</span><span class="stat-value stat-mana" id="sandbox-p1-mana">0/0</span></div>
+            <div class="stat"><span class="stat-label">HAND</span><span class="stat-value" id="sandbox-p1-handcount">0</span></div>
+            <div class="stat"><span class="stat-label">DECK</span><span class="stat-value" id="sandbox-p1-deck">0</span></div>
+            <button class="pile-btn sandbox-pile-btn" data-pile="graveyard" data-player="1" title="P2 grave">
+              <span class="pile-emoji">⚰️</span><span class="pile-count stat-emoji" id="sandbox-p1-grave">0</span>
+            </button>
+            <button class="pile-btn sandbox-pile-btn" data-pile="exhaust" data-player="1" title="P2 exhaust">
+              <span class="pile-emoji">🌀</span><span class="pile-count stat-emoji" id="sandbox-p1-exhaust">0</span>
+            </button>
+            <button class="pile-btn sandbox-pile-btn" data-pile="deck_top" data-player="1" title="P2 deck">
+              <span class="pile-emoji">🎴</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Player 2 hand (face-up, using the same .hand-container styling
+             as the live self-hand — god view shows both hands) -->
+        <div class="hand-container sandbox-hand-top" id="sandbox-hand-p1">
+          <!-- renderHand({ mount: this, state, ownerIdx: 1, godView: true }) -->
+        </div>
+
+        <!-- 5x5 Board -->
+        <div class="board-container">
+          <div id="sandbox-board" class="game-board">
+            <!-- 25 cells rendered by renderBoard({ mount: this, state }) -->
+          </div>
+        </div>
+
+        <!-- Player 1 info bar (bottom — mirrors self-bar in live game) -->
+        <div class="info-bar self-bar">
+          <span class="player-tag self-tag">PLAYER 1</span>
+          <div class="stat-group">
+            <div class="stat"><span class="stat-label">HP</span><span class="stat-value stat-hp-self" id="sandbox-p0-hp">20</span></div>
+            <div class="stat"><span class="stat-label">MANA</span><span class="stat-value stat-mana" id="sandbox-p0-mana">0/0</span></div>
+            <div class="stat"><span class="stat-label">HAND</span><span class="stat-value" id="sandbox-p0-handcount">0</span></div>
+            <div class="stat"><span class="stat-label">DECK</span><span class="stat-value" id="sandbox-p0-deck">0</span></div>
+            <button class="pile-btn sandbox-pile-btn" data-pile="graveyard" data-player="0" title="P1 grave">
+              <span class="pile-emoji">⚰️</span><span class="pile-count stat-emoji" id="sandbox-p0-grave">0</span>
+            </button>
+            <button class="pile-btn sandbox-pile-btn" data-pile="exhaust" data-player="0" title="P1 exhaust">
+              <span class="pile-emoji">🌀</span><span class="pile-count stat-emoji" id="sandbox-p0-exhaust">0</span>
+            </button>
+            <button class="pile-btn sandbox-pile-btn" data-pile="deck_top" data-player="0" title="P1 deck">
+              <span class="pile-emoji">🎴</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Player 1 hand (bottom, face-up) -->
+        <div class="hand-container sandbox-hand-bottom" id="sandbox-hand-p0">
+          <!-- renderHand({ mount: this, state, ownerIdx: 0, godView: true }) -->
+        </div>
+      </div>
+
+      <!-- Right: sandbox control panel (replaces Log/Chat sidebar) -->
+      <div class="game-sidebar">
+        <div class="sidebar-section" id="sandbox-control-panel">
+          <div class="sandbox-ctrl-title">Sandbox</div>
+
+          <!-- Search + add-to-zone -->
+          <div class="sandbox-ctrl-group">
+            <div class="sandbox-search-wrap">
+              <input type="text" id="sandbox-search" class="input" placeholder="Search cards..." autocomplete="off">
+              <div id="sandbox-search-results" class="sandbox-search-results" hidden></div>
+            </div>
+            <div class="sandbox-inline-row">
+              <span class="sandbox-inline-label">Add to:</span>
+              <button class="btn btn-sm sandbox-target-btn active" data-target="0">P1</button>
+              <button class="btn btn-sm sandbox-target-btn" data-target="1">P2</button>
+            </div>
             <select id="sandbox-zone-select" class="input">
               <option value="hand" selected>Hand</option>
               <option value="deck_top">Deck top</option>
@@ -442,71 +513,80 @@
               <option value="exhaust">Exhaust</option>
             </select>
           </div>
-        </div>
 
-        <!-- Row 2: control toggle + action buttons -->
-        <div class="sandbox-row sandbox-row-actions">
-          <div class="sandbox-control-toggle">
-            <span>Controlling:</span>
-            <button class="btn btn-sm sandbox-control-btn active" data-control="0">P1</button>
-            <button class="btn btn-sm sandbox-control-btn" data-control="1">P2</button>
+          <!-- Controlling toggle -->
+          <div class="sandbox-ctrl-group">
+            <div class="sandbox-inline-row">
+              <span class="sandbox-inline-label">Controlling:</span>
+              <button class="btn btn-sm sandbox-control-btn active" data-control="0">P1</button>
+              <button class="btn btn-sm sandbox-control-btn" data-control="1">P2</button>
+            </div>
           </div>
-          <div class="sandbox-actions">
-            <button class="btn btn-sm" id="sandbox-undo-btn" title="Undo last action">Undo</button>
-            <button class="btn btn-sm" id="sandbox-redo-btn" title="Redo">Redo</button>
-            <button class="btn btn-sm" id="sandbox-save-btn" title="Download state as JSON">Save</button>
-            <button class="btn btn-sm" id="sandbox-load-btn" title="Load JSON file">Load</button>
-            <input type="file" id="sandbox-load-file" accept="application/json" hidden>
-            <button class="btn btn-sm" id="sandbox-share-btn" title="Copy base64 share code to clipboard">Copy Code</button>
-            <button class="btn btn-sm" id="sandbox-paste-btn" title="Load from base64 share code">Paste Code</button>
-            <button class="btn btn-sm" id="sandbox-import-deck-btn" title="Load a deck from the deck builder">Load deck...</button>
-            <button class="btn btn-sm" id="sandbox-reset-btn" title="Reset to empty">Reset</button>
-            <span class="sandbox-history-status" id="sandbox-history-status">undo:0 redo:0</span>
+
+          <!-- Cheat inputs -->
+          <div class="sandbox-ctrl-group">
+            <div class="sandbox-ctrl-subtitle">Cheats</div>
+            <div class="sandbox-cheat-grid">
+              <div class="sandbox-cheat-col" data-player="0">
+                <strong>P1</strong>
+                <label>HP <input type="number" class="input sandbox-cheat-input" data-player="0" data-field="hp"></label>
+                <label>Mana <input type="number" class="input sandbox-cheat-input" data-player="0" data-field="current_mana"></label>
+                <label>Max <input type="number" class="input sandbox-cheat-input" data-player="0" data-field="max_mana"></label>
+              </div>
+              <div class="sandbox-cheat-col" data-player="1">
+                <strong>P2</strong>
+                <label>HP <input type="number" class="input sandbox-cheat-input" data-player="1" data-field="hp"></label>
+                <label>Mana <input type="number" class="input sandbox-cheat-input" data-player="1" data-field="current_mana"></label>
+                <label>Max <input type="number" class="input sandbox-cheat-input" data-player="1" data-field="max_mana"></label>
+              </div>
+            </div>
+          </div>
+
+          <!-- Undo / Redo / Save / Load / Share / Reset -->
+          <div class="sandbox-ctrl-group">
+            <div class="sandbox-ctrl-subtitle">State</div>
+            <div class="sandbox-btn-grid">
+              <button class="btn btn-sm" id="sandbox-undo-btn" title="Undo last action">Undo</button>
+              <button class="btn btn-sm" id="sandbox-redo-btn" title="Redo">Redo</button>
+              <button class="btn btn-sm" id="sandbox-save-btn" title="Download state as JSON">Save</button>
+              <button class="btn btn-sm" id="sandbox-load-btn" title="Load JSON file">Load</button>
+              <input type="file" id="sandbox-load-file" accept="application/json" hidden>
+              <button class="btn btn-sm" id="sandbox-share-btn" title="Copy base64 share code">Copy Code</button>
+              <button class="btn btn-sm" id="sandbox-paste-btn" title="Load base64 share code">Paste Code</button>
+              <button class="btn btn-sm" id="sandbox-import-deck-btn" title="Import a deck">Load deck</button>
+              <button class="btn btn-sm" id="sandbox-reset-btn" title="Reset to empty">Reset</button>
+            </div>
+          </div>
+
+          <!-- Server save slots -->
+          <div class="sandbox-ctrl-group sandbox-ctrl-slots">
+            <div class="sandbox-ctrl-subtitle">Server Saves</div>
+            <div class="sandbox-slots-header">
+              <input type="text" id="sandbox-slot-name" class="input" placeholder="slot_name" maxlength="64">
+              <button class="btn btn-sm" id="sandbox-slot-save-btn" title="Save to server">Save</button>
+              <button class="btn btn-sm" id="sandbox-slot-refresh-btn" title="Refresh list">↻</button>
+            </div>
+            <div class="sandbox-slots-list" id="sandbox-slots-list">
+              <!-- populated by renderSandboxSlotList() -->
+            </div>
           </div>
         </div>
+      </div>
 
-        <!-- Row 3: cheat-input panel (DEV-06) -->
-        <div class="sandbox-row sandbox-row-cheat">
-          <div class="sandbox-cheat-col" data-player="0">
-            <strong>P1 cheats</strong>
-            <label>HP <input type="number" class="input sandbox-cheat-input" data-player="0" data-field="hp"></label>
-            <label>Mana <input type="number" class="input sandbox-cheat-input" data-player="0" data-field="current_mana"></label>
-            <label>Max <input type="number" class="input sandbox-cheat-input" data-player="0" data-field="max_mana"></label>
-          </div>
-          <div class="sandbox-cheat-col" data-player="1">
-            <strong>P2 cheats</strong>
-            <label>HP <input type="number" class="input sandbox-cheat-input" data-player="1" data-field="hp"></label>
-            <label>Mana <input type="number" class="input sandbox-cheat-input" data-player="1" data-field="current_mana"></label>
-            <label>Max <input type="number" class="input sandbox-cheat-input" data-player="1" data-field="max_mana"></label>
-          </div>
-        </div>
+    </div>
+  </div>
 
-        <!-- Row 4: server-side save slots (DEV-08) -->
-        <div class="sandbox-row sandbox-row-slots">
-          <div class="sandbox-slots-header">
-            <strong>Server Saves</strong>
-            <input type="text" id="sandbox-slot-name" class="input" placeholder="slot_name" maxlength="64">
-            <button class="btn btn-sm" id="sandbox-slot-save-btn" title="Save current state to server slot">Save Slot</button>
-            <button class="btn btn-sm" id="sandbox-slot-refresh-btn" title="Refresh slot list">Refresh</button>
-          </div>
-          <div class="sandbox-slots-list" id="sandbox-slots-list">
-            <!-- populated by renderSandboxSlotList() -->
-          </div>
-        </div>
-
+  <!-- Phase 14.5 Wave 5: Shared Pile Modal (grave / exhaust viewer).
+       Moved to body-level in Phase 14.6 so it can open from either
+       #screen-game or #screen-sandbox (previously nested inside
+       #screen-game, which hid it when the sandbox screen was active). -->
+  <div id="pileModal" class="pile-modal-overlay" style="display:none;">
+    <div class="pile-modal">
+      <div class="pile-modal-header">
+        <div class="pile-modal-title" id="pileModalTitle">Pile</div>
+        <button class="pile-modal-close" id="pileModalClose" title="Close">×</button>
       </div>
-      <div class="sandbox-stats" id="sandbox-stats">
-        <!-- HP / mana / hand-size summary rendered by renderSandboxStats() -->
-      </div>
-      <div class="sandbox-hand sandbox-hand-p0-top" id="sandbox-hand-p0">
-        <!-- Player 1 hand (TOP, fixed): renderHand({ mount: this, state, ownerIdx: 0, godView: true }) -->
-      </div>
-      <div class="sandbox-board" id="sandbox-board">
-        <!-- 5x5 grid: renderBoard({ mount: this, state, perspectiveIdx }) -->
-      </div>
-      <div class="sandbox-hand sandbox-hand-p1-bottom" id="sandbox-hand-p1">
-        <!-- Player 2 hand (BOTTOM, fixed): renderHand({ mount: this, state, ownerIdx: 1, godView: true }) -->
-      </div>
+      <div class="pile-grid" id="pileModalGrid"></div>
     </div>
   </div>
 

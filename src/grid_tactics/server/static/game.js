@@ -5112,6 +5112,7 @@ function initSandboxScreen() {
         return;
     }
     setupSandboxToolbar();
+    _wireSandboxPileButtons();
     // Try restore from localStorage; fall back to a fresh sandbox.
     // Note: sandbox_load auto-creates the session server-side if it doesn't
     // exist (see events.py:handle_sandbox_load) and also emits sandbox_card_defs
@@ -5255,44 +5256,57 @@ function renderSandbox() {
 }
 
 function renderSandboxStats() {
-    var target = document.getElementById('sandbox-stats');
-    if (!target) return;
+    // Phase 14.6 (redesign): now populates the live-game-style info bars
+    // (opp-bar for P2 on top, self-bar for P1 on bottom) that live inside
+    // #screen-sandbox, plus the room-bar header (active player / phase /
+    // turn number). The old #sandbox-stats container has been removed.
     if (!sandboxState || !sandboxState.players) return;
-    // Lightweight HP/mana/hand-size display with pile-open buttons that
-    // surface the existing Phase 14.5 pile modal. In sandbox mode the pile
-    // modal injects a "Move to..." button per card row (see showPileModal
-    // sandboxCtx branch).
     var p0 = sandboxState.players[0];
     var p1 = sandboxState.players[1];
     if (!p0 || !p1) return;
-    function pileBtns(idx, p) {
-        return '<button class="btn btn-sm sandbox-pile-btn" data-pile="graveyard" data-player="' + idx + '">Grave ' + (p.grave ? p.grave.length : 0) + '</button>' +
-               '<button class="btn btn-sm sandbox-pile-btn" data-pile="exhaust" data-player="' + idx + '">Exhaust ' + (p.exhaust ? p.exhaust.length : 0) + '</button>' +
-               '<button class="btn btn-sm sandbox-pile-btn" data-pile="deck_top" data-player="' + idx + '">Deck ' + (p.deck ? p.deck.length : 0) + '</button>';
+
+    function setText(id, val) {
+        var el = document.getElementById(id);
+        if (el) el.textContent = val;
     }
-    target.innerHTML =
-        '<div class="player-stats sandbox-player-row" data-player="0">' +
-            '<strong>P1</strong>' +
-            '<span>HP ' + p0.hp + '</span>' +
-            '<span>Mana ' + p0.current_mana + '/' + p0.max_mana + '</span>' +
-            '<span>Hand ' + (p0.hand ? p0.hand.length : 0) + '</span>' +
-            pileBtns(0, p0) +
-        '</div>' +
-        '<div class="player-stats sandbox-meta-row">' +
-            '<strong>Active: P' + ((sandboxState.active_player_idx || 0) + 1) + '</strong>' +
-            '<span>Phase ' + sandboxState.phase + '</span>' +
-            '<span>Turn ' + sandboxState.turn_number + '</span>' +
-        '</div>' +
-        '<div class="player-stats sandbox-player-row" data-player="1">' +
-            '<strong>P2</strong>' +
-            '<span>HP ' + p1.hp + '</span>' +
-            '<span>Mana ' + p1.current_mana + '/' + p1.max_mana + '</span>' +
-            '<span>Hand ' + (p1.hand ? p1.hand.length : 0) + '</span>' +
-            pileBtns(1, p1) +
-        '</div>';
-    // Wire pile-open buttons (sandbox-only) to showPileModal with sandboxCtx
-    target.querySelectorAll('.sandbox-pile-btn').forEach(function(btn) {
+
+    // Player 1 info bar (bottom)
+    setText('sandbox-p0-hp', p0.hp);
+    setText('sandbox-p0-mana', p0.current_mana + '/' + p0.max_mana);
+    setText('sandbox-p0-handcount', p0.hand ? p0.hand.length : 0);
+    setText('sandbox-p0-deck', p0.deck ? p0.deck.length : 0);
+    setText('sandbox-p0-grave', p0.grave ? p0.grave.length : 0);
+    setText('sandbox-p0-exhaust', p0.exhaust ? p0.exhaust.length : 0);
+
+    // Player 2 info bar (top)
+    setText('sandbox-p1-hp', p1.hp);
+    setText('sandbox-p1-mana', p1.current_mana + '/' + p1.max_mana);
+    setText('sandbox-p1-handcount', p1.hand ? p1.hand.length : 0);
+    setText('sandbox-p1-deck', p1.deck ? p1.deck.length : 0);
+    setText('sandbox-p1-grave', p1.grave ? p1.grave.length : 0);
+    setText('sandbox-p1-exhaust', p1.exhaust ? p1.exhaust.length : 0);
+
+    // Room bar
+    setText('sandbox-active-label', 'Active: P' + ((sandboxState.active_player_idx || 0) + 1));
+    var phaseLabel = (sandboxState.phase === 1) ? 'REACT' : 'ACTION';
+    var phaseEl = document.getElementById('sandbox-phase-badge');
+    if (phaseEl) {
+        phaseEl.textContent = phaseLabel;
+        phaseEl.classList.toggle('phase-react', sandboxState.phase === 1);
+        phaseEl.classList.toggle('phase-action', sandboxState.phase !== 1);
+    }
+    setText('sandbox-turn-number', 'Turn ' + sandboxState.turn_number);
+}
+
+// Wire the static .sandbox-pile-btn buttons once at activation time.
+// (Previously rebuilt on every renderSandboxStats -- now the buttons are
+// static in the HTML info bars, so we attach listeners exactly once.)
+function _wireSandboxPileButtons() {
+    document.querySelectorAll('#screen-sandbox .sandbox-pile-btn').forEach(function(btn) {
+        if (btn.dataset.sandboxPileBound === '1') return;
+        btn.dataset.sandboxPileBound = '1';
         btn.addEventListener('click', function() {
+            if (!sandboxState) return;
             var pileKey = btn.dataset.pile;
             var playerIdx = parseInt(btn.dataset.player, 10);
             var player = sandboxState.players[playerIdx];

@@ -3420,156 +3420,188 @@ body {
   animation: opp-back-pop 400ms ease-out;
 }
 
-/* ============================================== */
-/* Phase 14.6: Sandbox screen layout              */
-/* (FIXED god view: P1 top, P2 bottom -- no flip) */
-/* ============================================== */
-#screen-sandbox .sandbox-container {
-  display: grid;
-  grid-template-rows: auto auto auto 1fr auto;
-  gap: 12px;
-  padding: 16px;
-  height: 100%;
-  box-sizing: border-box;
-}
-#screen-sandbox .sandbox-toolbar {
-  background: var(--panel-bg, #1a1a2e);
-  border-radius: 8px;
-  padding: 12px;
+/* ============================================================ */
+/* Phase 14.6: Sandbox screen layout                              */
+/* Mirrors #screen-game (.game-layout > tooltip + main + sidebar) */
+/* so renderBoard/renderHand reuse all live-game CSS. Only the    */
+/* right-hand sidebar content differs: sandbox controls replace   */
+/* the Log/Chat panel.                                            */
+/* ============================================================ */
+
+/* Sandbox sidebar panel (replaces .sidebar-section activity-panel) */
+#sandbox-control-panel {
   display: flex;
   flex-direction: column;
   gap: 10px;
-  align-items: stretch;
+  overflow-y: auto;
 }
-#screen-sandbox .sandbox-stats {
+#sandbox-control-panel .sandbox-ctrl-title {
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--cyan);
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 6px;
+  flex-shrink: 0;
+}
+#sandbox-control-panel .sandbox-ctrl-subtitle {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--muted);
+  margin-bottom: 4px;
+}
+#sandbox-control-panel .sandbox-ctrl-group {
   display: flex;
-  justify-content: space-between;
-  gap: 16px;
+  flex-direction: column;
+  gap: 6px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
 }
-#screen-sandbox .sandbox-board {
+#sandbox-control-panel .sandbox-ctrl-group:last-child {
+  border-bottom: none;
+}
+#sandbox-control-panel .sandbox-ctrl-slots {
+  flex: 1 1 auto;
+  min-height: 0;
   display: flex;
-  justify-content: center;
-  align-items: center;
+  flex-direction: column;
 }
-#screen-sandbox .sandbox-hand {
-  min-height: 120px;
+#sandbox-control-panel .sandbox-inline-row {
   display: flex;
-  gap: 8px;
-  justify-content: center;
-  align-items: center;
-}
-#screen-sandbox .sandbox-toolbar-placeholder {
-  color: #888;
-  font-style: italic;
-}
-
-/* ============================================== */
-/* Phase 14.6-03: Sandbox toolbar controls        */
-/* ============================================== */
-#screen-sandbox .sandbox-row {
-  display: flex;
-  gap: 12px;
+  gap: 4px;
   align-items: center;
   flex-wrap: wrap;
+}
+#sandbox-control-panel .sandbox-inline-label {
+  font-size: 11px;
+  color: var(--muted);
+  margin-right: 2px;
+}
+#sandbox-control-panel .btn-sm {
+  padding: 4px 8px;
+  font-size: 11px;
+}
+#sandbox-control-panel .input {
+  padding: 6px 8px;
+  font-size: 12px;
+  width: 100%;
+  box-sizing: border-box;
+}
+#sandbox-control-panel .sandbox-search-wrap {
+  position: relative;
   width: 100%;
 }
-#screen-sandbox .sandbox-search-wrap {
-  position: relative;
-  flex: 1 1 200px;
-  min-width: 200px;
-}
-#screen-sandbox .sandbox-search-results {
+#sandbox-control-panel .sandbox-search-results {
   position: absolute;
   top: 100%;
   left: 0;
   right: 0;
-  max-height: 280px;
+  max-height: 240px;
   overflow-y: auto;
-  background: var(--panel-bg, #1a1a2e);
-  border: 1px solid #444;
+  background: var(--card);
+  border: 1px solid var(--border);
   border-radius: 6px;
   z-index: 100;
   margin-top: 4px;
 }
-#screen-sandbox .sandbox-search-result {
-  padding: 6px 10px;
+.sandbox-search-result {
+  padding: 5px 8px;
   cursor: pointer;
   display: flex;
   justify-content: space-between;
-  gap: 8px;
-  border-bottom: 1px solid #2a2a3e;
-}
-#screen-sandbox .sandbox-search-result:hover { background: #2a2a3e; }
-#screen-sandbox .sandbox-search-result-name { font-weight: 600; }
-#screen-sandbox .sandbox-search-result-meta { color: #aaa; font-size: 0.85em; }
-#screen-sandbox .sandbox-target-toggle,
-#screen-sandbox .sandbox-zone-toggle,
-#screen-sandbox .sandbox-control-toggle,
-#screen-sandbox .sandbox-actions {
-  display: flex;
   gap: 6px;
-  align-items: center;
+  border-bottom: 1px solid var(--border);
+  font-size: 11px;
 }
-#screen-sandbox .sandbox-target-btn.active,
-#screen-sandbox .sandbox-control-btn.active {
-  background: var(--accent, #4a90e2);
-  color: white;
+.sandbox-search-result:hover { background: var(--card2); }
+.sandbox-search-result-name { font-weight: 600; }
+.sandbox-search-result-meta { color: var(--muted); font-size: 0.9em; }
+#sandbox-control-panel .sandbox-target-btn.active,
+#sandbox-control-panel .sandbox-control-btn.active {
+  background: var(--cyan);
+  color: #000;
 }
-#screen-sandbox .sandbox-history-status {
-  margin-left: 8px;
-  font-family: monospace;
-  font-size: 0.85em;
-  color: #888;
+#sandbox-control-panel .sandbox-cheat-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
 }
-#screen-sandbox .sandbox-cheat-col {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  padding: 6px 10px;
-  background: #14142a;
-  border-radius: 6px;
-}
-#screen-sandbox .sandbox-cheat-col label {
-  display: flex;
-  gap: 4px;
-  align-items: center;
-  font-size: 0.85em;
-}
-#screen-sandbox .sandbox-cheat-input {
-  width: 70px;
-}
-#screen-sandbox .sandbox-slots-header {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  flex-wrap: wrap;
-  width: 100%;
-}
-#screen-sandbox .sandbox-slots-list {
+#sandbox-control-panel .sandbox-cheat-col {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 3px;
+  padding: 6px;
+  background: var(--card2);
+  border-radius: 6px;
+}
+#sandbox-control-panel .sandbox-cheat-col strong {
+  font-size: 10px;
+  color: var(--muted);
+}
+#sandbox-control-panel .sandbox-cheat-col label {
+  display: flex;
+  gap: 3px;
+  align-items: center;
+  font-size: 10px;
+}
+#sandbox-control-panel .sandbox-cheat-input {
   width: 100%;
+  padding: 3px 4px;
+  font-size: 11px;
+}
+#sandbox-control-panel .sandbox-btn-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+}
+#sandbox-control-panel .sandbox-slots-header {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 4px;
+  align-items: center;
+}
+#sandbox-control-panel .sandbox-slots-list {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
   margin-top: 6px;
-  max-height: 200px;
+  flex: 1 1 auto;
+  min-height: 0;
   overflow-y: auto;
 }
-#screen-sandbox .sandbox-slot-row {
-  display: flex;
-  gap: 8px;
+.sandbox-slot-row {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 4px;
   align-items: center;
-  padding: 4px 8px;
-  background: #14142a;
+  padding: 4px 6px;
+  background: var(--card2);
   border-radius: 4px;
+  font-size: 11px;
 }
-#screen-sandbox .sandbox-slot-name {
-  flex: 1;
+.sandbox-slot-name {
   font-family: monospace;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
-#screen-sandbox .sandbox-slots-empty {
-  color: #888;
+.sandbox-slots-empty {
+  color: var(--muted);
   font-style: italic;
-  padding: 4px 8px;
+  padding: 4px;
+  font-size: 11px;
+}
+/* History status pill (top room-bar) */
+#screen-sandbox .sandbox-history-status {
+  font-family: monospace;
+  font-size: 11px;
+  color: var(--muted);
+  padding: 2px 8px;
+  background: var(--card2);
+  border-radius: 4px;
 }
 /* "Move to..." popover for cards in pile modals + hand rows */
 #screen-sandbox .sandbox-move-popover,
