@@ -4900,9 +4900,9 @@ function getEffectDescription(effects, cardData) {
                 } else if (typeof tt === 'object') {
                     // Selector dict: {tribe: "Rat"} etc.
                     var selParts = [];
-                    if (tt.tribe) selParts.push(tt.tribe.toLowerCase() + (amount > 1 ? 's' : ''));
-                    if (tt.element) selParts.push(tt.element.toLowerCase());
-                    if (tt.card_type) selParts.push(tt.card_type.toLowerCase());
+                    if (tt.tribe) selParts.push(tt.tribe + (amount > 1 ? 's' : ''));
+                    if (tt.element) selParts.push(tt.element);
+                    if (tt.card_type) selParts.push(tt.card_type);
                     desc = prefix + 'Tutor ' + tutorCount + (selParts.join(' ') || 'card');
                 } else {
                     desc = prefix + 'Tutor ' + tutorCount + tt;
