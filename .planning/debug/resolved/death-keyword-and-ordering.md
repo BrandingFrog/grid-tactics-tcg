@@ -1,8 +1,9 @@
 ---
-status: verifying
+status: resolved
 trigger: "Death: keyword does not fire; no ordering system for simultaneous death triggers"
 created: 2026-04-11T00:00:00Z
 updated: 2026-04-11T00:00:00Z
+resolved: 2026-04-11T00:00:00Z
 ---
 
 ## Current Focus
@@ -305,4 +306,77 @@ of the new click-target death-modal pattern.
   test_observation, test_fatigue_fix, test_events spectator, e2e
   sandbox smoke) are unrelated — confirmed by running them against
   the stashed pre-change state.
+
+## Closeout (2026-04-11)
+
+Status flipped `verifying` → `resolved` after adding sandbox end-to-end
+Playwright coverage on top of the 215 targeted unit tests. Moving this
+file into `.planning/debug/resolved/`.
+
+### Additional e2e coverage (commit d35aab8)
+
+Added `tests/e2e/test_sandbox_death_mechanics.py` — 3 Playwright tests
+that exercise the fix through the full UI → Socket.IO → Python engine
+path in the sandbox:
+
+1. `test_giant_rat_death_promotes_friendly_rat` — deploys Common Rat +
+   Giant Rat via PLAY_CARD, kills the Giant Rat with a P2 Fireball,
+   asserts the Common Rat is transformed in place to card_numeric_id
+   13 (Giant Rat), board shrinks to 1 minion, dead Giant Rat lands
+   in P1 graveyard. Proves DEFECT #2 fix (Python engine PROMOTE parity).
+
+2. `test_giant_rat_unique_constraint_blocks_promotion` — two Giant
+   Rats alive + one Common Rat candidate; kills one Giant Rat;
+   asserts the Common Rat is NOT promoted because the unique
+   constraint fires. Guards against a regression that would open
+   a rat-promotion chain.
+
+3. `test_lasercannon_death_opens_target_modal` — builds the 2-robot
+   sacrifice Lasercannon deploy (hand index 2, sacrifice_card_index 0,
+   action_resolver auto-picks sacrifice #2), kills it with a P1
+   Fireball, asserts `pending_death_target_owner_idx === 1`,
+   `pending_death_card_name === "RGB Lasercannon"`,
+   `pending_death_valid_targets === [[0, 0]]`, then submits
+   `DEATH_TARGET_PICK { target_pos: [0, 0] }` and asserts the rat is
+   destroyed + the modal clears. Proves DEFECT #1 fix (Lasercannon
+   destroy/single_target modal) all the way through to the DOM.
+
+### Incidental bug found and fixed
+
+Writing test 3 surfaced a real sandbox emission gap:
+`src/grid_tactics/server/events.py::_emit_sandbox_state` was never
+updated when the death-modal machinery landed. It called
+`enrich_pending_post_move_attack` but not `enrich_pending_death_target`,
+so death modals were silently invisible to the sandbox client — the
+session appeared stuck from the user's POV.
+
+Fix (commit d35aab8): added `enrich_pending_death_target(state, dict,
+viewer, library)` to `_emit_sandbox_state`, with the viewer picked from
+`pending_death_target.owner_idx` when a modal is active (god-view
+routing). Without this fix, test 3 failed at the
+`pending_death_target_owner_idx === 1` wait because the field was
+absent from the wire.
+
+### Test infrastructure notes
+
+The new Playwright file needs `socket.io.min.js`, which the sandbox
+HTML loads from `cdn.socket.io` — blocked in hermetic environments.
+Vendored as `tests/e2e/_assets/socket.io.min.js` (49.7 KB, pulled
+from the socket.io-client 4.7.4 npm tarball on
+`registry.npmjs.org`, which is allowed). The test fixture uses
+`page.route()` to intercept CDN requests and serve the local copy.
+The pre-existing `tests/e2e/test_sandbox_smoke.py` does NOT have this
+workaround and so still fails in hermetic envs with `io is not
+defined` — pre-existing, unrelated to this fix.
+
+### Final verification
+
+- 3/3 new Playwright e2e tests pass (6.88s)
+- 13/13 `TestDeathKeyword*` unit tests pass (0.59s)
+- 62 sandbox session + event unit tests still pass
+- All 4 defects from the original hypothesis closed:
+  - DEFECT #1 (Lasercannon destroy no-op): unit + e2e
+  - DEFECT #2 (Giant Rat promote no-op): unit + e2e
+  - DEFECT #3 (chain-reaction one-pass): unit
+  - DEFECT #4 (ordering active-player-first): unit
 

@@ -610,6 +610,17 @@ def register_events(room_manager: RoomManager) -> None:
         """Single source of truth for sandbox state emission. God view, no filter."""
         state_dict = sandbox.state.to_dict()
         enrich_pending_post_move_attack(sandbox.state, state_dict, sandbox.library)
+        # Death-trigger modal (Lasercannon and similar): the sandbox is god
+        # view, so the picker is always the dying minion's owner. Pass that
+        # owner_idx as the viewer so the picker-only fields (card name,
+        # valid targets, filter) make it onto the wire.
+        _death_viewer = 0
+        _pdt = getattr(sandbox.state, "pending_death_target", None)
+        if _pdt is not None:
+            _death_viewer = int(_pdt.owner_idx)
+        enrich_pending_death_target(
+            sandbox.state, state_dict, _death_viewer, sandbox.library,
+        )
         actions = sandbox.legal_actions() if not sandbox.state.is_game_over else ()
         serialized = [serialize_action(a) for a in actions]
         emit("sandbox_state", {
