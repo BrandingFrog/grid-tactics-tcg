@@ -13,7 +13,7 @@ progress:
   plans_total_in_phase: 4
   percent: 100
 inserted_phases:
-  - 9.1: SMW DisplayTitleLookup Backtick Fix — not planned
+  - 9.1: SMW DisplayTitleLookup Backtick Fix — complete (2026-04-11)
   - 9.2: Semantic Drilldown Faceted Card Search — not planned
 ---
 
@@ -28,10 +28,10 @@ See: `.planning/PROJECT.md`
 
 ## Current Position
 
-Phase: 9 of 9 (Launch Polish)
-Plan: 04 of 4 complete -- Final verification passed
-Status: COMPLETE. All 9 phases, all 16 plans done.
-Last activity: 2026-04-09 -- Completed 09-04 (Final verification, all Phase 9 criteria pass)
+Phase: 9 of 9 (Launch Polish) + inserted 9.1 complete, 9.2 pending
+Plan: 09.1-01 of 1 complete
+Status: COMPLETE. All 9 phases + 9.1 done; 9.2 pending.
+Last activity: 2026-04-11 -- Completed 09.1-01 (SMW 6.0.x upgrade, DisplayTitleLookup backtick fix verified across 9 SMW-backed category pages, Special:Browse, and Semantic:Showcase's 7 #ask queries)
 
 Progress: `██████████` 100%
 
@@ -121,11 +121,19 @@ Progress: `██████████` 100%
 - **[01-04]** Sample cards source values from the real `data/cards/*.json`, not from illustrative values in plan text. This makes Phase 1's sample an honest dry-run of Phase 3's sync path.
 - **[01-04]** Rules-text synthesis for cards without a `rules_text` field: derive from `activated_ability` or `effects` blocks. Phase 3 should formalize this as a dedicated helper in `sync_cards.py`.
 - **[01-04]** Subobject emission (`{{#subobject:}}`) intentionally deferred to Phase 3 — Phase 1 sample proves basic property annotations only.
+- **[09.1-01]** SMW 5.1.x is **obsolete** per upstream — only officially supports MW ≤ 1.43.1; we run MW 1.43.8, already outside the window. Pinned SMW to `~6.0` in `wiki/Dockerfile` (resolves to 6.0.1 or later). No schema migration needed (SMW 6.0.0 release notes: "no update.php or other migration scripts required"). Upstream fix = PR #6172 / commit `600f520`, merged 2025-08-04, released in SMW 6.0.0 (2025-08-12) and 6.0.1 (2025-08-26).
+- **[09.1-01]** Railway auto-redeploys on any commit to master when the service's `rootDirectory` is `wiki/`. Cache-bust comment on `wiki/Dockerfile:30` forces a full composer install layer rebuild (otherwise `composer require` is a cached no-op and the pin bump has no effect). Always bump the cache-bust comment alongside any composer-require change.
+- **[09.1-01]** Fresh MediaWiki containers on Railway sometimes can't resolve `mysql.railway.internal:3306` and get stuck in an entrypoint retry loop. Two deploys in a row during 9.1 rollout hit this; first one broke through on its own after ~2 min of retries, second one required `serviceInstanceRedeploy` to force a fresh container. This is a Railway mesh DNS staleness issue, not anything in our stack. If `deploymentLogs` show repeated `[entrypoint] ...retry N` lines and the wiki is 502, the fix is `serviceInstanceRedeploy` on service `08a52887-a4ab-4f22-b03d-006da72e07f7`. Don't touch MySQL.
+- **[09.1-01]** `MW_DEBUG=1` is an ops-side gate in `wiki/LocalSettings.php` (commit `4c7eeb1`) that routes PHP errors to stderr AND into HTTP 500 response bodies. Toggle via Railway env-var mutation (`variableUpsert`) — flip on during any SMW-adjacent rollout, flip off after verification. Keep the gate in place permanently; control it via env var, not by removing the block from LocalSettings.
+- **[09.1-01]** `Card:Ratchanter` title rendering is the canonical DISPLAYTITLE round-trip smoke test for SMW changes. Check the rendered `<h1>` or `<title>` — if it starts with `Card:`, DISPLAYTITLE is broken and the `_DTITLE` → `smw_fpt_dtitle` pipeline regressed. Under SMW 6.0.x this renders correctly as just "Ratchanter".
+- **[09.1-01]** **SMW upgrades require an authenticated null-edit to invalidate rendered `#ask` query output.** MediaWiki's `action=purge` (even with `forcerecursivelinkupdate=1`) only invalidates page link data, not the parser cache for inline SMW queries. After the 9.1 upgrade, `Semantic:Showcase` was still showing partial pre-upgrade renders (only 2 of 7 queries had tables) until `python -m sync.sync_showcase` ran an authenticated edit. Phase 9.2 execution must re-run the taxonomy/showcase sync scripts post-install so the faceted pages don't serve stale results.
+- **[09.1-01]** Canonical category names on this wiki are **element + " cards"** (e.g. `Category:Fire cards`, `Category:Dark cards`) and type-pluralized (`Category:Minions`, NOT `Category:Minion`). The plan's test case used `Category:Minion` which is a legitimate 404, not a 500. Future verification should pull category names from `wiki/sync/sync_taxonomy.py::scan_elements` + explicit knowledge of the type-plural convention, not ad-hoc guesses.
 
 ### Roadmap Evolution
 
 - **2026-04-11** — Phase **9.1** inserted after Phase 9: *SMW DisplayTitleLookup Backtick Fix* (URGENT). `Category:Card` returns HTTP 500 on SMW 5.1.0 + MW 1.43.8. Root cause captured via `MW_DEBUG=1` on Railway deployment `ad905e6e`: `SMW\SQLStore\Lookup\DisplayTitleLookup.php:124` pre-wraps table name in backticks, MW 1.43's Rdbms `SQLPlatform::addIdentifierQuotes` rejects pre-quoted identifiers. Blocking the in-game "Wiki" nav link and any Drilldown UI work. Fix options: Dockerfile sed patch, composer-patches, or SMW upstream upgrade if a patch release lands.
-- **2026-04-11** — Phase **9.2** inserted after Phase 9.1: *Semantic Drilldown Faceted Card Search*. Tier-2 upgrade on the existing SMW enrichment (20 typed properties per card already populated by `sync_cards.py`). Will install `mediawiki/semantic-drilldown`, create `Filter:Element`, `Filter:CardType`, `Filter:Tribe`, `Filter:ManaCost`, `Filter:Attack`, `Filter:HP`, `Filter:Keyword` via a new `sync_filters.py`, and point "All Cards" at `Special:BrowseData/Card`. Hard-blocked by 9.1 because Drilldown's landing hits the same DisplayTitleLookup prefetch path.
+- **2026-04-11** — Phase **9.1 COMPLETED**. SMW bumped from `~5.0` (5.1.0, obsolete, crash on MW 1.43.8) → `~6.0` (6.0.1, supports MW 1.43-1.44). Two-line Dockerfile change (cache-bust comment + composer pin), no schema migration required. `Category:Card` and 8 sibling SMW-backed category pages return HTTP 200. `Special:Browse/Card:Ratchanter` renders all typed properties including "Display title of" (the property backing `smw_fpt_dtitle`). `Semantic:Showcase`'s 7 `#ask` queries all render correct live data after a null-edit re-parse via `sync_showcase.py`. SMW ask API returned 26 Minion results, confirming Phase 9.2 is unblocked. `MW_DEBUG` flipped back to 0. Commit `2712922` → Railway deployment `5486d08f` (build) → `87bd7f5e` (active after manual redeploy to break MySQL mesh-DNS retry loop).
+- **2026-04-11** — Phase **9.2** inserted after Phase 9.1: *Semantic Drilldown Faceted Card Search*. Tier-2 upgrade on the existing SMW enrichment (20 typed properties per card already populated by `sync_cards.py`). Will install `mediawiki/semantic-drilldown`, create `Filter:Element`, `Filter:CardType`, `Filter:Tribe`, `Filter:ManaCost`, `Filter:Attack`, `Filter:HP`, `Filter:Keyword` via a new `sync_filters.py`, and point "All Cards" at `Special:BrowseData/Card`. Hard-blocked by 9.1 because Drilldown's landing hits the same DisplayTitleLookup prefetch path. **Unblocked as of 2026-04-11.**
 
 ### Pending Todos
 
@@ -146,6 +154,6 @@ Progress: `██████████` 100%
 
 ## Session Continuity
 
-Last session: 2026-04-09
-Stopped at: Completed 09-04 -- All Phase 9 criteria verified. v1.0 milestone complete.
+Last session: 2026-04-11
+Stopped at: Completed 09.1-01 -- SMW 6.0.x verified green on live Railway wiki. Phase 9.2 Drilldown unblocked.
 Resume file: None

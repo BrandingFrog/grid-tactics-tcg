@@ -187,9 +187,10 @@ Plans:
 
 ---
 
-### Phase 9.1: SMW DisplayTitleLookup Backtick Fix (INSERTED)
+### Phase 9.1: SMW DisplayTitleLookup Backtick Fix (INSERTED) ✓
 
 **Goal:** `/wiki/Category:Card` (and every other SMW-prefetched category page) returns HTTP 200 instead of HTTP 500 under the pinned SMW 5.1.0 + MW 1.43.8 pairing.
+**Status:** COMPLETE 2026-04-11. Bumped SMW composer pin `~5.0` → `~6.0` in `wiki/Dockerfile` (commit `2712922`). SMW 6.0.1 contains upstream PR #6172 which removes the redundant `$connection->tablename()` wrapper. Verified green across 9/9 SMW-backed category pages, Special:Browse renders all typed properties including `"Display title of"` (the property backing `smw_fpt_dtitle`), and Semantic:Showcase's 7 `#ask` queries all render correct live data under SMW 6.0.x. Phase 9.2 unblock proxy (SMW ask API) passed with 26 results. MW_DEBUG flipped back to 0 post-verification.
 **Depends on:** Phase 9 (runs against the already-live wiki)
 **Urgency:** Blocking — `Category:Card` is the primary entry point from the game client's in-app "Wiki" nav link (`src/grid_tactics/server/static/game.html:24`) and from `Main Page → All Cards`. Also a hard prerequisite for Phase 9.2 (Drilldown) because the Drilldown landing page hits the same `DisplayTitleLookup` prefetch codepath.
 Plans:
@@ -223,7 +224,7 @@ Plans:
 ### Phase 9.2: Semantic Drilldown Faceted Card Search (INSERTED)
 
 **Goal:** "All Cards" on the wiki becomes a faceted card-search UI (Element / CardType / Tribe / ManaCost / Attack / HP / Keyword) backed by the existing SMW property annotations from `sync_cards.py`, with URL-bookmarkable filter state and multi-select facets.
-**Depends on:** Phase 9.1 (blocking — Drilldown's `Special:BrowseData/Card` landing hits the DisplayTitleLookup prefetch codepath)
+**Depends on:** Phase 9.1 ✓ (9.1 verified 2026-04-11 — DisplayTitleLookup prefetch no longer crashes on SMW 6.0.x; ask API returns correct results)
 **Plans:** TBD (run `/gsd:plan-phase 9.2` to break down)
 
 **Context:**
@@ -262,7 +263,7 @@ The SMW enrichment pipeline (`wiki/sync/schema.py`, `wiki/sync/templates/Card.wi
 | 7 - Semantic Query Showcase & Homepage | complete | 2026-04-09 |
 | 8 - Idempotency, Drift Detection & Reliability | complete | 2026-04-09 |
 | 9 - Launch Polish | complete | 2026-04-09 |
-| 9.1 - SMW DisplayTitleLookup Backtick Fix (INSERTED) | not planned | - |
+| 9.1 - SMW DisplayTitleLookup Backtick Fix (INSERTED) | complete | 2026-04-11 |
 | 9.2 - Semantic Drilldown Faceted Card Search (INSERTED) | not planned | - |
 
 ## Coverage
