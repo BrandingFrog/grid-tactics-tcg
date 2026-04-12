@@ -99,15 +99,15 @@ A fantasy trading card game on a 5x5 grid with RL-driven strategy discovery. Pla
 ## Architecture
 
 ### Two Game Engines
-1. **Python engine** (`src/grid_tactics/`) — Immutable dataclass-based. Used for tests and correctness verification.
-2. **Tensor engine** (`src/grid_tactics/tensor_engine/`) — PyTorch batched tensors. Runs N games simultaneously on GPU. Used for training.
+1. **Python engine** (`src/grid_tactics/`) — Immutable dataclass-based. Used for the live PvP server, tests, and correctness verification. **This is the active engine.**
+2. **Tensor engine** (`src/grid_tactics/tensor_engine/`) — PyTorch batched tensors. Runs N games simultaneously on GPU. Originally built for RL training. **Status: on hold.** The game rules are still evolving rapidly (new keywords, card effects, react mechanics), so keeping two engines in sync is costly. The tensor engine will be revisited once the card set and rules stabilize. Code is preserved but not actively maintained.
 
 ### Key Integration Points
-- **Tensor Engine -> Training**: `tensor_train.py` calls `engine.step_batch(actions)` for all N games in parallel, collects rollouts on GPU, runs PPO gradient updates.
 - **Training -> Supabase**: `supabase-py` REST client writes training_runs, training_snapshots, card_stats, game_results to PostgreSQL.
 - **Supabase -> Dashboard**: Vercel HTML page reads via `supabase-js` anon key. Realtime subscriptions auto-refresh.
-- **Code Deploy**: `deploy_runpod.py` uploads tarball to Supabase Storage, RunPod pods download and run.
 - **Action Masking**: Legal action mask [N, 1262] computed on GPU by `legal_actions.py`. Prevents agent from selecting illegal actions.
+- ~~**Tensor Engine -> Training**: `tensor_train.py` calls `engine.step_batch(actions)` — on hold until rules stabilize.~~
+- ~~**Code Deploy**: `deploy_runpod.py` uploads tarball to Supabase Storage — on hold.~~
 ## Version Compatibility Matrix
 | Package | Version | Python Requirement | Notes |
 |---------|---------|-------------------|-------|
