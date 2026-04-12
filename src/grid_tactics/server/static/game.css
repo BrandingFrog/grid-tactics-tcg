@@ -506,7 +506,7 @@ body {
 
 @media (max-width: 700px) {
   .card-browser-grid {
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: 1fr;
   }
 }
 
@@ -2352,11 +2352,10 @@ body {
   .filter-checkbox { font-size: 8px; }
 
   .card-browser-grid {
-    grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
-    gap: 6px;
+    grid-template-columns: 1fr;
+    gap: 8px;
   }
 
-  .card-frame-full { width: 120px; }
   .card-name-overlay { font-size: 10px; }
   .card-effect-full { font-size: 8px; }
   .card-flavour { font-size: 8px; }
@@ -2385,6 +2384,9 @@ body {
   .card-frame { width: 70px; }
   .card-frame-hand { width: 132px; }
   .hand-container { max-height: 228px; min-height: 80px; }
+
+  /* Deck builder cards: single-column, wider than game hand cards */
+  .card-frame-full { width: 220px; }
 }
 
 /* ===== Phase 14 PLAY-02: React Window UI ===== */
