@@ -178,20 +178,26 @@ def test_ratical_resurrection(sb):
 
 
 def test_to_the_ratmobile(sb):
-    """To The Ratmobile: tutor a rat from deck to hand."""
+    """To The Ratmobile: tutor rat(s) from deck to hand. Requires TUTOR_SELECT modal."""
     sb.set_mana(0, 10)
     sb.ensure_p0_turn()
-    sb.add_card(0, NID["rat"], zone="deck_top")  # rat to top of deck
-    sb.add_card(0, NID["rat"], zone="deck_top")  # another rat
+    for _ in range(5):
+        sb.add_card(0, NID["rat"], zone="deck_top")
     deck_before = len(sb.p0.get("deck", []))
-    sb.add_card(0, NID["to_the_ratmobile"])  # ratmobile to hand
-    hand_before = len(sb.p0["hand"])
+    sb.add_card(0, NID["to_the_ratmobile"])
     sb.play_card(card_index=0)
-    hand_after = len(sb.p0["hand"])
+
+    # Cast enters pending_tutor — send TUTOR_SELECT to pick first match
+    sb.sio.emit("sandbox_apply_action", {"action_type": 9, "card_index": 0})
+    sb.sio.sleep(1.0)
+    # Tutor amount=2, so a second pick may be needed
+    sb.sio.emit("sandbox_apply_action", {"action_type": 9, "card_index": 0})
+    sb.sio.sleep(1.0)
+
     deck_after = len(sb.p0.get("deck", []))
-    if hand_after >= hand_before or deck_after < deck_before:
-        return (f"Tutored: hand {hand_before}->{hand_after}, deck {deck_before}->{deck_after}", "PASS")
-    return (f"No tutor: hand {hand_before}->{hand_after}, deck {deck_before}->{deck_after}", "FAIL")
+    if deck_after < deck_before:
+        return (f"Tutored: deck {deck_before}->{deck_after}", "PASS")
+    return (f"No tutor: deck {deck_before}->{deck_after}", "FAIL")
 
 
 # ==========================================================================

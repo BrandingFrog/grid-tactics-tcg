@@ -27,6 +27,7 @@ from grid_tactics.effect_resolver import resolve_effects_for_trigger
 from grid_tactics.enums import (
     ActionType,
     CardType,
+    EffectType,
     PlayerSide,
     TriggerType,
     TurnPhase,
@@ -418,6 +419,91 @@ def _deploy_minion(
     return state
 
 
+def _resolve_revive(
+    state: GameState,
+    card_def: CardDefinition,
+    active_side: PlayerSide,
+    library: CardLibrary,
+) -> GameState:
+    """Revive up to N copies of revive_card_id from grave to the board.
+
+    Finds matching cards in the owner's grave, places them on empty cells
+    in the owner's deploy zone (back row for ranged, friendly rows for melee),
+    and removes them from the grave.
+    """
+    revive_id = card_def.revive_card_id
+    if not revive_id:
+        return state
+
+    revive_def = library.get_by_card_id(revive_id)
+    if revive_def is None:
+        return state
+
+    revive_numeric_id = library.get_numeric_id(revive_id)
+    amount = 0
+    for eff in card_def.effects:
+        if eff.effect_type == EffectType.REVIVE:
+            amount = eff.amount
+            break
+    if amount <= 0:
+        return state
+
+    player_idx = 0 if active_side == PlayerSide.PLAYER_1 else 1
+    player = state.players[player_idx]
+    grave = list(player.grave)
+
+    # Find matching cards in grave
+    matches = [i for i, cid in enumerate(grave) if cid == revive_numeric_id]
+    to_revive = matches[:amount]
+    if not to_revive:
+        return state
+
+    # Find empty cells in deploy zone
+    if active_side == PlayerSide.PLAYER_1:
+        deploy_rows = PLAYER_1_ROWS
+    else:
+        deploy_rows = PLAYER_2_ROWS
+
+    empty_cells = []
+    for r in deploy_rows:
+        for c in range(5):
+            if state.board.get(r, c) is None:
+                empty_cells.append((r, c))
+
+    # Place minions (up to available cells)
+    placed = 0
+    removed_indices = set()
+    for idx in to_revive:
+        if placed >= len(empty_cells):
+            break
+        pos = empty_cells[placed]
+        minion = MinionInstance(
+            instance_id=state.next_minion_id,
+            card_numeric_id=revive_numeric_id,
+            owner=active_side,
+            position=pos,
+            current_health=revive_def.health,
+        )
+        new_board = state.board.place(pos[0], pos[1], minion.instance_id)
+        state = replace(
+            state,
+            board=new_board,
+            minions=state.minions + (minion,),
+            next_minion_id=state.next_minion_id + 1,
+        )
+        removed_indices.add(idx)
+        placed += 1
+
+    # Remove revived cards from grave
+    new_grave = tuple(cid for i, cid in enumerate(grave) if i not in removed_indices)
+    new_player = replace(player, grave=new_grave)
+    players = list(state.players)
+    players[player_idx] = new_player
+    state = replace(state, players=tuple(players))
+
+    return state
+
+
 def _cast_magic(
     state: GameState,
     action: Action,
@@ -428,21 +514,29 @@ def _cast_magic(
 ) -> GameState:
     """Cast a magic card. Resolves all ON_PLAY effects, card already discarded.
 
-    Uses a temporary "virtual" minion concept -- magic cards don't go on the board,
-    but we need a caster_pos and caster_owner for effect resolution. We use a
-    placeholder position (0,0) for the caster since magic doesn't have a board position.
-    We call resolve_effect directly via the effect list instead.
+    Magic cards don't place a minion, so effects that need special routing
+    (TUTOR, REVIVE) are dispatched here before falling through to the
+    generic resolve_effect path.
     """
-    # Magic cards resolve their ON_PLAY effects
-    # Since magic doesn't have a minion on board, create a virtual caster context
     caster_pos = action.position if action.position is not None else (0, 0)
 
     for effect in card_def.effects:
         if effect.trigger == TriggerType.ON_PLAY:
-            from grid_tactics.effect_resolver import resolve_effect
-            state = resolve_effect(
-                state, effect, caster_pos, active_side, library, action.target_pos,
+            from grid_tactics.effect_resolver import (
+                resolve_effect,
+                _enter_pending_tutor,
             )
+
+            if effect.effect_type == EffectType.TUTOR:
+                state = _enter_pending_tutor(state, card_def, active_side, library)
+            elif effect.effect_type == EffectType.REVIVE:
+                state = _resolve_revive(
+                    state, card_def, active_side, library,
+                )
+            else:
+                state = resolve_effect(
+                    state, effect, caster_pos, active_side, library, action.target_pos,
+                )
 
     return state
 
