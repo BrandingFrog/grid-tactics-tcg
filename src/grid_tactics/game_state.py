@@ -117,6 +117,14 @@ class GameState:
     pending_tutor_matches: tuple = ()                    # Deck indices of matching cards (in deck order)
     pending_tutor_is_conjure: bool = False               # True when tutor is for conjure-to-field (not hand)
 
+    # Pending revive-place state (revive effects from magic cards).
+    # When a REVIVE effect fires, we enter pending state so the player can
+    # choose WHERE to place each revived minion. One placement per
+    # REVIVE_PLACE action; DECLINE_REVIVE stops early.
+    pending_revive_player_idx: Optional[int] = None     # Which player is placing
+    pending_revive_card_id: Optional[str] = None        # card_id to revive (e.g. "rat")
+    pending_revive_remaining: int = 0                   # How many more placements allowed
+
     # Phase 14.6: Pending conjure-deploy state (conjure-to-field flow).
     # After TUTOR_SELECT resolves during a conjure (pending_tutor_is_conjure),
     # instead of adding the card to hand, we enter this state so the player

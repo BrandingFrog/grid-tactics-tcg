@@ -353,6 +353,30 @@ def enrich_pending_death_target(
     filtered_dict["pending_death_valid_targets"] = valid
 
 
+def enrich_pending_revive(
+    state, filtered_dict: dict, viewer_idx: int, library
+) -> None:
+    """Expose pending_revive state to the client.
+
+    Both players see the same info: which player is placing, which card,
+    and how many remain. The placing player's client highlights valid cells.
+    """
+    pending_idx = getattr(state, "pending_revive_player_idx", None)
+    filtered_dict["pending_revive_player_idx"] = pending_idx
+    filtered_dict["pending_revive_card_id"] = getattr(state, "pending_revive_card_id", None)
+    filtered_dict["pending_revive_remaining"] = getattr(state, "pending_revive_remaining", 0)
+
+    if pending_idx is not None and filtered_dict["pending_revive_card_id"]:
+        card_id = filtered_dict["pending_revive_card_id"]
+        revive_def = library.get_by_card_id(card_id)
+        if revive_def:
+            filtered_dict["pending_revive_card_numeric_id"] = library.get_numeric_id(card_id)
+        else:
+            filtered_dict["pending_revive_card_numeric_id"] = None
+    else:
+        filtered_dict["pending_revive_card_numeric_id"] = None
+
+
 def enrich_pending_conjure_deploy(
     state, filtered_dict: dict, viewer_idx: int, library
 ) -> None:

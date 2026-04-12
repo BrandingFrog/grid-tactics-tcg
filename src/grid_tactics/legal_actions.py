@@ -30,11 +30,13 @@ from grid_tactics.actions import (
     decline_conjure_action,
     decline_post_move_attack_action,
     decline_tutor_action,
+    decline_revive_action,
     draw_action,
     move_action,
     pass_action,
     play_card_action,
     play_react_action,
+    revive_place_action,
     sacrifice_action,
     transform_action,
     tutor_select_action,
@@ -83,6 +85,11 @@ def legal_actions(
     # REACT phase.
     if state.pending_death_target is not None:
         return _pending_death_target_actions(state)
+
+    # Pending revive-place: player must pick a deploy cell for each revived
+    # minion or DECLINE_REVIVE to stop early.
+    if state.pending_revive_player_idx is not None:
+        return _pending_revive_actions(state, library)
 
     # Mutex: the two pending flavours must never coexist. Loud assert (defense
     # in depth on top of the asserts in _enter_pending_tutor / action_resolver).
@@ -356,6 +363,53 @@ def _pending_tutor_actions(state: GameState) -> tuple[Action, ...]:
         for i in range(len(state.pending_tutor_matches))
     ]
     actions.append(decline_tutor_action())
+    return tuple(actions)
+
+
+# ---------------------------------------------------------------------------
+# Pending revive enumeration
+# ---------------------------------------------------------------------------
+
+
+def _pending_revive_actions(state: GameState, library: CardLibrary) -> tuple[Action, ...]:
+    """Enumerate legal actions while pending_revive is set.
+
+    Legal:
+      - REVIVE_PLACE(position) for each empty cell in the player's deploy zone
+      - DECLINE_REVIVE to stop placing early
+    """
+    player_idx = state.pending_revive_player_idx
+    if player_idx is None:
+        return (decline_revive_action(),)
+
+    card_id = state.pending_revive_card_id
+    if card_id is None:
+        return (decline_revive_action(),)
+
+    # Check there are still matching cards in grave
+    revive_def = library.get_by_card_id(card_id)
+    if revive_def is None:
+        return (decline_revive_action(),)
+
+    revive_numeric_id = library.get_numeric_id(card_id)
+    player = state.players[player_idx]
+    if revive_numeric_id not in player.grave:
+        return (decline_revive_action(),)
+
+    # Determine valid deploy cells based on card's range
+    from grid_tactics.types import PLAYER_1_ROWS, PLAYER_2_ROWS, BACK_ROW_P1, BACK_ROW_P2
+    if player_idx == 0:
+        deploy_rows = PLAYER_1_ROWS if revive_def.attack_range == 0 else (BACK_ROW_P1,)
+    else:
+        deploy_rows = PLAYER_2_ROWS if revive_def.attack_range == 0 else (BACK_ROW_P2,)
+
+    actions: list[Action] = []
+    for r in deploy_rows:
+        for c in range(5):
+            if state.board.get(r, c) is None:
+                actions.append(revive_place_action(position=(r, c)))
+
+    actions.append(decline_revive_action())
     return tuple(actions)
 
 

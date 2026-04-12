@@ -419,17 +419,17 @@ def _deploy_minion(
     return state
 
 
-def _resolve_revive(
+def _enter_pending_revive(
     state: GameState,
     card_def: CardDefinition,
     active_side: PlayerSide,
     library: CardLibrary,
 ) -> GameState:
-    """Revive up to N copies of revive_card_id from grave to the board.
+    """Enter pending_revive state so the player can choose deploy positions.
 
-    Finds matching cards in the owner's grave, places them on empty cells
-    in the owner's deploy zone (back row for ranged, friendly rows for melee),
-    and removes them from the grave.
+    Checks that the grave has at least one matching card and there's at
+    least one empty deploy cell. Sets pending_revive fields on the state;
+    actual placement happens in _apply_revive_place.
     """
     revive_id = card_def.revive_card_id
     if not revive_id:
@@ -440,6 +440,7 @@ def _resolve_revive(
         return state
 
     revive_numeric_id = library.get_numeric_id(revive_id)
+
     amount = 0
     for eff in card_def.effects:
         if eff.effect_type == EffectType.REVIVE:
@@ -450,58 +451,102 @@ def _resolve_revive(
 
     player_idx = 0 if active_side == PlayerSide.PLAYER_1 else 1
     player = state.players[player_idx]
-    grave = list(player.grave)
 
-    # Find matching cards in grave
-    matches = [i for i, cid in enumerate(grave) if cid == revive_numeric_id]
-    to_revive = matches[:amount]
-    if not to_revive:
+    # Check grave has matching cards
+    grave_count = sum(1 for cid in player.grave if cid == revive_numeric_id)
+    if grave_count == 0:
         return state
 
-    # Find empty cells in deploy zone
-    if active_side == PlayerSide.PLAYER_1:
-        deploy_rows = PLAYER_1_ROWS
-    else:
-        deploy_rows = PLAYER_2_ROWS
+    # Cap at available grave copies
+    actual_amount = min(amount, grave_count)
 
-    empty_cells = []
-    for r in deploy_rows:
-        for c in range(5):
-            if state.board.get(r, c) is None:
-                empty_cells.append((r, c))
+    return replace(
+        state,
+        pending_revive_player_idx=player_idx,
+        pending_revive_card_id=revive_id,
+        pending_revive_remaining=actual_amount,
+    )
 
-    # Place minions (up to available cells)
-    placed = 0
-    removed_indices = set()
-    for idx in to_revive:
-        if placed >= len(empty_cells):
-            break
-        pos = empty_cells[placed]
-        minion = MinionInstance(
-            instance_id=state.next_minion_id,
-            card_numeric_id=revive_numeric_id,
-            owner=active_side,
-            position=pos,
-            current_health=revive_def.health,
-        )
-        new_board = state.board.place(pos[0], pos[1], minion.instance_id)
-        state = replace(
+
+def _apply_revive_place(
+    state: GameState,
+    action: Action,
+    library: CardLibrary,
+) -> GameState:
+    """Place one revived minion from grave to the board at action.position.
+
+    Removes one matching card from grave, creates a MinionInstance,
+    decrements pending_revive_remaining. If remaining hits 0 or no more
+    grave copies, clears the pending state.
+    """
+    player_idx = state.pending_revive_player_idx
+    card_id = state.pending_revive_card_id
+    remaining = state.pending_revive_remaining
+
+    if player_idx is None or card_id is None or remaining <= 0:
+        raise ValueError("No pending revive to place")
+
+    pos = action.position
+    if pos is None:
+        raise ValueError("REVIVE_PLACE requires a position")
+
+    row, col = pos
+    if state.board.get(row, col) is not None:
+        raise ValueError(f"Cell ({row}, {col}) is occupied")
+
+    revive_def = library.get_by_card_id(card_id)
+    revive_numeric_id = library.get_numeric_id(card_id)
+    active_side = PlayerSide.PLAYER_1 if player_idx == 0 else PlayerSide.PLAYER_2
+    player = state.players[player_idx]
+
+    # Remove one copy from grave
+    grave = list(player.grave)
+    try:
+        grave.remove(revive_numeric_id)
+    except ValueError:
+        raise ValueError(f"No {card_id} in grave to revive")
+
+    # Create minion
+    minion = MinionInstance(
+        instance_id=state.next_minion_id,
+        card_numeric_id=revive_numeric_id,
+        owner=active_side,
+        position=pos,
+        current_health=revive_def.health,
+    )
+    new_board = state.board.place(row, col, minion.instance_id)
+
+    # Update player grave
+    new_player = replace(player, grave=tuple(grave))
+    players = list(state.players)
+    players[player_idx] = new_player
+
+    new_remaining = remaining - 1
+    # Check if more copies exist in grave for continued placement
+    more_in_grave = revive_numeric_id in grave  # grave already has one removed
+
+    if new_remaining <= 0 or not more_in_grave:
+        # Done — clear pending
+        return replace(
             state,
             board=new_board,
             minions=state.minions + (minion,),
             next_minion_id=state.next_minion_id + 1,
+            players=tuple(players),
+            pending_revive_player_idx=None,
+            pending_revive_card_id=None,
+            pending_revive_remaining=0,
         )
-        removed_indices.add(idx)
-        placed += 1
-
-    # Remove revived cards from grave
-    new_grave = tuple(cid for i, cid in enumerate(grave) if i not in removed_indices)
-    new_player = replace(player, grave=new_grave)
-    players = list(state.players)
-    players[player_idx] = new_player
-    state = replace(state, players=tuple(players))
-
-    return state
+    else:
+        # More to place
+        return replace(
+            state,
+            board=new_board,
+            minions=state.minions + (minion,),
+            next_minion_id=state.next_minion_id + 1,
+            players=tuple(players),
+            pending_revive_remaining=new_remaining,
+        )
 
 
 def _cast_magic(
@@ -530,7 +575,7 @@ def _cast_magic(
             if effect.effect_type == EffectType.TUTOR:
                 state = _enter_pending_tutor(state, card_def, active_side, library)
             elif effect.effect_type == EffectType.REVIVE:
-                state = _resolve_revive(
+                state = _enter_pending_revive(
                     state, card_def, active_side, library,
                 )
             else:
@@ -1309,6 +1354,24 @@ def resolve_action(
                     state = replace(state, players=new_players)
             return state
 
+    # Pending revive-place gate — runs before REACT delegation so the player
+    # can place revived minions even when the state is technically in REACT
+    # (the react window is deferred until revive completes).
+    if state.pending_revive_player_idx is not None:
+        if action.action_type == ActionType.REVIVE_PLACE:
+            return _apply_revive_place(state, action, library)
+        elif action.action_type == ActionType.DECLINE_REVIVE:
+            return replace(
+                state,
+                pending_revive_player_idx=None,
+                pending_revive_card_id=None,
+                pending_revive_remaining=0,
+            )
+        else:
+            raise ValueError(
+                "Pending revive: must REVIVE_PLACE or DECLINE_REVIVE"
+            )
+
     # REACT phase: delegate to react handler
     if state.phase == TurnPhase.REACT:
         from grid_tactics.react_stack import handle_react_action
@@ -1501,6 +1564,29 @@ def resolve_action(
             f"{action.action_type.name} only legal during pending_tutor state"
         )
 
+    # Pending revive-place gate.
+    # Player picks a deploy cell for each revived minion, or declines.
+    if state.pending_revive_player_idx is not None:
+        if action.action_type == ActionType.REVIVE_PLACE:
+            return _apply_revive_place(state, action, library)
+        elif action.action_type == ActionType.DECLINE_REVIVE:
+            return replace(
+                state,
+                pending_revive_player_idx=None,
+                pending_revive_card_id=None,
+                pending_revive_remaining=0,
+            )
+        else:
+            raise ValueError(
+                "Pending revive: must REVIVE_PLACE or DECLINE_REVIVE"
+            )
+
+    # Not in pending revive: REVIVE_PLACE / DECLINE_REVIVE are illegal
+    if action.action_type in (ActionType.REVIVE_PLACE, ActionType.DECLINE_REVIVE):
+        raise ValueError(
+            f"{action.action_type.name} only legal during pending_revive state"
+        )
+
     # Phase 14.1: pending-post-move-attack gate.
     # If a melee minion just moved and has in-range targets, the player MUST
     # either ATTACK with that minion or DECLINE_POST_MOVE_ATTACK. Anything
@@ -1590,6 +1676,11 @@ def resolve_action(
     # the react window until TUTOR_SELECT/DECLINE_TUTOR clears it. One react
     # window per logical card play.
     if state.pending_tutor_player_idx is not None:
+        return state
+
+    # If revive-place is pending, defer the react window until
+    # REVIVE_PLACE/DECLINE_REVIVE clears it.
+    if state.pending_revive_player_idx is not None:
         return state
 
     # Phase 14.6: If conjure-deploy is pending, defer the react window until

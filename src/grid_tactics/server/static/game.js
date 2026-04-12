@@ -3305,6 +3305,7 @@ function renderGame() {
     syncPendingTutorUI();
     syncPendingConjureDeployUI();
     syncPendingDeathTargetUI();
+    syncPendingReviveUI();
     // Always refresh highlights — even when it's not my turn — so stale
     // .card-playable classes from the previous render are cleared.
     highlightBoard();
@@ -4234,6 +4235,111 @@ function showOpponentTutoringToast() {
 function hideOpponentTutoringToast() {
     var existing = document.getElementById('opponent-tutoring-toast');
     if (existing) existing.remove();
+}
+
+// =============================================
+// Revive modal — place revived minions from grave
+// =============================================
+
+var reviveModalOpen = false;
+
+function syncPendingReviveUI() {
+    if (!gameState) {
+        if (reviveModalOpen) closeReviveModal();
+        return;
+    }
+    var pendingIdx = gameState.pending_revive_player_idx;
+    if (pendingIdx == null) {
+        if (reviveModalOpen) closeReviveModal();
+        return;
+    }
+    if (pendingIdx === myPlayerIdx) {
+        if (!reviveModalOpen) {
+            showReviveModal();
+        }
+    } else {
+        if (reviveModalOpen) closeReviveModal();
+    }
+}
+
+function showReviveModal() {
+    closeReviveModal();
+    reviveModalOpen = true;
+
+    var remaining = gameState.pending_revive_remaining || 0;
+    var cardNid = gameState.pending_revive_card_numeric_id;
+    var cardDef = cardNid != null && window.cardDefs ? window.cardDefs[cardNid] : null;
+    var cardName = cardDef ? cardDef.name : 'minion';
+
+    var overlay = document.createElement('div');
+    overlay.className = 'tutor-modal-overlay';
+    overlay.id = 'revive-modal-overlay';
+
+    var modal = document.createElement('div');
+    modal.className = 'tutor-modal';
+
+    var header = document.createElement('div');
+    header.className = 'tutor-modal-header';
+    var title = document.createElement('div');
+    title.className = 'tutor-modal-title';
+    title.textContent = 'Revive: Click a tile to place ' + cardName + ' (' + remaining + ' remaining)';
+    header.appendChild(title);
+    modal.appendChild(header);
+
+    var body = document.createElement('div');
+    body.style.cssText = 'padding:16px;text-align:center;color:var(--muted);font-size:14px;';
+    body.textContent = 'Click a highlighted cell on the board to place the revived minion.';
+    modal.appendChild(body);
+
+    var footer = document.createElement('div');
+    footer.className = 'tutor-modal-footer';
+    var skipBtn = document.createElement('button');
+    skipBtn.className = 'btn btn-secondary';
+    skipBtn.textContent = 'Done (skip remaining)';
+    skipBtn.onclick = function() {
+        submitAction({ action_type: 16 }); // DECLINE_REVIVE
+    };
+    footer.appendChild(skipBtn);
+    modal.appendChild(footer);
+
+    overlay.appendChild(modal);
+    document.body.appendChild(overlay);
+
+    // Highlight valid board cells
+    highlightReviveCells();
+}
+
+function highlightReviveCells() {
+    // Use legalActions to find valid REVIVE_PLACE positions
+    if (!window.legalActions) return;
+    var cells = document.querySelectorAll('.board-cell');
+    cells.forEach(function(cell) {
+        cell.classList.remove('cell-valid');
+    });
+    for (var i = 0; i < legalActions.length; i++) {
+        var a = legalActions[i];
+        if (a.action_type === 15 && a.position) { // REVIVE_PLACE
+            var r = a.position[0], c = a.position[1];
+            var cell = document.querySelector('.board-cell[data-row="' + r + '"][data-col="' + c + '"]');
+            if (cell) {
+                cell.classList.add('cell-valid');
+                (function(row, col) {
+                    cell.onclick = function() {
+                        submitAction({ action_type: 15, position: [row, col] }); // REVIVE_PLACE
+                    };
+                })(r, c);
+            }
+        }
+    }
+}
+
+function closeReviveModal() {
+    var existing = document.getElementById('revive-modal-overlay');
+    if (existing) existing.remove();
+    reviveModalOpen = false;
+    // Clear cell highlights
+    var cells = document.querySelectorAll('.board-cell.cell-valid');
+    cells.forEach(function(cell) { cell.classList.remove('cell-valid'); });
 }
 
 // =============================================

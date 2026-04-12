@@ -87,6 +87,16 @@ def decline_tutor_action() -> Action:
     return Action(action_type=ActionType.DECLINE_TUTOR)
 
 
+def revive_place_action(position: tuple[int, int]) -> Action:
+    """Create a REVIVE_PLACE action to deploy a revived minion at position."""
+    return Action(action_type=ActionType.REVIVE_PLACE, position=position)
+
+
+def decline_revive_action() -> Action:
+    """Create a DECLINE_REVIVE action to stop placing revived minions early."""
+    return Action(action_type=ActionType.DECLINE_REVIVE)
+
+
 def move_action(minion_id: int, position: tuple[int, int]) -> Action:
     """Create a MOVE action for a minion to a destination position."""
     return Action(action_type=ActionType.MOVE, minion_id=minion_id, position=position)

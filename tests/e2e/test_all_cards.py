@@ -162,19 +162,28 @@ def make_deploy_test(stable_id, expected_atk, expected_hp):
 # ==========================================================================
 
 def test_ratical_resurrection(sb):
-    """Ratical Resurrection: revive a rat from grave to board."""
+    """Ratical Resurrection: revive rat from grave via REVIVE_PLACE modal."""
     sb.set_mana(0, 10)
     sb.ensure_p0_turn()
-    sb.add_card(0, NID["rat"], zone="graveyard")  # rat to grave (API zone name)
+    sb.add_card(0, NID["rat"], zone="graveyard")  # rat to grave
     grave_before = len(sb.p0.get("grave", []))
     sb.add_card(0, NID["ratical_resurrection"])  # to hand
     sb.play_card(card_index=0)
+
+    # Cast enters pending_revive — send REVIVE_PLACE to pick a deploy cell
+    if sb.state.get("pending_revive_player_idx") is not None:
+        # ActionType.REVIVE_PLACE = 15
+        sb.sio.emit("sandbox_apply_action", {"action_type": 15, "position": [0, 2]})
+        sb.sio.sleep(1.0)
+
     grave_after = len(sb.p0.get("grave", []))
     board_minions = len(sb.minions)
-    hand_after = len(sb.p0["hand"])
-    if board_minions > 0 or grave_after < grave_before:
-        return (f"Revived: grave {grave_before}->{grave_after}, board={board_minions}", "PASS")
-    return (f"No revive: grave={grave_after}, hand={hand_after}, board={board_minions}", "FAIL")
+    board_cells = [i for i, c in enumerate(sb.state.get("board", [])) if c is not None]
+    if board_minions > 0 or len(board_cells) > 0:
+        return (f"Revived: grave {grave_before}->{grave_after}, board={board_cells}", "PASS")
+    if grave_after < grave_before:
+        return (f"Revived from grave: {grave_before}->{grave_after}", "PASS")
+    return (f"No revive: grave={grave_after}, board={board_cells}, pending={sb.state.get('pending_revive_player_idx')}", "FAIL")
 
 
 def test_to_the_ratmobile(sb):
