@@ -308,25 +308,24 @@ def test_rathopper_leap(sb):
 
 
 def test_rgb_lasercannon(sb):
-    """RGB Lasercannon: Cost: Exhaust 2 Robots from hand. Add 2 Robots + RGB to hand."""
+    """RGB Lasercannon: Cost: Discard 2 Robots from hand. Death: Destroy target."""
     sb.set_mana(0, 10)
     sb.ensure_p0_turn()
-    # Add 2 Robots to hand (cost: exhaust them) + RGB Lasercannon
-    sb.add_card(0, NID["blue_diodebot"])   # Robot in hand
-    sb.add_card(0, NID["green_diodebot"])  # Robot in hand
-    sb.add_card(0, NID["rgb_lasercannon"]) # RGB in hand
-    hand_before = len(sb.p0["hand"])
-    exhaust_before = len(sb.p0.get("exhaust", []))
+    sb.add_card(0, NID["blue_diodebot"])   # Robot [0]
+    sb.add_card(0, NID["green_diodebot"])  # Robot [1]
+    sb.add_card(0, NID["rgb_lasercannon"]) # RGB   [2]
 
-    # Play RGB Lasercannon (card_index=2 since it was added third)
-    sb.play_card(card_index=2, position=[0, 2])
-    hand_after = len(sb.p0["hand"])
-    exhaust_after = len(sb.p0.get("exhaust", []))
+    # Play RGB (index 2) with discard_card_index=0 (first robot as cost)
+    sb.sio.emit("sandbox_apply_action", {
+        "action_type": 0, "card_index": 2, "position": [0, 2],
+        "discard_card_index": 0
+    })
+    sb.sio.sleep(1.0)
     has_minion = len(sb.minions) > 0 or any(c is not None for c in sb.state.get("board", []))
-
-    if has_minion:
-        return (f"Deployed. Hand {hand_before}->{hand_after}, exhaust {exhaust_before}->{exhaust_after}", "PASS")
-    return (f"Deploy failed. Hand {hand_before}->{hand_after}, exhaust={exhaust_after}, errors={sb.errors}", "FAIL")
+    exhaust = len(sb.p0.get("exhaust", []))
+    if has_minion and exhaust >= 2:
+        return (f"Deployed. 2 Robots discarded to exhaust pile", "PASS")
+    return (f"Deploy failed. hand={len(sb.p0['hand'])}, exhaust={exhaust}, errors={sb.errors}", "FAIL")
 
 
 def test_counter_spell(sb):
