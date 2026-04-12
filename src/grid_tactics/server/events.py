@@ -70,8 +70,8 @@ def _build_card_defs(library):
                 "react_mana_cost": card.react_mana_cost,
                 "promote_target": card.promote_target,
                 "tutor_target": card.tutor_target,
-                "summon_sacrifice_tribe": card.summon_sacrifice_tribe,
-                "summon_sacrifice_count": card.summon_sacrifice_count,
+                "discard_cost_tribe": card.discard_cost_tribe,
+                "discard_cost_count": card.discard_cost_count,
                 "unique": getattr(card, 'unique', False),
                 "deckable": getattr(card, 'deckable', True),
                 "transform_options": [

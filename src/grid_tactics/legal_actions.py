@@ -155,15 +155,15 @@ def _action_phase_actions(
 
         # Summon sacrifice check: enumerate one action per valid sacrifice choice
         sacrifice_choices: list[Optional[int]] = [None]
-        if card_def.summon_sacrifice_tribe:
+        if card_def.discard_cost_tribe:
             sacrifice_choices = []
             for j in range(len(player.hand)):
                 if j == idx:
                     continue
                 hand_card = library.get_by_id(player.hand[j])
-                if card_def.summon_sacrifice_tribe in (hand_card.tribe or "").split():
+                if card_def.discard_cost_tribe in (hand_card.tribe or "").split():
                     sacrifice_choices.append(j)
-            sac_needed = card_def.summon_sacrifice_count
+            sac_needed = card_def.discard_cost_count
             if len(sacrifice_choices) < sac_needed:
                 continue  # not enough sacrifice cards -> can't play
 
@@ -184,19 +184,19 @@ def _action_phase_actions(
                                 actions.append(Action(
                                     action_type=ActionType.PLAY_CARD,
                                     card_index=idx, position=pos, target_pos=target_pos,
-                                    sacrifice_card_index=sac_idx,
+                                    discard_card_index=sac_idx,
                                 ))
                         else:
                             actions.append(Action(
                                 action_type=ActionType.PLAY_CARD,
                                 card_index=idx, position=pos,
-                                sacrifice_card_index=sac_idx,
+                                discard_card_index=sac_idx,
                             ))
                     else:
                         actions.append(Action(
                             action_type=ActionType.PLAY_CARD,
                             card_index=idx, position=pos,
-                            sacrifice_card_index=sac_idx,
+                            discard_card_index=sac_idx,
                         ))
 
             elif card_def.card_type == CardType.MAGIC:
@@ -211,13 +211,13 @@ def _action_phase_actions(
                         actions.append(Action(
                             action_type=ActionType.PLAY_CARD,
                             card_index=idx, target_pos=target_pos,
-                            sacrifice_card_index=sac_idx,
+                            discard_card_index=sac_idx,
                         ))
                 else:
                     actions.append(Action(
                         action_type=ActionType.PLAY_CARD,
                         card_index=idx,
-                        sacrifice_card_index=sac_idx,
+                        discard_card_index=sac_idx,
                     ))
 
         # Skip CardType.REACT during ACTION phase

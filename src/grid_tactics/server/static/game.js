@@ -1147,7 +1147,7 @@ function renderCardBrowser() {
             else if (kw === 'promote' && c.promote_target) hasKeyword = true;
             else if (kw === 'rally' && c.effects && c.effects.some(function(e) { return e.type === 6; })) hasKeyword = true;
             else if (kw === 'transform' && c.transform_options && c.transform_options.length > 0) hasKeyword = true;
-            else if (kw === 'discard' && c.summon_sacrifice_tribe) hasKeyword = true;
+            else if (kw === 'discard' && c.discard_cost_tribe) hasKeyword = true;
             else if (kw === 'react' && c.react_condition != null) hasKeyword = true;
             else if (kw === 'unique' && c.unique) hasKeyword = true;
             else if (kw === 'negate' && c.effects && c.effects.some(function(e) { return e.type === 4; })) hasKeyword = true;
@@ -1299,9 +1299,9 @@ function buildCardTooltipContent(c) {
     // Card text lines (effect, activated ability, transform, react)
     var cardTextLines = [];
     var effectDesc = (c.effects && c.effects.length > 0) ? getEffectDescription(c.effects, c) : '';
-    if (c.summon_sacrifice_tribe) {
-        var sacCount = c.summon_sacrifice_count || 1;
-        cardTextLines.push('Cost: Discard any ' + (sacCount > 1 ? sacCount + ' ' : '') + c.summon_sacrifice_tribe + (sacCount > 1 ? 's' : ''));
+    if (c.discard_cost_tribe) {
+        var sacCount = c.discard_cost_count || 1;
+        cardTextLines.push('Cost: Discard any ' + (sacCount > 1 ? sacCount + ' ' : '') + c.discard_cost_tribe + (sacCount > 1 ? 's' : ''));
     }
     if (c.unique) cardTextLines.push('Unique');
     if (effectDesc) cardTextLines.push(effectDesc);
@@ -1350,7 +1350,7 @@ function buildCardTooltipContent(c) {
     if (c.unique) matchedKeywords.push('Unique');
     if (c.card_type === 0 && c.attack_range != null && c.attack_range === 0) matchedKeywords.push('Melee');
     if (c.card_type === 0 && c.attack_range != null && c.attack_range > 0) matchedKeywords.push('Range');
-    if (c.summon_sacrifice_tribe) { matchedKeywords.push('Cost'); matchedKeywords.push('Discard'); }
+    if (c.discard_cost_tribe) { matchedKeywords.push('Cost'); matchedKeywords.push('Discard'); }
     if (c.transform_options && c.transform_options.length > 0) matchedKeywords.push('Transform');
     if (c.react_condition != null) matchedKeywords.push('React');
     if (c.react_condition != null && c.react_effect && c.react_effect.type === 5) matchedKeywords.push('Deploy');
@@ -1607,9 +1607,9 @@ function renderCardFrame(c, opts) {
         html += '</div>';
     }
     // Summon sacrifice cost
-    if (c.summon_sacrifice_tribe) {
-        var sacN = c.summon_sacrifice_count || 1;
-        html += '<div class="card-effect-full">Cost: Discard any ' + (sacN > 1 ? sacN + ' ' : '') + c.summon_sacrifice_tribe + (sacN > 1 ? 's' : '') + '</div>';
+    if (c.discard_cost_tribe) {
+        var sacN = c.discard_cost_count || 1;
+        html += '<div class="card-effect-full">Cost: Discard any ' + (sacN > 1 ? sacN + ' ' : '') + c.discard_cost_tribe + (sacN > 1 ? 's' : '') + '</div>';
     }
     // Unique tag
     if (c.unique) {
@@ -3517,22 +3517,22 @@ function findCardAction(handIdx, deployPos, targetPos) {
     return null;
 }
 
-// Get unique sacrifice card indices for this card (for cards with summon_sacrifice_tribe)
+// Get unique sacrifice card indices for this card (for cards with discard_cost_tribe)
 function getSacrificeChoices(handIdx, deployPos, targetPos) {
     var seen = {};
     var choices = [];
     legalActions.forEach(function(a) {
         if (a.action_type !== 0 || a.card_index !== handIdx) return;
-        if (a.sacrifice_card_index == null) return;
+        if (a.discard_card_index == null) return;
         if (deployPos != null && a.position) {
             if (a.position[0] !== deployPos[0] || a.position[1] !== deployPos[1]) return;
         }
         if (targetPos != null && a.target_pos) {
             if (a.target_pos[0] !== targetPos[0] || a.target_pos[1] !== targetPos[1]) return;
         }
-        if (!seen[a.sacrifice_card_index]) {
-            seen[a.sacrifice_card_index] = true;
-            choices.push(a.sacrifice_card_index);
+        if (!seen[a.discard_card_index]) {
+            seen[a.discard_card_index] = true;
+            choices.push(a.discard_card_index);
         }
     });
     return choices;
@@ -3734,7 +3734,7 @@ function onBoardCellClick(row, col) {
                 highlightBoard();
                 return;
             }
-            // Check for sacrifice choices (summon_sacrifice_tribe card)
+            // Check for sacrifice choices (discard_cost_tribe card)
             var sacChoices = getSacrificeChoices(selectedHandIdx, [row, col], null);
             if (sacChoices.length > 1) {
                 selectedDeployPos = [row, col];
@@ -3743,7 +3743,7 @@ function onBoardCellClick(row, col) {
             }
             // No targeting/sacrifice needed — submit now
             var payload = { action_type: 0, card_index: selectedHandIdx, position: [row, col] };
-            if (sacChoices.length === 1) payload.sacrifice_card_index = sacChoices[0];
+            if (sacChoices.length === 1) payload.discard_card_index = sacChoices[0];
             submitAction(payload);
         }
         return;
@@ -3763,7 +3763,7 @@ function onBoardCellClick(row, col) {
             }
             var payload = { action_type: 0, card_index: selectedHandIdx, target_pos: [row, col] };
             if (selectedDeployPos) payload.position = selectedDeployPos;
-            if (sacChoices2.length === 1) payload.sacrifice_card_index = sacChoices2[0];
+            if (sacChoices2.length === 1) payload.discard_card_index = sacChoices2[0];
             submitAction(payload);
         }
         return;
@@ -4017,7 +4017,7 @@ function showSacrificePicker(handIdx, deployPos, targetPos, sacChoices) {
         btn.className = 'sacrifice-picker-card';
         btn.innerHTML = '<div class="sp-name">' + c.name + '</div><div class="sp-meta">' + (c.tribe || '') + '</div>';
         btn.addEventListener('click', function() {
-            var payload = { action_type: 0, card_index: handIdx, sacrifice_card_index: sacIdx };
+            var payload = { action_type: 0, card_index: handIdx, discard_card_index: sacIdx };
             if (deployPos) payload.position = deployPos;
             if (targetPos) payload.target_pos = targetPos;
             hideSacrificePicker();

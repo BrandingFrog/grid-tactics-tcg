@@ -305,33 +305,33 @@ def _apply_play_card(
         new_player = new_player.discard_from_hand(card_numeric_id)
 
     # Summon sacrifice: exhaust card(s) of the required tribe from hand (cost).
-    # Use the user's chosen sacrifice_card_index if provided; otherwise auto-pick first.
-    if card_def.summon_sacrifice_tribe:
-        sac_count = card_def.summon_sacrifice_count
+    # Use the user's chosen discard_card_index if provided; otherwise auto-pick first.
+    if card_def.discard_cost_tribe:
+        sac_count = card_def.discard_cost_count
         for _sac_i in range(sac_count):
             sacrifice_id = None
-            if _sac_i == 0 and action.sacrifice_card_index is not None:
-                # Note: action.sacrifice_card_index references the ORIGINAL hand
+            if _sac_i == 0 and action.discard_card_index is not None:
+                # Note: action.discard_card_index references the ORIGINAL hand
                 # (before this card was discarded). We recompute the index
                 # by using the original `player.hand`, since `new_player.hand`
                 # has the played card removed.
-                sac_idx = action.sacrifice_card_index
+                sac_idx = action.discard_card_index
                 if 0 <= sac_idx < len(player.hand):
                     candidate_id = player.hand[sac_idx]
                     # Verify it's still in new_player.hand and tribe matches
                     cand_def = library.get_by_id(candidate_id)
-                    if card_def.summon_sacrifice_tribe in (cand_def.tribe or "").split() and candidate_id in new_player.hand:
+                    if card_def.discard_cost_tribe in (cand_def.tribe or "").split() and candidate_id in new_player.hand:
                         sacrifice_id = candidate_id
             if sacrifice_id is None:
                 # Fallback: auto-pick first matching card
                 for hand_card_id in new_player.hand:
                     hand_card_def = library.get_by_id(hand_card_id)
-                    if card_def.summon_sacrifice_tribe in (hand_card_def.tribe or "").split():
+                    if card_def.discard_cost_tribe in (hand_card_def.tribe or "").split():
                         sacrifice_id = hand_card_id
                         break
             if sacrifice_id is None:
                 raise ValueError(
-                    f"No {card_def.summon_sacrifice_tribe} card in hand to sacrifice"
+                    f"No {card_def.discard_cost_tribe} card in hand to sacrifice"
                 )
             # Phase 14.5: discard-for-cost goes to EXHAUST, not grave.
             new_player = new_player.exhaust_from_hand(sacrifice_id)

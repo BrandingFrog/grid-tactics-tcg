@@ -486,10 +486,10 @@ def apply_play_card_batch(state, mask, action_type, hand_idx, target_flat, card_
         _add_to_grave_batch(state, is_magic_type, ap, card_id, arange_n)
 
     # --- SUMMON SACRIFICE: destroy a tribe card from hand ---
-    sac_tribe = card_table.summon_sacrifice_tribe_id[safe_cid]  # [N]
+    sac_tribe = card_table.discard_cost_tribe_id[safe_cid]  # [N]
     needs_sac = valid & (sac_tribe > 0)
     if needs_sac.any():
-        _apply_summon_sacrifice_batch(state, needs_sac, ap, sac_tribe, card_table, arange_n)
+        _apply_discard_cost_batch(state, needs_sac, ap, sac_tribe, card_table, arange_n)
 
     # --- MINION DEPLOY ---
     is_minion = valid & (ctype == 0)
@@ -958,7 +958,7 @@ def apply_react_batch(state, mask, action_type, hand_idx, target_flat, card_tabl
 # ---------------------------------------------------------------------------
 
 
-def _apply_summon_sacrifice_batch(state, mask, player, req_tribe_id, card_table, arange_n):
+def _apply_discard_cost_batch(state, mask, player, req_tribe_id, card_table, arange_n):
     """Sacrifice the first card of matching tribe from hand -- batched.
 
     Finds the first hand slot with a card whose tribe_id matches req_tribe_id,
@@ -986,7 +986,7 @@ def _apply_summon_sacrifice_batch(state, mask, player, req_tribe_id, card_table,
     sac_card = state.hands[arange_n, player, safe_idx]
 
     _remove_from_hand_batch(state, found, player, safe_idx, arange_n)
-    # Phase 14.5: summon_sacrifice_tribe discards route to EXHAUST, not
+    # Phase 14.5: discard_cost_tribe discards route to EXHAUST, not
     # grave. Mirrors Python Player.exhaust_from_hand.
     _add_to_exhaust_batch(state, found, player, sac_card, arange_n)
 
@@ -1053,7 +1053,7 @@ def _add_to_exhaust_batch(state, valid_mask, player, card_id, arange_n):
     """Phase 14.5: append card to exhaust pile at next slot -- batched.
 
     Parallel to _add_to_grave_batch. Used by discard-for-cost paths
-    (summon_sacrifice_tribe). Mirrors Python Player.exhaust_from_hand.
+    (discard_cost_tribe). Mirrors Python Player.exhaust_from_hand.
     """
     device = valid_mask.device
     gs = state.exhaust_sizes[arange_n, player]  # [N]

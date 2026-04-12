@@ -33,7 +33,7 @@ class Player:
     hand: tuple[int, ...]
     deck: tuple[int, ...]
     grave: tuple[int, ...]
-    # Phase 14.5: cards removed from hand as a COST (e.g. summon_sacrifice_tribe
+    # Phase 14.5: cards removed from hand as a COST (e.g. discard_cost_tribe
     # discard) go here instead of grave. Exhaust is shown in a separate pile
     # in the UI and is NOT considered "played" for card-effect purposes.
     exhaust: tuple[int, ...] = ()

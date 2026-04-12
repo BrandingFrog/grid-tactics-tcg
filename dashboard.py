@@ -646,8 +646,8 @@ TEMPLATE = """
 
             // Summon sacrifice
             let sacHtml = '';
-            if (c.summon_sacrifice_tribe) {
-                sacHtml = `<div style="color:#ff7043;font-size:13px;margin-top:4px">Summon Cost: Destroy a <strong>${c.summon_sacrifice_tribe}</strong> in hand</div>`;
+            if (c.discard_cost_tribe) {
+                sacHtml = `<div style="color:#ff7043;font-size:13px;margin-top:4px">Summon Cost: Destroy a <strong>${c.discard_cost_tribe}</strong> in hand</div>`;
             }
 
             tiles += `
@@ -786,7 +786,7 @@ def api_cards():
             ],
             'react_mana_cost': card_def.react_mana_cost,
             'tutor_target': card_def.tutor_target,
-            'summon_sacrifice_tribe': card_def.summon_sacrifice_tribe,
+            'discard_cost_tribe': card_def.discard_cost_tribe,
         })
     return jsonify(cards)
 

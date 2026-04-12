@@ -303,7 +303,7 @@ def _compute_play_card_mask(mask, state, card_table, phase_mask, ap, arange_n,
     unique_blocked = is_unique_card & has_unique_on_board
 
     # Summon sacrifice tribe: need another card of matching tribe in hand
-    sac_tribe = card_table.summon_sacrifice_tribe_id[card_ids_flat].reshape(N, MAX_HAND)
+    sac_tribe = card_table.discard_cost_tribe_id[card_ids_flat].reshape(N, MAX_HAND)
     has_sac_req = sac_tribe > 0  # [N, MAX_HAND]
     if has_sac_req.any():
         hand_tribes = card_table.tribe_id[card_ids_flat].reshape(N, MAX_HAND)

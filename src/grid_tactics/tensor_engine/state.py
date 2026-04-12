@@ -53,7 +53,7 @@ class TensorGameState:
 
     # Phase 14.5: Exhaust piles (discard-for-cost destination). Parallel to
     # graves: same [N, 2, MAX_GRAVEYARD] capacity/pointer pattern. Mirrors
-    # Python Player.exhaust. `summon_sacrifice_tribe` discards route here
+    # Python Player.exhaust. `discard_cost_tribe` discards route here
     # instead of the grave.
     exhausts: torch.Tensor        # [N, 2, MAX_GRAVEYARD] int32
     exhaust_sizes: torch.Tensor   # [N, 2] int32

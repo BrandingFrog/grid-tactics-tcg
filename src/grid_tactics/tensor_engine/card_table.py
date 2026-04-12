@@ -56,7 +56,7 @@ class CardTable:
         tutor_selector_element: torch.Tensor,
         tutor_selector_card_type: torch.Tensor,
         tribe_id: torch.Tensor,
-        summon_sacrifice_tribe_id: torch.Tensor,
+        discard_cost_tribe_id: torch.Tensor,
         leap_amount: torch.Tensor,
         passive_burn_amount: torch.Tensor,
         passive_heal_amount: torch.Tensor,
@@ -101,7 +101,7 @@ class CardTable:
         self.tutor_selector_element = tutor_selector_element    # [num_cards] int32, -1 = any
         self.tutor_selector_card_type = tutor_selector_card_type  # [num_cards] int32, -1 = any
         self.tribe_id = tribe_id                    # [num_cards] int32, 0 if no tribe
-        self.summon_sacrifice_tribe_id = summon_sacrifice_tribe_id  # [num_cards] int32, 0 if none
+        self.discard_cost_tribe_id = discard_cost_tribe_id  # [num_cards] int32, 0 if none
         # Audit-followup: precomputed per-card effect amounts for fast lookup
         # without re-scanning effect_type[i, j]. Zero means the card lacks the
         # effect. Used by LEAP move enumeration and the PASSIVE pipeline.
@@ -156,7 +156,7 @@ class CardTable:
         tutor_selector_element = torch.full((n,), -1, dtype=torch.int32)
         tutor_selector_card_type = torch.full((n,), -1, dtype=torch.int32)
         tribe_id = torch.zeros(n, dtype=torch.int32)
-        summon_sacrifice_tribe_id = torch.zeros(n, dtype=torch.int32)
+        discard_cost_tribe_id = torch.zeros(n, dtype=torch.int32)
         leap_amount = torch.zeros(n, dtype=torch.int32)
         passive_burn_amount = torch.zeros(n, dtype=torch.int32)
         passive_heal_amount = torch.zeros(n, dtype=torch.int32)
@@ -282,9 +282,9 @@ class CardTable:
                     is_rat[i] = True
 
             # Summon sacrifice tribe
-            if card.summon_sacrifice_tribe:
-                tid = tribe_map.get(card.summon_sacrifice_tribe, 0)
-                summon_sacrifice_tribe_id[i] = tid
+            if card.discard_cost_tribe:
+                tid = tribe_map.get(card.discard_cost_tribe, 0)
+                discard_cost_tribe_id[i] = tid
 
             if card.card_type == CardType.REACT:
                 react_mana_cost[i] = card.mana_cost
@@ -343,7 +343,7 @@ class CardTable:
             tutor_selector_element=tutor_selector_element.to(device),
             tutor_selector_card_type=tutor_selector_card_type.to(device),
             tribe_id=tribe_id.to(device),
-            summon_sacrifice_tribe_id=summon_sacrifice_tribe_id.to(device),
+            discard_cost_tribe_id=discard_cost_tribe_id.to(device),
             leap_amount=leap_amount.to(device),
             passive_burn_amount=passive_burn_amount.to(device),
             passive_heal_amount=passive_heal_amount.to(device),

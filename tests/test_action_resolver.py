@@ -1513,7 +1513,7 @@ class TestPilesPhase145:
 
     def _ratchanter_library(self) -> CardLibrary:
         """Build a library containing a cheap minion with a
-        summon_sacrifice_tribe cost so the discard-for-cost path is
+        discard_cost_tribe cost so the discard-for-cost path is
         exercisable without relying on JSON card data."""
         cards = {
             "test_melee": CardDefinition(
@@ -1527,7 +1527,7 @@ class TestPilesPhase145:
             "test_rat_costs_rat": CardDefinition(
                 card_id="test_rat_costs_rat", name="Pricey Rat", card_type=CardType.MINION,
                 mana_cost=2, attack=3, health=3, attack_range=0,
-                summon_sacrifice_tribe="Rat",
+                discard_cost_tribe="Rat",
             ),
             "test_magic_damage": CardDefinition(
                 card_id="test_magic_damage", name="Damage Spell", card_type=CardType.MAGIC,
@@ -1604,7 +1604,7 @@ class TestPilesPhase145:
         assert len(new_state.players[0].hand) == 0
 
     def test_discard_for_cost_goes_to_exhaust(self):
-        """summon_sacrifice_tribe removes a hand card as a COST; it goes to
+        """discard_cost_tribe removes a hand card as a COST; it goes to
         the exhaust pile, NOT the grave."""
         from grid_tactics.action_resolver import resolve_action
 
@@ -1617,7 +1617,7 @@ class TestPilesPhase145:
         )
         action = Action(
             action_type=ActionType.PLAY_CARD, card_index=0, position=(1, 0),
-            sacrifice_card_index=1,
+            discard_card_index=1,
         )
         new_state = resolve_action(state, action, lib)
         p1 = new_state.players[0]
