@@ -14,6 +14,17 @@
 
 set -e
 
+# Skip version bump if all staged files are wiki-only (wiki/, .planning/wiki/)
+staged=$(git diff --cached --name-only)
+if [ -z "$staged" ]; then
+  exit 0
+fi
+non_wiki=$(echo "$staged" | grep -v '^wiki/' | grep -v '^\.planning/.*wiki' || true)
+if [ -z "$non_wiki" ]; then
+  echo "[VERSION] skipped — wiki-only commit"
+  exit 0
+fi
+
 python - <<'PYEOF'
 import json
 import datetime
