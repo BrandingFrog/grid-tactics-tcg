@@ -162,8 +162,8 @@ def _p0_hand_size(page: Page, expected: int) -> None:
     _wait_text(page, "#sandbox-p0-handcount", str(expected))
 
 
-def _p0_mana(page: Page, current: int, max_mana: int) -> None:
-    _wait_text(page, "#sandbox-p0-mana", f"{current}/{max_mana}")
+def _p0_mana(page: Page, current: int) -> None:
+    _wait_text(page, "#sandbox-p0-mana", str(current))
 
 
 # ---------------------------------------------------------------------------
@@ -208,11 +208,11 @@ def test_01_sandbox_screen_loads_and_mirrors_live_layout(sandbox_page: Page):
     )
     assert cell_count == 25, f"expected 25 board cells, got {cell_count}"
 
-    # Fresh session: HP 100, mana 1/1, hand 0, deck 0
+    # Fresh session: HP 100, mana 1, hand 0, deck 0
     _p0_hp(page, 100)
     _p1_hp(page, 100)
     _p0_hand_size(page, 0)
-    _wait_text(page, "#sandbox-p0-mana", "1/1")
+    _wait_text(page, "#sandbox-p0-mana", "1")
 
 
 # ---------------------------------------------------------------------------
@@ -263,7 +263,7 @@ def test_03_click_to_deploy_reuses_live_game_handlers(sandbox_page: Page):
     assert mana_input is not None
     mana_input.fill("5")
     mana_input.press("Enter")
-    _p0_mana(page, 5, 1)
+    _p0_mana(page, 5)
 
     # Add a Common Rat to P1 hand via the search UI
     page.fill("#sandbox-search", "common rat")
@@ -299,7 +299,7 @@ def test_03_click_to_deploy_reuses_live_game_handlers(sandbox_page: Page):
     )
 
     # Mana decremented 5 → 4, hand shrunk 1 → 0
-    _p0_mana(page, 4, 1)
+    _p0_mana(page, 4)
     _p0_hand_size(page, 0)
 
     # Rat visible as a .board-minion inside the deployed cell
@@ -420,7 +420,7 @@ def test_05_server_slot_save_reset_load_roundtrip(sandbox_page: Page):
     set_cheat("hp", 0, "42")
     set_cheat("current_mana", 0, "5")
     _p0_hp(page, 42)
-    _p0_mana(page, 5, 1)
+    _p0_mana(page, 5)
 
     # Two rats to hand then deploy one — same flow as test 3 but via socket
     # (we already proved click-to-deploy works; this test focuses on save/load).
@@ -491,7 +491,7 @@ def test_05_server_slot_save_reset_load_roundtrip(sandbox_page: Page):
     )
     _p0_hp(page, 42)
     _p0_hand_size(page, 1)
-    _p0_mana(page, 4, 1)
+    _p0_mana(page, 4)
 
     # --- cleanup: delete the slot so repeated runs don't accumulate ---
     delete_btn = page.query_selector(
