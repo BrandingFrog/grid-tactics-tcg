@@ -67,7 +67,11 @@ COMMON_RAT_NID = 22  # card_id="rat", mana_cost=1, card_type=minion
 def browser_context():
     """Launch one Chromium browser for the whole module."""
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True)
+        browser = p.chromium.launch(
+            headless=True,
+            executable_path=os.environ.get("PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH"),
+            args=["--no-proxy-server"] if os.environ.get("PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH") else [],
+        )
         ctx = browser.new_context(viewport={"width": 1600, "height": 900})
         yield ctx
         ctx.close()
