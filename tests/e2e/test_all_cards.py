@@ -162,14 +162,14 @@ def make_deploy_test(stable_id, expected_atk, expected_hp):
 # ==========================================================================
 
 def test_ratical_resurrection(sb):
-    """Ratical Resurrection: revive a rat from graveyard to board."""
+    """Ratical Resurrection: revive a rat from grave to board."""
     sb.set_mana(0, 10)
     sb.ensure_p0_turn()
-    sb.add_card(0, NID["rat"], zone="graveyard")  # rat to graveyard
-    grave_before = len(sb.p0.get("graveyard", sb.p0.get("grave", [])))
-    sb.add_card(0, NID["ratical_resurrection"])  # ratical resurrection to hand
+    sb.add_card(0, NID["rat"], zone="graveyard")  # rat to grave (API zone name)
+    grave_before = len(sb.p0.get("grave", []))
+    sb.add_card(0, NID["ratical_resurrection"])  # to hand
     sb.play_card(card_index=0)
-    grave_after = len(sb.p0.get("graveyard", sb.p0.get("grave", [])))
+    grave_after = len(sb.p0.get("grave", []))
     board_minions = len(sb.minions)
     hand_after = len(sb.p0["hand"])
     if board_minions > 0 or grave_after < grave_before:
@@ -181,10 +181,10 @@ def test_to_the_ratmobile(sb):
     """To The Ratmobile: tutor a rat from deck to hand."""
     sb.set_mana(0, 10)
     sb.ensure_p0_turn()
-    sb.add_card(0, NID["rat"], zone="deck")  # rat to deck
-    sb.add_card(0, NID["rat"], zone="deck")  # another rat
-    sb.add_card(0, NID["to_the_ratmobile"])  # ratmobile to hand
+    sb.add_card(0, NID["rat"], zone="deck_top")  # rat to top of deck
+    sb.add_card(0, NID["rat"], zone="deck_top")  # another rat
     deck_before = len(sb.p0.get("deck", []))
+    sb.add_card(0, NID["to_the_ratmobile"])  # ratmobile to hand
     hand_before = len(sb.p0["hand"])
     sb.play_card(card_index=0)
     hand_after = len(sb.p0["hand"])
@@ -202,7 +202,7 @@ def make_tutor_deploy_test(stable_id, tutor_name):
     def test(sb):
         sb.set_mana(0, 10)
         sb.ensure_p0_turn()
-        sb.add_card(0, NID["rat"], zone="deck")  # rat to deck as tutor target
+        sb.add_card(0, NID["rat"], zone="deck_top")  # rat to deck as tutor target
         sb.add_card(0, stable_id)  # tutor minion to hand
         hand_before = len(sb.p0["hand"])
         sb.play_card(card_index=0, position=[0, 2])
@@ -308,29 +308,25 @@ def test_rathopper_leap(sb):
 
 
 def test_rgb_lasercannon(sb):
-    """RGB Lasercannon: requires sacrificing 2 Robots. Deploy 2 robots first."""
+    """RGB Lasercannon: Cost: Exhaust 2 Robots from hand. Add 2 Robots + RGB to hand."""
     sb.set_mana(0, 10)
     sb.ensure_p0_turn()
-    # Deploy 2 robots (blue_diodebot + green_diodebot) as sacrifice fodder
-    sb.add_card(0, NID["blue_diodebot"])
-    sb.play_card(card_index=0, position=[0, 0])
-    sb.ensure_p0_turn()
-    sb.set_mana(0, 10)
-    sb.add_card(0, NID["green_diodebot"])
-    sb.play_card(card_index=0, position=[0, 4])
-    sb.ensure_p0_turn()
-    sb.set_mana(0, 10)
+    # Add 2 Robots to hand (cost: exhaust them) + RGB Lasercannon
+    sb.add_card(0, NID["blue_diodebot"])   # Robot in hand
+    sb.add_card(0, NID["green_diodebot"])  # Robot in hand
+    sb.add_card(0, NID["rgb_lasercannon"]) # RGB in hand
+    hand_before = len(sb.p0["hand"])
+    exhaust_before = len(sb.p0.get("exhaust", []))
 
-    board_before = [i for i, c in enumerate(sb.state.get("board", [])) if c is not None]
-    # Add RGB Lasercannon and try to play with sacrifice
-    sb.add_card(0, NID["rgb_lasercannon"])
-    sb.play_card(card_index=0, position=[0, 2])
-    board_after = [i for i, c in enumerate(sb.state.get("board", [])) if c is not None]
+    # Play RGB Lasercannon (card_index=2 since it was added third)
+    sb.play_card(card_index=2, position=[0, 2])
+    hand_after = len(sb.p0["hand"])
+    exhaust_after = len(sb.p0.get("exhaust", []))
+    has_minion = len(sb.minions) > 0 or any(c is not None for c in sb.state.get("board", []))
 
-    if len(board_after) > 0 and 2 in board_after:
-        return (f"Deployed with sacrifice. Board: {board_before}->{board_after}", "PASS")
-    # Summon sacrifice might need special action format
-    return (f"Summon-sacrifice deploy needs investigation. Board: {board_before}->{board_after}, errors={sb.errors}", "FAIL")
+    if has_minion:
+        return (f"Deployed. Hand {hand_before}->{hand_after}, exhaust {exhaust_before}->{exhaust_after}", "PASS")
+    return (f"Deploy failed. Hand {hand_before}->{hand_after}, exhaust={exhaust_after}, errors={sb.errors}", "FAIL")
 
 
 def test_counter_spell(sb):
