@@ -73,6 +73,33 @@ def browser_context():
             args=["--no-proxy-server"] if os.environ.get("PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH") else [],
         )
         ctx = browser.new_context(viewport={"width": 1600, "height": 900})
+
+        # In network-restricted environments (Claude Code cloud), the CDN
+        # for socket.io / Google Fonts is unreachable.  Intercept those
+        # requests and serve a local copy or an empty response so the page
+        # still functions.
+        _sio_local = os.environ.get("SOCKETIO_LOCAL_JS")
+        if _sio_local:
+            import pathlib
+
+            _sio_body = pathlib.Path(_sio_local).read_bytes()
+
+            def _route_handler(route):
+                url = route.request.url
+                if "socket.io" in url and url.endswith(".js"):
+                    route.fulfill(
+                        status=200,
+                        content_type="application/javascript",
+                        body=_sio_body,
+                    )
+                else:
+                    # Google Fonts, etc. — return empty
+                    route.fulfill(status=200, content_type="text/css", body=b"")
+
+            ctx.route("**://cdn.socket.io/**", _route_handler)
+            ctx.route("**://fonts.googleapis.com/**", _route_handler)
+            ctx.route("**://fonts.gstatic.com/**", _route_handler)
+
         yield ctx
         ctx.close()
         browser.close()
