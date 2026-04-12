@@ -2385,8 +2385,16 @@ body {
   .card-frame-hand { width: 132px; }
   .hand-container { max-height: 228px; min-height: 80px; }
 
-  /* Deck builder cards: single-column, wider than game hand cards */
+  /* Deck builder cards: single-column, wider than game hand cards.
+     Restore desktop font sizes — 220px is bigger than the 192px desktop
+     card, so the 120px-era shrink overrides above are wrong here. */
   .card-frame-full { width: 220px; }
+  .card-frame-full .card-name-overlay { font-size: 16px; }
+  .card-frame-full .card-effect-full { font-size: 12px; }
+  .card-frame-full .card-flavour { font-size: 10px; }
+  .card-frame-full .card-stat-atk,
+  .card-frame-full .card-stat-hp { font-size: 16px; }
+  .card-frame-full .card-mana { font-size: 16px; }
 }
 
 /* ===== Phase 14 PLAY-02: React Window UI ===== */
