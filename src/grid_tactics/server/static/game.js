@@ -5580,12 +5580,9 @@ function setupSandboxToolbar() {
             var row = e.target.closest('.sandbox-search-result');
             if (!row) return;
             var nid = parseInt(row.dataset.nid, 10);
-            socket.emit('sandbox_add_card_to_zone', {
-                player_idx: sandboxAddTargetIdx,
-                card_numeric_id: nid,
-                zone: sandboxAddZone,
-            });
-            // Dismiss dropdown + clear search after adding
+            // Stage card as draggable preview instead of immediately adding
+            sandboxStageCard(nid);
+            // Dismiss dropdown + clear search
             resultsBox.hidden = true;
             resultsBox.innerHTML = '';
             searchInput.value = '';
@@ -5836,6 +5833,98 @@ function makeSandboxMoveButton(playerIdx, cardNumericId, srcZone) {
         openSandboxMovePopover(btn, playerIdx, cardNumericId, srcZone);
     });
     return btn;
+}
+
+// ---- E2. Staged card preview + drag-to-zone --------------------------------
+function sandboxStageCard(nid) {
+    var defs = sandboxCardDefs || cardDefs;
+    var def = defs && defs[nid];
+    if (!def) return;
+    var staged = document.getElementById('sandbox-staged-card');
+    if (!staged) return;
+    var artStyle = def.card_id
+        ? 'background-image:url(/static/art/' + def.card_id + '.png)'
+        : '';
+    staged.innerHTML =
+        '<div class="staged-art" style="' + artStyle + '"></div>' +
+        '<span class="staged-name">' + escapeHtml(def.name) + '</span>' +
+        '<span class="staged-cost">' + (def.mana_cost != null ? def.mana_cost : '-') + '\u{1F4A7}</span>' +
+        '<span class="staged-drag-hint">DRAG</span>';
+    staged.dataset.nid = nid;
+    staged.hidden = false;
+    // Wire drag handlers (idempotent — only binds once via the flag)
+    if (!staged._dragBound) {
+        staged._dragBound = true;
+        staged.addEventListener('dragstart', function(e) {
+            e.dataTransfer.setData('text/plain', staged.dataset.nid);
+            e.dataTransfer.effectAllowed = 'copy';
+            // Highlight all valid drop zones
+            setTimeout(function() {
+                document.querySelectorAll('#screen-sandbox .hand-container, #screen-sandbox .sandbox-pile-btn')
+                    .forEach(function(el) { el.classList.add('drop-target-active'); });
+            }, 0);
+        });
+        staged.addEventListener('dragend', function() {
+            document.querySelectorAll('.drop-target-active, .drop-target-hover')
+                .forEach(function(el) {
+                    el.classList.remove('drop-target-active');
+                    el.classList.remove('drop-target-hover');
+                });
+        });
+    }
+    // Ensure drop zones are wired (idempotent)
+    sandboxWireDropZones();
+}
+
+var _sandboxDropZonesBound = false;
+function sandboxWireDropZones() {
+    if (_sandboxDropZonesBound) return;
+    _sandboxDropZonesBound = true;
+
+    function handleDrop(playerIdx, zone) {
+        return function(e) {
+            e.preventDefault();
+            var nid = parseInt(e.dataTransfer.getData('text/plain'), 10);
+            if (isNaN(nid)) return;
+            socket.emit('sandbox_add_card_to_zone', {
+                player_idx: playerIdx,
+                card_numeric_id: nid,
+                zone: zone,
+            });
+        };
+    }
+    function allowDrop(e) {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'copy';
+    }
+    function hoverIn(e) { e.currentTarget.classList.add('drop-target-hover'); }
+    function hoverOut(e) { e.currentTarget.classList.remove('drop-target-hover'); }
+
+    // Hand containers
+    var handP0 = document.getElementById('sandbox-hand-p0');
+    var handP1 = document.getElementById('sandbox-hand-p1');
+    if (handP0) {
+        handP0.addEventListener('dragover', allowDrop);
+        handP0.addEventListener('dragenter', hoverIn);
+        handP0.addEventListener('dragleave', hoverOut);
+        handP0.addEventListener('drop', handleDrop(0, 'hand'));
+    }
+    if (handP1) {
+        handP1.addEventListener('dragover', allowDrop);
+        handP1.addEventListener('dragenter', hoverIn);
+        handP1.addEventListener('dragleave', hoverOut);
+        handP1.addEventListener('drop', handleDrop(1, 'hand'));
+    }
+
+    // Pile buttons (grave / exhaust / deck)
+    document.querySelectorAll('#screen-sandbox .sandbox-pile-btn').forEach(function(btn) {
+        var playerIdx = parseInt(btn.dataset.player, 10);
+        var pile = btn.dataset.pile;
+        btn.addEventListener('dragover', allowDrop);
+        btn.addEventListener('dragenter', hoverIn);
+        btn.addEventListener('dragleave', hoverOut);
+        btn.addEventListener('drop', handleDrop(playerIdx, pile));
+    });
 }
 
 // ---- F. Server-saves list rendering --------------------------------------
