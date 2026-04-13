@@ -974,11 +974,11 @@ body {
 }
 
 .board-minion.owner-self {
-  box-shadow: inset 0 0 0 2px rgba(0, 212, 255, 0.5);
+  box-shadow: inset 0 0 0 2px rgba(0, 212, 255, 0.7), 0 0 8px rgba(0, 212, 255, 0.4);
 }
 
 .board-minion.owner-opp {
-  box-shadow: inset 0 0 0 2px rgba(244, 67, 54, 0.5);
+  box-shadow: inset 0 0 0 2px rgba(244, 67, 54, 0.7), 0 0 8px rgba(244, 67, 54, 0.4);
 }
 
 /* Dark overlay on board minion for text readability */
