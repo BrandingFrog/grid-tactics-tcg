@@ -4,7 +4,7 @@
 
 // Stat emoji wrappers — apply a drop-shadow halo and slightly larger
 // font so 🗡️ and 🤍 look consistent next to numeric text with black stroke.
-var SWORD_SVG = '<svg class="stat-icon stat-icon-sword" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><polygon points="22,2 22,8 13,17 10,14 19,5 15,5 15,2" fill="currentColor"/><rect x="8" y="13" width="6" height="2" rx="0.5" transform="rotate(-45 11 14)" fill="currentColor"/><polygon points="5,17 7,15 9,17 7,19" fill="currentColor"/><polygon points="3,19 5,17 7,19 5,21" fill="currentColor"/></svg>';
+var SWORD_SVG = '<svg class="stat-icon stat-icon-sword" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M11 2h2l1 10h-4l1-10z" fill="currentColor"/><rect x="7" y="12" width="10" height="2.5" rx="1" fill="currentColor"/><rect x="10" y="14.5" width="4" height="5" rx="0.5" fill="currentColor"/><path d="M10 19.5h4l-0.5 2.5h-3l-0.5-2.5z" fill="currentColor"/></svg>';
 var HEART_SVG = '<svg class="stat-icon stat-icon-heart" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12 21.35L10.55 20.03C5.4 15.36 2 12.27 2 8.5C2 5.41 4.42 3 7.5 3C9.24 3 10.91 3.81 12 5.08C13.09 3.81 14.76 3 16.5 3C19.58 3 22 5.41 22 8.5C22 12.27 18.6 15.36 13.45 20.03L12 21.35Z" fill="currentColor"/></svg>';
 var SWORD = '<span class="stat-emoji">' + SWORD_SVG + '</span>';
 var HEART = '<span class="stat-emoji">' + HEART_SVG + '</span>';
