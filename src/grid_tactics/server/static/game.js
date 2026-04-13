@@ -1490,16 +1490,37 @@ function hideCardTooltip() {
 // Game Tooltip (hand cards + board minions) — same renderer, no related.
 // =============================================
 function showGameTooltip(numericId, anchorEl) {
-    populateTooltip(document.getElementById('game-tooltip'), numericId, { showRelated: false });
-    var hint = document.getElementById('game-tooltip-hint');
+    var tooltipId = sandboxMode ? 'sandbox-tooltip' : 'game-tooltip';
+    var hintId = sandboxMode ? 'sandbox-tooltip-hint' : 'game-tooltip-hint';
+    populateTooltip(document.getElementById(tooltipId), numericId, { showRelated: false });
+    var hint = document.getElementById(hintId);
     if (hint) hint.style.display = 'none';
 }
 
 function hideGameTooltip() {
-    var tooltip = document.getElementById('game-tooltip');
+    var tooltipId = sandboxMode ? 'sandbox-tooltip' : 'game-tooltip';
+    var hintId = sandboxMode ? 'sandbox-tooltip-hint' : 'game-tooltip-hint';
+    var tooltip = document.getElementById(tooltipId);
     if (tooltip) tooltip.style.display = 'none';
-    var hint = document.getElementById('game-tooltip-hint');
+    var hint = document.getElementById(hintId);
     if (hint) hint.style.display = '';
+}
+
+// Pin a hand card's full preview in the left tooltip sidebar on click.
+// Removes pin from any previously pinned card, toggles if same card clicked.
+function pinHandCardPreview(numericId, cardEl) {
+    var wasPinned = cardEl.classList.contains('card-preview-pinned');
+    // Unpin all
+    document.querySelectorAll('.card-preview-pinned').forEach(function(el) {
+        el.classList.remove('card-preview-pinned');
+    });
+    if (wasPinned) {
+        hideGameTooltip();
+        return;
+    }
+    // Pin this card
+    cardEl.classList.add('card-preview-pinned');
+    showGameTooltip(numericId, cardEl);
 }
 
 // Auto-fit for hand card names — clean wireframe: CSS handles overflow
@@ -1895,6 +1916,8 @@ function renderOppHandRow(count) {
     for (var i = 0; i < n; i++) {
         var back = document.createElement('div');
         back.className = 'opp-hand-card-back';
+        back.style.setProperty('--i', i);
+        back.style.setProperty('--n', n);
         row.appendChild(back);
     }
 }
@@ -5053,6 +5076,7 @@ function renderHand(opts) {
             lbl.textContent = label;
             handEl.appendChild(lbl);
         }
+        var totalCards = playerObj.hand.length;
         playerObj.hand.forEach(function(numericId, handIndex) {
             var mana = playerObj.current_mana;
             var cardHtml = renderHandCard(numericId, handIndex, mana, isMyTurn && !isSpectator);
@@ -5060,11 +5084,23 @@ function renderHand(opts) {
             wrapper.innerHTML = cardHtml;
             if (wrapper.firstChild) {
                 var cardEl = wrapper.firstChild;
+                // Fan positioning via CSS custom properties
+                cardEl.style.setProperty('--i', handIndex);
+                cardEl.style.setProperty('--n', totalCards);
                 cardEl.addEventListener('mouseenter', function() { showGameTooltip(numericId, this); });
-                cardEl.addEventListener('mouseleave', function() { hideGameTooltip(); });
-                (function(idx) {
-                    cardEl.addEventListener('click', function() { onHandCardClick(idx); });
-                })(handIndex);
+                cardEl.addEventListener('mouseleave', function() {
+                    // Only hide tooltip if this card is not pinned
+                    if (!cardEl.classList.contains('card-preview-pinned')) {
+                        hideGameTooltip();
+                    }
+                });
+                (function(idx, nid) {
+                    cardEl.addEventListener('click', function() {
+                        // Pin preview in the tooltip sidebar
+                        pinHandCardPreview(nid, this);
+                        onHandCardClick(idx);
+                    });
+                })(handIndex, numericId);
                 // Phase 14.6-03: additive "Move to..." affordance in sandbox
                 // mode. The existing play-from-hand click handler above is
                 // unchanged; this button is a sibling affordance.

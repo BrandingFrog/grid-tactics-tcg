@@ -408,8 +408,14 @@
       <!-- Left: empty tooltip sidebar slot (keeps 3-col grid parity with
            #screen-game so the board sizes the same way). Hidden on mobile
            via the existing .game-layout > .tooltip-sidebar media query. -->
-      <div class="tooltip-sidebar game-tooltip-sidebar">
-        <div class="tooltip-sidebar-hint">Sandbox mode</div>
+      <div class="tooltip-sidebar game-tooltip-sidebar" id="sandbox-tooltip-sidebar">
+        <div class="card-tooltip game-tooltip" id="sandbox-tooltip" style="display:none;">
+          <div class="tooltip-card tooltip-card-art"></div>
+          <div class="tooltip-header tooltip-name"></div>
+          <div class="tooltip-stats"></div>
+          <div class="tooltip-section tooltip-keywords"></div>
+        </div>
+        <div class="tooltip-sidebar-hint" id="sandbox-tooltip-hint">Hover a card to see details</div>
       </div>
 
       <!-- Middle: game-main (identical structure to live game) -->
