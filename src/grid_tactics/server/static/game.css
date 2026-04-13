@@ -1065,7 +1065,7 @@ body {
   align-items: flex-end;
   padding: 6px 4px 2px;
   flex-shrink: 0;
-  min-height: 40px;
+  min-height: 120px;
   max-height: 200px;
   overflow: visible;
   position: relative;
@@ -3357,7 +3357,7 @@ body {
   .game-sidebar { display: none; }
   .game-main { overflow-y: auto; }
   .board-container { min-height: 200px; }
-  .hand-container { min-height: 36px; }
+  .hand-container { min-height: 80px; }
 }
 
 /* =====================================================================
