@@ -40,24 +40,24 @@ def _build_test_decks(library: CardLibrary) -> tuple[tuple[int, ...], tuple[int,
     """
     card_counts: dict[str, int] = {
         # 1-cost (2 cards * 3 = 6)
-        "fire_imp": 3,
-        "shadow_stalker": 3,
+        "rat": 3,
+        "furryroach": 3,
         # 2-cost (3 cards * 3 = 9)
-        "dark_assassin": 3,
-        "light_cleric": 3,
-        "wind_archer": 3,
+        "blue_diodebot": 3,
+        "red_diodebot": 3,
+        "rgb_lasercannon": 3,
         # 3-cost (4 cards * 3 = 12)
-        "dark_sentinel": 3,
-        "holy_paladin": 3,
-        "iron_guardian": 3,
-        "shadow_knight": 3,
+        "green_diodebot": 3,
+        "ratchanter": 3,
+        "surgefed_sparkbot": 3,
+        "rathopper": 3,
         # 4-cost (1 card * 1 = 1)
-        "stone_golem": 1,
+        "giant_rat": 1,
         # Magic/react fill (12)
-        "fireball": 3,
-        "holy_light": 3,
-        "dark_drain": 3,
-        "shield_block": 3,
+        "to_the_ratmobile": 3,
+        "ratical_resurrection": 3,
+        "emberplague_rat": 3,
+        "counter_spell": 3,
     }
     # Total = 6 + 9 + 12 + 1 + 12 = 40
 
@@ -75,21 +75,21 @@ def _build_no_heal_decks(library: CardLibrary) -> tuple[tuple[int, ...], tuple[i
     to prevent healing from counteracting sacrifice damage.
     """
     card_counts: dict[str, int] = {
-        "fire_imp": 3,
-        "shadow_stalker": 3,
-        "dark_assassin": 3,
-        "wind_archer": 3,
-        "dark_sentinel": 3,
-        "iron_guardian": 3,
-        "shadow_knight": 3,
-        "stone_golem": 3,
-        "flame_wyrm": 3,
-        "fireball": 3,
-        "inferno": 3,
+        "rat": 3,
+        "furryroach": 3,
+        "blue_diodebot": 3,
+        "rgb_lasercannon": 3,
+        "green_diodebot": 3,
+        "surgefed_sparkbot": 3,
+        "rathopper": 3,
+        "giant_rat": 3,
+        "surgefed_sparkbot": 3,
+        "to_the_ratmobile": 3,
+        "rgb_lasercannon": 3,
         "counter_spell": 3,
-        "shield_block": 3,
-        # 13 * 3 = 39, need 1 more; include 1 dark_drain (minimal heal)
-        "dark_drain": 1,
+        "reanimated_bones": 3,
+        # 13 * 3 = 39, need 1 more
+        "ratical_resurrection": 1,
     }
     deck = library.build_deck(card_counts)
     # Audit-followup: MIN_DECK_SIZE was lowered from 40 to 30; this helper
@@ -327,7 +327,7 @@ class TestWinMechanism:
         state, rng = GameState.new_game(42, deck_p1, deck_p2)
 
         # Place a P1 minion on P2's back row (row 4) ready to sacrifice
-        fire_imp_id = library.get_numeric_id("fire_imp")
+        fire_imp_id = library.get_numeric_id("rat")
         minion = MinionInstance(
             instance_id=0,
             card_numeric_id=fire_imp_id,

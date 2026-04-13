@@ -274,25 +274,12 @@ const COLORS = ['#00d4ff','#4caf50','#ff9800','#f44336','#ce93d8','#ffeb3b','#29
 
 // Card definitions for tooltip previews
 const CARD_DB = {
-  fire_imp:{name:"Fire Imp",type:"minion",cost:1,atk:20,hp:10,range:0,elem:"fire",tribe:"Imp",effects:[]},
-  dark_assassin:{name:"Dark Assassin",type:"minion",cost:2,atk:30,hp:10,range:0,elem:"dark",tribe:"Assassin",effects:[]},
-  shadow_stalker:{name:"Shadow Stalker",type:"minion",cost:1,atk:10,hp:20,range:0,elem:"dark",tribe:"Assassin",effects:[]},
-  shadow_knight:{name:"Shadow Knight",type:"minion",cost:3,atk:30,hp:30,range:0,elem:"dark",tribe:"Knight",effects:[]},
-  dark_sentinel:{name:"Dark Sentinel",type:"minion",cost:3,atk:20,hp:30,range:0,elem:"dark",tribe:"Dark Mage",effects:[],react:"opponent_plays_light",react_cost:1},
-  holy_paladin:{name:"Holy Paladin",type:"minion",cost:3,atk:20,hp:40,range:0,elem:"light",tribe:"Paladin",effects:[]},
-  light_cleric:{name:"Light Cleric",type:"minion",cost:2,atk:10,hp:30,range:1,elem:"light",tribe:"Cleric",effects:[]},
-  flame_wyrm:{name:"Flame Wyrm",type:"minion",cost:5,atk:40,hp:40,range:1,elem:"fire",tribe:"Dragon",effects:[]},
-  stone_golem:{name:"Stone Golem",type:"minion",cost:4,atk:20,hp:50,range:0,elem:"earth",tribe:"Golem",effects:[]},
-  iron_guardian:{name:"Iron Guardian",type:"minion",cost:3,atk:10,hp:50,range:0,elem:"metal",tribe:"Golem",effects:[]},
-  wind_archer:{name:"Wind Archer",type:"minion",cost:2,atk:20,hp:20,range:2,elem:"wood",tribe:"Archer",effects:[]},
-  fireball:{name:"Fireball",type:"magic",cost:3,elem:"fire",effects:[{type:"damage",trigger:"on_play",target:"single_target",amount:40}]},
-  dark_drain:{name:"Dark Drain",type:"magic",cost:2,elem:"dark",effects:[{type:"damage",trigger:"on_play",target:"single_target",amount:20},{type:"heal",trigger:"on_play",target:"self_owner",amount:20}]},
-  holy_light:{name:"Holy Light",type:"magic",cost:2,elem:"light",effects:[{type:"heal",trigger:"on_play",target:"self_owner",amount:30}]},
-  inferno:{name:"Inferno",type:"magic",cost:7,elem:"fire",effects:[{type:"damage",trigger:"on_play",target:"all_enemies",amount:20}]},
   counter_spell:{name:"Counter Spell",type:"react",cost:2,elem:"water",react:"opponent_plays_magic",effects:[{type:"negate",trigger:"on_play",target:"single_target",amount:10}]},
-  shield_block:{name:"Shield Block",type:"react",cost:1,elem:"light",react:"opponent_attacks",effects:[{type:"buff_health",trigger:"on_play",target:"single_target",amount:20}]},
-  dark_mirror:{name:"Dark Mirror",type:"react",cost:1,elem:"dark",react:"opponent_plays_minion",effects:[{type:"damage",trigger:"on_play",target:"single_target",amount:10},{type:"heal",trigger:"on_play",target:"self_owner",amount:10}]},
   furryroach:{name:"Furryroach",type:"minion",cost:1,atk:10,hp:10,range:0,elem:"earth",tribe:"Insect",effects:[{type:"rally_forward",trigger:"on_move",target:"self_owner",amount:10}]},
+  emberplague_rat:{name:"Emberplague Rat",type:"minion",cost:2,atk:0,hp:24,range:0,elem:"fire",tribe:"Rat",effects:[{type:"burn",trigger:"passive",target:"all_enemies",amount:2}]},
+  rathopper:{name:"Rathopper",type:"minion",cost:3,atk:19,hp:13,range:0,elem:"earth",tribe:"Rat",effects:[]},
+  ratchanter:{name:"Ratchanter",type:"minion",cost:4,atk:15,hp:30,range:0,elem:"dark",tribe:"Rat",effects:[]},
+  surgefed_sparkbot:{name:"Surgefed Sparkbot",type:"minion",cost:5,atk:27,hp:25,range:0,elem:"metal",tribe:"Robot",effects:[]},
   rat:{name:"Rat",type:"minion",cost:1,atk:10,hp:10,range:0,elem:"earth",tribe:"Rat",effects:[]},
   giant_rat:{name:"Giant Rat",type:"minion",cost:3,atk:30,hp:30,range:0,elem:"earth",tribe:"Rat",effects:[{type:"promote",trigger:"on_death",target:"self_owner",amount:10}],unique:true,promote_target:"rat"},
   red_diodebot:{name:"Red Diodebot",type:"minion",cost:2,atk:12,hp:12,range:0,elem:"metal",tribe:"Robot",effects:[{type:"tutor",trigger:"on_play",target:"self_owner",amount:1}],tutor_target:"green_diodebot"},
@@ -1001,33 +988,33 @@ function renderDuelLobby(el) {
 function renderDuelGame(el) {
   // Sample game state for mockup
   const board = Array(5).fill(null).map(() => Array(5).fill(null));
-  board[1][2] = { name: 'Dark Assassin', atk: 30, hp: 10, owner: 2, attr: 'dark' };
-  board[1][4] = { name: 'Wind Archer', atk: 20, hp: 15, owner: 2, attr: 'neutral' };
-  board[2][1] = { name: 'Shadow Stalker', atk: 10, hp: 20, owner: 2, attr: 'dark' };
-  board[2][3] = { name: 'Fire Imp', atk: 20, hp: 5, owner: 1, attr: 'fire' };
-  board[3][0] = { name: 'Stone Golem', atk: 20, hp: 50, owner: 1, attr: 'neutral' };
-  board[3][2] = { name: 'Holy Paladin', atk: 20, hp: 35, owner: 1, attr: 'light' };
+  board[1][2] = { name: 'Ratchanter', atk: 15, hp: 30, owner: 2, attr: 'dark' };
+  board[1][4] = { name: 'Pyre Archer', atk: 9, hp: 5, owner: 2, attr: 'fire' };
+  board[2][1] = { name: 'Rathopper', atk: 19, hp: 13, owner: 2, attr: 'earth' };
+  board[2][3] = { name: 'Red Diodebot', atk: 12, hp: 8, owner: 1, attr: 'metal' };
+  board[3][0] = { name: 'Giant Rat', atk: 30, hp: 30, owner: 1, attr: 'earth' };
+  board[3][2] = { name: 'Fallen Paladin', atk: 16, hp: 35, owner: 1, attr: 'light' };
 
   const myHand = [
-    { id: 'fireball', ...CARD_DB.fireball },
-    { id: 'iron_guardian', ...CARD_DB.iron_guardian },
+    { id: 'ratical_resurrection', ...CARD_DB.ratical_resurrection },
+    { id: 'rgb_lasercannon', ...CARD_DB.rgb_lasercannon },
     { id: 'counter_spell', ...CARD_DB.counter_spell },
-    { id: 'fire_imp', ...CARD_DB.fire_imp },
-    { id: 'dark_drain', ...CARD_DB.dark_drain },
+    { id: 'furryroach', ...CARD_DB.furryroach },
+    { id: 'to_the_ratmobile', ...CARD_DB.to_the_ratmobile },
   ];
 
   const log = [
-    { turn: 7, msg: '<span style="color:var(--cyan)">P1</span> deploys <span style="color:var(--red)">Fire Imp</span> at (2,3)' },
+    { turn: 7, msg: '<span style="color:var(--cyan)">P1</span> deploys <span style="color:var(--red)">Red Diodebot</span> at (2,3)' },
     { turn: 7, msg: '<span style="color:var(--red)">P2</span> passes react window' },
-    { turn: 6, msg: '<span style="color:var(--red)">P2</span> moves <span style="color:var(--purple)">Shadow Stalker</span> to (2,1)' },
+    { turn: 6, msg: '<span style="color:var(--red)">P2</span> moves <span style="color:var(--purple)">Rathopper</span> to (2,1)' },
     { turn: 6, msg: '<span style="color:var(--cyan)">P1</span> passes react window' },
-    { turn: 5, msg: '<span style="color:var(--cyan)">P1</span> <span style="color:var(--red)">attacks</span> Wind Archer with Holy Paladin' },
-    { turn: 5, msg: '<span style="color:var(--yellow)">[REACT]</span> <span style="color:var(--red)">P2</span> plays <span style="color:var(--cyan)">Shield Block</span> on Wind Archer' },
-    { turn: 4, msg: '<span style="color:var(--red)">P2</span> deploys <span style="color:var(--purple)">Dark Assassin</span> at (1,2)' },
+    { turn: 5, msg: '<span style="color:var(--cyan)">P1</span> <span style="color:var(--red)">attacks</span> Pyre Archer with Fallen Paladin' },
+    { turn: 5, msg: '<span style="color:var(--yellow)">[REACT]</span> <span style="color:var(--red)">P2</span> plays <span style="color:var(--cyan)">Counter Spell</span>' },
+    { turn: 4, msg: '<span style="color:var(--red)">P2</span> deploys <span style="color:var(--purple)">Ratchanter</span> at (1,2)' },
     { turn: 4, msg: '<span style="color:var(--cyan)">P1</span> passes react window' },
-    { turn: 3, msg: '<span style="color:var(--cyan)">P1</span> deploys <span style="color:var(--green)">Stone Golem</span> at (3,0)' },
+    { turn: 3, msg: '<span style="color:var(--cyan)">P1</span> deploys <span style="color:var(--green)">Giant Rat</span> at (3,0)' },
     { turn: 3, msg: '<span style="color:var(--red)">P2</span> passes react window' },
-    { turn: 2, msg: '<span style="color:var(--red)">P2</span> deploys <span style="color:var(--muted)">Wind Archer</span> at (0,4)' },
+    { turn: 2, msg: '<span style="color:var(--red)">P2</span> deploys <span style="color:var(--red)">Pyre Archer</span> at (0,4)' },
     { turn: 1, msg: '<span style="color:var(--cyan)">P1</span> draws a card' },
     { turn: 1, msg: '<span style="color:var(--red)">P2</span> draws a card' },
   ];

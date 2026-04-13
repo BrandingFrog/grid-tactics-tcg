@@ -2,35 +2,31 @@
 
 30 cards, max 3 copies per card. Validated against CardLibrary at import time.
 Used by programmatic test clients that don't have a deck builder UI.
+Only uses cards that have card art (+ counter_spell).
 """
 
 from grid_tactics.card_library import CardLibrary
 
-# Card counts: 9 cards at 2 copies (=18) + 12 cards at 1 copy (=12) = 30 total
+# 15 deckable cards (pyre_archer/grave_caller/fallen_paladin are tokens). 30-card deck.
+# 6 at 3 copies (=18) + 6 at 2 copies (=12) = 30 total
 PRESET_DECK_COUNTS: dict[str, int] = {
-    # 2 copies - cheap/versatile cards
-    "fire_imp": 2,
-    "shadow_stalker": 2,
-    "rat": 2,
-    "light_cleric": 2,
-    "wind_archer": 2,
-    "dark_assassin": 2,
-    "dark_drain": 2,
-    "shield_block": 2,
-    "dark_mirror": 2,
-    # 1 copy - remaining cards
-    "furryroach": 1,
-    "counter_spell": 1,
-    "holy_light": 1,
-    "fireball": 1,
-    "holy_paladin": 1,
-    "iron_guardian": 1,
-    "dark_sentinel": 1,
-    "shadow_knight": 1,
+    # 3 copies - cheap core
+    "rat": 3,
+    "furryroach": 3,
+    "reanimated_bones": 3,
+    "red_diodebot": 3,
+    "blue_diodebot": 3,
+    "green_diodebot": 3,
+    # 2 copies - mid game
+    "emberplague_rat": 2,
+    "rathopper": 2,
+    "rgb_lasercannon": 2,
     "giant_rat": 1,
-    "stone_golem": 1,
-    "flame_wyrm": 1,
-    "inferno": 1,
+    "ratchanter": 1,
+    "surgefed_sparkbot": 1,
+    "ratical_resurrection": 1,
+    "to_the_ratmobile": 1,
+    "counter_spell": 1,
 }
 
 

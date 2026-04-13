@@ -331,20 +331,18 @@ def test_apply_action_preserves_react_window_when_opponent_has_reacts(
     could counter the play, the sandbox user should be able to choose — so
     the session stays in REACT phase.
 
-    We load P2's hand with a Shield Block (a react-eligible card) and give
-    them enough mana to play it; after P1 plays a rat the session should
+    We load P2's hand with counter_spell (reacts to OPPONENT_PLAYS_MAGIC) and
+    give them enough mana; after P1 plays a magic card the session should
     remain in REACT.
     """
-    rat_nid = _find_numeric_id(library, "rat")
-    # Dark Mirror is CardType.REACT with condition OPPONENT_PLAYS_MINION — it's
-    # a legal react against P1 deploying a rat.
-    mirror_nid = _find_numeric_id(library, "dark_mirror")
-    mirror_cost = library.get_by_id(mirror_nid).mana_cost
+    magic_nid = _find_numeric_id(library, "to_the_ratmobile")
+    counter_nid = _find_numeric_id(library, "counter_spell")
+    counter_cost = library.get_by_id(counter_nid).mana_cost
 
-    session.set_player_field(0, "current_mana", 1)
-    session.add_card_to_zone(0, rat_nid, "hand")
-    session.add_card_to_zone(1, mirror_nid, "hand")
-    session.set_player_field(1, "current_mana", max(mirror_cost, 1))
+    session.set_player_field(0, "current_mana", 3)  # enough for to_the_ratmobile (cost=3)
+    session.add_card_to_zone(0, magic_nid, "hand")
+    session.add_card_to_zone(1, counter_nid, "hand")
+    session.set_player_field(1, "current_mana", max(counter_cost, 1))
 
     play_actions = [
         a for a in session.legal_actions() if a.action_type == ActionType.PLAY_CARD
@@ -354,10 +352,9 @@ def test_apply_action_preserves_react_window_when_opponent_has_reacts(
 
     from grid_tactics.enums import TurnPhase
 
-    # Engine state IS advanced (mana spent, rat on board) even during the react
+    # Engine state IS advanced (mana spent, magic resolved) even during the react
     # window — that part is baseline engine behavior.
     assert session.state.players[0].current_mana == 0
-    assert len(session.state.minions) == 1
 
     # BUT because P2 has a legal react, the sandbox must leave the state in
     # REACT phase so the user can decide whether to counter.

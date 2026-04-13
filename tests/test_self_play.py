@@ -37,20 +37,20 @@ def library():
 def deck(library):
     """Build a valid 40-card deck for testing."""
     card_counts = {
-        "fire_imp": 3,
-        "shadow_stalker": 3,
-        "dark_assassin": 3,
-        "light_cleric": 3,
-        "wind_archer": 3,
-        "dark_sentinel": 3,
-        "holy_paladin": 3,
-        "iron_guardian": 3,
-        "shadow_knight": 3,
-        "stone_golem": 1,
-        "fireball": 3,
-        "holy_light": 3,
-        "dark_drain": 3,
-        "shield_block": 3,
+        "rat": 3,
+        "furryroach": 3,
+        "blue_diodebot": 3,
+        "red_diodebot": 3,
+        "rgb_lasercannon": 3,
+        "green_diodebot": 3,
+        "ratchanter": 3,
+        "surgefed_sparkbot": 3,
+        "rathopper": 3,
+        "giant_rat": 1,
+        "to_the_ratmobile": 3,
+        "ratical_resurrection": 3,
+        "emberplague_rat": 3,
+        "counter_spell": 3,
     }
     return library.build_deck(card_counts)
 

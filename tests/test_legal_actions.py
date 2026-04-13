@@ -123,8 +123,8 @@ class TestBasicLegalActions:
 
     def test_pass_not_in_action_phase(self, library):
         """Audit-followup: PASS is no longer enumerated in ACTION phase."""
-        fire_imp_id = library.get_numeric_id("fire_imp")
-        state = _make_state(p1_hand=(fire_imp_id,), p1_deck=(fire_imp_id,))
+        rat_id = library.get_numeric_id("rat")
+        state = _make_state(p1_hand=(rat_id,), p1_deck=(rat_id,))
         actions = legal_actions(state, library)
         pass_actions = [a for a in actions if a.action_type == ActionType.PASS]
         assert len(pass_actions) == 0
@@ -133,8 +133,8 @@ class TestBasicLegalActions:
         """Audit-followup: DRAW is still a player action when deck is non-empty
         (CLAUDE.md is out of date — legal_actions still adds it at line ~278).
         """
-        fire_imp_id = library.get_numeric_id("fire_imp")
-        state = _make_state(p1_deck=(fire_imp_id,))
+        rat_id = library.get_numeric_id("rat")
+        state = _make_state(p1_deck=(rat_id,))
         actions = legal_actions(state, library)
         draw_actions = [a for a in actions if a.action_type == ActionType.DRAW]
         assert len(draw_actions) == 1
@@ -155,8 +155,8 @@ class TestBasicLegalActions:
 class TestMinionDeployment:
     def test_melee_minion_all_friendly_rows(self, library):
         """Melee minion (range=0) can deploy to any empty cell in P1 rows (0, 1)."""
-        fire_imp_id = library.get_numeric_id("fire_imp")  # range=0, cost=1
-        state = _make_state(p1_hand=(fire_imp_id,), p1_mana=5)
+        rat_id = library.get_numeric_id("rat")  # range=0, cost=1
+        state = _make_state(p1_hand=(rat_id,), p1_mana=5)
         actions = legal_actions(state, library)
 
         play_actions = [a for a in actions if a.action_type == ActionType.PLAY_CARD]
@@ -167,8 +167,8 @@ class TestMinionDeployment:
 
     def test_ranged_minion_back_row_only(self, library):
         """Ranged minion (range>=1) can only deploy to back row."""
-        wind_archer_id = library.get_numeric_id("wind_archer")  # range=2, cost=2
-        state = _make_state(p1_hand=(wind_archer_id,), p1_mana=5)
+        pyre_archer_id = library.get_numeric_id("pyre_archer")  # range=2, cost=2
+        state = _make_state(p1_hand=(pyre_archer_id,), p1_mana=5)
         actions = legal_actions(state, library)
 
         play_actions = [a for a in actions if a.action_type == ActionType.PLAY_CARD]
@@ -179,8 +179,8 @@ class TestMinionDeployment:
 
     def test_p2_melee_deploys_to_p2_rows(self, library):
         """P2's melee minion deploys to rows 3, 4."""
-        fire_imp_id = library.get_numeric_id("fire_imp")
-        state = _make_state(p2_hand=(fire_imp_id,), active_player_idx=1)
+        rat_id = library.get_numeric_id("rat")
+        state = _make_state(p2_hand=(rat_id,), active_player_idx=1)
         actions = legal_actions(state, library)
 
         play_actions = [a for a in actions if a.action_type == ActionType.PLAY_CARD]
@@ -190,8 +190,8 @@ class TestMinionDeployment:
 
     def test_p2_ranged_deploys_to_back_row(self, library):
         """P2's ranged minion deploys to row 4 only."""
-        wind_archer_id = library.get_numeric_id("wind_archer")
-        state = _make_state(p2_hand=(wind_archer_id,), active_player_idx=1)
+        pyre_archer_id = library.get_numeric_id("pyre_archer")
+        state = _make_state(p2_hand=(pyre_archer_id,), active_player_idx=1)
         actions = legal_actions(state, library)
 
         play_actions = [a for a in actions if a.action_type == ActionType.PLAY_CARD]
@@ -201,8 +201,8 @@ class TestMinionDeployment:
 
     def test_insufficient_mana_no_play(self, library):
         """Cards with cost > current mana are not legal to play."""
-        flame_wyrm_id = library.get_numeric_id("flame_wyrm")  # cost=5
-        state = _make_state(p1_hand=(flame_wyrm_id,), p1_mana=4)
+        fallen_paladin_id = library.get_numeric_id("fallen_paladin")  # cost=5
+        state = _make_state(p1_hand=(fallen_paladin_id,), p1_mana=4)
         actions = legal_actions(state, library)
 
         play_actions = [a for a in actions if a.action_type == ActionType.PLAY_CARD]
@@ -210,13 +210,13 @@ class TestMinionDeployment:
 
     def test_occupied_cells_excluded(self, library):
         """Occupied cells are not valid deploy targets."""
-        fire_imp_id = library.get_numeric_id("fire_imp")
+        rat_id = library.get_numeric_id("rat")
         # Place a minion at (0, 0)
         minion = MinionInstance(
-            instance_id=0, card_numeric_id=fire_imp_id,
+            instance_id=0, card_numeric_id=rat_id,
             owner=PlayerSide.PLAYER_1, position=(0, 0), current_health=2,
         )
-        state = _make_state(p1_hand=(fire_imp_id,), minions=(minion,))
+        state = _make_state(p1_hand=(rat_id,), minions=(minion,))
         actions = legal_actions(state, library)
 
         play_actions = [a for a in actions if a.action_type == ActionType.PLAY_CARD]
@@ -232,28 +232,28 @@ class TestMinionDeployment:
 
 
 class TestMagicCardPlay:
-    def test_single_target_magic_enumerates_enemy_targets(self, library):
-        """Magic with single_target enumerates each enemy minion as target."""
-        fireball_id = library.get_numeric_id("fireball")  # single_target damage, cost=2
+    def test_tutor_magic_produces_single_play_action(self, library):
+        """Tutor magic (to_the_ratmobile) produces one play action with no target."""
+        ratmobile_id = library.get_numeric_id("to_the_ratmobile")  # tutor magic, cost=3
         enemy_minion = MinionInstance(
-            instance_id=0, card_numeric_id=library.get_numeric_id("fire_imp"),
+            instance_id=0, card_numeric_id=library.get_numeric_id("rat"),
             owner=PlayerSide.PLAYER_2, position=(3, 0), current_health=2,
         )
-        state = _make_state(p1_hand=(fireball_id,), minions=(enemy_minion,))
+        state = _make_state(p1_hand=(ratmobile_id,), minions=(enemy_minion,))
         actions = legal_actions(state, library)
 
         play_actions = [a for a in actions if a.action_type == ActionType.PLAY_CARD]
         assert len(play_actions) == 1
-        assert play_actions[0].target_pos == (3, 0)
+        assert play_actions[0].target_pos is None
 
     def test_all_enemies_magic_single_action(self, library):
         """Magic with all_enemies effect produces one action (no target needed)."""
-        inferno_id = library.get_numeric_id("inferno")  # all_enemies damage, cost=4
+        ratmobile_aoe_id = library.get_numeric_id("to_the_ratmobile")  # tutor magic, cost=3
         enemy_minion = MinionInstance(
-            instance_id=0, card_numeric_id=library.get_numeric_id("fire_imp"),
+            instance_id=0, card_numeric_id=library.get_numeric_id("rat"),
             owner=PlayerSide.PLAYER_2, position=(3, 0), current_health=2,
         )
-        state = _make_state(p1_hand=(inferno_id,), p1_mana=10, minions=(enemy_minion,))
+        state = _make_state(p1_hand=(ratmobile_aoe_id,), p1_mana=10, minions=(enemy_minion,))
         actions = legal_actions(state, library)
 
         play_actions = [a for a in actions if a.action_type == ActionType.PLAY_CARD]
@@ -262,8 +262,8 @@ class TestMagicCardPlay:
 
     def test_react_cards_excluded_in_action_phase(self, library):
         """React cards cannot be played during ACTION phase."""
-        shield_block_id = library.get_numeric_id("shield_block")
-        state = _make_state(p1_hand=(shield_block_id,))
+        counter_spell_id = library.get_numeric_id("counter_spell")
+        state = _make_state(p1_hand=(counter_spell_id,))
         actions = legal_actions(state, library)
 
         play_actions = [a for a in actions if a.action_type == ActionType.PLAY_CARD]
@@ -278,9 +278,9 @@ class TestMagicCardPlay:
 class TestMoveEnumeration:
     def test_minion_can_move_forward_in_lane(self, library):
         """Minion can move forward one cell in its lane (same column)."""
-        fire_imp_id = library.get_numeric_id("fire_imp")
+        rat_id = library.get_numeric_id("rat")
         minion = MinionInstance(
-            instance_id=0, card_numeric_id=fire_imp_id,
+            instance_id=0, card_numeric_id=rat_id,
             owner=PlayerSide.PLAYER_1, position=(2, 2), current_health=2,
         )
         state = _make_state(minions=(minion,))
@@ -294,13 +294,13 @@ class TestMoveEnumeration:
 
     def test_minion_cannot_move_to_occupied(self, library):
         """Minion cannot move forward if the cell is occupied."""
-        fire_imp_id = library.get_numeric_id("fire_imp")
+        rat_id = library.get_numeric_id("rat")
         m1 = MinionInstance(
-            instance_id=0, card_numeric_id=fire_imp_id,
+            instance_id=0, card_numeric_id=rat_id,
             owner=PlayerSide.PLAYER_1, position=(1, 2), current_health=2,
         )
         m2 = MinionInstance(
-            instance_id=1, card_numeric_id=fire_imp_id,
+            instance_id=1, card_numeric_id=rat_id,
             owner=PlayerSide.PLAYER_1, position=(2, 2), current_health=2,
         )
         state = _make_state(minions=(m1, m2))
@@ -312,9 +312,9 @@ class TestMoveEnumeration:
 
     def test_corner_minion_one_forward_move(self, library):
         """Minion in corner can only move forward in its lane."""
-        fire_imp_id = library.get_numeric_id("fire_imp")
+        rat_id = library.get_numeric_id("rat")
         minion = MinionInstance(
-            instance_id=0, card_numeric_id=fire_imp_id,
+            instance_id=0, card_numeric_id=rat_id,
             owner=PlayerSide.PLAYER_1, position=(0, 0), current_health=2,
         )
         state = _make_state(minions=(minion,))
@@ -327,9 +327,9 @@ class TestMoveEnumeration:
 
     def test_back_row_minion_no_moves(self, library):
         """P1 minion on P2's back row (row 4) cannot move further forward."""
-        fire_imp_id = library.get_numeric_id("fire_imp")
+        rat_id = library.get_numeric_id("rat")
         minion = MinionInstance(
-            instance_id=0, card_numeric_id=fire_imp_id,
+            instance_id=0, card_numeric_id=rat_id,
             owner=PlayerSide.PLAYER_1, position=(4, 2), current_health=2,
         )
         state = _make_state(minions=(minion,))
@@ -348,13 +348,13 @@ class TestMoveEnumeration:
 class TestAttackEnumeration:
     def test_melee_adjacent_enemy_attack_present(self, library):
         """Melee minion adjacent to enemy has attack action."""
-        fire_imp_id = library.get_numeric_id("fire_imp")  # range=0
+        rat_id = library.get_numeric_id("rat")  # range=0
         attacker = MinionInstance(
-            instance_id=0, card_numeric_id=fire_imp_id,
+            instance_id=0, card_numeric_id=rat_id,
             owner=PlayerSide.PLAYER_1, position=(1, 2), current_health=2,
         )
         defender = MinionInstance(
-            instance_id=1, card_numeric_id=fire_imp_id,
+            instance_id=1, card_numeric_id=rat_id,
             owner=PlayerSide.PLAYER_2, position=(2, 2), current_health=2,
         )
         state = _make_state(minions=(attacker, defender))
@@ -367,13 +367,13 @@ class TestAttackEnumeration:
 
     def test_melee_at_distance_2_no_attack(self, library):
         """Melee minion at manhattan distance 2 cannot attack."""
-        fire_imp_id = library.get_numeric_id("fire_imp")
+        rat_id = library.get_numeric_id("rat")
         attacker = MinionInstance(
-            instance_id=0, card_numeric_id=fire_imp_id,
+            instance_id=0, card_numeric_id=rat_id,
             owner=PlayerSide.PLAYER_1, position=(0, 2), current_health=2,
         )
         defender = MinionInstance(
-            instance_id=1, card_numeric_id=fire_imp_id,
+            instance_id=1, card_numeric_id=rat_id,
             owner=PlayerSide.PLAYER_2, position=(2, 2), current_health=2,
         )
         state = _make_state(minions=(attacker, defender))
@@ -384,14 +384,14 @@ class TestAttackEnumeration:
 
     def test_ranged_at_distance_2_attack_present(self, library):
         """Ranged minion at orthogonal distance 2 has attack action."""
-        wind_archer_id = library.get_numeric_id("wind_archer")  # range=2
-        fire_imp_id = library.get_numeric_id("fire_imp")
+        pyre_archer_id = library.get_numeric_id("pyre_archer")  # range=2
+        rat_id = library.get_numeric_id("rat")
         attacker = MinionInstance(
-            instance_id=0, card_numeric_id=wind_archer_id,
+            instance_id=0, card_numeric_id=pyre_archer_id,
             owner=PlayerSide.PLAYER_1, position=(0, 2), current_health=3,
         )
         defender = MinionInstance(
-            instance_id=1, card_numeric_id=fire_imp_id,
+            instance_id=1, card_numeric_id=rat_id,
             owner=PlayerSide.PLAYER_2, position=(2, 2), current_health=2,
         )
         state = _make_state(minions=(attacker, defender))
@@ -402,14 +402,14 @@ class TestAttackEnumeration:
 
     def test_ranged_at_distance_4_no_attack(self, library):
         """Ranged minion (range=2 → 3 ortho) at distance 4 cannot attack."""
-        wind_archer_id = library.get_numeric_id("wind_archer")  # range=2
-        fire_imp_id = library.get_numeric_id("fire_imp")
+        pyre_archer_id = library.get_numeric_id("pyre_archer")  # range=2
+        rat_id = library.get_numeric_id("rat")
         attacker = MinionInstance(
-            instance_id=0, card_numeric_id=wind_archer_id,
+            instance_id=0, card_numeric_id=pyre_archer_id,
             owner=PlayerSide.PLAYER_1, position=(0, 2), current_health=3,
         )
         defender = MinionInstance(
-            instance_id=1, card_numeric_id=fire_imp_id,
+            instance_id=1, card_numeric_id=rat_id,
             owner=PlayerSide.PLAYER_2, position=(4, 2), current_health=2,
         )
         state = _make_state(minions=(attacker, defender))
@@ -420,14 +420,14 @@ class TestAttackEnumeration:
 
     def test_ranged_diagonal_distance_1_attack_present(self, library):
         """Range-2 minion: diagonal chebyshev=1 is reachable (star footprint)."""
-        wind_archer_id = library.get_numeric_id("wind_archer")
-        fire_imp_id = library.get_numeric_id("fire_imp")
+        pyre_archer_id = library.get_numeric_id("pyre_archer")
+        rat_id = library.get_numeric_id("rat")
         attacker = MinionInstance(
-            instance_id=0, card_numeric_id=wind_archer_id,
+            instance_id=0, card_numeric_id=pyre_archer_id,
             owner=PlayerSide.PLAYER_1, position=(1, 1), current_health=3,
         )
         defender = MinionInstance(
-            instance_id=1, card_numeric_id=fire_imp_id,
+            instance_id=1, card_numeric_id=rat_id,
             owner=PlayerSide.PLAYER_2, position=(2, 2), current_health=2,
         )
         state = _make_state(minions=(attacker, defender))
@@ -436,14 +436,14 @@ class TestAttackEnumeration:
 
     def test_ranged_diagonal_distance_2_attack_present(self, library):
         """Range-2 star: diagonal chebyshev=2 is reachable (|dr|==|dc|==2)."""
-        wind_archer_id = library.get_numeric_id("wind_archer")
-        fire_imp_id = library.get_numeric_id("fire_imp")
+        pyre_archer_id = library.get_numeric_id("pyre_archer")
+        rat_id = library.get_numeric_id("rat")
         attacker = MinionInstance(
-            instance_id=0, card_numeric_id=wind_archer_id,
+            instance_id=0, card_numeric_id=pyre_archer_id,
             owner=PlayerSide.PLAYER_1, position=(0, 0), current_health=3,
         )
         defender = MinionInstance(
-            instance_id=1, card_numeric_id=fire_imp_id,
+            instance_id=1, card_numeric_id=rat_id,
             owner=PlayerSide.PLAYER_2, position=(2, 2), current_health=2,
         )
         state = _make_state(minions=(attacker, defender))
@@ -452,14 +452,14 @@ class TestAttackEnumeration:
 
     def test_ranged_off_diagonal_knight_no_attack(self, library):
         """Range-2 star: (dr=2, dc=1) is NOT on diagonal, NOT ortho -> unreachable."""
-        wind_archer_id = library.get_numeric_id("wind_archer")
-        fire_imp_id = library.get_numeric_id("fire_imp")
+        pyre_archer_id = library.get_numeric_id("pyre_archer")
+        rat_id = library.get_numeric_id("rat")
         attacker = MinionInstance(
-            instance_id=0, card_numeric_id=wind_archer_id,
+            instance_id=0, card_numeric_id=pyre_archer_id,
             owner=PlayerSide.PLAYER_1, position=(0, 0), current_health=3,
         )
         defender = MinionInstance(
-            instance_id=1, card_numeric_id=fire_imp_id,
+            instance_id=1, card_numeric_id=rat_id,
             owner=PlayerSide.PLAYER_2, position=(2, 1), current_health=2,
         )
         state = _make_state(minions=(attacker, defender))
@@ -468,14 +468,14 @@ class TestAttackEnumeration:
 
     def test_ranged_diagonal_distance_3_no_attack(self, library):
         """Range-2 star: diagonal chebyshev=3 exceeds range -> unreachable."""
-        wind_archer_id = library.get_numeric_id("wind_archer")
-        fire_imp_id = library.get_numeric_id("fire_imp")
+        pyre_archer_id = library.get_numeric_id("pyre_archer")
+        rat_id = library.get_numeric_id("rat")
         attacker = MinionInstance(
-            instance_id=0, card_numeric_id=wind_archer_id,
+            instance_id=0, card_numeric_id=pyre_archer_id,
             owner=PlayerSide.PLAYER_1, position=(0, 0), current_health=3,
         )
         defender = MinionInstance(
-            instance_id=1, card_numeric_id=fire_imp_id,
+            instance_id=1, card_numeric_id=rat_id,
             owner=PlayerSide.PLAYER_2, position=(3, 3), current_health=2,
         )
         state = _make_state(minions=(attacker, defender))
@@ -484,13 +484,13 @@ class TestAttackEnumeration:
 
     def test_cannot_attack_own_minion(self, library):
         """No attack actions targeting own minions."""
-        fire_imp_id = library.get_numeric_id("fire_imp")
+        rat_id = library.get_numeric_id("rat")
         m1 = MinionInstance(
-            instance_id=0, card_numeric_id=fire_imp_id,
+            instance_id=0, card_numeric_id=rat_id,
             owner=PlayerSide.PLAYER_1, position=(1, 2), current_health=2,
         )
         m2 = MinionInstance(
-            instance_id=1, card_numeric_id=fire_imp_id,
+            instance_id=1, card_numeric_id=rat_id,
             owner=PlayerSide.PLAYER_1, position=(2, 2), current_health=2,
         )
         state = _make_state(minions=(m1, m2))
@@ -508,22 +508,32 @@ class TestAttackEnumeration:
 class TestReactPhase:
     def test_react_phase_only_react_and_pass(self, library):
         """During REACT phase, only react cards whose condition matches + PASS are legal."""
-        shield_block_id = library.get_numeric_id("shield_block")  # condition: opponent_attacks
-        fire_imp_id = library.get_numeric_id("fire_imp")
-        dark_sentinel_id = library.get_numeric_id("dark_sentinel")  # condition: opponent_plays_magic
+        counter_spell_id = library.get_numeric_id("counter_spell")  # condition: opponent_plays_magic
+        rat_id = library.get_numeric_id("rat")
+        green_diodebot_id = library.get_numeric_id("green_diodebot")  # minion (not react)
+        ratmobile_id = library.get_numeric_id("to_the_ratmobile")  # magic card
 
-        # P2 has shield_block (react), dark_sentinel (multi-purpose), fire_imp (not react)
+        # P2 has counter_spell (react), green_diodebot (minion), rat (not react)
         enemy_minion = MinionInstance(
-            instance_id=0, card_numeric_id=fire_imp_id,
+            instance_id=0, card_numeric_id=rat_id,
             owner=PlayerSide.PLAYER_1, position=(1, 2), current_health=2,
         )
-        # pending_action is an ATTACK so shield_block's condition (opponent_attacks) is met
-        state = _make_state(
-            p2_hand=(shield_block_id, dark_sentinel_id, fire_imp_id),
-            minions=(enemy_minion,),
+        # pending_action is a PLAY_CARD (magic) so counter_spell's OPPONENT_PLAYS_MAGIC condition is met
+        # The magic card is in P1's grave (it was played, moving it from hand to grave)
+        p1 = _make_player(PlayerSide.PLAYER_1, hand=(), grave=(ratmobile_id,))
+        p2 = _make_player(PlayerSide.PLAYER_2, hand=(counter_spell_id, green_diodebot_id, rat_id))
+        state = GameState(
+            board=Board.empty().place(1, 2, 0),
+            players=(p1, p2),
+            active_player_idx=0,
             phase=TurnPhase.REACT,
+            turn_number=1,
+            seed=42,
+            minions=(enemy_minion,),
+            next_minion_id=1,
+            react_stack=(),
             react_player_idx=1,
-            pending_action=attack_action(minion_id=0, target_id=0),
+            pending_action=play_card_action(card_index=0),
         )
         actions = legal_actions(state, library)
 
@@ -537,9 +547,9 @@ class TestReactPhase:
 
     def test_react_phase_non_react_excluded(self, library):
         """Non-react, non-multi-purpose cards are excluded during react."""
-        fire_imp_id = library.get_numeric_id("fire_imp")
+        rat_id = library.get_numeric_id("rat")
         state = _make_state(
-            p2_hand=(fire_imp_id,),
+            p2_hand=(rat_id,),
             phase=TurnPhase.REACT,
             react_player_idx=1,
         )
@@ -551,13 +561,13 @@ class TestReactPhase:
 
     def test_react_phase_stack_at_max_only_pass(self, library):
         """When stack is at MAX_REACT_STACK_DEPTH, only PASS is legal."""
-        shield_block_id = library.get_numeric_id("shield_block")
+        counter_spell_id = library.get_numeric_id("counter_spell")
         entries = tuple(
-            ReactEntry(player_idx=i % 2, card_index=0, card_numeric_id=shield_block_id)
+            ReactEntry(player_idx=i % 2, card_index=0, card_numeric_id=counter_spell_id)
             for i in range(MAX_REACT_STACK_DEPTH)
         )
         state = _make_state(
-            p2_hand=(shield_block_id,),
+            p2_hand=(counter_spell_id,),
             phase=TurnPhase.REACT,
             react_player_idx=1,
             react_stack=entries,
@@ -589,22 +599,22 @@ class TestSoundness:
         """Every action from legal_actions resolves without ValueError."""
         from grid_tactics.action_resolver import resolve_action
 
-        fire_imp_id = library.get_numeric_id("fire_imp")
-        wind_archer_id = library.get_numeric_id("wind_archer")
-        fireball_id = library.get_numeric_id("fireball")
+        rat_id = library.get_numeric_id("rat")
+        pyre_archer_id = library.get_numeric_id("pyre_archer")
+        ratmobile_id = library.get_numeric_id("to_the_ratmobile")
 
         # Set up a state with minions, cards in hand, and cards in deck
         attacker = MinionInstance(
-            instance_id=0, card_numeric_id=fire_imp_id,
+            instance_id=0, card_numeric_id=rat_id,
             owner=PlayerSide.PLAYER_1, position=(1, 2), current_health=2,
         )
         defender = MinionInstance(
-            instance_id=1, card_numeric_id=fire_imp_id,
+            instance_id=1, card_numeric_id=rat_id,
             owner=PlayerSide.PLAYER_2, position=(2, 2), current_health=2,
         )
         state = _make_state(
-            p1_hand=(fire_imp_id, wind_archer_id, fireball_id),
-            p1_deck=(fire_imp_id,),
+            p1_hand=(rat_id, pyre_archer_id, ratmobile_id),
+            p1_deck=(rat_id,),
             minions=(attacker, defender),
             p1_mana=5,
         )
@@ -626,12 +636,12 @@ class TestSoundness:
         """legal_actions with single-target minions but no enemies doesn't emit illegal actions."""
         from grid_tactics.action_resolver import resolve_action
 
-        fire_imp_id = library.get_numeric_id("fire_imp")
+        rat_id = library.get_numeric_id("rat")
 
-        # State with fire_imp in hand but NO enemy minions on the board
+        # State with rat in hand but NO enemy minions on the board
         state = _make_state(
-            p1_hand=(fire_imp_id,),
-            p1_deck=(fire_imp_id,),
+            p1_hand=(rat_id,),
+            p1_deck=(rat_id,),
             minions=(),
             p1_mana=5,
         )
@@ -651,16 +661,16 @@ class TestSoundness:
         """Every action from legal_actions during REACT resolves without error."""
         from grid_tactics.action_resolver import resolve_action
 
-        shield_block_id = library.get_numeric_id("shield_block")
-        dark_sentinel_id = library.get_numeric_id("dark_sentinel")
-        fire_imp_id = library.get_numeric_id("fire_imp")
+        counter_spell_id = library.get_numeric_id("counter_spell")
+        green_diodebot_id = library.get_numeric_id("green_diodebot")
+        rat_id = library.get_numeric_id("rat")
 
         enemy_minion = MinionInstance(
-            instance_id=0, card_numeric_id=fire_imp_id,
+            instance_id=0, card_numeric_id=rat_id,
             owner=PlayerSide.PLAYER_1, position=(1, 2), current_health=2,
         )
         state = _make_state(
-            p2_hand=(shield_block_id, dark_sentinel_id),
+            p2_hand=(counter_spell_id, green_diodebot_id),
             minions=(enemy_minion,),
             phase=TurnPhase.REACT,
             react_player_idx=1,
@@ -688,20 +698,20 @@ class TestPendingPostMoveAttackMask:
     def _melee_state_with_pending(self, library, enemy_positions):
         """Build a state where a P1 melee minion at (1,2) has pending set,
         with enemy minions at the given positions."""
-        fire_imp_id = library.get_numeric_id("fire_imp")  # melee, range=0
+        rat_id = library.get_numeric_id("rat")  # melee, range=0
         attacker = MinionInstance(
-            instance_id=10, card_numeric_id=fire_imp_id,
+            instance_id=10, card_numeric_id=rat_id,
             owner=PlayerSide.PLAYER_1, position=(1, 2), current_health=2,
         )
         enemies = tuple(
             MinionInstance(
-                instance_id=20 + i, card_numeric_id=fire_imp_id,
+                instance_id=20 + i, card_numeric_id=rat_id,
                 owner=PlayerSide.PLAYER_2, position=pos, current_health=2,
             )
             for i, pos in enumerate(enemy_positions)
         )
         state = _make_state(
-            p1_hand=(fire_imp_id,),  # would normally be playable
+            p1_hand=(rat_id,),  # would normally be playable
             p1_mana=5, p2_mana=5,
             minions=(attacker, *enemies),
         )
@@ -761,8 +771,8 @@ class TestPendingPostMoveAttackMask:
 
     def test_normal_state_mask_unchanged_when_pending_none(self, library):
         """Non-pending state must enumerate the same actions as before."""
-        fire_imp_id = library.get_numeric_id("fire_imp")
-        state = _make_state(p1_hand=(fire_imp_id,), p1_mana=5)
+        rat_id = library.get_numeric_id("rat")
+        state = _make_state(p1_hand=(rat_id,), p1_mana=5)
         # Sanity: pending is None by default
         assert state.pending_post_move_attacker_id is None
         actions = legal_actions(state, library)
@@ -839,11 +849,11 @@ class TestPendingTutorMask:
         length of pending_tutor_matches drives slot enumeration. We still
         place a believable deck so deck indices don't look insane.
         """
-        fire_imp_id = library.get_numeric_id("fire_imp")
-        # Build a deck of fire_imps long enough to host the match indices.
-        deck = tuple([fire_imp_id] * max(num_matches, 1))
+        rat_id = library.get_numeric_id("rat")
+        # Build a deck of rats long enough to host the match indices.
+        deck = tuple([rat_id] * max(num_matches, 1))
         # Use a few hand cards to prove they get masked out.
-        p1_hand = tuple(p1_extras) or (fire_imp_id, fire_imp_id)
+        p1_hand = tuple(p1_extras) or (rat_id, rat_id)
         state = _make_state(
             p1_hand=p1_hand, p1_mana=5, p1_deck=deck,
         )
@@ -890,20 +900,20 @@ class TestPendingTutorMask:
     def test_pending_tutor_masks_out_play_move_attack_sacrifice_pass(self, library):
         """Even with playable cards + a movable owned minion + an enemy in
         range + a back-row sacrifice candidate, ONLY tutor actions appear."""
-        fire_imp_id = library.get_numeric_id("fire_imp")
+        rat_id = library.get_numeric_id("rat")
         # P1 melee on enemy back row -> would normally be a SACRIFICE candidate
         sac_minion = MinionInstance(
-            instance_id=1, card_numeric_id=fire_imp_id,
+            instance_id=1, card_numeric_id=rat_id,
             owner=PlayerSide.PLAYER_1, position=(BACK_ROW_P2, 0), current_health=2,
         )
         # Adjacent enemy -> would normally be ATTACK candidate
         enemy = MinionInstance(
-            instance_id=2, card_numeric_id=fire_imp_id,
+            instance_id=2, card_numeric_id=rat_id,
             owner=PlayerSide.PLAYER_2, position=(BACK_ROW_P2, 1), current_health=2,
         )
         state = _make_state(
-            p1_hand=(fire_imp_id, fire_imp_id),  # would normally PLAY_CARD
-            p1_mana=5, p1_deck=(fire_imp_id, fire_imp_id),
+            p1_hand=(rat_id, rat_id),  # would normally PLAY_CARD
+            p1_mana=5, p1_deck=(rat_id, rat_id),
             minions=(sac_minion, enemy),
         )
         state = replace(
@@ -920,8 +930,8 @@ class TestPendingTutorMask:
     def test_no_pending_unchanged(self, library):
         """Non-pending state must enumerate the same actions as the pre-tutor
         baseline (validated indirectly: same as TestMinionDeployment)."""
-        fire_imp_id = library.get_numeric_id("fire_imp")
-        state = _make_state(p1_hand=(fire_imp_id,), p1_mana=5)
+        rat_id = library.get_numeric_id("rat")
+        state = _make_state(p1_hand=(rat_id,), p1_mana=5)
         assert state.pending_tutor_player_idx is None
         assert state.pending_post_move_attacker_id is None
         actions = legal_actions(state, library)
@@ -935,13 +945,13 @@ class TestPendingTutorMask:
 
     def test_mutex_assertion(self, library):
         """Both pending flavours set simultaneously -> AssertionError."""
-        fire_imp_id = library.get_numeric_id("fire_imp")
+        rat_id = library.get_numeric_id("rat")
         attacker = MinionInstance(
-            instance_id=10, card_numeric_id=fire_imp_id,
+            instance_id=10, card_numeric_id=rat_id,
             owner=PlayerSide.PLAYER_1, position=(1, 2), current_health=2,
         )
         state = _make_state(
-            p1_hand=(fire_imp_id,), p1_mana=5, p1_deck=(fire_imp_id,),
+            p1_hand=(rat_id,), p1_mana=5, p1_deck=(rat_id,),
             minions=(attacker,),
         )
         bad = replace(
@@ -956,17 +966,17 @@ class TestPendingTutorMask:
     def test_pending_post_move_attack_still_works_regression(self, library):
         """14.1 regression: pending_post_move_attack path still emits ATTACK
         + DECLINE_POST_MOVE_ATTACK when pending_tutor is None."""
-        fire_imp_id = library.get_numeric_id("fire_imp")
+        rat_id = library.get_numeric_id("rat")
         attacker = MinionInstance(
-            instance_id=10, card_numeric_id=fire_imp_id,
+            instance_id=10, card_numeric_id=rat_id,
             owner=PlayerSide.PLAYER_1, position=(1, 2), current_health=2,
         )
         enemy = MinionInstance(
-            instance_id=20, card_numeric_id=fire_imp_id,
+            instance_id=20, card_numeric_id=rat_id,
             owner=PlayerSide.PLAYER_2, position=(0, 2), current_health=2,
         )
         state = _make_state(
-            p1_hand=(fire_imp_id,), p1_mana=5, minions=(attacker, enemy),
+            p1_hand=(rat_id,), p1_mana=5, minions=(attacker, enemy),
         )
         state = replace(state, pending_post_move_attacker_id=10)
         # pending_tutor_player_idx is still None here -> mutex satisfied

@@ -59,20 +59,20 @@ def encoder():
 def test_decks(library):
     """Build two valid 40-card decks for testing."""
     card_counts = {
-        "fire_imp": 3,
-        "shadow_stalker": 3,
-        "dark_assassin": 3,
-        "light_cleric": 3,
-        "wind_archer": 3,
-        "dark_sentinel": 3,
-        "holy_paladin": 3,
-        "iron_guardian": 3,
-        "shadow_knight": 3,
-        "stone_golem": 1,
-        "fireball": 3,
-        "holy_light": 3,
-        "dark_drain": 3,
-        "shield_block": 3,
+        "rat": 3,
+        "furryroach": 3,
+        "blue_diodebot": 3,
+        "red_diodebot": 3,
+        "rgb_lasercannon": 3,
+        "green_diodebot": 3,
+        "ratchanter": 3,
+        "surgefed_sparkbot": 3,
+        "rathopper": 3,
+        "giant_rat": 1,
+        "to_the_ratmobile": 3,
+        "ratical_resurrection": 3,
+        "emberplague_rat": 3,
+        "counter_spell": 3,
     }
     deck = library.build_deck(card_counts)
     return deck, deck
@@ -133,7 +133,7 @@ class TestEncodeDecodeMOVE:
     def test_encode_decode_move(self, encoder, library):
         """MOVE at (1,2) direction down encodes/decodes correctly."""
         # Create a state with a minion at (1,2)
-        fire_imp_id = library.get_numeric_id("fire_imp")
+        fire_imp_id = library.get_numeric_id("rat")
         fire_imp_def = library.get_by_id(fire_imp_id)
 
         minion = MinionInstance(
@@ -182,7 +182,7 @@ class TestEncodeDecodeATTACK:
 
     def test_encode_decode_attack(self, encoder, library):
         """ATTACK from (1,2) to (2,2) encodes/decodes correctly."""
-        fire_imp_id = library.get_numeric_id("fire_imp")
+        fire_imp_id = library.get_numeric_id("rat")
         fire_imp_def = library.get_by_id(fire_imp_id)
 
         attacker = MinionInstance(
@@ -248,8 +248,8 @@ class TestEncodeDecodePLAY_CARD:
     def test_encode_decode_play_card_magic_targeted(self, encoder, library):
         """PLAY_CARD for targeted magic encodes/decodes with target_pos."""
         # Create state where player has fireball in hand and enemy on board
-        fireball_id = library.get_numeric_id("fireball")
-        fire_imp_id = library.get_numeric_id("fire_imp")
+        fireball_id = library.get_numeric_id("to_the_ratmobile")
+        fire_imp_id = library.get_numeric_id("rat")
         fire_imp_def = library.get_by_id(fire_imp_id)
 
         enemy_minion = MinionInstance(
@@ -294,7 +294,7 @@ class TestEncodeDecodeSACRIFICE:
 
     def test_encode_decode_sacrifice(self, encoder, library):
         """SACRIFICE at (4,3) encodes/decodes correctly."""
-        fire_imp_id = library.get_numeric_id("fire_imp")
+        fire_imp_id = library.get_numeric_id("rat")
         fire_imp_def = library.get_by_id(fire_imp_id)
 
         minion = MinionInstance(
@@ -340,7 +340,7 @@ class TestEncodeDecodeREACT:
         """PLAY_REACT targeted encodes/decodes correctly."""
         # Create state in REACT phase with react card in hand
         counter_spell_id = library.get_numeric_id("counter_spell")
-        fire_imp_id = library.get_numeric_id("fire_imp")
+        fire_imp_id = library.get_numeric_id("rat")
         fire_imp_def = library.get_by_id(fire_imp_id)
 
         enemy_minion = MinionInstance(
@@ -434,13 +434,13 @@ class TestMaskMatchesLegal:
     def test_mask_matches_legal(self, library, encoder):
         """For 100 random game states, mask matches legal_actions() exactly."""
         card_counts = {
-            "fire_imp": 3, "shadow_stalker": 3,
-            "dark_assassin": 3, "light_cleric": 3,
-            "wind_archer": 3, "dark_sentinel": 3,
-            "holy_paladin": 3, "iron_guardian": 3,
-            "shadow_knight": 3, "stone_golem": 1,
-            "fireball": 3, "holy_light": 3,
-            "dark_drain": 3, "shield_block": 3,
+            "rat": 3, "furryroach": 3,
+            "blue_diodebot": 3, "red_diodebot": 3,
+            "rgb_lasercannon": 3, "green_diodebot": 3,
+            "ratchanter": 3, "surgefed_sparkbot": 3,
+            "rathopper": 3, "giant_rat": 1,
+            "to_the_ratmobile": 3, "ratical_resurrection": 3,
+            "emberplague_rat": 3, "counter_spell": 3,
         }
         deck = library.build_deck(card_counts)
 
@@ -487,11 +487,9 @@ class TestAlwaysHasLegal:
     """Test that mask always has at least one True bit."""
 
     def test_always_has_legal(self, new_game_state, library, encoder):
-        """Mask always has at least one True bit (PASS is always legal)."""
+        """Mask always has at least one True bit at game start."""
         mask = build_action_mask(new_game_state, library, encoder)
         assert mask.any(), "Mask has no True bits"
-        # Specifically, PASS (index 1001) should always be True
-        assert mask[1001], "PASS action is not masked as legal"
 
 
 class TestRewardSparse:

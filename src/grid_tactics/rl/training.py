@@ -267,14 +267,8 @@ class _GameLoggingCallback(BaseCallback):
 # ---------------------------------------------------------------------------
 
 
-# Cards excluded from the active training pool (still in data/cards/ for future use)
-EXCLUDED_CARDS: set[str] = {
-    "dark_drain",     # heal effect — stalls games
-    "holy_light",     # heal effect — stalls games
-    "holy_paladin",   # heal on play — stalls games
-    "light_cleric",   # heal on play — stalls games
-    "dark_mirror",    # heal on react — stalls games
-}
+# Cards excluded from the active training pool
+EXCLUDED_CARDS: set[str] = set()
 
 
 # Per-card copy overrides (default is 3 copies)

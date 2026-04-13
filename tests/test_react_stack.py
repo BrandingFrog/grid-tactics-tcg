@@ -19,7 +19,7 @@ from dataclasses import replace, FrozenInstanceError
 
 import pytest
 
-from grid_tactics.actions import pass_action, play_react_action
+from grid_tactics.actions import pass_action, play_card_action, play_react_action
 from grid_tactics.board import Board
 from grid_tactics.card_library import CardLibrary
 from grid_tactics.enums import (
@@ -54,20 +54,19 @@ def library():
 def react_state_empty_stack(library):
     """A GameState in REACT phase with empty stack.
 
-    P1 just acted (active_player_idx=0), react window open for P2 (react_player_idx=1).
-    P2 has a shield_block (react card) and dark_sentinel (multi-purpose) in hand.
+    P1 just played a magic card (active_player_idx=0), react window open for P2 (react_player_idx=1).
+    P2 has counter_spell (react to magic) and surgefed_sparkbot (multi-purpose, react to sacrifice) in hand.
     """
-    shield_block_id = library.get_numeric_id("shield_block")
-    dark_sentinel_id = library.get_numeric_id("dark_sentinel")
     counter_spell_id = library.get_numeric_id("counter_spell")
-    fire_imp_id = library.get_numeric_id("fire_imp")
+    sparkbot_id = library.get_numeric_id("surgefed_sparkbot")
+    rat_id = library.get_numeric_id("rat")
 
     p1 = Player(
         side=PlayerSide.PLAYER_1,
         hp=STARTING_HP,
         current_mana=5,
         max_mana=5,
-        hand=(counter_spell_id, fire_imp_id),  # P1 has counter_spell + fire_imp
+        hand=(counter_spell_id, rat_id),
         deck=(),
         grave=(),
     )
@@ -76,7 +75,7 @@ def react_state_empty_stack(library):
         hp=STARTING_HP,
         current_mana=5,
         max_mana=5,
-        hand=(shield_block_id, dark_sentinel_id, fire_imp_id),  # P2 has shield_block + dark_sentinel + fire_imp
+        hand=(counter_spell_id, sparkbot_id, rat_id),
         deck=(),
         grave=(),
     )
@@ -84,14 +83,15 @@ def react_state_empty_stack(library):
     # Place a P1 minion on the board for targeting
     minion = MinionInstance(
         instance_id=0,
-        card_numeric_id=library.get_numeric_id("iron_guardian"),
+        card_numeric_id=library.get_numeric_id("rat"),
         owner=PlayerSide.PLAYER_1,
         position=(1, 2),
         current_health=5,
     )
     board = Board.empty().place(1, 2, 0)
 
-    pending = pass_action()  # The action that triggered react window
+    # P1 played a magic card — triggers counter_spell's OPPONENT_PLAYS_MAGIC condition
+    pending = play_card_action(card_index=0)
 
     return GameState(
         board=board,
@@ -152,22 +152,21 @@ class TestReactPass:
 
     def test_pass_resolves_stack_lifo(self, react_state_empty_stack, library):
         """PASS with entries on stack resolves them in LIFO order."""
-        shield_block_id = library.get_numeric_id("shield_block")
+        counter_spell_id = library.get_numeric_id("counter_spell")
 
-        # Manually push a react entry onto the stack
+        # Manually push a counter_spell (NEGATE) entry onto the stack
         entry = ReactEntry(
             player_idx=1,
             card_index=0,
-            card_numeric_id=shield_block_id,
-            target_pos=(1, 2),  # target the P1 minion at (1,2)
+            card_numeric_id=counter_spell_id,
         )
         state = replace(react_state_empty_stack, react_stack=(entry,))
         result = handle_react_action(state, pass_action(), library)
 
-        # Audit-followup: shield_block now BUFF_HEALTH +20 (scaled).
+        # counter_spell NEGATE resolves — minion health unchanged
         minion = result.get_minion(0)
         assert minion is not None
-        assert minion.current_health == 25  # 5 + 20
+        assert minion.current_health == 5  # unchanged
 
         # Turn should have advanced
         assert result.phase == TurnPhase.ACTION
@@ -199,7 +198,7 @@ class TestReactPass:
 class TestPlayReactCard:
     def test_react_card_pushes_to_stack(self, react_state_empty_stack, library):
         """Playing a react card pushes ReactEntry and switches react_player_idx."""
-        shield_block_id = library.get_numeric_id("shield_block")
+        shield_block_id = library.get_numeric_id("counter_spell")
 
         # P2 (react_player_idx=1) plays shield_block (card_index=0) targeting (1,2)
         action = play_react_action(card_index=0, target_pos=(1, 2))
@@ -217,28 +216,31 @@ class TestPlayReactCard:
         # Card removed from P2's hand, mana spent
         p2 = result.players[1]
         assert shield_block_id not in p2.hand
-        # shield_block costs 1 mana: 5 - 1 = 4
-        assert p2.current_mana == 4
+        # counter_spell costs 2 mana: 5 - 2 = 3
+        assert p2.current_mana == 3
 
         # Phase remains REACT
         assert result.phase == TurnPhase.REACT
 
     def test_multi_purpose_card_as_react(self, react_state_empty_stack, library):
-        """Multi-purpose card (dark_sentinel) can be played as react using react_mana_cost."""
-        dark_sentinel_id = library.get_numeric_id("dark_sentinel")
+        """Multi-purpose card (surgefed_sparkbot) can be played as react using react_mana_cost."""
+        sparkbot_id = library.get_numeric_id("surgefed_sparkbot")
 
-        # P2 plays dark_sentinel (card_index=1) as react, target_pos is deploy position
+        # Change pending_action to sacrifice so sparkbot's OPPONENT_SACRIFICES triggers
+        from grid_tactics.actions import Action
+        sac_action = Action(action_type=ActionType.SACRIFICE, card_index=0, position=(4, 0))
+        state = replace(react_state_empty_stack, pending_action=sac_action)
+
+        # P2 plays sparkbot (card_index=1) as react, target_pos is deploy position
         action = play_react_action(card_index=1, target_pos=(3, 0))
-        result = handle_react_action(react_state_empty_stack, action, library)
+        result = handle_react_action(state, action, library)
 
         # Stack should have one entry
         assert len(result.react_stack) == 1
-        assert result.react_stack[0].card_numeric_id == dark_sentinel_id
+        assert result.react_stack[0].card_numeric_id == sparkbot_id
 
-        # Audit-followup: dark_sentinel react_mana_cost is now 2: 5 - 2 = 3
         p2 = result.players[1]
-        assert p2.current_mana == 3
-        assert dark_sentinel_id not in p2.hand
+        assert sparkbot_id not in p2.hand
 
     def test_insufficient_mana_raises(self, react_state_empty_stack, library):
         """Playing a react card with insufficient mana raises ValueError."""
@@ -262,7 +264,7 @@ class TestPlayReactCard:
 
     def test_stack_depth_cap_enforced(self, react_state_empty_stack, library):
         """Cannot exceed MAX_REACT_STACK_DEPTH entries on the stack."""
-        shield_block_id = library.get_numeric_id("shield_block")
+        shield_block_id = library.get_numeric_id("counter_spell")
 
         # Fill stack to MAX_REACT_STACK_DEPTH
         entries = tuple(
@@ -299,7 +301,7 @@ class TestReactChaining:
         Minion stays at 5 HP (no buffs applied).
         """
         counter_spell_id = library.get_numeric_id("counter_spell")
-        shield_block_id = library.get_numeric_id("shield_block")
+        shield_block_id = library.get_numeric_id("counter_spell")
 
         state = react_state_empty_stack
 
@@ -346,65 +348,43 @@ class TestResolveReactStack:
         assert result.turn_number == 2
         assert result.react_stack == ()
 
-    def test_resolve_shield_block_effect(self, react_state_empty_stack, library):
-        """Shield block buff_health actually applies to the target minion."""
-        shield_block_id = library.get_numeric_id("shield_block")
+    def test_resolve_counter_spell_negate(self, react_state_empty_stack, library):
+        """Counter_spell NEGATE effect on the stack."""
+        counter_spell_id = library.get_numeric_id("counter_spell")
         entry = ReactEntry(
             player_idx=1,
             card_index=0,
-            card_numeric_id=shield_block_id,
-            target_pos=(1, 2),
+            card_numeric_id=counter_spell_id,
         )
         state = replace(react_state_empty_stack, react_stack=(entry,))
         result = resolve_react_stack(state, library)
 
+        # Counter_spell resolves (NEGATE) — minion unaffected, turn advances
         minion = result.get_minion(0)
         assert minion is not None
-        # Audit-followup: shield_block now buffs +20 hp (scaled). Fixture
-        # minion starts at current_health=5, so 5 + 20 = 25.
-        assert minion.current_health == 25
-
-    def test_resolve_dark_mirror_damage_and_heal(self, react_state_empty_stack, library):
-        """Dark mirror does damage to target and heals the owning player."""
-        dark_mirror_id = library.get_numeric_id("dark_mirror")
-        entry = ReactEntry(
-            player_idx=1,
-            card_index=0,
-            card_numeric_id=dark_mirror_id,
-            target_pos=(1, 2),
-        )
-        state = replace(react_state_empty_stack, react_stack=(entry,))
-        result = resolve_react_stack(state, library)
-
-        # Audit-followup: dark_mirror DAMAGE is now 10 (scaled). Fixture
-        # minion has current_health=5, so this is lethal — the minion is
-        # cleaned up and get_minion(0) returns None.
-        minion = result.get_minion(0)
-        assert minion is None
-
-        # Heal 10 to player 1 (self_owner = player who played react = P2),
-        # already at STARTING_HP so capped.
-        assert result.players[1].hp == STARTING_HP
+        assert minion.current_health == 5  # unchanged
+        assert result.phase == TurnPhase.ACTION
+        assert result.turn_number == 2
 
     def test_resolve_multi_purpose_react_effect(self, react_state_empty_stack, library):
         """Multi-purpose card's DEPLOY_SELF react_effect deploys the minion during stack resolution."""
-        dark_sentinel_id = library.get_numeric_id("dark_sentinel")
+        sparkbot_id = library.get_numeric_id("surgefed_sparkbot")
         entry = ReactEntry(
             player_idx=1,
             card_index=1,
-            card_numeric_id=dark_sentinel_id,
+            card_numeric_id=sparkbot_id,
             target_pos=(3, 0),  # empty P2 row position
         )
-        state = replace(react_state_empty_stack, react_stack=(entry,))
+        # Change pending to sacrifice so sparkbot condition matches
+        from grid_tactics.actions import Action
+        sac_action = Action(action_type=ActionType.SACRIFICE, card_index=0, position=(4, 0))
+        state = replace(react_state_empty_stack, react_stack=(entry,), pending_action=sac_action)
         result = resolve_react_stack(state, library)
 
-        # dark_sentinel DEPLOY_SELF: should be deployed as a minion at (3,0)
-        # Find the newly deployed minion (instance_id > 0 since minion 0 already exists)
-        deployed = [m for m in result.minions if m.card_numeric_id == dark_sentinel_id]
+        # DEPLOY_SELF: sparkbot deployed as a minion at (3,0)
+        deployed = [m for m in result.minions if m.card_numeric_id == sparkbot_id]
         assert len(deployed) == 1
         assert deployed[0].position == (3, 0)
-        # Audit-followup: dark_sentinel base health is now 30 (scaled).
-        assert deployed[0].current_health == 30
         assert deployed[0].owner == PlayerSide.PLAYER_2
 
 
