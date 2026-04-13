@@ -413,7 +413,7 @@ body {
 
 /* Card Browser */
 .card-browser {
-  background: var(--card);
+  background: var(--bg);
   border: 1px solid var(--border);
   border-radius: 10px;
   padding: 12px;
