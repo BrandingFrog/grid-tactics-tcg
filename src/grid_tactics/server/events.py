@@ -686,6 +686,27 @@ def register_events(room_manager: RoomManager) -> None:
                 return
         _emit_sandbox_state(sandbox, request.sid)
 
+    @socketio.on("sandbox_place_on_board")
+    def handle_sandbox_place_on_board(data):
+        sandbox = _get_sandbox_or_error()
+        if sandbox is None:
+            return
+        try:
+            player_idx = int(data["player_idx"])
+            card_numeric_id = int(data["card_numeric_id"])
+            row = int(data["row"])
+            col = int(data["col"])
+        except (KeyError, TypeError, ValueError):
+            emit("error", {"msg": "Invalid sandbox_place_on_board payload"})
+            return
+        with sandbox.lock:
+            try:
+                sandbox.place_on_board(player_idx, card_numeric_id, row, col)
+            except ValueError as e:
+                emit("error", {"msg": str(e)})
+                return
+        _emit_sandbox_state(sandbox, request.sid)
+
     @socketio.on("sandbox_move_card")
     def handle_sandbox_move_card(data):
         sandbox = _get_sandbox_or_error()

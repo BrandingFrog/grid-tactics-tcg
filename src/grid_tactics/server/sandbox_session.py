@@ -39,9 +39,11 @@ from grid_tactics.actions import Action, pass_action
 from grid_tactics.action_resolver import resolve_action
 from grid_tactics.board import Board
 from grid_tactics.card_library import CardLibrary
+from grid_tactics.cards import CardType
 from grid_tactics.enums import ActionType, PlayerSide, TurnPhase
 from grid_tactics.game_state import GameState
 from grid_tactics.legal_actions import legal_actions
+from grid_tactics.minion import MinionInstance
 from grid_tactics.player import Player
 
 # ---------------------------------------------------------------------------
@@ -283,6 +285,42 @@ class SandboxSession:
                 intermediate, exhaust=intermediate.exhaust + (cid,)
             )
         self._replace_player(player_idx, new_player)
+
+    def place_on_board(
+        self, player_idx: int, card_numeric_id: int, row: int, col: int
+    ) -> None:
+        """Place a minion directly onto the board at (row, col).
+
+        Creates a fresh MinionInstance owned by ``player_idx`` and places it
+        on the board. Only minion-type cards are allowed. Raises ValueError
+        if the cell is occupied or the card is not a minion.
+        """
+        if player_idx not in (0, 1):
+            raise ValueError("player_idx must be 0 or 1")
+        if not (0 <= card_numeric_id < self.library.card_count):
+            raise ValueError("unknown card_numeric_id")
+        card_def = self.library.by_numeric_id(card_numeric_id)
+        if card_def.card_type != CardType.MINION:
+            raise ValueError("Only minion cards can be placed on the board")
+        if self._state.board.get(row, col) is not None:
+            raise ValueError(f"Cell ({row}, {col}) is already occupied")
+        self._push_undo()
+        mid = self._state.next_minion_id
+        side = PlayerSide.PLAYER_1 if player_idx == 0 else PlayerSide.PLAYER_2
+        minion = MinionInstance(
+            instance_id=mid,
+            card_numeric_id=card_numeric_id,
+            owner=side,
+            position=(row, col),
+            current_health=card_def.health,
+        )
+        new_board = self._state.board.place(row, col, mid)
+        self._state = replace(
+            self._state,
+            board=new_board,
+            minions=self._state.minions + (minion,),
+            next_minion_id=mid + 1,
+        )
 
     def import_deck(self, player_idx: int, deck_card_ids: list[int]) -> None:
         """Replace a player's deck with the provided list of numeric card IDs.

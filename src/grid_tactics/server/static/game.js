@@ -5860,7 +5860,7 @@ function sandboxStageCard(nid) {
             e.dataTransfer.effectAllowed = 'copy';
             // Highlight all valid drop zones
             setTimeout(function() {
-                document.querySelectorAll('#screen-sandbox .hand-container, #screen-sandbox .sandbox-pile-btn')
+                document.querySelectorAll('#screen-sandbox .hand-container, #screen-sandbox .sandbox-pile-btn, #sandbox-board .board-cell')
                     .forEach(function(el) { el.classList.add('drop-target-active'); });
             }, 0);
         });
@@ -5925,6 +5925,36 @@ function sandboxWireDropZones() {
         btn.addEventListener('dragleave', hoverOut);
         btn.addEventListener('drop', handleDrop(playerIdx, pile));
     });
+
+    // Board cells — drop places minion directly on the grid
+    var boardEl = document.getElementById('sandbox-board');
+    if (boardEl) {
+        boardEl.addEventListener('dragover', allowDrop);
+        boardEl.addEventListener('drop', function(e) {
+            e.preventDefault();
+            var cell = e.target.closest('.board-cell');
+            if (!cell) return;
+            var nid = parseInt(e.dataTransfer.getData('text/plain'), 10);
+            if (isNaN(nid)) return;
+            var row = parseInt(cell.dataset.row, 10);
+            var col = parseInt(cell.dataset.col, 10);
+            socket.emit('sandbox_place_on_board', {
+                player_idx: sandboxAddTargetIdx,
+                card_numeric_id: nid,
+                row: row,
+                col: col,
+            });
+        });
+        // Per-cell hover highlight (delegated)
+        boardEl.addEventListener('dragenter', function(e) {
+            var cell = e.target.closest('.board-cell');
+            if (cell) cell.classList.add('drop-target-hover');
+        });
+        boardEl.addEventListener('dragleave', function(e) {
+            var cell = e.target.closest('.board-cell');
+            if (cell) cell.classList.remove('drop-target-hover');
+        });
+    }
 }
 
 // ---- F. Server-saves list rendering --------------------------------------
