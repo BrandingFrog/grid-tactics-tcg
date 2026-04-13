@@ -883,14 +883,14 @@ body {
   gap: 4px;
   height: 100%;
   max-height: 500px;
-  aspect-ratio: 1;
+  aspect-ratio: 5/3.75;
   margin: 0 auto;
   overflow: visible;
 }
 
 /* Board Cell */
 .board-cell {
-  aspect-ratio: 1;
+  aspect-ratio: 4/3;
   background: var(--card2);
   border: 1px solid var(--border);
   border-radius: 8px;
@@ -1053,29 +1053,17 @@ body {
   color: rgb(80, 220, 100);
 }
 
-/* ===== Hand Container ===== */
+/* ===== Hand Container (fan layout) ===== */
 .hand-container {
   display: flex;
-  gap: 8px;
-  overflow-x: auto;
-  padding: 8px 4px;
+  justify-content: center;
+  align-items: flex-end;
+  padding: 6px 4px 2px;
   flex-shrink: 0;
   min-height: 120px;
-  max-height: 312px;
-  justify-content: center;
-}
-
-.hand-container::-webkit-scrollbar {
-  height: 6px;
-}
-
-.hand-container::-webkit-scrollbar-track {
-  background: var(--card);
-}
-
-.hand-container::-webkit-scrollbar-thumb {
-  background: var(--border);
-  border-radius: 3px;
+  max-height: 170px;
+  overflow: visible;
+  position: relative;
 }
 
 /* ===== Card Frame (Full / Hand variant) ===== */
@@ -1583,14 +1571,82 @@ body {
   line-height: 24px;
 }
 
-/* ===== Hand Card context modifier =====
- * Wave 14.5-04: hand cards now carry BOTH .card-frame-full (base layout)
- * and .card-frame-hand (context hook for .card-playable / .card-selected-hand
- * / .card-react-playable / mobile width override). Base sizing and art
- * height are inherited from .card-frame-full / .card-art-full — do not
- * re-declare them here, or visual drift between hand and deck builder
- * will return. .card-art-hand is kept as a no-op class name in case
- * future hand-specific art tweaks are needed. */
+/* ===== Hand Card context modifier (fan thumbnail) =====
+ * Hand cards are small art-only thumbnails in an overlapping fan.
+ * CSS custom properties --i (0-based index) and --n (total count)
+ * are set by JS. The fan arc, overlap, and hover lift derive from them. */
+
+.card-frame-hand {
+  /* Thumbnail size */
+  width: 116px !important;
+  max-width: 116px !important;
+  aspect-ratio: 3/4;
+  border-radius: 7px;
+  overflow: hidden;
+  cursor: pointer;
+  flex-shrink: 0;
+
+  /* Fan arc positioning */
+  --offset: calc(var(--i) - (var(--n) - 1) / 2);
+  transform-origin: bottom center;
+  transform: rotate(calc(var(--offset) * 3deg)) translateY(calc(var(--offset) * var(--offset) * 1.2px));
+  margin-left: calc(-38px * min(1, var(--i)));  /* overlap; first card no negative margin */
+  transition: transform 150ms ease, box-shadow 150ms ease, margin-top 150ms ease;
+  position: relative;
+  z-index: calc(var(--i) + 1);
+}
+
+/* Scale down text for hand-size cards */
+.card-frame-hand .card-name-overlay { font-size: 9px; padding: 2px 4px; }
+.card-frame-hand .card-effect-full { font-size: 7px; padding: 1px 4px; line-height: 1.2; }
+.card-frame-hand .card-flavour { font-size: 6px; padding: 0 4px; }
+.card-frame-hand .card-type-badge { font-size: 7px; padding: 0 4px; line-height: 16px; }
+.card-frame-hand .card-mana { font-size: 10px; width: 18px; height: 18px; line-height: 18px; }
+.card-frame-hand .attr-circle { width: 16px; height: 16px; }
+.card-frame-hand .attr-text { font-size: 6px; }
+.card-frame-hand .card-stat-atk,
+.card-frame-hand .card-stat-hp { font-size: 9px; }
+.card-frame-hand .stat-emoji-bg { font-size: 8px; }
+.card-frame-hand .card-bottom-section { padding: 1px 4px 2px; }
+.card-frame-hand .card-bottom-range { font-size: 7px; }
+
+/* Hide sandbox move button in hand cards */
+.card-frame-hand .sandbox-move-btn { display: none; }
+
+/* Hover: lift card out of the fan */
+.card-frame-hand:hover {
+  transform: rotate(calc(var(--offset) * 3deg)) translateY(-14px) !important;
+  z-index: 100;
+  box-shadow: 0 6px 20px rgba(0, 212, 255, 0.35);
+}
+
+/* Pinned (clicked) card in preview — stronger lift + glow */
+.card-frame-hand.card-preview-pinned {
+  transform: rotate(calc(var(--offset) * 3deg)) translateY(-14px) !important;
+  z-index: 101;
+  box-shadow: 0 0 12px rgba(0, 212, 255, 0.6);
+  border-color: var(--cyan);
+}
+
+/* Top hand (sandbox P2 / opponent): inverted fan — cards arc downward */
+.hand-container.sandbox-hand-top {
+  align-items: flex-start;
+  padding: 2px 4px 6px;
+}
+.hand-container.sandbox-hand-top .card-frame-hand {
+  transform-origin: top center !important;
+  transform: rotate(calc(var(--offset) * -3deg)) translateY(calc(var(--offset) * var(--offset) * -1.2px)) !important;
+}
+.hand-container.sandbox-hand-top .card-frame-hand:hover {
+  transform: rotate(calc(var(--offset) * -3deg)) translateY(14px) !important;
+  z-index: 100;
+}
+.hand-container.sandbox-hand-top .card-frame-hand.card-playable:hover,
+.hand-container.sandbox-hand-top .card-frame-hand.card-selected-hand,
+.hand-container.sandbox-hand-top .card-frame-hand.card-react-playable:hover,
+.hand-container.sandbox-hand-top .card-frame-hand.card-preview-pinned {
+  transform: rotate(calc(var(--offset) * -3deg)) translateY(14px) !important;
+}
 
 /* Minion action menu (transform / sacrifice popup on selected minion) */
 .minion-action-menu {
@@ -1961,7 +2017,7 @@ body {
 
 .card-frame-hand.card-playable:hover {
   box-shadow: 0 0 16px rgba(76, 175, 80, 0.7);
-  transform: translateY(-8px);
+  transform: rotate(calc(var(--offset) * 3deg)) translateY(-14px) !important;
 }
 
 /* Selected hand card */
@@ -1969,7 +2025,8 @@ body {
   cursor: pointer;
   box-shadow: 0 0 16px rgba(0, 212, 255, 0.7);
   border-color: var(--cyan);
-  transform: translateY(-10px);
+  transform: rotate(calc(var(--offset) * 3deg)) translateY(-14px) !important;
+  z-index: 101;
 }
 
 /* Action bar (pass/skip buttons) */
@@ -2038,8 +2095,7 @@ body {
 
 /* Card Unaffordable State */
 .card-dimmed {
-  opacity: 0.4;
-  filter: grayscale(60%);
+  filter: brightness(0.7) saturate(0.6);
 }
 
 /* Card selected state (deck builder) */
@@ -2393,10 +2449,9 @@ body {
   .stat-value { font-size: 14px; }
   .stat-group { gap: 12px; }
   .board-container { padding: 4px; }
-  .hand-container { max-height: 132px; min-height: 80px; }
+  .hand-container { max-height: 100px; min-height: 70px; }
   .card-frame { width: 70px; }
-  .card-frame-hand { width: 132px; }
-  .hand-container { max-height: 228px; min-height: 80px; }
+  .card-frame-hand { width: 66px !important; max-width: 66px !important; }
 
   /* Deck builder cards adapt to width — 2 cols at 375px, 1 at 320px */
   .card-frame-full { width: 100%; max-width: 220px; }
@@ -2478,7 +2533,7 @@ body {
 
 .card-frame-hand.card-react-playable:hover {
   box-shadow: 0 0 18px rgba(255, 152, 0, 0.9);
-  transform: translateY(-8px);
+  transform: rotate(calc(var(--offset) * 3deg)) translateY(-14px) !important;
 }
 
 @media (max-width: 600px) {
@@ -3338,19 +3393,20 @@ body {
   text-align: center;
 }
 
-/* Opponent face-down hand row — above the opponent info bar, count-only. */
+/* Opponent face-down hand row — inverted fan (arcs downward). */
 .opp-hand-row {
   display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
   justify-content: center;
-  padding: 4px 8px;
+  align-items: flex-start;
+  padding: 2px 4px 6px;
   min-height: 0;
+  overflow: visible;
+  position: relative;
 }
 .opp-hand-card-back {
-  width: 42px;
-  height: 60px;
-  border-radius: 4px;
+  width: 52px;
+  height: 70px;
+  border-radius: 5px;
   border: 1px solid rgba(255, 255, 255, 0.22);
   background:
     repeating-linear-gradient(45deg,
@@ -3360,6 +3416,13 @@ body {
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.4), inset 0 0 0 1px rgba(0, 212, 255, 0.12);
   pointer-events: none;
   flex: 0 0 auto;
+  /* Fan arc (inverted — cards fan downward at top) */
+  --offset: calc(var(--i) - (var(--n) - 1) / 2);
+  transform-origin: top center;
+  transform: rotate(calc(var(--offset) * -3deg)) translateY(calc(var(--offset) * var(--offset) * -1px));
+  margin-left: calc(-14px * min(1, var(--i)));
+  position: relative;
+  z-index: calc(var(--i) + 1);
 }
 
 /* Pile modal overlay — reuses the tutor-modal aesthetic. */
