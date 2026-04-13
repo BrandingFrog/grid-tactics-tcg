@@ -882,8 +882,8 @@ body {
   grid-template-rows: repeat(5, minmax(0, 1fr));
   gap: 4px;
   height: 100%;
-  max-height: 500px;
-  aspect-ratio: 5/3.75;
+  max-height: 420px;
+  aspect-ratio: 5/4;
   margin: 0 auto;
   overflow: visible;
 }
@@ -1060,8 +1060,8 @@ body {
   align-items: flex-end;
   padding: 6px 4px 2px;
   flex-shrink: 0;
-  min-height: 120px;
-  max-height: 170px;
+  min-height: 40px;
+  max-height: 200px;
   overflow: visible;
   position: relative;
 }
@@ -1590,7 +1590,7 @@ body {
   --offset: calc(var(--i) - (var(--n) - 1) / 2);
   transform-origin: bottom center;
   transform: rotate(calc(var(--offset) * 3deg)) translateY(calc(var(--offset) * var(--offset) * 1.2px));
-  margin-left: calc(-38px * min(1, var(--i)));  /* overlap; first card no negative margin */
+  margin-left: calc(-28px * min(1, var(--i)));  /* overlap; first card no negative margin */
   transition: transform 150ms ease, box-shadow 150ms ease, margin-top 150ms ease;
   position: relative;
   z-index: calc(var(--i) + 1);
@@ -3352,7 +3352,7 @@ body {
   .game-sidebar { display: none; }
   .game-main { overflow-y: auto; }
   .board-container { min-height: 200px; }
-  .hand-container { min-height: 80px; }
+  .hand-container { min-height: 36px; }
 }
 
 /* =====================================================================
