@@ -3631,6 +3631,22 @@ function onHandCardClick(handIdx) {
 
 // Handle clicking a board cell
 function onBoardCellClick(row, col) {
+    // Sandbox: if a card is staged, click-to-place on empty cell
+    if (sandboxMode) {
+        var staged = document.getElementById('sandbox-staged-card');
+        if (staged && !staged.hidden && staged.dataset.nid) {
+            var nid = parseInt(staged.dataset.nid, 10);
+            if (!isNaN(nid)) {
+                socket.emit('sandbox_place_on_board', {
+                    player_idx: sandboxAddTargetIdx,
+                    card_numeric_id: nid,
+                    row: row,
+                    col: col,
+                });
+                return;
+            }
+        }
+    }
     if (isSpectator) return;  // spectators are read-only
     // Board clicks are inert during react window EXCEPT when a death
     // target pick is pending — the modal routes through the cell click
@@ -5849,9 +5865,22 @@ function sandboxStageCard(nid) {
         '<div class="staged-art" style="' + artStyle + '"></div>' +
         '<span class="staged-name">' + escapeHtml(def.name) + '</span>' +
         '<span class="staged-cost">' + (def.mana_cost != null ? def.mana_cost : '-') + '\u{1F4A7}</span>' +
-        '<span class="staged-drag-hint">DRAG</span>';
+        '<span class="staged-drag-hint">CLICK CELL / DRAG</span>';
     staged.dataset.nid = nid;
     staged.hidden = false;
+    // Click staged card → add to current zone selection
+    if (!staged._clickBound) {
+        staged._clickBound = true;
+        staged.addEventListener('click', function() {
+            var clickNid = parseInt(staged.dataset.nid, 10);
+            if (isNaN(clickNid)) return;
+            socket.emit('sandbox_add_card_to_zone', {
+                player_idx: sandboxAddTargetIdx,
+                card_numeric_id: clickNid,
+                zone: sandboxAddZone,
+            });
+        });
+    }
     // Wire drag handlers (idempotent — only binds once via the flag)
     if (!staged._dragBound) {
         staged._dragBound = true;
