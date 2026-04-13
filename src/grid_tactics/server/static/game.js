@@ -42,8 +42,8 @@ var HEART = '<span class="stat-emoji">' + HEART_SVG + '</span>';
                     }
                 } catch (e) {}
                 badge.innerHTML =
-                    '<div class="patch-version">Patch ' + version + ' ' + channel + '</div>' +
-                    (updatedStr ? '<div class="patch-updated">Updated ' + updatedStr + ' Dublin</div>' : '');
+                    '<span class="patch-version">Patch ' + version + ' ' + channel + '</span>' +
+                    (updatedStr ? ' <span class="patch-updated">· ' + updatedStr + '</span>' : '');
             })
             .catch(function () { /* silent — badge stays empty */ });
     }

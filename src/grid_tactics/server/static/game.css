@@ -508,7 +508,7 @@ body {
 .card-browser-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(160px, 220px));
-  gap: 6px;
+  gap: 16px 6px;
   justify-content: center;
 }
 
