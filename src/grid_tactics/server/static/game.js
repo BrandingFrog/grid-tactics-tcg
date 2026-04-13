@@ -1583,16 +1583,17 @@ function renderCardFrame(c, opts) {
     if (opts.numericId != null) dataAttrs += ' data-numeric-id="' + opts.numericId + '"';
 
     var html = '<div class="card-frame card-frame-full ' + typeClass + contextClass + dimClass + '"' + dataAttrs + '>';
-    // Mana badge (top-left)
-    html += '<div class="card-mana">' + c.mana_cost + '</div>';
-    // Element circle (top-right)
-    html += '<div class="attr-circle ' + elem.css + '"><span class="attr-text">' + elem.name + '</span></div>';
-    // Art area with name overlay (YGO CardPreview style)
+    // Art area with mana + element badges
     var artStyle = c.card_id ? 'background-image:url(/static/art/' + c.card_id + '.png)' : '';
     html += '<div class="card-art ' + artClass + '" style="' + artStyle + '">';
-    html += '<div class="card-art-overlay"></div>';
-    html += '<div class="card-name-overlay">' + c.name + '</div>';
+    html += '<div class="card-mana">' + c.mana_cost + '</div>';
+    html += '<div class="attr-circle ' + elem.css + '"><span class="attr-text">' + elem.name + '</span></div>';
     html += '</div>';
+    // Name bar (below art)
+    html += '<div class="card-name-overlay">' + c.name + '</div>';
+    // Type badge bar — show tribe for minions, card type for spells
+    var badgeText = c.card_type === 0 ? (c.tribe || 'MINION') : (c.card_type === 1 ? 'MAGIC' : 'REACT');
+    html += '<div class="card-type-badge">' + badgeText + '</div>';
     // Bottom section: ATK circle | tribe+range | HP circle
     if (c.card_type === 0 && c.attack != null) {
         var tribe = c.tribe || '';
