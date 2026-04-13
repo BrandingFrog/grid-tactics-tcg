@@ -4991,6 +4991,8 @@ function renderBoard(opts) {
             // Check for minion at this position
             var minion = minionMap[row + ',' + col];
             if (minion) {
+                var isOwn = minion.owner === perspectiveIdx;
+                cell.classList.add(isOwn ? 'cell-owner-self' : 'cell-owner-opp');
                 cell.innerHTML = renderBoardMinion(minion);
                 // Hover tooltip for board minions
                 (function(m) {
