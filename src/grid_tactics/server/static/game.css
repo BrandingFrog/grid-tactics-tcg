@@ -669,8 +669,8 @@ body {
   display: grid;
   grid-template-columns: 280px 1fr 220px;
   gap: 8px;
-  max-width: none;
-  margin: 0;
+  max-width: 1600px;
+  margin: 0 auto;
   padding: 8px;
   height: calc(100vh - 52px);
   overflow: hidden;
