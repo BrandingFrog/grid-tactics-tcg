@@ -3633,7 +3633,7 @@ body {
   top: 100%;
   left: 0;
   right: 0;
-  max-height: 240px;
+  max-height: 160px;
   overflow-y: auto;
   background: var(--card);
   border: 1px solid var(--border);

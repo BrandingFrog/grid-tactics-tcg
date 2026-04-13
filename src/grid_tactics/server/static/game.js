@@ -5585,6 +5585,10 @@ function setupSandboxToolbar() {
                 card_numeric_id: nid,
                 zone: sandboxAddZone,
             });
+            // Dismiss dropdown + clear search after adding
+            resultsBox.hidden = true;
+            resultsBox.innerHTML = '';
+            searchInput.value = '';
         });
         document.addEventListener('click', function(e) {
             if (!e.target.closest('.sandbox-search-wrap')) resultsBox.hidden = true;
