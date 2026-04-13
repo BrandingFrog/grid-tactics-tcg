@@ -5601,13 +5601,22 @@ function setupSandboxToolbar() {
         });
     });
 
-    // ---- A3. Zone selector (which zone to add to) ----
+    // ---- A3. Zone selector (button row + hidden select sync) ----
     var zoneSelect = document.getElementById('sandbox-zone-select');
     if (zoneSelect) {
         zoneSelect.addEventListener('change', function() {
             sandboxAddZone = zoneSelect.value;
         });
     }
+    document.querySelectorAll('.sandbox-zone-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            sandboxAddZone = btn.dataset.zone;
+            if (zoneSelect) zoneSelect.value = sandboxAddZone;
+            document.querySelectorAll('.sandbox-zone-btn').forEach(function(b) {
+                b.classList.toggle('active', b === btn);
+            });
+        });
+    });
 
     // ---- A4. Control toggle (set active_player_idx server-side; layout does NOT change) ----
     document.querySelectorAll('.sandbox-control-btn').forEach(function(btn) {

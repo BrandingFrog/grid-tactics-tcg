@@ -503,11 +503,19 @@
               <div id="sandbox-search-results" class="sandbox-search-results" hidden></div>
             </div>
             <div class="sandbox-inline-row">
-              <span class="sandbox-inline-label">Add to:</span>
+              <span class="sandbox-inline-label">Player:</span>
               <button class="btn btn-sm sandbox-target-btn active" data-target="0">P1</button>
               <button class="btn btn-sm sandbox-target-btn" data-target="1">P2</button>
             </div>
-            <select id="sandbox-zone-select" class="input">
+            <div class="sandbox-inline-row sandbox-zone-btns">
+              <span class="sandbox-inline-label">Zone:</span>
+              <button class="btn btn-sm sandbox-zone-btn active" data-zone="hand">🃏 Hand</button>
+              <button class="btn btn-sm sandbox-zone-btn" data-zone="deck_top">📚 Deck</button>
+              <button class="btn btn-sm sandbox-zone-btn" data-zone="graveyard">⚰️ Grave</button>
+              <button class="btn btn-sm sandbox-zone-btn" data-zone="exhaust">🌀 Exhaust</button>
+            </div>
+            <!-- Hidden select kept for JS compatibility -->
+            <select id="sandbox-zone-select" class="input" style="display:none;">
               <option value="hand" selected>Hand</option>
               <option value="deck_top">Deck top</option>
               <option value="deck_bottom">Deck bottom</option>

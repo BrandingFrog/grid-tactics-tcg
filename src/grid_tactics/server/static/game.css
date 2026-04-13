@@ -3649,9 +3649,17 @@ body {
 .sandbox-search-result-name { font-weight: 600; }
 .sandbox-search-result-meta { color: var(--muted); font-size: 0.9em; }
 #sandbox-control-panel .sandbox-target-btn.active,
-#sandbox-control-panel .sandbox-control-btn.active {
+#sandbox-control-panel .sandbox-control-btn.active,
+#sandbox-control-panel .sandbox-zone-btn.active {
   background: var(--cyan);
   color: #000;
+}
+#sandbox-control-panel .sandbox-zone-btn {
+  font-size: 10px;
+  padding: 3px 6px;
+}
+.sandbox-zone-btns {
+  flex-wrap: wrap;
 }
 #sandbox-control-panel .sandbox-cheat-grid {
   display: grid;
