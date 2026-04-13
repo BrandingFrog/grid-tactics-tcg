@@ -365,8 +365,8 @@ body {
    ======================================= */
 
 .deck-builder-layout {
-  max-width: none;
-  margin: 0;
+  max-width: 1600px;
+  margin: 0 auto;
   padding: 8px;
   height: calc(100vh - 52px);
   display: flex;
