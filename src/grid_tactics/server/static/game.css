@@ -499,9 +499,9 @@ body {
 
 .card-browser-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(160px, 220px));
   gap: 6px;
-  justify-items: stretch;
+  justify-content: center;
 }
 
 @media (max-width: 700px) {
@@ -1324,6 +1324,7 @@ body {
 /* ===== Full-Size Card (Deck Builder / YGO CardPreview style) ===== */
 .card-frame-full {
   width: 100%;
+  max-width: 220px;
   display: flex;
   flex-direction: column;
 }
