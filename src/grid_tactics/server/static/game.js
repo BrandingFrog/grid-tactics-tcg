@@ -4,8 +4,10 @@
 
 // Stat emoji wrappers — apply a drop-shadow halo and slightly larger
 // font so 🗡️ and 🤍 look consistent next to numeric text with black stroke.
-var SWORD = '<span class="stat-emoji">🗡️</span>';
-var HEART = '<span class="stat-emoji">🤍</span>';
+var SWORD_SVG = '<svg class="stat-icon stat-icon-sword" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M14.1 4L21 4L21 10.9L18.55 8.45L12.6 14.4L10.1 11.9L4.85 17.15L3.45 15.75L10.1 9.1L12.6 11.6L17.15 7.05L14.1 4Z" fill="currentColor"/><path d="M3 19L5.5 16.5L7.5 18.5L5 21L3 19Z" fill="currentColor"/></svg>';
+var HEART_SVG = '<svg class="stat-icon stat-icon-heart" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12 21.35L10.55 20.03C5.4 15.36 2 12.27 2 8.5C2 5.41 4.42 3 7.5 3C9.24 3 10.91 3.81 12 5.08C13.09 3.81 14.76 3 16.5 3C19.58 3 22 5.41 22 8.5C22 12.27 18.6 15.36 13.45 20.03L12 21.35Z" fill="currentColor"/></svg>';
+var SWORD = '<span class="stat-emoji">' + SWORD_SVG + '</span>';
+var HEART = '<span class="stat-emoji">' + HEART_SVG + '</span>';
 
 // =============================================
 // Patch badge — fetch VERSION.json + render top-right
@@ -5005,8 +5007,8 @@ function renderBoardMinion(minion) {
         + '<div class="attr-circle-sm ' + elem.css + '"><span class="attr-text-sm">' + elem.name + '</span></div>'
         + '<div class="board-minion-name">' + cardDef.name + '</div>'
         + '<div class="board-minion-stats">'
-        + '<span class="board-minion-atk"><span class="stat-emoji-bg">🗡️</span><span class="stat-num">' + atk + '</span></span>'
-        + '<span class="board-minion-hp"><span class="stat-emoji-bg">🤍</span><span class="stat-num">' + hp + '</span></span>'
+        + '<span class="board-minion-atk"><span class="stat-emoji-bg">' + SWORD_SVG + '</span><span class="stat-num">' + atk + '</span></span>'
+        + '<span class="board-minion-hp"><span class="stat-emoji-bg">' + HEART_SVG + '</span><span class="stat-num">' + hp + '</span></span>'
         + '</div>'
         + badgesHtml
         + '</div>';
