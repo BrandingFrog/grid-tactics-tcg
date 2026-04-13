@@ -299,7 +299,7 @@ class SandboxSession:
             raise ValueError("player_idx must be 0 or 1")
         if not (0 <= card_numeric_id < self.library.card_count):
             raise ValueError("unknown card_numeric_id")
-        card_def = self.library.by_numeric_id(card_numeric_id)
+        card_def = self.library.get_by_id(card_numeric_id)
         if card_def.card_type != CardType.MINION:
             raise ValueError("Only minion cards can be placed on the board")
         if self._state.board.get(row, col) is not None:
