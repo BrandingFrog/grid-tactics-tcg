@@ -1557,34 +1557,18 @@ function renderCardFrame(c, opts) {
     // Type badge bar — show tribe for minions, card type for spells
     var badgeText = c.card_type === 0 ? (c.tribe || 'MINION').toUpperCase() : (c.card_type === 1 ? 'MAGIC' : 'REACT');
     html += '<div class="card-type-badge">' + badgeText + '</div>';
-    // Bottom section: ATK circle | tribe+range | HP circle
-    if (c.card_type === 0 && c.attack != null) {
-        var tribe = c.tribe || '';
-        var rangeText = (c.attack_range != null) ? (c.attack_range === 0 ? 'MELEE' : 'RANGE ' + c.attack_range) : '';
-        html += '<div class="card-bottom-section">';
-        html += '<div class="card-stat-atk"><span class="stat-emoji-bg">🗡️</span><span class="stat-num">' + c.attack + '</span></div>';
-        html += '<div class="card-bottom-center">';
-        if (tribe) html += '<div class="card-bottom-tribe">' + tribe + '</div>';
-        if (rangeText) html += '<div class="card-bottom-range">' + rangeText + '</div>';
-        html += '</div>';
-        html += '<div class="card-stat-hp"><span class="stat-emoji-bg">🤍</span><span class="stat-num">' + c.health + '</span></div>';
-        html += '</div>';
-    }
-    // Summon sacrifice cost
+    // Effect text block (all card types) — between type badge and stats
     if (c.discard_cost_tribe) {
         var sacN = c.discard_cost_count || 1;
         html += '<div class="card-effect-full">Cost: Discard any ' + (sacN > 1 ? sacN + ' ' : '') + c.discard_cost_tribe + (sacN > 1 ? 's' : '') + '</div>';
     }
-    // Unique tag
     if (c.unique) {
         html += '<div class="card-effect-full">Unique</div>';
     }
-    // Effect text (all card types)
     if (c.effects && c.effects.length > 0) {
         var desc = getEffectDescription(c.effects, c);
         html += '<div class="card-effect-full">' + desc + '</div>';
     }
-    // Activated ability — auto-derive description from the ability block
     if (c.activated_ability) {
         var ab = c.activated_ability;
         var abDesc = 'Active (' + ab.mana_cost + '): ';
@@ -1597,14 +1581,12 @@ function renderCardFrame(c, opts) {
         }
         html += '<div class="card-effect-full">' + abDesc + '</div>';
     }
-    // Transform options (Reanimated Bones) — compact list
     if (c.transform_options && c.transform_options.length > 0) {
         var tLines = c.transform_options.map(function(opt) {
             return '(' + opt.mana_cost + ') ' + findCardNameById(opt.target);
         });
         html += '<div class="card-effect-full">Transform: ' + tLines.join(', ') + '</div>';
     }
-    // React ability (multi-purpose cards like Dark Sentinel)
     if (c.react_condition != null && c.react_mana_cost != null) {
         var condMap = {
             0: 'Enemy plays Magic', 1: 'Enemy summons Minion', 2: 'Enemy attacks',
@@ -1621,13 +1603,23 @@ function renderCardFrame(c, opts) {
             html += '<div class="card-effect-full">▶ Deploy</div>';
         }
     }
-    // Flavour text — only when the card has no other text content
     if (c.flavour_text
             && (!c.effects || c.effects.length === 0)
             && !c.activated_ability
             && c.react_condition == null
             && (!c.transform_options || c.transform_options.length === 0)) {
         html += '<div class="card-flavour">' + c.flavour_text + '</div>';
+    }
+    // Stats row at bottom: ATK | RANGE | HP (minions only)
+    if (c.card_type === 0 && c.attack != null) {
+        var rangeText = (c.attack_range != null) ? (c.attack_range === 0 ? 'MELEE' : 'RANGE ' + c.attack_range) : '';
+        html += '<div class="card-bottom-section">';
+        html += '<div class="card-stat-atk"><span class="stat-emoji-bg">' + SWORD + '</span> <span class="stat-num">' + c.attack + '</span></div>';
+        html += '<div class="card-bottom-center">';
+        if (rangeText) html += '<div class="card-bottom-range">' + rangeText + '</div>';
+        html += '</div>';
+        html += '<div class="card-stat-hp"><span class="stat-emoji-bg">' + HEART + '</span> <span class="stat-num">' + c.health + '</span></div>';
+        html += '</div>';
     }
     html += '</div>';
     // Count badge (deck-builder / tooltip contexts)
