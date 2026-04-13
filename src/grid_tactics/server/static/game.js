@@ -5374,9 +5374,11 @@ function setupSandboxSocketHandlers() {
         sandboxRedoDepth = payload.redo_depth || 0;
         // Push sandbox state into the swapped globals so the renderers and
         // the click handlers see it as "the current state".
+        // FIXED: myPlayerIdx stays 0 (P1 perspective) so the board never flips.
+        // sandboxActiveViewIdx only controls which player's actions we submit.
         if (sandboxMode) {
             gameState = sandboxState;
-            myPlayerIdx = sandboxActiveViewIdx;
+            myPlayerIdx = 0;
             legalActions = sandboxLegalActions;
         }
         // Plan 14.6-03: autosave + toolbar state sync

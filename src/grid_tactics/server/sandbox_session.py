@@ -184,6 +184,11 @@ class SandboxSession:
                 break
             self._state = resolve_action(self._state, pass_action(), self.library)
 
+        # Auto-follow active player: after each action, sync the sandbox
+        # view to whoever's turn it is so the user always controls the
+        # active player without needing to manually toggle.
+        self._active_view_idx = self._state.active_player_idx
+
     # ------------------------------------------------------------------
     # Zone editing (DEV-02 / DEV-03)
     # ------------------------------------------------------------------
