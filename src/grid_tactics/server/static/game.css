@@ -1329,7 +1329,7 @@ body {
 }
 
 .card-art-full {
-  flex: 0 0 55%;
+  flex: 0 0 50%;
 }
 
 .card-art-overlay {
@@ -1343,7 +1343,10 @@ body {
 }
 
 .card-name-overlay {
-  position: relative;
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
   color: white;
   font-family: 'Inter', system-ui, sans-serif;
   font-size: 14px;
@@ -1355,7 +1358,7 @@ body {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  background: rgba(11, 11, 22, 0.85);
+  background: rgba(11, 11, 22, 0.65);
   padding: 6px 8px;
 }
 
