@@ -57,7 +57,7 @@ def react_state_empty_stack(library):
     P1 just played a magic card (active_player_idx=0), react window open for P2 (react_player_idx=1).
     P2 has counter_spell (react to magic) and surgefed_sparkbot (multi-purpose, react to sacrifice) in hand.
     """
-    counter_spell_id = library.get_numeric_id("counter_spell")
+    counter_spell_id = library.get_numeric_id("prohibition")
     sparkbot_id = library.get_numeric_id("surgefed_sparkbot")
     rat_id = library.get_numeric_id("rat")
 
@@ -152,7 +152,7 @@ class TestReactPass:
 
     def test_pass_resolves_stack_lifo(self, react_state_empty_stack, library):
         """PASS with entries on stack resolves them in LIFO order."""
-        counter_spell_id = library.get_numeric_id("counter_spell")
+        counter_spell_id = library.get_numeric_id("prohibition")
 
         # Manually push a counter_spell (NEGATE) entry onto the stack
         entry = ReactEntry(
@@ -198,7 +198,7 @@ class TestReactPass:
 class TestPlayReactCard:
     def test_react_card_pushes_to_stack(self, react_state_empty_stack, library):
         """Playing a react card pushes ReactEntry and switches react_player_idx."""
-        shield_block_id = library.get_numeric_id("counter_spell")
+        shield_block_id = library.get_numeric_id("prohibition")
 
         # P2 (react_player_idx=1) plays shield_block (card_index=0) targeting (1,2)
         action = play_react_action(card_index=0, target_pos=(1, 2))
@@ -264,7 +264,7 @@ class TestPlayReactCard:
 
     def test_stack_depth_cap_enforced(self, react_state_empty_stack, library):
         """Cannot exceed MAX_REACT_STACK_DEPTH entries on the stack."""
-        shield_block_id = library.get_numeric_id("counter_spell")
+        shield_block_id = library.get_numeric_id("prohibition")
 
         # Fill stack to MAX_REACT_STACK_DEPTH
         entries = tuple(
@@ -300,8 +300,8 @@ class TestReactChaining:
           - shield_block is negated, does not resolve
         Minion stays at 5 HP (no buffs applied).
         """
-        counter_spell_id = library.get_numeric_id("counter_spell")
-        shield_block_id = library.get_numeric_id("counter_spell")
+        counter_spell_id = library.get_numeric_id("prohibition")
+        shield_block_id = library.get_numeric_id("prohibition")
 
         state = react_state_empty_stack
 
@@ -350,7 +350,7 @@ class TestResolveReactStack:
 
     def test_resolve_counter_spell_negate(self, react_state_empty_stack, library):
         """Counter_spell NEGATE effect on the stack."""
-        counter_spell_id = library.get_numeric_id("counter_spell")
+        counter_spell_id = library.get_numeric_id("prohibition")
         entry = ReactEntry(
             player_idx=1,
             card_index=0,

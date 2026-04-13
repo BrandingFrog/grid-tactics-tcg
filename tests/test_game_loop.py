@@ -57,7 +57,7 @@ def _build_test_decks(library: CardLibrary) -> tuple[tuple[int, ...], tuple[int,
         "to_the_ratmobile": 3,
         "ratical_resurrection": 3,
         "emberplague_rat": 3,
-        "counter_spell": 3,
+        "prohibition": 3,
     }
     # Total = 6 + 9 + 12 + 1 + 12 = 40
 
@@ -86,7 +86,7 @@ def _build_no_heal_decks(library: CardLibrary) -> tuple[tuple[int, ...], tuple[i
         "surgefed_sparkbot": 3,
         "to_the_ratmobile": 3,
         "rgb_lasercannon": 3,
-        "counter_spell": 3,
+        "prohibition": 3,
         "reanimated_bones": 3,
         # 13 * 3 = 39, need 1 more
         "ratical_resurrection": 1,

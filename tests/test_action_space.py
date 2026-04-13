@@ -72,7 +72,7 @@ def test_decks(library):
         "to_the_ratmobile": 3,
         "ratical_resurrection": 3,
         "emberplague_rat": 3,
-        "counter_spell": 3,
+        "prohibition": 3,
     }
     deck = library.build_deck(card_counts)
     return deck, deck
@@ -339,7 +339,7 @@ class TestEncodeDecodeREACT:
     def test_encode_decode_react_targeted(self, encoder, library):
         """PLAY_REACT targeted encodes/decodes correctly."""
         # Create state in REACT phase with react card in hand
-        counter_spell_id = library.get_numeric_id("counter_spell")
+        counter_spell_id = library.get_numeric_id("prohibition")
         fire_imp_id = library.get_numeric_id("rat")
         fire_imp_def = library.get_by_id(fire_imp_id)
 
@@ -383,7 +383,7 @@ class TestEncodeDecodeREACT:
 
     def test_encode_decode_react_untargeted(self, encoder, library):
         """PLAY_REACT untargeted encodes/decodes correctly."""
-        counter_spell_id = library.get_numeric_id("counter_spell")
+        counter_spell_id = library.get_numeric_id("prohibition")
 
         from grid_tactics.board import Board
         from grid_tactics.player import Player
@@ -440,7 +440,7 @@ class TestMaskMatchesLegal:
             "ratchanter": 3, "surgefed_sparkbot": 3,
             "rathopper": 3, "giant_rat": 1,
             "to_the_ratmobile": 3, "ratical_resurrection": 3,
-            "emberplague_rat": 3, "counter_spell": 3,
+            "emberplague_rat": 3, "prohibition": 3,
         }
         deck = library.build_deck(card_counts)
 

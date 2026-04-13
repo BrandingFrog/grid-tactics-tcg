@@ -252,7 +252,7 @@ def test_deck_composition(tmp_path: Path):
     db_path = tmp_path / "test.db"
     writer = TrainingRunWriter(db_path)
 
-    card_counts = {"rat": 3, "to_the_ratmobile": 3, "counter_spell": 2}
+    card_counts = {"rat": 3, "to_the_ratmobile": 3, "prohibition": 2}
     writer.record_deck("deck_hash_001", card_counts)
 
     conn = sqlite3.connect(str(db_path))

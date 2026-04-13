@@ -336,7 +336,7 @@ def test_apply_action_preserves_react_window_when_opponent_has_reacts(
     remain in REACT.
     """
     magic_nid = _find_numeric_id(library, "to_the_ratmobile")
-    counter_nid = _find_numeric_id(library, "counter_spell")
+    counter_nid = _find_numeric_id(library, "prohibition")
     counter_cost = library.get_by_id(counter_nid).mana_cost
 
     session.set_player_field(0, "current_mana", 3)  # enough for to_the_ratmobile (cost=3)

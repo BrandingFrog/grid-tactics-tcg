@@ -273,7 +273,7 @@ EXCLUDED_CARDS: set[str] = set()
 
 # Per-card copy overrides (default is 3 copies)
 CARD_COPIES: dict[str, int] = {
-    "counter_spell": 1,  # 1 copy (reactive niche)
+    "prohibition": 1,  # 1 copy (reactive niche)
     "giant_rat": 1,      # unique — only 1 on board, 1 in deck
 }
 

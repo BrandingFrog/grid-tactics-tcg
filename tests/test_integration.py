@@ -149,7 +149,7 @@ class TestReactInteraction:
     def test_react_counter_spell_buffs_minion(self, library):
         """P1 attacks -> P2 plays counter_spell on defending minion -> resolve -> advance."""
         rat_id = library.get_numeric_id("rat")
-        counter_spell_id = library.get_numeric_id("counter_spell")
+        counter_spell_id = library.get_numeric_id("prohibition")
 
         attacker = MinionInstance(
             instance_id=0, card_numeric_id=rat_id,
@@ -185,7 +185,7 @@ class TestReactInteraction:
         """
         rat_id = library.get_numeric_id("rat")
         ratmobile_id = library.get_numeric_id("to_the_ratmobile")
-        counter_spell_id = library.get_numeric_id("counter_spell")  # NEGATE
+        counter_spell_id = library.get_numeric_id("prohibition")  # NEGATE
 
         attacker = MinionInstance(
             instance_id=0, card_numeric_id=rat_id,
@@ -219,8 +219,8 @@ class TestReactInteraction:
         -> P1 counter-reacts with counter_spell (condition: opponent_plays_react, NEGATE)
         -> P2 passes -> LIFO resolves: counter_spell negates counter_spell, minion undamaged."""
         rat_id = library.get_numeric_id("rat")
-        counter_spell_id = library.get_numeric_id("counter_spell")   # condition: opponent_plays_minion
-        counter_spell_id = library.get_numeric_id("counter_spell")  # condition: opponent_plays_magic, NEGATE
+        counter_spell_id = library.get_numeric_id("prohibition")   # condition: opponent_plays_minion
+        counter_spell_id = library.get_numeric_id("prohibition")  # condition: opponent_plays_magic, NEGATE
 
         # P1 has rat to deploy and counter_spell for react
         # P2 has counter_spell to react to the deploy
@@ -373,7 +373,7 @@ class TestLegalActionsConsistency:
     def test_legal_actions_valid_at_every_step(self, library):
         """At every game step, all legal_actions resolve without error."""
         rathopper_id = library.get_numeric_id("rathopper")  # no ON_PLAY effects
-        counter_spell_id = library.get_numeric_id("counter_spell")
+        counter_spell_id = library.get_numeric_id("prohibition")
 
         state = _make_state(
             p1_hand=(rathopper_id,),

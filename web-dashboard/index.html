@@ -274,7 +274,7 @@ const COLORS = ['#00d4ff','#4caf50','#ff9800','#f44336','#ce93d8','#ffeb3b','#29
 
 // Card definitions for tooltip previews
 const CARD_DB = {
-  counter_spell:{name:"Counter Spell",type:"react",cost:2,elem:"water",react:"opponent_plays_magic",effects:[{type:"negate",trigger:"on_play",target:"single_target",amount:10}]},
+  prohibition:{name:"Prohibition",type:"react",cost:2,elem:"water",react:"opponent_plays_magic",effects:[{type:"negate",trigger:"on_play",target:"single_target",amount:10}]},
   furryroach:{name:"Furryroach",type:"minion",cost:1,atk:10,hp:10,range:0,elem:"earth",tribe:"Insect",effects:[{type:"rally_forward",trigger:"on_move",target:"self_owner",amount:10}]},
   emberplague_rat:{name:"Emberplague Rat",type:"minion",cost:2,atk:0,hp:24,range:0,elem:"fire",tribe:"Rat",effects:[{type:"burn",trigger:"passive",target:"all_enemies",amount:2}]},
   rathopper:{name:"Rathopper",type:"minion",cost:3,atk:19,hp:13,range:0,elem:"earth",tribe:"Rat",effects:[]},
@@ -998,7 +998,7 @@ function renderDuelGame(el) {
   const myHand = [
     { id: 'ratical_resurrection', ...CARD_DB.ratical_resurrection },
     { id: 'rgb_lasercannon', ...CARD_DB.rgb_lasercannon },
-    { id: 'counter_spell', ...CARD_DB.counter_spell },
+    { id: 'prohibition', ...CARD_DB.prohibition },
     { id: 'furryroach', ...CARD_DB.furryroach },
     { id: 'to_the_ratmobile', ...CARD_DB.to_the_ratmobile },
   ];
@@ -1009,7 +1009,7 @@ function renderDuelGame(el) {
     { turn: 6, msg: '<span style="color:var(--red)">P2</span> moves <span style="color:var(--purple)">Rathopper</span> to (2,1)' },
     { turn: 6, msg: '<span style="color:var(--cyan)">P1</span> passes react window' },
     { turn: 5, msg: '<span style="color:var(--cyan)">P1</span> <span style="color:var(--red)">attacks</span> Pyre Archer with Fallen Paladin' },
-    { turn: 5, msg: '<span style="color:var(--yellow)">[REACT]</span> <span style="color:var(--red)">P2</span> plays <span style="color:var(--cyan)">Counter Spell</span>' },
+    { turn: 5, msg: '<span style="color:var(--yellow)">[REACT]</span> <span style="color:var(--red)">P2</span> plays <span style="color:var(--cyan)">Prohibition</span>' },
     { turn: 4, msg: '<span style="color:var(--red)">P2</span> deploys <span style="color:var(--purple)">Ratchanter</span> at (1,2)' },
     { turn: 4, msg: '<span style="color:var(--cyan)">P1</span> passes react window' },
     { turn: 3, msg: '<span style="color:var(--cyan)">P1</span> deploys <span style="color:var(--green)">Giant Rat</span> at (3,0)' },

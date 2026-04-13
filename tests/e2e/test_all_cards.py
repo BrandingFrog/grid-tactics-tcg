@@ -10,7 +10,7 @@ RESULTS = []
 # Card numeric IDs (0-based load order, NOT stable_id).
 # Regenerate with: PYTHONPATH=src python3 -c "from pathlib import Path; from grid_tactics.card_library import CardLibrary; lib=CardLibrary.from_directory(Path('data/cards')); [print(f'{lib.get_numeric_id(c):>3} {c}') for c in sorted(lib._cards)]"
 NID = {
-    "blue_diodebot": 0, "counter_spell": 1, "emberplague_rat": 2,
+    "blue_diodebot": 0, "prohibition": 1, "emberplague_rat": 2,
     "fallen_paladin": 3, "furryroach": 4, "giant_rat": 5,
     "grave_caller": 6, "green_diodebot": 7, "pyre_archer": 8,
     "rat": 9, "ratchanter": 10, "rathopper": 11,
@@ -346,7 +346,7 @@ def test_rgb_lasercannon(sb):
 def test_counter_spell(sb):
     """Counter Spell: react card. Verify it can be held in hand."""
     sb.set_mana(0, 10)
-    sb.add_card(0, NID["counter_spell"])
+    sb.add_card(0, NID["prohibition"])
     if len(sb.p0["hand"]) == 1:
         return ("React card in hand. Plays during react window", "PASS")
     return ("Could not add to hand", "FAIL")

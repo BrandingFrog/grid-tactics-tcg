@@ -61,7 +61,7 @@ def test_decks(library):
         "to_the_ratmobile": 3,
         "ratical_resurrection": 3,
         "emberplague_rat": 3,
-        "counter_spell": 3,
+        "prohibition": 3,
     }
     deck = library.build_deck(card_counts)
     return deck, deck

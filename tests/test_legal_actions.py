@@ -262,7 +262,7 @@ class TestMagicCardPlay:
 
     def test_react_cards_excluded_in_action_phase(self, library):
         """React cards cannot be played during ACTION phase."""
-        counter_spell_id = library.get_numeric_id("counter_spell")
+        counter_spell_id = library.get_numeric_id("prohibition")
         state = _make_state(p1_hand=(counter_spell_id,))
         actions = legal_actions(state, library)
 
@@ -508,7 +508,7 @@ class TestAttackEnumeration:
 class TestReactPhase:
     def test_react_phase_only_react_and_pass(self, library):
         """During REACT phase, only react cards whose condition matches + PASS are legal."""
-        counter_spell_id = library.get_numeric_id("counter_spell")  # condition: opponent_plays_magic
+        counter_spell_id = library.get_numeric_id("prohibition")  # condition: opponent_plays_magic
         rat_id = library.get_numeric_id("rat")
         green_diodebot_id = library.get_numeric_id("green_diodebot")  # minion (not react)
         ratmobile_id = library.get_numeric_id("to_the_ratmobile")  # magic card
@@ -561,7 +561,7 @@ class TestReactPhase:
 
     def test_react_phase_stack_at_max_only_pass(self, library):
         """When stack is at MAX_REACT_STACK_DEPTH, only PASS is legal."""
-        counter_spell_id = library.get_numeric_id("counter_spell")
+        counter_spell_id = library.get_numeric_id("prohibition")
         entries = tuple(
             ReactEntry(player_idx=i % 2, card_index=0, card_numeric_id=counter_spell_id)
             for i in range(MAX_REACT_STACK_DEPTH)
@@ -578,7 +578,7 @@ class TestReactPhase:
 
     def test_react_phase_insufficient_mana_excluded(self, library):
         """React cards needing more mana than available are excluded."""
-        counter_spell_id = library.get_numeric_id("counter_spell")  # cost=2
+        counter_spell_id = library.get_numeric_id("prohibition")  # cost=2
         state = _make_state(
             p2_hand=(counter_spell_id,), p2_mana=1,
             phase=TurnPhase.REACT,
@@ -661,7 +661,7 @@ class TestSoundness:
         """Every action from legal_actions during REACT resolves without error."""
         from grid_tactics.action_resolver import resolve_action
 
-        counter_spell_id = library.get_numeric_id("counter_spell")
+        counter_spell_id = library.get_numeric_id("prohibition")
         green_diodebot_id = library.get_numeric_id("green_diodebot")
         rat_id = library.get_numeric_id("rat")
 

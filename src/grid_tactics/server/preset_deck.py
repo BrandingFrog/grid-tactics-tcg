@@ -2,7 +2,7 @@
 
 30 cards, max 3 copies per card. Validated against CardLibrary at import time.
 Used by programmatic test clients that don't have a deck builder UI.
-Only uses cards that have card art (+ counter_spell).
+Only uses cards that have card art (+ prohibition).
 """
 
 from grid_tactics.card_library import CardLibrary
@@ -26,7 +26,7 @@ PRESET_DECK_COUNTS: dict[str, int] = {
     "surgefed_sparkbot": 1,
     "ratical_resurrection": 1,
     "to_the_ratmobile": 1,
-    "counter_spell": 1,
+    "prohibition": 1,
 }
 
 

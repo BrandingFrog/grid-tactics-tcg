@@ -1,7 +1,7 @@
 {
-    "card_id": "counter_spell",
+    "card_id": "prohibition",
     "stable_id": 2,
-    "name": "Counter Spell",
+    "name": "Prohibition",
     "card_type": "react",
     "mana_cost": 2,
     "element": "water",
