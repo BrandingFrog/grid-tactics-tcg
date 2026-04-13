@@ -506,7 +506,7 @@ body {
 
 @media (max-width: 700px) {
   .card-browser-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
   }
 }
 
@@ -2352,7 +2352,7 @@ body {
   .filter-checkbox { font-size: 8px; }
 
   .card-browser-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
     gap: 8px;
   }
 
@@ -2385,16 +2385,38 @@ body {
   .card-frame-hand { width: 132px; }
   .hand-container { max-height: 228px; min-height: 80px; }
 
-  /* Deck builder cards: single-column, wider than game hand cards.
-     Restore desktop font sizes — 220px is bigger than the 192px desktop
-     card, so the 120px-era shrink overrides above are wrong here. */
-  .card-frame-full { width: 220px; }
-  .card-frame-full .card-name-overlay { font-size: 16px; }
-  .card-frame-full .card-effect-full { font-size: 12px; }
-  .card-frame-full .card-flavour { font-size: 10px; }
+  /* Deck builder cards adapt to width — 2 cols at 375px, 1 at 320px */
+  .card-frame-full { width: 100%; max-width: 220px; }
+  .card-frame-full .card-name-overlay { font-size: 14px; }
+  .card-frame-full .card-effect-full { font-size: 10px; }
+  .card-frame-full .card-flavour { font-size: 9px; }
   .card-frame-full .card-stat-atk,
-  .card-frame-full .card-stat-hp { font-size: 16px; }
-  .card-frame-full .card-mana { font-size: 16px; }
+  .card-frame-full .card-stat-hp { font-size: 14px; }
+  .card-frame-full .card-mana { font-size: 14px; }
+
+  /* Header: hide patch badge on small screens */
+  .patch-badge { display: none; }
+}
+
+/* ===== Extra-small screens (<=420px) ===== */
+@media (max-width: 420px) {
+  .header { padding: 0 6px; overflow: hidden; }
+  .logo { font-size: 11px; margin-right: 8px; letter-spacing: 1px; }
+  .nav-btn { padding: 10px 6px; font-size: 10px; }
+  .nav { gap: 0; }
+  .header-right { gap: 6px; }
+  .conn { font-size: 9px; }
+
+  .lobby-heading { font-size: 20px; letter-spacing: 2px; }
+  .lobby-container { padding: 12px 6px; }
+
+  .card-browser-grid {
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+    gap: 6px;
+  }
+  .card-frame-full { max-width: 180px; }
+  .filter-label { min-width: 35px; font-size: 7px; }
+  .filter-btn { padding: 2px 5px; font-size: 7px; }
 }
 
 /* ===== Phase 14 PLAY-02: React Window UI ===== */
