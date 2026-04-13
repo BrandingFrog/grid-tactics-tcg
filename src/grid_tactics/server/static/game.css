@@ -1220,7 +1220,7 @@ body {
   text-overflow: ellipsis;
 }
 
-/* Card Bottom Section (stats + range) */
+/* Card Bottom Section (stats + range) — pinned to card bottom */
 .card-bottom-section {
   position: relative;
   display: flex;
@@ -1228,6 +1228,7 @@ body {
   justify-content: space-between;
   padding: 4px 8px 6px;
   z-index: 3;
+  margin-top: auto; /* push to bottom */
 }
 
 /* Card Stats — clean inline text */

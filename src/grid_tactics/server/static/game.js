@@ -1076,28 +1076,11 @@ function renderDeckBuilder() {
 }
 
 function fitCardEffects() {
-    document.querySelectorAll('.card-effect-full').forEach(function(el) {
-        el.style.fontSize = '12px';
-        var size = 12;
-        while (el.scrollHeight > el.clientHeight && size > 7) {
-            size--;
-            el.style.fontSize = size + 'px';
-        }
-    });
+    // Clean wireframe design: let CSS handle font sizes
 }
 
 function fitCardNames() {
-    document.querySelectorAll('.card-name-overlay').forEach(function(el) {
-        el.style.transform = 'none';
-        el.style.fontSize = '16px';
-        var containerWidth = el.offsetWidth;
-        var textWidth = el.scrollWidth;
-        if (textWidth > containerWidth && containerWidth > 0) {
-            var scale = containerWidth / textWidth;
-            if (scale < 0.5) scale = 0.5;
-            el.style.transform = 'scaleX(' + scale + ')';
-        }
-    });
+    // Clean wireframe design: overflow handled by CSS text-overflow
 }
 
 function renderCardBrowser() {
@@ -1513,31 +1496,11 @@ function hideGameTooltip() {
     if (hint) hint.style.display = '';
 }
 
-// Auto-fit for hand card names (scaleX for overflow)
-function fitHandCardNames() {
-    document.querySelectorAll('.card-frame-hand .card-name-overlay').forEach(function(el) {
-        el.style.transform = 'none';
-        var containerWidth = el.offsetWidth;
-        var textWidth = el.scrollWidth;
-        if (textWidth > containerWidth && containerWidth > 0) {
-            var scale = containerWidth / textWidth;
-            if (scale < 0.5) scale = 0.5;
-            el.style.transform = 'scaleX(' + scale + ')';
-        }
-    });
-}
+// Auto-fit for hand card names — clean wireframe: CSS handles overflow
+function fitHandCardNames() {}
 
-// Auto-fit for hand card effects (shrink font)
-function fitHandCardEffects() {
-    document.querySelectorAll('.card-frame-hand .card-effect-full').forEach(function(el) {
-        el.style.fontSize = '10px';
-        var size = 10;
-        while (el.scrollHeight > el.clientHeight && size > 6) {
-            size--;
-            el.style.fontSize = size + 'px';
-        }
-    });
-}
+// Auto-fit for hand card effects — clean wireframe: CSS handles sizing
+function fitHandCardEffects() {}
 
 // =============================================
 // renderCardFrame(c, opts) -- SHARED full-size card renderer
@@ -1592,7 +1555,7 @@ function renderCardFrame(c, opts) {
     // Name bar (below art)
     html += '<div class="card-name-overlay">' + c.name + '</div>';
     // Type badge bar — show tribe for minions, card type for spells
-    var badgeText = c.card_type === 0 ? (c.tribe || 'MINION') : (c.card_type === 1 ? 'MAGIC' : 'REACT');
+    var badgeText = c.card_type === 0 ? (c.tribe || 'MINION').toUpperCase() : (c.card_type === 1 ? 'MAGIC' : 'REACT');
     html += '<div class="card-type-badge">' + badgeText + '</div>';
     // Bottom section: ATK circle | tribe+range | HP circle
     if (c.card_type === 0 && c.attack != null) {
