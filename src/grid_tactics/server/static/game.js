@@ -5248,7 +5248,7 @@ function getEffectDescription(effects, cardData) {
             var burnTarget = {0: '', 1: ' all enemies', 2: ' adjacent enemies', 3: ''}[eff.target] || '';
             desc = prefix + 'Burn' + burnTarget;
         } else if (type === 11) { // Dark Matter Buff
-            desc = 'Active: +' + amount + SWORD + ' (+Dark Matter*1)';
+            desc = prefix + 'Target gains (Dark Matter)' + SWORD;
         } else if (type === 12) { // Passive Heal
             desc = 'Passive: Heal ' + amount + ' per turn';
         } else if (type === 13) { // Leap
