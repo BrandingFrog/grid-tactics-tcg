@@ -1256,9 +1256,9 @@ var KEYWORD_GLOSSARY = {
     'Deal': 'Deal damage to a target.',
     'Burn': 'Applies Burning to affected enemies. A burning minion takes 5🤍 damage at the start of its owner\'s turn. Persists until the minion dies.',
     'Burning': 'A burning minion takes 5🤍 damage at the start of its owner\'s turn. Burning persists until the minion dies.',
-    'Dark Matter': 'Buff scales with Dark Matter stacks.',
-    'Leap': 'If blocked by an enemy, advance to the next available tile instead.',
-    'Conjure': 'Summon a card from outside your deck directly to the board.',
+    'Dark Matter': 'A stacking resource used by Dark Mages. Buffs and costs scale with accumulated stacks.',
+    'Leap': 'If blocked by an enemy, jump over to the next available tile. Cannot leap allies. If all tiles ahead are enemy-occupied, enables sacrifice.',
+    'Conjure': 'Summon a card from your deck directly to the board.',
     'Revive': 'Summon a card from the Grave to the board.',
 };
 
@@ -1335,42 +1335,58 @@ function buildCardTooltipContent(c) {
         bodyHtml += '<div class="tooltip-flavour">"' + c.flavour_text + '"</div>';
     }
 
-    // Matched keywords
+    // Matched keywords — helper to avoid duplicates
     var matchedKeywords = [];
-    if (c.unique) matchedKeywords.push('Unique');
-    if (c.card_type === 0 && c.attack_range != null && c.attack_range === 0) matchedKeywords.push('Melee');
-    if (c.card_type === 0 && c.attack_range != null && c.attack_range > 0) matchedKeywords.push('Range');
-    if (c.discard_cost_tribe) { matchedKeywords.push('Cost'); matchedKeywords.push('Discard'); }
-    if (c.transform_options && c.transform_options.length > 0) matchedKeywords.push('Transform');
-    if (c.react_condition != null) matchedKeywords.push('React');
-    if (c.react_condition != null && c.react_effect && c.react_effect.type === 5) matchedKeywords.push('Deploy');
+    function addKw(kw) { if (matchedKeywords.indexOf(kw) === -1) matchedKeywords.push(kw); }
+
+    // Card-level keywords
+    if (c.unique) addKw('Unique');
+    if (c.card_type === 0 && c.attack_range != null && c.attack_range === 0) addKw('Melee');
+    if (c.card_type === 0 && c.attack_range != null && c.attack_range > 0) addKw('Range');
+    if (c.discard_cost_tribe) { addKw('Cost'); addKw('Exhaust'); }
+    if (c.cost_reduction) { addKw('Cost'); addKw('Dark Matter'); }
+    if (c.transform_options && c.transform_options.length > 0) addKw('Transform');
+    if (c.react_condition != null) addKw('React');
+    if (c.react_condition != null && c.react_effect && c.react_effect.type === 5) addKw('Deploy');
+
+    // Activated ability keywords
+    if (c.activated_ability) {
+        addKw('Active');
+        var abType = c.activated_ability.effect_type || '';
+        if (abType.indexOf('conjure') !== -1) addKw('Conjure');
+        if (abType.indexOf('dark_matter') !== -1 || abType.indexOf('buff') !== -1) addKw('Dark Matter');
+    }
+
+    // Effect-level keywords
     var skipSummon = false;
     if (c.effects) { c.effects.forEach(function(eff) { if (eff.type === 11) skipSummon = true; }); }
     if (c.effects && c.effects.length > 0) {
         c.effects.forEach(function(eff) {
-            if (eff.trigger === 0 && c.card_type === 0 && !skipSummon) { if (matchedKeywords.indexOf('Summon') === -1) matchedKeywords.push('Summon'); }
-            if (eff.trigger === 1) { if (matchedKeywords.indexOf('Death') === -1) matchedKeywords.push('Death'); }
-            if (eff.trigger === 2) { if (matchedKeywords.indexOf('Attack') === -1) matchedKeywords.push('Attack'); }
-            if (eff.trigger === 3) { if (matchedKeywords.indexOf('Damaged') === -1) matchedKeywords.push('Damaged'); }
-            if (eff.trigger === 4) { if (matchedKeywords.indexOf('Move') === -1) matchedKeywords.push('Move'); }
-            if (eff.trigger === 5) { if (matchedKeywords.indexOf('Passive') === -1) matchedKeywords.push('Passive'); }
-            if (eff.type === 0) { if (matchedKeywords.indexOf('Deal') === -1) matchedKeywords.push('Deal'); }
-            if (eff.type === 1) { if (matchedKeywords.indexOf('Heal') === -1) matchedKeywords.push('Heal'); }
-            if (eff.type === 3) { if (matchedKeywords.indexOf('Heal') === -1) matchedKeywords.push('Heal'); }
-            if (eff.type === 4) { if (matchedKeywords.indexOf('Negate') === -1) matchedKeywords.push('Negate'); }
-            if (eff.type === 5) { if (matchedKeywords.indexOf('Deploy') === -1) matchedKeywords.push('Deploy'); }
-            if (eff.type === 6) { if (matchedKeywords.indexOf('Rally') === -1) matchedKeywords.push('Rally'); }
-            if (eff.type === 7) { if (matchedKeywords.indexOf('Promote') === -1) matchedKeywords.push('Promote'); }
-            if (eff.type === 8) { if (matchedKeywords.indexOf('Tutor') === -1) matchedKeywords.push('Tutor'); }
-            if (eff.type === 9) { if (matchedKeywords.indexOf('Destroy') === -1) matchedKeywords.push('Destroy'); }
-            if (eff.type === 10) { if (matchedKeywords.indexOf('Burn') === -1) matchedKeywords.push('Burn'); }
-            if (eff.type === 11) { if (matchedKeywords.indexOf('Active') === -1) matchedKeywords.push('Active'); if (matchedKeywords.indexOf('Dark Matter') === -1) matchedKeywords.push('Dark Matter'); }
-            if (eff.type === 12) { if (matchedKeywords.indexOf('Passive') === -1) matchedKeywords.push('Passive'); if (matchedKeywords.indexOf('Heal') === -1) matchedKeywords.push('Heal'); }
-            if (eff.type === 13) { if (matchedKeywords.indexOf('Leap') === -1) matchedKeywords.push('Leap'); }
-            if (eff.type === 14) { if (matchedKeywords.indexOf('Conjure') === -1) matchedKeywords.push('Conjure'); }
-            if (eff.type === 15) { if (matchedKeywords.indexOf('Burning') === -1) matchedKeywords.push('Burning'); }
-            if (eff.type === 16) { if (matchedKeywords.indexOf('Dark Matter') === -1) matchedKeywords.push('Dark Matter'); }
-            if (eff.type === 17) { if (matchedKeywords.indexOf('Revive') === -1) matchedKeywords.push('Revive'); }
+            // Triggers
+            if (eff.trigger === 0 && c.card_type === 0 && !skipSummon) addKw('Summon');
+            if (eff.trigger === 1) addKw('Death');
+            if (eff.trigger === 2) addKw('Attack');
+            if (eff.trigger === 3) addKw('Damaged');
+            if (eff.trigger === 4) addKw('Move');
+            if (eff.trigger === 5) addKw('Passive');
+            // Effect types
+            if (eff.type === 0) { addKw('Deal'); if (eff.scale_with === 'dark_matter') addKw('Dark Matter'); }
+            if (eff.type === 1) addKw('Heal');
+            if (eff.type === 3) addKw('Heal');
+            if (eff.type === 4) addKw('Negate');
+            if (eff.type === 5) addKw('Deploy');
+            if (eff.type === 6) addKw('Rally');
+            if (eff.type === 7) addKw('Promote');
+            if (eff.type === 8) addKw('Tutor');
+            if (eff.type === 9) addKw('Destroy');
+            if (eff.type === 10) addKw('Burn');
+            if (eff.type === 11) { addKw('Active'); addKw('Dark Matter'); }
+            if (eff.type === 12) { addKw('Passive'); addKw('Heal'); }
+            if (eff.type === 13) addKw('Leap');
+            if (eff.type === 14) addKw('Conjure');
+            if (eff.type === 15) addKw('Burning');
+            if (eff.type === 16) addKw('Dark Matter');
+            if (eff.type === 17) addKw('Revive');
         });
     }
     matchedKeywords.forEach(function(kw) {

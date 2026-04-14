@@ -37,7 +37,7 @@ Update this file and the matching `KEYWORD_GLOSSARY` in `src/grid_tactics/server
 | Deal | Deal damage to a target. |
 | Burn | Applies Burning to affected enemies. A burning minion takes 5🤍 damage at the start of its owner's turn. Persists until the minion dies. |
 | Burning | A burning minion takes 5🤍 damage at the start of its owner's turn. Burning is a boolean status — re-applying it does nothing. It persists until the minion dies. |
-| Dark Matter | Buff scales with Dark Matter stacks. |
-| Leap | If blocked by an enemy, advance to the next available tile instead. |
-| Conjure | Summon a card from outside your deck directly to the board. |
+| Dark Matter | A stacking resource used by Dark Mages. Buffs and costs scale with accumulated stacks. |
+| Leap | If blocked by an enemy, jump over to the next available tile. Cannot leap allies. If all tiles ahead are enemy-occupied, enables sacrifice. |
+| Conjure | Summon a card from your deck directly to the board. |
 | Revive | Summon a card from the Grave to the board. |
