@@ -3643,6 +3643,9 @@ function onBoardCellClick(row, col) {
                     row: row,
                     col: col,
                 });
+                // Clear staged card so normal gameplay clicks work
+                staged.hidden = true;
+                staged.dataset.nid = '';
                 return;
             }
         }
