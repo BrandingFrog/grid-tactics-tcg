@@ -1328,6 +1328,8 @@ body {
   max-width: 220px;
   display: flex;
   flex-direction: column;
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  box-shadow: 0 0 10px rgba(255, 255, 255, 0.1);
 }
 
 .card-art-full {
@@ -1425,8 +1427,6 @@ body {
 .tooltip-card .card-frame-full {
   width: 100%;
   max-width: 220px;
-  border: 2px solid rgba(255, 255, 255, 0.35);
-  box-shadow: 0 0 10px rgba(255, 255, 255, 0.1);
 }
 
 .tooltip-header {
