@@ -142,13 +142,10 @@ body {
   display: block;
 }
 
-/* Game/Sandbox screens: center the layout vertically */
+/* Game/Sandbox screens: center the layout horizontally on ultra-wide */
 #screen-game.active,
 #screen-sandbox.active {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: calc(100vh - 52px);
+  display: block;
 }
 
 /* ===== Buttons ===== */
@@ -686,11 +683,10 @@ body {
   display: grid;
   grid-template-columns: 280px 1fr 220px;
   gap: 8px;
-  aspect-ratio: 16 / 10;
-  max-width: 100%;
-  max-height: calc(100vh - 52px);
-  width: auto;
-  margin: auto;
+  width: 100%;
+  height: calc(100vh - 52px);
+  max-width: calc((100vh - 52px) * 16 / 9.5);
+  margin: 0 auto;
   padding: 8px;
   overflow: hidden;
   box-sizing: border-box;
