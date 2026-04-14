@@ -67,7 +67,7 @@ const ELEMENT_MAP = {
     1: { name: 'Fire',  color: 'rgb(220,40,30)',   css: 'attr-fire' },
     2: { name: 'Earth', color: 'rgb(140,100,40)',   css: 'attr-earth' },
     3: { name: 'Water', color: 'rgb(66,165,245)',   css: 'attr-water' },
-    4: { name: 'Metal', color: 'rgb(189,189,189)',  css: 'attr-metal' },
+    4: { name: 'Metal', color: 'rgb(120,120,135)',  css: 'attr-metal' },
     5: { name: 'Dark',  color: 'rgb(130,50,180)',   css: 'attr-dark' },
     6: { name: 'Light', color: 'rgb(240,220,40)',   css: 'attr-light' },
 };
@@ -1591,6 +1591,9 @@ function renderCardFrame(c, opts) {
     }
     if (c.unique) {
         html += '<div class="card-effect-full">Unique</div>';
+    }
+    if (c.cost_reduction === 'dark_matter') {
+        html += '<div class="card-effect-full">Cost: Reduce mana cost by (Dark Matter)</div>';
     }
     if (c.effects && c.effects.length > 0) {
         var desc = getEffectDescription(c.effects, c);

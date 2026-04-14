@@ -125,7 +125,7 @@ def main_page_wikitext(cards_dir: Path | None = None) -> str:
         _elem_colours = {
             "Wood": "rgb(102,187,106)", "Fire": "rgb(220,40,30)",
             "Earth": "rgb(140,100,40)", "Water": "rgb(66,165,245)",
-            "Metal": "rgb(189,189,189)", "Dark": "rgb(130,50,180)",
+            "Metal": "rgb(120,120,135)", "Dark": "rgb(130,50,180)",
             "Light": "rgb(240,220,40)",
         }
         elem_bg = _elem_colours.get(element, "rgb(128,128,128)")
