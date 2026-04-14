@@ -5189,8 +5189,14 @@ function getEffectDescription(effects, cardData) {
         var desc = '';
 
         if (type === 0) { // Damage
-            desc = prefix + 'Deal ' + amount + ' damage';
+            if (eff.scale_with === 'dark_matter') {
+                desc = prefix + 'Deal (Dark Matter) damage';
+                if (amount > 0) desc = prefix + 'Deal ' + amount + ' + (Dark Matter) damage';
+            } else {
+                desc = prefix + 'Deal ' + amount + ' damage';
+            }
             if (eff.target === 1) desc += ' to all enemies';
+            if (eff.target === 4) desc += ' to opponent';
         } else if (type === 1) { // Heal
             desc = prefix + 'Heal ' + amount;
         } else if (type === 2) { // Buff ATK

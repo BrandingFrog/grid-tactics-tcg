@@ -103,6 +103,7 @@ class TargetType(IntEnum):
     ALL_ENEMIES = 1    # Hits all enemy minions
     ADJACENT = 2       # Hits all adjacent units
     SELF_OWNER = 3     # Affects self or owning player
+    OPPONENT_PLAYER = 4  # Deals damage/effect to the opponent player's HP
 
 
 # ---------------------------------------------------------------------------

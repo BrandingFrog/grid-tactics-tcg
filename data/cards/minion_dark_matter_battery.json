@@ -1,0 +1,21 @@
+{
+    "card_id": "dark_matter_battery",
+    "stable_id": 37,
+    "name": "Dark Matter Battery",
+    "card_type": "minion",
+    "mana_cost": 5,
+    "attack": 0,
+    "health": 20,
+    "range": 2,
+    "element": "dark",
+    "tribe": "Machine",
+    "effects": [
+        {
+            "type": "damage",
+            "trigger": "passive",
+            "target": "opponent_player",
+            "amount": 0,
+            "scale_with": "dark_matter"
+        }
+    ]
+}

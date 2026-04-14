@@ -39,11 +39,12 @@ class EffectDefinition:
     trigger: TriggerType
     target: TargetType
     amount: int
+    scale_with: Optional[str] = None  # e.g. "dark_matter" — adds caster's DM stacks to amount
 
     def __post_init__(self) -> None:
-        if not (1 <= self.amount <= MAX_EFFECT_AMOUNT):
+        if not (0 <= self.amount <= MAX_EFFECT_AMOUNT):
             raise ValueError(
-                f"Effect amount {self.amount} out of range [1, {MAX_EFFECT_AMOUNT}]"
+                f"Effect amount {self.amount} out of range [0, {MAX_EFFECT_AMOUNT}]"
             )
 
 

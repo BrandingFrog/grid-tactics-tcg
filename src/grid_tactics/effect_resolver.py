@@ -375,16 +375,30 @@ def resolve_effect(
     Raises:
         ValueError: If target_pos is None for SINGLE_TARGET effects.
     """
-    if effect.target == TargetType.SINGLE_TARGET:
-        return _resolve_single_target(state, effect, library, target_pos)
-    elif effect.target == TargetType.ALL_ENEMIES:
-        return _resolve_all_enemies(state, effect, caster_owner, library)
-    elif effect.target == TargetType.ADJACENT:
-        return _resolve_adjacent(state, effect, caster_pos, library, caster_owner)
-    elif effect.target == TargetType.SELF_OWNER:
-        return _resolve_self_owner(state, effect, caster_pos, caster_owner, library)
+    # Scale amount if scale_with is set (e.g. "dark_matter" adds caster's DM stacks)
+    scaled_effect = effect
+    if effect.scale_with == "dark_matter":
+        caster = _find_minion_at_pos(state.minions, caster_pos)
+        dm = caster.dark_matter_stacks if caster else 0
+        scaled_amount = effect.amount + dm
+        if scaled_amount > 0:
+            scaled_effect = replace(effect, amount=scaled_amount)
+        else:
+            return state  # 0 damage, skip
+
+    if scaled_effect.target == TargetType.SINGLE_TARGET:
+        return _resolve_single_target(state, scaled_effect, library, target_pos)
+    elif scaled_effect.target == TargetType.ALL_ENEMIES:
+        return _resolve_all_enemies(state, scaled_effect, caster_owner, library)
+    elif scaled_effect.target == TargetType.ADJACENT:
+        return _resolve_adjacent(state, scaled_effect, caster_pos, library, caster_owner)
+    elif scaled_effect.target == TargetType.SELF_OWNER:
+        return _resolve_self_owner(state, scaled_effect, caster_pos, caster_owner, library)
+    elif scaled_effect.target == TargetType.OPPONENT_PLAYER:
+        opp_idx = 1 - _player_index_for_side(caster_owner)
+        return _apply_effect_to_player(state, scaled_effect, opp_idx)
     else:
-        raise ValueError(f"Unknown target type: {effect.target}")
+        raise ValueError(f"Unknown target type: {scaled_effect.target}")
 
 
 def resolve_effects_for_trigger(

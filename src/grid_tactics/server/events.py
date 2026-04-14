@@ -36,15 +36,17 @@ def _build_card_defs(library):
         try:
             card = library.get_by_id(nid)
             # Serialize effects as list of dicts
-            effects_list = [
-                {
+            effects_list = []
+            for e in card.effects:
+                ed = {
                     "type": int(e.effect_type),
                     "trigger": int(e.trigger),
                     "target": int(e.target),
                     "amount": e.amount,
                 }
-                for e in card.effects
-            ]
+                if e.scale_with:
+                    ed["scale_with"] = e.scale_with
+                effects_list.append(ed)
             # Serialize react_effect as dict if present
             react_effect_dict = None
             if card.react_effect is not None:
