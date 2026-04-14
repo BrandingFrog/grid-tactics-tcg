@@ -142,6 +142,15 @@ body {
   display: block;
 }
 
+/* Game/Sandbox screens: center the layout vertically */
+#screen-game.active,
+#screen-sandbox.active {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: calc(100vh - 52px);
+}
+
 /* ===== Buttons ===== */
 .btn {
   padding: 12px 24px;
@@ -677,11 +686,14 @@ body {
   display: grid;
   grid-template-columns: 280px 1fr 220px;
   gap: 8px;
-  max-width: 1600px;
-  margin: 0 auto;
+  aspect-ratio: 16 / 10;
+  max-width: 100%;
+  max-height: calc(100vh - 52px);
+  width: auto;
+  margin: auto;
   padding: 8px;
-  height: calc(100vh - 52px);
   overflow: hidden;
+  box-sizing: border-box;
 }
 
 @media (max-width: 1400px) {
