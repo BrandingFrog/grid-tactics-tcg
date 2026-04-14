@@ -999,8 +999,8 @@ body {
   bottom: 0;
   left: 0;
   right: 0;
-  height: 65%;
-  background: linear-gradient(transparent, rgba(0,0,0,0.7));
+  height: 40%;
+  background: linear-gradient(transparent, rgba(0,0,0,0.6));
   z-index: 1;
   pointer-events: none;
 }
