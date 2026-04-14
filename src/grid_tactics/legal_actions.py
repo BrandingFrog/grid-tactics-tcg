@@ -248,6 +248,7 @@ def _action_phase_actions(
 
     # MOVE enumeration (forward only in lane)
     owned_minions = state.get_minions_for_side(player_side)
+    _leap_sacrifice_ids: set[int] = set()  # Leap minions that can sacrifice (all tiles ahead enemy-occupied)
     for minion in owned_minions:
         row, col = minion.position
         # Forward: P1 moves down (+1 row), P2 moves up (-1 row)
@@ -259,23 +260,38 @@ def _action_phase_actions(
                     minion_id=minion.instance_id, position=(fwd_row, col),
                 ))
             else:
-                # LEAP: if the forward tile is blocked but the minion has a
-                # LEAP effect, allow jumping over the blocker to the next empty
-                # tile in the same column (up to `amount` tiles past the blocker).
+                # LEAP: if the forward tile is blocked by an ENEMY, the minion
+                # can jump over enemy blockers to the next empty tile. Cannot
+                # leap over allies. If every tile from here to the opponent's
+                # back row is enemy-occupied, Leap enables sacrifice.
+                blocker = next(
+                    (m for m in state.minions if m.position == (fwd_row, col)),
+                    None,
+                )
+                # Can only leap over enemies, not allies
+                if blocker is not None and blocker.owner == player_side:
+                    continue  # ally blocking — no leap
                 minion_card = library.get_by_id(minion.card_numeric_id)
                 leap_amount = 0
                 for eff in minion_card.effects:
                     if eff.effect_type == EffectType.LEAP:
                         leap_amount = max(leap_amount, eff.amount or 1)
                 if leap_amount > 0:
-                    # Walk past the blocker(s) up to leap_amount additional steps
+                    # Walk past enemy blocker(s) up to leap_amount steps for MOVE
                     landing_row = fwd_row + delta
                     steps = 0
                     while (
                         0 <= landing_row < GRID_ROWS
                         and steps < leap_amount
-                        and state.board.get(landing_row, col) is not None
                     ):
+                        occupant = next(
+                            (m for m in state.minions if m.position == (landing_row, col)),
+                            None,
+                        )
+                        if occupant is None:
+                            break  # empty tile — land here
+                        if occupant.owner == player_side:
+                            break  # ally — can't leap over
                         landing_row += delta
                         steps += 1
                     if (
@@ -286,6 +302,23 @@ def _action_phase_actions(
                             minion_id=minion.instance_id,
                             position=(landing_row, col),
                         ))
+
+                    # Leap sacrifice check: scan ALL tiles ahead (no step limit).
+                    # If every tile from here to the back row is enemy-occupied,
+                    # the minion leaps over all of them and sacrifices.
+                    scan_row = fwd_row
+                    all_enemy_to_end = True
+                    while 0 <= scan_row < GRID_ROWS:
+                        occ = next(
+                            (m for m in state.minions if m.position == (scan_row, col)),
+                            None,
+                        )
+                        if occ is None or occ.owner == player_side:
+                            all_enemy_to_end = False
+                            break
+                        scan_row += delta
+                    if all_enemy_to_end:
+                        _leap_sacrifice_ids.add(minion.instance_id)
 
     # ATTACK enumeration
     # General rule: a minion with effective attack <= 0 cannot attack.
@@ -304,12 +337,15 @@ def _action_phase_actions(
                     ))
 
     # SACRIFICE enumeration (Phase 4)
-    # Minions on opponent's back row can be sacrificed
+    # Minions on opponent's back row can be sacrificed.
+    # Leap minions whose entire forward path is enemy-occupied can also sacrifice.
     for minion in owned_minions:
         row = minion.position[0]
         if player_side == PlayerSide.PLAYER_1 and row == BACK_ROW_P2:
             actions.append(sacrifice_action(minion_id=minion.instance_id))
         elif player_side == PlayerSide.PLAYER_2 and row == BACK_ROW_P1:
+            actions.append(sacrifice_action(minion_id=minion.instance_id))
+        elif minion.instance_id in _leap_sacrifice_ids:
             actions.append(sacrifice_action(minion_id=minion.instance_id))
 
     # TRANSFORM enumeration: minions with transform_options can transform on the board

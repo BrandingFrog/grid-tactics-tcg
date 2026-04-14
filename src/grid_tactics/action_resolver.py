@@ -35,7 +35,7 @@ from grid_tactics.enums import (
 from grid_tactics.game_state import GameState
 from grid_tactics.minion import MinionInstance
 from grid_tactics.player import Player
-from grid_tactics.types import BACK_ROW_P1, BACK_ROW_P2, PLAYER_1_ROWS, PLAYER_2_ROWS
+from grid_tactics.types import BACK_ROW_P1, BACK_ROW_P2, GRID_ROWS, PLAYER_1_ROWS, PLAYER_2_ROWS
 
 
 # ---------------------------------------------------------------------------
@@ -615,19 +615,36 @@ def _apply_sacrifice(
             f"Cannot sacrifice opponent's minion (belongs to {minion.owner.name})"
         )
 
-    # Validate minion is on opponent's back row
+    # Validate minion is on opponent's back row OR is a valid Leap sacrifice
     row = minion.position[0]
-    if active_side == PlayerSide.PLAYER_1:
-        if row != BACK_ROW_P2:
+    on_back_row = (
+        (active_side == PlayerSide.PLAYER_1 and row == BACK_ROW_P2)
+        or (active_side == PlayerSide.PLAYER_2 and row == BACK_ROW_P1)
+    )
+    if not on_back_row:
+        # Check for Leap sacrifice: all tiles ahead to back row are enemy-occupied
+        card_def_check = library.get_by_id(minion.card_numeric_id)
+        has_leap = any(e.effect_type == EffectType.LEAP for e in card_def_check.effects)
+        if not has_leap:
             raise ValueError(
-                f"P1 minion must be on opponent's back row {BACK_ROW_P2} to sacrifice, "
-                f"got row {row}"
+                f"Minion must be on opponent's back row to sacrifice, got row {row}"
             )
-    else:
-        if row != BACK_ROW_P1:
+        # Verify path is fully enemy-blocked
+        delta = 1 if active_side == PlayerSide.PLAYER_1 else -1
+        check_row = row + delta
+        all_enemy = True
+        while 0 <= check_row < GRID_ROWS:
+            occupant = next(
+                (m for m in state.minions if m.position == (check_row, minion.position[1])),
+                None,
+            )
+            if occupant is None or occupant.owner == active_side:
+                all_enemy = False
+                break
+            check_row += delta
+        if not all_enemy:
             raise ValueError(
-                f"P2 minion must be on opponent's back row {BACK_ROW_P1} to sacrifice, "
-                f"got row {row}"
+                f"Leap sacrifice requires all tiles ahead to be enemy-occupied"
             )
 
     # Look up card definition for base attack
