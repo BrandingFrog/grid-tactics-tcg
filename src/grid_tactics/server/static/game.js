@@ -1299,7 +1299,7 @@ function buildCardTooltipContent(c) {
         var ab = c.activated_ability;
         var abDesc = 'Active (' + ab.mana_cost + '): ';
         if (ab.effect_type === 'conjure_rat_and_buff') {
-            abDesc += 'Conjure Common Rat from deck. Ally Rats on board +1' + SWORD + '/+1' + HEART + ' (+Dark Matter × 1).';
+            abDesc += 'Conjure Common Rat. Ally Rats gain (Dark Matter)' + SWORD + HEART + '.';
         } else if (ab.effect_type === 'summon_token' && ab.summon_card_id) {
             abDesc += 'Summon ' + findCardNameById(ab.summon_card_id) + '.';
         } else {
@@ -1603,7 +1603,7 @@ function renderCardFrame(c, opts) {
         var ab = c.activated_ability;
         var abDesc = 'Active (' + ab.mana_cost + '): ';
         if (ab.effect_type === 'conjure_rat_and_buff') {
-            abDesc += 'Conjure Common Rat from deck. Ally Rats on board +1' + SWORD + '/+1' + HEART + ' (+Dark Matter × 1).';
+            abDesc += 'Conjure Common Rat. Ally Rats gain (Dark Matter)' + SWORD + HEART + '.';
         } else if (ab.effect_type === 'summon_token' && ab.summon_card_id) {
             abDesc += 'Summon ' + findCardNameById(ab.summon_card_id) + '.';
         } else {
