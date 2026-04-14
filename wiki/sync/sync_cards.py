@@ -219,6 +219,10 @@ def build_rules_text(card: dict, name_map: dict[str, str] | None = None) -> str:
     if card.get("unique"):
         parts.append("[[Unique]]")
 
+    # Cost reduction
+    if card.get("cost_reduction") == "dark_matter":
+        parts.append("[[Cost]]: Reduce mana cost by ([[Dark Matter]])")
+
     # Standard effects — matches game.js getEffectDescription exactly
     is_minion = card.get("card_type", "") == "minion"
     for eff in effects:

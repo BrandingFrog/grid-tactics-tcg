@@ -287,10 +287,12 @@ def _apply_play_card(
     if card_def.card_type == CardType.REACT:
         raise ValueError("React cards cannot be played during ACTION phase")
 
-    # Check mana
-    if player.current_mana < card_def.mana_cost:
+    # Check mana (with cost reduction)
+    from grid_tactics.legal_actions import effective_mana_cost
+    eff_cost = effective_mana_cost(card_def, state, state.active_player_idx)
+    if player.current_mana < eff_cost:
         raise ValueError(
-            f"Insufficient mana: have {player.current_mana}, need {card_def.mana_cost}"
+            f"Insufficient mana: have {player.current_mana}, need {eff_cost}"
         )
 
     # Phase 14.5 pile semantics:
@@ -299,7 +301,7 @@ def _apply_play_card(
     #     from_deck=True — tokens vanish).
     #   - MAGIC plays are one-shots and route to grave immediately via
     #     discard_from_hand (the card is "played").
-    new_player = player.spend_mana(card_def.mana_cost)
+    new_player = player.spend_mana(eff_cost)
     if card_def.card_type == CardType.MINION:
         new_player = new_player.remove_from_hand(card_numeric_id)
     else:

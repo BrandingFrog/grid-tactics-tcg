@@ -136,6 +136,9 @@ class CardDefinition:
     summon_token_cost: Optional[int] = None    # mana cost for the conjure ability
     conjure_buff: Optional[str] = None         # buff type applied on conjure (e.g. 'dark_matter')
 
+    # Cost reduction: e.g. "dark_matter" reduces mana cost by total DM stacks on board
+    cost_reduction: Optional[str] = None
+
     # Revive mechanic: card_id of the minion to revive from grave
     revive_card_id: Optional[str] = None
 

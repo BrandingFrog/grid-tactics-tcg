@@ -1293,6 +1293,7 @@ function buildCardTooltipContent(c) {
         cardTextLines.push('Cost: Discard any ' + (sacCount > 1 ? sacCount + ' ' : '') + c.discard_cost_tribe + (sacCount > 1 ? 's' : ''));
     }
     if (c.unique) cardTextLines.push('Unique');
+    if (c.cost_reduction === 'dark_matter') cardTextLines.push('Cost: Reduce mana cost by (Dark Matter)');
     if (effectDesc) cardTextLines.push(effectDesc);
     if (c.activated_ability) {
         var ab = c.activated_ability;

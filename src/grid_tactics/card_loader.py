@@ -103,6 +103,7 @@ class CardLoader:
             summon_token_target=data.get("summon_token_target"),
             summon_token_cost=data.get("summon_token_cost"),
             conjure_buff=data.get("conjure_buff"),
+            cost_reduction=data.get("cost_reduction"),
             revive_card_id=CardLoader._parse_revive_card_id(data),
             activated_ability=CardLoader._parse_activated_ability(data, card_id),
         )

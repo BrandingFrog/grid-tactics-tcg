@@ -34,7 +34,7 @@ MIN_DECK_SIZE: int = 30
 
 # Card stat ranges (per D-19: stats in 1-5 range)
 MIN_STAT: int = 1
-MAX_STAT: int = 50
+MAX_STAT: int = 100
 
 # Effect amount range (starter 1-5, extensible to 10 for Phase 8)
 MAX_EFFECT_AMOUNT: int = 100

@@ -59,6 +59,22 @@ from grid_tactics.types import (
 )
 
 
+def effective_mana_cost(card_def, state: GameState, player_idx: int) -> int:
+    """Compute effective mana cost after cost reductions (e.g. dark_matter).
+
+    Returns max(0, base_cost - reduction). Summing dark_matter_stacks across
+    all of the player's minions on the board.
+    """
+    cost = card_def.mana_cost
+    if card_def.cost_reduction == "dark_matter":
+        side = state.players[player_idx].side
+        total_dm = sum(
+            m.dark_matter_stacks for m in state.minions if m.owner == side
+        )
+        cost = max(0, cost - total_dm)
+    return cost
+
+
 def legal_actions(
     state: GameState, library: CardLibrary,
 ) -> tuple[Action, ...]:
@@ -156,8 +172,9 @@ def _action_phase_actions(
     for idx, card_numeric_id in enumerate(player.hand):
         card_def = library.get_by_id(card_numeric_id)
 
-        # Check mana (D-11)
-        if player.current_mana < card_def.mana_cost:
+        # Check mana (D-11), with cost reduction
+        eff_cost = effective_mana_cost(card_def, state, state.active_player_idx)
+        if player.current_mana < eff_cost:
             continue
 
         # Summon sacrifice check: enumerate one action per valid sacrifice choice

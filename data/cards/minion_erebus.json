@@ -1,0 +1,15 @@
+{
+    "card_id": "erebus",
+    "stable_id": 38,
+    "name": "Erebus, the Darkness",
+    "card_type": "minion",
+    "mana_cost": 20,
+    "attack": 80,
+    "health": 80,
+    "range": 0,
+    "element": "dark",
+    "tribe": "Mage",
+    "unique": true,
+    "cost_reduction": "dark_matter",
+    "effects": []
+}
