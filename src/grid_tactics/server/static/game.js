@@ -5611,7 +5611,13 @@ function setupSandboxToolbar() {
             var row = e.target.closest('.sandbox-search-result');
             if (!row) return;
             var nid = parseInt(row.dataset.nid, 10);
-            // Stage card as draggable preview instead of immediately adding
+            // Add to currently selected zone immediately
+            socket.emit('sandbox_add_card_to_zone', {
+                player_idx: sandboxAddTargetIdx,
+                card_numeric_id: nid,
+                zone: sandboxAddZone,
+            });
+            // Also stage for optional board click-to-place
             sandboxStageCard(nid);
             // Dismiss dropdown + clear search
             resultsBox.hidden = true;
