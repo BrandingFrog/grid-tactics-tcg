@@ -233,9 +233,15 @@ def build_rules_text(card: dict, name_map: dict[str, str] | None = None) -> str:
         target = eff.get("target", 0)
 
         if eff_type == "damage":
-            desc = f"{pfx}Deal {amount} damage"
+            scale = eff.get("scale_with")
+            if scale == "dark_matter":
+                desc = f"{pfx}Deal ([[Dark Matter]]) damage" if amount == 0 else f"{pfx}Deal {amount} + ([[Dark Matter]]) damage"
+            else:
+                desc = f"{pfx}Deal {amount} damage"
             if target in (1, "all"):
                 desc += " to all enemies"
+            if target in (4, "opponent_player"):
+                desc += " to opponent"
         elif eff_type == "heal":
             desc = f"{pfx}[[Heal]] {amount}"
         elif eff_type == "buff_attack":
