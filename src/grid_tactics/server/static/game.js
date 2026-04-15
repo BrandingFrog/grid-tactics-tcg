@@ -1684,7 +1684,7 @@ function renderCardFrame(c, opts) {
     if (c.react_condition != null && c.react_mana_cost != null) {
         if (isMultiPurpose) {
             html += '</div><div class="card-multi-half">';
-            html += '<div class="card-type-badge card-react-bar">REACT</div>';
+            html += '<div class="card-type-badge card-react-bar"><span class="react-mana-circle">' + c.react_mana_cost + '</span>REACT</div>';
         }
         var condMap = {
             0: 'Enemy plays Magic', 1: 'Enemy summons Minion', 2: 'Enemy attacks',

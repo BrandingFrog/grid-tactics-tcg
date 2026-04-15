@@ -1408,6 +1408,26 @@ body {
   background: rgb(160, 40, 100) !important;
   width: 100%;
   text-align: left;
+  position: relative;
+  padding-left: 24px !important;
+}
+.react-mana-circle {
+  position: absolute;
+  left: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: rgb(120, 30, 80);
+  border: 1.5px solid rgba(255, 255, 255, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 9px;
+  font-weight: 900;
+  color: white;
+  line-height: 1;
 }
 
 .card-effect-full {
