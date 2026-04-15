@@ -190,8 +190,8 @@ class CardDefinition:
 
     def __post_init__(self) -> None:
         """Validate card definition invariants at construction time."""
-        # mana_cost range (D-19)
-        if not (MIN_STAT <= self.mana_cost <= MAX_STAT):
+        # mana_cost range — 0 allowed for free spells
+        if not (0 <= self.mana_cost <= MAX_STAT):
             raise ValueError(
                 f"Card '{self.card_id}': mana_cost={self.mana_cost} "
                 f"out of range [{MIN_STAT}, {MAX_STAT}]"
