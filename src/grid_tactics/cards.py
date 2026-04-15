@@ -246,18 +246,25 @@ class CardDefinition:
         # (multi-purpose minions CAN have react_condition for their react mode)
         if (self.react_condition is not None
                 and self.card_type != CardType.REACT
-                and not (self.card_type == CardType.MINION and self.react_effect is not None)):
+                and not (self.card_type == CardType.MINION and self.react_effect is not None)
+                and not (self.card_type == CardType.MAGIC and self.react_mana_cost is not None)):
             raise ValueError(
-                f"Card '{self.card_id}': Only REACT cards and multi-purpose minions "
+                f"Card '{self.card_id}': Only REACT cards and multi-purpose cards "
                 f"can have react_condition"
             )
 
         # Multi-purpose consistency (D-06, D-07)
+        # Minion multi-purpose: react_effect and react_mana_cost must both be set
+        # Magic+react: react_mana_cost without react_effect is allowed (uses effects array)
         if (self.react_effect is None) != (self.react_mana_cost is None):
-            raise ValueError(
-                f"Card '{self.card_id}': react_effect and react_mana_cost "
-                f"must both be set or both be None"
-            )
+            is_magic_react = (self.card_type == CardType.MAGIC
+                              and self.react_mana_cost is not None
+                              and self.react_condition is not None)
+            if not is_magic_react:
+                raise ValueError(
+                    f"Card '{self.card_id}': react_effect and react_mana_cost "
+                    f"must both be set or both be None"
+                )
 
         # Only minions can be multi-purpose (D-06)
         if self.react_effect is not None and self.card_type != CardType.MINION:
