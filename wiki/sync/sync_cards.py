@@ -71,6 +71,7 @@ _TRIGGER_PREFIX: dict[int | str, str] = {
     3: "[[Damaged]]", "on_damaged": "[[Damaged]]",
     4: "[[Move]]", "on_move": "[[Move]]",
     5: "[[Passive]]", "passive": "[[Passive]]",
+    6: "[[Discarded]]", "on_discard": "[[Discarded]]",
 }
 
 
@@ -136,13 +137,25 @@ def derive_keywords(card: dict) -> list[str]:
     if card.get("activated_ability"):
         kws.add("Active")
         ability = card["activated_ability"]
-        if str(ability.get("effect_type", "")).startswith("conjure"):
+        ab_type = str(ability.get("effect_type", ""))
+        if ab_type.startswith("conjure"):
             kws.add("Conjure")
+        if "dark_matter" in ab_type:
+            kws.add("Dark Matter")
 
-    # Exhaust cost (e.g. "Cost: Exhaust any 2 Robots")
-    if card.get("summon_sacrifice_tribe"):
+    # Discard cost
+    if card.get("discard_cost_tribe") or card.get("summon_sacrifice_tribe"):
         kws.add("Cost")
-        kws.add("Exhaust")
+        kws.add("Discard")
+
+    # Cost reduction
+    if card.get("cost_reduction"):
+        kws.add("Cost")
+        kws.add("Dark Matter")
+
+    # Play condition
+    if card.get("play_condition") == "discarded_last_turn":
+        kws.add("Discarded")
 
     # Effect-derived keywords
     for eff in effects:
@@ -156,6 +169,12 @@ def derive_keywords(card: dict) -> list[str]:
             kws.add("Death")
         if trigger == "passive":
             kws.add("Passive")
+        if trigger == "on_discard":
+            kws.add("Discarded")
+
+        # scale_with
+        if eff.get("scale_with") == "dark_matter":
+            kws.add("Dark Matter")
 
         # Effect type keywords
         _EFFECT_KW: dict[str, str] = {
@@ -168,6 +187,9 @@ def derive_keywords(card: dict) -> list[str]:
             "rally_forward": "Rally",
             "deploy_self": "Deploy",
             "grant_dark_matter": "Dark Matter",
+            "dark_matter_buff": "Dark Matter",
+            "buff_attack": "Buff",
+            "buff_health": "Buff",
             "revive": "Revive",
         }
         if eff_type in _EFFECT_KW:
