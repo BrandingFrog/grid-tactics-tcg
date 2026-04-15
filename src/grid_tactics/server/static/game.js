@@ -1436,22 +1436,40 @@ function populateTooltip(hostEl, numericId, opts) {
     }
 
     var relatedIds = [];
-    if (c.tutor_target) relatedIds.push(c.tutor_target);
-    if (c.promote_target) relatedIds.push(c.promote_target);
-    if (c.transform_options) {
-        c.transform_options.forEach(function(opt) {
-            if (relatedIds.indexOf(opt.target) === -1) relatedIds.push(opt.target);
-        });
+    function addRelated(cid) { if (cid && relatedIds.indexOf(cid) === -1) relatedIds.push(cid); }
+
+    // Forward references from this card
+    if (c.tutor_target) {
+        if (typeof c.tutor_target === 'string') addRelated(c.tutor_target);
     }
+    if (c.promote_target) addRelated(c.promote_target);
+    if (c.summon_token_target) addRelated(c.summon_token_target);
+    if (c.revive_card_id) addRelated(c.revive_card_id);
+    if (c.transform_options) {
+        c.transform_options.forEach(function(opt) { addRelated(opt.target); });
+    }
+    // Activated ability references
+    if (c.activated_ability && c.activated_ability.summon_card_id) {
+        addRelated(c.activated_ability.summon_card_id);
+    }
+
+    // Reverse references: other cards that mention this card
     for (var nid2 in defs) {
         var d = defs[nid2];
         if (d.card_id === c.card_id) continue;
-        if (d.tutor_target === c.card_id && relatedIds.indexOf(d.card_id) === -1) relatedIds.push(d.card_id);
-        if (d.promote_target === c.card_id && relatedIds.indexOf(d.card_id) === -1) relatedIds.push(d.card_id);
+        if (d.tutor_target === c.card_id) addRelated(d.card_id);
+        if (d.promote_target === c.card_id) addRelated(d.card_id);
+        if (d.summon_token_target === c.card_id) addRelated(d.card_id);
+        if (d.revive_card_id === c.card_id) addRelated(d.card_id);
+        if (d.activated_ability && d.activated_ability.summon_card_id === c.card_id) addRelated(d.card_id);
         if (d.transform_options) {
             d.transform_options.forEach(function(opt) {
-                if (opt.target === c.card_id && relatedIds.indexOf(d.card_id) === -1) relatedIds.push(d.card_id);
+                if (opt.target === c.card_id) addRelated(d.card_id);
             });
+        }
+        // Selector-based tutor targeting tribe
+        if (d.tutor_target && typeof d.tutor_target === 'object' && d.tutor_target.tribe && c.tribe) {
+            if (c.tribe.indexOf(d.tutor_target.tribe) !== -1) addRelated(d.card_id);
         }
     }
 
