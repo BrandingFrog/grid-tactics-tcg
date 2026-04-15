@@ -1250,7 +1250,7 @@ var KEYWORD_GLOSSARY = {
     'Deploy': 'Place this card onto the battlefield from your hand during a React window.',
     'Destroy': 'Remove a target minion from the board regardless of its 🤍.',
     'Transform': 'Pay mana to transform this minion into another form.',
-    'Cost': 'An additional cost that must be paid to play this card.',
+    'Cost': 'An additional requirement or modifier that changes how much you pay to play this card.',
     'Exhaust': 'Send a card from your hand to the Exhaust Pile as a cost.',
     'Heal': 'Restore 🤍 to a target.',
     'Deal': 'Deal damage to a target.',

@@ -30,7 +30,7 @@ Update this file and the matching `KEYWORD_GLOSSARY` in `src/grid_tactics/server
 | Deploy | Place this card onto the battlefield from your hand during a React window. |
 | Destroy | Remove a target minion from the board regardless of its 🤍. |
 | Transform | Pay mana to transform this minion into another form. |
-| Cost | An additional cost that must be paid to play this card. |
+| Cost | An additional requirement or modifier that changes how much you pay to play this card. |
 | Discard | Send a card from your hand to the Exhaust Pile. |
 | Exhaust | Send a card to the Exhaust Pile. |
 | Heal | Restore 🤍 to a target. |
