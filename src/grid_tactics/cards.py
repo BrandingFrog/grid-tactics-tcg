@@ -140,6 +140,9 @@ class CardDefinition:
     # Cost reduction: e.g. "dark_matter" reduces mana cost by total DM stacks on board
     cost_reduction: Optional[str] = None
 
+    # Play condition: e.g. "discarded_last_turn" — card can only be played if condition met
+    play_condition: Optional[str] = None
+
     # Revive mechanic: card_id of the minion to revive from grave
     revive_card_id: Optional[str] = None
 

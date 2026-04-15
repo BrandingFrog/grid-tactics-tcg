@@ -1300,6 +1300,7 @@ function buildCardTooltipContent(c) {
     }
     if (c.unique) cardTextLines.push('Unique');
     if (c.cost_reduction === 'dark_matter') cardTextLines.push('Cost: Reduce mana cost by (Dark Matter)');
+    if (c.play_condition === 'discarded_last_turn') cardTextLines.push('Cost: Discard last turn');
     if (effectDesc) cardTextLines.push(effectDesc);
     if (c.activated_ability) {
         var ab = c.activated_ability;
@@ -1641,6 +1642,9 @@ function renderCardFrame(c, opts) {
     }
     if (c.cost_reduction === 'dark_matter') {
         html += '<div class="card-effect-full">Cost: Reduce mana cost by (Dark Matter)</div>';
+    }
+    if (c.play_condition === 'discarded_last_turn') {
+        html += '<div class="card-effect-full">Cost: Discard last turn</div>';
     }
     if (c.effects && c.effects.length > 0) {
         var desc = getEffectDescription(c.effects, c);
@@ -5260,7 +5264,8 @@ function getEffectDescription(effects, cardData) {
                 var hasMatchingHp = effects.some(function(e2) {
                     return e2.type === 3 && e2.scale_with === 'dark_matter' && e2.target === eff.target;
                 });
-                desc = prefix + 'Ally' + (eff.target_tribe ? ' ' + eff.target_tribe + 's' : 's') + ' gain (Dark Matter)' + SWORD + (hasMatchingHp ? HEART : '');
+                var tribeName = eff.target_tribe === 'Mage' ? 'Dark Mages' : (eff.target_tribe ? eff.target_tribe + 's' : 'allies');
+                desc = prefix + 'Ally ' + tribeName + ' gain (Dark Matter)' + SWORD + (hasMatchingHp ? HEART : '');
             } else {
                 desc = prefix + '+' + amount + SWORD;
             }
@@ -5271,7 +5276,8 @@ function getEffectDescription(effects, cardData) {
                     return e2.type === 2 && e2.scale_with === 'dark_matter' && e2.target === eff.target;
                 });
                 if (alreadyMerged) { desc = ''; return; }
-                desc = prefix + 'Ally' + (eff.target_tribe ? ' ' + eff.target_tribe + 's' : 's') + ' gain (Dark Matter)' + HEART;
+                var tribeNameHp = eff.target_tribe === 'Mage' ? 'Dark Mages' : (eff.target_tribe ? eff.target_tribe + 's' : 'allies');
+                desc = prefix + 'Ally ' + tribeNameHp + ' gain (Dark Matter)' + HEART;
             } else {
                 desc = prefix + '+' + amount + HEART;
             }
@@ -5333,7 +5339,8 @@ function getEffectDescription(effects, cardData) {
             desc = prefix + 'Apply ' + burnAmt + ' Burning';
         } else if (type === 16) { // Grant Dark Matter
             desc = prefix + 'Dark Matter +' + amount;
-            if (eff.target === 5 && eff.target_tribe) desc += ' per ally ' + eff.target_tribe;
+            if (eff.target === 5 && eff.target_tribe === 'Mage') desc += ' per ally Dark Mage';
+            else if (eff.target === 5 && eff.target_tribe) desc += ' per ally ' + eff.target_tribe;
             else if (eff.target === 5) desc += ' per ally';
         } else if (type === 17) { // Revive
             var reviveName = (cardData && cardData.revive_card_id) ? findCardNameById(cardData.revive_card_id) : 'minion';

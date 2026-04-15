@@ -89,6 +89,7 @@ def _build_card_defs(library):
                 "summon_token_cost": getattr(card, 'summon_token_cost', None),
                 "conjure_buff": getattr(card, 'conjure_buff', None),
                 "cost_reduction": getattr(card, 'cost_reduction', None),
+                "play_condition": getattr(card, 'play_condition', None),
                 "revive_card_id": getattr(card, 'revive_card_id', None),
                 "activated_ability": (
                     {

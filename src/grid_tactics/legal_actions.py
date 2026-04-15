@@ -172,6 +172,10 @@ def _action_phase_actions(
     for idx, card_numeric_id in enumerate(player.hand):
         card_def = library.get_by_id(card_numeric_id)
 
+        # Play condition check (e.g. "discarded_last_turn")
+        if card_def.play_condition == "discarded_last_turn" and not player.discarded_last_turn:
+            continue
+
         # Check mana (D-11), with cost reduction
         eff_cost = effective_mana_cost(card_def, state, state.active_player_idx)
         if player.current_mana < eff_cost:

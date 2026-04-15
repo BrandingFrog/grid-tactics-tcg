@@ -1387,7 +1387,14 @@ def resolve_action(
                 _fire_passive_effects, tick_status_effects,
             )
             from grid_tactics.types import AUTO_DRAW_ENABLED
-            new_active_idx = 1 - state.active_player_idx
+            old_active_idx = state.active_player_idx
+            new_active_idx = 1 - old_active_idx
+            # Flip discard tracking: this_turn → last_turn for the player whose turn ended
+            old_player = state.players[old_active_idx]
+            updated_old = replace(old_player,
+                                  discarded_last_turn=old_player.discarded_this_turn,
+                                  discarded_this_turn=False)
+            state = replace(state, players=_replace_player(state.players, old_active_idx, updated_old))
             state = replace(
                 state,
                 react_stack=(),

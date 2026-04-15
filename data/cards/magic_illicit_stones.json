@@ -1,0 +1,18 @@
+{
+    "card_id": "illicit_stones",
+    "stable_id": 41,
+    "name": "Illicit Stones",
+    "card_type": "magic",
+    "mana_cost": 0,
+    "element": "dark",
+    "play_condition": "discarded_last_turn",
+    "effects": [
+        {
+            "type": "grant_dark_matter",
+            "trigger": "on_play",
+            "target": "all_allies",
+            "target_tribe": "Mage",
+            "amount": 1
+        }
+    ]
+}

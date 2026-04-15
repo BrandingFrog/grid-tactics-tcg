@@ -231,6 +231,7 @@ class GameState:
                     "deck": list(p.deck),
                     "grave": list(p.grave),
                     "exhaust": list(p.exhaust),
+                    "discarded_last_turn": p.discarded_last_turn,
                 }
                 for p in self.players
             ],
@@ -304,6 +305,7 @@ class GameState:
                 deck=tuple(p["deck"]),
                 grave=tuple(p["grave"]),
                 exhaust=tuple(p.get("exhaust", ())),
+                discarded_last_turn=p.get("discarded_last_turn", False),
             )
             for p in d["players"]
         )

@@ -37,6 +37,8 @@ class Player:
     # discard) go here instead of grave. Exhaust is shown in a separate pile
     # in the UI and is NOT considered "played" for card-effect purposes.
     exhaust: tuple[int, ...] = ()
+    discarded_this_turn: bool = False
+    discarded_last_turn: bool = False
 
     # -- Construction -------------------------------------------------------
 
@@ -71,7 +73,10 @@ class Player:
         return replace(self, hand=tuple(hand_list))
 
     def exhaust_from_hand(self, card_id: int) -> Player:
-        """Move a card from hand to exhaust pile (discard-for-cost)."""
+        """Move a card from hand to exhaust pile (discard-for-cost).
+
+        Also sets discarded_this_turn=True for play-condition tracking.
+        """
         if card_id not in self.hand:
             raise ValueError(f"Card {card_id} not in hand: {self.hand}")
         hand_list = list(self.hand)
@@ -80,6 +85,7 @@ class Player:
             self,
             hand=tuple(hand_list),
             exhaust=self.exhaust + (card_id,),
+            discarded_this_turn=True,
         )
 
     # -- Mana operations ----------------------------------------------------
