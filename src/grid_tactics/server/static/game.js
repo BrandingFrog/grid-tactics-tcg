@@ -1644,7 +1644,9 @@ function renderCardFrame(c, opts) {
     }
     if (c.effects && c.effects.length > 0) {
         var desc = getEffectDescription(c.effects, c);
-        html += '<div class="card-effect-full">' + desc + '</div>';
+        desc.split('. ').forEach(function(line) {
+            if (line) html += '<div class="card-effect-full">' + line + '</div>';
+        });
     }
     if (c.activated_ability) {
         var ab = c.activated_ability;
