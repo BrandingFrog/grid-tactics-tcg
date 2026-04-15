@@ -1252,6 +1252,7 @@ var KEYWORD_GLOSSARY = {
     'Transform': 'Pay mana to transform this minion into another form.',
     'Cost': 'An additional requirement or modifier that changes how much you pay to play this card.',
     'Discard': 'Send a card from your hand to the Exhaust Pile.',
+    'Discarded': 'This effect triggers when this card is discarded from hand.',
     'Exhaust': 'Send a card to the Exhaust Pile from anywhere.',
     'Heal': 'Restore 🤍 to a target.',
     'Deal': 'Deal damage to a target.',
@@ -1291,7 +1292,11 @@ function buildCardTooltipContent(c) {
     var effectDesc = (c.effects && c.effects.length > 0) ? getEffectDescription(c.effects, c) : '';
     if (c.discard_cost_tribe) {
         var sacCount = c.discard_cost_count || 1;
-        cardTextLines.push('Cost: Discard any ' + (sacCount > 1 ? sacCount + ' ' : '') + c.discard_cost_tribe + (sacCount > 1 ? 's' : ''));
+        if (c.discard_cost_tribe === 'any') {
+            cardTextLines.push('Cost: Discard ' + (sacCount > 1 ? sacCount + ' cards' : 'a card'));
+        } else {
+            cardTextLines.push('Cost: Discard any ' + (sacCount > 1 ? sacCount + ' ' : '') + c.discard_cost_tribe + (sacCount > 1 ? 's' : ''));
+        }
     }
     if (c.unique) cardTextLines.push('Unique');
     if (c.cost_reduction === 'dark_matter') cardTextLines.push('Cost: Reduce mana cost by (Dark Matter)');
@@ -1372,7 +1377,7 @@ function buildCardTooltipContent(c) {
             if (eff.trigger === 3) addKw('Damaged');
             if (eff.trigger === 4) addKw('Move');
             if (eff.trigger === 5) addKw('Passive');
-            if (eff.trigger === 6) addKw('Discard');
+            if (eff.trigger === 6) addKw('Discarded');
             // Effect types
             if (eff.type === 0) { addKw('Deal'); if (eff.scale_with === 'dark_matter') addKw('Dark Matter'); }
             if (eff.type === 1) addKw('Heal');
@@ -1625,7 +1630,11 @@ function renderCardFrame(c, opts) {
     // Effect text block (all card types) — between type badge and stats
     if (c.discard_cost_tribe) {
         var sacN = c.discard_cost_count || 1;
-        html += '<div class="card-effect-full">Cost: Discard any ' + (sacN > 1 ? sacN + ' ' : '') + c.discard_cost_tribe + (sacN > 1 ? 's' : '') + '</div>';
+        if (c.discard_cost_tribe === 'any') {
+            html += '<div class="card-effect-full">Cost: Discard ' + (sacN > 1 ? sacN + ' cards' : 'a card') + '</div>';
+        } else {
+            html += '<div class="card-effect-full">Cost: Discard any ' + (sacN > 1 ? sacN + ' ' : '') + c.discard_cost_tribe + (sacN > 1 ? 's' : '') + '</div>';
+        }
     }
     if (c.unique) {
         html += '<div class="card-effect-full">Unique</div>';
@@ -5222,7 +5231,7 @@ function renderHandCard(numericId, handIndex, currentMana, isMyTurn) {
 function getEffectDescription(effects, cardData) {
     if (!effects || effects.length === 0) return '';
     var isMinion = cardData && cardData.card_type === 0;
-    var triggerMap = {0: isMinion ? 'Summon' : '', 1: 'Death', 2: 'Attack', 3: 'Damaged', 4: 'Move', 5: 'Passive', 6: 'Discard'};
+    var triggerMap = {0: isMinion ? 'Summon' : '', 1: 'Death', 2: 'Attack', 3: 'Damaged', 4: 'Move', 5: 'Passive', 6: 'Discarded'};
     var parts = [];
     effects.forEach(function(eff) {
         var trigger = triggerMap[eff.trigger];
@@ -5245,12 +5254,21 @@ function getEffectDescription(effects, cardData) {
             desc = prefix + 'Heal ' + amount;
         } else if (type === 2) { // Buff ATK
             if (eff.scale_with === 'dark_matter') {
-                desc = prefix + 'Ally' + (eff.target_tribe ? ' ' + eff.target_tribe + 's' : 's') + ' gain (Dark Matter)' + SWORD;
+                // Check if next effect is BUFF_HP with same scale — merge icons
+                var hasMatchingHp = effects.some(function(e2) {
+                    return e2.type === 3 && e2.scale_with === 'dark_matter' && e2.target === eff.target;
+                });
+                desc = prefix + 'Ally' + (eff.target_tribe ? ' ' + eff.target_tribe + 's' : 's') + ' gain (Dark Matter)' + SWORD + (hasMatchingHp ? HEART : '');
             } else {
                 desc = prefix + '+' + amount + SWORD;
             }
         } else if (type === 3) { // Buff HP
             if (eff.scale_with === 'dark_matter') {
+                // Skip if already merged with BUFF_ATK above
+                var alreadyMerged = effects.some(function(e2) {
+                    return e2.type === 2 && e2.scale_with === 'dark_matter' && e2.target === eff.target;
+                });
+                if (alreadyMerged) { desc = ''; return; }
                 desc = prefix + 'Ally' + (eff.target_tribe ? ' ' + eff.target_tribe + 's' : 's') + ' gain (Dark Matter)' + HEART;
             } else {
                 desc = prefix + '+' + amount + HEART;
@@ -5322,7 +5340,7 @@ function getEffectDescription(effects, cardData) {
             console.warn('[getEffectDescription] Unhandled effect type ' + type + ' on card "' + (cardData && cardData.card_id) + '". Add a case for EffectType ' + type + ' in getEffectDescription().');
             desc = prefix + 'Effect';
         }
-        parts.push(desc);
+        if (desc) parts.push(desc);
     });
     return parts.join('. ');
 }
