@@ -1404,11 +1404,23 @@ body {
   min-height: 0;
   overflow: hidden;
 }
+.card-multi-half:last-child {
+  width: 80%;
+  margin: 4px auto;
+  background: rgba(160, 40, 100, 0.15);
+  border: 1px solid rgba(160, 40, 100, 0.4);
+  border-radius: 6px;
+  overflow: hidden;
+}
 .card-react-bar {
   background: rgb(160, 40, 100) !important;
   width: 100%;
   text-align: left;
   position: relative;
+}
+.card-multi-half:last-child .card-effect-full {
+  font-size: 9px;
+  padding: 3px 6px;
 }
 .react-mana-circle {
   position: absolute;
