@@ -397,6 +397,16 @@ def resolve_effect(
     elif scaled_effect.target == TargetType.OPPONENT_PLAYER:
         opp_idx = 1 - _player_index_for_side(caster_owner)
         return _apply_effect_to_player(state, scaled_effect, opp_idx)
+    elif scaled_effect.target == TargetType.ALL_ALLIES:
+        for minion in state.minions:
+            if minion.owner != caster_owner or minion.current_health <= 0:
+                continue
+            if scaled_effect.target_tribe:
+                card_def = library.get_by_id(minion.card_numeric_id)
+                if not card_def.tribe or scaled_effect.target_tribe.lower() not in card_def.tribe.lower():
+                    continue
+            state = _apply_effect_to_minion(state, scaled_effect, minion, library)
+        return state
     else:
         raise ValueError(f"Unknown target type: {scaled_effect.target}")
 

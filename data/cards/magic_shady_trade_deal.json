@@ -1,0 +1,19 @@
+{
+    "card_id": "shady_trade_deal",
+    "stable_id": 39,
+    "name": "Shady Trade Deal",
+    "card_type": "magic",
+    "mana_cost": 1,
+    "element": "dark",
+    "discard_cost_tribe": "any",
+    "discard_cost_count": 1,
+    "effects": [
+        {
+            "type": "grant_dark_matter",
+            "trigger": "on_play",
+            "target": "all_allies",
+            "target_tribe": "Mage",
+            "amount": 1
+        }
+    ]
+}

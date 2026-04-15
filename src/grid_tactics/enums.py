@@ -94,6 +94,7 @@ class TriggerType(IntEnum):
     ON_DAMAGED = 3  # When the minion takes damage
     ON_MOVE = 4     # When the minion moves
     PASSIVE = 5     # Fires every turn (passive effects)
+    ON_DISCARD = 6  # Fires when this card is discarded (sent from hand to exhaust pile)
 
 
 class TargetType(IntEnum):
@@ -104,6 +105,7 @@ class TargetType(IntEnum):
     ADJACENT = 2       # Hits all adjacent units
     SELF_OWNER = 3     # Affects self or owning player
     OPPONENT_PLAYER = 4  # Deals damage/effect to the opponent player's HP
+    ALL_ALLIES = 5       # Hits all friendly minions (optionally filtered by target_tribe)
 
 
 # ---------------------------------------------------------------------------

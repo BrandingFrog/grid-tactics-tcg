@@ -323,11 +323,16 @@ def _apply_play_card(
                     candidate_id = player.hand[sac_idx]
                     # Verify it's still in new_player.hand and tribe matches
                     cand_def = library.get_by_id(candidate_id)
-                    if card_def.discard_cost_tribe in (cand_def.tribe or "").split() and candidate_id in new_player.hand:
+                    tribe_match = (card_def.discard_cost_tribe == "any"
+                                   or card_def.discard_cost_tribe in (cand_def.tribe or "").split())
+                    if tribe_match and candidate_id in new_player.hand:
                         sacrifice_id = candidate_id
             if sacrifice_id is None:
                 # Fallback: auto-pick first matching card
                 for hand_card_id in new_player.hand:
+                    if card_def.discard_cost_tribe == "any":
+                        sacrifice_id = hand_card_id
+                        break
                     hand_card_def = library.get_by_id(hand_card_id)
                     if card_def.discard_cost_tribe in (hand_card_def.tribe or "").split():
                         sacrifice_id = hand_card_id
@@ -336,8 +341,23 @@ def _apply_play_card(
                 raise ValueError(
                     f"No {card_def.discard_cost_tribe} card in hand to sacrifice"
                 )
-            # Phase 14.5: discard-for-cost goes to EXHAUST, not grave.
+            # Discard: send from hand to exhaust pile.
             new_player = new_player.exhaust_from_hand(sacrifice_id)
+            # Fire ON_DISCARD effects on the discarded card
+            discarded_def = library.get_by_id(sacrifice_id)
+            discard_effects = [e for e in discarded_def.effects if e.trigger == TriggerType.ON_DISCARD]
+            if discard_effects:
+                # Temporarily commit player state so effects can read board
+                tmp_players = _replace_player(state.players, active_idx, new_player)
+                tmp_state = replace(state, players=tmp_players)
+                from grid_tactics.effect_resolver import resolve_effect
+                for eff in discard_effects:
+                    tmp_state = resolve_effect(
+                        tmp_state, eff, (0, 0), active_side, library,
+                    )
+                # Pull updated state back (effects may have changed minions)
+                state = tmp_state
+                new_player = state.players[active_idx]
 
     new_players = _replace_player(state.players, active_idx, new_player)
     state = replace(state, players=new_players)

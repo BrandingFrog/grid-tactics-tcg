@@ -46,6 +46,8 @@ def _build_card_defs(library):
                 }
                 if e.scale_with:
                     ed["scale_with"] = e.scale_with
+                if e.target_tribe:
+                    ed["target_tribe"] = e.target_tribe
                 effects_list.append(ed)
             # Serialize react_effect as dict if present
             react_effect_dict = None

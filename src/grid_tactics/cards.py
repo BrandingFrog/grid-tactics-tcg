@@ -40,6 +40,7 @@ class EffectDefinition:
     target: TargetType
     amount: int
     scale_with: Optional[str] = None  # e.g. "dark_matter" — adds caster's DM stacks to amount
+    target_tribe: Optional[str] = None  # filter ALL_ALLIES to only this tribe (e.g. "Mage")
 
     def __post_init__(self) -> None:
         if not (0 <= self.amount <= MAX_EFFECT_AMOUNT):

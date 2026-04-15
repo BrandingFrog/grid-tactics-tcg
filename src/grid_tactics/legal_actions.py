@@ -184,9 +184,12 @@ def _action_phase_actions(
             for j in range(len(player.hand)):
                 if j == idx:
                     continue
-                hand_card = library.get_by_id(player.hand[j])
-                if card_def.discard_cost_tribe in (hand_card.tribe or "").split():
+                if card_def.discard_cost_tribe == "any":
                     sacrifice_choices.append(j)
+                else:
+                    hand_card = library.get_by_id(player.hand[j])
+                    if card_def.discard_cost_tribe in (hand_card.tribe or "").split():
+                        sacrifice_choices.append(j)
             sac_needed = card_def.discard_cost_count
             if len(sacrifice_choices) < sac_needed:
                 continue  # not enough sacrifice cards -> can't play

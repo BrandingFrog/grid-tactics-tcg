@@ -1,0 +1,40 @@
+{
+    "card_id": "dark_matter_stash",
+    "stable_id": 40,
+    "name": "Dark Matter Stash",
+    "card_type": "magic",
+    "mana_cost": 5,
+    "element": "dark",
+    "effects": [
+        {
+            "type": "buff_attack",
+            "trigger": "on_play",
+            "target": "all_allies",
+            "target_tribe": "Mage",
+            "amount": 0,
+            "scale_with": "dark_matter"
+        },
+        {
+            "type": "buff_health",
+            "trigger": "on_play",
+            "target": "all_allies",
+            "target_tribe": "Mage",
+            "amount": 0,
+            "scale_with": "dark_matter"
+        },
+        {
+            "type": "grant_dark_matter",
+            "trigger": "on_play",
+            "target": "all_allies",
+            "target_tribe": "Mage",
+            "amount": 1
+        },
+        {
+            "type": "grant_dark_matter",
+            "trigger": "on_discard",
+            "target": "all_allies",
+            "target_tribe": "Mage",
+            "amount": 1
+        }
+    ]
+}

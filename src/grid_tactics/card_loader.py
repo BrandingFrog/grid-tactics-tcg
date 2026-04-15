@@ -180,6 +180,7 @@ class CardLoader:
             target=target,
             amount=data["amount"],
             scale_with=data.get("scale_with"),
+            target_tribe=data.get("target_tribe"),
         )
 
     _TUTOR_SELECTOR_KEYS = frozenset({"tribe", "element", "card_type"})

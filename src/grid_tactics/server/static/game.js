@@ -1251,7 +1251,8 @@ var KEYWORD_GLOSSARY = {
     'Destroy': 'Remove a target minion from the board regardless of its 🤍.',
     'Transform': 'Pay mana to transform this minion into another form.',
     'Cost': 'An additional requirement or modifier that changes how much you pay to play this card.',
-    'Exhaust': 'Send a card from your hand to the Exhaust Pile as a cost.',
+    'Discard': 'Send a card from your hand to the Exhaust Pile.',
+    'Exhaust': 'Send a card to the Exhaust Pile from anywhere.',
     'Heal': 'Restore 🤍 to a target.',
     'Deal': 'Deal damage to a target.',
     'Burn': 'Applies Burning to affected enemies. A burning minion takes 5🤍 damage at the start of its owner\'s turn. Persists until the minion dies.',
@@ -1371,6 +1372,7 @@ function buildCardTooltipContent(c) {
             if (eff.trigger === 3) addKw('Damaged');
             if (eff.trigger === 4) addKw('Move');
             if (eff.trigger === 5) addKw('Passive');
+            if (eff.trigger === 6) addKw('Discard');
             // Effect types
             if (eff.type === 0) { addKw('Deal'); if (eff.scale_with === 'dark_matter') addKw('Dark Matter'); }
             if (eff.type === 1) addKw('Heal');
@@ -5220,7 +5222,7 @@ function renderHandCard(numericId, handIndex, currentMana, isMyTurn) {
 function getEffectDescription(effects, cardData) {
     if (!effects || effects.length === 0) return '';
     var isMinion = cardData && cardData.card_type === 0;
-    var triggerMap = {0: isMinion ? 'Summon' : '', 1: 'Death', 2: 'Attack', 3: 'Damaged', 4: 'Move', 5: 'Passive'};
+    var triggerMap = {0: isMinion ? 'Summon' : '', 1: 'Death', 2: 'Attack', 3: 'Damaged', 4: 'Move', 5: 'Passive', 6: 'Discard'};
     var parts = [];
     effects.forEach(function(eff) {
         var trigger = triggerMap[eff.trigger];
@@ -5242,9 +5244,17 @@ function getEffectDescription(effects, cardData) {
         } else if (type === 1) { // Heal
             desc = prefix + 'Heal ' + amount;
         } else if (type === 2) { // Buff ATK
-            desc = prefix + '+' + amount + SWORD;
+            if (eff.scale_with === 'dark_matter') {
+                desc = prefix + 'Ally' + (eff.target_tribe ? ' ' + eff.target_tribe + 's' : 's') + ' gain (Dark Matter)' + SWORD;
+            } else {
+                desc = prefix + '+' + amount + SWORD;
+            }
         } else if (type === 3) { // Buff HP
-            desc = prefix + '+' + amount + HEART;
+            if (eff.scale_with === 'dark_matter') {
+                desc = prefix + 'Ally' + (eff.target_tribe ? ' ' + eff.target_tribe + 's' : 's') + ' gain (Dark Matter)' + HEART;
+            } else {
+                desc = prefix + '+' + amount + HEART;
+            }
         } else if (type === 4) { // Negate
             desc = prefix + 'Negate';
         } else if (type === 5) { // Deploy Self
@@ -5302,7 +5312,9 @@ function getEffectDescription(effects, cardData) {
             var burnAmt = amount || 1;
             desc = prefix + 'Apply ' + burnAmt + ' Burning';
         } else if (type === 16) { // Grant Dark Matter
-            desc = prefix + 'Grant ' + amount + ' Dark Matter';
+            desc = prefix + 'Dark Matter +' + amount;
+            if (eff.target === 5 && eff.target_tribe) desc += ' per ally ' + eff.target_tribe;
+            else if (eff.target === 5) desc += ' per ally';
         } else if (type === 17) { // Revive
             var reviveName = (cardData && cardData.revive_card_id) ? findCardNameById(cardData.revive_card_id) : 'minion';
             desc = prefix + 'Revive ' + amount + ' ' + reviveName + (amount > 1 ? 's' : '') + ' from Grave';
