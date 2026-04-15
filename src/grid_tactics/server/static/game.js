@@ -1628,6 +1628,7 @@ function renderCardFrame(c, opts) {
     // Type badge bar — show tribe for minions, card type for spells
     var isMultiPurpose = c.card_type === 0 && c.react_condition != null && c.react_mana_cost != null;
     var badgeText = c.card_type === 0 ? (c.tribe || 'MINION').toUpperCase() : (c.card_type === 1 ? 'MAGIC' : 'REACT');
+    if (isMultiPurpose) html += '<div class="card-multi-wrapper"><div class="card-multi-half">';
     html += '<div class="card-type-badge">' + badgeText + '</div>';
 
     // === MINION SECTION: effects, activated, transform, flavour ===
@@ -1682,6 +1683,7 @@ function renderCardFrame(c, opts) {
     // === REACT SECTION (multi-purpose only): react bar + react effect ===
     if (c.react_condition != null && c.react_mana_cost != null) {
         if (isMultiPurpose) {
+            html += '</div><div class="card-multi-half">';
             html += '<div class="card-type-badge card-react-bar">REACT</div>';
         }
         var condMap = {
@@ -1696,6 +1698,7 @@ function renderCardFrame(c, opts) {
         var costText = c.react_mana_cost > 0 ? ' (' + c.react_mana_cost + ')' : '';
         var deployText = (c.react_effect && c.react_effect.type === 5) ? ' ▶ Deploy' : '';
         html += '<div class="card-effect-full">' + condText + extraCond + deployText + '</div>';
+        if (isMultiPurpose) html += '</div></div>';
     }
     // Stats row at bottom: ATK | RANGE | HP (minions only)
     if (c.card_type === 0 && c.attack != null) {

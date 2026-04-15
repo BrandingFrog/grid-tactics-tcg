@@ -1390,7 +1390,20 @@ body {
 .card-type-magic .card-type-badge { background: rgb(30, 140, 120); }
 .card-type-react .card-type-badge { background: rgb(160, 40, 100); }
 
-/* Multi-purpose (minion + react): separate react bar below tribe */
+/* Multi-purpose (minion + react): 50/50 vertical split */
+.card-multi-wrapper {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+.card-multi-half {
+  flex: 1 1 50%;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
 .card-react-bar {
   background: rgb(160, 40, 100) !important;
   width: 100%;
