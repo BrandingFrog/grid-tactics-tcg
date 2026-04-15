@@ -1629,10 +1629,8 @@ function renderCardFrame(c, opts) {
     var isMultiPurpose = c.card_type === 0 && c.react_condition != null && c.react_mana_cost != null;
     var badgeText = c.card_type === 0 ? (c.tribe || 'MINION').toUpperCase() : (c.card_type === 1 ? 'MAGIC' : 'REACT');
     html += '<div class="card-type-badge">' + badgeText + '</div>';
-    if (isMultiPurpose) {
-        html += '<div class="card-type-badge card-react-bar">REACT</div>';
-    }
-    // Effect text block (all card types) — between type badge and stats
+
+    // === MINION SECTION: effects, activated, transform, flavour ===
     if (c.discard_cost_tribe) {
         var sacN = c.discard_cost_count || 1;
         if (c.discard_cost_tribe === 'any') {
@@ -1676,7 +1674,16 @@ function renderCardFrame(c, opts) {
         });
         html += '<div class="card-effect-full">Transform: ' + tLines.join(', ') + '</div>';
     }
+    // Flavour text — always show if present
+    if (c.flavour_text) {
+        html += '<div class="card-flavour">' + c.flavour_text + '</div>';
+    }
+
+    // === REACT SECTION (multi-purpose only): react bar + react effect ===
     if (c.react_condition != null && c.react_mana_cost != null) {
+        if (isMultiPurpose) {
+            html += '<div class="card-type-badge card-react-bar">REACT</div>';
+        }
         var condMap = {
             0: 'Enemy plays Magic', 1: 'Enemy summons Minion', 2: 'Enemy attacks',
             3: 'Enemy plays React', 4: 'Any enemy action',
@@ -1687,15 +1694,8 @@ function renderCardFrame(c, opts) {
         var condText = condMap[c.react_condition] || 'Enemy acts';
         var extraCond = c.react_requires_no_friendly_minions ? ' & No friendly minions' : '';
         var costText = c.react_mana_cost > 0 ? ' (' + c.react_mana_cost + ')' : '';
-        var deployText = (opts.showReactDeploy && c.react_effect && c.react_effect.type === 5) ? ' ▶ Deploy' : '';
-        html += '<div class="card-effect-full">React' + costText + ': ' + condText + extraCond + deployText + '</div>';
-    }
-    if (c.flavour_text
-            && (!c.effects || c.effects.length === 0)
-            && !c.activated_ability
-            && c.react_condition == null
-            && (!c.transform_options || c.transform_options.length === 0)) {
-        html += '<div class="card-flavour">' + c.flavour_text + '</div>';
+        var deployText = (c.react_effect && c.react_effect.type === 5) ? ' ▶ Deploy' : '';
+        html += '<div class="card-effect-full">' + condText + extraCond + deployText + '</div>';
     }
     // Stats row at bottom: ATK | RANGE | HP (minions only)
     if (c.card_type === 0 && c.attack != null) {
