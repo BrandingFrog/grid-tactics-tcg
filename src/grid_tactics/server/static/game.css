@@ -1393,8 +1393,8 @@ body {
 /* Multi-purpose (minion + react): separate react bar below tribe */
 .card-react-bar {
   background: rgb(160, 40, 100) !important;
-  width: 50%;
-  text-align: center;
+  width: 100%;
+  text-align: left;
 }
 
 .card-effect-full {
