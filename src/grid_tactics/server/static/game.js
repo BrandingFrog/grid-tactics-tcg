@@ -1688,10 +1688,8 @@ function renderCardFrame(c, opts) {
         var condText = condMap[c.react_condition] || 'Enemy acts';
         var extraCond = c.react_requires_no_friendly_minions ? ' & No friendly minions' : '';
         var costText = c.react_mana_cost > 0 ? ' (' + c.react_mana_cost + ')' : '';
-        html += '<div class="card-effect-full">React' + costText + ': ' + condText + extraCond + '</div>';
-        if (opts.showReactDeploy) {
-            html += '<div class="card-effect-full">▶ Deploy</div>';
-        }
+        var deployText = (opts.showReactDeploy && c.react_effect && c.react_effect.type === 5) ? ' ▶ Deploy' : '';
+        html += '<div class="card-effect-full">React' + costText + ': ' + condText + extraCond + deployText + '</div>';
     }
     if (c.flavour_text
             && (!c.effects || c.effects.length === 0)
