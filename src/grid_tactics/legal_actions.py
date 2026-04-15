@@ -681,6 +681,11 @@ def _check_react_condition(
                         return card_def.element == required_elem
         return False
 
+    if condition == ReactCondition.OPPONENT_DISCARDS:
+        # Opponent discarded a card this turn (discard_cost)
+        acting_player = state.players[state.active_player_idx]
+        return acting_player.discarded_this_turn
+
     return False
 
 
@@ -767,6 +772,15 @@ def _react_phase_actions(
                         actions.append(play_react_action(card_index=idx))
                 else:
                     actions.append(play_react_action(card_index=idx))
+
+        elif (card_def.card_type == CardType.MAGIC
+              and card_def.react_condition is not None
+              and card_def.react_mana_cost is not None):
+            # Magic+react multi-purpose: plays its regular effects as a react
+            if not _check_react_condition(card_def.react_condition, state, library):
+                continue
+            if react_player.current_mana >= card_def.react_mana_cost:
+                actions.append(play_react_action(card_index=idx))
 
     # PASS always legal
     actions.append(pass_action())

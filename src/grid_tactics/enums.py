@@ -83,6 +83,7 @@ class ReactCondition(IntEnum):
     OPPONENT_PLAYS_DARK = 10    # Opponent played a card with DARK element
     OPPONENT_PLAYS_LIGHT = 11   # Opponent played a card with LIGHT element
     OPPONENT_SACRIFICES = 12    # Opponent's minion sacrificed at your back row
+    OPPONENT_DISCARDS = 13     # Opponent discarded a card from hand
 
 
 class TriggerType(IntEnum):

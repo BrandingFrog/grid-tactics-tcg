@@ -1328,7 +1328,7 @@ function buildCardTooltipContent(c) {
             3: 'Enemy plays React', 4: 'Any enemy action',
             5: 'Enemy plays any Wood', 6: 'Enemy plays any Fire', 7: 'Enemy plays any Earth',
             8: 'Enemy plays any Water', 9: 'Enemy plays any Metal', 10: 'Enemy plays any Dark',
-            11: 'Enemy plays any Light', 12: 'Enemy sacrifices'
+            11: 'Enemy plays any Light', 12: 'Enemy sacrifices', 13: 'Enemy discards'
         };
         var condText = condMap[c.react_condition] || 'Enemy acts';
         var extraCond = c.react_requires_no_friendly_minions ? ' & no allies' : '';
@@ -1626,7 +1626,7 @@ function renderCardFrame(c, opts) {
     html += '<div class="card-name-overlay">' + c.name + '</div>';
     html += '</div>';
     // Type badge bar — show tribe for minions, card type for spells
-    var isMultiPurpose = c.card_type === 0 && c.react_condition != null && c.react_mana_cost != null;
+    var isMultiPurpose = c.react_condition != null && c.react_mana_cost != null && (c.card_type === 0 || c.card_type === 1);
     var badgeText = c.card_type === 0 ? (c.tribe || 'MINION').toUpperCase() : (c.card_type === 1 ? 'MAGIC' : 'REACT');
     if (isMultiPurpose) html += '<div class="card-multi-wrapper"><div class="card-multi-half">';
     html += '<div class="card-type-badge">' + badgeText + '</div>';
@@ -1691,7 +1691,7 @@ function renderCardFrame(c, opts) {
             3: 'Enemy plays React', 4: 'Any enemy action',
             5: 'Enemy plays any Wood', 6: 'Enemy plays any Fire', 7: 'Enemy plays any Earth',
             8: 'Enemy plays any Water', 9: 'Enemy plays any Metal', 10: 'Enemy plays any Dark',
-            11: 'Enemy plays any Light', 12: 'Enemy sacrifices'
+            11: 'Enemy plays any Light', 12: 'Enemy sacrifices', 13: 'Enemy discards'
         };
         var condText = condMap[c.react_condition] || 'Enemy acts';
         var extraCond = c.react_requires_no_friendly_minions ? ' & no allies' : '';

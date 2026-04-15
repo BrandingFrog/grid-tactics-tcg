@@ -6,6 +6,8 @@
     "mana_cost": 0,
     "element": "dark",
     "play_condition": "discarded_last_turn",
+    "react_condition": "opponent_discards",
+    "react_mana_cost": 1,
     "effects": [
         {
             "type": "grant_dark_matter",

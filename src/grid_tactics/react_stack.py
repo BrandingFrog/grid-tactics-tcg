@@ -225,10 +225,15 @@ def _play_react(
         mana_cost = card_def.mana_cost
     elif card_def.is_multi_purpose:
         mana_cost = card_def.react_mana_cost
+    elif (card_def.card_type == CardType.MAGIC
+          and card_def.react_condition is not None
+          and card_def.react_mana_cost is not None):
+        # Magic+react multi-purpose
+        mana_cost = card_def.react_mana_cost
     else:
         raise ValueError(
             f"Card '{card_def.card_id}' ({card_def.card_type.name}) is not react-eligible. "
-            f"Only REACT cards and multi-purpose minions can be played during react window."
+            f"Only REACT cards and multi-purpose cards can be played during react window."
         )
 
     # Validate mana
@@ -345,6 +350,15 @@ def resolve_react_stack(
                 else:
                     state = resolve_effect(
                         state, card_def.react_effect, (0, 0), caster_owner, library,
+                        entry.target_pos,
+                    )
+        elif (card_def.card_type == CardType.MAGIC
+              and card_def.react_condition is not None):
+            # Magic+react: resolve ON_PLAY effects (same as pure react cards)
+            for effect in card_def.effects:
+                if effect.trigger == TriggerType.ON_PLAY:
+                    state = resolve_effect(
+                        state, effect, (0, 0), caster_owner, library,
                         entry.target_pos,
                     )
 
