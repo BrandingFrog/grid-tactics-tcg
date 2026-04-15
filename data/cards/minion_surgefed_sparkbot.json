@@ -9,6 +9,7 @@
     "range": 0,
     "element": "metal",
     "tribe": "Robot",
+    "flavour_text": "They said it was too dangerous to activate. They were right.",
     "effects": [],
     "react_condition": "opponent_sacrifices",
     "react_effect": {

@@ -1628,10 +1628,9 @@ function renderCardFrame(c, opts) {
     // Type badge bar — show tribe for minions, card type for spells
     var isMultiPurpose = c.card_type === 0 && c.react_condition != null && c.react_mana_cost != null;
     var badgeText = c.card_type === 0 ? (c.tribe || 'MINION').toUpperCase() : (c.card_type === 1 ? 'MAGIC' : 'REACT');
+    html += '<div class="card-type-badge">' + badgeText + '</div>';
     if (isMultiPurpose) {
-        html += '<div class="card-type-badge card-type-multi">' + badgeText + '<span class="badge-react-tag">REACT</span></div>';
-    } else {
-        html += '<div class="card-type-badge">' + badgeText + '</div>';
+        html += '<div class="card-type-badge card-react-bar">REACT</div>';
     }
     // Effect text block (all card types) — between type badge and stats
     if (c.discard_cost_tribe) {
