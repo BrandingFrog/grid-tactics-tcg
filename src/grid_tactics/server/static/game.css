@@ -1409,11 +1409,10 @@ body {
   width: 100%;
   text-align: left;
   position: relative;
-  padding-left: 24px !important;
 }
 .react-mana-circle {
   position: absolute;
-  left: 4px;
+  right: 4px;
   top: 50%;
   transform: translateY(-50%);
   width: 16px;
