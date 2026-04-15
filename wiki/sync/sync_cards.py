@@ -229,13 +229,21 @@ def build_rules_text(card: dict, name_map: dict[str, str] | None = None) -> str:
     parts: list[str] = []
     effects = card.get("effects", [])
 
-    # Summon sacrifice cost (in-game: "Cost: Discard any 2 Robots")
-    sac_tribe = card.get("summon_sacrifice_tribe", "")
-    if sac_tribe:
-        sac_count = card.get("summon_sacrifice_count", 1)
-        count_text = f"{sac_count} " if sac_count > 1 else ""
-        plural = "s" if sac_count > 1 else ""
-        parts.append(f"[[Cost]]: [[Exhaust]] any {count_text}[[{sac_tribe}]]{plural}")
+    # Discard cost
+    discard_tribe = card.get("discard_cost_tribe") or card.get("summon_sacrifice_tribe", "")
+    if discard_tribe:
+        sac_count = card.get("discard_cost_count") or card.get("summon_sacrifice_count", 1)
+        if discard_tribe == "any":
+            count_text = f"{sac_count} cards" if sac_count > 1 else "a card"
+            parts.append(f"[[Cost]]: [[Discard]] {count_text}")
+        else:
+            count_text = f"{sac_count} " if sac_count > 1 else ""
+            plural = "s" if sac_count > 1 else ""
+            parts.append(f"[[Cost]]: [[Discard]] any {count_text}[[{discard_tribe}]]{plural}")
+
+    # Play condition
+    if card.get("play_condition") == "discarded_last_turn":
+        parts.append("[[Cost]]: [[Discard]] last turn")
 
     # Unique tag
     if card.get("unique"):
@@ -311,8 +319,34 @@ def build_rules_text(card: dict, name_map: dict[str, str] | None = None) -> str:
             }
             burn_target = burn_target_map.get(target, "")
             desc = f"{pfx}[[Burn]]{burn_target}"
+        elif eff_type == "grant_dark_matter":
+            tribe = eff.get("target_tribe", "")
+            tribe_text = "Dark Mage" if tribe == "Mage" else (tribe or "ally")
+            target_val = eff.get("target", 0)
+            if target_val in (5, "all_allies"):
+                desc = f"{pfx}[[Dark Matter]] +{amount} per ally {tribe_text}"
+            else:
+                desc = f"{pfx}[[Dark Matter]] +{amount}"
+        elif eff_type in ("buff_attack", "buff_health"):
+            scale = eff.get("scale_with", "")
+            tribe = eff.get("target_tribe", "")
+            tribe_text = "Dark Mages" if tribe == "Mage" else (tribe + "s" if tribe else "allies")
+            if scale == "dark_matter":
+                icon = "🗡️" if eff_type == "buff_attack" else "🤍"
+                # Check if paired with other buff (merge icons)
+                other = "buff_health" if eff_type == "buff_attack" else "buff_attack"
+                has_pair = any(e.get("type") == other and e.get("scale_with") == "dark_matter" and e.get("target") == eff.get("target") for e in effects)
+                if eff_type == "buff_attack" and has_pair:
+                    desc = f"{pfx}Ally {tribe_text} gain ([[Dark Matter]])🗡️🤍"
+                elif eff_type == "buff_health" and has_pair:
+                    continue  # merged with buff_attack above
+                else:
+                    desc = f"{pfx}Ally {tribe_text} gain ([[Dark Matter]]){icon}"
+            else:
+                icon = "🗡️" if eff_type == "buff_attack" else "🤍"
+                desc = f"{pfx}+{amount}{icon}"
         elif eff_type == "dark_matter_buff":
-            desc = f"Active: +{amount}🗡️ (+[[Dark Matter]]×1)"
+            desc = f"Active: Target gains ([[Dark Matter]])🗡️"
         elif eff_type == "passive_heal":
             desc = f"Passive: [[Heal]] {amount} per turn"
         elif eff_type == "leap":
