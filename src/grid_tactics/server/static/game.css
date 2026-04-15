@@ -1390,17 +1390,17 @@ body {
 .card-type-magic .card-type-badge { background: rgb(30, 140, 120); }
 .card-type-react .card-type-badge { background: rgb(160, 40, 100); }
 
-/* Multi-purpose (minion + react): gold → purple gradient */
+/* Multi-purpose (minion + react): gold → purple hard split */
 .card-type-badge.card-type-multi {
-  background: linear-gradient(90deg, rgb(180, 140, 60) 50%, rgb(160, 40, 100) 100%);
+  background: linear-gradient(90deg, rgb(180, 140, 60) 45%, rgb(160, 40, 100) 55%);
   display: flex;
   justify-content: space-between;
   align-items: center;
 }
 .badge-react-tag {
-  font-size: 0.85em;
-  letter-spacing: 1.5px;
-  opacity: 0.95;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 2px;
 }
 
 .card-effect-full {
