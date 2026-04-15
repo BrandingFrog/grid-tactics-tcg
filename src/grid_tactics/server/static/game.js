@@ -1247,7 +1247,7 @@ var KEYWORD_GLOSSARY = {
     'Rally': 'When this minion moves, all other friendly copies of it also advance forward.',
     'Negate': 'Cancel the effect of an opponent\'s spell or ability.',
     'React': 'This card can be played during the opponent\'s turn in response to their action.',
-    'Deploy': 'Place this card onto the battlefield from your hand during a React window.',
+    'Deploy': 'Summon this card onto the battlefield from your hand during a React window.',
     'Destroy': 'Remove a target minion from the board regardless of its 🤍.',
     'Transform': 'Pay mana to transform this minion into another form.',
     'Cost': 'An additional requirement or modifier that changes how much you pay to play this card.',
@@ -1333,7 +1333,7 @@ function buildCardTooltipContent(c) {
         var condText = condMap[c.react_condition] || 'Enemy acts';
         var extraCond = c.react_requires_no_friendly_minions ? ' & no allies' : '';
         var costText = c.react_mana_cost > 0 ? ' (' + c.react_mana_cost + ')' : '';
-        cardTextLines.push('React' + costText + ': ' + condText + extraCond + ' ▶ Deploy');
+        cardTextLines.push('React' + costText + ': ' + condText + extraCond + ' ▶ Summon');
     }
 
     var bodyHtml = '';
@@ -1356,7 +1356,7 @@ function buildCardTooltipContent(c) {
     if (c.cost_reduction) { addKw('Cost'); addKw('Dark Matter'); }
     if (c.transform_options && c.transform_options.length > 0) addKw('Transform');
     if (c.react_condition != null) addKw('React');
-    if (c.react_condition != null && c.react_effect && c.react_effect.type === 5) addKw('Deploy');
+    if (c.react_condition != null && c.react_effect && c.react_effect.type === 5) addKw('Summon');
 
     // Activated ability keywords
     if (c.activated_ability) {
@@ -1384,7 +1384,7 @@ function buildCardTooltipContent(c) {
             if (eff.type === 1) addKw('Heal');
             if (eff.type === 3) addKw('Heal');
             if (eff.type === 4) addKw('Negate');
-            if (eff.type === 5) addKw('Deploy');
+            if (eff.type === 5) addKw('Summon');
             if (eff.type === 6) addKw('Rally');
             if (eff.type === 7) addKw('Promote');
             if (eff.type === 8) addKw('Tutor');
@@ -1586,7 +1586,7 @@ function fitHandCardEffects() {}
 //   handIndex:  number (hand context; stamped as data-hand-idx)
 //   numericId:  number (hand/deck-builder; stamped as data-numeric-id)
 //   dim:        bool   (adds .card-dimmed — hand can't-afford/not-my-turn)
-//   showReactDeploy: bool (deck-builder shows the '▶ Deploy' react hint;
+//   showReactDeploy: bool (deck-builder shows the '▶ Summon' react hint;
 //                          hand suppresses it to match original behavior)
 // }
 // =============================================
@@ -1696,7 +1696,7 @@ function renderCardFrame(c, opts) {
         var condText = condMap[c.react_condition] || 'Enemy acts';
         var extraCond = c.react_requires_no_friendly_minions ? ' & no allies' : '';
         var costText = c.react_mana_cost > 0 ? ' (' + c.react_mana_cost + ')' : '';
-        var deployText = (c.react_effect && c.react_effect.type === 5) ? ' ▶ Deploy' : '';
+        var deployText = (c.react_effect && c.react_effect.type === 5) ? ' ▶ Summon' : '';
         html += '<div class="card-effect-full">' + condText + extraCond + deployText + '</div>';
         if (isMultiPurpose) html += '</div></div>';
     }
@@ -5289,7 +5289,7 @@ function getEffectDescription(effects, cardData) {
         } else if (type === 4) { // Negate
             desc = prefix + 'Negate';
         } else if (type === 5) { // Deploy Self
-            desc = prefix + 'Deploy';
+            desc = prefix + 'Summon';
         } else if (type === 6) { // Rally Forward
             var rallyName = (cardData && cardData.name) || 'this unit';
             desc = 'Move: Rally friendly ' + rallyName;

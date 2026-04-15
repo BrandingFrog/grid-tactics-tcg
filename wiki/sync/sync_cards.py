@@ -185,7 +185,7 @@ def derive_keywords(card: dict) -> list[str]:
             "negate": "Negate",
             "leap": "Leap",
             "rally_forward": "Rally",
-            "deploy_self": "Deploy",
+            "deploy_self": "Summon",
             "grant_dark_matter": "Dark Matter",
             "dark_matter_buff": "Dark Matter",
             "buff_attack": "Buff",
@@ -200,7 +200,7 @@ def derive_keywords(card: dict) -> list[str]:
     if react_eff:
         eff_type = react_eff.get("type", "")
         _REACT_EFF_KW: dict[str, str] = {
-            "deploy_self": "Deploy",
+            "deploy_self": "Summon",
             "damage": "Deal",
             "heal": "Heal",
         }
@@ -285,7 +285,7 @@ def build_rules_text(card: dict, name_map: dict[str, str] | None = None) -> str:
         elif eff_type == "negate":
             desc = f"{pfx}[[Negate]]"
         elif eff_type == "deploy_self":
-            desc = f"{pfx}[[Deploy]]"
+            desc = f"{pfx}[[Summon]]"
         elif eff_type == "rally_forward":
             card_name = card.get("name", "this unit")
             desc = f"Move: [[Rally]] friendly {card_name}"
@@ -370,7 +370,7 @@ def build_rules_text(card: dict, name_map: dict[str, str] | None = None) -> str:
         elif eff_type == "heal":
             parts.append(f"[[Heal]] {amount}")
         elif eff_type == "deploy_self":
-            parts.append("[[Deploy]]")
+            parts.append("[[Summon]]")
         elif eff_type == "negate":
             parts.append("[[Negate]]")
 
