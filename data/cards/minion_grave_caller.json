@@ -10,12 +10,11 @@
     "element": "dark",
     "tribe": "Mage Undead",
     "deckable": false,
-    "effects": [
-        {
-            "type": "dark_matter_buff",
-            "trigger": "on_play",
-            "target": "single_target",
-            "amount": 5
-        }
-    ]
+    "activated_ability": {
+        "name": "Dark Matter Buff",
+        "mana_cost": 0,
+        "effect_type": "dark_matter_buff",
+        "target": "single_target"
+    },
+    "effects": []
 }

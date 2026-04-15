@@ -1297,9 +1297,11 @@ function buildCardTooltipContent(c) {
     if (effectDesc) cardTextLines.push(effectDesc);
     if (c.activated_ability) {
         var ab = c.activated_ability;
-        var abDesc = 'Active (' + ab.mana_cost + '): ';
+        var abDesc = ab.mana_cost > 0 ? 'Active (' + ab.mana_cost + '): ' : 'Active: ';
         if (ab.effect_type === 'conjure_rat_and_buff') {
             abDesc += 'Conjure Common Rat. Ally Rats gain (Dark Matter)' + SWORD + HEART + '.';
+        } else if (ab.effect_type === 'dark_matter_buff') {
+            abDesc += 'Target gains (Dark Matter)' + SWORD + '.';
         } else if (ab.effect_type === 'summon_token' && ab.summon_card_id) {
             abDesc += 'Summon ' + findCardNameById(ab.summon_card_id) + '.';
         } else {
@@ -1635,9 +1637,11 @@ function renderCardFrame(c, opts) {
     }
     if (c.activated_ability) {
         var ab = c.activated_ability;
-        var abDesc = 'Active (' + ab.mana_cost + '): ';
+        var abDesc = ab.mana_cost > 0 ? 'Active (' + ab.mana_cost + '): ' : 'Active: ';
         if (ab.effect_type === 'conjure_rat_and_buff') {
             abDesc += 'Conjure Common Rat. Ally Rats gain (Dark Matter)' + SWORD + HEART + '.';
+        } else if (ab.effect_type === 'dark_matter_buff') {
+            abDesc += 'Target gains (Dark Matter)' + SWORD + '.';
         } else if (ab.effect_type === 'summon_token' && ab.summon_card_id) {
             abDesc += 'Summon ' + findCardNameById(ab.summon_card_id) + '.';
         } else {

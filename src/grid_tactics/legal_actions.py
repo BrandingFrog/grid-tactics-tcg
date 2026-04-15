@@ -380,6 +380,15 @@ def _action_phase_actions(
                             minion_id=minion.instance_id,
                             target_pos=(r, c),
                         ))
+        elif ability.target == "single_target":
+            # Targeted ability — one action per valid target minion on board
+            for target_m in state.minions:
+                if target_m.current_health > 0:
+                    actions.append(Action(
+                        action_type=ActionType.ACTIVATE_ABILITY,
+                        minion_id=minion.instance_id,
+                        target_pos=target_m.position,
+                    ))
         elif ability.target == "none":
             # Untargeted self-ability — emit exactly one action.
             actions.append(Action(

@@ -799,6 +799,12 @@ def _apply_activate_ability(
             )
         if state.board.get(target_pos[0], target_pos[1]) is not None:
             raise ValueError(f"Target tile {target_pos} is occupied")
+    elif ability.target == "single_target":
+        # Targeted ability — must have a target_pos with a minion on it
+        if target_pos is None:
+            raise ValueError("ACTIVATE_ABILITY with single_target requires a target_pos")
+        if state.board.get(target_pos[0], target_pos[1]) is None:
+            raise ValueError(f"No minion at target tile {target_pos}")
     elif ability.target == "none":
         # Untargeted self-ability; target_pos must be None (ignored if set).
         pass
@@ -842,6 +848,22 @@ def _apply_activate_ability(
     elif ability.effect_type == "conjure_rat_and_buff":
         state = _apply_conjure_rat_and_buff(
             state, active_idx, active_side, minion, ability, library,
+        )
+    elif ability.effect_type == "dark_matter_buff":
+        # Dispatch through standard effect resolver with scale_with
+        from grid_tactics.cards import EffectDefinition
+        from grid_tactics.enums import TriggerType as _TT, TargetType as _TGT
+        from grid_tactics.effect_resolver import resolve_effect
+        buff_effect = EffectDefinition(
+            effect_type=EffectType.BUFF_ATTACK,
+            trigger=_TT.ON_PLAY,
+            target=_TGT.SINGLE_TARGET,
+            amount=0,
+            scale_with="dark_matter",
+        )
+        state = resolve_effect(
+            state, buff_effect, minion.position, active_side, library,
+            target_pos=target_pos,
         )
     else:
         raise ValueError(f"Unsupported activated_ability effect_type '{ability.effect_type}'")
