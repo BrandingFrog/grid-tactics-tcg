@@ -82,6 +82,14 @@ mkdir -p /var/www/html/images/{temp,thumb,archive,deleted,lockdir}
 chown -R www-data:www-data /var/www/html/images
 chmod -R 775 /var/www/html/images
 
+echo "[entrypoint] images/ state:"
+ls -la /var/www/html/images/ | head -20
+echo "[entrypoint] write test as www-data:"
+su -s /bin/bash www-data -c "touch /var/www/html/images/temp/.writetest && echo 'WRITE_OK' || echo 'WRITE_FAIL'"
+rm -f /var/www/html/images/temp/.writetest
+echo "[entrypoint] php upload_tmp_dir / open_basedir:"
+php -r 'echo "upload_tmp_dir=" . (ini_get("upload_tmp_dir") ?: "(default)") . "\n"; echo "open_basedir=" . (ini_get("open_basedir") ?: "(none)") . "\n"; echo "sys_tmp=" . sys_get_temp_dir() . "\n";'
+
 # Run update.php every boot — idempotent, handles SMW schema bring-up and upgrades
 echo "[entrypoint] Running update.php..."
 php maintenance/update.php --quick || {
