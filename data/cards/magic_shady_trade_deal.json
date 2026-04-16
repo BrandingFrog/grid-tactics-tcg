@@ -15,5 +15,11 @@
             "target_tribe": "Mage",
             "amount": 1
         }
+    ],
+    "rulings": [
+        "To play this card, you must discard one other card from your hand (any card, any type). The discarded card goes to the exhaust pile.",
+        "Each friendly Mage on the board gains +1 Dark Matter. Mages in hand or deck are not affected.",
+        "The discarded card may trigger its own on-discard effects (e.g. Dark Matter Stash grants Dark Matter to all Mages when discarded).",
+        "If you have no other cards in hand, you cannot pay the discard cost and cannot play this card."
     ]
 }

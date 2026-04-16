@@ -36,5 +36,11 @@
             "target_tribe": "Mage",
             "amount": 1
         }
+    ],
+    "rulings": [
+        "When played, each friendly Mage on the board gains attack and health equal to your current Dark Matter stack count, then gains +1 Dark Matter.",
+        "The buff is applied first, then the Dark Matter is granted. A Mage with 3 Dark Matter gets +3🗡️/+3🤍, then goes to 4 Dark Matter.",
+        "If discarded from hand (e.g. by Shady Trade Deal), the on-discard effect triggers: each friendly Mage gains +1 Dark Matter. The buff effects do not trigger on discard.",
+        "Only Mages on the board at the time of casting receive the buff. Mages played later do not retroactively benefit."
     ]
 }

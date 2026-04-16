@@ -587,6 +587,10 @@ def card_to_wikitext(
     result += "\n\n== Gallery =="
     result += "\n\n== Tips =="
     result += "\n\n== Rulings =="
+    rulings = card.get("rulings", [])
+    if rulings:
+        for r in rulings:
+            result += f"\n* {r}"
     result += "\n\n== Trivia =="
 
     # Append history section (auto-generated from patch tracking)

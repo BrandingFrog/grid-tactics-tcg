@@ -13,5 +13,11 @@
             "target": "single_target",
             "amount": 10
         }
+    ],
+    "rulings": [
+        "Can only be played in the react window immediately after your opponent plays a magic card.",
+        "Negates the opponent's magic card entirely — all of its effects are cancelled and it is sent to the exhaust pile.",
+        "Costs 4 mana to play. If you don't have 4 mana available during the react window, you cannot use it.",
+        "Does not negate minion summons, react cards, or activated abilities — only magic cards."
     ]
 }

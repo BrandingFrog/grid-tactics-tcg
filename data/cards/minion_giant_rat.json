@@ -18,5 +18,11 @@
         }
     ],
     "promote_target": "rat",
-    "unique": true
+    "unique": true,
+    "rulings": [
+        "Unique means only one Giant Rat can be on the board at a time. You cannot play a second copy while one is already in play.",
+        "When Giant Rat dies, its death effect promotes any Rat you control into a new Giant Rat. The promoted Rat is replaced in-place on the board.",
+        "If no friendly Rats are on the board when Giant Rat dies, the promote effect fizzles and nothing happens.",
+        "The promoted Rat becomes a fresh Giant Rat at full stats (30🗡️/30🤍), regardless of the original Rat's stats or damage."
+    ]
 }
