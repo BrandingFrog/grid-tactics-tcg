@@ -75,6 +75,13 @@ fi
 cp /tmp/LocalSettings.template.php /var/www/html/LocalSettings.php
 chown www-data:www-data /var/www/html/LocalSettings.php
 
+# Ensure MediaWiki upload directories exist and are writable by www-data.
+# Railway's ephemeral filesystem drops these on restart, causing upload stash
+# failures ("Could not store file at mwstore://local-backend/local-temp/...").
+mkdir -p /var/www/html/images/{temp,thumb,archive,deleted,lockdir}
+chown -R www-data:www-data /var/www/html/images
+chmod -R 775 /var/www/html/images
+
 # Run update.php every boot — idempotent, handles SMW schema bring-up and upgrades
 echo "[entrypoint] Running update.php..."
 php maintenance/update.php --quick || {
