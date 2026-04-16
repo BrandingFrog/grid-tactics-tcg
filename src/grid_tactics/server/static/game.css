@@ -1454,10 +1454,6 @@ body {
   letter-spacing: 0.2px;
   padding: 4px 8px;
   word-wrap: break-word;
-  overflow: hidden;
-  display: -webkit-box;
-  -webkit-line-clamp: 4;
-  -webkit-box-orient: vertical;
 }
 
 /* card-range is no longer used — range shown in card-bottom-center */
