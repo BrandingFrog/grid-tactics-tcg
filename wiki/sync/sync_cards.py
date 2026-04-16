@@ -359,19 +359,7 @@ def build_rules_text(card: dict, name_map: dict[str, str] | None = None) -> str:
             desc = f"{pfx}Effect"
         parts.append(desc)
 
-    # React effect (separate field from effects array)
-    react_eff = card.get("react_effect")
-    if react_eff:
-        eff_type = react_eff.get("type", "")
-        amount = react_eff.get("amount", 0)
-        if eff_type == "damage":
-            parts.append(f"Deal {amount} damage")
-        elif eff_type == "heal":
-            parts.append(f"[[Heal]] {amount}")
-        elif eff_type == "deploy_self":
-            parts.append("[[Summon]]")
-        elif eff_type == "negate":
-            parts.append("[[Negate]]")
+    # React effect is now rendered in the react condition section below.
 
     # Activated ability
     ability = card.get("activated_ability")
