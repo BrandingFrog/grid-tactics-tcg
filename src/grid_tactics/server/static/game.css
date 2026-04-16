@@ -1425,12 +1425,13 @@ body {
 .react-mana-circle {
   position: absolute;
   right: 4px;
+  /* Blue to match the main mana circle */
   top: 50%;
   transform: translateY(-50%);
   width: 16px;
   height: 16px;
   border-radius: 50%;
-  background: rgb(120, 30, 80);
+  background: rgb(30, 100, 220);
   border: 1.5px solid rgba(255, 255, 255, 0.4);
   display: flex;
   align-items: center;

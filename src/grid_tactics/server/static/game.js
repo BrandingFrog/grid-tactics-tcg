@@ -1698,6 +1698,13 @@ function renderCardFrame(c, opts) {
         var costText = c.react_mana_cost > 0 ? ' (' + c.react_mana_cost + ')' : '';
         var deployText = (c.react_effect && c.react_effect.type === 5) ? ' ▶ Summon' : '';
         html += '<div class="card-effect-full">' + condText + extraCond + deployText + '</div>';
+        // Magic+react: show effects array as the react effect text
+        if (!c.react_effect && c.effects && c.effects.length > 0) {
+            var reactDesc = getEffectDescription(c.effects, c);
+            reactDesc.split('. ').forEach(function(line) {
+                if (line) html += '<div class="card-effect-full">' + line + '</div>';
+            });
+        }
         if (isMultiPurpose) html += '</div></div>';
     }
     // Stats row at bottom: ATK | RANGE | HP (minions only)
