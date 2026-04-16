@@ -1324,14 +1324,14 @@ function buildCardTooltipContent(c) {
     }
     if (c.react_condition != null && c.react_mana_cost != null) {
         var condMap = {
-            0: 'Enemy plays Magic', 1: 'Enemy summons Minion', 2: 'Enemy attacks',
-            3: 'Enemy plays React', 4: 'Any enemy action',
-            5: 'Enemy plays any Wood', 6: 'Enemy plays any Fire', 7: 'Enemy plays any Earth',
-            8: 'Enemy plays any Water', 9: 'Enemy plays any Metal', 10: 'Enemy plays any Dark',
-            11: 'Enemy plays any Light', 12: 'Enemy sacrifices', 13: 'Enemy discards'
+            0: 'Magic or React', 1: 'Summon', 2: 'Attack',
+            3: 'Magic or React', 4: 'Any action',
+            5: 'Wood', 6: 'Fire', 7: 'Earth',
+            8: 'Water', 9: 'Metal', 10: 'Dark',
+            11: 'Light', 12: 'Sacrifice', 13: 'Discard'
         };
         var condText = condMap[c.react_condition] || 'Enemy acts';
-        var extraCond = c.react_requires_no_friendly_minions ? ' & no allies' : '';
+        var extraCond = c.react_requires_no_friendly_minions ? ' while no allies' : '';
         var costText = c.react_mana_cost > 0 ? ' (' + c.react_mana_cost + ')' : '';
         var reactEffectTooltip = '';
         if (c.react_effect && c.react_effect.type === 5) {
@@ -1702,14 +1702,14 @@ function renderCardFrame(c, opts) {
             html += '<div class="card-type-badge card-react-bar">REACT<span class="react-mana-circle">' + c.react_mana_cost + '</span></div>';
         }
         var condMap = {
-            0: 'Enemy plays Magic', 1: 'Enemy summons Minion', 2: 'Enemy attacks',
-            3: 'Enemy plays React', 4: 'Any enemy action',
-            5: 'Enemy plays any Wood', 6: 'Enemy plays any Fire', 7: 'Enemy plays any Earth',
-            8: 'Enemy plays any Water', 9: 'Enemy plays any Metal', 10: 'Enemy plays any Dark',
-            11: 'Enemy plays any Light', 12: 'Enemy sacrifices', 13: 'Enemy discards'
+            0: 'Magic or React', 1: 'Summon', 2: 'Attack',
+            3: 'Magic or React', 4: 'Any action',
+            5: 'Wood', 6: 'Fire', 7: 'Earth',
+            8: 'Water', 9: 'Metal', 10: 'Dark',
+            11: 'Light', 12: 'Sacrifice', 13: 'Discard'
         };
         var condText = condMap[c.react_condition] || 'Enemy acts';
-        var extraCond = c.react_requires_no_friendly_minions ? ' & no allies' : '';
+        var extraCond = c.react_requires_no_friendly_minions ? ' while no allies' : '';
         var costText = c.react_mana_cost > 0 ? ' (' + c.react_mana_cost + ')' : '';
         var reactEffectText = '';
         if (c.react_effect && c.react_effect.type === 5) {
