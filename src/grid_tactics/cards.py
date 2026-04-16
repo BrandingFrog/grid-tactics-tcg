@@ -145,6 +145,9 @@ class CardDefinition:
     # Play condition: e.g. "discarded_last_turn" — card can only be played if condition met
     play_condition: Optional[str] = None
 
+    # Sacrifice ally cost: must destroy a friendly minion to play this card
+    sacrifice_ally_cost: bool = False
+
     # Revive mechanic: card_id of the minion to revive from grave
     revive_card_id: Optional[str] = None
 

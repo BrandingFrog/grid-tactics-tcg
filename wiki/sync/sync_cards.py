@@ -152,6 +152,11 @@ def derive_keywords(card: dict) -> list[str]:
         kws.add("Cost")
         kws.add("Dark Matter")
 
+    # Sacrifice ally cost
+    if card.get("sacrifice_ally_cost"):
+        kws.add("Cost")
+        kws.add("Destroy")
+
     # Play condition
     if card.get("play_condition") == "discarded_last_turn":
         kws.add("Discarded")
@@ -245,6 +250,10 @@ def build_rules_text(card: dict, name_map: dict[str, str] | None = None) -> str:
             plural = "s" if sac_count > 1 else ""
             parts.append(f"[[Cost]]: [[Discard]] any {count_text}[[{discard_tribe}]]{plural}")
 
+    # Sacrifice ally cost
+    if card.get("sacrifice_ally_cost"):
+        parts.append("[[Cost]]: [[Destroy]] an ally")
+
     # Play condition
     if card.get("play_condition") == "discarded_last_turn":
         parts.append("[[Cost]]: [[Discard]] last turn")
@@ -275,6 +284,9 @@ def build_rules_text(card: dict, name_map: dict[str, str] | None = None) -> str:
             scale = eff.get("scale_with")
             if scale == "dark_matter":
                 desc = f"{pfx}Deal ([[Dark Matter]]) damage" if amount == 0 else f"{pfx}Deal {amount} + ([[Dark Matter]]) damage"
+            elif scale in ("sacrificed_attack", "sacrificed_attack_plus_dm"):
+                dm_part = " + ([[Dark Matter]])" if "dm" in scale else ""
+                desc = f"{pfx}Deal sacrificed ally's 🗡️{dm_part} as damage"
             else:
                 desc = f"{pfx}Deal {amount} damage"
             if target in (1, "all"):

@@ -587,6 +587,27 @@ def _cast_magic(
     """
     caster_pos = action.position if action.position is not None else (0, 0)
 
+    # Sacrifice ally cost: destroy a friendly minion before effects resolve
+    sacrificed_attack = 0
+    sacrificed_dm = 0
+    if card_def.sacrifice_ally_cost and action.sacrifice_minion_id is not None:
+        sac_minion = state.get_minion(action.sacrifice_minion_id)
+        if sac_minion is not None and sac_minion.owner == active_side:
+            sac_def = library.get_by_id(sac_minion.card_numeric_id)
+            sacrificed_attack = sac_def.attack + sac_minion.attack_bonus
+            sacrificed_dm = sac_minion.dark_matter_stacks
+            # Remove from board
+            new_board = state.board.remove(sac_minion.position[0], sac_minion.position[1])
+            new_minions = tuple(m for m in state.minions if m.instance_id != sac_minion.instance_id)
+            # Add to grave if from_deck
+            active_idx = state.active_player_idx
+            new_players = state.players
+            if sac_minion.from_deck:
+                p = state.players[active_idx]
+                new_p = p.add_to_grave(sac_minion.card_numeric_id)
+                new_players = _replace_player(new_players, active_idx, new_p)
+            state = replace(state, board=new_board, minions=new_minions, players=new_players)
+
     for effect in card_def.effects:
         if effect.trigger == TriggerType.ON_PLAY:
             from grid_tactics.effect_resolver import (
@@ -594,15 +615,22 @@ def _cast_magic(
                 _enter_pending_tutor,
             )
 
-            if effect.effect_type == EffectType.TUTOR:
+            # Pre-scale effects that depend on sacrificed ally's attack
+            resolved_effect = effect
+            if effect.scale_with in ("sacrificed_attack", "sacrificed_attack_plus_dm"):
+                bonus = sacrificed_attack + sacrificed_dm if effect.scale_with == "sacrificed_attack_plus_dm" else sacrificed_attack
+                if bonus > 0:
+                    resolved_effect = replace(effect, amount=effect.amount + bonus)
+
+            if resolved_effect.effect_type == EffectType.TUTOR:
                 state = _enter_pending_tutor(state, card_def, active_side, library)
-            elif effect.effect_type == EffectType.REVIVE:
+            elif resolved_effect.effect_type == EffectType.REVIVE:
                 state = _enter_pending_revive(
                     state, card_def, active_side, library,
                 )
             else:
                 state = resolve_effect(
-                    state, effect, caster_pos, active_side, library, action.target_pos,
+                    state, resolved_effect, caster_pos, active_side, library, action.target_pos,
                 )
 
     return state

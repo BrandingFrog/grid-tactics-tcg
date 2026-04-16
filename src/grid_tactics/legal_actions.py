@@ -236,20 +236,32 @@ def _action_phase_actions(
                     e.trigger == TriggerType.ON_PLAY and e.target == TargetType.SINGLE_TARGET
                     for e in card_def.effects
                 )
-                if has_single_target:
-                    enemy_positions = _get_enemy_minion_positions(state, player_side)
-                    for target_pos in enemy_positions:
+
+                # Sacrifice ally cost: enumerate ally minion choices
+                ally_choices: list[Optional[int]] = [None]
+                if card_def.sacrifice_ally_cost:
+                    friendly = [m for m in state.minions if m.owner == player_side and m.current_health > 0]
+                    if not friendly:
+                        continue  # can't play without an ally to sacrifice
+                    ally_choices = [m.instance_id for m in friendly]
+
+                for sac_ally_id in ally_choices:
+                    if has_single_target:
+                        enemy_positions = _get_enemy_minion_positions(state, player_side)
+                        for target_pos in enemy_positions:
+                            actions.append(Action(
+                                action_type=ActionType.PLAY_CARD,
+                                card_index=idx, target_pos=target_pos,
+                                discard_card_index=sac_idx,
+                                sacrifice_minion_id=sac_ally_id,
+                            ))
+                    else:
                         actions.append(Action(
                             action_type=ActionType.PLAY_CARD,
-                            card_index=idx, target_pos=target_pos,
+                            card_index=idx,
                             discard_card_index=sac_idx,
+                            sacrifice_minion_id=sac_ally_id,
                         ))
-                else:
-                    actions.append(Action(
-                        action_type=ActionType.PLAY_CARD,
-                        card_index=idx,
-                        discard_card_index=sac_idx,
-                    ))
 
         # Skip CardType.REACT during ACTION phase
 

@@ -38,6 +38,7 @@ class Action:
     target_pos: Optional[tuple[int, int]] = None  # target position for effects
     discard_card_index: Optional[int] = None  # for PLAY_CARD with discard_cost_tribe
     transform_target: Optional[str] = None  # for TRANSFORM action: target card_id
+    sacrifice_minion_id: Optional[int] = None  # for cards with sacrifice_ally_cost: ally to destroy
 
 
 # ---------------------------------------------------------------------------

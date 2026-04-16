@@ -1,0 +1,25 @@
+{
+    "card_id": "sacrifice_to_the_shadow",
+    "stable_id": 45,
+    "name": "Sacrifice to the Shadow",
+    "card_type": "magic",
+    "mana_cost": 2,
+    "element": "dark",
+    "sacrifice_ally_cost": true,
+    "effects": [
+        {
+            "type": "damage",
+            "trigger": "on_play",
+            "target": "single_target",
+            "amount": 0,
+            "scale_with": "sacrificed_attack_plus_dm"
+        },
+        {
+            "type": "grant_dark_matter",
+            "trigger": "on_play",
+            "target": "all_allies",
+            "target_tribe": "Mage",
+            "amount": 1
+        }
+    ]
+}

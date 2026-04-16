@@ -105,6 +105,7 @@ class CardLoader:
             conjure_buff=data.get("conjure_buff"),
             cost_reduction=data.get("cost_reduction"),
             play_condition=data.get("play_condition"),
+            sacrifice_ally_cost=data.get("sacrifice_ally_cost", False),
             revive_card_id=CardLoader._parse_revive_card_id(data),
             activated_ability=CardLoader._parse_activated_ability(data, card_id),
         )
