@@ -4558,7 +4558,11 @@ function syncPendingDeathTargetUI() {
 
 function showDeathTargetPickerUI() {
     closeDeathTargetUI();
+    // closeDeathTargetUI nulls interactionMode — re-assert picker mode
+    // AFTER so the rest of this function (and downstream highlightBoard)
+    // sees the right mode.
     deathTargetActive = true;
+    interactionMode = 'death_target_pick';
 
     var banner = document.createElement('div');
     banner.id = 'death-target-banner';
