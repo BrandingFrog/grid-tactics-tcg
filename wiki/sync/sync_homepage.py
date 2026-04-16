@@ -102,23 +102,64 @@ def main_page_wikitext(cards_dir: Path | None = None) -> str:
                 )
             rules_row = (
                 f'|-\n'
-                f'| colspan="2" style="padding:8px 10px; min-height:60px;" '
+                f'| colspan="3" style="padding:8px 10px; min-height:60px;" '
                 f'| {"".join(text_parts)}\n'
             )
 
-        # ATK/HP row for minions
+        # ATK / RANGE / HP row for minions
         atk_hp_row = ""
         if attack is not None and health is not None:
+            range_text = ""
+            if atk_range is not None:
+                range_text = "MELEE" if atk_range == 0 else f"RANGE {atk_range}"
             atk_hp_row = (
                 f'|-\n'
-                f'! style="padding:6px 10px; background:#111; text-align:left; '
+                f'| style="padding:6px 10px; background:#111; text-align:left; '
                 f"font-family:'Montserrat',sans-serif; font-weight:900; text-transform:uppercase; "
-                f'-webkit-text-stroke:1px black; paint-order:stroke fill; font-size:1.1em;" '
+                f'-webkit-text-stroke:1px black; paint-order:stroke fill; font-size:1.1em; '
+                f'color:rgb(200,50,32);" '
                 f'| {attack}\U0001f5e1\ufe0f\n'
-                f'! style="padding:6px 10px; background:#111; text-align:right; '
+                f"| style=\"padding:6px 10px; background:#111; text-align:center; "
+                f"font-family:'Inter',system-ui,sans-serif; font-weight:600; font-size:0.75em; "
+                f'color:#888; letter-spacing:1px;" '
+                f'| {range_text}\n'
+                f'| style="padding:6px 10px; background:#111; text-align:right; '
                 f"font-family:'Montserrat',sans-serif; font-weight:900; text-transform:uppercase; "
-                f'-webkit-text-stroke:1px black; paint-order:stroke fill; font-size:1.1em;" '
+                f'-webkit-text-stroke:1px black; paint-order:stroke fill; font-size:1.1em; '
+                f'color:rgb(40,160,60);" '
                 f'| {health}\U0001f90d\n'
+            )
+
+        # React section for multi-purpose cards
+        react_section = ""
+        react_cond = cotd.get("react_condition")
+        if react_cond is not None and cotd.get("card_type", "") != "react":
+            from sync.sync_cards import _REACT_CONDITION_TEXT, _REACT_CONDITION_TEXT_STR
+            cond_text = _REACT_CONDITION_TEXT.get(react_cond) or _REACT_CONDITION_TEXT_STR.get(str(react_cond), "Any action")
+            extra = " while no allies" if cotd.get("react_requires_no_friendly_minions") else ""
+            react_eff = cotd.get("react_effect")
+            if react_eff and react_eff.get("type") == "deploy_self":
+                eff_text = " \u25b6 Summon"
+            else:
+                eff_text = ""
+            react_cost = cotd.get("react_mana_cost", 0)
+            cost_circle = (
+                f'<span style="position:absolute; right:6px; top:50%; transform:translateY(-50%); '
+                f'background:rgb(30,100,220); border-radius:50%; width:22px; height:22px; '
+                f'border:1.5px solid rgba(255,255,255,0.4); display:flex; align-items:center; '
+                f'justify-content:center; font-size:11px; font-weight:900; letter-spacing:0;">'
+                f'{react_cost}</span>'
+            )
+            react_section = (
+                f'|-\n'
+                f'! colspan="3" style="padding:6px 10px; background:rgb(160,40,100); text-align:left; '
+                f"font-family:'Inter',system-ui,sans-serif; font-weight:700; font-size:0.85em; "
+                f'text-transform:uppercase; letter-spacing:2px; position:relative;" '
+                f'| REACT{cost_circle}\n'
+                f'|-\n'
+                f'| colspan="3" style="padding:6px 10px; background:rgba(160,40,100,0.15); '
+                f'border:1px solid rgba(160,40,100,0.3); font-size:0.9em;" '
+                f'| {cond_text}{extra}{eff_text}\n'
             )
 
         # Element colour
@@ -130,13 +171,19 @@ def main_page_wikitext(cards_dir: Path | None = None) -> str:
         }
         elem_bg = _elem_colours.get(element, "rgb(128,128,128)")
 
+        # Type-based title bar color
+        _type_colours = {
+            "Minion": "rgb(180,140,60)", "Magic": "rgb(30,140,120)", "React": "rgb(160,40,100)",
+        }
+        title_bg = _type_colours.get(card_type, "linear-gradient(90deg,#333,#111)")
+
         cotd_section = (
             f'== Card of the Day ==\n'
             f'<div style="display:flex; justify-content:center; margin-bottom:1em;">\n'
             f'{{| style="width:280px; border:2px solid #222; border-radius:10px; '
             f'background:#1a1a1a; color:#eee; font-family:sans-serif;"\n'
             f'|-\n'
-            f'! colspan="2" style="padding:6px 10px; background:linear-gradient(90deg,#333,#111); '
+            f'! colspan="3" style="padding:6px 10px; background:{title_bg}; '
             f'border-radius:8px 8px 0 0; text-align:center; position:relative;" | '
             f'<span style="position:absolute; left:10px; top:50%; transform:translateY(-50%); '
             f"background:rgb(30,100,220); border-radius:50%; width:40px; height:40px; "
@@ -153,10 +200,11 @@ def main_page_wikitext(cards_dir: Path | None = None) -> str:
             f"font-size:9px; text-transform:uppercase; white-space:nowrap; letter-spacing:0; "
             f'-webkit-text-stroke:3px black; paint-order:stroke fill;">{element}</span>\n'
             f'|-\n'
-            f'| colspan="2" style="padding:0;" | [[File:{card_id}.png|280px|center|link=Card:{card_name}]]\n'
+            f'| colspan="3" style="padding:0;" | [[File:{card_id}.png|280px|center|link=Card:{card_name}]]\n'
             f'{meta}'
             f'{rules_row}'
             f'{atk_hp_row}'
+            f'{react_section}'
             f'|}}\n'
             f'</div>\n'
             f'\n'

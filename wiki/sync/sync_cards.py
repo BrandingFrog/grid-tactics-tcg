@@ -500,6 +500,12 @@ def card_to_wikitext(
             f"[[Keyword::{kw}| ]]" for kw in keywords
         )
 
+    # Pre-split tribe annotations so "Mage Rat" becomes two separate Tribe properties
+    if tribe:
+        fields["tribe_annotations"] = "".join(
+            f"[[Tribe::{t}| ]]" for t in tribe.split()
+        )
+
     # Build metadata table rows (Tribe, Range, Keywords) as pre-rendered wikitext
     # This avoids {{#if:0}} issues and conditional row breakage in the template
     _row_style = 'style="padding:4px 10px; background:#222; text-align:left; color:#888; font-weight:normal; font-size:0.85em;"'
