@@ -1,0 +1,55 @@
+#!/bin/bash
+# Grid Tactics Wiki — auto-sync on relevant file changes
+#
+# Order: patch notes first (creates Patch pages + card history),
+# then taxonomy (keywords/tribes/elements), then card pages
+# (which preserve the history written by --patch).
+
+set -o pipefail
+
+# Watched path patterns
+WATCHED_PATTERNS="data/cards/|data/GLOSSARY.md|src/grid_tactics/enums.py|wiki/sync/|src/grid_tactics/server/static/game.js"
+
+# Check if this commit touches any watched files
+CHANGED_FILES=$(git diff-tree --no-commit-id -r --name-only HEAD 2>/dev/null)
+if ! echo "$CHANGED_FILES" | grep -qE "$WATCHED_PATTERNS"; then
+    exit 0
+fi
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+if [ ! -f "$REPO_ROOT/wiki/.env" ]; then
+    echo "[post-commit] wiki/.env not found, skipping wiki sync"
+    exit 0
+fi
+
+# Retry helper: try up to 3 times with 10s delay on failure
+run_with_retry() {
+    local label="$1"
+    shift
+    for attempt in 1 2 3; do
+        if "$@" 2>&1 | sed "s/^/  [$label] /"; then
+            return 0
+        fi
+        echo "  [$label] attempt $attempt failed, retrying in 10s..."
+        sleep 10
+    done
+    echo "  [$label] all attempts failed"
+}
+
+echo "[post-commit] Detected card/glossary/enum changes, syncing wiki..."
+cd "$REPO_ROOT/wiki" || exit 0
+
+# 1. Patch notes first (creates Patch:X.Y.Z pages + card history entries)
+run_with_retry "patch" python -m sync.sync_wiki --patch
+
+# 2. Taxonomy if glossary or cards changed (new keywords, tribes, elements)
+if echo "$CHANGED_FILES" | grep -qE "data/GLOSSARY.md|data/cards/"; then
+    run_with_retry "taxonomy" python -m sync.sync_wiki --taxonomy
+fi
+
+# 3. Card pages last (preserves history written by step 1)
+if echo "$CHANGED_FILES" | grep -q "data/cards/"; then
+    run_with_retry "cards" python -m sync.sync_wiki --all-cards
+fi
+
+exit 0
