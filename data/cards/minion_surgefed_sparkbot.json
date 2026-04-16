@@ -20,6 +20,13 @@
     },
     "react_mana_cost": 0,
     "react_requires_no_friendly_minions": true,
+    "tips": [
+        "This card hard-counters sacrifice strategies. If your opponent is running Giant Rat or Rathopper Leap sacrifices, hold Surgebot in hand for a free 27/25 the moment they score.",
+        "The no-allies gate means this works best as a comeback card. If your board has been wiped, an opponent sacrifice lets you instantly recover with a premium body for 0 mana.",
+        "In Robot decks, RGB Lasercannon's discard cost can thin your Robot count. If Surgebot is your last card and your board is empty, you're set up for the react.",
+        "Don't be afraid to play this normally for 5 mana if the react condition seems unlikely — 27/25 melee is strong raw stats for the cost.",
+        "Against Rat decks, Giant Rat's death-promote counts as the promoted Rat appearing, not a sacrifice. But Rathopper's Leap sacrifice DOES trigger Surgebot's react."
+    ],
     "rulings": [
         "Can be played normally as a 5-mana minion, or played as a free react card (0 mana) when the opponent sacrifices a minion.",
         "The react mode can only be used if you have no friendly minions on the board. If you already control any minion, the react option is unavailable.",

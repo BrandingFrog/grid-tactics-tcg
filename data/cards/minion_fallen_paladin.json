@@ -17,5 +17,12 @@
             "target": "self_owner",
             "amount": 2
         }
+    ],
+    "tips": [
+        "Fallen Paladin heals 2 HP per turn passively. With 42 base health, it's one of the tankiest minions in the game and extremely hard to remove through chip damage.",
+        "Only obtainable via Reanimated Bones transform (1+4 = 5 mana across turns). This is the same total cost as hard-casting but lets you split the investment.",
+        "The passive heal means Fallen Paladin gets stronger the longer it stays alive. Pair it with a defensive board position to maximize its sustain.",
+        "At 16 attack, it hits hard enough to trade with most midrange minions while healing back the damage taken. It wins nearly every war of attrition.",
+        "As an Undead, Fallen Paladin shares a tribe with Grave Caller and Reanimated Bones. A dedicated Undead package gives you access to all three transform options."
     ]
 }

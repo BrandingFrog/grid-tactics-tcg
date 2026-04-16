@@ -17,5 +17,12 @@
             "target": "self_owner",
             "amount": 1
         }
+    ],
+    "tips": [
+        "Green Diodebot tutors Blue Diodebot on play. At 13/15 it's the tankiest of the three Diodebots — best for holding a lane.",
+        "The tutor chain guarantees hand refill. Play Green, get Blue in hand, play Blue next turn, get Red, and so on.",
+        "Green's 15 health lets it survive most early trades. Use it as a front-line body while building toward RGB Lasercannon.",
+        "Each Diodebot played is a Robot in hand for Lasercannon's discard cost. Green into Blue gives you two Robots to discard.",
+        "If you need to stall for mana, Green Diodebot's durability buys time while its tutor keeps your hand full."
     ]
 }

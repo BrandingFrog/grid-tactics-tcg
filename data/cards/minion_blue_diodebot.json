@@ -17,5 +17,12 @@
             "target": "self_owner",
             "amount": 1
         }
+    ],
+    "tips": [
+        "Blue Diodebot tutors Red Diodebot, completing the cycle. At 14/8 it's the most aggressive Diodebot — highest attack but lowest health.",
+        "Blue is the glass cannon of the chain. Play it when you need damage output, not when you need a blocker.",
+        "The tutor chain means drawing any single Diodebot eventually gets you all three. Blue completing the cycle back to Red means the chain is infinite if they keep dying and being re-drawn.",
+        "Discard Blue and another Robot for RGB Lasercannon's cost — Blue's fragile stats make it a better discard target than the tankier Green.",
+        "At 14 attack for 2 mana, Blue trades up into 3-mana minions. Use it aggressively, then recycle via the tutor chain."
     ]
 }

@@ -37,6 +37,13 @@
             "amount": 1
         }
     ],
+    "tips": [
+        "Best played late when you already have multiple Mages on the board with high Dark Matter stacks — the buff scales multiplicatively with both Mage count and DM.",
+        "Discard this with Shady Trade Deal for a 2-for-1: Shady grants +1 DM to all Mages, then Stash's on-discard grants another +1 DM. You net +2 DM per Mage for just 1 mana.",
+        "Pair with Ratchanter — the Rats he conjures don't benefit, but Ratchanter himself is a Mage and receives the full buff.",
+        "At 5 mana this competes with Erebus for your mana. If your DM is high enough, Erebus may be cheaper and put a body on board. Use Stash when you need to buff existing Mages rather than deploy a new one.",
+        "Sometimes it's better to hold this card as discard fodder than to play it — the on-discard effect costs 0 mana and still grants DM."
+    ],
     "rulings": [
         "When played, each friendly Mage on the board gains attack and health equal to your current Dark Matter stack count, then gains +1 Dark Matter.",
         "The buff is applied first, then the Dark Matter is granted. A Mage with 3 Dark Matter gets +3🗡️/+3🤍, then goes to 4 Dark Matter.",

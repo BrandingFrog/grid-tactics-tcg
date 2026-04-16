@@ -13,5 +13,12 @@
             "amount": 3,
             "revive_card_id": "rat"
         }
+    ],
+    "tips": [
+        "Revives up to 3 Common Rats from the grave. After a board wipe, this instantly rebuilds your Rat count for Giant Rat promote targets.",
+        "Pair with Giant Rat — if your Rats were killed in combat, Ratical Resurrection brings them back as fresh promote fodder.",
+        "The revived Rats deploy to your back row. In a long game, this gives you 3 bodies for 3 mana — the best board-width spell available.",
+        "Use this after Ratchanter has conjured and lost several Rats. The conjured Rats go to the grave when killed, making them valid revive targets.",
+        "Timing matters — play this when you have board space and need bodies, not when your lanes are already full."
     ]
 }

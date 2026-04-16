@@ -10,5 +10,12 @@
     "element": "earth",
     "tribe": "Rat",
     "effects": [],
-    "flavour_text": "Rats. We're rats. We're the rats."
+    "flavour_text": "Rats. We're rats. We're the rats.",
+    "tips": [
+        "Common Rat's real value is as promote fodder for Giant Rat. A 1-mana investment that becomes a 30/30 when Giant Rat dies.",
+        "Ratchanter conjures copies of this card from the deck for 2 mana, thinning your draws and building board width.",
+        "Keep at least one alive whenever possible — it's insurance for Giant Rat's death trigger and a valid target for Grave Caller's Dark Matter buff.",
+        "Multiple Common Rats on board multiply the value of Ratchanter's activated ability, since all Rats get buffed each activation.",
+        "At 10/10 for 1 mana, it can trade into damaged midrange minions or chip in sacrifice pressure by advancing down a lane."
+    ]
 }

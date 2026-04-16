@@ -16,6 +16,13 @@
             "amount": 1
         }
     ],
+    "tips": [
+        "The best discard target is Dark Matter Stash — you get Shady's +1 DM per Mage AND Stash's on-discard +1 DM per Mage, netting +2 DM per Mage for 1 mana.",
+        "Discarding any card also enables Illicit Shadow Stones on your next turn (play condition: discarded last turn). Plan your sequencing across turns.",
+        "At only 1 mana, this fits into almost any turn alongside another action. Play a Mage, then follow up with Shady Trade Deal to immediately start building DM.",
+        "Be careful what you discard — cards go to the exhaust pile, not the grave. Ratical Resurrection cannot bring back discarded cards.",
+        "This card is the engine of the Dark Mage archetype. Without it, DM stacking is much slower. Mulligan aggressively for this in Mage-heavy decks."
+    ],
     "rulings": [
         "To play this card, you must discard one other card from your hand (any card, any type). The discarded card goes to the exhaust pile.",
         "Each friendly Mage on the board gains +1 Dark Matter. Mages in hand or deck are not affected.",

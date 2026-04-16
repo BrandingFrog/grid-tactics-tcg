@@ -10,5 +10,12 @@
     "element": "dark",
     "tribe": "Mage",
     "cost_reduction": "dark_matter",
-    "effects": []
+    "effects": [],
+    "tips": [
+        "Erebus costs 20 mana minus your Dark Matter stacks. With 15+ DM, it becomes a 5-mana 80/80 — the most efficient body in the game.",
+        "Build DM with Shady Trade Deal and Grave Caller before dropping Erebus. The entire Dark Mage archetype exists to make this card affordable.",
+        "As a Mage, Erebus also receives Dark Matter Stash buffs after being played. An 80/80 that keeps growing is nearly impossible to remove.",
+        "Don't wait for 0-cost — playing Erebus at 8-10 mana is still a dominant play. Holding too long risks losing your Mages and DM momentum.",
+        "Erebus is the primary reason to run the Dark Mage package. If your opponent sees Ratchanter and Shady Trade Deal, they should expect Erebus is coming."
+    ]
 }

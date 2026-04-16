@@ -17,6 +17,13 @@
             "amount": 1
         }
     ],
+    "tips": [
+        "The classic setup: play Shady Trade Deal (discard any card) on turn N, then play Illicit Shadow Stones for free on turn N+1. Two DM triggers across two turns for just 1 mana total.",
+        "The react mode is a hidden counter to discard-heavy opponents — if they use their own Shady Trade Deal, you can react with this for 1 mana to steal DM momentum.",
+        "This is one of the few cards that can function as both a proactive play and a reactive counter. Keep it in hand even if you can't meet the play condition — the react mode may come up.",
+        "In a Mage-heavy board, this card's value scales with your Mage count. With 3 Mages out, it's +3 DM total for 0 mana.",
+        "Discarding this card via Shady Trade Deal does NOT trigger its effect — it has no on-discard trigger. Save Dark Matter Stash for discard fodder instead."
+    ],
     "rulings": [
         "This card can only be played from hand if you discarded a card on your previous turn (e.g. via Shady Trade Deal).",
         "When played as a magic card (0 mana), each friendly Mage gains +1 Dark Matter.",

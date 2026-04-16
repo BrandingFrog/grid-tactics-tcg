@@ -586,6 +586,10 @@ def card_to_wikitext(
     # Standard card page sections
     result += "\n\n== Gallery =="
     result += "\n\n== Tips =="
+    tips = card.get("tips", [])
+    if tips:
+        for t in tips:
+            result += f"\n* {t}"
     result += "\n\n== Rulings =="
     rulings = card.get("rulings", [])
     if rulings:

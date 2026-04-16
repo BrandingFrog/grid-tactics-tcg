@@ -17,5 +17,12 @@
             "target": "single_target",
             "amount": 5
         }
+    ],
+    "tips": [
+        "Pyre Archer applies burn on every attack at range 2. Over multiple turns, the burn damage stacks and can outpace the direct attack damage.",
+        "Only obtainable via Reanimated Bones transform (1+2 = 3 mana total). This is the cheapest transform option and gets burn pressure online fastest.",
+        "At 9/5, Pyre Archer is fragile. Keep it in the back row behind a tanky minion — its range 2 means it can attack from two rows away.",
+        "Pair with Emberplague Rat for a double burn strategy. Targets caught between both will take passive + on-attack burn simultaneously.",
+        "As an Archer and Undead, it shares tribal tags with both ranged and undead synergies. The dual tribe may become more relevant as new cards are added."
     ]
 }

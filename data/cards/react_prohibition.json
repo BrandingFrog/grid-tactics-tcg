@@ -14,6 +14,13 @@
             "amount": 10
         }
     ],
+    "tips": [
+        "Save this for high-value magic cards like Dark Matter Stash or Ratical Resurrection. Negating a 1-mana Shady Trade Deal with a 4-mana Prohibition is a losing trade.",
+        "The threat of Prohibition is often as valuable as playing it. If your opponent knows you have Water mana open, they may delay their key spells.",
+        "At 4 mana, this is expensive to hold up. Try to plan turns where you can play a minion or attack AND still have 4 mana in reserve.",
+        "Does not stop minion summons or activated abilities. Against creature-heavy decks like Rats or Robots, this card may be a dead draw.",
+        "Against Dark Mage decks, negating Dark Matter Stash is devastating — it wastes their 5 mana AND denies the DM buff that their entire strategy depends on."
+    ],
     "rulings": [
         "Can only be played in the react window immediately after your opponent plays a magic card.",
         "Negates the opponent's magic card entirely — all of its effects are cancelled and it is sent to the exhaust pile.",

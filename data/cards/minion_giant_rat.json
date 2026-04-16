@@ -19,6 +19,13 @@
     ],
     "promote_target": "rat",
     "unique": true,
+    "tips": [
+        "Giant Rat is the Rat deck's resilience engine. As long as you have any Rat on the board, killing Giant Rat just creates another one at full stats.",
+        "Pair with Ratchanter's conjured Common Rats — they serve as both board presence and promote fodder when Giant Rat dies.",
+        "Position a Common Rat in your back row as insurance. If Giant Rat dies on the front line, the back-row Rat promotes into a fresh 30/30 without losing tempo.",
+        "To The Ratmobile! tutoring 2 Rats helps ensure you always have promote targets available when Giant Rat falls.",
+        "Be aware that Unique prevents you from playing a second Giant Rat while one is alive. If your Giant Rat is damaged, you cannot play a fresh copy — you must wait for it to die and promote."
+    ],
     "rulings": [
         "Unique means only one Giant Rat can be on the board at a time. You cannot play a second copy while one is already in play.",
         "When Giant Rat dies, its death effect promotes any Rat you control into a new Giant Rat. The promoted Rat is replaced in-place on the board.",

@@ -17,5 +17,12 @@
             "amount": 0,
             "scale_with": "dark_matter"
         }
+    ],
+    "tips": [
+        "Dark Matter Battery deals passive damage to the opponent's HP equal to your Dark Matter stacks each turn. At high DM, this is a win condition by itself.",
+        "At range 2, Battery can sit in the back row and ping the opponent's life total without ever entering combat. Protect it with front-line minions.",
+        "Unlike other DM cards, Battery is a Machine, not a Mage — it doesn't benefit from Mage-specific DM buffs. Its value is purely in the passive damage.",
+        "Pair with Grave Caller and Shady Trade Deal to ramp DM quickly. Each DM stack increases Battery's damage output permanently.",
+        "At 0/20, Battery can't attack normally. Its entire value is the passive. If the opponent ignores it, the damage adds up fast; if they focus it, your other minions operate freely."
     ]
 }

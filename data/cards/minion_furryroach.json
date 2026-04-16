@@ -16,5 +16,12 @@
             "target": "self_owner",
             "amount": 10
         }
+    ],
+    "tips": [
+        "Furryroach rallies a friendly minion forward when it moves. Use this to push a high-value minion closer to the enemy back row for a sacrifice threat.",
+        "At 1 mana, Furryroach is the cheapest way to accelerate board position. Play it early, move it forward, and drag an ally along.",
+        "Rally pairs well with slow, tanky minions like Fallen Paladin or Giant Rat — they get a free extra tile of forward progress each time Furryroach moves.",
+        "The rally triggers on each move, not just once. If Furryroach survives multiple turns, it can push allies across the entire board.",
+        "As an Insect with no tribal synergies yet, Furryroach is a pure utility card. Splash it into any deck that wants faster board advancement."
     ]
 }
