@@ -22,6 +22,6 @@
         "If every tile ahead of Rathopper is occupied by enemies, Leap becomes a sacrifice — Rathopper hops over all of them and scores. This is a surprise win condition.",
         "Rathopper cannot leap over friendly minions. Clear your own lane before trying to leap — otherwise it moves normally.",
         "At 19/13, Rathopper hits hard but dies easily. Treat it as a glass cannon or sacrifice threat, not a sustained fighter.",
-        "Pair with Sparkfed Surgebot awareness — a Rathopper leap sacrifice triggers the opponent's Surgebot react if they're holding one with an empty board."
+        "Rathopper's leap sacrifice won't trigger the opponent's Sparkfed Surgebot react — Surgebot requires no allies on board, and the opponent would need their own board empty, not yours."
     ]
 }
