@@ -1696,15 +1696,13 @@ function renderCardFrame(c, opts) {
         var condText = condMap[c.react_condition] || 'Enemy acts';
         var extraCond = c.react_requires_no_friendly_minions ? ' & no allies' : '';
         var costText = c.react_mana_cost > 0 ? ' (' + c.react_mana_cost + ')' : '';
-        var deployText = (c.react_effect && c.react_effect.type === 5) ? ' ▶ Summon' : '';
-        html += '<div class="card-effect-full">' + condText + extraCond + deployText + '</div>';
-        // Magic+react: show effects array as the react effect text
-        if (!c.react_effect && c.effects && c.effects.length > 0) {
-            var reactDesc = getEffectDescription(c.effects, c);
-            reactDesc.split('. ').forEach(function(line) {
-                if (line) html += '<div class="card-effect-full">' + line + '</div>';
-            });
+        var reactEffectText = '';
+        if (c.react_effect && c.react_effect.type === 5) {
+            reactEffectText = 'Summon';
+        } else if (!c.react_effect && c.effects && c.effects.length > 0) {
+            reactEffectText = getEffectDescription(c.effects, c);
         }
+        html += '<div class="card-effect-full">' + condText + extraCond + (reactEffectText ? ' ▶ ' + reactEffectText : '') + '</div>';
         if (isMultiPurpose) html += '</div></div>';
     }
     // Stats row at bottom: ATK | RANGE | HP (minions only)
