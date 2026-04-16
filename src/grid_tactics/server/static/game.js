@@ -1507,6 +1507,15 @@ function populateTooltip(hostEl, numericId, opts) {
             var rEffect = '';
             if (rc.unique) rEffect += 'Unique. ';
             if (rc.effects && rc.effects.length > 0) rEffect += getEffectDescription(rc.effects, rc);
+            if (rc.activated_ability) {
+                var rab = rc.activated_ability;
+                var rabDesc = rab.mana_cost > 0 ? 'Active (' + rab.mana_cost + '): ' : 'Active: ';
+                if (rab.effect_type === 'conjure_rat_and_buff') rabDesc += 'Conjure + DM buff';
+                else if (rab.effect_type === 'dark_matter_buff') rabDesc += 'Target gains (DM)' + SWORD;
+                else if (rab.effect_type === 'summon_token') rabDesc += 'Summon ' + (rab.summon_card_id || '');
+                else rabDesc += rab.name || rab.effect_type;
+                rEffect += rabDesc;
+            }
             if (rEffect) relHtml += '<div class="tooltip-related-effect">' + rEffect + '</div>';
             relHtml += '</div></div>';
         });
