@@ -30,7 +30,7 @@
     "rulings": [
         "Can be played normally as a 5-mana minion, or played as a free react card (0 mana) when the opponent sacrifices a minion.",
         "The react mode can only be used if you have no friendly minions on the board. If you already control any minion, the react option is unavailable.",
-        "When played via react, Sparkfed Surgebot is summoned directly to your back row as if you had played it normally.",
+        "When played via react, you choose any empty cell in your back 2 rows to place Sparkfed Surgebot — same placement rules as playing it normally.",
         "If your opponent sacrifices and you have no minions, you may react with this card even if you could not afford its normal 5-mana cost."
     ]
 }
