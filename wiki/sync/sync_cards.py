@@ -70,6 +70,7 @@ _TRIGGER_PREFIX: dict[int | str, str] = {
     4: "[[Move]]", "on_move": "[[Move]]",
     5: "[[End]]", "passive": "[[End]]",
     6: "[[Discarded]]", "on_discard": "[[Discarded]]",
+    7: "Passive", "aura": "Passive",
 }
 
 
@@ -189,9 +190,14 @@ def derive_keywords(card: dict) -> list[str]:
             "buff_attack": "Buff",
             "buff_health": "Buff",
             "revive": "Revive",
+            "draw": "Draw",
+            "burn_bonus": "Burn",
         }
         if eff_type in _EFFECT_KW:
             kws.add(_EFFECT_KW[eff_type])
+        # Aura trigger → Passive keyword
+        if trigger in (7, "aura"):
+            kws.add("Passive")
 
     # React effect (separate from effects array)
     react_eff = card.get("react_effect")
@@ -349,6 +355,11 @@ def build_rules_text(card: dict, name_map: dict[str, str] | None = None) -> str:
             revive_link = _wikilink(revive_id, name_map) if revive_id else "a card"
             up_to = f"up to {amount} " if amount > 1 else ""
             desc = f"{pfx}[[Revive]] {up_to}{revive_link}"
+        elif eff_type == "draw":
+            count_text = f"{amount} cards" if amount > 1 else "1 card"
+            desc = f"{pfx}[[Draw]] {count_text}"
+        elif eff_type == "burn_bonus":
+            desc = f"Passive: [[Burn]] +{amount}"
         else:
             desc = f"{pfx}Effect"
         parts.append(desc)

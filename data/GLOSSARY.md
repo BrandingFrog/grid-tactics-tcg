@@ -14,6 +14,7 @@ Update this file and the matching `KEYWORD_GLOSSARY` in `src/grid_tactics/server
 | Damaged | This effect activates when the minion takes damage. |
 | Start | This effect triggers at the start of the owner's turn, before any actions. |
 | End | This effect triggers at the end of the owner's turn, after all actions. |
+| Passive | This effect is always active while the minion is on the board. |
 | Active | This ability can be used once per turn instead of attacking. |
 
 ## Mechanic Keywords
@@ -41,3 +42,4 @@ Update this file and the matching `KEYWORD_GLOSSARY` in `src/grid_tactics/server
 | Leap | If blocked by an enemy, jump over to the next available tile. Cannot leap allies. If all tiles ahead are enemy-occupied, enables sacrifice. |
 | Conjure | Summon a card from your deck directly to the board. |
 | Revive | Summon a card from the Grave to the board. |
+| Draw | Draw cards from your deck to your hand. |

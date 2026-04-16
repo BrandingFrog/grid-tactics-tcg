@@ -269,7 +269,15 @@ def _resolve_self_owner(
     For minion-targeting effects (BUFF_ATTACK, BUFF_HEALTH): target the minion at caster_pos.
     For player-targeting effects (DAMAGE, HEAL): target the owning player.
     """
-    if effect.effect_type in (EffectType.DAMAGE, EffectType.HEAL):
+    if effect.effect_type == EffectType.DRAW:
+        player_idx = _player_index_for_side(caster_owner)
+        player = state.players[player_idx]
+        for _ in range(effect.amount):
+            if player.deck:
+                player, _card_id = player.draw_card()
+        new_players = _replace_player(state.players, player_idx, player)
+        return replace(state, players=new_players)
+    elif effect.effect_type in (EffectType.DAMAGE, EffectType.HEAL):
         # Target the owning player
         player_idx = _player_index_for_side(caster_owner)
         return _apply_effect_to_player(state, effect, player_idx)

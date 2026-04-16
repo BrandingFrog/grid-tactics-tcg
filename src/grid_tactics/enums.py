@@ -61,6 +61,8 @@ class EffectType(IntEnum):
     APPLY_BURNING = 15  # Phase 14.3: grant N burning_stacks to the target minion (stacks additively)
     GRANT_DARK_MATTER = 16  # Add `amount` Dark Matter stacks to a target minion. Currently only consumed by Ratchanter's activated ability (magnitude scales with caster.dark_matter_stacks).
     REVIVE = 17  # Summon up to `amount` copies of revive_card_id from grave to the board
+    DRAW = 18    # Draw `amount` cards from deck to hand
+    BURN_BONUS = 19  # Aura: adds `amount` to burn tick damage for this player's burning enemies
 
 
 class ReactCondition(IntEnum):
@@ -94,8 +96,9 @@ class TriggerType(IntEnum):
     ON_ATTACK = 2   # When the minion attacks
     ON_DAMAGED = 3  # When the minion takes damage
     ON_MOVE = 4     # When the minion moves
-    PASSIVE = 5     # Fires every turn (passive effects)
+    PASSIVE = 5     # Fires every turn (end of turn effects)
     ON_DISCARD = 6  # Fires when this card is discarded (sent from hand to exhaust pile)
+    AURA = 7        # Always active while this minion is alive on the board
 
 
 class TargetType(IntEnum):

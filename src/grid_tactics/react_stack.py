@@ -79,6 +79,20 @@ def tick_status_effects(state: GameState, library: CardLibrary) -> GameState:
     # Snapshot in (row, col) order for determinism
     ordered = sorted(state.minions, key=lambda m: (m.position[0], m.position[1]))
 
+    # Calculate burn bonus from opponent's aura minions (BURN_BONUS effect)
+    from grid_tactics.enums import EffectType, TriggerType
+    opponent_side = PlayerSide.PLAYER_1 if active_side == PlayerSide.PLAYER_2 else PlayerSide.PLAYER_2
+    burn_bonus = 0
+    for m in state.minions:
+        if m.owner != opponent_side or m.current_health <= 0:
+            continue
+        card_def = library.get_by_id(m.card_numeric_id)
+        for eff in card_def.effects:
+            if eff.effect_type == EffectType.BURN_BONUS and eff.trigger == TriggerType.AURA:
+                burn_bonus += eff.amount
+
+    total_burn = BURN_DAMAGE + burn_bonus
+
     new_minions_by_id: dict[int, MinionInstance] = {}
     for m in ordered:
         if not m.is_burning:
@@ -87,7 +101,7 @@ def tick_status_effects(state: GameState, library: CardLibrary) -> GameState:
             continue
         new_minions_by_id[m.instance_id] = _replace(
             m,
-            current_health=m.current_health - BURN_DAMAGE,
+            current_health=m.current_health - total_burn,
         )
 
     if not new_minions_by_id:

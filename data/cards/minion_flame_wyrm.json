@@ -1,0 +1,26 @@
+{
+    "card_id": "flame_wyrm",
+    "stable_id": 42,
+    "name": "Flame Wyrm",
+    "card_type": "minion",
+    "mana_cost": 5,
+    "attack": 33,
+    "health": 33,
+    "range": 0,
+    "element": "fire",
+    "tribe": "Wyrm",
+    "effects": [
+        {
+            "type": "draw",
+            "trigger": "on_play",
+            "target": "self_owner",
+            "amount": 1
+        },
+        {
+            "type": "burn_bonus",
+            "trigger": "aura",
+            "target": "self_owner",
+            "amount": 1
+        }
+    ]
+}

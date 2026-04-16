@@ -1142,6 +1142,8 @@ function renderCardBrowser() {
             else if (kw === 'negate' && c.effects && c.effects.some(function(e) { return e.type === 4; })) hasKeyword = true;
             else if (kw === 'burn' && c.effects && c.effects.some(function(e) { return e.type === 10; })) hasKeyword = true;
             else if (kw === 'end' && c.effects && c.effects.some(function(e) { return e.trigger === 5 || e.type === 12; })) hasKeyword = true;
+            else if (kw === 'draw' && c.effects && c.effects.some(function(e) { return e.type === 18; })) hasKeyword = true;
+            else if (kw === 'passive' && c.effects && c.effects.some(function(e) { return e.trigger === 7; })) hasKeyword = true;
             if (!hasKeyword) return;
         }
         // Search filter
@@ -1263,6 +1265,8 @@ var KEYWORD_GLOSSARY = {
     'Leap': 'If blocked by an enemy, jump over to the next available tile. Cannot leap allies. If all tiles ahead are enemy-occupied, enables sacrifice.',
     'Conjure': 'Summon a card from your deck directly to the board.',
     'Revive': 'Summon a card from the Grave to the board.',
+    'Draw': 'Draw cards from your deck to your hand.',
+    'Passive': 'This effect is always active while the minion is on the board.',
 };
 
 // Build the shared content for a card tooltip. Both the deck-builder
@@ -1404,6 +1408,9 @@ function buildCardTooltipContent(c) {
             if (eff.type === 15) addKw('Burning');
             if (eff.type === 16) addKw('Dark Matter');
             if (eff.type === 17) addKw('Revive');
+            if (eff.type === 18) addKw('Draw');
+            if (eff.type === 19) { addKw('Passive'); addKw('Burn'); }
+            if (eff.trigger === 7) addKw('Passive');
         });
     }
     matchedKeywords.forEach(function(kw) {
@@ -5372,6 +5379,11 @@ function getEffectDescription(effects, cardData) {
         } else if (type === 17) { // Revive
             var reviveName = (cardData && cardData.revive_card_id) ? findCardNameById(cardData.revive_card_id) : 'minion';
             desc = prefix + 'Revive ' + amount + ' ' + reviveName + (amount > 1 ? 's' : '') + ' from Grave';
+        } else if (type === 18) { // Draw
+            var cardText = amount > 1 ? amount + ' cards' : '1 card';
+            desc = prefix + 'Draw ' + cardText;
+        } else if (type === 19) { // Burn Bonus (passive aura)
+            desc = 'Passive: Burn +' + amount;
         } else {
             console.warn('[getEffectDescription] Unhandled effect type ' + type + ' on card "' + (cardData && cardData.card_id) + '". Add a case for EffectType ' + type + ' in getEffectDescription().');
             desc = prefix + 'Effect';
