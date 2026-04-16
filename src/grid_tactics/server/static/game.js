@@ -4627,7 +4627,10 @@ function showOpponentDeathPickToast() {
 }
 
 function findCardNameByNid(nid) {
-    if (cardDefsMap && cardDefsMap[nid]) return cardDefsMap[nid].name || ('Card #' + nid);
+    // cardDefs is the nid-keyed map populated from sandbox_card_defs /
+    // the game-start card defs payload; cardDefsMap was a stale name.
+    var defs = (typeof cardDefs !== 'undefined' && cardDefs) ? cardDefs : null;
+    if (defs && defs[nid]) return defs[nid].name || ('Card #' + nid);
     return 'Card #' + nid;
 }
 
