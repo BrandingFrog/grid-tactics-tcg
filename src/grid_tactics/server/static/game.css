@@ -1405,7 +1405,7 @@ body {
   overflow: hidden;
 }
 .card-multi-half:last-child {
-  width: 80%;
+  width: 90%;
   margin: 4px auto;
   background: rgba(160, 40, 100, 0.15);
   border: 1px solid rgba(160, 40, 100, 0.4);
