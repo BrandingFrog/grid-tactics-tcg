@@ -417,7 +417,12 @@ def build_rules_text(card: dict, name_map: dict[str, str] | None = None) -> str:
             effect_text = " ▶ " + ". ".join(effect_parts) if effect_parts else ""
         else:
             effect_text = ""
-        parts.append(f"[[React]]{cost_text}: {cond_text}{extra}{effect_text}")
+        if card.get("card_type", "") == "react":
+            # Pure react — card type badge already says REACT, just show condition
+            parts.append(f"{cond_text}{extra}{effect_text}")
+        else:
+            # Multi-purpose — needs the React label
+            parts.append(f"[[React]]{cost_text}: {cond_text}{extra}{effect_text}")
 
     return ". ".join(parts)
 
