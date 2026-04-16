@@ -18,7 +18,7 @@ from typing import Optional
 
 from grid_tactics.actions import Action
 from grid_tactics.card_library import CardLibrary
-from grid_tactics.enums import ActionType, CardType, EffectType, TriggerType, TurnPhase
+from grid_tactics.enums import ActionType, CardType, EffectType, PlayerSide, TriggerType, TurnPhase
 from grid_tactics.game_state import GameState
 from grid_tactics.minion import BURN_DAMAGE, MinionInstance
 from grid_tactics.types import AUTO_DRAW_ENABLED, MAX_REACT_STACK_DEPTH
