@@ -507,13 +507,37 @@ def card_to_wikitext(
     meta_rows = []
     if tribe:
         tribe_links = "<br/>".join(f"[[{t}]]" for t in tribe.split())
-        meta_rows.append(f"{{{{!}}}}-\n! {_row_style} {{{{!}}}} Tribe\n{{{{!}}}} {_val_style} {{{{!}}}} {tribe_links}")
-    if is_minion and card.get("range") is not None:
-        range_val = "[[Melee]]" if card.get("range") == 0 else f"[[Ranged|Range {card.get('range')}]]"
-        meta_rows.append(f"{{{{!}}}}-\n! {_row_style} {{{{!}}}} Range\n{{{{!}}}} {_val_style} {{{{!}}}} {range_val}")
+        meta_rows.append(f'{{{{!}}}}-\n! {_row_style} {{{{!}}}} Tribe\n{{{{!}}}} colspan="2" {_val_style} {{{{!}}}} {tribe_links}')
+    # Range now shown in stats bar, not meta_rows
     # Keywords row removed — keywords are linked inline in effect text instead
     if meta_rows:
         fields["meta_rows"] = "\n".join(meta_rows)
+
+    # React section for multi-purpose cards
+    react_cond = card.get("react_condition")
+    if react_cond is not None and card_type != "react":
+        # Build react rules text
+        cond_text = _REACT_CONDITION_TEXT.get(react_cond) or _REACT_CONDITION_TEXT_STR.get(str(react_cond), "Any action")
+        extra = " while no allies" if card.get("react_requires_no_friendly_minions") else ""
+        react_effect = card.get("react_effect")
+        if react_effect and react_effect.get("type") == "deploy_self":
+            effect_text = " ▶ [[Summon]]"
+        elif not react_effect and effects:
+            effect_parts = []
+            for eff in effects:
+                eff_type = eff.get("type", "")
+                if eff_type == "grant_dark_matter":
+                    t = eff.get("target_tribe", "")
+                    t_text = "Dark Mage" if t == "Mage" else (t or "ally")
+                    effect_parts.append(f"[[Dark Matter]] +{eff.get('amount', 1)} per ally {t_text}")
+                else:
+                    effect_parts.append(eff_type)
+            effect_text = " ▶ " + ". ".join(effect_parts) if effect_parts else ""
+        else:
+            effect_text = ""
+        fields["react_rules"] = f"{cond_text}{extra}{effect_text}"
+        react_cost = card.get("react_mana_cost", 0)
+        fields["react_cost"] = str(react_cost)
 
     # Art
     if art_exists:
