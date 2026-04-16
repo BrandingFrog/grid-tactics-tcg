@@ -3,7 +3,7 @@
     "stable_id": 2,
     "name": "Prohibition",
     "card_type": "react",
-    "mana_cost": 2,
+    "mana_cost": 4,
     "element": "water",
     "react_condition": "opponent_plays_magic",
     "effects": [
