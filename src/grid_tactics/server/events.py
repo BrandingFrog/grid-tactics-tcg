@@ -625,10 +625,28 @@ def register_events(room_manager: RoomManager) -> None:
     # and re-emits the full god-view state via _emit_sandbox_state.
 
     def _emit_sandbox_state(sandbox, sid):
-        """Single source of truth for sandbox state emission. God view, no filter."""
-        state_dict = sandbox.state.to_dict()
-        enrich_pending_post_move_attack(sandbox.state, state_dict, sandbox.library)
-        enrich_pending_revive(sandbox.state, state_dict, 0, sandbox.library)
+        """Single source of truth for sandbox state emission. God view, no filter.
+
+        Enriches pending_tutor / pending_death / pending_post_move_attack /
+        pending_revive so the sandbox UI can render modals and target
+        highlights. Sandbox is god-mode — whichever player the engine says
+        should pick, we enrich from THEIR POV so the UI shows full picker
+        state (valid targets + banner) regardless of which player the user
+        is currently viewing as.
+        """
+        state = sandbox.state
+        state_dict = state.to_dict()
+        enrich_pending_post_move_attack(state, state_dict, sandbox.library)
+        # For revive/tutor/death, the picker is the owner of the pending
+        # state; enrich from their POV so the sandbox always gets the full
+        # picker payload (valid_targets, matches, etc.).
+        revive_viewer = state.pending_revive_player_idx if state.pending_revive_player_idx is not None else 0
+        tutor_viewer = state.pending_tutor_player_idx if state.pending_tutor_player_idx is not None else 0
+        death_target = getattr(state, "pending_death_target", None)
+        death_viewer = int(death_target.owner_idx) if death_target is not None else 0
+        enrich_pending_revive(state, state_dict, revive_viewer, sandbox.library)
+        enrich_pending_tutor_for_viewer(state, state_dict, tutor_viewer, sandbox.library)
+        enrich_pending_death_target(state, state_dict, death_viewer, sandbox.library)
         actions = sandbox.legal_actions() if not sandbox.state.is_game_over else ()
         serialized = [serialize_action(a) for a in actions]
         emit("sandbox_state", {

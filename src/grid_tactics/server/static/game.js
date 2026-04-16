@@ -4538,9 +4538,9 @@ function syncPendingDeathTargetUI() {
         closeDeathTargetUI();
         return;
     }
-    if (ownerIdx === myPlayerIdx) {
-        // I'm the picker — enter death-target mode. Click an enemy minion
-        // (highlighted as a valid target) to submit DEATH_TARGET_PICK.
+    // Sandbox is god-mode — always enter picker UI regardless of myPlayerIdx.
+    var isPicker = sandboxMode || ownerIdx === myPlayerIdx;
+    if (isPicker) {
         if (!deathTargetActive) {
             deathTargetActive = true;
             interactionMode = 'death_target_pick';
@@ -4564,7 +4564,15 @@ function showDeathTargetPickerUI() {
     banner.style.top = '60px';
 
     var cardName = gameState.pending_death_card_name || 'Death effect';
-    banner.textContent = 'Pick an enemy to destroy (' + cardName + ' death)';
+    var filter = gameState.pending_death_filter || 'enemy_minion';
+    var text;
+    if (filter === 'friendly_promote') {
+        banner.style.background = '#1b5a7a';
+        text = 'Pick an ally to promote (' + cardName + ' death)';
+    } else {
+        text = 'Pick an enemy to destroy (' + cardName + ' death)';
+    }
+    banner.textContent = text;
     document.body.appendChild(banner);
 
     highlightBoard();
