@@ -4660,9 +4660,9 @@ function highlightBoard() {
 
     // Revive placement tile highlighting (Ratical Resurrection modal).
     // Uses legalActions REVIVE_PLACE entries to mark valid tiles.
-    if (interactionMode === 'revive_place' && window.legalActions) {
-        for (var _i = 0; _i < window.legalActions.length; _i++) {
-            var _a = window.legalActions[_i];
+    if (interactionMode === 'revive_place' && legalActions) {
+        for (var _i = 0; _i < legalActions.length; _i++) {
+            var _a = legalActions[_i];
             if (_a.action_type === 15 && _a.position) {  // REVIVE_PLACE
                 var _cell = document.querySelector('.board-cell[data-row="' + _a.position[0] + '"][data-col="' + _a.position[1] + '"]');
                 if (_cell) _cell.classList.add('cell-valid');
