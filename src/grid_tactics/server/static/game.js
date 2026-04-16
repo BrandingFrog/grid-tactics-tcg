@@ -4541,9 +4541,12 @@ function syncPendingDeathTargetUI() {
     // Sandbox is god-mode — always enter picker UI regardless of myPlayerIdx.
     var isPicker = sandboxMode || ownerIdx === myPlayerIdx;
     if (isPicker) {
+        // Always (re-)enter the picker mode on every state update while the
+        // modal is open — a prior clearSelection() may have wiped
+        // interactionMode even though deathTargetActive remained true.
+        interactionMode = 'death_target_pick';
         if (!deathTargetActive) {
             deathTargetActive = true;
-            interactionMode = 'death_target_pick';
             showDeathTargetPickerUI();
         }
     } else {
