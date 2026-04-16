@@ -129,9 +129,18 @@ def patch_index_wikitext(patches: list[dict]) -> str:
     """Generate wikitext for Patch:Index page.
 
     Each entry in patches should have keys: version, date, commit_sha.
-    Sorted newest-first by version string (lexicographic, works for 0.x.y).
+    Sorted newest-first by semantic version.
     """
-    sorted_patches = sorted(patches, key=lambda p: p["version"], reverse=True)
+    def _semver_key(p):
+        parts = []
+        for part in p["version"].split("."):
+            try:
+                parts.append(int(part))
+            except ValueError:
+                parts.append(0)
+        return parts
+
+    sorted_patches = sorted(patches, key=_semver_key, reverse=True)
 
     lines: list[str] = []
     lines.append("This page lists all patches for Grid Tactics, newest first.")
