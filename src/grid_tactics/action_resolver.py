@@ -758,12 +758,14 @@ def _apply_transform(
     new_player = player.spend_mana(matched_cost)
     new_players = _replace_player(state.players, active_idx, new_player)
 
-    # Replace minion stats
+    # Replace minion stats — full reset: new card, fresh HP, clear all buffs/status
     new_minion = replace(
         minion,
         card_numeric_id=target_numeric_id,
         current_health=target_card.health,
         attack_bonus=0,
+        max_health_bonus=0,
+        is_burning=False,
     )
     new_minions = _replace_minion(state.minions, minion.instance_id, new_minion)
 

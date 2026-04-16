@@ -719,12 +719,14 @@ def _apply_promote_on_death(
         candidates.sort(key=lambda m: (m.position[0], m.position[1], m.instance_id))
 
     chosen = candidates[0]
+    # Full reset: new card, fresh HP, clear all buffs/debuffs/status
     promoted = replace(
         chosen,
         card_numeric_id=dying_card_numeric_id,
         current_health=dying_card_def.health,
         attack_bonus=0,
         max_health_bonus=0,
+        is_burning=False,
     )
     new_minions = _replace_minion(state.minions, chosen.instance_id, promoted)
     return replace(state, minions=new_minions)

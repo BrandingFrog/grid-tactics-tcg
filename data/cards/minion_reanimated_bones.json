@@ -24,6 +24,10 @@
         }
     ],
     "effects": [],
+    "rulings": [
+        "When Reanimated Bones transforms, the new minion starts at full stats with no buffs, debuffs, or status effects — even burn is removed.",
+        "The transformed minion keeps the same board position and owner. It is treated as a completely fresh minion in every other way."
+    ],
     "tips": [
         "Reanimated Bones is the gateway to three powerful Undead minions: Pyre Archer (2 mana), Grave Caller (3 mana), or Fallen Paladin (4 mana).",
         "Play Bones for 1 mana on an early turn, then transform next turn when you have mana. This splits a 3-5 mana minion's cost across two turns.",
