@@ -4347,9 +4347,16 @@ function syncPendingReviveUI() {
     var pendingIdx = gameState.pending_revive_player_idx;
     if (pendingIdx == null) {
         if (reviveModalOpen) closeReviveModal();
+        if (interactionMode === 'revive_place') interactionMode = null;
         return;
     }
-    if (pendingIdx === myPlayerIdx) {
+    // Sandbox is god-mode — always show the modal regardless of myPlayerIdx.
+    var isPicker = sandboxMode || pendingIdx === myPlayerIdx;
+    if (isPicker) {
+        // Re-assert revive_place mode so highlightBoard draws cell-valid on
+        // REVIVE_PLACE legal tiles. A prior clearSelection() may have wiped
+        // interactionMode even while reviveModalOpen stayed true.
+        interactionMode = 'revive_place';
         if (!reviveModalOpen) {
             showReviveModal();
         }
@@ -4438,6 +4445,7 @@ function closeReviveModal() {
     var existing = document.getElementById('revive-modal-overlay');
     if (existing) existing.remove();
     reviveModalOpen = false;
+    if (interactionMode === 'revive_place') interactionMode = null;
     // Clear cell highlights
     var cells = document.querySelectorAll('.board-cell.cell-valid');
     cells.forEach(function(cell) { cell.classList.remove('cell-valid'); });
@@ -4645,6 +4653,19 @@ function highlightBoard() {
             }
         });
         return;  // Skip the regular selection-driven highlighting
+    }
+
+    // Revive placement tile highlighting (Ratical Resurrection modal).
+    // Uses legalActions REVIVE_PLACE entries to mark valid tiles.
+    if (interactionMode === 'revive_place' && window.legalActions) {
+        for (var _i = 0; _i < window.legalActions.length; _i++) {
+            var _a = window.legalActions[_i];
+            if (_a.action_type === 15 && _a.position) {  // REVIVE_PLACE
+                var _cell = document.querySelector('.board-cell[data-row="' + _a.position[0] + '"][data-col="' + _a.position[1] + '"]');
+                if (_cell) _cell.classList.add('cell-valid');
+            }
+        }
+        return;
     }
 
     // Death-target pick tile highlighting (click-target death modal).
