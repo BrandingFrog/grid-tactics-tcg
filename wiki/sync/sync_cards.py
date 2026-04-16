@@ -508,7 +508,9 @@ def card_to_wikitext(
     if tribe:
         tribe_links = "<br/>".join(f"[[{t}]]" for t in tribe.split())
         meta_rows.append(f'{{{{!}}}}-\n! {_row_style} {{{{!}}}} Tribe\n{{{{!}}}} colspan="2" {_val_style} {{{{!}}}} {tribe_links}')
-    # Range now shown in stats bar, not meta_rows
+    if is_minion and card.get("range") is not None:
+        range_val = "[[Melee]]" if card.get("range") == 0 else f"[[Ranged|Range {card.get('range')}]]"
+        meta_rows.append(f'{{{{!}}}}-\n! {_row_style} {{{{!}}}} Range\n{{{{!}}}} colspan="2" {_val_style} {{{{!}}}} {range_val}')
     # Keywords row removed — keywords are linked inline in effect text instead
     if meta_rows:
         fields["meta_rows"] = "\n".join(meta_rows)
