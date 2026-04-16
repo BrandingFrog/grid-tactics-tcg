@@ -532,14 +532,17 @@ def card_to_wikitext(
         react_effect = card.get("react_effect")
         if react_effect and react_effect.get("type") == "deploy_self":
             effect_text = " ▶ [[Summon]]"
-        elif not react_effect and effects:
+        elif not react_effect and card.get("effects"):
+            card_effects = card.get("effects", [])
             effect_parts = []
-            for eff in effects:
+            for eff in card_effects:
                 eff_type = eff.get("type", "")
                 if eff_type == "grant_dark_matter":
                     t = eff.get("target_tribe", "")
                     t_text = "Dark Mage" if t == "Mage" else (t or "ally")
                     effect_parts.append(f"[[Dark Matter]] +{eff.get('amount', 1)} per ally {t_text}")
+                elif eff_type == "negate":
+                    effect_parts.append("[[Negate]]")
                 else:
                     effect_parts.append(eff_type)
             effect_text = " ▶ " + ". ".join(effect_parts) if effect_parts else ""
