@@ -66,7 +66,7 @@ const ELEMENT_MAP = {
     0: { name: 'Wood',  color: 'rgb(102,187,106)', css: 'attr-wood' },
     1: { name: 'Fire',  color: 'rgb(220,40,30)',   css: 'attr-fire' },
     2: { name: 'Earth', color: 'rgb(140,100,40)',   css: 'attr-earth' },
-    3: { name: 'Water', color: 'rgb(66,165,245)',   css: 'attr-water' },
+    3: { name: 'Water', color: 'rgb(25,118,210)',   css: 'attr-water' },
     4: { name: 'Metal', color: 'rgb(120,120,135)',  css: 'attr-metal' },
     5: { name: 'Dark',  color: 'rgb(130,50,180)',   css: 'attr-dark' },
     6: { name: 'Light', color: 'rgb(240,220,40)',   css: 'attr-light' },
