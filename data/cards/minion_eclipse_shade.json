@@ -1,0 +1,20 @@
+{
+    "card_id": "eclipse_shade",
+    "stable_id": 43,
+    "name": "Eclipse Shade",
+    "card_type": "minion",
+    "mana_cost": 1,
+    "attack": 20,
+    "health": 26,
+    "range": 0,
+    "element": "dark",
+    "tribe": "Mage",
+    "effects": [
+        {
+            "type": "burn",
+            "trigger": "on_play",
+            "target": "self_owner",
+            "amount": 5
+        }
+    ]
+}
