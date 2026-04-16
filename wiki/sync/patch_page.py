@@ -14,10 +14,10 @@ from sync.patch_diff import PatchDiff
 # ---------------------------------------------------------------------------
 
 PATCH_TEMPLATE_WIKITEXT = """\
-<includeonly><div class="patch-infobox" style="float:right; border:1px solid #aaa; padding:8px; margin:0 0 8px 8px; width:250px; background:#f9f9f9;">
+<includeonly><div class="patch-infobox" style="float:right; border:2px solid #222; border-radius:10px; padding:8px; margin:0 0 8px 8px; width:250px; background:#1a1a1a; color:#eee;">
 '''Patch {{{version|}}}'''
 * '''Date:''' {{{date|}}}
-* '''Commit:''' <code>{{{commit|}}}</code>
+* '''Commit:''' <code style="background:#333; color:#ccc; padding:2px 6px; border-radius:4px;">{{{commit|}}}</code>
 </div></includeonly><noinclude>
 Infobox template for patch notes pages.
 [[Category:Template]]
