@@ -1,0 +1,34 @@
+{
+    "card_id": "gargoyle_sorceress",
+    "stable_id": 44,
+    "name": "Gargoyle Sorceress",
+    "card_type": "minion",
+    "mana_cost": 5,
+    "attack": 20,
+    "health": 50,
+    "range": 0,
+    "element": "dark",
+    "tribe": "Mage",
+    "discard_cost_tribe": "any",
+    "discard_cost_count": 2,
+    "effects": [
+        {
+            "type": "buff_attack",
+            "trigger": "on_play",
+            "target": "self_owner",
+            "amount": 0,
+            "scale_with": "dark_matter",
+            "placement_condition": "front_of_dark_ranged",
+            "condition_multiplier": 3
+        },
+        {
+            "type": "buff_health",
+            "trigger": "on_play",
+            "target": "self_owner",
+            "amount": 0,
+            "scale_with": "dark_matter",
+            "placement_condition": "front_of_dark_ranged",
+            "condition_multiplier": 3
+        }
+    ]
+}

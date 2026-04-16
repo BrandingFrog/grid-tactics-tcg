@@ -41,6 +41,8 @@ class EffectDefinition:
     amount: int
     scale_with: Optional[str] = None  # e.g. "dark_matter" — adds caster's DM stacks to amount
     target_tribe: Optional[str] = None  # filter ALL_ALLIES to only this tribe (e.g. "Mage")
+    placement_condition: Optional[str] = None  # e.g. "front_of_dark_ranged" — positional condition
+    condition_multiplier: int = 1  # multiplier applied when placement_condition is met
 
     def __post_init__(self) -> None:
         if not (0 <= self.amount <= MAX_EFFECT_AMOUNT):

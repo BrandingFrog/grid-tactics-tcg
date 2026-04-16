@@ -5299,7 +5299,11 @@ function getEffectDescription(effects, cardData) {
                     return e2.type === 3 && e2.scale_with === 'dark_matter' && e2.target === eff.target;
                 });
                 var tribeName = eff.target_tribe === 'Mage' ? 'Dark Mages' : (eff.target_tribe ? eff.target_tribe + 's' : 'allies');
-                desc = prefix + 'Ally ' + tribeName + ' gain (Dark Matter)' + SWORD + (hasMatchingHp ? HEART : '');
+                var selfTarget = (eff.target === 3); // SELF_OWNER
+                desc = prefix + (selfTarget ? 'Gain' : 'Ally ' + tribeName + ' gain') + ' (Dark Matter)' + SWORD + (hasMatchingHp ? HEART : '');
+                if (eff.placement_condition === 'front_of_dark_ranged' && eff.condition_multiplier > 1) {
+                    desc += '. ×' + eff.condition_multiplier + ' if in front of Dark Ranged ally';
+                }
             } else {
                 desc = prefix + '+' + amount + SWORD;
             }

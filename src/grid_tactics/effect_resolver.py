@@ -17,7 +17,7 @@ from typing import Optional
 from grid_tactics.board import Board
 from grid_tactics.card_library import CardLibrary
 from grid_tactics.cards import CardDefinition, EffectDefinition
-from grid_tactics.enums import EffectType, PlayerSide, TargetType, TriggerType
+from grid_tactics.enums import EffectType, Element, PlayerSide, TargetType, TriggerType
 from grid_tactics.game_state import GameState, PendingDeathTarget
 from grid_tactics.minion import MinionInstance
 from grid_tactics.player import Player
@@ -66,6 +66,27 @@ def _find_minion_at_pos(
 def _player_index_for_side(side: PlayerSide) -> int:
     """Return the player tuple index for a PlayerSide."""
     return int(side)
+
+
+def _check_placement_condition(
+    state, caster_pos: tuple[int, int], caster_owner: PlayerSide,
+    condition: str, library,
+) -> bool:
+    """Check if a placement condition is met for the minion at caster_pos."""
+    if condition == "front_of_dark_ranged":
+        # Check if there's a friendly dark ranged minion directly behind this position.
+        # "In front of X" = this minion is forward of X, so X is behind.
+        # P1 forward = +row, so behind = row-1. P2 forward = -row, so behind = row+1.
+        row, col = caster_pos
+        behind_row = row - 1 if caster_owner == PlayerSide.PLAYER_1 else row + 1
+        if behind_row < 0 or behind_row > 4:
+            return False
+        ally = _find_minion_at_pos(state.minions, (behind_row, col))
+        if ally is None or ally.owner != caster_owner:
+            return False
+        ally_def = library.get_by_id(ally.card_numeric_id)
+        return (ally_def.element == Element.DARK and ally_def.attack_range >= 1)
+    return False
 
 
 # ---------------------------------------------------------------------------
@@ -393,6 +414,11 @@ def resolve_effect(
             scaled_effect = replace(effect, amount=scaled_amount)
         else:
             return state  # 0 damage, skip
+
+    # Placement condition multiplier (e.g. "triple if placed in front of dark ranged")
+    if scaled_effect.placement_condition and scaled_effect.condition_multiplier > 1:
+        if _check_placement_condition(state, caster_pos, caster_owner, scaled_effect.placement_condition, library):
+            scaled_effect = replace(scaled_effect, amount=scaled_effect.amount * scaled_effect.condition_multiplier)
 
     if scaled_effect.target == TargetType.SINGLE_TARGET:
         return _resolve_single_target(state, scaled_effect, library, target_pos)

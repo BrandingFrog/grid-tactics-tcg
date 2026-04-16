@@ -292,7 +292,12 @@ def build_rules_text(card: dict, name_map: dict[str, str] | None = None) -> str:
                 other = "buff_health" if eff_type == "buff_attack" else "buff_attack"
                 has_pair = any(e.get("type") == other and e.get("scale_with") == "dark_matter" and e.get("target") == eff.get("target") for e in render_effects)
                 if eff_type == "buff_attack" and has_pair:
-                    desc = f"{pfx}Ally {tribe_text} gain ([[Dark Matter]])🗡️🤍"
+                    desc = f"{pfx}Gain ([[Dark Matter]])🗡️🤍"
+                    # Placement condition modifier
+                    pcond = eff.get("placement_condition")
+                    mult = eff.get("condition_multiplier", 1)
+                    if pcond == "front_of_dark_ranged" and mult > 1:
+                        desc += f". ×{mult} if placed in front of a [[Dark]] [[Ranged]] ally"
                 elif eff_type == "buff_health" and has_pair:
                     continue
                 else:
