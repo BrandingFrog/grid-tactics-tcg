@@ -33,28 +33,26 @@ _VERSION_PATH = _REPO_ROOT / "src" / "grid_tactics" / "server" / "static" / "VER
 
 # React condition map — matches game.js condMap (int keys from card JSON)
 _REACT_CONDITION_TEXT: dict[int, str] = {
-    0: "Enemy plays Magic",
-    1: "Enemy summons Minion",
-    2: "Enemy attacks",
-    3: "Enemy plays React",
-    4: "Any enemy action",
-    5: "Enemy plays any Wood",
-    6: "Enemy plays any Fire",
-    7: "Enemy plays any Earth",
-    8: "Enemy plays any Water",
-    9: "Enemy plays any Metal",
-    10: "Enemy plays any Dark",
-    11: "Enemy plays any Light",
-    12: "Enemy sacrifices",
+    0: "Magic or React",
+    1: "Summon",
+    2: "Attack",
+    3: "Magic or React",
+    4: "Any action",
+    5: "Wood", 6: "Fire", 7: "Earth",
+    8: "Water", 9: "Metal", 10: "Dark",
+    11: "Light",
+    12: "Sacrifice",
+    13: "Discard",
 }
 # Also support string keys (some card JSONs use strings)
 _REACT_CONDITION_TEXT_STR: dict[str, str] = {
-    "opponent_plays_magic": "Enemy plays Magic",
-    "opponent_plays_minion": "Enemy summons Minion",
-    "opponent_attacks": "Enemy attacks",
-    "opponent_plays_react": "Enemy plays React",
-    "opponent_sacrifices": "Enemy sacrifices",
-    "opponent_plays_light": "Enemy plays any Light",
+    "opponent_plays_magic": "Magic or React",
+    "opponent_plays_minion": "Summon",
+    "opponent_attacks": "Attack",
+    "opponent_plays_react": "Magic or React",
+    "opponent_sacrifices": "Sacrifice",
+    "opponent_discards": "Discard",
+    "opponent_plays_light": "Light",
 }
 
 
@@ -253,9 +251,10 @@ def build_rules_text(card: dict, name_map: dict[str, str] | None = None) -> str:
     if card.get("cost_reduction") == "dark_matter":
         parts.append("[[Cost]]: Reduce mana cost by ([[Dark Matter]])")
 
-    # Standard effects — matches game.js getEffectDescription exactly
+    # Standard effects — skip for pure react cards (their effects render in react section)
     is_minion = card.get("card_type", "") == "minion"
-    for eff in effects:
+    render_effects = effects if card.get("card_type", "") != "react" else []
+    for eff in render_effects:
         trigger_idx = eff.get("trigger", 0)
         trigger = _TRIGGER_PREFIX.get(trigger_idx, "")
         # on_play trigger only shows "Summon" for minions
@@ -403,14 +402,34 @@ def build_rules_text(card: dict, name_map: dict[str, str] | None = None) -> str:
             options.append(f"Pay {cost} mana -> {target_link}")
         parts.append(f"'''Transform:''' {', '.join(options)}.")
 
-    # React condition (multi-purpose minions like Dark Sentinel, Surgefed Sparkbot)
+    # React condition — pure react cards AND multi-purpose
     react_cond = card.get("react_condition")
-    if react_cond is not None and card.get("react_mana_cost") is not None:
-        cond_text = _REACT_CONDITION_TEXT.get(react_cond) or _REACT_CONDITION_TEXT_STR.get(str(react_cond), "Enemy acts")
-        extra = " & No friendly minions" if card.get("react_requires_no_friendly_minions") else ""
-        cost = card.get("react_mana_cost", 0)
-        cost_text = f" ({cost})" if cost > 0 else ""
-        parts.append(f"[[React]]{cost_text}: {cond_text}{extra}")
+    if react_cond is not None:
+        cond_text = _REACT_CONDITION_TEXT.get(react_cond) or _REACT_CONDITION_TEXT_STR.get(str(react_cond), "Any action")
+        extra = " while no allies" if card.get("react_requires_no_friendly_minions") else ""
+        react_cost = card.get("react_mana_cost") if card.get("react_mana_cost") is not None else card.get("mana_cost", 0)
+        cost_text = f" ({react_cost})" if react_cost > 0 else ""
+        # Build effect text after ▶
+        react_effect = card.get("react_effect")
+        if react_effect and react_effect.get("type") == "deploy_self":
+            effect_text = " ▶ [[Summon]]"
+        elif not react_effect and effects:
+            # Magic+react or pure react: effects array is the react effect
+            effect_parts = []
+            for eff in effects:
+                eff_type = eff.get("type", "")
+                if eff_type == "negate":
+                    effect_parts.append("[[Negate]]")
+                elif eff_type == "grant_dark_matter":
+                    tribe = eff.get("target_tribe", "")
+                    tribe_text = "Dark Mage" if tribe == "Mage" else (tribe or "ally")
+                    effect_parts.append(f"[[Dark Matter]] +{eff.get('amount', 1)} per ally {tribe_text}")
+                else:
+                    effect_parts.append(eff_type)
+            effect_text = " ▶ " + ". ".join(effect_parts) if effect_parts else ""
+        else:
+            effect_text = ""
+        parts.append(f"[[React]]{cost_text}: {cond_text}{extra}{effect_text}")
 
     return ". ".join(parts)
 
