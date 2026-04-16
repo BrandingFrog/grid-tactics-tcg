@@ -1333,7 +1333,13 @@ function buildCardTooltipContent(c) {
         var condText = condMap[c.react_condition] || 'Enemy acts';
         var extraCond = c.react_requires_no_friendly_minions ? ' & no allies' : '';
         var costText = c.react_mana_cost > 0 ? ' (' + c.react_mana_cost + ')' : '';
-        cardTextLines.push('React' + costText + ': ' + condText + extraCond + ' ▶ Summon');
+        var reactEffectTooltip = '';
+        if (c.react_effect && c.react_effect.type === 5) {
+            reactEffectTooltip = ' ▶ Summon';
+        } else if (!c.react_effect && c.effects && c.effects.length > 0) {
+            reactEffectTooltip = ' ▶ ' + getEffectDescription(c.effects, c);
+        }
+        cardTextLines.push('React' + costText + ': ' + condText + extraCond + reactEffectTooltip);
     }
 
     var bodyHtml = '';
