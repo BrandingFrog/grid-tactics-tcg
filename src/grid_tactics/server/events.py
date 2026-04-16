@@ -644,9 +644,11 @@ def register_events(room_manager: RoomManager) -> None:
         tutor_viewer = state.pending_tutor_player_idx if state.pending_tutor_player_idx is not None else 0
         death_target = getattr(state, "pending_death_target", None)
         death_viewer = int(death_target.owner_idx) if death_target is not None else 0
+        conjure_viewer = state.pending_conjure_deploy_player_idx if state.pending_conjure_deploy_player_idx is not None else 0
         enrich_pending_revive(state, state_dict, revive_viewer, sandbox.library)
         enrich_pending_tutor_for_viewer(state, state_dict, tutor_viewer, sandbox.library)
         enrich_pending_death_target(state, state_dict, death_viewer, sandbox.library)
+        enrich_pending_conjure_deploy(state, state_dict, conjure_viewer, sandbox.library)
         actions = sandbox.legal_actions() if not sandbox.state.is_game_over else ()
         serialized = [serialize_action(a) for a in actions]
         emit("sandbox_state", {

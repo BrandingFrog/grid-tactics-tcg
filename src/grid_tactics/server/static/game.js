@@ -4470,11 +4470,14 @@ function syncPendingConjureDeployUI() {
         closeConjureDeployUI();
         return;
     }
-    if (pendingIdx === myPlayerIdx) {
-        // I'm the deployer - enter conjure deploy mode
+    // Sandbox is god-mode — always show the deploy UI regardless of myPlayerIdx.
+    var isDeployer = sandboxMode || pendingIdx === myPlayerIdx;
+    if (isDeployer) {
+        // Re-assert the mode on every state update; closeConjureDeployUI in
+        // showConjureDeployUI will null it, so set AFTER opening too.
+        interactionMode = 'conjure_deploy';
         if (!conjureDeployActive) {
             conjureDeployActive = true;
-            interactionMode = 'conjure_deploy';
             showConjureDeployUI();
         }
     } else {
@@ -4488,6 +4491,7 @@ function showConjureDeployUI() {
     // Show a header bar instructing the player to pick a tile
     closeConjureDeployUI();
     conjureDeployActive = true;
+    interactionMode = 'conjure_deploy';
 
     var banner = document.createElement('div');
     banner.id = 'conjure-deploy-banner';
