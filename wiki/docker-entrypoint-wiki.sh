@@ -75,21 +75,19 @@ fi
 cp /tmp/LocalSettings.template.php /var/www/html/LocalSettings.php
 chown www-data:www-data /var/www/html/LocalSettings.php
 
-# Ensure MediaWiki upload directories exist and are writable by www-data.
-# Railway's ephemeral filesystem drops these on restart, causing upload stash
-# failures ("Could not store file at mwstore://local-backend/local-temp/...").
+# Ensure MediaWiki upload directories exist with correct ownership.
 mkdir -p /var/www/html/images/{temp,thumb,archive,deleted,lockdir}
-chown -R www-data:www-data /var/www/html/images
-chmod -R 775 /var/www/html/images
+chown www-data:www-data /var/www/html/images/{temp,thumb,archive,deleted,lockdir}
 
-echo "[entrypoint] images/ disk usage:"
-df -h /var/www/html/images
-echo "[entrypoint] top 20 space-eaters in images/:"
-du -sh /var/www/html/images/* 2>/dev/null | sort -rh | head -20
-echo "[entrypoint] thumb dir size (if present):"
-du -sh /var/www/html/images/thumb 2>/dev/null || echo "  (no thumb dir)"
-echo "[entrypoint] temp dir size:"
-du -sh /var/www/html/images/temp 2>/dev/null || echo "  (no temp dir)"
+# Purge the upload stash (temp/) on every boot. These are incomplete chunked
+# uploads MediaWiki leaves behind; they accumulate and fill the volume.
+# Safe to delete — any active upload in flight will just be restarted.
+echo "[entrypoint] purging upload stash..."
+before=$(du -sh /var/www/html/images/temp 2>/dev/null | cut -f1)
+find /var/www/html/images/temp -mindepth 1 -delete 2>/dev/null || true
+after=$(du -sh /var/www/html/images/temp 2>/dev/null | cut -f1)
+echo "[entrypoint]   temp: $before → $after"
+df -h /var/www/html/images | tail -1
 
 # Run update.php every boot — idempotent, handles SMW schema bring-up and upgrades
 echo "[entrypoint] Running update.php..."
