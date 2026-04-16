@@ -58,7 +58,8 @@ def scan_tribes(cards_dir: Path) -> list[str]:
             card = json.loads(path.read_text(encoding="utf-8"))
             tribe = card.get("tribe", "")
             if tribe:
-                tribes.add(tribe)
+                for t in tribe.split():
+                    tribes.add(t)
         except (json.JSONDecodeError, KeyError):
             continue
     return sorted(tribes)
@@ -192,6 +193,20 @@ def sync_elements(
     return upsert_taxonomy_pages(site, pages, dry_run=dry_run)
 
 
+def _scan_combined_tribes(cards_dir: Path) -> set[str]:
+    """Find multi-word tribe strings that should NOT have their own page."""
+    combined: set[str] = set()
+    for path in sorted(cards_dir.glob("*.json")):
+        try:
+            card = json.loads(path.read_text(encoding="utf-8"))
+            tribe = card.get("tribe", "")
+            if tribe and " " in tribe:
+                combined.add(tribe)
+        except (json.JSONDecodeError, KeyError):
+            continue
+    return combined
+
+
 def sync_tribes(
     site,
     cards_dir: Path,
@@ -202,7 +217,20 @@ def sync_tribes(
     print(f"Found {len(tribes)} tribes: {', '.join(tribes)}")
 
     pages = {tribe: tribe_page_wikitext(tribe) for tribe in tribes}
-    return upsert_taxonomy_pages(site, pages, dry_run=dry_run)
+    counts = upsert_taxonomy_pages(site, pages, dry_run=dry_run)
+
+    # Delete stale combined-tribe pages (e.g. "Mage Rat" -> separate Mage + Rat)
+    combined = _scan_combined_tribes(cards_dir)
+    for stale in sorted(combined):
+        page = site.pages[stale]
+        if page.exists:
+            if dry_run:
+                print(f"  {stale}: would-delete (combined tribe)")
+            else:
+                page.delete(reason=f"Split combined tribe '{stale}' into individual pages")
+                print(f"  {stale}: deleted (combined tribe)")
+
+    return counts
 
 
 # ---------------------------------------------------------------------------

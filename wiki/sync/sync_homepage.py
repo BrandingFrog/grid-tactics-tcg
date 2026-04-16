@@ -192,7 +192,7 @@ def main_page_wikitext(cards_dir: Path | None = None) -> str:
             f'font-size:16px; -webkit-text-stroke:3px black; paint-order:stroke fill;">{mana}</span> '
             f"<span style=\"font-size:1.2em; font-family:'Source Sans 3','Source Sans Pro',sans-serif; "
             f'font-weight:700; -webkit-text-stroke:1px black; paint-order:stroke fill;\">'
-            f'[[Card:{card_name}|{card_name}]]</span> '
+            f'[[Card:{card_name}|<span style="color:white;">{card_name}</span>]]</span> '
             f'<span style="position:absolute; right:10px; top:50%; transform:translateY(-50%); '
             f'background:{elem_bg}; border-radius:50%; width:40px; height:40px; '
             f"border:2px solid rgb(30,25,20); display:flex; align-items:center; justify-content:center; "
