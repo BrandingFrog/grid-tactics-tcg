@@ -109,42 +109,40 @@ def _make_state(
 
 
 class TestBasicLegalActions:
-    def test_empty_everything_only_pass(self, library):
-        """Empty board, hand, deck -> zero actions (fatigue bleed handles it).
+    def test_empty_everything_has_pass(self, library):
+        """Empty board, hand, deck -> exactly one action (PASS).
 
-        Audit-followup: PASS is no longer auto-added to ACTION-phase action
-        lists; if a player has no legal actions the engine bleeds fatigue
-        instead of letting them PASS for free. Tests now assert the
-        zero-action contract.
+        Per D-16 and CLAUDE.md, PASS is always legal in the ACTION phase
+        so a player is never stuck with zero options. (Fatigue bleed still
+        applies when the player voluntarily passes.)
         """
         state = _make_state()
         actions = legal_actions(state, library)
-        assert len(actions) == 0
+        assert len(actions) == 1
+        assert actions[0].action_type == ActionType.PASS
 
-    def test_pass_not_in_action_phase(self, library):
-        """Audit-followup: PASS is no longer enumerated in ACTION phase."""
+    def test_pass_is_always_in_action_phase(self, library):
+        """PASS is enumerated alongside other legal actions (D-16)."""
         rat_id = library.get_numeric_id("rat")
         state = _make_state(p1_hand=(rat_id,), p1_deck=(rat_id,))
         actions = legal_actions(state, library)
         pass_actions = [a for a in actions if a.action_type == ActionType.PASS]
-        assert len(pass_actions) == 0
+        assert len(pass_actions) == 1
 
     def test_draw_is_action(self, library):
-        """Audit-followup: DRAW is still a player action when deck is non-empty
-        (CLAUDE.md is out of date — legal_actions still adds it at line ~278).
-        """
+        """DRAW is a player action when deck is non-empty."""
         rat_id = library.get_numeric_id("rat")
         state = _make_state(p1_deck=(rat_id,))
         actions = legal_actions(state, library)
         draw_actions = [a for a in actions if a.action_type == ActionType.DRAW]
         assert len(draw_actions) == 1
 
-    def test_pass_not_available_in_action_phase(self, library):
-        """Audit-followup: PASS is not enumerated in ACTION phase."""
+    def test_pass_available_in_action_phase(self, library):
+        """PASS is legal even when no other play/move/attack actions exist."""
         state = _make_state()
         actions = legal_actions(state, library)
         pass_actions = [a for a in actions if a.action_type == ActionType.PASS]
-        assert len(pass_actions) == 0
+        assert len(pass_actions) == 1
 
 
 # ---------------------------------------------------------------------------

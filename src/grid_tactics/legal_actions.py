@@ -420,7 +420,10 @@ def _action_phase_actions(
     if player.deck and len(player.hand) < 10:
         actions.append(draw_action())
 
-    # No PASS -- if no actions available, fatigue bleed handles it
+    # PASS is always legal during the action phase (D-16, CLAUDE.md).
+    # Players can voluntarily skip their turn.
+    actions.append(pass_action())
+
     return tuple(actions)
 
 

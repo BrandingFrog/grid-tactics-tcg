@@ -116,6 +116,7 @@ class GameState:
     pending_tutor_player_idx: Optional[int] = None      # Which player must pick
     pending_tutor_matches: tuple = ()                    # Deck indices of matching cards (in deck order)
     pending_tutor_is_conjure: bool = False               # True when tutor is for conjure-to-field (not hand)
+    pending_tutor_remaining: int = 0                     # How many more picks before auto-close (Ratmobile amount=2 etc)
 
     # Pending revive-place state (revive effects from magic cards).
     # When a REVIVE effect fires, we enter pending state so the player can

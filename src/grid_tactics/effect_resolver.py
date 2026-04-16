@@ -320,6 +320,7 @@ def _enter_pending_tutor(
     card_def: CardDefinition,
     caster_owner: PlayerSide,
     library: CardLibrary,
+    amount: int = 1,
 ) -> GameState:
     """Phase 14.2: enter pending_tutor state.
 
@@ -327,6 +328,10 @@ def _enter_pending_tutor(
     `card_def.tutor_target` (string shorthand or selector dict). Does NOT
     move any card -- the pick is resolved later in action_resolver via
     TUTOR_SELECT or DECLINE_TUTOR.
+
+    ``amount`` is how many picks the player may make before the modal
+    auto-closes (e.g. To The Ratmobile has amount=2 — picker gets 2
+    picks). Capped to the number of available matches.
 
     Mutex: asserts no concurrent pending_post_move_attacker_id (defense in
     depth -- tutor only fires from on_play, not from MOVE).
@@ -357,10 +362,12 @@ def _enter_pending_tutor(
         # No candidates -- silently no-op (caller proceeds to react window).
         return state
 
+    remaining = max(1, min(amount, len(matches)))
     return replace(
         state,
         pending_tutor_player_idx=player_idx,
         pending_tutor_matches=tuple(matches),
+        pending_tutor_remaining=remaining,
     )
 
 
@@ -369,6 +376,27 @@ def _resolve_tutor(*args, **kwargs):
     raise NotImplementedError(
         "_resolve_tutor was removed in Phase 14.2; use _enter_pending_tutor"
     )
+
+
+def _recompute_tutor_matches(
+    new_deck: tuple,
+    prev_matches: tuple,
+    picked_deck_idx: int,
+    library: CardLibrary,
+) -> list[int]:
+    """Recompute pending_tutor_matches after a pick removed one deck card.
+
+    The deck has had one slot removed at ``picked_deck_idx``, so every
+    previously-matched index > picked_deck_idx must be decremented by 1,
+    and the picked index is dropped entirely.
+    """
+    new_matches: list[int] = []
+    for m in prev_matches:
+        if m == picked_deck_idx:
+            continue
+        new_matches.append(m - 1 if m > picked_deck_idx else m)
+    # Defense: clamp against new deck length.
+    return [i for i in new_matches if 0 <= i < len(new_deck)]
 
 
 # ---------------------------------------------------------------------------
@@ -405,15 +433,24 @@ def resolve_effect(
         ValueError: If target_pos is None for SINGLE_TARGET effects.
     """
     # Scale amount if scale_with is set (e.g. "dark_matter" adds caster's DM stacks)
+    # When the caster is a minion on the board, scale once using the caster's DM.
+    # When the caster is a magic card (no minion at caster_pos), defer scaling to
+    # each individual target inside the dispatch branches below so the scale uses
+    # the target's own DM — matches rulings like Dark Matter Stash
+    # ("each Mage gains atk/hp equal to their own DM").
     scaled_effect = effect
+    _per_target_dm_scale = False
     if effect.scale_with == "dark_matter":
         caster = _find_minion_at_pos(state.minions, caster_pos)
-        dm = caster.dark_matter_stacks if caster else 0
-        scaled_amount = effect.amount + dm
-        if scaled_amount > 0:
-            scaled_effect = replace(effect, amount=scaled_amount)
+        if caster is not None:
+            dm = caster.dark_matter_stacks
+            scaled_amount = effect.amount + dm
+            if scaled_amount > 0:
+                scaled_effect = replace(effect, amount=scaled_amount)
+            else:
+                return state  # 0 damage, skip
         else:
-            return state  # 0 damage, skip
+            _per_target_dm_scale = True
 
     # Placement condition multiplier (e.g. "triple if placed in front of dark ranged")
     if scaled_effect.placement_condition and scaled_effect.condition_multiplier > 1:
@@ -439,7 +476,15 @@ def resolve_effect(
                 card_def = library.get_by_id(minion.card_numeric_id)
                 if not card_def.tribe or scaled_effect.target_tribe.lower() not in card_def.tribe.lower():
                     continue
-            state = _apply_effect_to_minion(state, scaled_effect, minion, library)
+            if _per_target_dm_scale:
+                # Scale per-target using the target's own DM (magic cards path)
+                this_amount = effect.amount + minion.dark_matter_stacks
+                if this_amount <= 0:
+                    continue
+                this_effect = replace(scaled_effect, amount=this_amount)
+            else:
+                this_effect = scaled_effect
+            state = _apply_effect_to_minion(state, this_effect, minion, library)
         return state
     else:
         raise ValueError(f"Unknown target type: {scaled_effect.target}")
@@ -474,7 +519,10 @@ def resolve_effects_for_trigger(
 
     for effect in matching_effects:
         if effect.effect_type == EffectType.TUTOR:
-            state = _enter_pending_tutor(state, card_def, minion.owner, library)
+            state = _enter_pending_tutor(
+                state, card_def, minion.owner, library,
+                amount=max(1, effect.amount or 1),
+            )
         elif effect.effect_type == EffectType.CONJURE:
             state = _resolve_conjure(state, card_def, minion.owner, library)
         elif effect.effect_type == EffectType.RALLY_FORWARD:
@@ -650,7 +698,10 @@ def resolve_death_effects_or_enter_modal(
         if effect.effect_type == EffectType.TUTOR:
             # Death-triggered tutor not currently used by any card; if it
             # shows up it will enter pending_tutor just like on_play tutor.
-            state = _enter_pending_tutor(state, card_def, owner, library)
+            state = _enter_pending_tutor(
+                state, card_def, owner, library,
+                amount=max(1, effect.amount or 1),
+            )
         elif effect.effect_type == EffectType.CONJURE:
             state = _resolve_conjure(state, card_def, owner, library)
         elif effect.effect_type == EffectType.RALLY_FORWARD:

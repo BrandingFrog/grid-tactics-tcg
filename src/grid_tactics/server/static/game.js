@@ -4367,12 +4367,17 @@ function showReviveModal() {
     var cardDef = cardNid != null && window.cardDefs ? window.cardDefs[cardNid] : null;
     var cardName = cardDef ? cardDef.name : 'minion';
 
+    // Revive modal is NON-blocking: the board must remain clickable so the
+    // player can pick a target cell. Overlay uses pointer-events:none; only
+    // the inner banner receives clicks (for the Skip button).
     var overlay = document.createElement('div');
-    overlay.className = 'tutor-modal-overlay';
+    overlay.className = 'tutor-modal-overlay revive-modal-overlay-nonblock';
     overlay.id = 'revive-modal-overlay';
+    overlay.style.cssText = 'position:fixed;top:70px;left:0;right:0;bottom:auto;background:transparent;backdrop-filter:none;pointer-events:none;display:flex;justify-content:center;z-index:10;';
 
     var modal = document.createElement('div');
     modal.className = 'tutor-modal';
+    modal.style.cssText = 'pointer-events:auto;max-width:480px;background:rgba(20,25,45,0.95);border:2px solid #1b5a7a;border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.6);';
 
     var header = document.createElement('div');
     header.className = 'tutor-modal-header';

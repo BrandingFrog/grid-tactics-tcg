@@ -846,7 +846,11 @@ class TestDeathKeywordPromote:
         assert rat_after is not None
         assert rat_after.card_numeric_id == rat_nid  # unchanged
 
-    def test_promote_picks_most_advanced_friendly(self):
+    def test_promote_opens_modal_with_2_candidates(self):
+        """With 2+ candidate Rats, promote opens the player-choice modal
+        (filter=friendly_promote) instead of auto-picking the most-advanced
+        one. Auto-pick is reserved for the unambiguous 1-candidate case.
+        """
         from grid_tactics.action_resolver import _cleanup_dead_minions
 
         lib = _make_death_test_library()
@@ -868,12 +872,15 @@ class TestDeathKeywordPromote:
         state = _make_state(minions=[dying, back_rat, forward_rat])
         new_state = _cleanup_dead_minions(state, lib)
 
-        # P1 forward = higher row. forward_rat (row 3) is the pick.
+        # Neither Rat is promoted yet — the modal is pending; the player
+        # picks which one. Both Rats remain Rats until DEATH_TARGET_PICK
+        # resolves.
+        assert new_state.pending_death_target is not None
+        assert new_state.pending_death_target.filter == "friendly_promote"
         forward_after = new_state.get_minion(2)
         back_after = new_state.get_minion(1)
-        assert forward_after is not None
-        assert forward_after.card_numeric_id == promote_nid
-        assert back_after.card_numeric_id == rat_nid  # unchanged
+        assert forward_after.card_numeric_id == rat_nid
+        assert back_after.card_numeric_id == rat_nid
 
 
 class TestDeathKeywordOrdering:

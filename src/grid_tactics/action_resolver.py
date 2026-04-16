@@ -623,7 +623,10 @@ def _cast_magic(
                     resolved_effect = replace(effect, amount=effect.amount + bonus)
 
             if resolved_effect.effect_type == EffectType.TUTOR:
-                state = _enter_pending_tutor(state, card_def, active_side, library)
+                state = _enter_pending_tutor(
+                    state, card_def, active_side, library,
+                    amount=max(1, resolved_effect.amount or 1),
+                )
             elif resolved_effect.effect_type == EffectType.REVIVE:
                 state = _enter_pending_revive(
                     state, card_def, active_side, library,
@@ -1611,26 +1614,69 @@ def resolve_action(
                     pending_conjure_deploy_player_idx=caster_idx,
                 )
             else:
-                # Standard tutor: add to hand
+                # Standard tutor: add to hand.
+                # Multi-pick support (e.g. To The Ratmobile amount=2):
+                # decrement pending_tutor_remaining; if still >0 re-enter
+                # pending state with the remaining matches (indices shifted
+                # for the removed deck slot) so the player picks again.
                 new_caster = replace(
                     caster,
                     deck=new_deck,
                     hand=caster.hand + (chosen_card,),
                 )
                 new_players = _replace_player(state.players, caster_idx, new_caster)
-                state = replace(
-                    state,
-                    players=new_players,
-                    pending_tutor_player_idx=None,
-                    pending_tutor_matches=(),
-                    pending_tutor_is_conjure=False,
-                )
+                remaining = max(0, state.pending_tutor_remaining - 1)
+                if remaining <= 0:
+                    state = replace(
+                        state,
+                        players=new_players,
+                        pending_tutor_player_idx=None,
+                        pending_tutor_matches=(),
+                        pending_tutor_is_conjure=False,
+                        pending_tutor_remaining=0,
+                    )
+                else:
+                    # Recompute matches against the NEW deck using the same
+                    # tutor filter as the original card. Look the card up
+                    # via the currently-resolving action's context — we keep
+                    # pending_tutor_is_conjure unchanged since the filter is
+                    # the same card.
+                    from grid_tactics.effect_resolver import _recompute_tutor_matches
+                    new_matches = _recompute_tutor_matches(
+                        new_caster.deck,
+                        state.pending_tutor_matches,
+                        deck_idx,
+                        library,
+                    )
+                    if not new_matches:
+                        # No further matches — close the modal early.
+                        state = replace(
+                            state,
+                            players=new_players,
+                            pending_tutor_player_idx=None,
+                            pending_tutor_matches=(),
+                            pending_tutor_is_conjure=False,
+                            pending_tutor_remaining=0,
+                        )
+                    else:
+                        remaining = min(remaining, len(new_matches))
+                        state = replace(
+                            state,
+                            players=new_players,
+                            pending_tutor_matches=tuple(new_matches),
+                            pending_tutor_remaining=remaining,
+                        )
+                        # Stay in pending_tutor — return without advancing
+                        # to react window; caller will re-enter on next
+                        # TUTOR_SELECT / DECLINE_TUTOR.
+                        return state
         elif action.action_type == ActionType.DECLINE_TUTOR:
             state = replace(
                 state,
                 pending_tutor_player_idx=None,
                 pending_tutor_matches=(),
                 pending_tutor_is_conjure=False,
+                pending_tutor_remaining=0,
             )
         else:
             raise ValueError(
