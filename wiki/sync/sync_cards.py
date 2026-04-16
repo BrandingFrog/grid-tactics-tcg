@@ -450,6 +450,10 @@ def build_rules_text(card: dict, name_map: dict[str, str] | None = None) -> str:
             # Multi-purpose — needs the React label
             parts.append(f"[[React]]{cost_text}: {cond_text}{extra}{effect_text}")
 
+    cost_parts = [p for p in parts if p.startswith("[[Cost]]")]
+    other_parts = [p for p in parts if not p.startswith("[[Cost]]")]
+    if cost_parts and other_parts:
+        return ". ".join(cost_parts) + ".<br>" + ". ".join(other_parts)
     return ". ".join(parts)
 
 
