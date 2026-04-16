@@ -4367,7 +4367,10 @@ function syncPendingReviveUI() {
 
 function showReviveModal() {
     closeReviveModal();
+    // closeReviveModal clears interactionMode — re-assert picker mode so the
+    // subsequent highlightBoard sees revive_place and draws cell-valid.
     reviveModalOpen = true;
+    interactionMode = 'revive_place';
 
     var remaining = gameState.pending_revive_remaining || 0;
     var cardNid = gameState.pending_revive_card_numeric_id;
