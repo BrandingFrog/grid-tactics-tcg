@@ -72,20 +72,20 @@ def main_page_wikitext(cards_dir: Path | None = None) -> str:
         health = cotd.get("health")
         atk_range = cotd.get("range")
 
-        # Build metadata rows
-        _rs = 'style="padding:4px 10px; background:#222; text-align:left; color:#888; font-weight:normal; font-size:0.85em;"'
-        _vs = 'style="padding:4px 10px; background:#222;"'
+        # Build metadata rows — single colspan="3" cells with label+value
+        _cs = 'style="padding:4px 10px; background:#222;"'
+        _label = 'style="color:#888; font-size:0.85em;"'
         meta = ""
-        meta += f'|-\n! {_rs} | Type\n| {_vs} | [[{card_type}]]\n'
+        meta += f'|-\n| colspan="3" {_cs} | <span {_label}>Type</span> <span style="float:right;">[[{card_type}]]</span>\n'
         if element:
-            meta += f'|-\n! {_rs} | Element\n| {_vs} | [[{element}]]\n'
+            meta += f'|-\n| colspan="3" {_cs} | <span {_label}>Element</span> <span style="float:right;">[[{element}]]</span>\n'
         if tribe:
             tribe_links = "<br/>".join(f"[[{t}]]" for t in tribe.split())
-            meta += f'|-\n! {_rs} | Tribe\n| {_vs} | {tribe_links}\n'
-        meta += f'|-\n! {_rs} | Mana\n| {_vs} | {mana}\n'
+            meta += f'|-\n| colspan="3" {_cs} | <span {_label}>Tribe</span> <span style="float:right;">{tribe_links}</span>\n'
+        meta += f'|-\n| colspan="3" {_cs} | <span {_label}>Mana</span> <span style="float:right;">{mana}</span>\n'
         if atk_range is not None:
             range_text = "[[Melee]]" if atk_range == 0 else f"[[Ranged|Range {atk_range}]]"
-            meta += f'|-\n! {_rs} | Range\n| {_vs} | {range_text}\n'
+            meta += f'|-\n| colspan="3" {_cs} | <span {_label}>Range</span> <span style="float:right;">{range_text}</span>\n'
 
         # Rules text + flavour text row
         rules = build_rules_text(cotd)

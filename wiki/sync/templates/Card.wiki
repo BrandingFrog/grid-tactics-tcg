@@ -29,11 +29,9 @@ data/cards/*.json automatically.
 |-
 | colspan="3" style="padding:0;" | [[File:{{{art|CardBack.png}}}|280px|center|link=]]
 |-
-! style="padding:4px 10px; background:#222; border-top:1px solid #444; text-align:left; width:80px; color:#888; font-weight:normal; font-size:0.85em;" {{!}} Type
-| colspan="2" style="padding:4px 10px; background:#222; border-top:1px solid #444;" {{!}} [[{{{type|Minion}}}]]
+| colspan="3" style="padding:4px 10px; background:#222; border-top:1px solid #444;" | <span style="color:#888; font-size:0.85em;">Type</span> <span style="float:right;">[[{{{type|Minion}}}]]</span>
 |-
-! style="padding:4px 10px; background:#222; text-align:left; color:#888; font-weight:normal; font-size:0.85em;" {{!}} Element
-| colspan="2" style="padding:4px 10px; background:#222;" {{!}} [[{{{element|Neutral}}}]]
+| colspan="3" style="padding:4px 10px; background:#222;" | <span style="color:#888; font-size:0.85em;">Element</span> <span style="float:right;">[[{{{element|Neutral}}}]]</span>
 {{{meta_rows|}}}
 |-
 | colspan="3" style="padding:8px 10px; min-height:60px;" | {{{rules|}}}{{#if:{{{flavor|}}}|<hr style="border:0;border-top:1px dashed #555;"/><span style="color:#888;font-style:italic;">{{{flavor}}}</span>}}
