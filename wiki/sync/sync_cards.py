@@ -277,10 +277,22 @@ def build_rules_text(card: dict, name_map: dict[str, str] | None = None) -> str:
                 desc += " to opponent"
         elif eff_type == "heal":
             desc = f"{pfx}[[Heal]] {amount}"
-        elif eff_type == "buff_attack":
-            desc = f"{pfx}+{amount}🗡️"
-        elif eff_type == "buff_health":
-            desc = f"{pfx}+{amount}🤍"
+        elif eff_type in ("buff_attack", "buff_health"):
+            scale = eff.get("scale_with", "")
+            tribe = eff.get("target_tribe", "")
+            tribe_text = "Dark Mages" if tribe == "Mage" else (tribe + "s" if tribe else "allies")
+            icon = "🗡️" if eff_type == "buff_attack" else "🤍"
+            if scale == "dark_matter":
+                other = "buff_health" if eff_type == "buff_attack" else "buff_attack"
+                has_pair = any(e.get("type") == other and e.get("scale_with") == "dark_matter" and e.get("target") == eff.get("target") for e in render_effects)
+                if eff_type == "buff_attack" and has_pair:
+                    desc = f"{pfx}Ally {tribe_text} gain ([[Dark Matter]])🗡️🤍"
+                elif eff_type == "buff_health" and has_pair:
+                    continue
+                else:
+                    desc = f"{pfx}Ally {tribe_text} gain ([[Dark Matter]]){icon}"
+            else:
+                desc = f"{pfx}+{amount}{icon}"
         elif eff_type == "negate":
             desc = f"{pfx}[[Negate]]"
         elif eff_type == "deploy_self":
@@ -326,24 +338,6 @@ def build_rules_text(card: dict, name_map: dict[str, str] | None = None) -> str:
                 desc = f"{pfx}[[Dark Matter]] +{amount} per ally {tribe_text}"
             else:
                 desc = f"{pfx}[[Dark Matter]] +{amount}"
-        elif eff_type in ("buff_attack", "buff_health"):
-            scale = eff.get("scale_with", "")
-            tribe = eff.get("target_tribe", "")
-            tribe_text = "Dark Mages" if tribe == "Mage" else (tribe + "s" if tribe else "allies")
-            if scale == "dark_matter":
-                icon = "🗡️" if eff_type == "buff_attack" else "🤍"
-                # Check if paired with other buff (merge icons)
-                other = "buff_health" if eff_type == "buff_attack" else "buff_attack"
-                has_pair = any(e.get("type") == other and e.get("scale_with") == "dark_matter" and e.get("target") == eff.get("target") for e in effects)
-                if eff_type == "buff_attack" and has_pair:
-                    desc = f"{pfx}Ally {tribe_text} gain ([[Dark Matter]])🗡️🤍"
-                elif eff_type == "buff_health" and has_pair:
-                    continue  # merged with buff_attack above
-                else:
-                    desc = f"{pfx}Ally {tribe_text} gain ([[Dark Matter]]){icon}"
-            else:
-                icon = "🗡️" if eff_type == "buff_attack" else "🤍"
-                desc = f"{pfx}+{amount}{icon}"
         elif eff_type == "dark_matter_buff":
             desc = f"Active: Target gains ([[Dark Matter]])🗡️"
         elif eff_type == "passive_heal":
@@ -371,6 +365,9 @@ def build_rules_text(card: dict, name_map: dict[str, str] | None = None) -> str:
             text = f"'''[[Active]] ({cost}):''' [[Conjure]] {rat_link} from deck. Ally Rats on board +1🗡️/+1🤍 (+[[Dark Matter]] × 1)."
         elif effect_type == "summon_token" and ability.get("summon_card_id"):
             text = f"'''[[Active]] ({cost}):''' [[Conjure|Summon]] {_wikilink(ability['summon_card_id'], name_map)}."
+        elif effect_type == "dark_matter_buff":
+            cost_text = f" ({cost})" if cost > 0 else ""
+            text = f"'''[[Active]]{cost_text}:''' Target gains ([[Dark Matter]])🗡️."
         else:
             name = ability.get("name", "activate")
             text = f"'''[[Active]] ({cost}):''' {name}."
