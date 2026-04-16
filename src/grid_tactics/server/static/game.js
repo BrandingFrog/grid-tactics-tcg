@@ -5628,6 +5628,15 @@ function renderSandbox() {
         });
     }
     renderSandboxStats();
+    // Pending-state modals (tutor/death/revive/post-move-attack) — sandbox
+    // reuses the live-game handlers so modal banners + valid-target cell
+    // highlights behave the same as a real duel.
+    if (typeof syncPendingPostMoveAttackUI === 'function') syncPendingPostMoveAttackUI();
+    if (typeof syncPendingTutorUI === 'function') syncPendingTutorUI();
+    if (typeof syncPendingConjureDeployUI === 'function') syncPendingConjureDeployUI();
+    if (typeof syncPendingDeathTargetUI === 'function') syncPendingDeathTargetUI();
+    if (typeof syncPendingReviveUI === 'function') syncPendingReviveUI();
+    if (typeof highlightBoard === 'function') highlightBoard();
 }
 
 function renderSandboxStats() {
