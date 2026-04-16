@@ -336,8 +336,9 @@ def build_rules_text(card: dict, name_map: dict[str, str] | None = None) -> str:
             desc = f"{pfx}[[Destroy]] target"
         elif eff_type == "burn":
             burn_target_map = {
-                0: "", 1: " all enemies", 2: " adjacent enemies", 3: "",
-                "single": "", "all": " all enemies", "adjacent": " adjacent enemies", "self": "",
+                0: "", 1: " all enemies", 2: " adjacent enemies", 3: " self",
+                "single": "", "all": " all enemies", "adjacent": " adjacent enemies",
+                "self": "", "self_owner": " self",
             }
             burn_target = burn_target_map.get(target, "")
             desc = f"{pfx}[[Burn]]{burn_target}"

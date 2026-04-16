@@ -5357,7 +5357,7 @@ function getEffectDescription(effects, cardData) {
         } else if (type === 9) { // Destroy
             desc = prefix + 'Destroy target';
         } else if (type === 10) { // Burn
-            var burnTarget = {0: '', 1: ' all enemies', 2: ' adjacent enemies', 3: ''}[eff.target] || '';
+            var burnTarget = {0: '', 1: ' all enemies', 2: ' adjacent enemies', 3: ' self'}[eff.target] || '';
             desc = prefix + 'Burn' + burnTarget;
         } else if (type === 11) { // Dark Matter Buff
             desc = prefix + 'Target gains (Dark Matter)' + SWORD;
