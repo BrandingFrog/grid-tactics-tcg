@@ -1664,7 +1664,8 @@ function renderCardFrame(c, opts) {
     if (c.play_condition === 'discarded_last_turn') {
         html += '<div class="card-effect-full">Cost: Discard last turn</div>';
     }
-    if (c.effects && c.effects.length > 0) {
+    if (c.effects && c.effects.length > 0 && c.card_type !== 2) {
+        // Skip effects block for pure REACT cards — their effects render in the react section
         var desc = getEffectDescription(c.effects, c);
         desc.split('. ').forEach(function(line) {
             if (line) html += '<div class="card-effect-full">' + line + '</div>';
@@ -1695,8 +1696,8 @@ function renderCardFrame(c, opts) {
         html += '<div class="card-flavour">' + c.flavour_text + '</div>';
     }
 
-    // === REACT SECTION (multi-purpose only): react bar + react effect ===
-    if (c.react_condition != null && c.react_mana_cost != null) {
+    // === REACT SECTION: condition + effect for react and multi-purpose cards ===
+    if (c.react_condition != null) {
         if (isMultiPurpose) {
             html += '</div><div class="card-multi-half">';
             html += '<div class="card-type-badge card-react-bar">REACT<span class="react-mana-circle">' + c.react_mana_cost + '</span></div>';
