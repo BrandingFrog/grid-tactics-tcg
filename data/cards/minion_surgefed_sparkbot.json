@@ -1,7 +1,7 @@
 {
     "card_id": "surgefed_sparkbot",
     "stable_id": 33,
-    "name": "Surgefed Sparkbot",
+    "name": "Sparkfed Surgebot",
     "card_type": "minion",
     "mana_cost": 5,
     "attack": 27,
