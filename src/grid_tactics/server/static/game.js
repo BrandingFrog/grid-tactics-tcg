@@ -5285,6 +5285,10 @@ function getEffectDescription(effects, cardData) {
             if (eff.scale_with === 'dark_matter') {
                 desc = prefix + 'Deal (Dark Matter) damage';
                 if (amount > 0) desc = prefix + 'Deal ' + amount + ' + (Dark Matter) damage';
+            } else if (eff.scale_with === 'sacrificed_attack_plus_dm') {
+                desc = prefix + "Deal destroyed ally's " + SWORD + ' + (Dark Matter) as damage';
+            } else if (eff.scale_with === 'sacrificed_attack') {
+                desc = prefix + "Deal destroyed ally's " + SWORD + ' as damage';
             } else {
                 desc = prefix + 'Deal ' + amount + ' damage';
             }

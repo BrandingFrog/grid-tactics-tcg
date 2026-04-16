@@ -250,7 +250,7 @@ def build_rules_text(card: dict, name_map: dict[str, str] | None = None) -> str:
             plural = "s" if sac_count > 1 else ""
             parts.append(f"[[Cost]]: [[Discard]] any {count_text}[[{discard_tribe}]]{plural}")
 
-    # Sacrifice ally cost
+    # Destroy ally cost
     if card.get("sacrifice_ally_cost"):
         parts.append("[[Cost]]: [[Destroy]] an ally")
 
@@ -286,7 +286,7 @@ def build_rules_text(card: dict, name_map: dict[str, str] | None = None) -> str:
                 desc = f"{pfx}Deal ([[Dark Matter]]) damage" if amount == 0 else f"{pfx}Deal {amount} + ([[Dark Matter]]) damage"
             elif scale in ("sacrificed_attack", "sacrificed_attack_plus_dm"):
                 dm_part = " + ([[Dark Matter]])" if "dm" in scale else ""
-                desc = f"{pfx}Deal sacrificed ally's 🗡️{dm_part} as damage"
+                desc = f"{pfx}Deal destroyed ally's 🗡️{dm_part} as damage"
             else:
                 desc = f"{pfx}Deal {amount} damage"
             if target in (1, "all"):

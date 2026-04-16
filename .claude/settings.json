@@ -1,0 +1,29 @@
+{
+  "enabledPlugins": {
+    "figma@claude-plugins-official": true
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python -c \"import sys,json; d=json.load(sys.stdin); f=d.get('tool_input',{}).get('file_path','') or d.get('tool_input',{}).get('file_path',''); print(json.dumps({'decision':'block','reason':'CARD EDIT BLOCKED: Editing card files (data/cards/*.json) requires explicit user approval. Show the user exactly what you plan to change and ask them to confirm.'}) if '/data/cards/' in f and f.endswith('.json') else '{}')\"",
+            "timeout": 5
+          }
+        ]
+      },
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python -c \"import sys,json; d=json.load(sys.stdin); content=d.get('tool_input',{}).get('content','') or d.get('tool_input',{}).get('new_string',''); f=d.get('tool_input',{}).get('file_path',''); is_card_related='/data/cards/' in f or '/sync_cards' in f or '/game.js' in f or '/GLOSSARY' in f; has_sacrifice='sacrific' in content.lower() if content else False; print(json.dumps({'decision':'block','reason':'SACRIFICE WORD CHECK: The word sacrifice/sacrificed is reserved for the board-crossing mechanic. Use Destroy for ally-removal costs. Please confirm this usage is intentional.'}) if is_card_related and has_sacrifice else '{}')\"",
+            "timeout": 5
+          }
+        ]
+      }
+    ]
+  }
+}
