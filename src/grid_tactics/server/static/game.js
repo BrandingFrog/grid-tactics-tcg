@@ -5601,18 +5601,26 @@ function renderSandbox() {
     // Renderer reuse contract: call the SAME renderBoard / renderHand,
     // passing sandbox mount targets via opts. The sandbox state is RAW
     // god view from the server -- we never call filter_state_for_player
-    // or filter_state_for_spectator. P1 hand always lands at #sandbox-hand-p0
-    // (top), P2 hand always lands at #sandbox-hand-p1 (bottom). Fixed (D1).
+    // or filter_state_for_spectator. Per spec D1: fixed dual-perspective,
+    // no flip. HTML places P2 hand at TOP and P1 hand at BOTTOM; the
+    // board orientation is locked to match (P2 back row at top, P1 back
+    // row at bottom) regardless of which player is currently active.
 
     var boardMount = document.getElementById('sandbox-board');
-    var handP0Mount = document.getElementById('sandbox-hand-p0');  // P1 visual TOP
-    var handP1Mount = document.getElementById('sandbox-hand-p1');  // P2 visual BOTTOM
+    var handP0Mount = document.getElementById('sandbox-hand-p0');  // P1 hand, visual BOTTOM
+    var handP1Mount = document.getElementById('sandbox-hand-p1');  // P2 hand, visual TOP
+
+    // Fixed perspective: perspectiveIdx=0 → rowOrder=[4,3,2,1,0], so row 0
+    // (P1 back row) renders at bottom near P1's hand, row 4 (P2 back row)
+    // renders at top near P2's hand. Do NOT key this off sandboxActiveViewIdx
+    // — that would flip the board every time the active player toggles.
+    var SANDBOX_PERSPECTIVE = 0;
 
     if (boardMount && typeof renderBoard === 'function') {
         renderBoard({
             mount: boardMount,
             state: sandboxState,
-            perspectiveIdx: sandboxActiveViewIdx,
+            perspectiveIdx: SANDBOX_PERSPECTIVE,
             legalActions: sandboxLegalActions,
         });
     }
