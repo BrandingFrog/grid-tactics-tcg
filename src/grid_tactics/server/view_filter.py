@@ -350,6 +350,24 @@ def enrich_pending_death_target(
             if not m.is_alive:
                 continue
             valid.append([int(m.position[0]), int(m.position[1])])
+    elif target.filter == "friendly_promote":
+        from grid_tactics.enums import PlayerSide
+        owner_side = PlayerSide(int(target.owner_idx))
+        promote_card_id = card_def.promote_target
+        if promote_card_id:
+            try:
+                promote_numeric_id = library.get_numeric_id(promote_card_id)
+            except KeyError:
+                promote_numeric_id = None
+            if promote_numeric_id is not None:
+                for m in state.minions:
+                    if m.owner != owner_side:
+                        continue
+                    if not m.is_alive:
+                        continue
+                    if m.card_numeric_id != promote_numeric_id:
+                        continue
+                    valid.append([int(m.position[0]), int(m.position[1])])
     filtered_dict["pending_death_valid_targets"] = valid
 
 

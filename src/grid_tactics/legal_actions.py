@@ -100,7 +100,7 @@ def legal_actions(
     # correctly regardless of whether the death happened during ACTION or
     # REACT phase.
     if state.pending_death_target is not None:
-        return _pending_death_target_actions(state)
+        return _pending_death_target_actions(state, library)
 
     # Pending revive-place: player must pick a deploy cell for each revived
     # minion or DECLINE_REVIVE to stop early.
@@ -499,17 +499,21 @@ def _pending_revive_actions(state: GameState, library: CardLibrary) -> tuple[Act
 # ---------------------------------------------------------------------------
 
 
-def _pending_death_target_actions(state: GameState) -> tuple[Action, ...]:
+def _pending_death_target_actions(
+    state: GameState, library: CardLibrary,
+) -> tuple[Action, ...]:
     """Enumerate legal DEATH_TARGET_PICK actions while a death modal is open.
 
-    The filter on ``state.pending_death_target`` determines which minions
-    are eligible. Currently the only filter is ``enemy_minion`` — pick an
-    alive enemy of the dying minion's owner.
+    Filters:
+      - ``enemy_minion`` — pick an alive enemy of the dying minion's owner
+        (e.g. Lasercannon destroy).
+      - ``friendly_promote`` — pick a friendly alive minion whose card_id
+        matches the dying card's promote_target (e.g. Giant Rat promote
+        when 2+ ally Rats are on board).
 
     If no eligible targets exist (shouldn't happen in practice because
     resolve_death_effects_or_enter_modal checks this and falls through to
-    no-op), returns an empty tuple — the caller (sandbox auto-pass, test
-    harness) should handle that gracefully.
+    no-op), returns an empty tuple — the caller should handle that.
     """
     target = state.pending_death_target
     if target is None:
@@ -525,8 +529,20 @@ def _pending_death_target_actions(state: GameState) -> tuple[Action, ...]:
             if not m.is_alive:
                 continue
             actions.append(death_target_pick_action(target_pos=m.position))
+    elif target.filter == "friendly_promote":
+        dying_def = library.get_by_id(target.card_numeric_id)
+        promote_card_id = dying_def.promote_target
+        if promote_card_id:
+            promote_numeric_id = library.get_numeric_id(promote_card_id)
+            for m in state.minions:
+                if m.owner != owner_side:
+                    continue
+                if not m.is_alive:
+                    continue
+                if m.card_numeric_id != promote_numeric_id:
+                    continue
+                actions.append(death_target_pick_action(target_pos=m.position))
     else:
-        # Future filters ("friendly_minion", "any_minion", etc.)
         raise ValueError(
             f"Unknown pending_death_target filter: {target.filter}"
         )

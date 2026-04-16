@@ -491,19 +491,58 @@ def resolve_effects_for_trigger(
 
 
 def _death_effect_needs_modal(effect: EffectDefinition) -> bool:
-    """Return True if a death-trigger effect requires a click-target modal.
+    """Return True if a death-trigger effect ALWAYS requires a click-target modal.
 
     Currently the only such shape is ``DESTROY / SINGLE_TARGET`` (Lasercannon
     on_death). The dying minion's owner must click an enemy minion to
     destroy it — there's no automatic target resolution path that makes
-    sense, so we enter the modal. Future shapes (DAMAGE / SINGLE_TARGET
-    on death, BUFF_HEALTH / SINGLE_TARGET on death, etc.) can be added
-    here as they come up.
+    sense, so we enter the modal.
+
+    Note: PROMOTE is handled separately in ``resolve_death_effects_or_enter_modal``
+    because it only enters the modal when 2+ candidates exist (with 0/1 it
+    resolves synchronously).
     """
     return (
         effect.trigger == TriggerType.ON_DEATH
         and effect.target == TargetType.SINGLE_TARGET
         and effect.effect_type == EffectType.DESTROY
+    )
+
+
+def _count_promote_candidates(
+    state: GameState,
+    dying_card_numeric_id: int,
+    dying_owner: PlayerSide,
+    library: CardLibrary,
+) -> int:
+    """Count friendly alive minions eligible for PROMOTE on death.
+
+    Mirrors the filter in ``_apply_promote_on_death`` but only returns the
+    count. Used by ``resolve_death_effects_or_enter_modal`` to decide
+    whether to auto-resolve (0 or 1 candidates) or open the picker modal
+    (2+ candidates).
+    """
+    try:
+        dying_card_def = library.get_by_id(dying_card_numeric_id)
+    except KeyError:
+        return 0
+    if not dying_card_def.promote_target:
+        return 0
+    try:
+        target_card_numeric_id = library.get_numeric_id(dying_card_def.promote_target)
+    except KeyError:
+        return 0
+    # Unique constraint: if another copy of the dying card is still alive on
+    # the owner's board, no promote happens at all.
+    if dying_card_def.unique:
+        for m in state.minions:
+            if m.owner == dying_owner and m.is_alive and m.card_numeric_id == dying_card_numeric_id:
+                return 0
+    return sum(
+        1 for m in state.minions
+        if m.owner == dying_owner
+        and m.is_alive
+        and m.card_numeric_id == target_card_numeric_id
     )
 
 
@@ -584,6 +623,29 @@ def resolve_death_effects_or_enter_modal(
             )
             return replace(state, pending_death_target=target), i
 
+        # PROMOTE: open modal if 2+ candidates, otherwise resolve inline.
+        if effect.effect_type == EffectType.PROMOTE:
+            candidate_count = _count_promote_candidates(
+                state, card_numeric_id, owner, library,
+            )
+            if candidate_count >= 2:
+                assert state.pending_death_target is None, (
+                    "resolve_death_effects_or_enter_modal called while "
+                    "pending_death_target already set"
+                )
+                target = PendingDeathTarget(
+                    card_numeric_id=card_numeric_id,
+                    owner_idx=int(owner),
+                    dying_instance_id=instance_id,
+                    effect_idx=i,
+                    filter="friendly_promote",
+                )
+                return replace(state, pending_death_target=target), i
+            state = _apply_promote_on_death(
+                state, card_numeric_id, owner, library,
+            )
+            continue
+
         # Synchronous resolution path.
         if effect.effect_type == EffectType.TUTOR:
             # Death-triggered tutor not currently used by any card; if it
@@ -591,10 +653,6 @@ def resolve_death_effects_or_enter_modal(
             state = _enter_pending_tutor(state, card_def, owner, library)
         elif effect.effect_type == EffectType.CONJURE:
             state = _resolve_conjure(state, card_def, owner, library)
-        elif effect.effect_type == EffectType.PROMOTE:
-            state = _apply_promote_on_death(
-                state, card_numeric_id, owner, library,
-            )
         elif effect.effect_type == EffectType.RALLY_FORWARD:
             # RALLY_FORWARD on death would need a mover reference; no live
             # card uses it, but keep the dispatch symmetric with
@@ -648,12 +706,30 @@ def apply_death_target_pick(
     picked = _find_minion_at_pos(state.minions, target_pos)
     if picked is None or not picked.is_alive:
         raise ValueError(f"DEATH_TARGET_PICK: no alive minion at {target_pos}")
+    owner_side = PlayerSide(target.owner_idx)
     if target.filter == "enemy_minion":
-        owner_side = PlayerSide(target.owner_idx)
         if picked.owner == owner_side:
             raise ValueError(
                 f"DEATH_TARGET_PICK: target {target_pos} is friendly to the "
                 f"dying minion's owner (filter=enemy_minion)"
+            )
+    elif target.filter == "friendly_promote":
+        if picked.owner != owner_side:
+            raise ValueError(
+                f"DEATH_TARGET_PICK: target {target_pos} is not friendly "
+                f"(filter=friendly_promote)"
+            )
+        # Target must also match the promote_target card_id.
+        promote_card_id = card_def.promote_target
+        if not promote_card_id:
+            raise ValueError(
+                "DEATH_TARGET_PICK: dying card has no promote_target"
+            )
+        promote_numeric_id = library.get_numeric_id(promote_card_id)
+        if picked.card_numeric_id != promote_numeric_id:
+            raise ValueError(
+                f"DEATH_TARGET_PICK: target at {target_pos} is not a "
+                f"valid promote target (card_id mismatch)"
             )
 
     # Resolve the effect. For DESTROY, kill the picked minion by zeroing
@@ -662,6 +738,18 @@ def apply_death_target_pick(
     if effect.effect_type == EffectType.DESTROY:
         new_picked = replace(picked, current_health=0)
         new_minions = _replace_minion(state.minions, picked.instance_id, new_picked)
+        state = replace(state, minions=new_minions)
+    elif effect.effect_type == EffectType.PROMOTE:
+        # Transform the picked ally into the dying card (full stat reset).
+        promoted = replace(
+            picked,
+            card_numeric_id=target.card_numeric_id,
+            current_health=card_def.health,
+            attack_bonus=0,
+            max_health_bonus=0,
+            is_burning=False,
+        )
+        new_minions = _replace_minion(state.minions, picked.instance_id, promoted)
         state = replace(state, minions=new_minions)
     else:
         # Future-proof: other effect types that could use this modal path.
