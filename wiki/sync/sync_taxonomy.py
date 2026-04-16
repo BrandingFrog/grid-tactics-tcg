@@ -901,7 +901,7 @@ RULES_PAGES: dict[str, str] = {
         "\n"
         "# '''Burn tick''' -- All burning minions owned by the active "
         "player take 5 damage.\n"
-        "# '''Passive effects''' -- Passive auras and heals resolve.\n"
+        "# '''End effects''' -- End of turn effects (heals, damage) resolve.\n"
         "# '''Mana regeneration''' -- Active player gains +1 mana.\n"
         "# '''Auto-draw''' -- Active player draws one card.\n"
         "\n"

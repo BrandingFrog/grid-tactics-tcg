@@ -1141,7 +1141,7 @@ function renderCardBrowser() {
             else if (kw === 'unique' && c.unique) hasKeyword = true;
             else if (kw === 'negate' && c.effects && c.effects.some(function(e) { return e.type === 4; })) hasKeyword = true;
             else if (kw === 'burn' && c.effects && c.effects.some(function(e) { return e.type === 10; })) hasKeyword = true;
-            else if (kw === 'passive' && c.effects && c.effects.some(function(e) { return e.type === 12; })) hasKeyword = true;
+            else if (kw === 'end' && c.effects && c.effects.some(function(e) { return e.trigger === 5 || e.type === 12; })) hasKeyword = true;
             if (!hasKeyword) return;
         }
         // Search filter
@@ -1236,7 +1236,8 @@ var KEYWORD_GLOSSARY = {
     'Move': 'This effect activates when the minion moves forward.',
     'Attack': 'This effect activates when the minion attacks.',
     'Damaged': 'This effect activates when the minion takes damage.',
-    'Passive': 'This effect triggers automatically every turn.',
+    'Start': 'This effect triggers at the start of the owner\'s turn, before any actions.',
+    'End': 'This effect triggers at the end of the owner\'s turn, after all actions.',
     'Active': 'This ability can be used once per turn instead of attacking.',
     // Mechanic keywords
     'Unique': 'Only one copy of this minion can exist on the board per player at a time.',
@@ -1256,8 +1257,8 @@ var KEYWORD_GLOSSARY = {
     'Exhaust': 'Send a card to the Exhaust Pile from anywhere.',
     'Heal': 'Restore 🤍 to a target.',
     'Deal': 'Deal damage to a target.',
-    'Burn': 'Applies Burning to affected enemies. A burning minion takes 5🤍 damage at the start of its owner\'s turn. Persists until the minion dies.',
-    'Burning': 'A burning minion takes 5🤍 damage at the start of its owner\'s turn. Burning persists until the minion dies.',
+    'Burn': 'Applies Burning to affected enemies.',
+    'Burning': 'A burning minion takes 5🤍 damage at Start. Burning persists until the minion dies.',
     'Dark Matter': 'A stacking resource used by Dark Mages. Buffs and costs scale with accumulated stacks.',
     'Leap': 'If blocked by an enemy, jump over to the next available tile. Cannot leap allies. If all tiles ahead are enemy-occupied, enables sacrifice.',
     'Conjure': 'Summon a card from your deck directly to the board.',
@@ -1383,7 +1384,7 @@ function buildCardTooltipContent(c) {
             if (eff.trigger === 2) addKw('Attack');
             if (eff.trigger === 3) addKw('Damaged');
             if (eff.trigger === 4) addKw('Move');
-            if (eff.trigger === 5) addKw('Passive');
+            if (eff.trigger === 5) addKw('End');
             if (eff.trigger === 6) addKw('Discarded');
             // Effect types
             if (eff.type === 0) { addKw('Deal'); if (eff.scale_with === 'dark_matter') addKw('Dark Matter'); }
@@ -1397,7 +1398,7 @@ function buildCardTooltipContent(c) {
             if (eff.type === 9) addKw('Destroy');
             if (eff.type === 10) addKw('Burn');
             if (eff.type === 11) { addKw('Active'); addKw('Dark Matter'); }
-            if (eff.type === 12) { addKw('Passive'); addKw('Heal'); }
+            if (eff.type === 12) { addKw('End'); addKw('Heal'); }
             if (eff.type === 13) addKw('Leap');
             if (eff.type === 14) addKw('Conjure');
             if (eff.type === 15) addKw('Burning');
@@ -5263,7 +5264,7 @@ function renderHandCard(numericId, handIndex, currentMana, isMyTurn) {
 function getEffectDescription(effects, cardData) {
     if (!effects || effects.length === 0) return '';
     var isMinion = cardData && cardData.card_type === 0;
-    var triggerMap = {0: isMinion ? 'Summon' : '', 1: 'Death', 2: 'Attack', 3: 'Damaged', 4: 'Move', 5: 'Passive', 6: 'Discarded'};
+    var triggerMap = {0: isMinion ? 'Summon' : '', 1: 'Death', 2: 'Attack', 3: 'Damaged', 4: 'Move', 5: 'End', 6: 'Discarded'};
     var parts = [];
     effects.forEach(function(eff) {
         var trigger = triggerMap[eff.trigger];
@@ -5349,8 +5350,8 @@ function getEffectDescription(effects, cardData) {
             desc = prefix + 'Burn' + burnTarget;
         } else if (type === 11) { // Dark Matter Buff
             desc = prefix + 'Target gains (Dark Matter)' + SWORD;
-        } else if (type === 12) { // Passive Heal
-            desc = 'Passive: Heal ' + amount + ' per turn';
+        } else if (type === 12) { // End Heal
+            desc = 'End: Heal ' + amount;
         } else if (type === 13) { // Leap
             desc = 'Move: Leap';
         } else if (type === 14) { // Conjure

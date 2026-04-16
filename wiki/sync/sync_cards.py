@@ -68,7 +68,7 @@ _TRIGGER_PREFIX: dict[int | str, str] = {
     2: "[[Attack]]", "on_attack": "[[Attack]]",
     3: "[[Damaged]]", "on_damaged": "[[Damaged]]",
     4: "[[Move]]", "on_move": "[[Move]]",
-    5: "[[Passive]]", "passive": "[[Passive]]",
+    5: "[[End]]", "passive": "[[End]]",
     6: "[[Discarded]]", "on_discard": "[[Discarded]]",
 }
 
@@ -166,7 +166,7 @@ def derive_keywords(card: dict) -> list[str]:
         if trigger == "on_death":
             kws.add("Death")
         if trigger == "passive":
-            kws.add("Passive")
+            kws.add("End of Turn")
         if trigger == "on_discard":
             kws.add("Discarded")
 
@@ -341,7 +341,7 @@ def build_rules_text(card: dict, name_map: dict[str, str] | None = None) -> str:
         elif eff_type == "dark_matter_buff":
             desc = f"Active: Target gains ([[Dark Matter]])🗡️"
         elif eff_type == "passive_heal":
-            desc = f"Passive: [[Heal]] {amount} per turn"
+            desc = f"[[End]]: [[Heal]] {amount}"
         elif eff_type == "leap":
             desc = "[[Move]]: [[Leap]]"
         elif eff_type == "revive":

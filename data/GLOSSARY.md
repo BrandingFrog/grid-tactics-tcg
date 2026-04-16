@@ -12,7 +12,8 @@ Update this file and the matching `KEYWORD_GLOSSARY` in `src/grid_tactics/server
 | Move | This effect activates when the minion moves forward. |
 | Attack | This effect activates when the minion attacks. |
 | Damaged | This effect activates when the minion takes damage. |
-| Passive | This effect triggers automatically every turn. |
+| Start | This effect triggers at the start of the owner's turn, before any actions. |
+| End | This effect triggers at the end of the owner's turn, after all actions. |
 | Active | This ability can be used once per turn instead of attacking. |
 
 ## Mechanic Keywords
@@ -34,8 +35,8 @@ Update this file and the matching `KEYWORD_GLOSSARY` in `src/grid_tactics/server
 | Exhaust | Send a card to the Exhaust Pile. |
 | Heal | Restore 🤍 to a target. |
 | Deal | Deal damage to a target. |
-| Burn | Applies Burning to affected enemies. A burning minion takes 5🤍 damage at the start of its owner's turn. Persists until the minion dies. |
-| Burning | A burning minion takes 5🤍 damage at the start of its owner's turn. Burning is a boolean status — re-applying it does nothing. It persists until the minion dies. |
+| Burn | Applies Burning to affected enemies. |
+| Burning | A burning minion takes 5🤍 damage at Start. Burning is a boolean status — re-applying it does nothing. It persists until the minion dies. |
 | Dark Matter | A stacking resource used by Dark Mages. Buffs and costs scale with accumulated stacks. |
 | Leap | If blocked by an enemy, jump over to the next available tile. Cannot leap allies. If all tiles ahead are enemy-occupied, enables sacrifice. |
 | Conjure | Summon a card from your deck directly to the board. |

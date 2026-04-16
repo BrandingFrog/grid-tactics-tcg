@@ -18,10 +18,10 @@
         }
     ],
     "tips": [
-        "Emberplague Rat has 0 attack but burns all adjacent enemies passively. Position it next to enemy minions to apply constant burn damage without attacking.",
+        "Emberplague Rat has 0 attack but burns all adjacent enemies at end of turn. Position it next to enemy minions to apply constant burn damage without attacking.",
         "At 24 health for 2 mana, it's extremely tanky for its cost. It can soak hits while its burn whittles down neighbours.",
         "Place it in a central lane to potentially burn enemies in adjacent columns. Burn stacks mean sustained damage over multiple turns.",
-        "Pair with Pyre Archer for a fire-heavy strategy — Emberplague burns passively while Pyre Archer burns on attack from range.",
+        "Pair with Pyre Archer for a fire-heavy strategy — Emberplague burns at end of turn while Pyre Archer burns on attack from range.",
         "As a Rat, it's still a valid promote target for Giant Rat's death trigger. A 24-health Rat is harder to kill than a Common Rat, keeping your promote chain alive."
     ]
 }
