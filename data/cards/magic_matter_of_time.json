@@ -26,5 +26,23 @@
             "target_tribe": "Mage",
             "amount": 1
         }
+    ],
+    "flavour_text": "Give it long enough and every minion rots to dust.",
+    "tips": [
+        "4-mana single-target removal + burn DoT + DM ramp — one of the most efficient tempo plays in the Dark toolbox once you have 4+ DM on the board.",
+        "Damage scales with your TOTAL Dark Matter pool (summed across live friendly minions), not one Mage's stacks. Build wide before casting for maximum burst.",
+        "The burn is the clutch — a partial-kill target at low HP dies at the next turn start from the burn tick. Use Matter of Time to 'finish later' when you can't quite one-shot.",
+        "Pair with [[Flame Wyrm]] — its Passive adds +1 to burn tick damage, turning Matter of Time's burn into a heavier long-tail threat.",
+        "Redundant against already-burning targets: the burn effect is a boolean, so casting a second Matter of Time on the same minion wastes the burn half. Chain onto a fresh target instead."
+    ],
+    "rulings": [
+        "Damage equals the sum of Dark Matter stacks across your live minions at cast time. Zero DM on-board = 0 damage (the burn and DM grant still resolve).",
+        "Both the damage and the [[Burn]] hit the same chosen target — one target pick resolves all three effect lines.",
+        "Burn is a boolean [[Burning]] status — re-applying it to an already-burning minion is a no-op; the first burn persists until the minion dies.",
+        "The +1 Dark Matter grants to every ally Dark [[Mage]] on the board, not just the caster's lane. Applies after damage and burn resolve, so newly-banked DM does not scale THIS cast.",
+        "If the target dies to the damage, burn is applied post-mortem to a dead minion and has no effect (the grave doesn't tick)."
+    ],
+    "trivia": [
+        "Matter of Time is the 4-mana sibling of [[Dark Matter Barrage]] — same DM scaling, same Mage-ramp payoff, narrower target range but cheaper and carries a persistent burn."
     ]
 }

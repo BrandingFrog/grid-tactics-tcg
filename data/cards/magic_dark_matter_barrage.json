@@ -20,5 +20,23 @@
             "target_tribe": "Mage",
             "amount": 1
         }
+    ],
+    "flavour_text": "Ten dark hearts beat. Ten dark rays fall.",
+    "tips": [
+        "Your top-end board wipe — 7 mana is max curve, so you're casting it on a turn where you've already built mana and DM stacks over the preceding turns.",
+        "The damage scales with your TOTAL Dark Matter (summed across every live friendly minion), not just a single Mage's stack. Go wide with Diodebots, Battery, Gargoyle, and Erebus to stack the pool before casting.",
+        "Clean-up spell against token swarms (Common Rats, Diodebots, Rat-conjured boards). A baseline 5 damage is already enough to one-shot most 10🤍 tokens; anything above that is a bonus from your DM pool.",
+        "The +1 DM to every ally Mage means the board you keep after the wipe is stronger than before — this card accelerates your own ramp even when it only partially clears the enemy side.",
+        "Against a single large enemy minion, Matter of Time (4 mana, same DM scaling, plus burn) is more mana-efficient. Save Barrage for turns where you're hitting three or more targets."
+    ],
+    "rulings": [
+        "Damage is `5 + (sum of Dark Matter stacks across your live minions)`. Enemy DM does not contribute.",
+        "Damage resolves before the +1 DM grant, so newly-granted DM does NOT scale this cast's damage — it's banked for the next one.",
+        "Every enemy minion on the board takes the full amount — range, tribe, and element are irrelevant.",
+        "The +1 DM targets ally Dark [[Mage]]s only. Non-Mage allies (Robots, Rats, Undead) get nothing, even if they hold Dark Matter.",
+        "If you have zero Mages on the board, the second effect is a no-op — the spell still costs 7 mana."
+    ],
+    "trivia": [
+        "At 7 mana with board-wipe-scale payoff, Dark Matter Barrage intentionally sits at the apex of the Dark curve — the 'what all this ramp was for' payoff for DM decks."
     ]
 }
