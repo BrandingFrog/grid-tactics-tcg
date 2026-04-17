@@ -678,6 +678,9 @@ def _check_react_condition(
     if condition == ReactCondition.OPPONENT_ATTACKS:
         return pending.action_type == ActionType.ATTACK
 
+    if condition == ReactCondition.OPPONENT_SACRIFICES:
+        return pending.action_type == ActionType.SACRIFICE
+
     if condition == ReactCondition.OPPONENT_PLAYS_REACT:
         return False  # No react on stack means nothing to counter-react
 
