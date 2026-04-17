@@ -5374,7 +5374,7 @@ function getEffectDescription(effects, cardData) {
             }
             if (eff.target === 1) desc += ' to all enemies';
             else if (eff.target === 0) desc += ' to target';
-            else if (eff.target === 4) desc += ' to opponent';
+            else if (eff.target === 4) desc += ' to face';
         } else if (type === 1) { // Heal
             desc = prefix + 'Heal ' + amount;
         } else if (type === 2) { // Buff ATK

@@ -320,7 +320,7 @@ def build_rules_text(card: dict, name_map: dict[str, str] | None = None) -> str:
             elif target in (0, "single", "single_target"):
                 desc += " to target"
             elif target in (4, "opponent_player"):
-                desc += " to opponent"
+                desc += " to face"
         elif eff_type == "heal":
             desc = f"{pfx}[[Heal]] {amount}"
         elif eff_type in ("buff_attack", "buff_health"):
