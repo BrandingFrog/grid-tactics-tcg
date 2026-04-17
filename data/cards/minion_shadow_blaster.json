@@ -1,0 +1,13 @@
+{
+    "card_id": "shadow_blaster",
+    "stable_id": 47,
+    "name": "Shadow Blaster",
+    "card_type": "minion",
+    "mana_cost": 3,
+    "attack": 14,
+    "health": 10,
+    "range": 1,
+    "element": "dark",
+    "tribe": "Mage",
+    "effects": []
+}
