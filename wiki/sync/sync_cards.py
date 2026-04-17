@@ -315,9 +315,11 @@ def build_rules_text(card: dict, name_map: dict[str, str] | None = None) -> str:
                 desc = f"{pfx}Deal destroyed ally's 🗡️{dm_part} as damage"
             else:
                 desc = f"{pfx}Deal {amount} damage"
-            if target in (1, "all"):
+            if target in (1, "all", "all_enemies"):
                 desc += " to all enemies"
-            if target in (4, "opponent_player"):
+            elif target in (0, "single", "single_target"):
+                desc += " to target"
+            elif target in (4, "opponent_player"):
                 desc += " to opponent"
         elif eff_type == "heal":
             desc = f"{pfx}[[Heal]] {amount}"
@@ -374,9 +376,11 @@ def build_rules_text(card: dict, name_map: dict[str, str] | None = None) -> str:
             desc = f"{pfx}[[Destroy]] target"
         elif eff_type == "burn":
             burn_target_map = {
-                0: "", 1: " all enemies", 2: " adjacent enemies", 3: " self",
-                "single": "", "all": " all enemies", "adjacent": " adjacent enemies",
-                "self": "", "self_owner": " self",
+                0: " target", 1: " all enemies", 2: " adjacent enemies", 3: " self",
+                "single": " target", "single_target": " target",
+                "all": " all enemies", "all_enemies": " all enemies",
+                "adjacent": " adjacent enemies",
+                "self": " self", "self_owner": " self",
             }
             if target in (6, "all_minions"):
                 tribes = eff.get("_tribes") or ([eff["target_tribe"]] if eff.get("target_tribe") else [])

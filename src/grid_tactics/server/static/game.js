@@ -5373,7 +5373,8 @@ function getEffectDescription(effects, cardData) {
                 desc = prefix + 'Deal ' + amount + ' damage';
             }
             if (eff.target === 1) desc += ' to all enemies';
-            if (eff.target === 4) desc += ' to opponent';
+            else if (eff.target === 0) desc += ' to target';
+            else if (eff.target === 4) desc += ' to opponent';
         } else if (type === 1) { // Heal
             desc = prefix + 'Heal ' + amount;
         } else if (type === 2) { // Buff ATK
@@ -5456,7 +5457,7 @@ function getEffectDescription(effects, cardData) {
                 else burnTarget = ' all ' + joined.slice(0, -1).join(', ') + ' and ' + joined.slice(-1)[0];
                 if (elements.length > 0) burnTarget += ' minions';
             } else {
-                burnTarget = {0: '', 1: ' all enemies', 2: ' adjacent enemies', 3: ' self'}[eff.target] || '';
+                burnTarget = {0: ' target', 1: ' all enemies', 2: ' adjacent enemies', 3: ' self'}[eff.target] || '';
             }
             desc = prefix + 'Burn' + burnTarget;
         } else if (type === 11) { // Dark Matter Buff
