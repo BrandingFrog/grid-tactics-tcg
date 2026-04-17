@@ -28,7 +28,7 @@
             "amount": 0
         }
     ],
-    "react_condition": "any_action",
+    "react_condition": "opponent_ends_turn",
     "react_mana_cost": 2,
     "react_effect": {
         "type": "draw",

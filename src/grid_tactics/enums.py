@@ -86,6 +86,7 @@ class ReactCondition(IntEnum):
     OPPONENT_PLAYS_LIGHT = 11   # Opponent played a card with LIGHT element
     OPPONENT_SACRIFICES = 12    # Opponent's minion sacrificed at your back row
     OPPONENT_DISCARDS = 13     # Opponent discarded a card from hand
+    OPPONENT_ENDS_TURN = 14    # Fires after opponent's turn action (one-per-turn game — semantically "end of opponent's turn")
 
 
 class TriggerType(IntEnum):

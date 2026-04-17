@@ -1333,7 +1333,8 @@ function buildCardTooltipContent(c) {
             3: 'Magic or React', 4: 'Any action',
             5: 'Wood', 6: 'Fire', 7: 'Earth',
             8: 'Water', 9: 'Metal', 10: 'Dark',
-            11: 'Light', 12: 'Sacrifice', 13: 'Discard'
+            11: 'Light', 12: 'Sacrifice', 13: 'Discard',
+            14: 'End of turn'
         };
         var condText = condMap[c.react_condition] || 'Enemy acts';
         var extraCond = c.react_requires_no_friendly_minions ? ' while no allies' : '';
@@ -1717,7 +1718,8 @@ function renderCardFrame(c, opts) {
             3: 'Magic or React', 4: 'Any action',
             5: 'Wood', 6: 'Fire', 7: 'Earth',
             8: 'Water', 9: 'Metal', 10: 'Dark',
-            11: 'Light', 12: 'Sacrifice', 13: 'Discard'
+            11: 'Light', 12: 'Sacrifice', 13: 'Discard',
+            14: 'End of turn'
         };
         var condText = condMap[c.react_condition] || 'Enemy acts';
         var extraCond = c.react_requires_no_friendly_minions ? ' while no allies' : '';
@@ -5327,6 +5329,29 @@ function getEffectDescription(effects, cardData) {
     if (!effects || effects.length === 0) return '';
     var isMinion = cardData && cardData.card_type === 0;
     var triggerMap = {0: isMinion ? 'Summon' : '', 1: 'Death', 2: 'Attack', 3: 'Damaged', 4: 'Move', 5: 'End', 6: 'Discarded'};
+    // Coalesce sibling burn-all-minions effects that only differ in
+    // target_tribe/target_element into a single rendered clause — so
+    // Acidic Rain reads "Burn all Robots, Machines and Metal minions"
+    // instead of three separate lines.
+    effects = (function(effs) {
+        var bucket = null;
+        var out = [];
+        effs.forEach(function(e) {
+            var isBurnAll = e.type === 10 && e.target === 6;
+            if (isBurnAll) {
+                if (!bucket || bucket.trigger !== e.trigger) {
+                    bucket = { type: 10, target: 6, trigger: e.trigger, amount: e.amount || 0, _tribes: [], _elements: [] };
+                    out.push(bucket);
+                }
+                if (e.target_tribe && bucket._tribes.indexOf(e.target_tribe) < 0) bucket._tribes.push(e.target_tribe);
+                if (e.target_element && bucket._elements.indexOf(e.target_element) < 0) bucket._elements.push(e.target_element);
+            } else {
+                bucket = null;
+                out.push(e);
+            }
+        });
+        return out;
+    })(effects);
     var parts = [];
     effects.forEach(function(eff) {
         var trigger = triggerMap[eff.trigger];
@@ -5418,12 +5443,18 @@ function getEffectDescription(effects, cardData) {
         } else if (type === 10) { // Burn
             var burnTarget;
             if (eff.target === 6) {
-                var bTribe = eff.target_tribe || '';
-                var bElem = eff.target_element || '';
-                if (bTribe && bElem) burnTarget = ' all ' + bTribe + ' and ' + bElem.charAt(0).toUpperCase() + bElem.slice(1) + ' minions';
-                else if (bTribe) burnTarget = ' all ' + bTribe + 's';
-                else if (bElem) burnTarget = ' all ' + bElem.charAt(0).toUpperCase() + bElem.slice(1) + ' minions';
-                else burnTarget = ' all minions';
+                // Either a coalesced bucket (see top of this fn) with
+                // _tribes/_elements arrays, or a single-effect fallback.
+                var tribes = eff._tribes || (eff.target_tribe ? [eff.target_tribe] : []);
+                var elements = eff._elements || (eff.target_element ? [eff.target_element] : []);
+                var cap = function(s) { return s.charAt(0).toUpperCase() + s.slice(1); };
+                var tribeParts = tribes.map(function(t) { return t + 's'; });
+                var elemParts = elements.map(function(el) { return cap(el); });
+                var joined = tribeParts.concat(elemParts);
+                if (joined.length === 0) burnTarget = ' all minions';
+                else if (joined.length === 1) burnTarget = ' all ' + joined[0];
+                else burnTarget = ' all ' + joined.slice(0, -1).join(', ') + ' and ' + joined.slice(-1)[0];
+                if (elements.length > 0) burnTarget += ' minions';
             } else {
                 burnTarget = {0: '', 1: ' all enemies', 2: ' adjacent enemies', 3: ' self'}[eff.target] || '';
             }

@@ -43,6 +43,7 @@ _REACT_CONDITION_TEXT: dict[int, str] = {
     11: "Light",
     12: "Sacrifice",
     13: "Discard",
+    14: "End of turn",
 }
 # Also support string keys (some card JSONs use strings)
 _REACT_CONDITION_TEXT_STR: dict[str, str] = {
@@ -53,6 +54,8 @@ _REACT_CONDITION_TEXT_STR: dict[str, str] = {
     "opponent_sacrifices": "Sacrifice",
     "opponent_discards": "Discard",
     "opponent_plays_light": "Light",
+    "any_action": "Any action",
+    "opponent_ends_turn": "End of turn",
 }
 
 
@@ -269,6 +272,29 @@ def build_rules_text(card: dict, name_map: dict[str, str] | None = None) -> str:
     # Standard effects — skip for pure react cards (their effects render in react section)
     is_minion = card.get("card_type", "") == "minion"
     render_effects = effects if card.get("card_type", "") != "react" else []
+    # Coalesce sibling burn + target=all_minions effects that only differ in
+    # target_tribe/target_element into a single clause with _tribes/_elements
+    # arrays. The per-branch renderer reads these arrays below.
+    def _coalesce_burn_all(effs):
+        out = []
+        bucket = None
+        for e in effs:
+            is_burn_all = e.get("type") == "burn" and e.get("target") in (6, "all_minions")
+            if is_burn_all:
+                if bucket is None or bucket.get("trigger") != e.get("trigger"):
+                    bucket = {**e, "_tribes": [], "_elements": []}
+                    out.append(bucket)
+                t = e.get("target_tribe")
+                el = e.get("target_element")
+                if t and t not in bucket["_tribes"]:
+                    bucket["_tribes"].append(t)
+                if el and el not in bucket["_elements"]:
+                    bucket["_elements"].append(el)
+            else:
+                bucket = None
+                out.append(e)
+        return out
+    render_effects = _coalesce_burn_all(render_effects)
     for eff in render_effects:
         trigger_idx = eff.get("trigger", 0)
         trigger = _TRIGGER_PREFIX.get(trigger_idx, "")
@@ -353,16 +379,19 @@ def build_rules_text(card: dict, name_map: dict[str, str] | None = None) -> str:
                 "self": "", "self_owner": " self",
             }
             if target in (6, "all_minions"):
-                tribe = eff.get("target_tribe", "")
-                element = eff.get("target_element", "")
-                if tribe and element:
-                    burn_target = f" all [[{tribe}]] and [[{element.capitalize()}]] minions"
-                elif tribe:
-                    burn_target = f" all [[{tribe}]]s"
-                elif element:
-                    burn_target = f" all [[{element.capitalize()}]] minions"
-                else:
+                tribes = eff.get("_tribes") or ([eff["target_tribe"]] if eff.get("target_tribe") else [])
+                elements = eff.get("_elements") or ([eff["target_element"]] if eff.get("target_element") else [])
+                tribe_parts = [f"[[{t}]]s" for t in tribes]
+                elem_parts = [f"[[{el.capitalize()}]]" for el in elements]
+                joined = tribe_parts + elem_parts
+                if not joined:
                     burn_target = " all minions"
+                elif len(joined) == 1:
+                    burn_target = f" all {joined[0]}"
+                else:
+                    burn_target = f" all {', '.join(joined[:-1])} and {joined[-1]}"
+                if elements:
+                    burn_target += " minions"
             else:
                 burn_target = burn_target_map.get(target, "")
             desc = f"{pfx}[[Burn]]{burn_target}"

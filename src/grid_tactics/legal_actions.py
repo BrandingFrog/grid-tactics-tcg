@@ -687,6 +687,11 @@ def _check_react_condition(
     if condition == ReactCondition.ANY_ACTION:
         return True
 
+    # Grid Tactics is one-action-per-turn — every opponent action ends
+    # their turn, so OPPONENT_ENDS_TURN fires for any pending_action.
+    if condition == ReactCondition.OPPONENT_ENDS_TURN:
+        return True
+
     # Element-based conditions
     _ELEM_CONDITIONS = {
         ReactCondition.OPPONENT_PLAYS_WOOD: Element.WOOD,
