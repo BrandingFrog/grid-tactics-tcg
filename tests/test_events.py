@@ -211,3 +211,45 @@ def test_non_god_spectator_filtered(alice, bob, eve):
     # Opponent hand stripped to count only.
     assert p1.get("hand") in (None, [], ()) or "hand_count" in p1
     assert p1.get("hand_count", 0) > 0
+
+
+def test_effect_serialization_reflects_all_fields():
+    """Regression guard: every non-None EffectDefinition field must reach the client.
+
+    Adding a new field to EffectDefinition should never silently drop on
+    its way to the browser. This test loads every card in the library,
+    serializes via _build_card_defs, and compares keys against the live
+    dataclass fields.
+    """
+    from dataclasses import fields as dc_fields
+    from grid_tactics.cards import EffectDefinition
+    from grid_tactics.server.events import _build_card_defs
+
+    library = CardLibrary.from_directory(Path("data/cards"))
+    defs = _build_card_defs(library)
+
+    # Engine field name -> client key (events._EFFECT_CLIENT_KEY mirror)
+    remap = {"effect_type": "type"}
+    engine_names = {f.name for f in dc_fields(EffectDefinition)}
+    expected_client = {remap.get(n, n) for n in engine_names}
+
+    saw = set()
+    for card in defs.values():
+        for eff in card.get("effects", []) or []:
+            saw.update(eff.keys())
+        if card.get("react_effect"):
+            saw.update(card["react_effect"].keys())
+
+    # Every key observed on the wire must map to a real engine field.
+    assert saw.issubset(expected_client), (
+        f"unexpected wire keys: {saw - expected_client}"
+    )
+
+    # Acidic Rain is the canonical coverage card: every filter type in one.
+    ar = next(d for d in defs.values() if d.get("card_id") == "acidic_rain")
+    tribes = {e.get("target_tribe") for e in ar["effects"]}
+    elements = {e.get("target_element") for e in ar["effects"]}
+    assert {"Robot", "Machine"}.issubset(tribes)
+    assert "metal" in elements
+    assert ar["react_effect"]["type"] == 18  # DRAW
+    assert ar["react_effect"]["amount"] == 1

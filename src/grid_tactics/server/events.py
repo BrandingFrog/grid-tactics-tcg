@@ -1,4 +1,7 @@
 """Socket.IO event handlers for PvP room system and game flow."""
+from dataclasses import fields as _dc_fields
+from enum import IntEnum as _IntEnum
+
 from flask import request
 from flask_socketio import emit, join_room as sio_join_room
 
@@ -23,6 +26,43 @@ from grid_tactics.server.view_filter import (
 _room_manager: RoomManager | None = None
 
 
+# Field-name remap for the client: the engine uses clearer names, the
+# client expects the JSON names. Keep this list minimal — everything else
+# is passed through by reflection below.
+_EFFECT_CLIENT_KEY = {
+    "effect_type": "type",
+}
+
+
+def _serialize_effect(effect):
+    """Serialize an EffectDefinition by reflecting its dataclass fields.
+
+    New fields added to EffectDefinition propagate to the client
+    automatically — no need to update an allowlist. Enum values are
+    coerced to ints, ``None`` and default values are dropped to keep
+    the payload compact.
+    """
+    if effect is None:
+        return None
+    out = {}
+    for f in _dc_fields(effect):
+        value = getattr(effect, f.name)
+        if value is None:
+            continue
+        # Skip default scalars so payload stays lean.
+        default = f.default
+        if default is not None and value == default:
+            # Keep core positional fields (type/trigger/target/amount) even
+            # if they match their default — the client always expects them.
+            if f.name not in ("effect_type", "trigger", "target", "amount"):
+                continue
+        if isinstance(value, _IntEnum):
+            value = int(value)
+        key = _EFFECT_CLIENT_KEY.get(f.name, f.name)
+        out[key] = value
+    return out
+
+
 def _build_card_defs(library):
     """Build a dict mapping numeric_id to card info for client rendering.
 
@@ -35,32 +75,10 @@ def _build_card_defs(library):
     for nid in range(library.card_count):
         try:
             card = library.get_by_id(nid)
-            # Serialize effects as list of dicts
-            effects_list = []
-            for e in card.effects:
-                ed = {
-                    "type": int(e.effect_type),
-                    "trigger": int(e.trigger),
-                    "target": int(e.target),
-                    "amount": e.amount,
-                }
-                if e.scale_with:
-                    ed["scale_with"] = e.scale_with
-                if e.target_tribe:
-                    ed["target_tribe"] = e.target_tribe
-                if e.placement_condition:
-                    ed["placement_condition"] = e.placement_condition
-                    ed["condition_multiplier"] = e.condition_multiplier
-                effects_list.append(ed)
-            # Serialize react_effect as dict if present
-            react_effect_dict = None
-            if card.react_effect is not None:
-                react_effect_dict = {
-                    "type": int(card.react_effect.effect_type),
-                    "trigger": int(card.react_effect.trigger),
-                    "target": int(card.react_effect.target),
-                    "amount": card.react_effect.amount,
-                }
+            # Serialize effects via reflection so new EffectDefinition
+            # fields don't need a matching edit here.
+            effects_list = [_serialize_effect(e) for e in card.effects]
+            react_effect_dict = _serialize_effect(card.react_effect)
             defs[nid] = {
                 "card_id": card.card_id,
                 "stable_id": card.stable_id,
