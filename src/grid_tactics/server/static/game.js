@@ -3081,13 +3081,26 @@ function _multisetDelta(prevList, nextList) {
 }
 
 function _zoneButton(zone) {
-    var map = {
+    // In sandbox, each player's piles have their own DOM ids (P1 bottom,
+    // P2 top); pile-modal buttons from live mode render but are zero-sized.
+    // Prefer the sandbox-specific ids when they exist AND have layout.
+    if (sandboxMode) {
+        var sbMap = {
+            'grave_own': 'sandbox-p0-grave',
+            'exhaust_own': 'sandbox-p0-exhaust',
+            'grave_opp': 'sandbox-p1-grave',
+            'exhaust_opp': 'sandbox-p1-exhaust',
+        };
+        var sbEl = document.getElementById(sbMap[zone]);
+        if (sbEl && sbEl.getBoundingClientRect().width > 0) return sbEl;
+    }
+    var liveMap = {
         'grave_own': 'pileBtnOwnGrave',
         'exhaust_own': 'pileBtnOwnExhaust',
         'grave_opp': 'pileBtnOppGrave',
         'exhaust_opp': 'pileBtnOppExhaust',
     };
-    return document.getElementById(map[zone]);
+    return document.getElementById(liveMap[zone]);
 }
 
 // Generic card-to-pile fly animation: ghost starts at fromRect, flies to
