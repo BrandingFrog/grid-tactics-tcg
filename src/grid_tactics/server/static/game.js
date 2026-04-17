@@ -5345,11 +5345,12 @@ function _viewerDarkMatterSum() {
 }
 
 // In card rules text, live games substitute "(Dark Matter)" with the
-// viewer's current DM pool in purple. Non-live contexts keep the literal.
+// viewer's current DM pool in purple, followed by the "(Dark Matter)"
+// label so the number is unambiguous. Non-live contexts keep the literal.
 function _dmTokenLive() {
     var dm = _viewerDarkMatterSum();
     if (dm == null) return '(Dark Matter)';
-    return '<span class="dm-live-num">' + dm + '</span>';
+    return '<span class="dm-live-num">' + dm + '</span> (Dark Matter)';
 }
 
 function getEffectDescription(effects, cardData) {
