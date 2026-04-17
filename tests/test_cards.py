@@ -429,19 +429,22 @@ class TestMultiPurpose:
         with pytest.raises(ValueError, match="react_effect and react_mana_cost must both"):
             _minion_card(react_mana_cost=2)
 
-    def test_non_minion_with_react_effect_raises(self) -> None:
-        with pytest.raises(ValueError, match="Only minions can be multi-purpose"):
-            CardDefinition(
-                card_id="bad_magic",
-                name="Bad Magic",
-                card_type=CardType.MAGIC,
-                mana_cost=2,
-                react_effect=_heal_effect(),
-                react_mana_cost=1,
-            )
+    def test_magic_with_react_effect_allowed(self) -> None:
+        # Magic+react cards may carry a distinct react_effect (e.g. Acidic
+        # Rain burns on play but draws on react).
+        card = CardDefinition(
+            card_id="ok_magic",
+            name="OK Magic",
+            card_type=CardType.MAGIC,
+            mana_cost=2,
+            react_condition=ReactCondition.ANY_ACTION,
+            react_effect=_heal_effect(),
+            react_mana_cost=1,
+        )
+        assert card.is_multi_purpose is True
 
-    def test_non_minion_react_with_react_effect_raises(self) -> None:
-        with pytest.raises(ValueError, match="Only minions can be multi-purpose"):
+    def test_react_card_with_react_effect_raises(self) -> None:
+        with pytest.raises(ValueError, match="distinct react_effect"):
             CardDefinition(
                 card_id="bad_react",
                 name="Bad React",

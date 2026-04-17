@@ -468,6 +468,25 @@ def resolve_effect(
     elif scaled_effect.target == TargetType.OPPONENT_PLAYER:
         opp_idx = 1 - _player_index_for_side(caster_owner)
         return _apply_effect_to_player(state, scaled_effect, opp_idx)
+    elif scaled_effect.target == TargetType.ALL_MINIONS:
+        for minion in state.minions:
+            if minion.current_health <= 0:
+                continue
+            if scaled_effect.target_tribe or scaled_effect.target_element:
+                card_def = library.get_by_id(minion.card_numeric_id)
+                tribe_match = bool(
+                    scaled_effect.target_tribe
+                    and card_def.tribe
+                    and scaled_effect.target_tribe.lower() in card_def.tribe.lower()
+                )
+                element_match = bool(
+                    scaled_effect.target_element
+                    and card_def.element.name.lower() == scaled_effect.target_element.lower()
+                )
+                if not (tribe_match or element_match):
+                    continue
+            state = _apply_effect_to_minion(state, scaled_effect, minion, library)
+        return state
     elif scaled_effect.target == TargetType.ALL_ALLIES:
         for minion in state.minions:
             if minion.owner != caster_owner or minion.current_health <= 0:

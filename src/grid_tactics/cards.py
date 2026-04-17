@@ -40,7 +40,8 @@ class EffectDefinition:
     target: TargetType
     amount: int
     scale_with: Optional[str] = None  # e.g. "dark_matter" — adds caster's DM stacks to amount
-    target_tribe: Optional[str] = None  # filter ALL_ALLIES to only this tribe (e.g. "Mage")
+    target_tribe: Optional[str] = None  # filter ALL_ALLIES/ALL_MINIONS to only this tribe (e.g. "Mage")
+    target_element: Optional[str] = None  # filter ALL_MINIONS to only this element (e.g. "metal"); combined with target_tribe as OR
     placement_condition: Optional[str] = None  # e.g. "front_of_dark_ranged" — positional condition
     condition_multiplier: int = 1  # multiplier applied when placement_condition is met
 
@@ -271,10 +272,15 @@ class CardDefinition:
                     f"must both be set or both be None"
                 )
 
-        # Only minions can be multi-purpose (D-06)
-        if self.react_effect is not None and self.card_type != CardType.MINION:
+        # Only minions or magic cards can carry a distinct react_effect (D-06).
+        # React cards already use their effects array for react resolution.
+        if (
+            self.react_effect is not None
+            and self.card_type not in (CardType.MINION, CardType.MAGIC)
+        ):
             raise ValueError(
-                f"Card '{self.card_id}': Only minions can be multi-purpose"
+                f"Card '{self.card_id}': Only minions or magic cards can carry "
+                f"a distinct react_effect"
             )
 
         # react_mana_cost range (D-19) — 0 allowed for free react abilities

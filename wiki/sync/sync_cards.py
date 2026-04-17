@@ -352,7 +352,19 @@ def build_rules_text(card: dict, name_map: dict[str, str] | None = None) -> str:
                 "single": "", "all": " all enemies", "adjacent": " adjacent enemies",
                 "self": "", "self_owner": " self",
             }
-            burn_target = burn_target_map.get(target, "")
+            if target in (6, "all_minions"):
+                tribe = eff.get("target_tribe", "")
+                element = eff.get("target_element", "")
+                if tribe and element:
+                    burn_target = f" all [[{tribe}]] and [[{element.capitalize()}]] minions"
+                elif tribe:
+                    burn_target = f" all [[{tribe}]]s"
+                elif element:
+                    burn_target = f" all [[{element.capitalize()}]] minions"
+                else:
+                    burn_target = " all minions"
+            else:
+                burn_target = burn_target_map.get(target, "")
             desc = f"{pfx}[[Burn]]{burn_target}"
         elif eff_type == "grant_dark_matter":
             tribe = eff.get("target_tribe", "")
@@ -427,6 +439,9 @@ def build_rules_text(card: dict, name_map: dict[str, str] | None = None) -> str:
         react_effect = card.get("react_effect")
         if react_effect and react_effect.get("type") == "deploy_self":
             effect_text = " ▶ [[Summon]]"
+        elif react_effect and react_effect.get("type") == "draw":
+            amt = react_effect.get("amount", 1)
+            effect_text = f" ▶ [[Draw]] {amt} card" + ("s" if amt > 1 else "")
         elif not react_effect and effects:
             # Magic+react or pure react: effects array is the react effect
             effect_parts = []

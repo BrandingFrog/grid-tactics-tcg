@@ -1,0 +1,53 @@
+{
+    "card_id": "acidic_rain",
+    "stable_id": 46,
+    "name": "Acidic Rain",
+    "card_type": "magic",
+    "mana_cost": 5,
+    "element": "water",
+    "effects": [
+        {
+            "type": "burn",
+            "trigger": "on_play",
+            "target": "all_minions",
+            "target_tribe": "Robot",
+            "amount": 0
+        },
+        {
+            "type": "burn",
+            "trigger": "on_play",
+            "target": "all_minions",
+            "target_tribe": "Machine",
+            "amount": 0
+        },
+        {
+            "type": "burn",
+            "trigger": "on_play",
+            "target": "all_minions",
+            "target_element": "metal",
+            "amount": 0
+        }
+    ],
+    "react_condition": "any_action",
+    "react_mana_cost": 2,
+    "react_effect": {
+        "type": "draw",
+        "trigger": "on_play",
+        "target": "self_owner",
+        "amount": 1
+    },
+    "tips": [
+        "A hard counter to Robot/Metal decks. Every Diodebot, Lasercannon, Surgebot, and Sparkbot on the board becomes burning simultaneously — turn-over they all take burn tick damage.",
+        "Burn is a boolean, not a stack — re-applying to an already-burning minion does nothing. Cast when several Metal/Robot targets are fresh.",
+        "Paired with Flame Wyrm, each burning Robot/Machine/Metal minion ticks for 6🤍 per turn start instead of 5🤍.",
+        "Burns your OWN Robots too — don't cast it if you're the Metal deck. Water vs Metal is the intended matchup.",
+        "The 2-mana react mode is cheap cycling. Keep Acidic Rain in hand against control opponents — any action they take is a free draw for you."
+    ],
+    "rulings": [
+        "Magic mode (5 mana): burns every living minion on the board — both sides — whose tribe is Robot or Machine, OR whose element is Metal. A Blue Diodebot (Robot + Metal) is still burned only once (burn is boolean).",
+        "The tribe/element filter is an OR: a Fire-element Robot still qualifies, as does a Metal-element non-Robot.",
+        "Does not damage players. Burn only affects minions.",
+        "React mode (2 mana): playable during the react window after ANY opponent action. Draws exactly 1 card for the reacting player.",
+        "React mode does NOT burn anything — only the draw effect fires. Magic mode does NOT draw — only the burns fire. The two modes are mutually exclusive per cast."
+    ]
+}

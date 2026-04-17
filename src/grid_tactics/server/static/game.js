@@ -1341,7 +1341,9 @@ function buildCardTooltipContent(c) {
         var reactEffectTooltip = '';
         if (c.react_effect && c.react_effect.type === 5) {
             reactEffectTooltip = ' ▶ Summon';
-        } else if (!c.react_effect && c.effects && c.effects.length > 0) {
+        } else if (c.react_effect) {
+            reactEffectTooltip = ' ▶ ' + getEffectDescription([c.react_effect], c);
+        } else if (c.effects && c.effects.length > 0) {
             reactEffectTooltip = ' ▶ ' + getEffectDescription(c.effects, c);
         }
         cardTextLines.push('React' + costText + ': ' + condText + extraCond + reactEffectTooltip);
@@ -1723,7 +1725,9 @@ function renderCardFrame(c, opts) {
         var reactEffectText = '';
         if (c.react_effect && c.react_effect.type === 5) {
             reactEffectText = 'Summon';
-        } else if (!c.react_effect && c.effects && c.effects.length > 0) {
+        } else if (c.react_effect) {
+            reactEffectText = getEffectDescription([c.react_effect], c);
+        } else if (c.effects && c.effects.length > 0) {
             reactEffectText = getEffectDescription(c.effects, c);
         }
         html += '<div class="card-effect-full">' + condText + extraCond + (reactEffectText ? ' ▶ ' + reactEffectText : '') + '</div>';
@@ -5412,7 +5416,17 @@ function getEffectDescription(effects, cardData) {
         } else if (type === 9) { // Destroy
             desc = prefix + 'Destroy target';
         } else if (type === 10) { // Burn
-            var burnTarget = {0: '', 1: ' all enemies', 2: ' adjacent enemies', 3: ' self'}[eff.target] || '';
+            var burnTarget;
+            if (eff.target === 6) {
+                var bTribe = eff.target_tribe || '';
+                var bElem = eff.target_element || '';
+                if (bTribe && bElem) burnTarget = ' all ' + bTribe + ' and ' + bElem.charAt(0).toUpperCase() + bElem.slice(1) + ' minions';
+                else if (bTribe) burnTarget = ' all ' + bTribe + 's';
+                else if (bElem) burnTarget = ' all ' + bElem.charAt(0).toUpperCase() + bElem.slice(1) + ' minions';
+                else burnTarget = ' all minions';
+            } else {
+                burnTarget = {0: '', 1: ' all enemies', 2: ' adjacent enemies', 3: ' self'}[eff.target] || '';
+            }
             desc = prefix + 'Burn' + burnTarget;
         } else if (type === 11) { // Dark Matter Buff
             desc = prefix + 'Target gains (Dark Matter)' + SWORD;

@@ -368,13 +368,21 @@ def resolve_react_stack(
                     )
         elif (card_def.card_type == CardType.MAGIC
               and card_def.react_condition is not None):
-            # Magic+react: resolve ON_PLAY effects (same as pure react cards)
-            for effect in card_def.effects:
-                if effect.trigger == TriggerType.ON_PLAY:
-                    state = resolve_effect(
-                        state, effect, (0, 0), caster_owner, library,
-                        entry.target_pos,
-                    )
+            # Magic+react: if the card carries a distinct react_effect, resolve
+            # only that (e.g. Acidic Rain's draw-a-card react). Otherwise fall
+            # back to the card's ON_PLAY effects (e.g. Illicit Stones shares).
+            if card_def.react_effect is not None:
+                state = resolve_effect(
+                    state, card_def.react_effect, (0, 0), caster_owner, library,
+                    entry.target_pos,
+                )
+            else:
+                for effect in card_def.effects:
+                    if effect.trigger == TriggerType.ON_PLAY:
+                        state = resolve_effect(
+                            state, effect, (0, 0), caster_owner, library,
+                            entry.target_pos,
+                        )
 
     # Clean up dead minions after react resolution
     from grid_tactics.action_resolver import _cleanup_dead_minions, _check_game_over

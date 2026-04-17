@@ -183,6 +183,7 @@ class CardLoader:
             amount=data["amount"],
             scale_with=data.get("scale_with"),
             target_tribe=data.get("target_tribe"),
+            target_element=data.get("target_element"),
             placement_condition=data.get("placement_condition"),
             condition_multiplier=data.get("condition_multiplier", 1),
         )

@@ -110,6 +110,7 @@ class TargetType(IntEnum):
     SELF_OWNER = 3     # Affects self or owning player
     OPPONENT_PLAYER = 4  # Deals damage/effect to the opponent player's HP
     ALL_ALLIES = 5       # Hits all friendly minions (optionally filtered by target_tribe)
+    ALL_MINIONS = 6      # Hits every living minion (both sides), optionally filtered by target_tribe and/or target_element
 
 
 # ---------------------------------------------------------------------------
