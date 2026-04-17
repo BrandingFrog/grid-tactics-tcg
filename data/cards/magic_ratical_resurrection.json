@@ -20,5 +20,12 @@
         "The revived Rats deploy to your back row. In a long game, this gives you 3 bodies for 3 mana — the best board-width spell available.",
         "Use this after Ratchanter has conjured and lost several Rats. The conjured Rats go to the grave when killed, making them valid revive targets.",
         "Timing matters — play this when you have board space and need bodies, not when your lanes are already full."
+    ],
+    "rulings": [
+        "Only Common Rats in the caster's graveyard can be revived. Other Rat-tribe cards (Giant Rat, Rathopper, Emberplague Rat) do NOT qualify — revive_card_id is hard-coded to 'rat'.",
+        "Fewer than 3 eligible Rats means fewer revives: the modal opens for as many placements as possible (capped by grave count).",
+        "You pick each placement cell individually through the revive modal; highlighted cells show legal placements in your zone.",
+        "DECLINE_REVIVE ends the revive chain early — unused revives are wasted (no refund of mana or remaining stack).",
+        "Revived Rats come back at base stats (10/10, 0 attack_bonus, 0 DM). They lose any buffs they had before dying."
     ]
 }

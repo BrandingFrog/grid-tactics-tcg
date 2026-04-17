@@ -19,8 +19,14 @@
     "tips": [
         "Ratchanter is both a Mage and a Rat — he benefits from Dark Matter buffs (Shady Trade Deal, Dark Matter Stash, Grave Caller) AND counts as a promote target for Giant Rat.",
         "Each activation conjures a Common Rat and buffs ALL Rats on board. The more Rats you have, the more value each 2-mana activation provides.",
-        "With Dark Matter stacks, the conjured Rats arrive with bonus stats. At 3 DM, each activation gives the new Rat +3🗡️/+3🤍 on top of its base 10/10.",
+        "The buff applies to every existing ally Rat, not the newly-conjured one. Magnitude is 1+DM. At Ratchanter DM=3, each of your existing Rats gets +4 🗡️/+4 🤍 per activation.",
         "Ratchanter + Giant Rat is the core Rat engine: conjure Rats for board width, and if Giant Rat dies, any Rat can promote into a fresh one.",
         "At 15/30 he's tanky enough to survive most early trades. Protect him in the back row and use him as a Rat factory rather than a frontline fighter."
+    ],
+    "rulings": [
+        "Activation costs 2 mana. Buff (Step 1) always fires. Conjure (Step 2) only triggers if at least one Common Rat is in the caster's deck.",
+        "The buff explicitly excludes the caster (Ratchanter doesn't buff itself).",
+        "Buff magnitude is 1 + Ratchanter's own DM stacks. All three stats (🗡️, max 🤍, current 🤍) increase — the buffed Rats gain usable HP, not just a cap raise.",
+        "Conjure goes through the pending_tutor → conjure_deploy flow: caster picks one Rat from their deck, then picks a friendly-zone tile to deploy it. The new Rat starts at base stats (no initial buff)."
     ]
 }

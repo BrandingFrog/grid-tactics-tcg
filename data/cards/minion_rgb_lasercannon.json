@@ -25,5 +25,11 @@
         "At range 1, Lasercannon can attack from the second row while staying behind a blocker. Its 25 attack hits hard enough to threaten most minions.",
         "The discard cost means you lose 2 Robots from hand. Be aware that discarding Robots leaves fewer in hand for Sparkfed Surgebot or future Lasercannons.",
         "Position Lasercannon where it will die to the biggest enemy threat. The death trigger is the payoff — trade it into something valuable, then destroy another."
+    ],
+    "rulings": [
+        "Playing Lasercannon exhausts the 2 Robot-tribe discards — they go to the Exhaust pile, not the Graveyard.",
+        "On death, a click-target modal opens for the Lasercannon's owner: pick any alive ENEMY minion to destroy. The filter excludes your own minions.",
+        "Destroy zeroes the target's current_health, which routes it through normal death cleanup — the target's own on_death effects will fire as a chain reaction.",
+        "If no enemy minions exist when Lasercannon dies, the destroy silently no-ops (no modal opens)."
     ]
 }

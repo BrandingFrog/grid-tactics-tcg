@@ -18,10 +18,16 @@
         }
     ],
     "tips": [
-        "Furryroach rallies a friendly minion forward when it moves. Use this to push a high-value minion closer to the enemy back row for a sacrifice threat.",
-        "At 1 mana, Furryroach is the cheapest way to accelerate board position. Play it early, move it forward, and drag an ally along.",
-        "Rally pairs well with slow, tanky minions like Fallen Paladin or Giant Rat — they get a free extra tile of forward progress each time Furryroach moves.",
-        "The rally triggers on each move, not just once. If Furryroach survives multiple turns, it can push allies across the entire board.",
-        "As an Insect with no tribal synergies yet, Furryroach is a pure utility card. Splash it into any deck that wants faster board advancement."
+        "When one Furryroach moves forward, every OTHER allied Furryroach also advances one tile — not arbitrary minions. Swarm-only synergy.",
+        "At 1 mana each, flood the board: 3 Furryroaches moving together is effectively 3 moves for 1 action.",
+        "Useful for racing the enemy back row with multiple Furryroaches threatening sacrifice simultaneously. Opponent can't block every lane.",
+        "Rally respects blockers: if a Furryroach's forward tile is occupied, that roach doesn't advance — but the others still do.",
+        "As an Insect with no tribal synergies yet, Furryroach is a pure swarm-tempo card."
+    ],
+    "rulings": [
+        "rally_forward only advances allied minions with the SAME card_numeric_id as the mover — meaning only other Furryroaches.",
+        "The mover itself is excluded from the rally sweep (it already moved via the normal MOVE action).",
+        "Rally skips any allied Furryroach whose forward tile is off-board or occupied by another minion. No partial displacement.",
+        "The amount=10 value in the effect is a legacy field; the actual advance is always 1 tile regardless."
     ]
 }

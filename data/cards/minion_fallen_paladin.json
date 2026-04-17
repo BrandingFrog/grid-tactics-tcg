@@ -24,5 +24,10 @@
         "The end-of-turn heal means Fallen Paladin gets stronger the longer it stays alive. Pair it with a defensive board position to maximize its sustain.",
         "At 16 attack, it hits hard enough to trade with most midrange minions while healing back the damage taken. It wins nearly every war of attrition.",
         "As an Undead, Fallen Paladin shares a tribe with Grave Caller and Reanimated Bones. A dedicated Undead package gives you access to all three transform options."
+    ],
+    "rulings": [
+        "The heal fires at the start of the Paladin's owner's turn (passive trigger). It heals 2 🤍 unconditionally — no condition check.",
+        "Heals up to the minion's current max HP (base 42 plus any max_health_bonus buffs). Cannot overheal above the cap.",
+        "Only one tick per turn cycle — taking 30 damage and then healing means Paladin is still down 28 that round."
     ]
 }

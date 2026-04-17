@@ -22,6 +22,12 @@
         "If every tile ahead of Rathopper is occupied by enemies, Leap becomes a sacrifice — Rathopper hops over all of them and scores. This is a surprise win condition.",
         "Rathopper cannot leap over friendly minions. Clear your own lane before trying to leap — otherwise it moves normally.",
         "At 19/13, Rathopper hits hard but dies easily. Treat it as a glass cannon or sacrifice threat, not a sustained fighter.",
-        "Rathopper's leap sacrifice won't trigger the opponent's Sparkfed Surgebot react — Surgebot requires no allies on board, and the opponent would need their own board empty, not yours."
+        "Warning: Rathopper's leap sacrifice triggers opponent reacts with react_condition=opponent_sacrifices. If the opponent has Sparkfed Surgebot in hand, they get a free deploy on their side."
+    ],
+    "rulings": [
+        "Leap only activates when the immediate forward tile is blocked by an ENEMY minion. Ally blockers do NOT enable leap.",
+        "Leap distance cap = 1 (the blocker) + amount (1) = up to 2 tiles past the original position. Rathopper cannot leap more than one enemy.",
+        "If all tiles from Rathopper to the opponent's back row are enemy-occupied, leap escalates to a sacrifice — Rathopper is consumed and the opponent takes damage.",
+        "The on_move trigger fires AFTER the leap lands — any ON_MOVE effects evaluate from the new position."
     ]
 }

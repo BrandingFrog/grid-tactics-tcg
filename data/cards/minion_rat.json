@@ -17,5 +17,9 @@
         "Keep at least one alive whenever possible — it's insurance for Giant Rat's death trigger and a valid target for Grave Caller's Dark Matter buff.",
         "Multiple Common Rats on board multiply the value of Ratchanter's activated ability, since all Rats get buffed each activation.",
         "At 10/10 for 1 mana, it can trade into damaged midrange minions or chip in sacrifice pressure by advancing down a lane."
+    ],
+    "rulings": [
+        "Common Rat has no effects of its own — all its value comes from interacting with cards that reference Rat tribe (Giant Rat, Ratchanter, Ratical Resurrection, To The Ratmobile).",
+        "As a vanilla 10/10, Common Rat dies to any 10+🗡️ attack in one hit and is often used as a Feed the Shadow sacrifice for 10 damage at 1+2 = 3 total mana."
     ]
 }

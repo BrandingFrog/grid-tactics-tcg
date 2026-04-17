@@ -22,7 +22,13 @@
         "Dark Matter Battery deals damage to the opponent's HP equal to your Dark Matter stacks at end of turn. At high DM, this is a win condition by itself.",
         "At range 2, Battery can sit in the back row and ping the opponent's life total without ever entering combat. Protect it with front-line minions.",
         "Unlike other DM cards, Battery is a Machine, not a Mage — it doesn't benefit from Mage-specific DM buffs. Its value is purely in the end-of-turn damage.",
-        "Pair with Grave Caller and Shady Trade Deal to ramp DM quickly. Each DM stack increases Battery's damage output permanently.",
+        "Ramp Battery's DM with Grave Caller's activated ability (targeted DM buff). Mage-only sources like Shady Trade Deal and Dark Matter Stash skip Battery — it's tribe Machine, not Mage.",
         "At 0/20, Battery can't attack normally. Its entire value is the end-of-turn damage. If the opponent ignores it, the damage adds up fast; if they focus it, your other minions operate freely."
+    ],
+    "rulings": [
+        "Damage fires once per full turn cycle when Battery's owner becomes active. scale_with=dark_matter uses the Battery's own DM stacks — not a pooled player total.",
+        "At Battery DM=0, the damage is 0 and the effect is skipped entirely (no visible tick).",
+        "Give Battery DM via Grave Caller's activated ability (targeted DM buff). Mage-tribe-only sources (Dark Matter Stash, Shady Trade Deal) do NOT grant DM to Battery.",
+        "If the opponent's HP reaches 0 from this damage, they lose immediately — the effect checks win condition during passive resolution."
     ]
 }

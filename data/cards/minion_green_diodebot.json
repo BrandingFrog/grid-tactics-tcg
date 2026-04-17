@@ -24,5 +24,10 @@
         "Green's 15 health lets it survive most early trades. Use it as a front-line body while building toward RGB Lasercannon.",
         "Each Diodebot played is a Robot in hand for Lasercannon's discard cost. Green into Blue gives you two Robots to discard.",
         "If you need to stall for mana, Green Diodebot's durability buys time while its tutor keeps your hand full."
+    ],
+    "rulings": [
+        "Summon: Tutor searches the caster's deck for Blue Diodebot and adds the first match to hand.",
+        "If no Blue Diodebot is in deck, the tutor silently no-ops.",
+        "Robots tutored from the deck count as Robots in hand for RGB Lasercannon's discard_cost_tribe check."
     ]
 }

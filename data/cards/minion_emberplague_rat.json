@@ -23,5 +23,11 @@
         "Place it in a central lane to potentially burn enemies in adjacent columns. Burn stacks mean sustained damage over multiple turns.",
         "Pair with Pyre Archer for a fire-heavy strategy — Emberplague burns at end of turn while Pyre Archer burns on attack from range.",
         "As a Rat, it's still a valid promote target for Giant Rat's death trigger. A 24-health Rat is harder to kill than a Common Rat, keeping your promote chain alive."
+    ],
+    "rulings": [
+        "The passive burn applies to adjacent enemy minions. It does not burn your own minions.",
+        "Burn is a boolean — adjacent enemies become burning, they don't accumulate stacks from repeated passes.",
+        "Moving Emberplague Rat changes which enemies it burns. An enemy that's no longer adjacent still has is_burning=true from previous ticks, but won't be re-targeted.",
+        "With an allied Flame Wyrm, the burns you apply tick for 6 🤍 on enemy turn starts."
     ]
 }

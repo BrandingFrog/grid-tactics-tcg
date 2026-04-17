@@ -24,5 +24,11 @@
         "At 9/5, Pyre Archer is fragile. Keep it in the back row behind a tanky minion — its range 2 means it can attack from two rows away.",
         "Pair with Emberplague Rat for a double burn strategy. Targets caught between both will take end-of-turn burn + on-attack burn simultaneously.",
         "As an Archer and Undead, it shares tribal tags with both ranged and undead synergies. The dual tribe may become more relevant as new cards are added."
+    ],
+    "rulings": [
+        "Burn is a boolean status (on/off), not a stack count. Hitting an already-burning target applies nothing extra; the target still just ticks for 5 🤍 at the start of its owner's next turn.",
+        "Burn persists until the minion dies — it does not expire after one tick.",
+        "If YOU control a Flame Wyrm, your burns on enemy minions tick for 6 🤍 instead of 5. Two Flame Wyrms stack for 7 🤍 ticks.",
+        "Target can still die to burn on the owner's next-turn start even after surviving the attack exchange."
     ]
 }

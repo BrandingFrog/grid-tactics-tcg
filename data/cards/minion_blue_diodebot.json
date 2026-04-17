@@ -24,5 +24,11 @@
         "The tutor chain means drawing any single Diodebot eventually gets you all three. Blue completing the cycle back to Red means the chain is infinite if they keep dying and being re-drawn.",
         "Discard Blue and another Robot for RGB Lasercannon's cost — Blue's fragile stats make it a better discard target than the tankier Green.",
         "At 14 attack for 2 mana, Blue trades up into 3-mana minions. Use it aggressively, then recycle via the tutor chain."
+    ],
+    "rulings": [
+        "Summon: Tutor searches the caster's deck for Red Diodebot and adds it to hand. Picker modal shows every Red in deck as a match.",
+        "If no Red Diodebot is in deck, the tutor silently does nothing — no modal, no toast.",
+        "The tutor pick happens through the standard pending_tutor flow (TUTOR_SELECT or DECLINE_TUTOR).",
+        "Chain order: Red → Green → Blue → Red (cycles indefinitely as long as you keep drawing and playing Diodebots)."
     ]
 }

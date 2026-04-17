@@ -23,5 +23,11 @@
         "Use the DM buff on your biggest threat each turn. Buffing a Giant Rat or Ratchanter with +5🗡️ per turn snowballs quickly.",
         "At range 1, Grave Caller can attack from the second row while staying protected. Pair this with its 0-cost ability to contribute both damage and buffs each turn.",
         "Getting Grave Caller onto the board via Reanimated Bones (1+3 = 4 mana split across turns) is more flexible than hard-casting for 4 mana in one turn."
+    ],
+    "rulings": [
+        "The activated ability is a single-target BUFF_ATTACK with scale_with=dark_matter and amount=0. The target gains Grave Caller's DM stacks as bonus 🗡️.",
+        "At Grave Caller DM=0, the ability executes cleanly but the +🗡️ is 0 — use Shady Trade Deal / Dark Matter Stash to stack DM on Grave Caller first.",
+        "ACTIVATE_ABILITY counts as your one action for the turn — you cannot activate AND attack in the same turn.",
+        "Target can be any minion on the board — ally or enemy (picking an enemy is almost never useful, but legal)."
     ]
 }

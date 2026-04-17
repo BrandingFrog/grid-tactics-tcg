@@ -24,5 +24,10 @@
         "At 12/12 for 2 mana, the stats are decent but the real value is deck thinning. Each Diodebot played pulls another card, accelerating your draws.",
         "The tutored Robots fuel RGB Lasercannon's discard cost (2 Robots). Play a Diodebot to tutor another, then discard both for Lasercannon.",
         "In a Robot deck, lead with whichever Diodebot you draw first — the chain ensures you'll see all three regardless of draw order."
+    ],
+    "rulings": [
+        "Summon: Tutor searches the caster's deck for Green Diodebot and adds the first match to hand.",
+        "If no Green Diodebot is in deck, the tutor silently no-ops.",
+        "Tutor resolves BEFORE the react window opens for the opponent — the tutored card is already in hand when the opponent gets their reaction."
     ]
 }

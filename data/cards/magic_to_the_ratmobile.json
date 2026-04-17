@@ -20,5 +20,11 @@
         "Play this mid-game when you need to reload after deploying your early Rats. Two fresh Rats in hand keeps the pressure on.",
         "The tutored Rats also serve as Giant Rat promote insurance. Having Rats in hand means you can always play a new promote target if your board gets wiped.",
         "At 3 mana with no board impact, this is a tempo loss on the turn you play it. Use it on a turn where the opponent can't punish you for not developing the board."
+    ],
+    "rulings": [
+        "tutor_target matches any card in your deck with the 'Rat' tribe — Common Rat, Giant Rat, Rathopper, Emberplague Rat, Ratchanter, and Furryroach all qualify (if Furryroach were tagged Rat; currently it's Insect so is excluded).",
+        "Picks are sequential: the modal stays open until both picks resolve or you DECLINE_TUTOR early.",
+        "Picking fewer than 2 Rats when more exist in deck wastes the effect — no refund.",
+        "If fewer than 2 matching Rats are in deck, the modal caps at the available count (e.g. 1 match = 1 pick required)."
     ]
 }

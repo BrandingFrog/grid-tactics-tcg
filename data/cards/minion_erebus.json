@@ -17,5 +17,11 @@
         "As a Mage, Erebus also receives Dark Matter Stash buffs after being played. An 80/80 that keeps growing is nearly impossible to remove.",
         "Don't wait for 0-cost — playing Erebus at 8-10 mana is still a dominant play. Holding too long risks losing your Mages and DM momentum.",
         "Erebus is the primary reason to run the Dark Mage package. If your opponent sees Ratchanter and Shady Trade Deal, they should expect Erebus is coming."
+    ],
+    "rulings": [
+        "cost_reduction=dark_matter subtracts the PLAYER'S total DM pool from the printed 20 mana at play time. Minimum cost is clamped above 0.",
+        "The cost reduction uses DM summed across your minions on the board (not a single mage's DM). Multiple low-DM Mages still contribute.",
+        "Erebus is a Mage, so he's a valid target for Dark Matter Stash's DM grant and ally-Mage buffs after he's on board.",
+        "Dying resets all his buffs (he respawns only via Revive-type effects, none of which currently target him)."
     ]
 }
