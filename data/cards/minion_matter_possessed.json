@@ -1,7 +1,7 @@
 {
-    "card_id": "dark_matter_possession",
+    "card_id": "matter_possessed",
     "stable_id": 50,
-    "name": "Dark Matter Possession",
+    "name": "Matter Possessed",
     "card_type": "minion",
     "mana_cost": 1,
     "attack": 25,
