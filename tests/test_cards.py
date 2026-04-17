@@ -133,14 +133,16 @@ class TestEffectDefinition:
         )
         assert e.effect_type == EffectType.BUFF_HEALTH
 
-    def test_amount_zero_raises(self) -> None:
-        with pytest.raises(ValueError, match="amount"):
-            EffectDefinition(
-                effect_type=EffectType.DAMAGE,
-                trigger=TriggerType.ON_PLAY,
-                target=TargetType.SINGLE_TARGET,
-                amount=0,
-            )
+    def test_amount_zero_allowed(self) -> None:
+        # amount=0 is permitted — used for effects like boolean burn where
+        # the flag, not the magnitude, is what matters.
+        eff = EffectDefinition(
+            effect_type=EffectType.BURN,
+            trigger=TriggerType.ON_PLAY,
+            target=TargetType.SINGLE_TARGET,
+            amount=0,
+        )
+        assert eff.amount == 0
 
     def test_amount_negative_raises(self) -> None:
         with pytest.raises(ValueError, match="amount"):
@@ -347,9 +349,10 @@ class TestStatValidation:
         card = _minion_card(health=MAX_STAT)
         assert card.health == MAX_STAT
 
-    def test_mana_cost_zero_raises(self) -> None:
-        with pytest.raises(ValueError, match="mana_cost"):
-            _minion_card(mana_cost=0)
+    def test_mana_cost_zero_allowed(self) -> None:
+        # 0-mana cards exist (e.g. Illicit Shadow Stones, some reacts).
+        card = _minion_card(mana_cost=0)
+        assert card.mana_cost == 0
 
     def test_mana_cost_above_max_raises(self) -> None:
         with pytest.raises(ValueError, match="mana_cost"):

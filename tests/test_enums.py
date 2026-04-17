@@ -155,13 +155,9 @@ class TestEffectType:
             assert isinstance(member, IntEnum)
 
     def test_member_count(self) -> None:
-        # Audit-followup test sweep: EffectType has grown via Phases 14.x +
-        # the audit's PASSIVE pipeline + Dark Matter source card + REVIVE.
-        # Current 18 members (append-only): DAMAGE, HEAL, BUFF_ATTACK,
-        # BUFF_HEALTH, NEGATE, DEPLOY_SELF, RALLY_FORWARD, PROMOTE, TUTOR,
-        # DESTROY, BURN, DARK_MATTER_BUFF, PASSIVE_HEAL, LEAP, CONJURE,
-        # APPLY_BURNING, GRANT_DARK_MATTER, REVIVE.
-        assert len(EffectType) == 18
+        # Append-only enum. Current 20 members: the original 18 plus DRAW
+        # and BURN_BONUS added by later phases.
+        assert len(EffectType) == 20
 
     def test_bracket_lookup(self) -> None:
         assert EffectType["DAMAGE"] is EffectType.DAMAGE
@@ -187,9 +183,9 @@ class TestTriggerType:
             assert isinstance(member, IntEnum)
 
     def test_member_count(self) -> None:
-        # Audit-followup test sweep: PASSIVE trigger added by 9608874.
-        # ON_PLAY, ON_DEATH, ON_ATTACK, ON_DAMAGED, ON_MOVE, PASSIVE.
-        assert len(TriggerType) == 6
+        # Append-only. 8 members: ON_PLAY, ON_DEATH, ON_ATTACK, ON_DAMAGED,
+        # ON_MOVE, PASSIVE, ON_DISCARD, AURA.
+        assert len(TriggerType) == 8
 
     def test_bracket_lookup(self) -> None:
         assert TriggerType["ON_PLAY"] is TriggerType.ON_PLAY
@@ -215,7 +211,9 @@ class TestTargetType:
             assert isinstance(member, IntEnum)
 
     def test_member_count(self) -> None:
-        assert len(TargetType) == 4
+        # Append-only. 7 members: SINGLE_TARGET, ALL_ENEMIES, ADJACENT,
+        # SELF_OWNER, OPPONENT_PLAYER, ALL_ALLIES, ALL_MINIONS.
+        assert len(TargetType) == 7
 
     def test_bracket_lookup(self) -> None:
         assert TargetType["SINGLE_TARGET"] is TargetType.SINGLE_TARGET
@@ -240,8 +238,8 @@ class TestCardConstants:
         assert MIN_STAT == 1
 
     def test_max_stat(self) -> None:
-        # Audit-followup: stat cap raised to 50 to accommodate scaled HP/dmg
-        assert MAX_STAT == 50
+        # Raised to 100 to accommodate late-game DM-scaled values and HP pools.
+        assert MAX_STAT == 100
 
     def test_max_effect_amount(self) -> None:
         # Audit-followup: effect amount cap raised to 100 (HP scale)

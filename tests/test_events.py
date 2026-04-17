@@ -118,7 +118,7 @@ def test_spectator_receives_state_update(alice, bob, eve):
 
     # Figure out whose turn it is and pass from that client.
     for client in (alice, bob):
-        client.emit("submit_action", {"action": {"action_type": 8}})  # PASS
+        client.emit("submit_action", {"action": {"action_type": 4}})  # PASS
         r = client.get_received()
         if _first(r, "error") is None:
             break
@@ -140,7 +140,7 @@ def test_spectator_submit_action_rejected(alice, bob, eve):
         {"room_code": code, "display_name": "Eve", "god_mode": False},
     )
     eve.get_received()
-    eve.emit("submit_action", {"action": {"action_type": 8}})
+    eve.emit("submit_action", {"action": {"action_type": 4}})
     r = eve.get_received()
     err = _first(r, "error")
     assert err is not None, f"expected error, got {[m['name'] for m in r]}"

@@ -67,34 +67,29 @@ class TestFatigueInGameState:
 
 
 class TestFatigueEscalates:
-    """Tests that fatigue damage escalates: 10, 20, 30..."""
+    """Tests that each PASS applies flat FATIGUE_DAMAGE (currently 5)."""
 
     def test_fatigue_escalates(self):
-        """3 consecutive PASS actions should deal 10, 20, 30 damage."""
-        from grid_tactics.actions import Action
+        """3 consecutive PASS actions each deal FATIGUE_DAMAGE."""
         from grid_tactics.card_library import CardLibrary
         from pathlib import Path
+        from grid_tactics.action_resolver import _apply_pass, FATIGUE_DAMAGE
 
-        library = CardLibrary.from_directory(Path("data/cards"))
+        CardLibrary.from_directory(Path("data/cards"))
         state = _make_minimal_state()
-        pass_action = Action(action_type=ActionType.PASS)
 
         initial_hp = state.players[0].hp
 
-        # First PASS: 10 damage
-        from grid_tactics.action_resolver import _apply_pass
         state1 = _apply_pass(state)
-        assert state1.players[0].hp == initial_hp - 10
+        assert state1.players[0].hp == initial_hp - FATIGUE_DAMAGE
         assert state1.fatigue_counts == (1, 0)
 
-        # Second PASS: 20 more damage (total 30)
         state2 = _apply_pass(replace(state1, phase=TurnPhase.ACTION))
-        assert state2.players[0].hp == initial_hp - 30
+        assert state2.players[0].hp == initial_hp - 2 * FATIGUE_DAMAGE
         assert state2.fatigue_counts == (2, 0)
 
-        # Third PASS: 30 more damage (total 60)
         state3 = _apply_pass(replace(state2, phase=TurnPhase.ACTION))
-        assert state3.players[0].hp == initial_hp - 60
+        assert state3.players[0].hp == initial_hp - 3 * FATIGUE_DAMAGE
         assert state3.fatigue_counts == (3, 0)
 
 

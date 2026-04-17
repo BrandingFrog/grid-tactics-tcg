@@ -216,8 +216,8 @@ class TestPlayReactCard:
         # Card removed from P2's hand, mana spent
         p2 = result.players[1]
         assert shield_block_id not in p2.hand
-        # counter_spell costs 2 mana: 5 - 2 = 3
-        assert p2.current_mana == 3
+        # Prohibition costs 4 mana: 5 - 4 = 1
+        assert p2.current_mana == 1
 
         # Phase remains REACT
         assert result.phase == TurnPhase.REACT
