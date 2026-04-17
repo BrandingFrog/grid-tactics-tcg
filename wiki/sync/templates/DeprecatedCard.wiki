@@ -11,5 +11,4 @@ Parameters:
 </noinclude><includeonly><div style="border:2px solid #c00; border-radius:8px; background:#2a0000; color:#faa; padding:12px; margin-bottom:1em;">
 &#9888; '''This card was removed in [[Patch:{{{patch|unknown}}}|Patch {{{patch|unknown}}}]].''' It is preserved here for historical reference.
 </div>
-[[Category:Deprecated]]
-[[Category:Card]]</includeonly>
+[[Category:Deprecated]]</includeonly>
