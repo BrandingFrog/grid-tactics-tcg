@@ -1094,6 +1094,8 @@ body {
   background: var(--card);
   display: flex;
   flex-direction: column;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 .card-frame:hover {
@@ -1254,6 +1256,8 @@ body {
   background: none;
   flex-shrink: 0;
   position: relative;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 .stat-emoji-bg {
