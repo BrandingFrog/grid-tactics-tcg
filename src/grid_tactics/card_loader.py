@@ -106,6 +106,7 @@ class CardLoader:
             cost_reduction=data.get("cost_reduction"),
             play_condition=data.get("play_condition"),
             sacrifice_ally_cost=data.get("sacrifice_ally_cost", False),
+            hp_cost=data.get("hp_cost"),
             revive_card_id=CardLoader._parse_revive_card_id(data),
             activated_ability=CardLoader._parse_activated_ability(data, card_id),
         )

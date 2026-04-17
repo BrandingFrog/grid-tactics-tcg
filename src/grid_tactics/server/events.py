@@ -112,6 +112,7 @@ def _build_card_defs(library):
                 "cost_reduction": getattr(card, 'cost_reduction', None),
                 "play_condition": getattr(card, 'play_condition', None),
                 "sacrifice_ally_cost": getattr(card, 'sacrifice_ally_cost', False),
+                "hp_cost": getattr(card, 'hp_cost', None),
                 "revive_card_id": getattr(card, 'revive_card_id', None),
                 "activated_ability": (
                     {

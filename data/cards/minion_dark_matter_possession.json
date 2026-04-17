@@ -1,0 +1,14 @@
+{
+    "card_id": "dark_matter_possession",
+    "stable_id": 50,
+    "name": "Dark Matter Possession",
+    "card_type": "minion",
+    "mana_cost": 1,
+    "attack": 25,
+    "health": 25,
+    "range": 0,
+    "element": "dark",
+    "tribe": "Mage",
+    "hp_cost": 25,
+    "effects": []
+}

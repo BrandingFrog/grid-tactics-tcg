@@ -295,6 +295,15 @@ def _apply_play_card(
             f"Insufficient mana: have {player.current_mana}, need {eff_cost}"
         )
 
+    # HP cost: caster takes damage to their own life total before the card
+    # resolves. Enforced in legal_actions; re-checked here as defence.
+    if card_def.hp_cost is not None:
+        if player.hp < card_def.hp_cost:
+            raise ValueError(
+                f"Insufficient HP: have {player.hp}, need {card_def.hp_cost}"
+            )
+        player = replace(player, hp=player.hp - card_def.hp_cost)
+
     # Phase 14.5 pile semantics:
     #   - MINION plays are removed from hand and placed on the board; the card
     #     only enters grave if/when the minion dies (and only if it was

@@ -149,6 +149,11 @@ class CardDefinition:
     # Sacrifice ally cost: must destroy a friendly minion to play this card
     sacrifice_ally_cost: bool = False
 
+    # HP cost: caster takes this much damage to their own life total on play.
+    # Enforced at legal_actions (caller must have hp >= hp_cost) and applied
+    # inside action_resolver before effect resolution.
+    hp_cost: Optional[int] = None
+
     # Revive mechanic: card_id of the minion to revive from grave
     revive_card_id: Optional[str] = None
 

@@ -257,6 +257,11 @@ def build_rules_text(card: dict, name_map: dict[str, str] | None = None) -> str:
     if card.get("sacrifice_ally_cost"):
         parts.append("[[Cost]]: [[Destroy]] an ally")
 
+    # HP cost — caster takes damage to own life on play
+    hp_cost = card.get("hp_cost")
+    if hp_cost:
+        parts.append(f"[[Cost]]: [[Deal]] {hp_cost}🤍 to own face")
+
     # Play condition
     if card.get("play_condition") == "discarded_last_turn":
         parts.append("[[Cost]]: [[Discard]] last turn")

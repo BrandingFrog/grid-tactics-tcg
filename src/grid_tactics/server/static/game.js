@@ -1306,6 +1306,7 @@ function buildCardTooltipContent(c) {
     if (c.unique) cardTextLines.push('Unique');
     if (c.cost_reduction === 'dark_matter') cardTextLines.push('Cost: Reduce mana cost by (Dark Matter)');
     if (c.play_condition === 'discarded_last_turn') cardTextLines.push('Cost: Discard last turn');
+    if (c.hp_cost) cardTextLines.push('Cost: Deal ' + c.hp_cost + HEART + ' to own face');
     if (effectDesc) cardTextLines.push(effectDesc);
     if (c.activated_ability) {
         var ab = c.activated_ability;
@@ -1674,6 +1675,9 @@ function renderCardFrame(c, opts) {
     }
     if (c.play_condition === 'discarded_last_turn') {
         html += '<div class="card-effect-full">Cost: Discard last turn</div>';
+    }
+    if (c.hp_cost) {
+        html += '<div class="card-effect-full">Cost: Deal ' + c.hp_cost + HEART + ' to own face</div>';
     }
     if (c.effects && c.effects.length > 0 && c.card_type !== 2) {
         // Skip effects block for pure REACT cards — their effects render in the react section

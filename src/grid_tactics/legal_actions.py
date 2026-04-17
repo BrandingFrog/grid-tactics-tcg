@@ -181,6 +181,12 @@ def _action_phase_actions(
         if player.current_mana < eff_cost:
             continue
 
+        # HP cost — caster must have at least hp_cost HP to self-damage
+        # when playing the card. Strictly >= so playing can reduce them
+        # to exactly 0 (which ends the game).
+        if card_def.hp_cost is not None and player.hp < card_def.hp_cost:
+            continue
+
         # Summon sacrifice check: enumerate one action per valid sacrifice choice
         sacrifice_choices: list[Optional[int]] = [None]
         if card_def.discard_cost_tribe:
