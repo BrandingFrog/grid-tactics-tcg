@@ -9,5 +9,19 @@
     "range": 1,
     "element": "dark",
     "tribe": "Mage",
-    "effects": []
+    "effects": [],
+    "flavour_text": "Aim narrow. The shadow does the widening.",
+    "tips": [
+        "14🗡️ at 3 mana is the best raw damage per mana for a ranged Dark Mage — deploy it on an open back-row column and start chipping immediately.",
+        "Only 10🤍 — any clean 14+ attack trades it out. Park it behind a tank like Gargoyle Sorceress so melee threats burn on her first.",
+        "Best synergy is Gargoyle Sorceress directly BEHIND her: Shadow Blaster becomes the 'dark ranged ally in front' that triples her DM buff condition.",
+        "The Mage tribe tag matters more than the stats. Dark Matter Stash, Feed the Shadow, and Illicit Shadow Stones all scale off Mage counts — every Shadow Blaster on board multiplies those payoffs.",
+        "3 mana leaves room on the same turn for a 1-mana play like Reanimated Bones or Shady Trade Deal — keep the tempo chain running."
+    ],
+    "rulings": [
+        "Range 1 means it attacks 2 tiles orthogonally and 1 tile diagonally (see [[Range X]] in the glossary).",
+        "No triggered effects — Summon, Death, Passive, and Attack triggers are all inert. It's a vanilla statline.",
+        "Counts as a [[Mage]] for every tribe-scoped effect: Dark Matter Stash's DM grant, Feed the Shadow's per-Mage DM, Illicit Shadow Stones' per-Mage DM, and Gargoyle Sorceress's placement buff all include Shadow Blaster.",
+        "Not [[Unique]] — multiple copies can exist on the board at once (up to 3 in the deck)."
+    ]
 }
