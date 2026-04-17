@@ -85,7 +85,7 @@ const EFFECT_TYPE_NAMES = [
 const TRIGGER_NAMES = ['On Play', 'On Death', 'On Attack', 'On Damaged', 'On Move'];
 const TARGET_NAMES = ['Single Target', 'All Enemies', 'Adjacent', 'Self/Owner'];
 
-const MAX_DECK_SIZE = 30;
+const MAX_DECK_SIZE = 40;
 const MAX_COPIES = 3;
 const MAX_SLOTS = 5;
 const STORAGE_KEY = 'gt_deck_slots';
