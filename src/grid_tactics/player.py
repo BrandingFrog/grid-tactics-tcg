@@ -140,6 +140,12 @@ class Player:
             grave=self.grave + (card_id,),
         )
 
+    def add_to_grave(self, card_id: int) -> Player:
+        """Append a card id to the grave. Used when a board minion dies or is
+        destroyed (e.g. Feed the Shadow's sacrifice_ally_cost) — the card's
+        numeric id is recorded in the owner's graveyard."""
+        return replace(self, grave=self.grave + (card_id,))
+
     # -- HP / damage --------------------------------------------------------
 
     def take_damage(self, amount: int) -> Player:
