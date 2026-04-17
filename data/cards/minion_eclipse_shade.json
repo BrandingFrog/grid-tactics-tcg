@@ -16,5 +16,18 @@
             "target": "self_owner",
             "amount": 5
         }
+    ],
+    "tips": [
+        "The best stat-per-mana body in the game: 20/26 for 1 mana. The catch is self-burn — she takes 5 🤍 at the start of every one of your turns until she dies.",
+        "Roughly five turns to use her or lose her. Play her down a lane she can actually push or attack in, not a holding position.",
+        "Perfect Feed the Shadow fodder: 1-mana summon + 2-mana Feed = 20 damage for 3 mana.",
+        "Pair with Dark Matter Stash to buff her stats before burn eats her HP. Each DM-fueled +🗡️/+🤍 extends her clock.",
+        "Against a Flame Wyrm on the opposing board, her self-burn ticks for 6/turn instead of 5 — her clock drops by a full turn."
+    ],
+    "rulings": [
+        "Self-burn fires on Summon, so she enters play already burning. The first tick lands at the start of your next turn.",
+        "Burn is a boolean status — re-applying Burn to an already-burning minion does nothing extra.",
+        "If burn kills her, any Death triggers on her (none by default) fire normally.",
+        "A Flame Wyrm controlled by YOUR opponent adds +1 to her burn tick. Your own Flame Wyrm does not — it buffs burns on enemy minions only."
     ]
 }

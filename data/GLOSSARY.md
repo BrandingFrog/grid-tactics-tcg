@@ -16,6 +16,7 @@ Update this file and the matching `KEYWORD_GLOSSARY` in `src/grid_tactics/server
 | End | This effect triggers at the end of the owner's turn, after all actions. |
 | Passive | This effect is always active while the minion is on the board. |
 | Active | This ability can be used once per turn instead of attacking. |
+| Discarded | This effect triggers when the card is discarded from hand (via a Cost or opponent effect). |
 
 ## Mechanic Keywords
 

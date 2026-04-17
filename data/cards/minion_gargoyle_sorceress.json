@@ -30,5 +30,18 @@
             "placement_condition": "front_of_dark_ranged",
             "condition_multiplier": 3
         }
+    ],
+    "tips": [
+        "20/50 for 5 mana is already a wall. Placement matters — drop her one row in front of a Dark ranged ally and the DM buffs triple.",
+        "Best pair: a Dark ranged minion (Range > 0, Element Dark) sitting behind her in the same column — e.g. a Grave Caller or a promoted Erebus line.",
+        "Without the placement condition you still get +DM/+DM. With it you get +3×DM/+3×DM. At DM=5 that's +15/+15 vs +5/+5.",
+        "The 2-card discard cost is 'any' tribe — dump cards you can't play this turn rather than sitting on them.",
+        "Discarding Dark Matter Stash triggers its on-Discard +1 DM to ally Mages — including the Sorceress, so you gain the DM right as she's summoned."
+    ],
+    "rulings": [
+        "The placement condition checks the tile directly in front of her (one row toward the opponent's back row) at Summon time.",
+        "condition_multiplier applies to the scaled amount: base 0 + DM stacks = N, then N × 3 = final buff.",
+        "Both buffs (atk and hp) share the same placement condition — either both triple or neither triples.",
+        "Discarded cards go to the Exhaust pile, not the Graveyard. Cost-discards fire on-Discard triggers (e.g. Dark Matter Stash's DM grant)."
     ]
 }

@@ -21,5 +21,18 @@
             "target_tribe": "Mage",
             "amount": 1
         }
+    ],
+    "tips": [
+        "A Common Rat sacrificed for 2 mana nukes a 10 🤍 target — one of the cheapest removal lines in the game.",
+        "Feed a Dark-Matter-loaded Mage for a massive burst: a Mage with 5 DM sacrificed deals (mage's 🗡️) + 5 damage.",
+        "Eclipse Shade is perfect Feed fodder: 20 🗡️ becomes 20 guaranteed damage before the self-burn eats it.",
+        "The +1 Dark Matter to every ally Mage is easy to miss — chain Feed the Shadow with Dark Matter Stash to stack DM fast.",
+        "Don't over-sacrifice. Giving up a 5-mana minion for 2-mana removal rarely trades up unless the enemy target is a game-winner."
+    ],
+    "rulings": [
+        "The damage equals the sacrificed ally's total 🗡️ (base + attack_bonus) plus that same ally's Dark Matter stacks. The caster's DM is irrelevant.",
+        "Sacrifice is a Cost, not an effect — it resolves before the damage and before the Dark Matter grant.",
+        "If you have no valid ally to sacrifice, Feed the Shadow cannot be cast.",
+        "The +1 Dark Matter to ally Mages grants to every Mage you control, including one summoned mid-chain by another effect."
     ]
 }

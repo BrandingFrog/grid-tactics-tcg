@@ -22,5 +22,18 @@
             "target": "self_owner",
             "amount": 1
         }
+    ],
+    "tips": [
+        "5 mana for a 33/33 body plus a card draw is already on-curve. The +1 burn aura is pure upside.",
+        "Your Pyre Archer's on-attack burn becomes 6 🤍/turn instead of 5 while Flame Wyrm lives.",
+        "Emberplague Rat's adjacent-burn passive also ticks for 6 🤍/turn with Flame Wyrm out — a nasty zone trap.",
+        "Protecting Flame Wyrm is half the value. Lose her and every future burn drops back to 5 🤍.",
+        "Two Flame Wyrms stack auras: enemy burns tick for 7 🤍/turn."
+    ],
+    "rulings": [
+        "The aura boosts burn damage on ENEMY minions that are burning. It does not boost burns on your own minions (even when you burn yourself via Eclipse Shade's Summon).",
+        "Draw fires once at Summon, before the aura starts affecting the board.",
+        "burn_bonus from multiple Flame Wyrms stacks additively.",
+        "If Flame Wyrm dies between an opponent burn being applied and the burn-tick firing, the aura no longer boosts that tick."
     ]
 }
