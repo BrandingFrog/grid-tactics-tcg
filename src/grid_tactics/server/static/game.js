@@ -2974,17 +2974,28 @@ function onStateUpdate(data) {
 // Diff hand → grave / exhaust transitions and emit card_fly jobs.
 // Source hand-slot rects are captured at derive time (pre-apply) so the
 // ghost starts exactly where the real card was sitting when it left.
+// In sandbox, both players' hands are visible, so we diff both.
 function deriveCardFlyJobs(prev, next) {
-    var jobs = [];
-    if (!prev || !next || myPlayerIdx == null) return jobs;
-    var me = myPlayerIdx;
-    var prevMe = prev.players && prev.players[me];
-    var nextMe = next.players && next.players[me];
-    if (!prevMe || !nextMe) return jobs;
+    if (!prev || !next) return [];
+    var indices = [];
+    if (sandboxMode) indices = [0, 1];
+    else if (myPlayerIdx != null) indices = [myPlayerIdx];
+    var out = [];
+    for (var k = 0; k < indices.length; k++) {
+        out = out.concat(_deriveFlyForPlayer(prev, next, indices[k]));
+    }
+    return out;
+}
 
-    // Multiset diff on own hand — which nids decreased?
-    var prevHand = prevMe.hand || [];
-    var nextHand = nextMe.hand || [];
+function _deriveFlyForPlayer(prev, next, playerIdx) {
+    var jobs = [];
+    var prevP = prev.players && prev.players[playerIdx];
+    var nextP = next.players && next.players[playerIdx];
+    if (!prevP || !nextP) return jobs;
+    var prevHand = prevP.hand || [];
+    var nextHand = nextP.hand || [];
+    if (!Array.isArray(prevHand) || !Array.isArray(nextHand)) return jobs;
+
     var nextCount = {};
     for (var ni = 0; ni < nextHand.length; ni++) {
         var nid2 = nextHand[ni];
@@ -3001,24 +3012,38 @@ function deriveCardFlyJobs(prev, next) {
     }
     if (removed.length === 0) return jobs;
 
-    // How many of each nid ARRIVED in grave / exhaust (multiset delta)?
-    var graveDelta = _multisetDelta(prevMe.grave, nextMe.grave);
-    var exhaustDelta = _multisetDelta(prevMe.exhaust, nextMe.exhaust);
+    var graveDelta = _multisetDelta(prevP.grave, nextP.grave);
+    var exhaustDelta = _multisetDelta(prevP.exhaust, nextP.exhaust);
 
-    var handEl = document.getElementById('hand-container');
+    // Hand container differs between live game and sandbox (which shows
+    // both hands in distinct divs). The "own" zone identifier also depends
+    // on whose hand we're tracking, so the ghost flies to the correct pile.
+    var handEl;
+    var ownerTag;  // zone suffix for pile lookup
+    if (sandboxMode) {
+        handEl = document.getElementById('sandbox-hand-p' + playerIdx);
+        // Sandbox UIs map playerIdx 0 → pileBtnOwnX, 1 → pileBtnOppX so the
+        // ghost lands on the right-side pile button pair (when P1 is
+        // the fixed perspective) — matches renderSandbox layout.
+        ownerTag = (playerIdx === 0) ? 'own' : 'opp';
+    } else {
+        handEl = document.getElementById(
+            playerIdx === myPlayerIdx ? 'hand-container' : 'oppHandRow'
+        );
+        ownerTag = (playerIdx === myPlayerIdx) ? 'own' : 'opp';
+    }
+
     for (var r = 0; r < removed.length; r++) {
         var rem = removed[r];
         var toZone = null;
         if ((exhaustDelta[rem.nid] || 0) > 0) {
-            toZone = 'exhaust_own';
+            toZone = 'exhaust_' + ownerTag;
             exhaustDelta[rem.nid] -= 1;
         } else if ((graveDelta[rem.nid] || 0) > 0) {
-            toZone = 'grave_own';
+            toZone = 'grave_' + ownerTag;
             graveDelta[rem.nid] -= 1;
         }
-        // If the card went to the board (minion deploy), let the summon
-        // animation handle it — no fly job.
-        if (!toZone) continue;
+        if (!toZone) continue;  // went to board; summon animation handles it
 
         var slot = handEl
             ? handEl.querySelector('.card-frame-hand[data-hand-idx="' + rem.slotIdx + '"]')
@@ -5800,6 +5825,15 @@ function setupSandboxSocketHandlers() {
 
     // === SANDBOX-STATE-HANDLER-START ===
     socket.on('sandbox_state', function(payload) {
+        // Capture previous state for card-fly derivation BEFORE we overwrite
+        // it. The fly derive function reads the live DOM (which still shows
+        // prev) to snapshot outgoing hand-slot rects; re-rendering with new
+        // state then removes those slots, so order matters.
+        var prevForFly = sandboxState;
+        var flyJobs = (sandboxMode && prevForFly)
+            ? deriveCardFlyJobs(prevForFly, payload.state)
+            : [];
+
         sandboxState = payload.state;
         sandboxLegalActions = payload.legal_actions || [];
         sandboxActiveViewIdx = payload.active_view_idx || 0;
@@ -5823,6 +5857,12 @@ function setupSandboxSocketHandlers() {
         } catch (e) { /* quota exceeded -- ignore */ }
         if (typeof renderSandboxToolbarState === 'function') renderSandboxToolbarState();
         renderSandbox();
+        // After the new frame is on screen, fire the fly ghosts — each one
+        // already captured its source rect from the now-stale DOM before
+        // renderSandbox() replaced it.
+        for (var _fi = 0; _fi < flyJobs.length; _fi++) {
+            enqueueAnimation(flyJobs[_fi]);
+        }
     });
     // === SANDBOX-STATE-HANDLER-END ===
 
