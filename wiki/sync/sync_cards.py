@@ -457,13 +457,14 @@ def build_rules_text(card: dict, name_map: dict[str, str] | None = None) -> str:
             options.append(f"Pay {cost} mana -> {target_link}")
         parts.append(f"'''Transform:''' {', '.join(options)}.")
 
-    # React condition — pure react cards AND multi-purpose
+    # React condition — pure react cards show it in the main rules text
+    # (the card type badge already says REACT). Multi-purpose cards (minion
+    # or magic + react) get a dedicated REACT section in the Card template
+    # and must NOT duplicate the react line here — see card_to_wikitext.
     react_cond = card.get("react_condition")
-    if react_cond is not None:
+    if react_cond is not None and card.get("card_type", "") == "react":
         cond_text = _REACT_CONDITION_TEXT.get(react_cond) or _REACT_CONDITION_TEXT_STR.get(str(react_cond), "Any action")
         extra = " while no allies" if card.get("react_requires_no_friendly_minions") else ""
-        react_cost = card.get("react_mana_cost") if card.get("react_mana_cost") is not None else card.get("mana_cost", 0)
-        cost_text = f" ({react_cost})" if react_cost > 0 else ""
         # Build effect text after ▶
         react_effect = card.get("react_effect")
         if react_effect and react_effect.get("type") == "deploy_self":
@@ -472,7 +473,7 @@ def build_rules_text(card: dict, name_map: dict[str, str] | None = None) -> str:
             amt = react_effect.get("amount", 1)
             effect_text = f" ▶ [[Draw]] {amt} card" + ("s" if amt > 1 else "")
         elif not react_effect and effects:
-            # Magic+react or pure react: effects array is the react effect
+            # Pure react: effects array is the react effect
             effect_parts = []
             for eff in effects:
                 eff_type = eff.get("type", "")
@@ -487,12 +488,7 @@ def build_rules_text(card: dict, name_map: dict[str, str] | None = None) -> str:
             effect_text = " ▶ " + ". ".join(effect_parts) if effect_parts else ""
         else:
             effect_text = ""
-        if card.get("card_type", "") == "react":
-            # Pure react — card type badge already says REACT, just show condition
-            parts.append(f"{cond_text}{extra}{effect_text}")
-        else:
-            # Multi-purpose — needs the React label
-            parts.append(f"[[React]]{cost_text}: {cond_text}{extra}{effect_text}")
+        parts.append(f"{cond_text}{extra}{effect_text}")
 
     cost_parts = [p for p in parts if p.startswith("[[Cost]]")]
     other_parts = [p for p in parts if not p.startswith("[[Cost]]")]
@@ -599,16 +595,20 @@ def card_to_wikitext(
     if meta_rows:
         fields["meta_rows"] = "\n".join(meta_rows)
 
-    # React section for multi-purpose cards
+    # React section for multi-purpose cards (minion+react or magic+react).
+    # Pure REACT cards render their react info in rules_text, not here.
     react_cond = card.get("react_condition")
     if react_cond is not None and card_type != "react":
-        # Build react rules text
         cond_text = _REACT_CONDITION_TEXT.get(react_cond) or _REACT_CONDITION_TEXT_STR.get(str(react_cond), "Any action")
         extra = " while no allies" if card.get("react_requires_no_friendly_minions") else ""
         react_effect = card.get("react_effect")
         if react_effect and react_effect.get("type") == "deploy_self":
             effect_text = " ▶ [[Summon]]"
+        elif react_effect and react_effect.get("type") == "draw":
+            amt = react_effect.get("amount", 1)
+            effect_text = f" ▶ [[Draw]] {amt} card" + ("s" if amt > 1 else "")
         elif not react_effect and card.get("effects"):
+            # Magic+react (shared effects like Illicit Stones)
             card_effects = card.get("effects", [])
             effect_parts = []
             for eff in card_effects:
