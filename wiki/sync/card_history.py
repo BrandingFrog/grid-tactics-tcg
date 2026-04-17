@@ -47,7 +47,16 @@ _FIELD_LABELS: dict[str, str] = {
     "flavour_text": "Flavor text",
     "react_condition": "React condition",
     "react_mana_cost": "React cost",
+    "tips": "Tips",
+    "rulings": "Rulings",
+    "trivia": "Trivia",
 }
+
+
+# Fields where the value is a list of strings (tips/rulings/trivia). Patch
+# notes render these as a count so a documentation-only change doesn't
+# spam the patch page with the full paragraphs.
+_STRING_LIST_FIELDS: set[str] = {"tips", "rulings", "trivia"}
 
 
 _FIELD_DEFAULTS: dict[str, object] = {
@@ -63,15 +72,22 @@ def _format_value(field: str, value: object) -> str:
         default = _FIELD_DEFAULTS.get(field)
         if default is not None:
             value = default
+        elif field in _STRING_LIST_FIELDS:
+            return "0 entries"
         else:
             return "none"
     if isinstance(value, bool):
         return "Yes" if value else "No"
     if isinstance(value, list):
         if not value:
-            return "none"
+            return "0 entries" if field in _STRING_LIST_FIELDS else "none"
+        # Documentation-only string-list fields (tips/rulings/trivia):
+        # show count only so patch notes stay skimmable.
+        if field in _STRING_LIST_FIELDS:
+            n = len(value)
+            return f"{n} entr{'y' if n == 1 else 'ies'}"
         # Effects array — summarize trigger:type pairs
-        if value and isinstance(value[0], dict) and "type" in value[0]:
+        if isinstance(value[0], dict) and "type" in value[0]:
             parts = []
             for eff in value:
                 trigger = eff.get("trigger", "")

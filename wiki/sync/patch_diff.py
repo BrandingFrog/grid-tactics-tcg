@@ -136,6 +136,11 @@ def diff_cards(old_sha: str, new_sha: str, repo_root: Path) -> list[CardChange]:
             change_type="removed",
         ))
 
+    # Documentation-only fields — changes to these alone do NOT produce a
+    # patch-note entry (wiki-only content, not gameplay). Gameplay changes
+    # alongside them still surface the card.
+    _DOC_ONLY_FIELDS = {"tips", "rulings", "trivia"}
+
     # Possibly changed cards
     for fname in sorted(old_files & new_files):
         old_raw = _git_show(old_sha, f"data/cards/{fname}", repo_root)
@@ -151,14 +156,18 @@ def diff_cards(old_sha: str, new_sha: str, repo_root: Path) -> list[CardChange]:
         changed_fields = sorted(
             k for k in all_keys if old_card.get(k) != new_card.get(k)
         )
+        # Drop documentation-only changes from patch notes entirely.
+        gameplay_changes = [f for f in changed_fields if f not in _DOC_ONLY_FIELDS]
+        if not gameplay_changes:
+            continue
         if changed_fields:
             changes.append(CardChange(
                 card_id=new_card.get("card_id", fname),
                 card_name=new_card.get("name", fname),
                 change_type="changed",
-                changed_fields=changed_fields,
-                old_values={k: old_card.get(k) for k in changed_fields},
-                new_values={k: new_card.get(k) for k in changed_fields},
+                changed_fields=gameplay_changes,
+                old_values={k: old_card.get(k) for k in gameplay_changes},
+                new_values={k: new_card.get(k) for k in gameplay_changes},
                 old_rules=build_rules_text(old_card),
                 new_rules=build_rules_text(new_card),
             ))
