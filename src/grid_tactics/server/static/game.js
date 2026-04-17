@@ -2151,6 +2151,9 @@ function playAnimation(job, done) {
         case 'draw_opp':
             playDrawOppAnimation(job, done);
             return;
+        case 'card_fly':
+            playCardFlyAnimation(job, done);
+            return;
         case 'noop':
         default:
             setTimeout(done, 0);
@@ -2931,12 +2934,20 @@ function onStateUpdate(data) {
     // so their target DOM (hand slot / opp card-back) already exists.
     var drawJobs = deriveDrawJobs(prev, next);
 
+    // Card-fly jobs (hand → grave / exhaust). Derived BEFORE apply so we can
+    // capture the live hand-slot rect of each outgoing card — after
+    // applyStateFrame runs, the slot is gone.
+    var flyJobs = deriveCardFlyJobs(prev, next);
+
     // Non-action transitions (noop with no meaningful diff) bypass the queue
     // entirely. This keeps react-window open/close, tutor-modal open/close,
     // turn-change banners, and passive state refreshes instantaneous.
     if (!job || job.type === 'noop') {
         applyStateFrame(next, nextLegal);
         // State already applied; each draw job is pure-visual.
+        for (var fi = 0; fi < flyJobs.length; fi++) {
+            enqueueAnimation(flyJobs[fi]);
+        }
         for (var i = 0; i < drawJobs.length; i++) {
             var dj = drawJobs[i];
             dj.stateApplied = true;
@@ -2950,11 +2961,152 @@ function onStateUpdate(data) {
     job.stateAfter = next;
     job.legalActionsAfter = nextLegal;
     enqueueAnimation(job);
+    for (var fj = 0; fj < flyJobs.length; fj++) {
+        enqueueAnimation(flyJobs[fj]);
+    }
     for (var j = 0; j < drawJobs.length; j++) {
         var dj2 = drawJobs[j];
         dj2.stateApplied = true;
         enqueueAnimation(dj2);
     }
+}
+
+// Diff hand → grave / exhaust transitions and emit card_fly jobs.
+// Source hand-slot rects are captured at derive time (pre-apply) so the
+// ghost starts exactly where the real card was sitting when it left.
+function deriveCardFlyJobs(prev, next) {
+    var jobs = [];
+    if (!prev || !next || myPlayerIdx == null) return jobs;
+    var me = myPlayerIdx;
+    var prevMe = prev.players && prev.players[me];
+    var nextMe = next.players && next.players[me];
+    if (!prevMe || !nextMe) return jobs;
+
+    // Multiset diff on own hand — which nids decreased?
+    var prevHand = prevMe.hand || [];
+    var nextHand = nextMe.hand || [];
+    var nextCount = {};
+    for (var ni = 0; ni < nextHand.length; ni++) {
+        var nid2 = nextHand[ni];
+        nextCount[nid2] = (nextCount[nid2] || 0) + 1;
+    }
+    var removed = [];
+    for (var pi = 0; pi < prevHand.length; pi++) {
+        var id = prevHand[pi];
+        if ((nextCount[id] || 0) > 0) {
+            nextCount[id] -= 1;
+        } else {
+            removed.push({ nid: id, slotIdx: pi });
+        }
+    }
+    if (removed.length === 0) return jobs;
+
+    // How many of each nid ARRIVED in grave / exhaust (multiset delta)?
+    var graveDelta = _multisetDelta(prevMe.grave, nextMe.grave);
+    var exhaustDelta = _multisetDelta(prevMe.exhaust, nextMe.exhaust);
+
+    var handEl = document.getElementById('hand-container');
+    for (var r = 0; r < removed.length; r++) {
+        var rem = removed[r];
+        var toZone = null;
+        if ((exhaustDelta[rem.nid] || 0) > 0) {
+            toZone = 'exhaust_own';
+            exhaustDelta[rem.nid] -= 1;
+        } else if ((graveDelta[rem.nid] || 0) > 0) {
+            toZone = 'grave_own';
+            graveDelta[rem.nid] -= 1;
+        }
+        // If the card went to the board (minion deploy), let the summon
+        // animation handle it — no fly job.
+        if (!toZone) continue;
+
+        var slot = handEl
+            ? handEl.querySelector('.card-frame-hand[data-hand-idx="' + rem.slotIdx + '"]')
+            : null;
+        var rect = slot ? slot.getBoundingClientRect() : null;
+        jobs.push({
+            type: 'card_fly',
+            cardNumericId: rem.nid,
+            fromRect: rect ? {
+                left: rect.left, top: rect.top,
+                width: rect.width, height: rect.height,
+            } : null,
+            toZone: toZone,
+            stateApplied: true,
+        });
+    }
+    return jobs;
+}
+
+function _multisetDelta(prevList, nextList) {
+    var d = {};
+    if (prevList) {
+        for (var i = 0; i < prevList.length; i++) {
+            var id = prevList[i];
+            d[id] = (d[id] || 0) - 1;
+        }
+    }
+    if (nextList) {
+        for (var j = 0; j < nextList.length; j++) {
+            var jd = nextList[j];
+            d[jd] = (d[jd] || 0) + 1;
+        }
+    }
+    return d;
+}
+
+function _zoneButton(zone) {
+    var map = {
+        'grave_own': 'pileBtnOwnGrave',
+        'exhaust_own': 'pileBtnOwnExhaust',
+        'grave_opp': 'pileBtnOppGrave',
+        'exhaust_opp': 'pileBtnOppExhaust',
+    };
+    return document.getElementById(map[zone]);
+}
+
+// Generic card-to-pile fly animation: ghost starts at fromRect, flies to
+// the destination pile button, shrinking and fading as it goes.
+function playCardFlyAnimation(job, done) {
+    var from = job.fromRect;
+    var toEl = _zoneButton(job.toZone);
+    if (!from || !toEl) { setTimeout(done, 0); return; }
+    var to = toEl.getBoundingClientRect();
+    var def = cardDefs && cardDefs[job.cardNumericId];
+    if (!def) { setTimeout(done, 0); return; }
+
+    var ghost = document.createElement('div');
+    ghost.className = 'card-fly-ghost';
+    ghost.style.left = from.left + 'px';
+    ghost.style.top = from.top + 'px';
+    ghost.style.width = from.width + 'px';
+    ghost.style.height = from.height + 'px';
+    ghost.innerHTML = renderCardFrame(def, {
+        context: 'hand',
+        numericId: job.cardNumericId,
+        interactive: false,
+        showReactDeploy: false,
+    });
+    document.body.appendChild(ghost);
+
+    var dx = (to.left + to.width / 2) - (from.left + from.width / 2);
+    var dy = (to.top + to.height / 2) - (from.top + from.height / 2);
+    var scale = Math.max(0.15, Math.min(1, to.width / from.width));
+
+    // Force a reflow so the starting position is committed, then transition.
+    void ghost.offsetWidth;
+    ghost.style.transform = 'translate(' + dx + 'px, ' + dy + 'px) scale(' + scale + ')';
+    ghost.style.opacity = '0';
+
+    var finished = false;
+    function finish() {
+        if (finished) return;
+        finished = true;
+        if (ghost.parentNode) ghost.parentNode.removeChild(ghost);
+        done();
+    }
+    ghost.addEventListener('transitionend', finish);
+    setTimeout(finish, 750);
 }
 
 // Diff hands (own identity, opponent count) between prev and next and
