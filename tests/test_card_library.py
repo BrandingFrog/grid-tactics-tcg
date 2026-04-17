@@ -365,6 +365,8 @@ class TestStarterPoolDeck:
     """A valid 40-card deck can be built from the starter pool."""
 
     def test_build_valid_deck(self) -> None:
+        from grid_tactics.types import MIN_DECK_SIZE
+
         lib = CardLibrary.from_directory(_STARTER_CARDS_DIR)
         # Build a deck from deckable cards only (skip tokens/summons)
         card_ids = sorted([
@@ -374,14 +376,14 @@ class TestStarterPoolDeck:
         card_counts = {}
         total = 0
         for card_id in card_ids:
-            if total >= 30:
+            if total >= MIN_DECK_SIZE:
                 break
-            copies = min(3, 30 - total)
+            copies = min(3, MIN_DECK_SIZE - total)
             card_counts[card_id] = copies
             total += copies
 
         deck = lib.build_deck(card_counts)
-        assert len(deck) >= 30
+        assert len(deck) >= MIN_DECK_SIZE
         errors = lib.validate_deck(deck)
         assert errors == []
 

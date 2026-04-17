@@ -332,12 +332,13 @@ def test_first_player_random(app):
 
 
 def test_preset_deck_valid():
-    """D-03: Preset deck has 30 cards and passes validate_deck."""
+    """D-03: Preset deck matches MIN_DECK_SIZE and passes validate_deck."""
     from grid_tactics.server.preset_deck import PRESET_DECK_COUNTS, get_preset_deck
+    from grid_tactics.types import MIN_DECK_SIZE
 
     library = CardLibrary.from_directory(Path("data/cards"))
     deck = get_preset_deck(library)
-    assert len(deck) == 30
+    assert len(deck) == MIN_DECK_SIZE
     errors = library.validate_deck(deck)
     assert errors == [], f"Deck validation errors: {errors}"
-    assert sum(PRESET_DECK_COUNTS.values()) == 30
+    assert sum(PRESET_DECK_COUNTS.values()) == MIN_DECK_SIZE

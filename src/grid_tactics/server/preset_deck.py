@@ -1,32 +1,35 @@
 """Default preset deck for Phase 11 testing (D-03).
 
-30 cards, max 3 copies per card. Validated against CardLibrary at import time.
+40 cards, max 3 copies per card. Validated against CardLibrary at import time.
 Used by programmatic test clients that don't have a deck builder UI.
 Only uses cards that have card art (+ prohibition).
 """
 
 from grid_tactics.card_library import CardLibrary
 
-# 15 deckable cards (pyre_archer/grave_caller/fallen_paladin are tokens). 30-card deck.
-# 6 at 3 copies (=18) + 6 at 2 copies (=12) = 30 total
+# 16 deckable cards (pyre_archer/grave_caller/fallen_paladin are tokens).
+# 40-card deck: 9 cards at 3 copies (=27) + 6 cards at 2 copies (=12)
+# + 1 card at 1 copy (=1) = 40 total
 PRESET_DECK_COUNTS: dict[str, int] = {
-    # 3 copies - cheap core
+    # 3 copies - cheap core + key threats
     "rat": 3,
     "furryroach": 3,
     "reanimated_bones": 3,
     "red_diodebot": 3,
     "blue_diodebot": 3,
     "green_diodebot": 3,
-    # 2 copies - mid game
-    "emberplague_rat": 2,
-    "rathopper": 2,
-    "rgb_lasercannon": 2,
-    "giant_rat": 1,
-    "ratchanter": 1,
-    "surgefed_sparkbot": 1,
-    "ratical_resurrection": 1,
-    "to_the_ratmobile": 1,
-    "prohibition": 1,
+    "emberplague_rat": 3,
+    "rathopper": 3,
+    "rgb_lasercannon": 3,
+    # 2 copies - payoff + control
+    "giant_rat": 2,
+    "ratchanter": 2,
+    "surgefed_sparkbot": 2,
+    "ratical_resurrection": 2,
+    "to_the_ratmobile": 2,
+    "prohibition": 2,
+    # 1 copy - splash
+    "dark_matter_stash": 1,
 }
 
 

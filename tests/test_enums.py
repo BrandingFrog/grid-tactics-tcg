@@ -231,8 +231,8 @@ class TestCardConstants:
         assert MAX_COPIES_PER_DECK == 3
 
     def test_min_deck_size(self) -> None:
-        # Audit-followup: 30-card preset deck (Phase 11 decision)
-        assert MIN_DECK_SIZE == 30
+        # 40-card preset deck.
+        assert MIN_DECK_SIZE == 40
 
     def test_min_stat(self) -> None:
         assert MIN_STAT == 1

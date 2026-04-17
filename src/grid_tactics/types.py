@@ -30,7 +30,7 @@ STARTING_HAND_P2: int = 4    # Player 2 (goes second) draws more to compensate
 
 # Card deck constraints (per D-12, D-13)
 MAX_COPIES_PER_DECK: int = 3
-MIN_DECK_SIZE: int = 30
+MIN_DECK_SIZE: int = 40
 
 # Card stat ranges (per D-19: stats in 1-5 range)
 MIN_STAT: int = 1

@@ -759,8 +759,8 @@ function populateDeckSelector() {
         var totalCards = getDeckTotal(slot.cards);
         var opt = document.createElement('option');
         opt.value = idx;
-        var ready = totalCards === 30;
-        opt.textContent = (ready ? '' : '⚠ ') + slot.name + ' (' + totalCards + '/30)';
+        var ready = totalCards === 40;
+        opt.textContent = (ready ? '' : '⚠ ') + slot.name + ' (' + totalCards + '/40)';
         if (!ready) {
             opt.disabled = true;
         }
@@ -1779,15 +1779,15 @@ function renderDeckSidebar() {
     var countEl = document.getElementById('deck-count');
     var statusEl = document.getElementById('deck-status');
     if (countEl) {
-        countEl.textContent = total + '/30 cards';
-        countEl.className = 'deck-count ' + (total === 30 ? 'valid' : 'invalid');
+        countEl.textContent = total + '/40 cards';
+        countEl.className = 'deck-count ' + (total === 40 ? 'valid' : 'invalid');
     }
     if (statusEl) {
-        if (total === 30) {
+        if (total === 40) {
             statusEl.textContent = 'Ready to play';
             statusEl.className = 'deck-status valid';
         } else {
-            statusEl.textContent = 'Need 30 cards';
+            statusEl.textContent = 'Need 40 cards';
             statusEl.className = 'deck-status invalid';
         }
     }
@@ -1938,7 +1938,7 @@ function refreshLoadDropdown() {
     slots.forEach(function(slot, idx) {
         var opt = document.createElement('option');
         opt.value = idx;
-        opt.textContent = slot.name + ' (' + getDeckTotal(slot.cards) + '/30)';
+        opt.textContent = slot.name + ' (' + getDeckTotal(slot.cards) + '/40)';
         loadSelect.appendChild(opt);
     });
 }
