@@ -1304,7 +1304,7 @@ function buildCardTooltipContent(c) {
         }
     }
     if (c.unique) cardTextLines.push('Unique');
-    if (c.cost_reduction === 'dark_matter') cardTextLines.push('Cost: Reduce mana cost by (Dark Matter)');
+    if (c.cost_reduction === 'dark_matter') cardTextLines.push('Cost: Reduce mana cost by ' + _dmTokenLive());
     if (c.play_condition === 'discarded_last_turn') cardTextLines.push('Cost: Discard last turn');
     if (c.hp_cost) cardTextLines.push('Cost: Deal ' + c.hp_cost + HEART + ' to own face');
     if (effectDesc) cardTextLines.push(effectDesc);
@@ -1312,9 +1312,9 @@ function buildCardTooltipContent(c) {
         var ab = c.activated_ability;
         var abDesc = ab.mana_cost > 0 ? 'Active (' + ab.mana_cost + '): ' : 'Active: ';
         if (ab.effect_type === 'conjure_rat_and_buff') {
-            abDesc += 'Conjure Common Rat. Ally Rats gain (Dark Matter)' + SWORD + HEART + '.';
+            abDesc += 'Conjure Common Rat. Ally Rats gain ' + _dmTokenLive() + SWORD + HEART + '.';
         } else if (ab.effect_type === 'dark_matter_buff') {
-            abDesc += 'Target gains (Dark Matter)' + SWORD + '.';
+            abDesc += 'Target gains ' + _dmTokenLive() + SWORD + '.';
         } else if (ab.effect_type === 'summon_token' && ab.summon_card_id) {
             abDesc += 'Summon ' + findCardNameById(ab.summon_card_id) + '.';
         } else {
@@ -1671,7 +1671,7 @@ function renderCardFrame(c, opts) {
         html += '<div class="card-effect-full">Unique</div>';
     }
     if (c.cost_reduction === 'dark_matter') {
-        html += '<div class="card-effect-full">Cost: Reduce mana cost by (Dark Matter)</div>';
+        html += '<div class="card-effect-full">Cost: Reduce mana cost by ' + _dmTokenLive() + '</div>';
     }
     if (c.play_condition === 'discarded_last_turn') {
         html += '<div class="card-effect-full">Cost: Discard last turn</div>';
@@ -1690,9 +1690,9 @@ function renderCardFrame(c, opts) {
         var ab = c.activated_ability;
         var abDesc = ab.mana_cost > 0 ? 'Active (' + ab.mana_cost + '): ' : 'Active: ';
         if (ab.effect_type === 'conjure_rat_and_buff') {
-            abDesc += 'Conjure Common Rat. Ally Rats gain (Dark Matter)' + SWORD + HEART + '.';
+            abDesc += 'Conjure Common Rat. Ally Rats gain ' + _dmTokenLive() + SWORD + HEART + '.';
         } else if (ab.effect_type === 'dark_matter_buff') {
-            abDesc += 'Target gains (Dark Matter)' + SWORD + '.';
+            abDesc += 'Target gains ' + _dmTokenLive() + SWORD + '.';
         } else if (ab.effect_type === 'summon_token' && ab.summon_card_id) {
             abDesc += 'Summon ' + findCardNameById(ab.summon_card_id) + '.';
         } else {
@@ -5329,9 +5329,33 @@ function renderHandCard(numericId, handIndex, currentMana, isMyTurn) {
 // Section 17: Helper -- getEffectDescription()
 // =============================================
 
+// Sum of Dark Matter stacks across the viewing player's live minions.
+// Returns null when not in an active game (deck builder, card DB) so the
+// placeholder "(Dark Matter)" stays literal in those contexts.
+function _viewerDarkMatterSum() {
+    if (!gameState || !gameState.minions || myPlayerIdx == null) return null;
+    var sum = 0;
+    for (var i = 0; i < gameState.minions.length; i++) {
+        var m = gameState.minions[i];
+        if (m && m.owner === myPlayerIdx && (m.current_health == null || m.current_health > 0)) {
+            sum += (m.dark_matter_stacks || 0);
+        }
+    }
+    return sum;
+}
+
+// In card rules text, live games substitute "(Dark Matter)" with the
+// viewer's current DM pool in purple. Non-live contexts keep the literal.
+function _dmTokenLive() {
+    var dm = _viewerDarkMatterSum();
+    if (dm == null) return '(Dark Matter)';
+    return '<span class="dm-live-num">' + dm + '</span>';
+}
+
 function getEffectDescription(effects, cardData) {
     if (!effects || effects.length === 0) return '';
     var isMinion = cardData && cardData.card_type === 0;
+    var DM = _dmTokenLive();
     var triggerMap = {0: isMinion ? 'Summon' : '', 1: 'Death', 2: 'Attack', 3: 'Damaged', 4: 'Move', 5: 'End', 6: 'Discarded'};
     // Coalesce sibling burn-all-minions effects that only differ in
     // target_tribe/target_element into a single rendered clause — so
@@ -5367,10 +5391,10 @@ function getEffectDescription(effects, cardData) {
 
         if (type === 0) { // Damage
             if (eff.scale_with === 'dark_matter') {
-                desc = prefix + 'Deal (Dark Matter) damage';
-                if (amount > 0) desc = prefix + 'Deal ' + amount + ' + (Dark Matter) damage';
+                desc = prefix + 'Deal ' + DM + ' damage';
+                if (amount > 0) desc = prefix + 'Deal ' + amount + ' + ' + DM + ' damage';
             } else if (eff.scale_with === 'sacrificed_attack_plus_dm') {
-                desc = prefix + "Deal destroyed ally's " + SWORD + ' + (Dark Matter) as damage';
+                desc = prefix + "Deal destroyed ally's " + SWORD + ' + ' + DM + ' as damage';
             } else if (eff.scale_with === 'sacrificed_attack') {
                 desc = prefix + "Deal destroyed ally's " + SWORD + ' as damage';
             } else {
@@ -5389,7 +5413,7 @@ function getEffectDescription(effects, cardData) {
                 });
                 var tribeName = eff.target_tribe === 'Mage' ? 'Dark Mages' : (eff.target_tribe ? eff.target_tribe + 's' : 'allies');
                 var selfTarget = (eff.target === 3); // SELF_OWNER
-                desc = prefix + (selfTarget ? 'Gain' : 'Ally ' + tribeName + ' gain') + ' (Dark Matter)' + SWORD + (hasMatchingHp ? HEART : '');
+                desc = prefix + (selfTarget ? 'Gain' : 'Ally ' + tribeName + ' gain') + ' ' + DM + SWORD + (hasMatchingHp ? HEART : '');
                 if (eff.placement_condition === 'front_of_dark_ranged' && eff.condition_multiplier > 1) {
                     desc += '. ×' + eff.condition_multiplier + ' if in front of Dark Ranged ally';
                 }
@@ -5404,7 +5428,7 @@ function getEffectDescription(effects, cardData) {
                 });
                 if (alreadyMerged) { desc = ''; return; }
                 var tribeNameHp = eff.target_tribe === 'Mage' ? 'Dark Mages' : (eff.target_tribe ? eff.target_tribe + 's' : 'allies');
-                desc = prefix + 'Ally ' + tribeNameHp + ' gain (Dark Matter)' + HEART;
+                desc = prefix + 'Ally ' + tribeNameHp + ' gain ' + DM + HEART;
             } else {
                 desc = prefix + '+' + amount + HEART;
             }

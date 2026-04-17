@@ -18,6 +18,14 @@
   --text: #e0e0e0;
   --muted: #777;
   --dim: #444;
+  --dm: #b14cff;
+}
+
+/* Live Dark Matter number substituted into card rules in active games. */
+.dm-live-num {
+  color: var(--dm);
+  font-weight: 900;
+  text-shadow: 0 0 6px rgba(177, 76, 255, 0.45);
 }
 
 /* ===== Reset ===== */
