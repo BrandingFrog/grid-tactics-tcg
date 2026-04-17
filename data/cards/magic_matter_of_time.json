@@ -1,0 +1,30 @@
+{
+    "card_id": "matter_of_time",
+    "stable_id": 49,
+    "name": "Matter of Time",
+    "card_type": "magic",
+    "mana_cost": 4,
+    "element": "dark",
+    "effects": [
+        {
+            "type": "damage",
+            "trigger": "on_play",
+            "target": "single_target",
+            "amount": 0,
+            "scale_with": "dark_matter"
+        },
+        {
+            "type": "burn",
+            "trigger": "on_play",
+            "target": "single_target",
+            "amount": 0
+        },
+        {
+            "type": "grant_dark_matter",
+            "trigger": "on_play",
+            "target": "all_allies",
+            "target_tribe": "Mage",
+            "amount": 1
+        }
+    ]
+}

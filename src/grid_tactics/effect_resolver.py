@@ -450,7 +450,22 @@ def resolve_effect(
             else:
                 return state  # 0 damage, skip
         else:
+            # Magic card path: no caster minion. ALL_ALLIES still scales
+            # per-target using each ally's own DM (Dark Matter Stash rule);
+            # every other target scales by the caster player's TOTAL DM
+            # pool (sum across their live minions) — "(Dark Matter)" on a
+            # spell means "how much DM you currently hold."
             _per_target_dm_scale = True
+            if effect.target != TargetType.ALL_ALLIES:
+                player_dm_sum = sum(
+                    m.dark_matter_stacks for m in state.minions
+                    if m.owner == caster_owner and m.current_health > 0
+                )
+                scaled_amount = effect.amount + player_dm_sum
+                if scaled_amount > 0:
+                    scaled_effect = replace(effect, amount=scaled_amount)
+                else:
+                    return state
 
     # Placement condition multiplier (e.g. "triple if placed in front of dark ranged")
     if scaled_effect.placement_condition and scaled_effect.condition_multiplier > 1:
