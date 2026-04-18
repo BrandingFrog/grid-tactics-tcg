@@ -3485,23 +3485,9 @@ function _performStageShift() {
         var html = _spellStageCardHtml(nid);
         if (html) {
             var leftWrap = document.createElement('div');
-            leftWrap.className = 'spell-stage-card-inner';
+            leftWrap.className = 'spell-stage-card-inner glide-from-right';
             leftWrap.innerHTML = html;
             els.left.appendChild(leftWrap);
-            // Start offset to the right of the LEFT slot (roughly where the
-            // RIGHT slot is), then glide home.
-            var dx = (els.right.getBoundingClientRect().left - els.left.getBoundingClientRect().left);
-            leftWrap.style.transform = 'translate(' + dx + 'px, 0)';
-            leftWrap.style.opacity = '1';
-            // Force reflow so the initial transform commits as the transition
-            // baseline — same pattern as _showSpellStage. Without this the
-            // slide-in-from-right never animates (starts from identity instead
-            // of +dx, so the card just appears in the LEFT slot with no glide).
-            void leftWrap.offsetWidth;
-            leftWrap.style.transition = 'transform 440ms cubic-bezier(0.2, 0.7, 0.3, 1)';
-            requestAnimationFrame(function() { requestAnimationFrame(function() {
-                leftWrap.style.transform = 'translate(0, 0)';
-            }); });
             _spellStage.leftCardEl = leftWrap;
         }
     }

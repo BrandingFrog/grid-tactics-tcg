@@ -196,6 +196,8 @@
   justify-content: center;
   box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6), 0 0 40px rgba(0, 212, 255, 0.25);
   will-change: transform, opacity;
+  position: relative;
+  z-index: 2;
 }
 .spell-stage-card {
   /* overflow: visible so the inner `.spell-stage-card-inner` can be
@@ -216,6 +218,8 @@
   text-shadow: 0 0 16px rgba(0, 212, 255, 0.6);
   line-height: 1;
   will-change: transform;
+  position: relative;
+  z-index: 1;
 }
 .spell-stage-react {
   background: rgba(20, 20, 40, 0.8);
@@ -289,6 +293,19 @@
 @keyframes spell-card-off-right {
   0%   { transform: translateX(0); opacity: 1; }
   100% { transform: translateX(70vw) rotate(10deg); opacity: 0; }
+}
+/* Chain shift: new card enters the LEFT slot from the RIGHT slot's
+   position. 308px = slot width (280) + flex gap (28). Keyframe
+   animation (vs inline transition) avoids the first-paint stutter that
+   occurs when a freshly-parsed innerHTML subtree races the transition
+   start — same pattern as slide-off-right which is smooth. */
+.spell-stage-card-inner.glide-from-right {
+  animation: spell-card-glide-from-right 440ms cubic-bezier(0.2, 0.7, 0.3, 1) forwards;
+  transform: translate3d(0, 0, 0);
+}
+@keyframes spell-card-glide-from-right {
+  0%   { transform: translate3d(308px, 0, 0); }
+  100% { transform: translate3d(0, 0, 0); }
 }
 .tests-summary {
   padding: 12px 16px;
