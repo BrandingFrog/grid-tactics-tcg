@@ -238,10 +238,12 @@ def _apply_move(state: GameState, action: Action, library: CardLibrary = None) -
             state, TriggerType.ON_MOVE, new_minion, library,
         )
 
-    # Phase 14.1: For melee (range=0) minions, if there is at least one
-    # in-range enemy from the new tile, enter pending-post-move-attack state.
-    # The player must then ATTACK or DECLINE_POST_MOVE_ATTACK as the
-    # continuation of the same logical action (single react window).
+    # Phase 14.1 / 14.7-08: For melee (range=0) minions, if there is at least
+    # one in-range enemy from the new tile, enter pending-post-move-attack
+    # state AND open a post-move REACT window (14.7-08 supersedes 14.1's
+    # single-window semantics per spec v2 §4.1 — the melee chain now opens
+    # TWO independent react windows, one after the move and one after the
+    # optional attack).
     if library is not None:
         attacker_card = library.get_by_id(new_minion.card_numeric_id)
         if attacker_card.attack_range == 0 and _has_any_attack_target(state, new_minion, library):
@@ -1452,12 +1454,15 @@ def resolve_action(
         #       has already been partially consumed when the cleanup was
         #       called, safest is to finish turn advancement inline here.
         if state.phase == TurnPhase.ACTION:
-            if state.pending_post_move_attacker_id is not None:
-                return state
             if state.pending_tutor_player_idx is not None:
                 return state
             if state.pending_conjure_deploy_card is not None:
                 return state
+            # Phase 14.7-08: pending_post_move_attacker_id now opens a
+            # post-move REACT window (spec v2 §4.1). Fall through to the
+            # REACT transition below — the pending flag survives the
+            # react window and resolve_react_stack's AFTER_ACTION check
+            # routes back to ACTION for the optional attack sub-action.
             state = replace(
                 state,
                 phase=TurnPhase.REACT,
@@ -1772,6 +1777,7 @@ def resolve_action(
     # logical action, so the react window only fires after this resolves.
     if state.pending_post_move_attacker_id is not None:
         pending_id = state.pending_post_move_attacker_id
+        is_decline = action.action_type == ActionType.DECLINE_POST_MOVE_ATTACK
         if action.action_type == ActionType.ATTACK:
             if action.minion_id != pending_id:
                 raise ValueError(
@@ -1779,14 +1785,14 @@ def resolve_action(
                 )
             state = _apply_attack(state, action, library)
             state = replace(state, pending_post_move_attacker_id=None)
-        elif action.action_type == ActionType.DECLINE_POST_MOVE_ATTACK:
+        elif is_decline:
             state = replace(state, pending_post_move_attacker_id=None)
         else:
             raise ValueError(
                 "Pending post-move attack: must ATTACK with the moved minion or DECLINE"
             )
 
-        # Dead minion cleanup + game-over check, then react window (single).
+        # Dead minion cleanup + game-over check.
         state = replace(state, pending_action=action)
         state = _cleanup_dead_minions(state, library)
         state = _check_game_over(state)
@@ -1794,11 +1800,22 @@ def resolve_action(
             return state
         if state.pending_death_target is not None:
             return state
+
+        # Phase 14.7-08: DECLINE means "no second action" → no second react
+        # window. The post-move react window already opened (and closed)
+        # around the move itself. Advance directly to END_OF_TURN.
+        if is_decline:
+            from grid_tactics.react_stack import enter_end_of_turn
+            return enter_end_of_turn(state, library)
+
+        # ATTACK sub-action resolved — open its own (second) react window.
+        # This is the SECOND of the two react windows mandated by spec v2
+        # §4.1 (the first fired around the MOVE itself).
         state = replace(
             state,
             phase=TurnPhase.REACT,
             react_player_idx=1 - state.active_player_idx,
-            # Phase 14.7-02: after-action react window (melee post-move).
+            # Phase 14.7-02: after-action react window (melee post-attack).
             react_context=ReactContext.AFTER_ACTION,
             react_return_phase=TurnPhase.ACTION,
         )
@@ -1847,10 +1864,23 @@ def resolve_action(
     if state.pending_death_target is not None:
         return state
 
-    # Phase 14.1: If MOVE entered pending-post-move-attack state, do NOT
-    # fire the react window yet. The react window fires after the player
-    # resolves with ATTACK or DECLINE_POST_MOVE_ATTACK.
+    # Phase 14.7-08: If MOVE entered pending-post-move-attack state, open
+    # the post-move REACT window here (spec v2 §4.1: melee opens TWO
+    # independent react windows, one after the move and one after the
+    # optional attack). The pending_post_move_attacker_id survives the
+    # react window; when resolve_react_stack's AFTER_ACTION dispatch
+    # closes the window, it returns to ACTION (not END_OF_TURN) because
+    # the pending flag is still set, so the player can choose ATTACK or
+    # DECLINE_POST_MOVE_ATTACK next. This SUPERSEDES Phase 14.1's
+    # combined-single-react-window semantic per key_user_decisions #1.
     if state.pending_post_move_attacker_id is not None:
+        state = replace(
+            state,
+            phase=TurnPhase.REACT,
+            react_player_idx=1 - state.active_player_idx,
+            react_context=ReactContext.AFTER_ACTION,
+            react_return_phase=TurnPhase.ACTION,
+        )
         return state
 
     # Phase 14.2: If PLAY_CARD on_play entered pending_tutor state, defer

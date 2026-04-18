@@ -138,12 +138,24 @@ def legal_actions(
     if state.pending_tutor_player_idx is not None:
         return _pending_tutor_actions(state)
 
-    # Phase 14.1: while a melee minion is mid-move-attack (pending), the only
-    # legal actions are ATTACK from the pending attacker against an in-range
-    # enemy, or DECLINE_POST_MOVE_ATTACK. Slot 1001 (PASS) is reinterpreted
-    # as DECLINE in this state by the action encoder. PLAY_CARD, MOVE,
-    # SACRIFICE, DRAW, regular PASS and REACT are all illegal here.
-    if state.pending_post_move_attacker_id is not None:
+    # Phase 14.1 / 14.7-08: while a melee minion is mid-move-attack (pending)
+    # AND we are in ACTION phase, the only legal actions are ATTACK from the
+    # pending attacker against an in-range enemy, or DECLINE_POST_MOVE_ATTACK.
+    # Slot 1001 (PASS) is reinterpreted as DECLINE in this state by the
+    # action encoder. PLAY_CARD, MOVE, SACRIFICE, DRAW, regular PASS and
+    # REACT are all illegal here.
+    #
+    # 14.7-08 tightening: the pending flag now survives the post-move REACT
+    # window. While phase==REACT, the reacting player's legal actions are
+    # the usual react-phase set (PASS + any legal react cards); the ATTACK
+    # / DECLINE sub-action choice only becomes legal after the window
+    # closes and we return to ACTION with pending still set. Gate the
+    # pending enumeration on phase==ACTION so REACT enumeration is not
+    # shadowed.
+    if (
+        state.pending_post_move_attacker_id is not None
+        and state.phase == TurnPhase.ACTION
+    ):
         return _pending_post_move_attack_actions(state, library)
 
     if state.phase == TurnPhase.ACTION:

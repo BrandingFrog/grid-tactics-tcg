@@ -13,6 +13,7 @@ from grid_tactics.enums import (
     EffectType,
     PlayerSide,
     ReactCondition,
+    ReactContext,
     TargetType,
     TriggerType,
     TurnPhase,
@@ -1327,8 +1328,15 @@ class TestPendingPostMoveAttack:
         action = Action(action_type=ActionType.MOVE, minion_id=0, position=(2, 0))
         new_state = resolve_action(state, action, lib)
 
+        # Phase 14.7-08: pending state persists + the post-move REACT
+        # window opens immediately (spec v2 §4.1 — two independent react
+        # windows per melee chain). This SUPERSEDES 14.1's single-window
+        # assertion that phase stayed ACTION.
         assert new_state.pending_post_move_attacker_id == 0
-        assert new_state.phase == TurnPhase.ACTION
+        assert new_state.phase == TurnPhase.REACT
+        assert new_state.react_context == ReactContext.AFTER_ACTION
+        assert new_state.react_return_phase == TurnPhase.ACTION
+        assert new_state.react_player_idx == 1  # opponent reacts
         assert new_state.get_minion(1).current_health == 5
 
     def test_melee_move_no_pending_when_no_targets(self):
@@ -1380,6 +1388,13 @@ class TestPendingPostMoveAttack:
         state = _make_state(minions=[attacker, defender])
         move = Action(action_type=ActionType.MOVE, minion_id=0, position=(2, 0))
         state = resolve_action(state, move, lib)
+        # Phase 14.7-08: post-move REACT window opens immediately. Drain
+        # it (opponent PASSes on the empty stack) before the attack
+        # sub-action. Returns us to ACTION with pending intact.
+        assert state.pending_post_move_attacker_id == 0
+        assert state.phase == TurnPhase.REACT
+        state = resolve_action(state, Action(action_type=ActionType.PASS), lib)
+        assert state.phase == TurnPhase.ACTION
         assert state.pending_post_move_attacker_id == 0
 
         atk = Action(action_type=ActionType.ATTACK, minion_id=0, target_id=1)
@@ -1388,10 +1403,19 @@ class TestPendingPostMoveAttack:
         assert new_state.pending_post_move_attacker_id is None
         assert new_state.get_minion(0).current_health == 3
         assert new_state.get_minion(1).current_health == 3
+        # Second (post-attack) react window opens per spec v2 §4.1.
         assert new_state.phase == TurnPhase.REACT
         assert new_state.pending_action == atk
 
-    def test_pending_decline_clears_state_with_one_react(self):
+    def test_pending_decline_skips_second_react_window(self):
+        """Phase 14.7-08: DECLINE means "no second action" → no second react window.
+
+        Prior to 14.7-08 the DECLINE opened a phantom react window. Now
+        the post-move window already fired (around the move) and DECLINE
+        advances directly to END_OF_TURN (which, absent End triggers,
+        shortcuts to turn-advance, i.e. opponent's START_OF_TURN →
+        ACTION).
+        """
         from grid_tactics.action_resolver import resolve_action
 
         lib = _make_test_library()
@@ -1407,16 +1431,27 @@ class TestPendingPostMoveAttack:
         state = resolve_action(
             state, Action(action_type=ActionType.MOVE, minion_id=0, position=(2, 0)), lib,
         )
+        # Drain the post-move react window first (Phase 14.7-08).
+        assert state.pending_post_move_attacker_id == 0
+        assert state.phase == TurnPhase.REACT
+        # Opponent's single PASS resolves the (empty) react stack; pending
+        # flag survives so we return to ACTION for the optional attack.
+        state = resolve_action(state, Action(action_type=ActionType.PASS), lib)
+        assert state.phase == TurnPhase.ACTION
         assert state.pending_post_move_attacker_id == 0
 
         decline = Action(action_type=ActionType.DECLINE_POST_MOVE_ATTACK)
         new_state = resolve_action(state, decline, lib)
 
+        # DECLINE clears pending, runs end-of-turn, and advances turn.
+        # No second react window opens — 14.7-08 explicit behavior.
         assert new_state.pending_post_move_attacker_id is None
         assert new_state.get_minion(0).current_health == 5
         assert new_state.get_minion(1).current_health == 5
-        assert new_state.phase == TurnPhase.REACT
-        assert new_state.pending_action == decline
+        # Turn has advanced to P2's ACTION (no End triggers, so END_OF_TURN
+        # shortcuts to turn-advance → new player's START_OF_TURN → ACTION).
+        assert new_state.active_player_idx == 1
+        assert new_state.phase == TurnPhase.ACTION
 
     def test_pending_state_blocks_unrelated_actions(self):
         from grid_tactics.action_resolver import resolve_action
@@ -1434,6 +1469,15 @@ class TestPendingPostMoveAttack:
         state = resolve_action(
             state, Action(action_type=ActionType.MOVE, minion_id=0, position=(2, 0)), lib,
         )
+        # Phase 14.7-08: post-move react window fires first. Drain it so
+        # we land back in ACTION with pending still set — that's where
+        # unrelated actions must be rejected.
+        assert state.pending_post_move_attacker_id == 0
+        assert state.phase == TurnPhase.REACT
+        # Opponent's single PASS resolves the (empty) react stack; pending
+        # flag survives so we return to ACTION for the optional attack.
+        state = resolve_action(state, Action(action_type=ActionType.PASS), lib)
+        assert state.phase == TurnPhase.ACTION
         assert state.pending_post_move_attacker_id == 0
 
         with pytest.raises(ValueError, match="[Pp]ending"):
@@ -1480,6 +1524,13 @@ class TestPendingPostMoveAttack:
         state = resolve_action(
             state, Action(action_type=ActionType.MOVE, minion_id=0, position=(2, 0)), lib,
         )
+        # Phase 14.7-08: drain post-move react window first.
+        assert state.pending_post_move_attacker_id == 0
+        assert state.phase == TurnPhase.REACT
+        # Opponent's single PASS resolves the (empty) react stack; pending
+        # flag survives so we return to ACTION for the optional attack.
+        state = resolve_action(state, Action(action_type=ActionType.PASS), lib)
+        assert state.phase == TurnPhase.ACTION
         assert state.pending_post_move_attacker_id == 0
 
         with pytest.raises(ValueError, match="[Pp]ending"):
@@ -1500,6 +1551,265 @@ class TestPendingPostMoveAttack:
                 Action(action_type=ActionType.DECLINE_POST_MOVE_ATTACK),
                 lib,
             )
+
+
+# ---------------------------------------------------------------------------
+# Phase 14.7-08: Two independent react windows for melee move+attack chains
+# (spec v2 §4.1). Supersedes Phase 14.1's combined-single-window semantic.
+# ---------------------------------------------------------------------------
+
+
+class TestMeleeTwoReactWindows:
+    """14.7-08: melee chain opens TWO independent react windows (move + attack).
+
+    - Post-move window (react_context=AFTER_ACTION, return_phase=ACTION)
+    - If player ATTACKs: second react window opens post-attack
+    - If player DECLINEs: NO second react window — turn advances directly
+    - pending_post_move_attacker_id survives the post-move react window
+    - Prior 14.1 behavior (single react window after the combined action)
+      is explicitly superseded per key_user_decisions #1.
+    """
+
+    def test_melee_move_opens_post_move_react_window(self):
+        """MOVE by a melee minion with in-range targets enters REACT."""
+        from grid_tactics.action_resolver import resolve_action
+
+        lib = _make_test_library()
+        attacker = MinionInstance(
+            instance_id=0, card_numeric_id=1, owner=PlayerSide.PLAYER_1,
+            position=(1, 0), current_health=5,
+        )
+        defender = MinionInstance(
+            instance_id=1, card_numeric_id=1, owner=PlayerSide.PLAYER_2,
+            position=(2, 1), current_health=5,
+        )
+        state = _make_state(minions=[attacker, defender])
+        state = resolve_action(
+            state,
+            Action(action_type=ActionType.MOVE, minion_id=0, position=(2, 0)),
+            lib,
+        )
+
+        # Window 1 open, pending preserved.
+        assert state.phase == TurnPhase.REACT
+        assert state.pending_post_move_attacker_id == 0
+        assert state.react_context == ReactContext.AFTER_ACTION
+        assert state.react_return_phase == TurnPhase.ACTION
+        assert state.react_player_idx == 1  # P2 reacts post-move
+
+        # Opponent PASSes on an empty react stack → window closes, we return
+        # to ACTION with the pending flag intact for the optional attack.
+        state = resolve_action(state, Action(action_type=ActionType.PASS), lib)
+        assert state.phase == TurnPhase.ACTION
+        assert state.pending_post_move_attacker_id == 0
+        # The closing window cleared its bookkeeping.
+        assert state.react_stack == ()
+        assert state.react_context is None
+        assert state.react_return_phase is None
+
+    def test_melee_move_attack_opens_two_react_windows(self):
+        """Full move+attack chain fires both windows; turn advances ONCE."""
+        from grid_tactics.action_resolver import resolve_action
+
+        lib = _make_test_library()
+        attacker = MinionInstance(
+            instance_id=0, card_numeric_id=1, owner=PlayerSide.PLAYER_1,
+            position=(1, 0), current_health=5,
+        )
+        defender = MinionInstance(
+            instance_id=1, card_numeric_id=1, owner=PlayerSide.PLAYER_2,
+            position=(2, 1), current_health=5,
+        )
+        state = _make_state(minions=[attacker, defender])
+        initial_turn = state.turn_number
+        # Window 1: MOVE
+        state = resolve_action(
+            state,
+            Action(action_type=ActionType.MOVE, minion_id=0, position=(2, 0)),
+            lib,
+        )
+        assert state.phase == TurnPhase.REACT
+        # Close window 1.
+        state = resolve_action(state, Action(action_type=ActionType.PASS), lib)
+        assert state.phase == TurnPhase.ACTION
+        assert state.pending_post_move_attacker_id == 0
+
+        # ATTACK: window 2 opens.
+        state = resolve_action(
+            state,
+            Action(action_type=ActionType.ATTACK, minion_id=0, target_id=1),
+            lib,
+        )
+        assert state.phase == TurnPhase.REACT
+        assert state.react_context == ReactContext.AFTER_ACTION
+        assert state.react_return_phase == TurnPhase.ACTION
+        assert state.pending_post_move_attacker_id is None
+
+        # Close window 2 → turn advances to P2 exactly once.
+        state = resolve_action(state, Action(action_type=ActionType.PASS), lib)
+        assert state.active_player_idx == 1
+        assert state.phase == TurnPhase.ACTION
+        # One full round-trip consumed one turn, not two.
+        assert state.turn_number == initial_turn + 1
+
+    def test_melee_move_decline_skips_second_window(self):
+        """DECLINE after the post-move window advances turn — no phantom window."""
+        from grid_tactics.action_resolver import resolve_action
+
+        lib = _make_test_library()
+        attacker = MinionInstance(
+            instance_id=0, card_numeric_id=1, owner=PlayerSide.PLAYER_1,
+            position=(1, 0), current_health=5,
+        )
+        defender = MinionInstance(
+            instance_id=1, card_numeric_id=1, owner=PlayerSide.PLAYER_2,
+            position=(2, 1), current_health=5,
+        )
+        state = _make_state(minions=[attacker, defender])
+        # Move + close window 1.
+        state = resolve_action(
+            state,
+            Action(action_type=ActionType.MOVE, minion_id=0, position=(2, 0)),
+            lib,
+        )
+        state = resolve_action(state, Action(action_type=ActionType.PASS), lib)
+        assert state.phase == TurnPhase.ACTION
+        assert state.pending_post_move_attacker_id == 0
+
+        # DECLINE: no second window. Turn advances directly.
+        state = resolve_action(
+            state,
+            Action(action_type=ActionType.DECLINE_POST_MOVE_ATTACK),
+            lib,
+        )
+        assert state.pending_post_move_attacker_id is None
+        assert state.active_player_idx == 1
+        # No End triggers / Start triggers in this test fixture → go direct
+        # to P2's ACTION phase without a second REACT window.
+        assert state.phase == TurnPhase.ACTION
+        assert state.react_stack == ()
+
+    def test_ranged_move_single_react_window(self):
+        """Ranged minions are unchanged — single react window, no pending flag."""
+        from grid_tactics.action_resolver import resolve_action
+
+        lib = _make_test_library()
+        attacker = MinionInstance(
+            instance_id=0, card_numeric_id=4, owner=PlayerSide.PLAYER_1,
+            position=(0, 0), current_health=3,
+        )
+        defender = MinionInstance(
+            instance_id=1, card_numeric_id=1, owner=PlayerSide.PLAYER_2,
+            position=(2, 1), current_health=5,
+        )
+        state = _make_state(minions=[attacker, defender])
+        state = resolve_action(
+            state,
+            Action(action_type=ActionType.MOVE, minion_id=0, position=(1, 0)),
+            lib,
+        )
+        # Ranged move: REACT window opens, pending NOT set.
+        assert state.phase == TurnPhase.REACT
+        assert state.pending_post_move_attacker_id is None
+
+        # One PASS closes the window and advances the turn (no chain).
+        state = resolve_action(state, Action(action_type=ActionType.PASS), lib)
+        assert state.active_player_idx == 1
+        assert state.phase == TurnPhase.ACTION
+
+    def test_melee_move_no_in_range_targets_single_window(self):
+        """Melee move with no in-range targets opens one window (no chain)."""
+        from grid_tactics.action_resolver import resolve_action
+
+        lib = _make_test_library()
+        attacker = MinionInstance(
+            instance_id=0, card_numeric_id=1, owner=PlayerSide.PLAYER_1,
+            position=(1, 0), current_health=5,
+        )
+        state = _make_state(minions=[attacker])
+        state = resolve_action(
+            state,
+            Action(action_type=ActionType.MOVE, minion_id=0, position=(2, 0)),
+            lib,
+        )
+        # No in-range enemies → no pending flag, standard single-window path.
+        assert state.pending_post_move_attacker_id is None
+        assert state.phase == TurnPhase.REACT
+
+        state = resolve_action(state, Action(action_type=ActionType.PASS), lib)
+        assert state.active_player_idx == 1
+        assert state.phase == TurnPhase.ACTION
+
+    def test_legal_actions_during_post_move_window_are_react_only(self):
+        """During the post-move REACT window, opponent's only legal actions are
+        PASS (+ any react cards whose conditions match). PLAY_CARD/MOVE/ATTACK
+        by the opponent are NOT legal here.
+        """
+        from grid_tactics.action_resolver import resolve_action
+        from grid_tactics.legal_actions import legal_actions
+
+        lib = _make_test_library()
+        attacker = MinionInstance(
+            instance_id=0, card_numeric_id=1, owner=PlayerSide.PLAYER_1,
+            position=(1, 0), current_health=5,
+        )
+        defender = MinionInstance(
+            instance_id=1, card_numeric_id=1, owner=PlayerSide.PLAYER_2,
+            position=(2, 1), current_health=5,
+        )
+        state = _make_state(minions=[attacker, defender])
+        state = resolve_action(
+            state,
+            Action(action_type=ActionType.MOVE, minion_id=0, position=(2, 0)),
+            lib,
+        )
+        # In the post-move REACT window, opponent has no react cards in this
+        # fixture, so the only legal action is PASS.
+        assert state.phase == TurnPhase.REACT
+        acts = legal_actions(state, lib)
+        assert len(acts) == 1
+        assert acts[0].action_type == ActionType.PASS
+
+    def test_legal_actions_between_windows_are_attack_or_decline(self):
+        """After the post-move window closes (pending still set), only ATTACK
+        to in-range targets + DECLINE_POST_MOVE_ATTACK are legal.
+        """
+        from grid_tactics.action_resolver import resolve_action
+        from grid_tactics.legal_actions import legal_actions
+
+        lib = _make_test_library()
+        attacker = MinionInstance(
+            instance_id=0, card_numeric_id=1, owner=PlayerSide.PLAYER_1,
+            position=(1, 0), current_health=5,
+        )
+        defender = MinionInstance(
+            instance_id=1, card_numeric_id=1, owner=PlayerSide.PLAYER_2,
+            position=(2, 1), current_health=5,
+        )
+        state = _make_state(minions=[attacker, defender])
+        state = resolve_action(
+            state,
+            Action(action_type=ActionType.MOVE, minion_id=0, position=(2, 0)),
+            lib,
+        )
+        state = resolve_action(state, Action(action_type=ActionType.PASS), lib)
+        # Between windows: phase=ACTION + pending set.
+        assert state.phase == TurnPhase.ACTION
+        assert state.pending_post_move_attacker_id == 0
+        acts = legal_actions(state, lib)
+        action_types = {a.action_type for a in acts}
+        # Only ATTACK (to the in-range defender) + DECLINE. No PLAY_CARD,
+        # no MOVE, no SACRIFICE, no regular PASS.
+        assert ActionType.ATTACK in action_types
+        assert ActionType.DECLINE_POST_MOVE_ATTACK in action_types
+        assert ActionType.PLAY_CARD not in action_types
+        assert ActionType.MOVE not in action_types
+        assert ActionType.SACRIFICE not in action_types
+        # ATTACK targets must all be the pending attacker hitting an in-range enemy.
+        for a in acts:
+            if a.action_type == ActionType.ATTACK:
+                assert a.minion_id == 0
+                assert a.target_id == 1
 
 
 # ---------------------------------------------------------------------------

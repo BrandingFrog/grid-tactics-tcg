@@ -1099,6 +1099,24 @@ def resolve_react_stack(
     return_phase = state.react_return_phase or TurnPhase.ACTION
 
     if return_phase == TurnPhase.ACTION:
+        # Phase 14.7-08: If the closing react window was the POST-MOVE
+        # window (i.e. pending_post_move_attacker_id is still set), return
+        # to ACTION instead of advancing to END_OF_TURN. The melee caster
+        # still owes us their ATTACK or DECLINE_POST_MOVE_ATTACK sub-action
+        # — per spec v2 §4.1 the melee chain has TWO independent react
+        # windows, and this is the gap between them. Clear the react
+        # bookkeeping for the closing window but keep pending intact.
+        if state.pending_post_move_attacker_id is not None:
+            return replace(
+                state,
+                phase=TurnPhase.ACTION,
+                react_stack=(),
+                react_player_idx=None,
+                pending_action=None,
+                react_context=None,
+                react_return_phase=None,
+            )
+
         # Phase 14.7-03: after-action react window closed → enter
         # END_OF_TURN (fires End triggers + opens end react window if any
         # End triggers exist; otherwise shortcuts to turn-advance). This
