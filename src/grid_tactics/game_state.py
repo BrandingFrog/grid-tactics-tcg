@@ -263,6 +263,23 @@ class GameState:
                     "card_index": entry.card_index,
                     "card_numeric_id": entry.card_numeric_id,
                     "target_pos": list(entry.target_pos) if entry.target_pos is not None else None,
+                    # Phase 14.7-01: originator fields
+                    "is_originator": bool(getattr(entry, "is_originator", False)),
+                    "origin_kind": getattr(entry, "origin_kind", None),
+                    "source_minion_id": getattr(entry, "source_minion_id", None),
+                    "effect_payload": (
+                        [
+                            [
+                                idx,
+                                (list(tp) if tp is not None else None),
+                                co,
+                            ]
+                            for (idx, tp, co) in getattr(entry, "effect_payload", ()) or ()
+                        ]
+                        if getattr(entry, "effect_payload", None) is not None else None
+                    ),
+                    "destroyed_attack": int(getattr(entry, "destroyed_attack", 0)),
+                    "destroyed_dm": int(getattr(entry, "destroyed_dm", 0)),
                 }
                 if hasattr(entry, "player_idx") else entry
                 for entry in self.react_stack
@@ -350,6 +367,44 @@ class GameState:
         winner = PlayerSide(winner_raw) if winner_raw is not None else None
         is_game_over = d.get("is_game_over", False)
 
+        # Reconstruct react_stack entries (Phase 14.7-01: includes originator fields)
+        from grid_tactics.react_stack import ReactEntry
+        react_stack_data = d.get("react_stack", ())
+        react_stack_entries = []
+        for e in react_stack_data:
+            if not isinstance(e, dict):
+                # Legacy tuple/other passthrough — keep as-is for backward compat.
+                react_stack_entries.append(e)
+                continue
+            raw_payload = e.get("effect_payload")
+            payload_tuple: Optional[tuple] = None
+            if raw_payload is not None:
+                payload_tuple = tuple(
+                    (
+                        int(item[0]),
+                        (tuple(item[1]) if item[1] is not None else None),
+                        int(item[2]),
+                    )
+                    for item in raw_payload
+                )
+            react_stack_entries.append(
+                ReactEntry(
+                    player_idx=e["player_idx"],
+                    card_index=e["card_index"],
+                    card_numeric_id=e["card_numeric_id"],
+                    target_pos=(
+                        tuple(e["target_pos"])
+                        if e.get("target_pos") is not None else None
+                    ),
+                    is_originator=bool(e.get("is_originator", False)),
+                    origin_kind=e.get("origin_kind"),
+                    source_minion_id=e.get("source_minion_id"),
+                    effect_payload=payload_tuple,
+                    destroyed_attack=int(e.get("destroyed_attack", 0)),
+                    destroyed_dm=int(e.get("destroyed_dm", 0)),
+                )
+            )
+
         return cls(
             board=board,
             players=players,  # type: ignore[arg-type]
@@ -359,7 +414,7 @@ class GameState:
             seed=d["seed"],
             minions=minions,
             next_minion_id=d.get("next_minion_id", 0),
-            react_stack=tuple(d.get("react_stack", ())),
+            react_stack=tuple(react_stack_entries),
             react_player_idx=d.get("react_player_idx"),
             pending_action=pending_action,
             winner=winner,

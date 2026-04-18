@@ -591,16 +591,26 @@ def _cast_magic(
     active_side: PlayerSide,
     library: CardLibrary,
 ) -> GameState:
-    """Cast a magic card. Resolves all ON_PLAY effects, card already discarded.
+    """Cast a magic card (Phase 14.7-01 deferred resolution).
 
-    Magic cards don't place a minion, so effects that need special routing
-    (TUTOR, REVIVE) are dispatched here before falling through to the
-    generic resolve_effect path.
+    Flow:
+      1. Resolve costs IMMEDIATELY (per spec §4.2 — mana/HP/discard already
+         handled by the caller; destroy-ally cost handled here).
+      2. Capture the card's ON_PLAY effects into an "originator" ReactEntry
+         and push it to the BOTTOM of the react stack.
+      3. Transition to REACT phase so the opponent gets the first react
+         opportunity. The originator's effects resolve LIFO when the stack
+         drains; a Prohibition (or other NEGATE) played on top of the
+         originator cancels the cast entirely.
+
+    The card itself has already been removed from hand (discarded to grave)
+    by the caller (_apply_play_card), so the card_index on the originator
+    is -1 to signal "no hand reference".
     """
-    caster_pos = action.position if action.position is not None else (0, 0)
-
     # Destroy-ally cost: remove a friendly minion from the board before
     # effects resolve. Distinct from the board-crossing SACRIFICE action.
+    # Captures destroyed_attack / destroyed_dm for scale_with effects at
+    # originator resolution time.
     destroyed_attack = 0
     destroyed_dm = 0
     if card_def.destroy_ally_cost and action.destroyed_minion_id is not None:
@@ -621,35 +631,38 @@ def _cast_magic(
                 new_players = _replace_player(new_players, active_idx, new_p)
             state = replace(state, board=new_board, minions=new_minions, players=new_players)
 
-    for effect in card_def.effects:
-        if effect.trigger == TriggerType.ON_PLAY:
-            from grid_tactics.effect_resolver import (
-                resolve_effect,
-                _enter_pending_tutor,
-            )
+    # Build captured-effect payload from ON_PLAY effects. Each entry:
+    # (effect_idx, target_pos_tuple_or_None, caster_owner_int). Using
+    # tuple-of-tuples keeps the frozen dataclass hashable-friendly.
+    effects_payload: list[tuple] = []
+    for eff_idx, effect in enumerate(card_def.effects):
+        if effect.trigger != TriggerType.ON_PLAY:
+            continue
+        target_pos = tuple(action.target_pos) if action.target_pos is not None else None
+        effects_payload.append((eff_idx, target_pos, int(active_side)))
 
-            # Pre-scale effects that depend on destroyed ally's attack
-            resolved_effect = effect
-            if effect.scale_with in ("destroyed_attack", "destroyed_attack_plus_dm"):
-                bonus = destroyed_attack + destroyed_dm if effect.scale_with == "destroyed_attack_plus_dm" else destroyed_attack
-                if bonus > 0:
-                    resolved_effect = replace(effect, amount=effect.amount + bonus)
-
-            if resolved_effect.effect_type == EffectType.TUTOR:
-                state = _enter_pending_tutor(
-                    state, card_def, active_side, library,
-                    amount=max(1, resolved_effect.amount or 1),
-                )
-            elif resolved_effect.effect_type == EffectType.REVIVE:
-                state = _enter_pending_revive(
-                    state, card_def, active_side, library,
-                )
-            else:
-                state = resolve_effect(
-                    state, resolved_effect, caster_pos, active_side, library, action.target_pos,
-                )
-
-    return state
+    # Push cast_mode originator onto the react stack and enter REACT phase.
+    # card_index=-1 because the card has already been discarded from hand.
+    from grid_tactics.react_stack import ReactEntry
+    originator = ReactEntry(
+        player_idx=state.active_player_idx,
+        card_index=-1,
+        card_numeric_id=card_numeric_id,
+        target_pos=tuple(action.target_pos) if action.target_pos is not None else None,
+        is_originator=True,
+        origin_kind="magic_cast",
+        source_minion_id=None,
+        effect_payload=tuple(effects_payload),
+        destroyed_attack=destroyed_attack,
+        destroyed_dm=destroyed_dm,
+    )
+    new_stack = state.react_stack + (originator,)
+    return replace(
+        state,
+        react_stack=new_stack,
+        react_player_idx=1 - state.active_player_idx,
+        phase=TurnPhase.REACT,
+    )
 
 
 def _apply_sacrifice(

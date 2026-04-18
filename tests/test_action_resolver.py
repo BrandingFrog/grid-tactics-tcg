@@ -471,9 +471,15 @@ class TestPlayCardMinion:
 
 
 class TestPlayCardMagic:
-    """PLAY_CARD magic resolves effect and discards."""
+    """PLAY_CARD magic defers effect resolution via an originator on the react stack.
 
-    def test_magic_card_resolves_effect_and_discards(self):
+    Phase 14.7-01: Costs (mana, discard) resolve on play; ON_PLAY effects sit
+    at the BOTTOM of the react stack as a cast_mode originator and resolve
+    LIFO after the chain closes. A Prohibition on top cancels the cast.
+    """
+
+    def test_magic_cast_pushes_originator_without_resolving_effect(self):
+        """Cast: costs paid, card in grave, originator on stack, effect NOT yet applied."""
         from grid_tactics.action_resolver import resolve_action
 
         lib = _make_test_library()
@@ -489,13 +495,47 @@ class TestPlayCardMagic:
         )
         new_state = resolve_action(state, action, lib)
 
-        # Mana deducted
+        # Costs resolved immediately
         assert new_state.players[0].current_mana == 3  # 5 - 2
-        # Card removed from hand, added to grave
         assert len(new_state.players[0].hand) == 0
         assert 0 in new_state.players[0].grave
+
+        # Effect DEFERRED — damage should not yet be applied
+        assert new_state.get_minion(0).current_health == 5  # unchanged
+
+        # Originator pushed onto the stack, REACT phase entered
+        assert new_state.phase.name == "REACT"
+        assert new_state.react_player_idx == 1
+        assert len(new_state.react_stack) == 1
+        origin = new_state.react_stack[0]
+        assert origin.is_originator is True
+        assert origin.origin_kind == "magic_cast"
+        assert origin.card_numeric_id == 0
+        assert origin.target_pos == (3, 0)
+
+    def test_magic_cast_resolves_after_both_pass_react(self):
+        """With no react, passing through the stack resolves the originator."""
+        from grid_tactics.action_resolver import resolve_action
+        from grid_tactics.actions import pass_action
+
+        lib = _make_test_library()
+        enemy = MinionInstance(
+            instance_id=0, card_numeric_id=1, owner=PlayerSide.PLAYER_2,
+            position=(3, 0), current_health=5,
+        )
+        state = _make_state(p1_hand=(0,), p1_mana=5, minions=[enemy])
+        action = Action(
+            action_type=ActionType.PLAY_CARD, card_index=0, target_pos=(3, 0),
+        )
+        state = resolve_action(state, action, lib)
+        # P2 passes the react window — stack resolves LIFO, originator fires.
+        state = resolve_action(state, pass_action(), lib)
+
         # Effect applied: enemy took 2 damage
-        assert new_state.get_minion(0).current_health == 3  # 5 - 2
+        assert state.get_minion(0).current_health == 3  # 5 - 2
+        # Turn advanced
+        assert state.phase.name == "ACTION"
+        assert state.active_player_idx == 1
 
 
 class TestPlayReactInActionPhaseRaises:

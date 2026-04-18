@@ -347,3 +347,82 @@ class TestSerializationPhase3:
         assert restored.react_stack == ()
         assert restored.react_player_idx is None
         assert restored.pending_action is None
+
+    def test_react_entry_roundtrip_preserves_originator_fields(self):
+        """Phase 14.7-01: to_dict/from_dict round-trips ReactEntry originator fields.
+
+        Covers a stack with:
+          - One standard react entry (is_originator=False, legacy fields only)
+          - One magic_cast originator (is_originator=True, full payload)
+        Asserts every new field survives JSON round-trip (dict -> json -> dict).
+        """
+        from grid_tactics.react_stack import ReactEntry
+
+        state, _ = GameState.new_game(42, DECK_P1, DECK_P2)
+
+        # Standard react entry (pre-14.7 shape)
+        react_entry = ReactEntry(
+            player_idx=1,
+            card_index=2,
+            card_numeric_id=99,
+            target_pos=(3, 4),
+        )
+
+        # Magic-cast originator (14.7-01 shape)
+        originator = ReactEntry(
+            player_idx=0,
+            card_index=-1,
+            card_numeric_id=46,  # acidic_rain stable_id
+            target_pos=None,
+            is_originator=True,
+            origin_kind="magic_cast",
+            source_minion_id=None,
+            effect_payload=(
+                (0, None, 0),
+                (1, (2, 3), 0),
+            ),
+            destroyed_attack=5,
+            destroyed_dm=2,
+        )
+
+        state = dataclasses.replace(
+            state,
+            react_stack=(originator, react_entry),
+            react_player_idx=1,
+            phase=TurnPhase.REACT,
+        )
+
+        # Round-trip through JSON to verify the payload is wire-safe.
+        d = state.to_dict()
+        json_str = json.dumps(d)
+        restored_d = json.loads(json_str)
+        restored = GameState.from_dict(restored_d)
+
+        assert len(restored.react_stack) == 2
+        r_origin, r_react = restored.react_stack
+
+        # Originator round-trip
+        assert r_origin.is_originator is True
+        assert r_origin.origin_kind == "magic_cast"
+        assert r_origin.source_minion_id is None
+        assert r_origin.card_numeric_id == 46
+        assert r_origin.card_index == -1
+        assert r_origin.target_pos is None
+        assert r_origin.effect_payload == (
+            (0, None, 0),
+            (1, (2, 3), 0),
+        )
+        assert r_origin.destroyed_attack == 5
+        assert r_origin.destroyed_dm == 2
+
+        # Standard react entry round-trip — new fields default to legacy values
+        assert r_react.is_originator is False
+        assert r_react.origin_kind is None
+        assert r_react.source_minion_id is None
+        assert r_react.effect_payload is None
+        assert r_react.destroyed_attack == 0
+        assert r_react.destroyed_dm == 0
+        assert r_react.player_idx == 1
+        assert r_react.card_index == 2
+        assert r_react.card_numeric_id == 99
+        assert r_react.target_pos == (3, 4)

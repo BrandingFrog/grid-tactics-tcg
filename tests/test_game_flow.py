@@ -454,7 +454,7 @@ class TestReactCardVisibility:
 # -----------------------------------------------------------------------
 
 
-def _play_to_completion(c1, c2, gs1, gs2, max_iterations=500):
+def _play_to_completion(c1, c2, gs1, gs2, max_iterations=1500):
     """Play a game to completion, returning the game_over data for both clients.
 
     Each iteration: find who has legal_actions, submit the first one,

@@ -30,12 +30,45 @@ class ReactEntry:
 
     Tracks who played it, which card, and the optional target position
     for single-target react effects.
+
+    Phase 14.7-01: Originator fields support deferred magic resolution.
+    When a magic card is CAST, its cost resolves immediately but its
+    ON_PLAY effects are captured as an "originator" entry at the bottom
+    of the react stack. The chain then resolves LIFO so a NEGATE played
+    on top of the originator can cancel the cast entirely.
+
+    Fields:
+        is_originator: True when this entry represents a pending
+            magic-cast (or future summon/start-of-turn declaration)
+            whose effects have NOT yet resolved. Regular reactions
+            played via _play_react stay at the default False.
+        origin_kind: Classifies the originator type. Currently only
+            "magic_cast". Future: "summon_declaration",
+            "start_of_turn", etc.
+        source_minion_id: Reserved for future origin_kinds that refer
+            to a specific minion (e.g. a summon declaration or an
+            on-death trigger). Always None for magic_cast.
+        effect_payload: Captured ON_PLAY effect tuple for a magic_cast
+            originator. Each entry is (effect_idx, target_pos, caster_owner_int).
+            Tuple-of-tuples to keep the dataclass hashable-friendly.
+        destroyed_attack: Captured at cast time from the destroy-ally
+            cost (if any). Used by `scale_with` effects at resolution.
+        destroyed_dm: Dark-matter stacks captured at cast time from the
+            destroy-ally cost. Used by scale_with=destroyed_attack_plus_dm.
     """
 
     player_idx: int                              # who played this react
     card_index: int                              # which card from hand (at time of play)
     card_numeric_id: int                         # card definition ID for effect lookup
     target_pos: Optional[tuple[int, int]] = None  # for single-target react effects
+
+    # Phase 14.7-01: Originator fields (all default-valued for backward compat)
+    is_originator: bool = False
+    origin_kind: Optional[str] = None            # "magic_cast" | (future: "summon_declaration", ...)
+    source_minion_id: Optional[int] = None       # future: origin-minion id
+    effect_payload: Optional[tuple] = None       # tuple of (effect_idx, target_pos, caster_owner_int)
+    destroyed_attack: int = 0                    # captured for scale_with at cast time
+    destroyed_dm: int = 0                        # captured for scale_with at cast time
 
 
 # ---------------------------------------------------------------------------
@@ -311,6 +344,43 @@ def resolve_react_stack(
 
         card_def = library.get_by_id(entry.card_numeric_id)
         caster_owner = state.players[entry.player_idx].side
+
+        # Phase 14.7-01: Originator branch — magic_cast originators carry
+        # their captured ON_PLAY effect payload. Resolve each effect via
+        # the same dispatch the old _cast_magic inline loop used.
+        if entry.is_originator and entry.origin_kind == "magic_cast":
+            for (effect_idx, target_pos_raw, _caster_owner_int) in (entry.effect_payload or ()):
+                if effect_idx < 0 or effect_idx >= len(card_def.effects):
+                    continue
+                effect = card_def.effects[effect_idx]
+                tp = tuple(target_pos_raw) if target_pos_raw is not None else None
+                # Re-apply scale_with bonus captured at cast time
+                resolved_effect = effect
+                if effect.scale_with in ("destroyed_attack", "destroyed_attack_plus_dm"):
+                    if effect.scale_with == "destroyed_attack_plus_dm":
+                        bonus = entry.destroyed_attack + entry.destroyed_dm
+                    else:
+                        bonus = entry.destroyed_attack
+                    if bonus > 0:
+                        resolved_effect = replace(effect, amount=(effect.amount or 0) + bonus)
+                # Dispatch TUTOR/REVIVE to pending-entry shims (same routing as
+                # the old _cast_magic inline path).
+                if resolved_effect.effect_type == EffectType.TUTOR:
+                    from grid_tactics.effect_resolver import _enter_pending_tutor
+                    state = _enter_pending_tutor(
+                        state, card_def, caster_owner, library,
+                        amount=max(1, resolved_effect.amount or 1),
+                    )
+                elif resolved_effect.effect_type == EffectType.REVIVE:
+                    from grid_tactics.action_resolver import _enter_pending_revive
+                    state = _enter_pending_revive(
+                        state, card_def, caster_owner, library,
+                    )
+                else:
+                    state = resolve_effect(
+                        state, resolved_effect, (0, 0), caster_owner, library, tp,
+                    )
+            continue  # originator handled; skip the card_type dispatch below
 
         if card_def.card_type == CardType.REACT:
             # Check if this react has NEGATE effects
