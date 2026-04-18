@@ -6513,6 +6513,15 @@ function setupSandboxSocketHandlers() {
         var hpJobsSb = (sandboxMode && prevForFly)
             ? derivePlayerHpDeltaAnims(prevForFly, payload.state)
             : [];
+        // Derive an action-keyed animation job (SACRIFICE / ATTACK / MOVE /
+        // PLAY_CARD) from the `last_action` the server now enriches onto
+        // sandbox_state (see server/events.py::_emit_sandbox_state). Without
+        // this dispatch, the sandbox silently drops action animations — most
+        // visibly the sacrifice transcend SVG jumper. `noop` results fall
+        // through to the immediate-render path below.
+        var actionJob = (sandboxMode && prevForFly)
+            ? deriveAnimationJob(prevForFly, payload.state)
+            : null;
 
         sandboxState = payload.state;
         sandboxLegalActions = payload.legal_actions || [];
@@ -6537,6 +6546,19 @@ function setupSandboxSocketHandlers() {
         } catch (e) { /* quota exceeded -- ignore */ }
         if (typeof renderSandboxToolbarState === 'function') renderSandboxToolbarState();
         renderSandbox();
+        // Enqueue the action job FIRST (if any) so the board-level animation
+        // (e.g. sacrifice transcend, summon pop, attack swing) plays before
+        // subsidiary fly / hp-popup ghosts. In sandbox mode the state is
+        // already applied by the renderSandbox() call above, so set
+        // stateApplied=true to suppress the queue's post-anim applyStateFrame
+        // (which would otherwise re-render and double-apply). Animations
+        // that read cell positions (e.g. sacrifice transcend) only need the
+        // .board-cell[data-row][data-col] selector — the cell survives
+        // re-render even after its minion is removed.
+        if (actionJob && actionJob.type && actionJob.type !== 'noop') {
+            actionJob.stateApplied = true;
+            enqueueAnimation(actionJob);
+        }
         // After the new frame is on screen, fire the fly ghosts — each one
         // already captured its source rect from the now-stale DOM before
         // renderSandbox() replaced it.

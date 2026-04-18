@@ -721,6 +721,23 @@ def register_events(room_manager: RoomManager) -> None:
         state = sandbox.state
         state_dict = state.to_dict()
         enrich_pending_post_move_attack(state, state_dict, sandbox.library)
+        # Mirror the real-multiplayer emit path: attach `last_action`
+        # (type + attacker_pos + target_pos + damage + killed) so the client
+        # can drive engine-action animations — in particular the sacrifice
+        # transcend animation, whose client dispatcher keys off
+        # `last_action.type === 'SACRIFICE'`. Without this call the sandbox
+        # state has no `last_action` field and the client falls through to
+        # the legacy `pending_action` path which only covers PLAY_CARD /
+        # MOVE / ATTACK, silently dropping SACRIFICE (and any other future
+        # action-keyed animations). prev_state / action are None outside
+        # an engine action (zone edits, cheats, undo/redo) — `enrich_last_action`
+        # handles that case by setting `last_action = None`.
+        enrich_last_action(
+            state_dict,
+            sandbox.last_prev_state,
+            state,
+            sandbox.last_action,
+        )
         # For revive/tutor/death, the picker is the owner of the pending
         # state; enrich from their POV so the sandbox always gets the full
         # picker payload (valid_targets, matches, etc.).

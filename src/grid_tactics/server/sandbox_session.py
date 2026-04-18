@@ -85,6 +85,12 @@ class SandboxSession:
         self._undo: deque[GameState] = deque(maxlen=HISTORY_MAX)
         self._redo: deque[GameState] = deque(maxlen=HISTORY_MAX)
         self.lock = threading.Lock()
+        # Snapshot of (prev_state, action) from the most recent apply_action
+        # call. Consumed by the sandbox emit path to enrich `last_action`
+        # onto the wire payload so the client can drive sacrifice/attack/
+        # move animations the same way real multiplayer does.
+        self._last_prev_state: GameState | None = None
+        self._last_action: Action | None = None
 
     # ------------------------------------------------------------------
     # Empty starting state (does NOT call GameState.new_game)
@@ -130,14 +136,38 @@ class SandboxSession:
     def redo_depth(self) -> int:
         return len(self._redo)
 
+    @property
+    def last_prev_state(self) -> GameState | None:
+        """Pre-action snapshot from the most recent apply_action (or None).
+
+        Cleared to None on undo/redo and on any non-action mutation so stale
+        last_action payloads never bleed into unrelated frames (zone edits,
+        cheat toggles, save/load).
+        """
+        return self._last_prev_state
+
+    @property
+    def last_action(self) -> Action | None:
+        """Most recently applied engine action (or None)."""
+        return self._last_action
+
     # ------------------------------------------------------------------
     # Mutation primitives
     # ------------------------------------------------------------------
 
     def _push_undo(self) -> None:
-        """Push current state onto undo stack and clear redo (on new mutation)."""
+        """Push current state onto undo stack and clear redo (on new mutation).
+
+        Also clears the cached last_action/last_prev_state pair so zone edits,
+        cheat toggles, and other non-engine mutations don't leave a stale
+        engine action sitting around — the next emit would otherwise replay
+        the previous SACRIFICE/ATTACK animation on top of e.g. a mana change.
+        ``apply_action`` re-populates the pair immediately after calling this.
+        """
         self._undo.append(self._state)
         self._redo.clear()
+        self._last_prev_state = None
+        self._last_action = None
 
     def _replace_player(self, player_idx: int, new_player: Player) -> None:
         """Swap ``players[idx]`` in ``self._state`` via ``dataclasses.replace``."""
@@ -171,6 +201,12 @@ class SandboxSession:
         if action not in valid:
             raise ValueError("Illegal action")
         self._push_undo()
+        # Snapshot the pre-action state BEFORE resolve so the emit path can
+        # populate `last_action.attacker_pos` from the pre-action minion
+        # positions (mirrors real multiplayer's _emit_state_to_players,
+        # which passes prev_state + resolved_action into enrich_last_action).
+        self._last_prev_state = self._state
+        self._last_action = action
         self._state = resolve_action(self._state, action, self.library)
         # Drain trivial react windows — empty hand / no reactive cards means
         # the only legal action is PASS. Bounded by an attempt counter so a
@@ -398,6 +434,9 @@ class SandboxSession:
             return False
         self._redo.append(self._state)
         self._state = self._undo.pop()
+        # Stepping back in history must not replay the last engine animation.
+        self._last_prev_state = None
+        self._last_action = None
         return True
 
     def redo(self) -> bool:
@@ -405,6 +444,8 @@ class SandboxSession:
             return False
         self._undo.append(self._state)
         self._state = self._redo.pop()
+        self._last_prev_state = None
+        self._last_action = None
         return True
 
     def reset(self) -> None:
@@ -428,6 +469,8 @@ class SandboxSession:
         self._active_view_idx = int(payload.get("active_view_idx", 0))
         self._undo.clear()
         self._redo.clear()
+        self._last_prev_state = None
+        self._last_action = None
 
     def legal_actions(self) -> tuple:
         return legal_actions(self._state, self.library)
