@@ -3436,6 +3436,14 @@ function _showSpellStage(numericId, sourcePlayerIdx) {
     var dy = (src.top + src.height / 2) - (slot.top + slot.height / 2);
     wrap.style.transform = 'translate(' + dx + 'px,' + dy + 'px) scale(0.45)';
     wrap.style.opacity = '0';
+    // Force a reflow BEFORE attaching the transition so the browser commits
+    // the initial transform + opacity as the baseline. Without this the two
+    // writes (initial + final below) collapse into a single style recalc and
+    // the transition has no start value to interpolate from — the card snaps
+    // to the slot with no visible flight. `void offsetWidth` is the classic
+    // "re-trigger CSS transition" flush; `getComputedStyle` does NOT flush in
+    // this scenario (verified empirically via Playwright on v0.11.31).
+    void wrap.offsetWidth;
     wrap.style.transition = 'transform 520ms cubic-bezier(0.2, 0.7, 0.3, 1), opacity 260ms ease-out';
     // Two rAFs guarantee the initial values commit before the transition.
     requestAnimationFrame(function() { requestAnimationFrame(function() {
@@ -3485,6 +3493,11 @@ function _performStageShift() {
             var dx = (els.right.getBoundingClientRect().left - els.left.getBoundingClientRect().left);
             leftWrap.style.transform = 'translate(' + dx + 'px, 0)';
             leftWrap.style.opacity = '1';
+            // Force reflow so the initial transform commits as the transition
+            // baseline — same pattern as _showSpellStage. Without this the
+            // slide-in-from-right never animates (starts from identity instead
+            // of +dx, so the card just appears in the LEFT slot with no glide).
+            void leftWrap.offsetWidth;
             leftWrap.style.transition = 'transform 440ms cubic-bezier(0.2, 0.7, 0.3, 1)';
             requestAnimationFrame(function() { requestAnimationFrame(function() {
                 leftWrap.style.transform = 'translate(0, 0)';
