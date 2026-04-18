@@ -490,3 +490,73 @@ class TestSerializationPhase3:
         assert r_react.card_index == 2
         assert r_react.card_numeric_id == 99
         assert r_react.target_pos == (3, 4)
+
+
+class TestSerializationPhase14_7_05:
+    """Phase 14.7-05: pending_trigger_queue_{turn,other} + picker_idx round-trip."""
+
+    def test_defaults_empty(self):
+        """Fresh game has empty queues and picker_idx=None."""
+        state, _ = GameState.new_game(42, DECK_P1, DECK_P2)
+        assert state.pending_trigger_queue_turn == ()
+        assert state.pending_trigger_queue_other == ()
+        assert state.pending_trigger_picker_idx is None
+
+    def test_serialize_pending_trigger_queue(self):
+        """Round-trip a state carrying queue entries + picker_idx."""
+        from grid_tactics.game_state import PendingTrigger
+
+        state, _ = GameState.new_game(42, DECK_P1, DECK_P2)
+        turn_trigger = PendingTrigger(
+            trigger_kind="start_of_turn",
+            source_minion_id=5,
+            source_card_numeric_id=9,
+            effect_idx=0,
+            owner_idx=0,
+            captured_position=(2, 3),
+            target_pos=None,
+        )
+        other_trigger = PendingTrigger(
+            trigger_kind="end_of_turn",
+            source_minion_id=7,
+            source_card_numeric_id=11,
+            effect_idx=1,
+            owner_idx=1,
+            captured_position=(4, 2),
+            target_pos=(0, 1),
+        )
+        state = dataclasses.replace(
+            state,
+            pending_trigger_queue_turn=(turn_trigger,),
+            pending_trigger_queue_other=(other_trigger,),
+            pending_trigger_picker_idx=0,
+        )
+
+        d = state.to_dict()
+        # JSON-serializable
+        json_str = json.dumps(d)
+        assert isinstance(json_str, str)
+
+        restored = GameState.from_dict(d)
+        # Whole-state equality — strict round-trip
+        assert restored == state
+        # Spot-check nested fields
+        assert restored.pending_trigger_picker_idx == 0
+        assert len(restored.pending_trigger_queue_turn) == 1
+        assert len(restored.pending_trigger_queue_other) == 1
+        assert isinstance(restored.pending_trigger_queue_turn[0], PendingTrigger)
+        assert restored.pending_trigger_queue_turn[0].source_card_numeric_id == 9
+        assert restored.pending_trigger_queue_turn[0].captured_position == (2, 3)
+        assert restored.pending_trigger_queue_other[0].target_pos == (0, 1)
+
+    def test_from_dict_backward_compatible_missing_keys(self):
+        """Old dicts without the new keys reconstruct with empty defaults."""
+        state, _ = GameState.new_game(42, DECK_P1, DECK_P2)
+        d = state.to_dict()
+        d.pop("pending_trigger_queue_turn", None)
+        d.pop("pending_trigger_queue_other", None)
+        d.pop("pending_trigger_picker_idx", None)
+        restored = GameState.from_dict(d)
+        assert restored.pending_trigger_queue_turn == ()
+        assert restored.pending_trigger_queue_other == ()
+        assert restored.pending_trigger_picker_idx is None

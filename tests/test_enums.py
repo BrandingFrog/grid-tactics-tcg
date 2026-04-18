@@ -9,6 +9,7 @@ from enum import IntEnum
 import pytest
 
 from grid_tactics.enums import (
+    ActionType,
     CardType,
     EffectType,
     Element,
@@ -316,3 +317,21 @@ class TestPhase1Constants:
     def test_starting_hp(self) -> None:
         # Audit-followup: HP scaled 20 -> 100
         assert STARTING_HP == 100
+
+
+class TestActionTypePhase14_7_05:
+    """Phase 14.7-05: TRIGGER_PICK / DECLINE_TRIGGER appended to ActionType."""
+
+    def test_trigger_pick_value(self) -> None:
+        # Append-only: TRIGGER_PICK is 17 (after DECLINE_REVIVE=16)
+        assert ActionType.TRIGGER_PICK == 17
+
+    def test_decline_trigger_value(self) -> None:
+        # Append-only: DECLINE_TRIGGER is 18
+        assert ActionType.DECLINE_TRIGGER == 18
+
+    def test_preserves_existing_values(self) -> None:
+        # Sanity check: the 0..16 slice is unchanged (action space stability)
+        assert ActionType.PLAY_CARD == 0
+        assert ActionType.PASS == 4
+        assert ActionType.DECLINE_REVIVE == 16

@@ -180,3 +180,6 @@ class ActionType(IntEnum):
     DEATH_TARGET_PICK = 14  # Pick a target for a death-triggered modal effect (e.g. Lasercannon on_death destroy)
     REVIVE_PLACE = 15       # Place a revived minion from grave onto a board tile
     DECLINE_REVIVE = 16     # Decline remaining revive placements
+    # Phase 14.7-05: simultaneous-trigger priority picker
+    TRIGGER_PICK = 17       # Pick a queued trigger to resolve next (reuses PLAY_CARD[0:N] slots)
+    DECLINE_TRIGGER = 18    # Decline / skip remaining triggers (reuses PASS slot 1001)

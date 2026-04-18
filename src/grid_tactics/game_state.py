@@ -72,6 +72,49 @@ class PendingDeathTarget:
 
 
 @dataclass(frozen=True, slots=True)
+class PendingTrigger:
+    """A queued trigger effect waiting for resolution via priority picker.
+
+    Phase 14.7-05: When multiple effects trigger at the same game-state
+    moment (START_OF_TURN and END_OF_TURN in this plan; Death: migration
+    lands in 14.7-05b), the turn player's effects ALL resolve before any
+    non-turn-player effect resolves, and each player with 2+ simultaneous
+    triggers picks resolution order via a modal.
+
+    Fields:
+        trigger_kind: "start_of_turn" | "end_of_turn" | "on_death" |
+            "on_summon_effect" — determines how the source is rendered in
+            the picker modal and which ReactContext the per-resolution
+            react window carries.
+        source_minion_id: None if the source minion is already dead
+            (on_death case; 14.7-05b). For start/end-of-turn this is the
+            living minion's instance_id.
+        source_card_numeric_id: The card definition ID — used to look up
+            the card's effects at resolution time and to render the full
+            card face in the picker modal.
+        effect_idx: Which effect index on the card this queue entry is
+            for. A card with two simultaneous-trigger effects enqueues
+            two PendingTrigger entries.
+        owner_idx: 0 (Player 1) or 1 (Player 2) — whose queue this entry
+            belongs to and who picks resolution order.
+        captured_position: The minion's position at enqueue time. Used
+            for SELF_OWNER targeting even if the minion has since moved
+            or died. Fizzle (14.7-06) re-validates at resolution time.
+        target_pos: Optional pre-captured target position for triggers
+            that carry a target (rare for start/end; reserved for
+            on-summon / on-death parity).
+    """
+
+    trigger_kind: str
+    source_minion_id: Optional[int]
+    source_card_numeric_id: int
+    effect_idx: int
+    owner_idx: int
+    captured_position: tuple[int, int]
+    target_pos: Optional[tuple[int, int]] = None
+
+
+@dataclass(frozen=True, slots=True)
 class GameState:
     """Complete immutable game state snapshot.
 
@@ -159,6 +202,23 @@ class GameState:
     # other pending_* states.
     pending_death_queue: tuple = ()                          # tuple[PendingDeathWork, ...]
     pending_death_target: Optional["PendingDeathTarget"] = None
+
+    # Phase 14.7-05: simultaneous-trigger priority queue + modal picker.
+    # When multiple ON_START_OF_TURN / ON_END_OF_TURN effects fire at the
+    # same moment, they ENQUEUE here instead of resolving inline. The
+    # turn player's queue drains first (pending_trigger_queue_turn), then
+    # the other player's (pending_trigger_queue_other). When either queue
+    # has >=2 entries at drain time, pending_trigger_picker_idx is set to
+    # that owner so the UI opens a modal card-picker (reusing the tutor
+    # modal — renderDeckBuilderCard). With exactly 1 entry the drain
+    # helper auto-resolves without a modal.
+    #
+    # Death: triggers (14.7-05b) will migrate onto the same queues. Until
+    # then, pending_death_queue + pending_death_target remain the source
+    # of truth for on-death modal handling.
+    pending_trigger_queue_turn: tuple = ()    # tuple[PendingTrigger, ...]
+    pending_trigger_queue_other: tuple = ()   # tuple[PendingTrigger, ...]
+    pending_trigger_picker_idx: Optional[int] = None
 
     @property
     def active_player(self) -> Player:
@@ -309,6 +369,36 @@ class GameState:
             "is_game_over": self.is_game_over,
             # Phase 11: Fatigue tracking
             "fatigue_counts": list(self.fatigue_counts),
+            # Phase 14.7-05: simultaneous-trigger priority queue
+            "pending_trigger_queue_turn": [
+                {
+                    "trigger_kind": t.trigger_kind,
+                    "source_minion_id": t.source_minion_id,
+                    "source_card_numeric_id": t.source_card_numeric_id,
+                    "effect_idx": t.effect_idx,
+                    "owner_idx": t.owner_idx,
+                    "captured_position": list(t.captured_position),
+                    "target_pos": (
+                        list(t.target_pos) if t.target_pos is not None else None
+                    ),
+                }
+                for t in self.pending_trigger_queue_turn
+            ],
+            "pending_trigger_queue_other": [
+                {
+                    "trigger_kind": t.trigger_kind,
+                    "source_minion_id": t.source_minion_id,
+                    "source_card_numeric_id": t.source_card_numeric_id,
+                    "effect_idx": t.effect_idx,
+                    "owner_idx": t.owner_idx,
+                    "captured_position": list(t.captured_position),
+                    "target_pos": (
+                        list(t.target_pos) if t.target_pos is not None else None
+                    ),
+                }
+                for t in self.pending_trigger_queue_other
+            ],
+            "pending_trigger_picker_idx": self.pending_trigger_picker_idx,
         }
 
         # Serialize pending_action if present
@@ -429,6 +519,38 @@ class GameState:
                 )
             )
 
+        # Phase 14.7-05: reconstruct pending_trigger queues.
+        pending_trigger_queue_turn = tuple(
+            PendingTrigger(
+                trigger_kind=t["trigger_kind"],
+                source_minion_id=t.get("source_minion_id"),
+                source_card_numeric_id=t["source_card_numeric_id"],
+                effect_idx=t["effect_idx"],
+                owner_idx=t["owner_idx"],
+                captured_position=tuple(t["captured_position"]),
+                target_pos=(
+                    tuple(t["target_pos"])
+                    if t.get("target_pos") is not None else None
+                ),
+            )
+            for t in d.get("pending_trigger_queue_turn", [])
+        )
+        pending_trigger_queue_other = tuple(
+            PendingTrigger(
+                trigger_kind=t["trigger_kind"],
+                source_minion_id=t.get("source_minion_id"),
+                source_card_numeric_id=t["source_card_numeric_id"],
+                effect_idx=t["effect_idx"],
+                owner_idx=t["owner_idx"],
+                captured_position=tuple(t["captured_position"]),
+                target_pos=(
+                    tuple(t["target_pos"])
+                    if t.get("target_pos") is not None else None
+                ),
+            )
+            for t in d.get("pending_trigger_queue_other", [])
+        )
+
         return cls(
             board=board,
             players=players,  # type: ignore[arg-type]
@@ -446,4 +568,7 @@ class GameState:
             winner=winner,
             is_game_over=is_game_over,
             fatigue_counts=tuple(d.get("fatigue_counts", (0, 0))),
+            pending_trigger_queue_turn=pending_trigger_queue_turn,
+            pending_trigger_queue_other=pending_trigger_queue_other,
+            pending_trigger_picker_idx=d.get("pending_trigger_picker_idx"),
         )
