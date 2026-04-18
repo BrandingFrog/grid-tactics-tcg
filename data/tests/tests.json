@@ -10,6 +10,19 @@
     },
     "tests": [
         {
+            "id": "sacrifice-transcend-animation",
+            "title": "Sacrifice across the field — minion transcends with jumper silhouette + damage blip",
+            "instructions": "1. P1's Common Rat is already on row 0 (the enemy back row — it has crossed the field).\n2. Click the Rat to select it.\n3. Click the Sacrifice action button.",
+            "expected": "The Rat sprite transforms into a pixel-style silhouette of a jumping figure (purple outlined, white glowing, limbs stretched). The silhouette jumps a short distance forward, then fades/transcends out of view. A damage blip pops on P2's face showing the damage dealt, and P2's HP drops by that amount.",
+            "setup": [
+                {"op": "reset"},
+                {"op": "set_player", "player_idx": 0, "field": "current_mana", "value": 10},
+                {"op": "set_player", "player_idx": 0, "field": "max_mana", "value": 10},
+                {"op": "place", "player_idx": 0, "card_id": "rat", "row": 0, "col": 2},
+                {"op": "set_active", "player_idx": 0}
+            ]
+        },
+        {
             "id": "acidic-rain-burns-metal-and-robots",
             "title": "Acidic Rain burns all Metal/Robot/Machine minions — and nothing else",
             "instructions": "1. Click Acidic Rain in P1's hand.\n2. Click any valid play indicator to cast it (it's 5 mana; P1 has 20).",
