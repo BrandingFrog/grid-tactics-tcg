@@ -37,6 +37,7 @@ from grid_tactics.actions import (
     conjure_deploy_action,
     decline_conjure_action,
     decline_post_move_attack_action,
+    decline_trigger_action,
     decline_tutor_action,
     draw_action,
     move_action,
@@ -44,6 +45,7 @@ from grid_tactics.actions import (
     play_card_action,
     play_react_action,
     sacrifice_action,
+    trigger_pick_action,
     tutor_select_action,
 )
 from grid_tactics.card_library import CardLibrary
@@ -132,6 +134,11 @@ class ActionEncoder:
         if atype == ActionType.DECLINE_TUTOR:
             return PASS_IDX
 
+        # Phase 14.7-05: DECLINE_TRIGGER reuses slot 1001 (PASS).
+        # Disambiguated at decode time by state.pending_trigger_picker_idx.
+        if atype == ActionType.DECLINE_TRIGGER:
+            return PASS_IDX
+
         # Phase 14.6: CONJURE_DEPLOY reuses the PLAY_CARD slot space [0:250].
         # card_index is fixed at 0, cell = deploy position flat index.
         if atype == ActionType.CONJURE_DEPLOY:
@@ -144,6 +151,15 @@ class ActionEncoder:
         if atype == ActionType.TUTOR_SELECT:
             match_idx = action.card_index if action.card_index is not None else 0
             return PLAY_CARD_BASE + match_idx * GRID_SIZE
+
+        # Phase 14.7-05: TRIGGER_PICK reuses PLAY_CARD slot space [0:250].
+        # The queue index lives on Action.card_index. Same slot-reuse trick as
+        # TUTOR_SELECT: pin cell=0, stride by GRID_SIZE so the encoded slot is
+        # PLAY_CARD_BASE + queue_idx * GRID_SIZE. Decode disambiguates via
+        # state.pending_trigger_picker_idx.
+        if atype == ActionType.TRIGGER_PICK:
+            queue_idx = action.card_index if action.card_index is not None else 0
+            return PLAY_CARD_BASE + queue_idx * GRID_SIZE
 
         if atype == ActionType.PASS:
             return PASS_IDX
@@ -188,6 +204,12 @@ class ActionEncoder:
             Action object.
         """
         if action_int == PASS_IDX:
+            # Phase 14.7-05: slot 1001 reinterpreted as DECLINE_TRIGGER while
+            # the simultaneous-trigger priority modal is open. Checked first
+            # because it overrides all other pending states (phase-agnostic
+            # gate in legal_actions).
+            if state.pending_trigger_picker_idx is not None:
+                return decline_trigger_action()
             # Phase 14.6: slot 1001 reinterpreted as DECLINE_CONJURE while
             # a conjure deployment is pending.
             if state.pending_conjure_deploy_card is not None:
@@ -222,6 +244,17 @@ class ActionEncoder:
         ):
             match_idx = (action_int - PLAY_CARD_BASE) // GRID_SIZE
             return tutor_select_action(match_index=match_idx)
+
+        # Phase 14.7-05: PLAY_CARD slot space reinterpreted as TRIGGER_PICK
+        # while the simultaneous-trigger priority modal is open. The encoded
+        # queue_idx is recovered by the same floor-division the tutor decoder
+        # uses (stride=GRID_SIZE, cell sub-index ignored).
+        if (
+            state.pending_trigger_picker_idx is not None
+            and PLAY_CARD_BASE <= action_int < MOVE_BASE
+        ):
+            queue_idx = (action_int - PLAY_CARD_BASE) // GRID_SIZE
+            return trigger_pick_action(queue_idx=queue_idx)
 
         if action_int == DRAW_IDX:
             return draw_action()

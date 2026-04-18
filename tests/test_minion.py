@@ -22,10 +22,11 @@ class TestActionTypeEnum:
         assert ActionType.PLAY_REACT == 5
 
     def test_action_type_count(self):
-        """ActionType count is append-only. Currently 17 members:
-        the original 15 plus REVIVE_PLACE and DECLINE_REVIVE from Phase 14.
+        """ActionType count is append-only. Currently 19 members:
+        the original 15 plus REVIVE_PLACE and DECLINE_REVIVE from Phase 14,
+        plus TRIGGER_PICK and DECLINE_TRIGGER from Phase 14.7-05.
         """
-        assert len(ActionType) == 17
+        assert len(ActionType) == 19
 
     def test_action_type_is_int(self):
         """ActionType values are ints (IntEnum pattern)."""

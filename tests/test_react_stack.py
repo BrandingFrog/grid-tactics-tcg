@@ -1416,3 +1416,213 @@ class TestSummonCompoundWindows:
         assert round_trip_b.react_stack[0].is_originator is True
         assert round_trip_b.react_stack[0].origin_kind == "summon_effect"
         assert round_trip_b.react_stack[0].source_minion_id is not None
+
+
+# ---------------------------------------------------------------------------
+# Phase 14.7-05: simultaneous-trigger priority queue + modal picker
+# ---------------------------------------------------------------------------
+
+
+class TestPhase14_7_05_TriggerQueue:
+    """Simultaneous START/END triggers enqueue into pending_trigger_queue_{turn,other}.
+
+    Spec §7.2: turn player's queue drains first. >=2 entries open modal.
+    Each picked/auto-resolved trigger opens its own REACT window per §7.5.
+    """
+
+    def _build_state_with_paladins(self, library, count: int):
+        """Build a state with ``count`` wounded Fallen Paladins owned by P1.
+
+        All paladins are at current_health=30 (base 42, so heal +2 lands).
+        Positions are placed in column 2, starting at row 0 — deterministic.
+        """
+        paladin_id = library.get_numeric_id("fallen_paladin")
+        minions = []
+        board = Board.empty()
+        for i in range(count):
+            row = i
+            inst = MinionInstance(
+                instance_id=i,
+                card_numeric_id=paladin_id,
+                owner=PlayerSide.PLAYER_1,
+                position=(row, 2),
+                current_health=30,
+            )
+            minions.append(inst)
+            board = board.place(row, 2, i)
+        p1 = Player(
+            side=PlayerSide.PLAYER_1, hp=STARTING_HP,
+            current_mana=3, max_mana=3, hand=(), deck=(), grave=(),
+        )
+        p2 = Player(
+            side=PlayerSide.PLAYER_2, hp=STARTING_HP,
+            current_mana=3, max_mana=3, hand=(), deck=(), grave=(),
+        )
+        return GameState(
+            board=board, players=(p1, p2),
+            active_player_idx=0,
+            phase=TurnPhase.START_OF_TURN,
+            turn_number=3,
+            seed=42,
+            minions=tuple(minions),
+            next_minion_id=count,
+        )
+
+    def test_single_start_trigger_auto_resolves(self, library):
+        """1 trigger in turn queue → auto-resolves, no picker modal opens."""
+        from grid_tactics.react_stack import enter_start_of_turn
+
+        state = self._build_state_with_paladins(library, count=1)
+        result = enter_start_of_turn(state, library)
+
+        # Auto-resolved — picker modal never opened.
+        assert result.pending_trigger_picker_idx is None
+        # Queue drained.
+        assert result.pending_trigger_queue_turn == ()
+        assert result.pending_trigger_queue_other == ()
+        # Heal landed — paladin at 32 now.
+        healed = result.get_minion(0)
+        assert healed is not None
+        assert healed.current_health == 32
+        # React window opened for this single resolution (spec §7.5).
+        assert result.phase == TurnPhase.REACT
+        from grid_tactics.enums import ReactContext
+        assert result.react_context == ReactContext.AFTER_START_TRIGGER
+
+    def test_two_start_triggers_open_picker(self, library):
+        """2+ triggers in turn queue → pending_trigger_picker_idx set, modal opens."""
+        from grid_tactics.react_stack import enter_start_of_turn
+
+        state = self._build_state_with_paladins(library, count=2)
+        result = enter_start_of_turn(state, library)
+
+        # Modal picker opened for P1 (the active/turn player).
+        assert result.pending_trigger_picker_idx == 0
+        # Both triggers queued (nothing auto-resolved yet).
+        assert len(result.pending_trigger_queue_turn) == 2
+        assert result.pending_trigger_queue_other == ()
+        # Neither paladin healed yet — picker hasn't picked.
+        for i in range(2):
+            m = result.get_minion(i)
+            assert m is not None
+            assert m.current_health == 30
+
+    def test_trigger_pick_resolves_first_then_second(self, library):
+        """TRIGGER_PICK(0) resolves entry 0; singleton remainder auto-resolves next."""
+        from grid_tactics.action_resolver import resolve_action
+        from grid_tactics.actions import trigger_pick_action
+        from grid_tactics.react_stack import enter_start_of_turn
+
+        state = self._build_state_with_paladins(library, count=2)
+        state = enter_start_of_turn(state, library)
+        assert state.pending_trigger_picker_idx == 0
+        assert len(state.pending_trigger_queue_turn) == 2
+
+        # P1 picks the paladin at row 0 (queue_idx=0 in (row, col) order).
+        picked = resolve_action(state, trigger_pick_action(queue_idx=0), library)
+
+        # First paladin healed.
+        m0 = picked.get_minion(0)
+        assert m0 is not None
+        assert m0.current_health == 32
+        # Second paladin not healed yet.
+        m1 = picked.get_minion(1)
+        assert m1 is not None
+        assert m1.current_health == 30
+        # A REACT window opened for the resolved trigger.
+        assert picked.phase == TurnPhase.REACT
+        from grid_tactics.enums import ReactContext
+        assert picked.react_context == ReactContext.AFTER_START_TRIGGER
+        # Queue has 1 remaining; picker closed since singletons auto-resolve
+        # on next drain (which runs when this react window closes).
+        assert len(picked.pending_trigger_queue_turn) == 1
+        assert picked.pending_trigger_picker_idx is None
+
+    def test_decline_trigger_clears_queue(self, library):
+        """DECLINE_TRIGGER skips the rest of the picker's queue silently."""
+        from grid_tactics.action_resolver import resolve_action
+        from grid_tactics.actions import decline_trigger_action
+        from grid_tactics.react_stack import enter_start_of_turn
+
+        state = self._build_state_with_paladins(library, count=3)
+        state = enter_start_of_turn(state, library)
+        assert state.pending_trigger_picker_idx == 0
+        assert len(state.pending_trigger_queue_turn) == 3
+
+        # P1 declines — all 3 fizzle silently, no heals.
+        result = resolve_action(state, decline_trigger_action(), library)
+
+        # All paladins still at 30 (no heal fired).
+        for i in range(3):
+            m = result.get_minion(i)
+            assert m is not None
+            assert m.current_health == 30
+        # Queue cleared, picker closed.
+        assert result.pending_trigger_queue_turn == ()
+        assert result.pending_trigger_picker_idx is None
+
+    def test_two_triggers_second_fires_after_first(self, library):
+        """Regression test for drain-recheck ordering (Warning 8 fix).
+
+        With 2 simultaneous Start: triggers, pick the first; after the
+        per-resolution REACT window PASS-PASSes, the drain-recheck block
+        in resolve_react_stack MUST re-drain the queue before the phase
+        dispatch flips to ACTION. Otherwise the second trigger strands.
+        """
+        from grid_tactics.action_resolver import resolve_action
+        from grid_tactics.actions import pass_action, trigger_pick_action
+        from grid_tactics.react_stack import enter_start_of_turn
+
+        state = self._build_state_with_paladins(library, count=2)
+        state = enter_start_of_turn(state, library)
+        assert len(state.pending_trigger_queue_turn) == 2
+
+        # P1 picks entry 0 — first paladin heals, react window opens.
+        state = resolve_action(state, trigger_pick_action(queue_idx=0), library)
+        assert state.phase == TurnPhase.REACT
+        assert state.get_minion(0).current_health == 32
+        assert state.get_minion(1).current_health == 30
+
+        # P2 passes on the react window.
+        state = resolve_action(state, pass_action(), library)
+        # P1 passes on the counter-react — window closes.
+        state = resolve_action(state, pass_action(), library)
+
+        # Drain-recheck must fire BEFORE phase transition: second paladin's
+        # auto-resolve (singleton in queue now) heals it and opens another
+        # REACT window. After that window's PASS-PASS, the queue is empty
+        # and ACTION is reached via the normal dispatch.
+        # We drive further passes until we exit REACT.
+        safety = 0
+        while state.phase == TurnPhase.REACT and safety < 20:
+            state = resolve_action(state, pass_action(), library)
+            safety += 1
+        assert safety < 20, "Drain-recheck loop did not terminate"
+
+        # BOTH paladins healed — the second one fires correctly.
+        assert state.get_minion(0).current_health == 32
+        assert state.get_minion(1).current_health == 32
+        # Queues fully drained.
+        assert state.pending_trigger_queue_turn == ()
+        assert state.pending_trigger_queue_other == ()
+        assert state.pending_trigger_picker_idx is None
+
+    def test_legal_actions_during_picker(self, library):
+        """legal_actions during pending_trigger_picker returns TRIGGER_PICK(0..N-1) + DECLINE."""
+        from grid_tactics.legal_actions import legal_actions
+        from grid_tactics.react_stack import enter_start_of_turn
+
+        state = self._build_state_with_paladins(library, count=2)
+        state = enter_start_of_turn(state, library)
+        assert state.pending_trigger_picker_idx == 0
+
+        actions = legal_actions(state, library)
+        kinds = {a.action_type for a in actions}
+        assert ActionType.TRIGGER_PICK in kinds
+        assert ActionType.DECLINE_TRIGGER in kinds
+        # No other action types legal — this is a focused picker state.
+        assert kinds == {ActionType.TRIGGER_PICK, ActionType.DECLINE_TRIGGER}
+        # Two TRIGGER_PICK entries (one per queue slot), one DECLINE_TRIGGER.
+        picks = [a for a in actions if a.action_type == ActionType.TRIGGER_PICK]
+        assert len(picks) == 2
+        assert {p.card_index for p in picks} == {0, 1}

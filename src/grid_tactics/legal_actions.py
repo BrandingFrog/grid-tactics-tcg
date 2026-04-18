@@ -29,6 +29,7 @@ from grid_tactics.actions import (
     death_target_pick_action,
     decline_conjure_action,
     decline_post_move_attack_action,
+    decline_trigger_action,
     decline_tutor_action,
     decline_revive_action,
     draw_action,
@@ -39,6 +40,7 @@ from grid_tactics.actions import (
     revive_place_action,
     sacrifice_action,
     transform_action,
+    trigger_pick_action,
     tutor_select_action,
 )
 from grid_tactics.board import Board
@@ -101,6 +103,17 @@ def legal_actions(
     # REACT phase.
     if state.pending_death_target is not None:
         return _pending_death_target_actions(state, library)
+
+    # Phase 14.7-05: pending_trigger_picker (phase-agnostic): while the
+    # priority-queue modal is open, the ONLY legal actions are
+    # TRIGGER_PICK (one per entry in the picker owner's queue) and
+    # DECLINE_TRIGGER (skip remaining). Overrides normal phase-based
+    # enumeration — mirrors the pending_tutor pattern. This gate must
+    # come BEFORE the REACT-phase enumeration so the reacting player
+    # sees an empty legal-action set (they can't interact while the
+    # caster is picking).
+    if state.pending_trigger_picker_idx is not None:
+        return _pending_trigger_picker_actions(state, library)
 
     # Pending revive-place: player must pick a deploy cell for each revived
     # minion or DECLINE_REVIVE to stop early.
@@ -486,6 +499,41 @@ def _pending_tutor_actions(state: GameState) -> tuple[Action, ...]:
         for i in range(len(state.pending_tutor_matches))
     ]
     actions.append(decline_tutor_action())
+    return tuple(actions)
+
+
+# ---------------------------------------------------------------------------
+# Pending trigger picker enumeration (Phase 14.7-05)
+# ---------------------------------------------------------------------------
+
+
+def _pending_trigger_picker_actions(
+    state: GameState, library: CardLibrary,
+) -> tuple[Action, ...]:
+    """Enumerate the only-legal actions while the trigger picker modal is open.
+
+    Phase 14.7-05: When ``pending_trigger_picker_idx`` is set, the picker
+    owner's legal actions are TRIGGER_PICK(queue_idx) for each entry in
+    THEIR queue (turn queue if picker == active_player_idx else other
+    queue) plus DECLINE_TRIGGER to fizzle the rest.
+
+    The reacting player (non-picker) has NO legal actions here — the
+    server waits on the picker owner. Returning an empty tuple for the
+    non-picker keeps the client's legal-action masking correct.
+    """
+    picker = state.pending_trigger_picker_idx
+    if picker is None:
+        return ()
+    is_turn_queue = (picker == state.active_player_idx)
+    q = (
+        state.pending_trigger_queue_turn
+        if is_turn_queue
+        else state.pending_trigger_queue_other
+    )
+    actions: list[Action] = [
+        trigger_pick_action(queue_idx=i) for i in range(len(q))
+    ]
+    actions.append(decline_trigger_action())
     return tuple(actions)
 
 

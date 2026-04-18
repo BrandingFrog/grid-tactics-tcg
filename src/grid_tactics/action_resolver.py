@@ -608,6 +608,110 @@ def _apply_revive_place(
         )
 
 
+# ---------------------------------------------------------------------------
+# Phase 14.7-05: TRIGGER_PICK / DECLINE_TRIGGER handlers
+# ---------------------------------------------------------------------------
+
+
+def _apply_trigger_pick(
+    state: GameState, pick_idx: int, library: CardLibrary,
+) -> GameState:
+    """Pick one queued trigger (by queue index) and resolve it.
+
+    Phase 14.7-05: When pending_trigger_picker_idx is set and the picker
+    owner submits TRIGGER_PICK with card_index=queue_idx, this handler:
+      1. Removes the picked entry from the owner's queue.
+      2. Clears pending_trigger_picker_idx so the modal closes.
+      3. Resolves the picked trigger via
+         _resolve_trigger_and_open_react_window, which opens its own
+         REACT window. The window's close re-enters drain via the
+         drain-recheck hook in resolve_react_stack.
+
+    Works for both turn-queue (picker_idx == active_player_idx) and
+    other-queue (picker_idx == other_idx) — the is_turn_queue flag is
+    derived from the picker's identity.
+    """
+    from grid_tactics.react_stack import _resolve_trigger_and_open_react_window
+
+    picker = state.pending_trigger_picker_idx
+    if picker is None:
+        raise ValueError("TRIGGER_PICK submitted with no picker open")
+
+    is_turn_queue = (picker == state.active_player_idx)
+    q = (
+        state.pending_trigger_queue_turn
+        if is_turn_queue
+        else state.pending_trigger_queue_other
+    )
+    if pick_idx < 0 or pick_idx >= len(q):
+        raise ValueError(
+            f"Invalid TRIGGER_PICK index {pick_idx} for queue of length {len(q)}"
+        )
+
+    picked = q[pick_idx]
+    # Move the picked entry to the front of the queue so the shared helper
+    # _resolve_trigger_and_open_react_window (which pops index 0 after
+    # resolving) handles removal in exactly one place. This keeps the
+    # auto-resolve path (singleton in queue) and the picked-resolve path
+    # (2+ entries, picker chose one) symmetric — both funnel through the
+    # same pop-and-open logic.
+    reordered = (picked,) + q[:pick_idx] + q[pick_idx + 1:]
+    if is_turn_queue:
+        state = replace(state, pending_trigger_queue_turn=reordered)
+    else:
+        state = replace(state, pending_trigger_queue_other=reordered)
+
+    # Close the picker modal — _resolve_trigger_and_open_react_window
+    # opens its own REACT window, and the drain-recheck hook re-opens the
+    # modal if the queue still has 2+ entries after this resolution.
+    state = replace(state, pending_trigger_picker_idx=None)
+
+    return _resolve_trigger_and_open_react_window(
+        state, picked, is_turn_queue=is_turn_queue, library=library,
+    )
+
+
+def _apply_decline_trigger(
+    state: GameState, library: CardLibrary,
+) -> GameState:
+    """Decline the remaining triggers in the picker owner's queue.
+
+    Phase 14.7-05: DECLINE_TRIGGER clears ALL remaining entries in the
+    picker owner's queue (they fizzle silently — no effects fire, no
+    react windows open). The other-queue drain continues normally via
+    drain_pending_trigger_queue.
+
+    This is the "skip" escape hatch for situations where resolving more
+    triggers is undesirable (e.g. a cascading heal that would push past
+    lethal). Spec §7.3 grants the owner this option — the fizzled
+    effects simply don't happen.
+    """
+    from grid_tactics.react_stack import drain_pending_trigger_queue
+
+    picker = state.pending_trigger_picker_idx
+    if picker is None:
+        raise ValueError("DECLINE_TRIGGER submitted with no picker open")
+
+    is_turn_queue = (picker == state.active_player_idx)
+    if is_turn_queue:
+        state = replace(
+            state,
+            pending_trigger_queue_turn=(),
+            pending_trigger_picker_idx=None,
+        )
+    else:
+        state = replace(
+            state,
+            pending_trigger_queue_other=(),
+            pending_trigger_picker_idx=None,
+        )
+
+    # Re-enter drain — the other queue (if any) continues from where it
+    # left off; otherwise we fall through to whatever phase transition
+    # the prior react_return_phase encodes.
+    return drain_pending_trigger_queue(state, library)
+
+
 def _cast_magic(
     state: GameState,
     action: Action,
@@ -1505,6 +1609,30 @@ def resolve_action(
             raise ValueError(
                 "Pending revive: must REVIVE_PLACE or DECLINE_REVIVE"
             )
+
+    # Phase 14.7-05: pending_trigger_picker gate.
+    # When drain_pending_trigger_queue has opened the modal card-picker
+    # (pending_trigger_picker_idx is set), the ONLY legal actions are
+    # TRIGGER_PICK (from the picker owner, with card_index=queue_idx) or
+    # DECLINE_TRIGGER (skips the rest of the picker's queue).
+    #
+    # This gate MUST run before the REACT-phase dispatch: during the
+    # modal the phase may still be REACT (a prior trigger's window just
+    # closed) or may have been set by drain to an intermediate phase —
+    # either way, normal react-handler enumeration isn't valid here.
+    # Mirrors the pending_tutor / pending_conjure_deploy pattern.
+    if state.pending_trigger_picker_idx is not None:
+        if action.action_type == ActionType.TRIGGER_PICK:
+            if action.card_index is None:
+                raise ValueError(
+                    "TRIGGER_PICK requires card_index (queue index)"
+                )
+            return _apply_trigger_pick(state, action.card_index, library)
+        if action.action_type == ActionType.DECLINE_TRIGGER:
+            return _apply_decline_trigger(state, library)
+        raise ValueError(
+            "Pending trigger picker: only TRIGGER_PICK or DECLINE_TRIGGER are legal"
+        )
 
     # REACT phase: delegate to react handler
     if state.phase == TurnPhase.REACT:

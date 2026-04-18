@@ -187,6 +187,31 @@ def death_target_pick_action(target_pos: tuple[int, int]) -> Action:
     )
 
 
+def trigger_pick_action(queue_idx: int) -> Action:
+    """Create a TRIGGER_PICK action (Phase 14.7-05).
+
+    Only legal while ``state.pending_trigger_picker_idx`` is set. ``queue_idx``
+    is reused on the ``card_index`` field and indexes into the picker's
+    queue (pending_trigger_queue_turn if picker == active_player_idx else
+    pending_trigger_queue_other). Encoded on the integer action space by
+    reusing the PLAY_CARD slot space [0:N]; the encoder disambiguates from
+    PLAY_CARD via the pending state at decode time. Mirrors the 14.2
+    TUTOR_SELECT slot-reuse trick.
+    """
+    return Action(action_type=ActionType.TRIGGER_PICK, card_index=queue_idx)
+
+
+def decline_trigger_action() -> Action:
+    """Create a DECLINE_TRIGGER action (Phase 14.7-05).
+
+    Only legal while ``state.pending_trigger_picker_idx`` is set. Clears
+    the picker owner's remaining queue entries silently (they fizzle).
+    Encoded on slot 1001 (PASS); the encoder disambiguates via the pending
+    state.
+    """
+    return Action(action_type=ActionType.DECLINE_TRIGGER)
+
+
 def transform_action(
     minion_id: int,
     transform_target: str,

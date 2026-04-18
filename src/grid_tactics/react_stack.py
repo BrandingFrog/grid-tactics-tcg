@@ -27,7 +27,7 @@ from grid_tactics.enums import (
     TriggerType,
     TurnPhase,
 )
-from grid_tactics.game_state import GameState
+from grid_tactics.game_state import GameState, PendingTrigger
 from grid_tactics.minion import BURN_DAMAGE, MinionInstance
 from grid_tactics.types import AUTO_DRAW_ENABLED, MAX_REACT_STACK_DEPTH
 
@@ -235,94 +235,287 @@ def _has_triggers_for(
     return False
 
 
+def _enqueue_turn_phase_triggers(
+    state: GameState, library: CardLibrary, trigger: TriggerType, trigger_kind: str,
+) -> GameState:
+    """Collect simultaneous trigger effects for the active player's turn phase and enqueue them.
+
+    Phase 14.7-05: Instead of resolving ON_START_OF_TURN / ON_END_OF_TURN
+    effects inline in (row, col) order (pre-14.7-05 behavior), this helper
+    enqueues every matching (minion, effect) pair into
+    pending_trigger_queue_turn (for minions owned by the active player)
+    or pending_trigger_queue_other (for minions owned by the non-active
+    player — reserved; currently start/end triggers only fire for the
+    TURN player's minions per §7.1, so other-queue stays empty for
+    start/end. The other-queue wiring is still present for future
+    on-summon-by-opponent / on-death scenarios reused in 14.7-05b).
+
+    Fires AFTER the caller has bookended the phase transition
+    (enter_start_of_turn has already set phase=START_OF_TURN and ticked
+    burns). This helper DOES NOT resolve effects or open react windows —
+    ``drain_pending_trigger_queue`` below handles ordering + modal picker.
+
+    Ownership rule: only the TURN player's minions enqueue for
+    start/end-of-turn triggers. An enemy minion's Start: trigger fires
+    at ITS owner's next turn start — spec §7.1.
+    """
+    active_side = state.players[state.active_player_idx].side
+
+    turn_triggers: list[PendingTrigger] = []
+    other_triggers: list[PendingTrigger] = []
+
+    # Iterate minions in (row, col) order so the UNORDERED queue still has
+    # deterministic pre-pick order (the picker modal surfaces the queue
+    # order; we want it stable across runs for the same state).
+    ordered = sorted(state.minions, key=lambda m: (m.position[0], m.position[1]))
+    for m in ordered:
+        if m.current_health <= 0:
+            continue
+        # Start/end triggers only fire for the TURN player's minions.
+        if m.owner != active_side:
+            continue
+        card_def = library.get_by_id(m.card_numeric_id)
+        for eff_idx, effect in enumerate(card_def.effects):
+            if effect.trigger != trigger:
+                continue
+            owner_idx = 0 if m.owner == PlayerSide.PLAYER_1 else 1
+            pt = PendingTrigger(
+                trigger_kind=trigger_kind,
+                source_minion_id=m.instance_id,
+                source_card_numeric_id=m.card_numeric_id,
+                effect_idx=eff_idx,
+                owner_idx=owner_idx,
+                captured_position=m.position,
+                target_pos=None,
+            )
+            if owner_idx == state.active_player_idx:
+                turn_triggers.append(pt)
+            else:
+                other_triggers.append(pt)
+
+    if not turn_triggers and not other_triggers:
+        return state
+
+    # Append to existing queues so a re-drain triggered by a cascading
+    # phase transition doesn't clobber in-flight entries.
+    state = replace(
+        state,
+        pending_trigger_queue_turn=state.pending_trigger_queue_turn + tuple(turn_triggers),
+        pending_trigger_queue_other=state.pending_trigger_queue_other + tuple(other_triggers),
+    )
+    return state
+
+
 def fire_start_of_turn_triggers(
     state: GameState, library: CardLibrary,
 ) -> GameState:
-    """Fire ON_START_OF_TURN triggered effects for the current active player's minions.
+    """Enqueue ON_START_OF_TURN triggers into the priority queue + drain.
 
-    Ordering: (row, col) for determinism (14.7-05 replaces with priority queue
-    + modal picker for simultaneous triggers on the turn player's side).
-    Fires AFTER tick_status_effects (burn ticks) — burn is a status tick,
-    not a trigger.
+    Phase 14.7-05: Replaces the old inline (row, col) loop. Each matching
+    (minion, effect) pair enqueues a PendingTrigger; then
+    ``drain_pending_trigger_queue`` auto-resolves singletons or opens a
+    modal picker for 2+ simultaneous triggers on the same owner's side.
 
-    Only fires effects OWNED by the active player. An enemy minion's
-    Start: trigger does NOT fire at your turn start — it fires at ITS
-    owner's turn start.
+    Each trigger resolution (auto or picked) opens its own REACT window
+    tagged with ReactContext.AFTER_START_TRIGGER (spec §7.5 step 3). The
+    window's closing leads back through resolve_react_stack's drain-
+    recheck hook which re-calls drain_pending_trigger_queue if entries
+    remain.
 
-    Fizzle (14.7-06) is not yet implemented — effects resolve blindly
-    against their target. Newly-dead minions are routed through standard
-    cleanup.
+    Fizzle (14.7-06) is not yet implemented — captured_position preserves
+    SELF_OWNER targeting even if the source minion has since moved/died.
     """
-    from grid_tactics.effect_resolver import resolve_effect
-    from grid_tactics.action_resolver import (
-        _check_game_over, _cleanup_dead_minions,
+    state = _enqueue_turn_phase_triggers(
+        state, library, TriggerType.ON_START_OF_TURN, "start_of_turn",
     )
-
-    active_side = state.players[state.active_player_idx].side
-
-    ordered_ids = [
-        m.instance_id
-        for m in sorted(state.minions, key=lambda m: (m.position[0], m.position[1]))
-    ]
-    for inst_id in ordered_ids:
-        m = state.get_minion(inst_id)
-        if m is None:
-            continue
-        if m.owner != active_side:
-            continue
-        if m.current_health <= 0:
-            continue
-        card_def = library.get_by_id(m.card_numeric_id)
-        for effect in card_def.effects:
-            if effect.trigger != TriggerType.ON_START_OF_TURN:
-                continue
-            state = resolve_effect(
-                state, effect, m.position, m.owner, library, target_pos=None,
-            )
-
-    state = _cleanup_dead_minions(state, library)
-    state = _check_game_over(state)
-    return state
+    if (
+        not state.pending_trigger_queue_turn
+        and not state.pending_trigger_queue_other
+    ):
+        return state
+    return drain_pending_trigger_queue(state, library)
 
 
 def fire_end_of_turn_triggers(
     state: GameState, library: CardLibrary,
 ) -> GameState:
-    """Fire ON_END_OF_TURN triggered effects for the current active player's minions.
+    """Enqueue ON_END_OF_TURN triggers into the priority queue + drain.
 
-    Same ordering / ownership / fizzle caveats as fire_start_of_turn_triggers.
-    Fires BEFORE the end-of-turn react window opens.
+    Same machinery as fire_start_of_turn_triggers, but tags entries as
+    trigger_kind="end_of_turn" which drives ReactContext.BEFORE_END_OF_TURN
+    on the per-resolution react window.
+    """
+    state = _enqueue_turn_phase_triggers(
+        state, library, TriggerType.ON_END_OF_TURN, "end_of_turn",
+    )
+    if (
+        not state.pending_trigger_queue_turn
+        and not state.pending_trigger_queue_other
+    ):
+        return state
+    return drain_pending_trigger_queue(state, library)
+
+
+# ---------------------------------------------------------------------------
+# Phase 14.7-05: priority-queue drain + per-trigger react window opener
+# ---------------------------------------------------------------------------
+
+
+def drain_pending_trigger_queue(
+    state: GameState, library: CardLibrary,
+) -> GameState:
+    """Drain the pending-trigger queues in priority order.
+
+    Spec §7.2: the turn player's queue drains fully before the other
+    player's queue begins. Within each queue:
+      - >=2 entries → set pending_trigger_picker_idx so the UI opens the
+        modal card-picker (client reuses renderDeckBuilderCard). Control
+        returns to the caller; the picker's owner must submit a
+        TRIGGER_PICK or DECLINE_TRIGGER action next.
+      - exactly 1 entry → auto-resolve via
+        _resolve_trigger_and_open_react_window (no modal needed).
+      - 0 entries → advance to the other queue (if any) or exit.
+
+    Each auto-resolve or picked-resolve opens its OWN react window per
+    spec §7.5 step 3. The window's close re-enters this function via
+    resolve_react_stack's drain-recheck hook (see Step 3 of Task 2).
+
+    If the picker modal is already open (picker_idx set), this function
+    is a no-op — we wait for TRIGGER_PICK / DECLINE_TRIGGER to make
+    progress.
+    """
+    # If picker modal is already open, do not auto-advance — wait for
+    # TRIGGER_PICK / DECLINE_TRIGGER from the picker owner.
+    if state.pending_trigger_picker_idx is not None:
+        return state
+
+    # Short-circuit if the game has ended (e.g. a trigger killed a player).
+    if state.is_game_over:
+        return state
+
+    turn_q = state.pending_trigger_queue_turn
+    other_q = state.pending_trigger_queue_other
+    active_idx = state.active_player_idx
+    other_idx = 1 - active_idx
+
+    # Turn queue drains first (priority).
+    if len(turn_q) >= 2:
+        return replace(state, pending_trigger_picker_idx=active_idx)
+    if len(turn_q) == 1:
+        return _resolve_trigger_and_open_react_window(
+            state, turn_q[0], is_turn_queue=True, library=library,
+        )
+    if len(other_q) >= 2:
+        return replace(state, pending_trigger_picker_idx=other_idx)
+    if len(other_q) == 1:
+        return _resolve_trigger_and_open_react_window(
+            state, other_q[0], is_turn_queue=False, library=library,
+        )
+
+    # Both queues empty — drain complete, nothing to do.
+    return state
+
+
+def _resolve_trigger_and_open_react_window(
+    state: GameState,
+    trigger: PendingTrigger,
+    is_turn_queue: bool,
+    library: CardLibrary,
+) -> GameState:
+    """Resolve one queued trigger and open a REACT window for it (spec §7.5 step 3).
+
+    Steps:
+      1. Look up the card_def + effect by (source_card_numeric_id, effect_idx).
+      2. Resolve the effect via resolve_effect, using captured_position as
+         the source (SELF_OWNER / position-relative targeting works even
+         if the source minion has moved/died — true fizzle in 14.7-06).
+      3. Clean up any newly-dead minions and check game over.
+      4. Pop the resolved trigger from the appropriate queue.
+      5. Open a REACT window tagged with the trigger_kind's ReactContext.
+         The window's react_return_phase is preserved from the prior
+         state.react_return_phase so the phase-dispatch block in
+         resolve_react_stack returns to the correct phase when both
+         queues finally empty.
+
+    Returns state with phase=REACT (or game-over / unchanged if the
+    effect ended the game).
     """
     from grid_tactics.effect_resolver import resolve_effect
-    from grid_tactics.action_resolver import (
-        _check_game_over, _cleanup_dead_minions,
-    )
+    from grid_tactics.action_resolver import _cleanup_dead_minions, _check_game_over
 
-    active_side = state.players[state.active_player_idx].side
-
-    ordered_ids = [
-        m.instance_id
-        for m in sorted(state.minions, key=lambda m: (m.position[0], m.position[1]))
-    ]
-    for inst_id in ordered_ids:
-        m = state.get_minion(inst_id)
-        if m is None:
-            continue
-        if m.owner != active_side:
-            continue
-        if m.current_health <= 0:
-            continue
-        card_def = library.get_by_id(m.card_numeric_id)
-        for effect in card_def.effects:
-            if effect.trigger != TriggerType.ON_END_OF_TURN:
-                continue
-            state = resolve_effect(
-                state, effect, m.position, m.owner, library, target_pos=None,
+    card_def = library.get_by_id(trigger.source_card_numeric_id)
+    if trigger.effect_idx < 0 or trigger.effect_idx >= len(card_def.effects):
+        # Defensive: effect index out of range — drop the trigger silently.
+        if is_turn_queue:
+            state = replace(
+                state,
+                pending_trigger_queue_turn=state.pending_trigger_queue_turn[1:],
             )
+        else:
+            state = replace(
+                state,
+                pending_trigger_queue_other=state.pending_trigger_queue_other[1:],
+            )
+        return drain_pending_trigger_queue(state, library)
 
+    effect = card_def.effects[trigger.effect_idx]
+    caster_owner = PlayerSide.PLAYER_1 if trigger.owner_idx == 0 else PlayerSide.PLAYER_2
+
+    # Resolve the effect. 14.7-06 will add a fizzle check here (re-validate
+    # that the source minion is still alive and the captured_position is
+    # still valid).
+    state = resolve_effect(
+        state, effect, trigger.captured_position, caster_owner, library,
+        trigger.target_pos,
+    )
     state = _cleanup_dead_minions(state, library)
     state = _check_game_over(state)
-    return state
+    if state.is_game_over:
+        return state
+
+    # Pop the resolved trigger from the appropriate queue.
+    if is_turn_queue:
+        state = replace(
+            state,
+            pending_trigger_queue_turn=state.pending_trigger_queue_turn[1:],
+        )
+    else:
+        state = replace(
+            state,
+            pending_trigger_queue_other=state.pending_trigger_queue_other[1:],
+        )
+
+    # Pick the ReactContext tag for this trigger_kind.
+    if trigger.trigger_kind == "start_of_turn":
+        rc = ReactContext.AFTER_START_TRIGGER
+        # If return_phase not already set by an outer caller, inherit
+        # START_OF_TURN so the final phase-dispatch returns to ACTION.
+        default_return = TurnPhase.START_OF_TURN
+    elif trigger.trigger_kind == "end_of_turn":
+        rc = ReactContext.BEFORE_END_OF_TURN
+        default_return = TurnPhase.END_OF_TURN
+    elif trigger.trigger_kind == "on_death":
+        rc = ReactContext.AFTER_DEATH_EFFECT
+        default_return = state.react_return_phase or TurnPhase.ACTION
+    else:
+        rc = ReactContext.AFTER_ACTION
+        default_return = state.react_return_phase or TurnPhase.ACTION
+
+    # Preserve an existing react_return_phase if one is already in flight
+    # (e.g. we're nested inside an outer drain that originated from
+    # START_OF_TURN). Otherwise use the trigger-kind default.
+    new_return_phase = state.react_return_phase or default_return
+
+    return replace(
+        state,
+        phase=TurnPhase.REACT,
+        react_player_idx=1 - state.active_player_idx,
+        react_context=rc,
+        react_return_phase=new_return_phase,
+        # Ensure react_stack is empty for the new window (the drain pops
+        # from the queues, not from the react stack).
+        react_stack=(),
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -1091,6 +1284,40 @@ def resolve_react_stack(
             react_context=None,
             react_return_phase=None,
         )
+
+    # Phase 14.7-05: Drain-recheck.
+    #
+    # If a trigger resolution left entries in the pending_trigger queues
+    # (because we're mid-way through a multi-trigger drain), re-enter the
+    # drain BEFORE the return_phase dispatch flips the active player or
+    # advances phase. This is the critical ordering constraint captured
+    # in the plan's "Warning 8" fix:
+    #
+    #   LIFO loop runs → cleanup → is_game_over → DRAIN-RECHECK (here) →
+    #   return_phase dispatch (next block)
+    #
+    # Without the recheck, the dispatch could close the react window for
+    # trigger #1 and immediately advance to END_OF_TURN, leaving trigger
+    # #2 stranded in pending_trigger_queue_turn until the NEXT time the
+    # queue is touched — a silent correctness bug. The
+    # test_two_triggers_second_fires_after_first regression test in
+    # tests/test_react_stack.py asserts this ordering.
+    if (
+        state.pending_trigger_queue_turn
+        or state.pending_trigger_queue_other
+    ):
+        # Clear react bookkeeping from the closing window; the drain will
+        # open a NEW window (with its own context) for the next trigger.
+        state = replace(
+            state,
+            react_stack=(),
+            react_player_idx=None,
+            pending_action=None,
+            react_context=None,
+            # react_return_phase is preserved — the final-drain exit needs
+            # to know where to transition when both queues finally empty.
+        )
+        return drain_pending_trigger_queue(state, library)
 
     # Phase 14.7-02: Dispatch on ``react_return_phase`` — where did we
     # come from? Pre-14.7 callers didn't set this field so it's None,
