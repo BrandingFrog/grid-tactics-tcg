@@ -544,3 +544,167 @@ def test_slot_name_validation_accepts_valid() -> None:
 def test_slot_name_validation_non_string_raises() -> None:
     with pytest.raises(ValueError):
         SandboxSession._validate_slot_name(42)  # type: ignore[arg-type]
+
+
+# ---------------------------------------------------------------------------
+# Phase 14.7-04: Compound summon window state survives save/load round trip
+# ---------------------------------------------------------------------------
+
+
+def test_sandbox_saves_summon_declaration_state(
+    library: CardLibrary, isolated_slot_dir,
+) -> None:
+    """Window A (AFTER_SUMMON_DECLARATION) round-trips through save/load.
+
+    14.7-04 introduced summon_declaration originator entries on the react
+    stack. The GameState serializer (14.7-01) already speaks generic
+    origin_kind strings — this test pins that compound-window originator
+    state survives a full sandbox slot round trip.
+
+    Note: no current card has react_condition OPPONENT_PLAYS_MINION (that
+    lands in 14.7-07), so Window A on a pure minion deploy auto-drains in
+    a normal sandbox apply_action flow. We therefore synthesize the
+    Window A state via direct GameState construction + load_dict to
+    exercise the serializer/deserializer end-to-end without relying on
+    the sandbox auto-drain semantics.
+    """
+    from dataclasses import replace as _replace
+    from grid_tactics.board import Board
+    from grid_tactics.enums import PlayerSide, ReactContext, TurnPhase
+    from grid_tactics.game_state import GameState
+    from grid_tactics.player import Player
+    from grid_tactics.react_stack import ReactEntry
+    from grid_tactics.types import STARTING_HP
+
+    blue_nid = _find_numeric_id(library, "blue_diodebot")
+
+    # Hand-build a GameState that is stopped mid-Window-A.
+    p1 = Player(
+        side=PlayerSide.PLAYER_1, hp=STARTING_HP,
+        current_mana=0, max_mana=2, hand=(), deck=(), grave=(),
+    )
+    p2 = Player(
+        side=PlayerSide.PLAYER_2, hp=STARTING_HP,
+        current_mana=4, max_mana=4, hand=(), deck=(), grave=(),
+    )
+    originator = ReactEntry(
+        player_idx=0, card_index=-1, card_numeric_id=blue_nid,
+        target_pos=(1, 0),
+        is_originator=True, origin_kind="summon_declaration",
+    )
+    state = GameState(
+        board=Board.empty(), players=(p1, p2),
+        active_player_idx=0,
+        phase=TurnPhase.REACT,
+        turn_number=3, seed=42,
+        react_stack=(originator,),
+        react_player_idx=1,
+        react_context=ReactContext.AFTER_SUMMON_DECLARATION,
+        react_return_phase=TurnPhase.ACTION,
+    )
+
+    # Install the state in a session by load_dict-ing its serialized form.
+    s1 = SandboxSession(library, "a")
+    s1.load_dict({"state": state.to_dict(), "active_view_idx": 0})
+    assert s1.state.phase == TurnPhase.REACT
+    assert s1.state.react_context == ReactContext.AFTER_SUMMON_DECLARATION
+    assert s1.state.react_stack[0].origin_kind == "summon_declaration"
+
+    # Save + load into a fresh session through file-based slot persistence.
+    s1.save_to_slot("summon_decl_round_trip")
+
+    s2 = SandboxSession(library, "b")
+    s2.load_from_slot("summon_decl_round_trip")
+
+    # Compound-window state fully reconstructed.
+    assert s2.state.phase == TurnPhase.REACT
+    assert s2.state.react_context == ReactContext.AFTER_SUMMON_DECLARATION
+    assert s2.state.react_return_phase == TurnPhase.ACTION
+    assert len(s2.state.react_stack) == 1
+    origin = s2.state.react_stack[0]
+    assert origin.is_originator is True
+    assert origin.origin_kind == "summon_declaration"
+    assert origin.card_numeric_id == blue_nid
+    assert origin.target_pos == (1, 0)
+
+
+def test_sandbox_saves_summon_effect_state(
+    library: CardLibrary, isolated_slot_dir,
+) -> None:
+    """Window B (AFTER_SUMMON_EFFECT) round-trips through save/load.
+
+    Mirrors the Window A test but for a summon_effect originator that
+    carries source_minion_id + effect_payload. Exercises the full
+    serializer/deserializer path for compound-window Window B state.
+    """
+    from grid_tactics.board import Board
+    from grid_tactics.enums import PlayerSide, ReactContext, TurnPhase
+    from grid_tactics.game_state import GameState
+    from grid_tactics.minion import MinionInstance
+    from grid_tactics.player import Player
+    from grid_tactics.react_stack import ReactEntry
+    from grid_tactics.types import STARTING_HP
+
+    blue_nid = _find_numeric_id(library, "blue_diodebot")
+
+    # Blue Diodebot already on the board (landed via Window A PASS-PASS).
+    landed = MinionInstance(
+        instance_id=0, card_numeric_id=blue_nid,
+        owner=PlayerSide.PLAYER_1, position=(1, 0),
+        current_health=8,
+    )
+    board = Board.empty().place(1, 0, 0)
+
+    p1 = Player(
+        side=PlayerSide.PLAYER_1, hp=STARTING_HP,
+        current_mana=0, max_mana=2, hand=(), deck=(), grave=(),
+    )
+    p2 = Player(
+        side=PlayerSide.PLAYER_2, hp=STARTING_HP,
+        current_mana=5, max_mana=5, hand=(), deck=(), grave=(),
+    )
+    # ON_SUMMON effect index is 0 for Blue Diodebot (single tutor effect).
+    originator = ReactEntry(
+        player_idx=0, card_index=-1, card_numeric_id=blue_nid,
+        target_pos=None,
+        is_originator=True, origin_kind="summon_effect",
+        source_minion_id=0,  # the landed minion's instance_id
+        effect_payload=((0, None, int(PlayerSide.PLAYER_1)),),
+    )
+    state = GameState(
+        board=board, players=(p1, p2),
+        active_player_idx=0,
+        phase=TurnPhase.REACT,
+        turn_number=3, seed=42,
+        minions=(landed,), next_minion_id=1,
+        react_stack=(originator,),
+        react_player_idx=1,
+        react_context=ReactContext.AFTER_SUMMON_EFFECT,
+        react_return_phase=TurnPhase.ACTION,
+    )
+
+    s1 = SandboxSession(library, "a")
+    s1.load_dict({"state": state.to_dict(), "active_view_idx": 0})
+
+    s1.save_to_slot("summon_effect_round_trip")
+
+    s2 = SandboxSession(library, "b")
+    s2.load_from_slot("summon_effect_round_trip")
+
+    # Window B fully restored.
+    assert s2.state.phase == TurnPhase.REACT
+    assert s2.state.react_context == ReactContext.AFTER_SUMMON_EFFECT
+    assert s2.state.react_return_phase == TurnPhase.ACTION
+    assert len(s2.state.react_stack) == 1
+    origin = s2.state.react_stack[0]
+    assert origin.is_originator is True
+    assert origin.origin_kind == "summon_effect"
+    assert origin.card_numeric_id == blue_nid
+    assert origin.source_minion_id == 0
+    # effect_payload (the ON_SUMMON tutor index) carried over too.
+    assert origin.effect_payload is not None
+    assert len(origin.effect_payload) == 1
+    assert origin.effect_payload[0][0] == 0  # effect index
+    # And the landed minion survives the round trip.
+    assert len(s2.state.minions) == 1
+    assert s2.state.minions[0].card_numeric_id == blue_nid

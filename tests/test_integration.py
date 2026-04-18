@@ -624,3 +624,251 @@ class TestMultiPurposeMagicReactArm:
         # P2's react_effect fired: drew 1 card from deck to hand
         assert len(state.players[1].deck) == p2_deck_count_before_react - 1
         assert rat_id in state.players[1].hand
+
+
+# ---------------------------------------------------------------------------
+# Phase 14.7-04: Compound summon windows — end-to-end integration
+# ---------------------------------------------------------------------------
+
+
+class TestSummonCompoundWindowsIntegration:
+    """End-to-end coverage of the two-window summon dispatch (spec §4.2).
+
+    Complements the narrow unit tests in test_react_stack.py by exercising
+    full action flows through resolve_action including the pending_tutor
+    gate and end-of-turn tail.
+    """
+
+    def test_diodebot_tutor_through_compound_windows(self, library):
+        """P1 deploys Blue Diodebot → Window A passes → minion lands →
+        Window B passes → tutor pending → P1 picks Red Diodebot from deck.
+        """
+        from grid_tactics.actions import Action
+
+        blue_id = library.get_numeric_id("blue_diodebot")
+        red_id = library.get_numeric_id("red_diodebot")
+
+        state = _make_state(
+            p1_hand=(blue_id,),
+            p1_deck=(red_id,),
+            p1_mana=5,
+        )
+
+        # Deploy Blue — Window A opens
+        state = resolve_action(
+            state, play_card_action(card_index=0, position=(1, 0)), library,
+        )
+        assert state.phase == TurnPhase.REACT
+        assert state.react_stack[0].origin_kind == "summon_declaration"
+
+        # P2 passes Window A → minion lands + Window B opens
+        state = resolve_action(state, pass_action(), library)
+        assert state.phase == TurnPhase.REACT
+        assert state.react_stack[0].origin_kind == "summon_effect"
+        assert len(state.minions) == 1  # Blue landed
+
+        # P2 passes Window B → tutor fires → pending_tutor state for P1
+        state = resolve_action(state, pass_action(), library)
+        assert state.phase == TurnPhase.ACTION
+        assert state.pending_tutor_player_idx == 0  # P1 must pick
+
+        # P1 picks Red
+        state = resolve_action(
+            state,
+            Action(action_type=ActionType.TUTOR_SELECT, card_index=0),
+            library,
+        )
+
+        # Red moved from deck to hand; pending_tutor cleared
+        assert state.pending_tutor_player_idx is None
+        assert red_id in state.players[0].hand
+        assert red_id not in state.players[0].deck
+
+    def test_prohibition_on_window_a_negates_full_summon_and_tutor(self, library):
+        """P2 plays Prohibition on Blue Diodebot's Window A.
+
+        Both fires are forfeit: minion does NOT land, tutor does NOT fire,
+        mana does NOT refund.
+        """
+        blue_id = library.get_numeric_id("blue_diodebot")
+        red_id = library.get_numeric_id("red_diodebot")
+        prohibition_id = library.get_numeric_id("prohibition")
+
+        state = _make_state(
+            p1_hand=(blue_id,),
+            p1_deck=(red_id,),
+            p1_mana=5,
+            p2_hand=(prohibition_id,),
+            p2_mana=5,
+        )
+
+        # P1 deploys Blue → Window A
+        state = resolve_action(
+            state, play_card_action(card_index=0, position=(1, 0)), library,
+        )
+        # P2 plays Prohibition on Window A
+        state = resolve_action(state, play_react_action(card_index=0), library)
+        # P1 passes → resolve LIFO: Prohibition negates summon_declaration
+        state = resolve_action(state, pass_action(), library)
+
+        # Minion did NOT land
+        assert len(state.minions) == 0
+        # Tutor did NOT fire
+        assert state.pending_tutor_player_idx is None
+        assert red_id in state.players[0].deck
+        assert red_id not in state.players[0].hand
+        # Mana stayed spent (2 for Blue Diodebot, 4 for Prohibition)
+        assert state.players[0].current_mana == 5 - 2
+        assert state.players[1].current_mana == 5 - 4
+        # Turn advanced (after-action path)
+        assert state.phase == TurnPhase.ACTION
+        assert state.active_player_idx == 1
+
+    def test_prohibition_on_window_b_preserves_minion_cancels_tutor(self, library):
+        """P2 passes Window A (minion lands), then Prohibitions Window B.
+
+        Minion stays on board; tutor is cancelled.
+        """
+        blue_id = library.get_numeric_id("blue_diodebot")
+        red_id = library.get_numeric_id("red_diodebot")
+        prohibition_id = library.get_numeric_id("prohibition")
+
+        state = _make_state(
+            p1_hand=(blue_id,),
+            p1_deck=(red_id,),
+            p1_mana=5,
+            p2_hand=(prohibition_id,),
+            p2_mana=5,
+        )
+
+        # P1 deploys Blue, P2 passes Window A → minion lands + Window B opens
+        state = resolve_action(
+            state, play_card_action(card_index=0, position=(1, 0)), library,
+        )
+        state = resolve_action(state, pass_action(), library)
+        # P2 plays Prohibition on Window B
+        state = resolve_action(state, play_react_action(card_index=0), library)
+        # P1 passes → Prohibition negates summon_effect
+        state = resolve_action(state, pass_action(), library)
+
+        # Minion STAYS on board
+        assert len(state.minions) == 1
+        assert state.minions[0].card_numeric_id == blue_id
+        # Tutor did NOT fire
+        assert state.pending_tutor_player_idx is None
+        assert red_id in state.players[0].deck
+        # Prohibition in P2's grave
+        assert prohibition_id in state.players[1].grave
+
+    def test_eclipse_shade_self_burn_fires_after_land(self, library):
+        """Eclipse Shade's on_summon self-burn applies to itself after both windows drain.
+
+        Shade enters play is_burning=True. With no Prohibition, both windows
+        pass naturally.
+        """
+        shade_id = library.get_numeric_id("eclipse_shade")
+
+        state = _make_state(
+            p1_hand=(shade_id,),
+            p1_mana=5,
+        )
+
+        # P1 deploys Shade
+        state = resolve_action(
+            state, play_card_action(card_index=0, position=(1, 0)), library,
+        )
+        # P2 passes Window A → Shade lands + Window B opens
+        state = resolve_action(state, pass_action(), library)
+        # P2 passes Window B → self-burn applies
+        state = resolve_action(state, pass_action(), library)
+
+        # Shade is on board and burning
+        assert len(state.minions) == 1
+        shade = state.minions[0]
+        assert shade.card_numeric_id == shade_id
+        assert shade.is_burning is True
+        # Turn advanced
+        assert state.phase == TurnPhase.ACTION
+        assert state.active_player_idx == 1
+
+
+class TestRandomGamesDoNotCrash:
+    """Deterministic random-agent games through the compound-window pipeline.
+
+    Smoke-checks that the 14.7-04 refactor doesn't introduce infinite loops,
+    illegal-state transitions, or crashes across varied deck interactions.
+    """
+
+    def test_random_games_with_compound_windows_do_not_crash(self, library):
+        """Drive 30 deterministic games with a first-legal-action agent.
+
+        Uses a realistic starter hand/deck + advance_to_next_turn helper so
+        START/END triggers resolve, summon windows open and close, and the
+        turn state machine cycles fully. Asserts games either end (game_over)
+        or plateau — no exceptions, no wedge.
+        """
+        import random
+        from grid_tactics.legal_actions import legal_actions
+        from grid_tactics.react_stack import advance_to_next_turn
+
+        # A curated deck of cards that exercise multiple effect paths and
+        # deployment types — Diodebot tutors (pending_tutor through Window B),
+        # Gargoyle compound effects, plain rats, magic cards, etc.
+        deck_card_ids = [
+            "rat", "rat", "rat", "rat",
+            "blue_diodebot", "red_diodebot", "green_diodebot",
+            "eclipse_shade",
+            "prohibition", "prohibition",
+            "acidic_rain",
+            "rathopper", "rathopper",
+            "pyre_archer", "giant_rat",
+        ]
+        deck_nids = tuple(library.get_numeric_id(c) for c in deck_card_ids)
+
+        crashed = []
+        for seed in range(30):
+            rng = random.Random(seed)
+            deck_p1 = tuple(rng.sample(deck_nids, len(deck_nids)))
+            deck_p2 = tuple(rng.sample(deck_nids, len(deck_nids)))
+
+            p1 = Player(
+                side=PlayerSide.PLAYER_1, hp=STARTING_HP,
+                current_mana=5, max_mana=5,
+                hand=deck_p1[:3], deck=deck_p1[3:], grave=(),
+            )
+            p2 = Player(
+                side=PlayerSide.PLAYER_2, hp=STARTING_HP,
+                current_mana=5, max_mana=5,
+                hand=deck_p2[:3], deck=deck_p2[3:], grave=(),
+            )
+            state = GameState(
+                board=Board.empty(), players=(p1, p2),
+                active_player_idx=0,
+                phase=TurnPhase.ACTION,
+                turn_number=3,
+                seed=seed,
+            )
+
+            try:
+                for _ in range(150):
+                    if state.is_game_over:
+                        break
+                    # If we're in a transient non-ACTION phase (START_OF_TURN /
+                    # END_OF_TURN / REACT with no interesting play), drive through.
+                    if state.phase in (TurnPhase.START_OF_TURN, TurnPhase.END_OF_TURN):
+                        state = advance_to_next_turn(state, library)
+                        continue
+                    legals = legal_actions(state, library)
+                    if not legals:
+                        # Fatigue bleed — submit PASS
+                        state = resolve_action(state, pass_action(), library)
+                        continue
+                    # Prefer non-REACT "play card" actions first to exercise
+                    # the compound-window pipeline, otherwise take the first legal.
+                    play_actions = [a for a in legals if a.action_type == ActionType.PLAY_CARD]
+                    action = play_actions[0] if play_actions else legals[0]
+                    state = resolve_action(state, action, library)
+            except Exception as exc:
+                crashed.append((seed, repr(exc)))
+
+        assert not crashed, f"Random agent crashed in {len(crashed)} games: {crashed[:3]}"
