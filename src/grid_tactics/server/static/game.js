@@ -3232,11 +3232,16 @@ function _playSacShatter(job, done) {
         fragEls.push(frag);
     }
 
+    // A small tilt feels like momentum — pick a sign based on jump
+    // direction so the rotation leans INTO the enemy face.
+    var tiltMid = (ctx.jumpDx >= 0 ? 1 : -1) * 8;
+    var tiltEnd = (ctx.jumpDx >= 0 ? 1 : -1) * 14;
+
     // Kick beat 1+2 on the next frame pair.
     requestAnimationFrame(function() { requestAnimationFrame(function() {
         flash.style.opacity = '1';
         flash.style.transform = 'scale(1.8)';
-        jumper.style.transform = 'translate(' + (ctx.jumpDx * 0.6) + 'px,' + (ctx.jumpDy * 0.6) + 'px) scale(1.15)';
+        jumper.style.transform = 'translate(' + (ctx.jumpDx * 0.6) + 'px,' + (ctx.jumpDy * 0.6) + 'px) scale(1.15) rotate(' + tiltMid + 'deg)';
     }); });
 
     // Fade the flash out fast — a brief blink that seeds the jump.
@@ -3248,7 +3253,7 @@ function _playSacShatter(job, done) {
     // Mid-arc: pop the jumper, launch the shards.
     setTimeout(function() {
         jumper.style.transition = 'transform 200ms ease-out,opacity 200ms ease-out,filter 200ms ease-out';
-        jumper.style.transform = 'translate(' + (ctx.jumpDx * 0.65) + 'px,' + (ctx.jumpDy * 0.65) + 'px) scale(1.45)';
+        jumper.style.transform = 'translate(' + (ctx.jumpDx * 0.65) + 'px,' + (ctx.jumpDy * 0.65) + 'px) scale(1.45) rotate(' + tiltEnd + 'deg)';
         jumper.style.opacity = '0';
         jumper.style.filter = 'brightness(2) saturate(1.3)';
         fragEls.forEach(function(f) {
