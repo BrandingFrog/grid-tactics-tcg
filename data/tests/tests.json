@@ -10,6 +10,25 @@
     },
     "tests": [
         {
+            "id": "prohibition-react-chain",
+            "title": "React chain — Prohibition vs Prohibition, 3 deep",
+            "instructions": "Both players have plenty of mana and three Prohibitions each. You'll drive both sides via the 'Controlling' toggle in the sandbox sidebar.\n\n1. Controlling P1, click Acidic Rain in P1's hand and confirm the cast (2nd click).\n2. The spell stage shows [Acidic Rain] ▶ [?]. Toggle Controlling → P2.\n3. Click Prohibition in P2's hand. The stage should push Acidic Rain LEFT off-screen and slide Prohibition into the centre with a fresh [?] slot.\n4. Toggle Controlling → P1. Click Prohibition in P1's hand. Another slide.\n5. Toggle Controlling → P2. Click Prohibition in P2's hand. Another slide.\n6. Toggle Controlling → P1. No Prohibition left — click the Skip/Pass button in the react window to close the stack.",
+            "expected": "The spell stage animates a slide-left / slide-in-right each time a react is added. The '?' resets between reacts. Once the stack resolves (LIFO): the topmost Prohibition negates the second, the second negates the first, the first negates Acidic Rain. No minion ends up burning, all 4 cards (Acidic Rain + 3 Prohibitions) land in the Grave piles (Acidic Rain + P1's 2 Prohibitions in P1 grave, P2's 1 Prohibition in P2 grave). No HP damage popup — the spell was negated.",
+            "setup": [
+                {"op": "reset"},
+                {"op": "set_player", "player_idx": 0, "field": "current_mana", "value": 20},
+                {"op": "set_player", "player_idx": 0, "field": "max_mana", "value": 20},
+                {"op": "set_player", "player_idx": 1, "field": "current_mana", "value": 20},
+                {"op": "set_player", "player_idx": 1, "field": "max_mana", "value": 20},
+                {"op": "add_to_hand", "player_idx": 0, "card_id": "acidic_rain"},
+                {"op": "add_to_hand", "player_idx": 0, "card_id": "prohibition"},
+                {"op": "add_to_hand", "player_idx": 1, "card_id": "prohibition"},
+                {"op": "add_to_hand", "player_idx": 1, "card_id": "prohibition"},
+                {"op": "place", "player_idx": 1, "card_id": "red_diodebot", "row": 1, "col": 2},
+                {"op": "set_active", "player_idx": 0}
+            ]
+        },
+        {
             "id": "sacrifice-transcend-animation",
             "title": "Sacrifice — jumper leaps, shatters mid-arc (default visual)",
             "instructions": "1. P1's Common Rat is pre-placed on row 4 — ready to jump off.\n2. Click the Rat to select it.\n3. Click the Sacrifice action button.",
