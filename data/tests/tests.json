@@ -59,6 +59,20 @@
             ]
         },
         {
+            "id": "spell-stage-center-visual",
+            "title": "Spell cast center stage — magic card appears in centre with ▶ ? slot",
+            "instructions": "1. Play Dark Matter Stash from P1's hand (5 mana).\n2. Watch the center of the screen immediately after.",
+            "expected": "A giant Dark Matter Stash appears in the middle of the screen with a cyan ▶ arrow and a '?' slot to its right. After roughly 1 second the '?' flips to a green 👍 (thumbs-up) and the whole overlay fades out.",
+            "setup": [
+                {"op": "reset"},
+                {"op": "set_player", "player_idx": 0, "field": "current_mana", "value": 20},
+                {"op": "set_player", "player_idx": 0, "field": "max_mana", "value": 20},
+                {"op": "place", "player_idx": 0, "card_id": "gargoyle_sorceress", "row": 3, "col": 2},
+                {"op": "add_to_hand", "player_idx": 0, "card_id": "dark_matter_stash"},
+                {"op": "set_active", "player_idx": 0}
+            ]
+        },
+        {
             "id": "matter-possessed-hp-cost",
             "title": "Matter Possessed — Cost: Deal 25🤍 to own face",
             "instructions": "1. Hover Matter Possessed in P1's hand and confirm the cost line reads 'Cost: Deal 25🤍 to own face'.\n2. P1 HP is 30 and mana is 1.\n3. Play Matter Possessed onto any empty tile in P1's back two rows.",

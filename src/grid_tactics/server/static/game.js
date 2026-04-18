@@ -2949,6 +2949,14 @@ function onStateUpdate(data) {
     // applyStateFrame runs, the slot is gone.
     var flyJobs = deriveCardFlyJobs(prev, next);
 
+    // Spell-cast center stage. Detect before apply because we look at the
+    // grave/react_stack diff; trigger after a short tick so the new frame
+    // is on screen first.
+    var spellNid = detectSpellCast(prev, next);
+    if (spellNid != null) {
+        setTimeout(function() { _showSpellStage(spellNid); }, 0);
+    }
+
     // Non-action transitions (noop with no meaningful diff) bypass the queue
     // entirely. This keeps react-window open/close, tutor-modal open/close,
     // turn-change banners, and passive state refreshes instantaneous.
@@ -2979,6 +2987,155 @@ function onStateUpdate(data) {
         dj2.stateApplied = true;
         enqueueAnimation(dj2);
     }
+}
+
+// ============================================================
+// Spell-cast center stage: when a magic or react is cast, show a
+// giant [card art] ▶ [? / 👍] overlay in the middle of the screen.
+// After 1s of react-window idleness the ? flips to 👍 and the stage
+// fades; a new react landing before then slides the current card
+// off-screen to the left and brings the new one in from the right.
+// ============================================================
+var _spellStage = {
+    currentNid: null,
+    cardEl: null,
+    thumbsTimer: null,
+    exitTimer: null,
+};
+
+function _spellStageEls() {
+    return {
+        root: document.getElementById('spell-stage'),
+        card: document.getElementById('spell-stage-card'),
+        react: document.getElementById('spell-stage-react'),
+    };
+}
+
+function _showSpellStage(numericId) {
+    var els = _spellStageEls();
+    if (!els.root || !els.card || !els.react) return;
+    var def = (cardDefs && cardDefs[numericId]) ||
+              (window.sandboxCardDefs && window.sandboxCardDefs[numericId]);
+    if (!def) return;
+
+    // Same card re-pushed — just reset timers, don't re-animate.
+    if (_spellStage.currentNid === numericId && !els.root.hidden) {
+        _resetSpellStageTimers();
+        _armSpellStageThumbs();
+        return;
+    }
+
+    _clearSpellStageTimers();
+
+    // Slide the previous card out to the left, then bring the new one in.
+    var existing = els.card.firstChild;
+    if (existing) {
+        existing.classList.add('exiting-left');
+        var oldCard = existing;
+        setTimeout(function() {
+            if (oldCard.parentNode) oldCard.parentNode.removeChild(oldCard);
+        }, 380);
+    }
+
+    var cardInner = document.createElement('div');
+    cardInner.innerHTML = renderCardFrame(def, {
+        context: 'tooltip',
+        numericId: numericId,
+        interactive: false,
+        showReactDeploy: false,
+    });
+    els.card.appendChild(cardInner.firstChild);
+    els.card.style.position = 'relative';
+
+    _spellStage.currentNid = numericId;
+    els.root.hidden = false;
+    els.root.classList.remove('exit');
+    els.root.classList.remove('enter');
+    // Force a reflow then re-add for the enter animation to retrigger.
+    void els.root.offsetWidth;
+    els.root.classList.add('enter');
+
+    // React slot back to waiting state.
+    els.react.textContent = '?';
+    els.react.classList.remove('confirmed');
+
+    _armSpellStageThumbs();
+}
+
+function _armSpellStageThumbs() {
+    _spellStage.thumbsTimer = setTimeout(function() {
+        var els = _spellStageEls();
+        if (!els.react) return;
+        els.react.textContent = '👍';
+        els.react.classList.add('confirmed');
+        // Linger briefly then fade out.
+        _spellStage.exitTimer = setTimeout(_hideSpellStage, 900);
+    }, 1000);
+}
+
+function _resetSpellStageTimers() {
+    _clearSpellStageTimers();
+}
+
+function _clearSpellStageTimers() {
+    if (_spellStage.thumbsTimer) { clearTimeout(_spellStage.thumbsTimer); _spellStage.thumbsTimer = null; }
+    if (_spellStage.exitTimer) { clearTimeout(_spellStage.exitTimer); _spellStage.exitTimer = null; }
+}
+
+function _hideSpellStage() {
+    _clearSpellStageTimers();
+    var els = _spellStageEls();
+    if (!els.root) return;
+    els.root.classList.add('exit');
+    setTimeout(function() {
+        els.root.hidden = true;
+        els.root.classList.remove('exit');
+        els.root.classList.remove('enter');
+        if (els.card) els.card.innerHTML = '';
+        _spellStage.currentNid = null;
+    }, 360);
+}
+
+// Detect spell-cast events from a prev→next state transition. Fires the
+// stage for any new magic/react card that just entered grave or the top
+// of the react_stack. Returns the last-detected nid (for chain display).
+function detectSpellCast(prev, next) {
+    if (!next) return null;
+    var nid = null;
+
+    // 1) New top of react_stack → that react was just played.
+    var prevStack = (prev && prev.react_stack) || [];
+    var nextStack = (next && next.react_stack) || [];
+    if (nextStack.length > prevStack.length) {
+        var entry = nextStack[nextStack.length - 1];
+        if (entry && entry.card_numeric_id != null) nid = entry.card_numeric_id;
+    }
+
+    // 2) Otherwise, compare graves for a newly-landed MAGIC/REACT card.
+    if (nid == null && prev && next.players) {
+        for (var i = 0; i < next.players.length; i++) {
+            var prevG = (prev.players && prev.players[i] && prev.players[i].grave) || [];
+            var nextG = (next.players[i] && next.players[i].grave) || [];
+            if (nextG.length <= prevG.length) continue;
+            // Multiset diff — which nids entered grave this step?
+            var prevCnt = {};
+            for (var p = 0; p < prevG.length; p++) prevCnt[prevG[p]] = (prevCnt[prevG[p]] || 0) + 1;
+            for (var q = 0; q < nextG.length; q++) {
+                var gid = nextG[q];
+                if (prevCnt[gid] > 0) { prevCnt[gid] -= 1; continue; }
+                // gid is new this step — is it magic or react?
+                var def = (cardDefs && cardDefs[gid]) ||
+                          (window.sandboxCardDefs && window.sandboxCardDefs[gid]);
+                if (def && (def.card_type === 1 || def.card_type === 2)) {
+                    nid = gid;
+                    break;
+                }
+            }
+            if (nid != null) break;
+        }
+    }
+
+    return nid;
 }
 
 // Diff hand → grave / exhaust transitions and emit card_fly jobs.
@@ -5844,10 +6001,20 @@ function _wireTestsOnce() {
         var pass = document.getElementById('tests-btn-pass');
         var fail = document.getElementById('tests-btn-fail');
         var skip = document.getElementById('tests-btn-skip');
+        var reset = document.getElementById('tests-btn-reset');
         var exitBtn = document.getElementById('tests-exit');
         if (pass) pass.addEventListener('click', function() { _submitTestResult('pass'); });
         if (fail) fail.addEventListener('click', function() { _submitTestResult('fail'); });
         if (skip) skip.addEventListener('click', function() { _submitTestResult('skip'); });
+        if (reset) reset.addEventListener('click', function() {
+            // Re-run the current test's setup without consuming the slot —
+            // lets the user retry after mis-clicking.
+            if (_testsState.currentId) {
+                socket.emit('tests_load', { id: _testsState.currentId });
+            } else if (_testsState.list.length > 0) {
+                _loadCurrentTest();
+            }
+        });
         if (exitBtn) exitBtn.addEventListener('click', function() { showScreen('screen-sandbox'); });
     }
     if (!_testsState.wiredHandlers && socket) {
@@ -5997,6 +6164,9 @@ function setupSandboxSocketHandlers() {
         var flyJobs = (sandboxMode && prevForFly)
             ? deriveCardFlyJobs(prevForFly, payload.state)
             : [];
+        var spellStageNid = (sandboxMode && prevForFly)
+            ? detectSpellCast(prevForFly, payload.state)
+            : null;
 
         sandboxState = payload.state;
         sandboxLegalActions = payload.legal_actions || [];
@@ -6026,6 +6196,9 @@ function setupSandboxSocketHandlers() {
         // renderSandbox() replaced it.
         for (var _fi = 0; _fi < flyJobs.length; _fi++) {
             enqueueAnimation(flyJobs[_fi]);
+        }
+        if (spellStageNid != null) {
+            setTimeout(function() { _showSpellStage(spellStageNid); }, 0);
         }
     });
     // === SANDBOX-STATE-HANDLER-END ===

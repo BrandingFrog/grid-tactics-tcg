@@ -593,6 +593,15 @@
        Moved to body-level in Phase 14.6 so it can open from either
        #screen-game or #screen-sandbox (previously nested inside
        #screen-game, which hid it when the sandbox screen was active). -->
+  <!-- Spell cast center stage — shows a giant preview of the card being
+       cast plus a waiting-for-react slot. Created/torn down by the
+       spell-stage module in game.js. Starts hidden. -->
+  <div id="spell-stage" class="spell-stage" hidden>
+    <div class="spell-stage-card" id="spell-stage-card"></div>
+    <div class="spell-stage-arrow">▶</div>
+    <div class="spell-stage-react" id="spell-stage-react">?</div>
+  </div>
+
   <!-- Tests screen: empty placeholder. The tests flow piggybacks on the
        sandbox board + rendering; showScreen('screen-tests') keeps
        #screen-sandbox active beneath and shows the overlay above. -->
@@ -636,6 +645,7 @@
           <button class="tests-btn tests-btn-pass" id="tests-btn-pass">✓ Pass</button>
           <button class="tests-btn tests-btn-fail" id="tests-btn-fail">✗ Fail</button>
           <button class="tests-btn tests-btn-skip" id="tests-btn-skip">⟳ Skip</button>
+          <button class="tests-btn tests-btn-reset" id="tests-btn-reset" title="Reload this scenario from scratch">↺ Reset</button>
         </div>
       </div>
       <div class="tests-summary" id="tests-summary" hidden></div>
