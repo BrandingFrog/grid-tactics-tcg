@@ -2167,6 +2167,9 @@ function playAnimation(job, done) {
         case 'hp_damage_popup':
             playHpDamagePopup(job, done);
             return;
+        case 'sacrifice_transcend':
+            playSacrificeTranscendAnimation(job, done);
+            return;
         case 'noop':
         default:
             setTimeout(done, 0);
@@ -3055,6 +3058,107 @@ function playHpDamagePopup(job, done) {
 }
 
 // ============================================================
+// Sacrifice transcend animation: the minion morphs into a purple-
+// outlined jumper silhouette, leaps toward the enemy HP display, and
+// fades out. The HP damage popup fires in parallel via the normal
+// derivePlayerHpDeltaAnims pipeline.
+// ============================================================
+var SACRIFICE_JUMPER_SVG = (
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="-50 -20 300 290" width="100%" height="100%">'
+    + '<defs><filter id="sjglow" x="-50%" y="-50%" width="200%" height="200%">'
+    + '<feMorphology in="SourceAlpha" operator="dilate" radius="3" result="wR"/>'
+    + '<feFlood flood-color="#ffffff" result="wF"/>'
+    + '<feComposite in="wF" in2="wR" operator="in" result="wL"/>'
+    + '<feGaussianBlur in="wR" stdDeviation="8" result="wB"/>'
+    + '<feFlood flood-color="#ffffff" result="wF2"/>'
+    + '<feComposite in="wF2" in2="wB" operator="in" result="wG"/>'
+    + '<feMorphology in="SourceAlpha" operator="dilate" radius="1" result="pR"/>'
+    + '<feFlood flood-color="#b347ff" result="pF"/>'
+    + '<feComposite in="pF" in2="pR" operator="in" result="pL"/>'
+    + '<feGaussianBlur in="pR" stdDeviation="3" result="pB"/>'
+    + '<feFlood flood-color="#b347ff" result="pF2"/>'
+    + '<feComposite in="pF2" in2="pB" operator="in" result="pG"/>'
+    + '<feMerge>'
+    + '<feMergeNode in="wG"/><feMergeNode in="wG"/><feMergeNode in="wL"/>'
+    + '<feMergeNode in="pG"/><feMergeNode in="pG"/><feMergeNode in="pL"/>'
+    + '<feMergeNode in="SourceGraphic"/>'
+    + '</feMerge></filter></defs>'
+    + '<g transform="rotate(-15 100 100)" fill="#111" filter="url(#sjglow)">'
+    + '<ellipse cx="100" cy="28" rx="36" ry="36"/>'
+    + '<polygon points="86,52 114,52 116,74 84,74"/>'
+    + '<polygon points="72,68 128,68 124,108 118,122 124,134 76,134 82,122 76,108"/>'
+    + '<polygon points="86,70 29,22 15,42 76,82"/>'
+    + '<circle cx="18" cy="26" r="22"/>'
+    + '<polygon points="114,70 171,22 185,42 124,82"/>'
+    + '<circle cx="182" cy="26" r="22"/>'
+    + '<polygon points="78,132 94,132 40,198 20,184"/>'
+    + '<polygon points="106,132 122,132 180,184 160,198"/>'
+    + '<g transform="translate(30 191) rotate(30)"><ellipse cx="-20" cy="0" rx="32" ry="18"/></g>'
+    + '<g transform="translate(170 191) rotate(-30)"><ellipse cx="20" cy="0" rx="32" ry="18"/></g>'
+    + '</g></svg>'
+);
+
+function playSacrificeTranscendAnimation(job, done) {
+    var pos = job.payload && job.payload.pos;
+    if (!pos) { setTimeout(done, 0); return; }
+
+    var tile = document.querySelector(
+        '.board-cell[data-row="' + pos[0] + '"][data-col="' + pos[1] + '"]');
+    if (!tile) { setTimeout(done, 0); return; }
+
+    var minionEl = tile.querySelector('.board-minion');
+    var rect = (minionEl || tile).getBoundingClientRect();
+
+    // Hide the original sprite so only the silhouette is visible during the jump.
+    if (minionEl) minionEl.style.visibility = 'hidden';
+
+    // Target the enemy HP display for the jump vector. If the sacrificed minion
+    // sat on row 4 (P2's back row) the enemy is P2 (index 1); row 0 (P1's back
+    // row) means the enemy is P1.
+    var enemyIdx = (pos[0] === 4) ? 1 : 0;
+    var enemyHpEl = document.getElementById(_hpStatElementId(enemyIdx));
+    var jumpDx = 0;
+    var jumpDy = enemyIdx === 1 ? -140 : 140;
+    if (enemyHpEl) {
+        var hpRect = enemyHpEl.getBoundingClientRect();
+        var mCx = rect.left + rect.width / 2;
+        var mCy = rect.top + rect.height / 2;
+        var hCx = hpRect.left + hpRect.width / 2;
+        var hCy = hpRect.top + hpRect.height / 2;
+        jumpDx = (hCx - mCx) * 0.35;
+        jumpDy = (hCy - mCy) * 0.35;
+    }
+
+    var jumper = document.createElement('div');
+    jumper.className = 'sacrifice-jumper';
+    jumper.style.position = 'fixed';
+    jumper.style.left = rect.left + 'px';
+    jumper.style.top = rect.top + 'px';
+    jumper.style.width = rect.width + 'px';
+    jumper.style.height = rect.height + 'px';
+    jumper.style.zIndex = '150';
+    jumper.style.pointerEvents = 'none';
+    jumper.style.transition = 'transform 850ms cubic-bezier(0.2, 0.6, 0.3, 1), opacity 850ms ease-in';
+    jumper.style.willChange = 'transform, opacity';
+    jumper.innerHTML = SACRIFICE_JUMPER_SVG;
+    document.body.appendChild(jumper);
+
+    // Two rAFs guarantee the browser picks up the initial style before the
+    // transition kicks off (otherwise the transform jumps instantly).
+    requestAnimationFrame(function() {
+        requestAnimationFrame(function() {
+            jumper.style.transform = 'translate(' + jumpDx + 'px, ' + jumpDy + 'px) scale(1.3)';
+            jumper.style.opacity = '0';
+        });
+    });
+
+    setTimeout(function() {
+        if (jumper.parentNode) jumper.parentNode.removeChild(jumper);
+        done();
+    }, 880);
+}
+
+// ============================================================
 // Spell-cast center stage: when a magic or react is cast, show a
 // giant [card art] ▶ [? / 👍] overlay in the middle of the screen.
 // After 1s of react-window idleness the ? flips to 👍 and the stage
@@ -3442,6 +3546,11 @@ function deriveAnimationJob(prev, next) {
     // directly without diffing minion lists. Falls through to the legacy
     // pending_action diff for summon/move and any frame missing last_action.
     var la = next && next.last_action;
+    if (la && la.type === 'SACRIFICE') {
+        return { type: 'sacrifice_transcend', payload: {
+            pos: la.attacker_pos || null,
+        } };
+    }
     if (la && la.type === 'ATTACK') {
         return { type: 'attack', payload: {
             attackerPos: la.attacker_pos || null,
