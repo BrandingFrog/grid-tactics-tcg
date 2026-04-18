@@ -158,6 +158,17 @@
 .tests-btn-skip { background: var(--border); color: var(--text); }
 .tests-btn-reset { background: var(--cyan); color: #0a0a0a; }
 
+/* Minimized state: collapse everything except the header so the board
+   underneath is fully visible. Click the minimize button again to expand. */
+.tests-overlay.is-minimized .tests-overlay-body,
+.tests-overlay.is-minimized .tests-overlay-footer,
+.tests-overlay.is-minimized .tests-summary {
+  display: none !important;
+}
+.tests-overlay.is-minimized {
+  width: min(420px, 96vw);
+}
+
 /* Spell cast center stage — giant [card] ▶ [? / 👍] overlay that
    flashes when a magic or react is cast. pointer-events: none so the
    player can still interact with the board underneath.

@@ -6242,6 +6242,14 @@ function _wireTestsOnce() {
             }
         });
         if (exitBtn) exitBtn.addEventListener('click', function() { showScreen('screen-sandbox'); });
+        var minBtn = document.getElementById('tests-minimize');
+        if (minBtn) minBtn.addEventListener('click', function() {
+            var ov = document.getElementById('tests-overlay');
+            if (!ov) return;
+            var mini = ov.classList.toggle('is-minimized');
+            minBtn.textContent = mini ? '▢' : '▁';
+            minBtn.title = mini ? 'Expand' : 'Minimize';
+        });
     }
     if (!_testsState.wiredHandlers && socket) {
         _testsState.wiredHandlers = true;
