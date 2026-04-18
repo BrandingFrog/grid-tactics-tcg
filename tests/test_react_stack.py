@@ -706,3 +706,412 @@ class TestLegalActionsStartEndPhases:
         )
 
         assert legal_actions(state, library) == ()
+
+
+# ---------------------------------------------------------------------------
+# Phase 14.7-03: Start/End trigger firing + react-window opening
+# ---------------------------------------------------------------------------
+
+
+class TestStartOfTurnTriggers:
+    """ON_START_OF_TURN triggers fire inside enter_start_of_turn + open react window."""
+
+    def test_fallen_paladin_heals_at_start_of_owners_turn(self, library):
+        """Fallen Paladin's PASSIVE_HEAL (retagged on_start_of_turn) heals self."""
+        from grid_tactics.react_stack import enter_start_of_turn
+
+        paladin_id = library.get_numeric_id("fallen_paladin")
+        # Wounded Fallen Paladin (base 42 HP) — current 30.
+        paladin = MinionInstance(
+            instance_id=0,
+            card_numeric_id=paladin_id,
+            owner=PlayerSide.PLAYER_1,
+            position=(2, 2),
+            current_health=30,
+        )
+        board = Board.empty().place(2, 2, 0)
+        p1 = Player(
+            side=PlayerSide.PLAYER_1, hp=STARTING_HP,
+            current_mana=3, max_mana=3, hand=(), deck=(), grave=(),
+        )
+        p2 = Player(
+            side=PlayerSide.PLAYER_2, hp=STARTING_HP,
+            current_mana=3, max_mana=3, hand=(), deck=(), grave=(),
+        )
+        state = GameState(
+            board=board, players=(p1, p2),
+            active_player_idx=0,
+            phase=TurnPhase.START_OF_TURN,
+            turn_number=3,
+            seed=42,
+            minions=(paladin,),
+            next_minion_id=1,
+        )
+
+        result = enter_start_of_turn(state, library)
+
+        # Heal +2 applied — Fallen Paladin at 32 now.
+        healed = result.get_minion(0)
+        assert healed is not None
+        assert healed.current_health == 32
+
+    def test_start_of_turn_react_window_opens_for_triggers(self, library):
+        """When Start: triggers fire, a REACT window opens with AFTER_START_TRIGGER context."""
+        from grid_tactics.enums import ReactContext
+        from grid_tactics.react_stack import enter_start_of_turn
+
+        paladin_id = library.get_numeric_id("fallen_paladin")
+        paladin = MinionInstance(
+            instance_id=0,
+            card_numeric_id=paladin_id,
+            owner=PlayerSide.PLAYER_1,
+            position=(2, 2),
+            current_health=30,
+        )
+        board = Board.empty().place(2, 2, 0)
+        p1 = Player(
+            side=PlayerSide.PLAYER_1, hp=STARTING_HP,
+            current_mana=3, max_mana=3, hand=(), deck=(), grave=(),
+        )
+        p2 = Player(
+            side=PlayerSide.PLAYER_2, hp=STARTING_HP,
+            current_mana=3, max_mana=3, hand=(), deck=(), grave=(),
+        )
+        state = GameState(
+            board=board, players=(p1, p2),
+            active_player_idx=0,
+            phase=TurnPhase.START_OF_TURN,
+            turn_number=3,
+            seed=42,
+            minions=(paladin,),
+            next_minion_id=1,
+        )
+
+        result = enter_start_of_turn(state, library)
+
+        assert result.phase == TurnPhase.REACT
+        assert result.react_context == ReactContext.AFTER_START_TRIGGER
+        assert result.react_return_phase == TurnPhase.START_OF_TURN
+        # Opponent reacts (P2 at idx=1)
+        assert result.react_player_idx == 1
+
+    def test_no_start_triggers_shortcuts_to_action(self, library):
+        """enter_start_of_turn with no Start: triggers shortcuts to ACTION (snappy)."""
+        from grid_tactics.react_stack import enter_start_of_turn
+
+        # Plain Rat (no on_start_of_turn triggers) on the board.
+        rat_id = library.get_numeric_id("rat")
+        rat = MinionInstance(
+            instance_id=0, card_numeric_id=rat_id,
+            owner=PlayerSide.PLAYER_1, position=(2, 2), current_health=5,
+        )
+        board = Board.empty().place(2, 2, 0)
+        p1 = Player(
+            side=PlayerSide.PLAYER_1, hp=STARTING_HP,
+            current_mana=3, max_mana=3, hand=(), deck=(), grave=(),
+        )
+        p2 = Player(
+            side=PlayerSide.PLAYER_2, hp=STARTING_HP,
+            current_mana=3, max_mana=3, hand=(), deck=(), grave=(),
+        )
+        state = GameState(
+            board=board, players=(p1, p2),
+            active_player_idx=0,
+            phase=TurnPhase.START_OF_TURN,
+            turn_number=3,
+            seed=42,
+            minions=(rat,),
+            next_minion_id=1,
+        )
+
+        result = enter_start_of_turn(state, library)
+
+        # No triggers → straight to ACTION, no react window.
+        assert result.phase == TurnPhase.ACTION
+        assert result.react_context is None
+        assert result.react_return_phase is None
+
+
+class TestEndOfTurnTriggers:
+    """ON_END_OF_TURN triggers fire inside enter_end_of_turn + open react window."""
+
+    def test_emberplague_applies_burn_to_adjacent_at_end_of_owners_turn(self, library):
+        """Emberplague Rat's BURN (retagged on_end_of_turn) marks adjacent enemies burning."""
+        from grid_tactics.react_stack import enter_end_of_turn
+
+        ember_id = library.get_numeric_id("emberplague_rat")
+        rat_id = library.get_numeric_id("rat")
+
+        # P1 owns Emberplague at (2,2). P2 enemy Rat adjacent at (2,1).
+        ember = MinionInstance(
+            instance_id=0, card_numeric_id=ember_id,
+            owner=PlayerSide.PLAYER_1, position=(2, 2), current_health=24,
+        )
+        enemy = MinionInstance(
+            instance_id=1, card_numeric_id=rat_id,
+            owner=PlayerSide.PLAYER_2, position=(2, 1), current_health=5,
+        )
+        board = Board.empty().place(2, 2, 0).place(2, 1, 1)
+        p1 = Player(
+            side=PlayerSide.PLAYER_1, hp=STARTING_HP,
+            current_mana=3, max_mana=3, hand=(), deck=(), grave=(),
+        )
+        p2 = Player(
+            side=PlayerSide.PLAYER_2, hp=STARTING_HP,
+            current_mana=3, max_mana=3, hand=(), deck=(), grave=(),
+        )
+        state = GameState(
+            board=board, players=(p1, p2),
+            active_player_idx=0,  # P1 is active → P1's end of turn
+            phase=TurnPhase.ACTION,
+            turn_number=3,
+            seed=42,
+            minions=(ember, enemy),
+            next_minion_id=2,
+        )
+
+        result = enter_end_of_turn(state, library)
+
+        # Enemy at (2,1) has is_burning=True now
+        enemy_after = result.get_minion(1)
+        assert enemy_after is not None
+        assert enemy_after.is_burning is True
+
+    def test_dark_matter_battery_damages_opponent_at_end_of_turn(self, library):
+        """Dark Matter Battery's damage-opp (retagged on_end_of_turn) hits opponent HP."""
+        from dataclasses import replace as _replace
+        from grid_tactics.react_stack import enter_end_of_turn
+
+        battery_id = library.get_numeric_id("dark_matter_battery")
+        # Battery on P1's side with 3 DM stacks — damage = 0 + 3 = 3.
+        battery = MinionInstance(
+            instance_id=0, card_numeric_id=battery_id,
+            owner=PlayerSide.PLAYER_1, position=(0, 2), current_health=20,
+            dark_matter_stacks=3,
+        )
+        board = Board.empty().place(0, 2, 0)
+        p1 = Player(
+            side=PlayerSide.PLAYER_1, hp=STARTING_HP,
+            current_mana=3, max_mana=3, hand=(), deck=(), grave=(),
+        )
+        p2 = Player(
+            side=PlayerSide.PLAYER_2, hp=STARTING_HP,
+            current_mana=3, max_mana=3, hand=(), deck=(), grave=(),
+        )
+        state = GameState(
+            board=board, players=(p1, p2),
+            active_player_idx=0,
+            phase=TurnPhase.ACTION,
+            turn_number=3,
+            seed=42,
+            minions=(battery,),
+            next_minion_id=1,
+        )
+
+        result = enter_end_of_turn(state, library)
+
+        # P2 HP dropped by 3 (scale_with dark_matter = 3)
+        assert result.players[1].hp == STARTING_HP - 3
+
+    def test_end_of_turn_react_window_opens_for_triggers(self, library):
+        """When End: triggers fire, REACT opens with BEFORE_END_OF_TURN context."""
+        from grid_tactics.enums import ReactContext
+        from grid_tactics.react_stack import enter_end_of_turn
+
+        battery_id = library.get_numeric_id("dark_matter_battery")
+        battery = MinionInstance(
+            instance_id=0, card_numeric_id=battery_id,
+            owner=PlayerSide.PLAYER_1, position=(0, 2), current_health=20,
+            dark_matter_stacks=1,
+        )
+        board = Board.empty().place(0, 2, 0)
+        p1 = Player(
+            side=PlayerSide.PLAYER_1, hp=STARTING_HP,
+            current_mana=3, max_mana=3, hand=(), deck=(), grave=(),
+        )
+        p2 = Player(
+            side=PlayerSide.PLAYER_2, hp=STARTING_HP,
+            current_mana=3, max_mana=3, hand=(), deck=(), grave=(),
+        )
+        state = GameState(
+            board=board, players=(p1, p2),
+            active_player_idx=0,
+            phase=TurnPhase.ACTION,
+            turn_number=3,
+            seed=42,
+            minions=(battery,),
+            next_minion_id=1,
+        )
+
+        result = enter_end_of_turn(state, library)
+
+        assert result.phase == TurnPhase.REACT
+        assert result.react_context == ReactContext.BEFORE_END_OF_TURN
+        assert result.react_return_phase == TurnPhase.END_OF_TURN
+        assert result.react_player_idx == 1  # P2 reacts
+
+    def test_no_end_triggers_shortcuts_to_turn_advance(self, library):
+        """enter_end_of_turn with no End: triggers shortcuts to turn-advance."""
+        from grid_tactics.react_stack import enter_end_of_turn
+
+        rat_id = library.get_numeric_id("rat")
+        rat = MinionInstance(
+            instance_id=0, card_numeric_id=rat_id,
+            owner=PlayerSide.PLAYER_1, position=(2, 2), current_health=5,
+        )
+        board = Board.empty().place(2, 2, 0)
+        p1 = Player(
+            side=PlayerSide.PLAYER_1, hp=STARTING_HP,
+            current_mana=3, max_mana=3, hand=(), deck=(), grave=(),
+        )
+        p2 = Player(
+            side=PlayerSide.PLAYER_2, hp=STARTING_HP,
+            current_mana=3, max_mana=3, hand=(), deck=(), grave=(),
+        )
+        state = GameState(
+            board=board, players=(p1, p2),
+            active_player_idx=0,
+            phase=TurnPhase.ACTION,
+            turn_number=3,
+            seed=42,
+            minions=(rat,),
+            next_minion_id=1,
+        )
+
+        result = enter_end_of_turn(state, library)
+
+        # Shortcut: turn-advance → phase=ACTION, P2 active, turn=4
+        assert result.phase == TurnPhase.ACTION
+        assert result.active_player_idx == 1
+        assert result.turn_number == 4
+
+
+class TestAdvanceToNextTurnHelper:
+    """advance_to_next_turn drives PASS-PASS through an open react window to next turn."""
+
+    def test_drives_through_start_of_turn_react_to_next_action(self, library):
+        """Full loop: END_OF_TURN with End-trigger react → flip → START_OF_TURN with Start-trigger react → ACTION."""
+        from grid_tactics.react_stack import advance_to_next_turn
+
+        # Setup: P1 active with a Fallen Paladin (Start trigger) on their side.
+        # Drive advance_to_next_turn from end of P1's turn; should end up in
+        # P2's ACTION (turn advanced by 1).
+        paladin_id = library.get_numeric_id("fallen_paladin")
+        paladin = MinionInstance(
+            instance_id=0, card_numeric_id=paladin_id,
+            owner=PlayerSide.PLAYER_1, position=(2, 2), current_health=30,
+        )
+        board = Board.empty().place(2, 2, 0)
+        p1 = Player(
+            side=PlayerSide.PLAYER_1, hp=STARTING_HP,
+            current_mana=3, max_mana=3, hand=(), deck=(), grave=(),
+        )
+        p2 = Player(
+            side=PlayerSide.PLAYER_2, hp=STARTING_HP,
+            current_mana=3, max_mana=3, hand=(), deck=(), grave=(),
+        )
+        state = GameState(
+            board=board, players=(p1, p2),
+            active_player_idx=0,
+            phase=TurnPhase.END_OF_TURN,
+            turn_number=3,
+            seed=42,
+            minions=(paladin,),
+            next_minion_id=1,
+        )
+
+        result = advance_to_next_turn(state, library)
+
+        # Should end up in P2's ACTION phase (turn advanced to 4)
+        assert result.phase == TurnPhase.ACTION
+        assert result.active_player_idx == 1
+        assert result.turn_number == 4
+
+    def test_returns_early_if_already_in_action(self, library):
+        """Helper returns state unchanged if already in ACTION for next turn."""
+        from grid_tactics.react_stack import advance_to_next_turn
+
+        p1 = Player(
+            side=PlayerSide.PLAYER_1, hp=STARTING_HP,
+            current_mana=3, max_mana=3, hand=(), deck=(), grave=(),
+        )
+        p2 = Player(
+            side=PlayerSide.PLAYER_2, hp=STARTING_HP,
+            current_mana=3, max_mana=3, hand=(), deck=(), grave=(),
+        )
+        state = GameState(
+            board=Board.empty(), players=(p1, p2),
+            active_player_idx=0,
+            phase=TurnPhase.ACTION,
+            turn_number=3,
+            seed=42,
+        )
+
+        result = advance_to_next_turn(state, library)
+
+        # Stays put
+        assert result.phase == TurnPhase.ACTION
+        assert result.active_player_idx == 0
+        assert result.turn_number == 3
+
+
+class TestResolveReactStackAfterActionRoutesThroughEnterEnd:
+    """After 14.7-03, resolve_react_stack AFTER_ACTION path routes via enter_end_of_turn."""
+
+    def test_after_action_with_no_end_triggers_still_advances_turn(
+        self, react_state_empty_stack, library,
+    ):
+        """Legacy behavior preserved: after-action PASS with no End triggers → turn advance."""
+        state = react_state_empty_stack
+        # Fixture has no End-trigger minions on the board.
+        result = resolve_react_stack(state, library)
+
+        # Same observable effect as pre-14.7-03: turn advanced.
+        assert result.phase == TurnPhase.ACTION
+        assert result.active_player_idx == 1
+        assert result.turn_number == 2
+
+    def test_after_action_with_end_trigger_opens_end_react_window(self, library):
+        """After-action PASS with an End trigger → enters END + opens react window."""
+        from grid_tactics.enums import ReactContext
+        from grid_tactics.react_stack import resolve_react_stack
+
+        battery_id = library.get_numeric_id("dark_matter_battery")
+        battery = MinionInstance(
+            instance_id=0, card_numeric_id=battery_id,
+            owner=PlayerSide.PLAYER_1, position=(0, 2), current_health=20,
+            dark_matter_stacks=1,
+        )
+        board = Board.empty().place(0, 2, 0)
+        p1 = Player(
+            side=PlayerSide.PLAYER_1, hp=STARTING_HP,
+            current_mana=3, max_mana=3, hand=(), deck=(), grave=(),
+        )
+        p2 = Player(
+            side=PlayerSide.PLAYER_2, hp=STARTING_HP,
+            current_mana=3, max_mana=3, hand=(), deck=(), grave=(),
+        )
+        state = GameState(
+            board=board, players=(p1, p2),
+            active_player_idx=0,
+            phase=TurnPhase.REACT,
+            turn_number=3,
+            seed=42,
+            minions=(battery,),
+            next_minion_id=1,
+            react_stack=(),
+            react_player_idx=1,
+            react_context=ReactContext.AFTER_ACTION,
+            react_return_phase=TurnPhase.ACTION,
+        )
+
+        result = resolve_react_stack(state, library)
+
+        # Did NOT advance turn — still P1 active. Now in end-of-turn react window.
+        assert result.phase == TurnPhase.REACT
+        assert result.react_context == ReactContext.BEFORE_END_OF_TURN
+        assert result.react_return_phase == TurnPhase.END_OF_TURN
+        assert result.active_player_idx == 0
+        assert result.turn_number == 3
+        # And the End trigger damage fired: P2 HP dropped by 1
+        assert result.players[1].hp == STARTING_HP - 1
