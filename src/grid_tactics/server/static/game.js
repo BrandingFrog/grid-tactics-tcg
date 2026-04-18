@@ -3337,95 +3337,166 @@ function _playSacPortal(job, done) {
 // fades; a new react landing before then slides the current card
 // off-screen to the left and brings the new one in from the right.
 // ============================================================
+// Two-slot chain stage. New cards land in the RIGHT slot (replacing the
+// waiting "?"). After a 1s beat the card shifts to the LEFT slot,
+// pushing any prior LEFT card off-screen, and a fresh "?" appears in
+// the RIGHT slot ready for the next react. When the chain resolves we
+// replay every pushed card LIFO (top-down) into the LEFT slot with a
+// "resolving" sigil in the RIGHT, then fade.
 var _spellStage = {
-    currentNid: null,
-    cardEl: null,
-    thumbsTimer: null,
+    chain: [],              // numeric ids, oldest first
+    pendingShiftTimer: null,
+    rightCardEl: null,
+    leftCardEl: null,
+    resolving: false,
     exitTimer: null,
 };
 
 function _spellStageEls() {
     return {
         root: document.getElementById('spell-stage'),
-        card: document.getElementById('spell-stage-card'),
-        react: document.getElementById('spell-stage-react'),
+        left: document.getElementById('spell-stage-card'),
+        right: document.getElementById('spell-stage-react'),
     };
 }
 
-function _showSpellStage(numericId) {
-    var els = _spellStageEls();
-    if (!els.root || !els.card || !els.react) return;
+function _spellStageCardHtml(numericId) {
     var def = (cardDefs && cardDefs[numericId]) ||
               (window.sandboxCardDefs && window.sandboxCardDefs[numericId]);
-    if (!def) return;
-
-    // Same card re-pushed — just reset timers, don't re-animate.
-    if (_spellStage.currentNid === numericId && !els.root.hidden) {
-        _resetSpellStageTimers();
-        _armSpellStageThumbs();
-        return;
-    }
-
-    _clearSpellStageTimers();
-
-    // Slide the previous card out to the left, then bring the new one in.
-    var existing = els.card.firstChild;
-    if (existing) {
-        existing.classList.add('exiting-left');
-        var oldCard = existing;
-        setTimeout(function() {
-            if (oldCard.parentNode) oldCard.parentNode.removeChild(oldCard);
-        }, 380);
-    }
-
-    var cardInner = document.createElement('div');
-    cardInner.innerHTML = renderCardFrame(def, {
+    if (!def) return '';
+    return renderCardFrame(def, {
         context: 'tooltip',
         numericId: numericId,
         interactive: false,
         showReactDeploy: false,
     });
-    els.card.appendChild(cardInner.firstChild);
-    els.card.style.position = 'relative';
+}
 
-    _spellStage.currentNid = numericId;
+function _showSpellStage(numericId) {
+    var els = _spellStageEls();
+    if (!els.root || !els.left || !els.right) return;
+    var html = _spellStageCardHtml(numericId);
+    if (!html) return;
+
+    _spellStage.resolving = false;
+    if (_spellStage.exitTimer) {
+        clearTimeout(_spellStage.exitTimer);
+        _spellStage.exitTimer = null;
+    }
+
+    // If a shift is pending from the previous push, flush it now so the
+    // chain conveyor keeps moving — no card should ever "win the race"
+    // and land in the RIGHT slot while another is already there.
+    if (_spellStage.pendingShiftTimer) {
+        clearTimeout(_spellStage.pendingShiftTimer);
+        _spellStage.pendingShiftTimer = null;
+        _performStageShift();
+    }
+
+    _spellStage.chain.push(numericId);
     els.root.hidden = false;
     els.root.classList.remove('exit');
     els.root.classList.remove('enter');
-    // Force a reflow then re-add for the enter animation to retrigger.
     void els.root.offsetWidth;
     els.root.classList.add('enter');
 
-    // React slot back to waiting state.
-    els.react.textContent = '?';
-    els.react.classList.remove('confirmed');
+    // Drop the card into the RIGHT slot with a slide-in from the right.
+    els.right.textContent = '';
+    els.right.classList.remove('confirmed');
+    var wrap = document.createElement('div');
+    wrap.className = 'spell-stage-card-inner slide-in-right';
+    wrap.innerHTML = html;
+    els.right.appendChild(wrap);
+    _spellStage.rightCardEl = wrap;
 
-    _armSpellStageThumbs();
+    // 1s beat so the viewer can read the new card, then shift left.
+    _spellStage.pendingShiftTimer = setTimeout(function() {
+        _spellStage.pendingShiftTimer = null;
+        _performStageShift();
+    }, 1000);
 }
 
-// Stage waits indefinitely while a react window is open. The thumbs-up
-// is driven from state — when a state update reports the react window
-// has closed (phase returned to ACTION with an empty react stack), we
-// call _spellStageOnReactClosed which flips ? → 👍 and schedules the
-// fade. A max-linger safety timeout keeps the stage from stalling if
-// state updates stop arriving for any reason.
-function _armSpellStageThumbs() {
-    // Safety net only — close the stage if no state change arrives in 8s.
-    _spellStage.thumbsTimer = setTimeout(function() {
-        _spellStageOnReactClosed();
-    }, 8000);
-}
-
-function _spellStageOnReactClosed() {
-    if (_spellStage.thumbsTimer) {
-        clearTimeout(_spellStage.thumbsTimer);
-        _spellStage.thumbsTimer = null;
-    }
+// Shift: old LEFT card (if any) slides off-screen-left; the current
+// RIGHT card animates into the LEFT slot; a fresh "?" appears in the
+// RIGHT slot waiting for the next react.
+function _performStageShift() {
     var els = _spellStageEls();
-    if (!els.react || !els.root || els.root.hidden) return;
-    els.react.textContent = '👍';
-    els.react.classList.add('confirmed');
-    _spellStage.exitTimer = setTimeout(_hideSpellStage, 900);
+    if (_spellStage.leftCardEl) {
+        var old = _spellStage.leftCardEl;
+        old.classList.remove('slide-in-right', 'slide-in-from-left', 'in-left');
+        old.classList.add('slide-off-left');
+        setTimeout(function() { if (old.parentNode) old.parentNode.removeChild(old); }, 440);
+        _spellStage.leftCardEl = null;
+    }
+    if (_spellStage.rightCardEl) {
+        var right = _spellStage.rightCardEl;
+        right.classList.remove('slide-in-right');
+        right.classList.add('in-left');
+        els.left.appendChild(right);
+        _spellStage.leftCardEl = right;
+        _spellStage.rightCardEl = null;
+    }
+    els.right.textContent = '?';
+    els.right.classList.remove('confirmed');
+}
+
+// The react window closed — run the LIFO resolution sequence. If the
+// auto-shift timer is still pending, flush it first so the LEFT slot
+// reflects the final top-of-stack before we pop.
+function _spellStageOnReactClosed() {
+    if (_spellStage.resolving) return;
+    if (_spellStage.pendingShiftTimer) {
+        clearTimeout(_spellStage.pendingShiftTimer);
+        _spellStage.pendingShiftTimer = null;
+        _performStageShift();
+    }
+    _resolveSpellStageChain();
+}
+
+function _resolveSpellStageChain() {
+    var els = _spellStageEls();
+    if (!els.root || els.root.hidden) return;
+    _spellStage.resolving = true;
+
+    // Clear both slots — resolution will place each card fresh.
+    if (_spellStage.leftCardEl && _spellStage.leftCardEl.parentNode) {
+        _spellStage.leftCardEl.parentNode.removeChild(_spellStage.leftCardEl);
+    }
+    _spellStage.leftCardEl = null;
+    _spellStage.rightCardEl = null;
+    els.left.innerHTML = '';
+    els.right.textContent = '';
+    els.right.classList.remove('confirmed');
+
+    var chain = _spellStage.chain.slice();
+    var i = chain.length - 1;  // top of stack resolves first (LIFO)
+
+    function step() {
+        if (i < 0) {
+            // All resolved — thumbs up then fade.
+            els.right.textContent = '👍';
+            els.right.classList.add('confirmed');
+            _spellStage.exitTimer = setTimeout(_hideSpellStage, 700);
+            return;
+        }
+        var html = _spellStageCardHtml(chain[i]);
+        var wrap = document.createElement('div');
+        wrap.className = 'spell-stage-card-inner slide-in-from-left';
+        wrap.innerHTML = html;
+        els.left.appendChild(wrap);
+        els.right.textContent = '⚡';
+        els.right.classList.remove('confirmed');
+        setTimeout(function() {
+            wrap.classList.remove('slide-in-from-left');
+            wrap.classList.add('slide-off-right');
+            setTimeout(function() {
+                if (wrap.parentNode) wrap.parentNode.removeChild(wrap);
+                i -= 1;
+                step();
+            }, 420);
+        }, 600);
+    }
+    step();
 }
 
 // True if the state just transitioned out of REACT phase into ACTION
@@ -3439,12 +3510,8 @@ function detectReactWindowClose(prev, next) {
     return wasReactOrHadStack && nowCalm;
 }
 
-function _resetSpellStageTimers() {
-    _clearSpellStageTimers();
-}
-
 function _clearSpellStageTimers() {
-    if (_spellStage.thumbsTimer) { clearTimeout(_spellStage.thumbsTimer); _spellStage.thumbsTimer = null; }
+    if (_spellStage.pendingShiftTimer) { clearTimeout(_spellStage.pendingShiftTimer); _spellStage.pendingShiftTimer = null; }
     if (_spellStage.exitTimer) { clearTimeout(_spellStage.exitTimer); _spellStage.exitTimer = null; }
 }
 
@@ -3457,8 +3524,16 @@ function _hideSpellStage() {
         els.root.hidden = true;
         els.root.classList.remove('exit');
         els.root.classList.remove('enter');
-        if (els.card) els.card.innerHTML = '';
-        _spellStage.currentNid = null;
+        if (els.left) els.left.innerHTML = '';
+        if (els.right) {
+            els.right.innerHTML = '';
+            els.right.textContent = '?';
+            els.right.classList.remove('confirmed');
+        }
+        _spellStage.chain = [];
+        _spellStage.leftCardEl = null;
+        _spellStage.rightCardEl = null;
+        _spellStage.resolving = false;
     }, 360);
 }
 
