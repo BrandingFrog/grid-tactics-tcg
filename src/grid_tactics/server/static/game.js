@@ -3943,13 +3943,17 @@ function getTargetPositions(handIdx, deployPos) {
 // Find a legal action for this card matching position+target_pos
 // Build a submit-ready payload for a PLAY_CARD action that preserves every
 // optional field the server checks (position, target_pos, discard_card_index,
-// sacrifice_minion_id). Synthesising payloads from (handIdx, target) alone
-// drops sacrifice_minion_id and makes cards like Feed the Shadow look illegal.
+// discard_card_indices, sacrifice_minion_id). Synthesising payloads from
+// (handIdx, target) alone drops these and the server's `action not in
+// valid_actions` check rejects it as "Illegal action".
 function _playCardPayload(action) {
     var payload = { action_type: 0, card_index: action.card_index };
     if (action.position) payload.position = action.position;
     if (action.target_pos) payload.target_pos = action.target_pos;
     if (action.discard_card_index != null) payload.discard_card_index = action.discard_card_index;
+    if (action.discard_card_indices && action.discard_card_indices.length > 0) {
+        payload.discard_card_indices = action.discard_card_indices;
+    }
     if (action.sacrifice_minion_id != null) payload.sacrifice_minion_id = action.sacrifice_minion_id;
     return payload;
 }
