@@ -2164,6 +2164,9 @@ function playAnimation(job, done) {
         case 'card_fly':
             playCardFlyAnimation(job, done);
             return;
+        case 'hp_damage_popup':
+            playHpDamagePopup(job, done);
+            return;
         case 'noop':
         default:
             setTimeout(done, 0);
@@ -2957,6 +2960,8 @@ function onStateUpdate(data) {
         setTimeout(function() { _showSpellStage(spellNid); }, 0);
     }
 
+    var hpJobs = derivePlayerHpDeltaAnims(prev, next);
+
     // Non-action transitions (noop with no meaningful diff) bypass the queue
     // entirely. This keeps react-window open/close, tutor-modal open/close,
     // turn-change banners, and passive state refreshes instantaneous.
@@ -2965,6 +2970,9 @@ function onStateUpdate(data) {
         // State already applied; each draw job is pure-visual.
         for (var fi = 0; fi < flyJobs.length; fi++) {
             enqueueAnimation(flyJobs[fi]);
+        }
+        for (var hi = 0; hi < hpJobs.length; hi++) {
+            enqueueAnimation(hpJobs[hi]);
         }
         for (var i = 0; i < drawJobs.length; i++) {
             var dj = drawJobs[i];
@@ -2982,11 +2990,68 @@ function onStateUpdate(data) {
     for (var fj = 0; fj < flyJobs.length; fj++) {
         enqueueAnimation(flyJobs[fj]);
     }
+    for (var hj = 0; hj < hpJobs.length; hj++) {
+        enqueueAnimation(hpJobs[hj]);
+    }
     for (var j = 0; j < drawJobs.length; j++) {
         var dj2 = drawJobs[j];
         dj2.stateApplied = true;
         enqueueAnimation(dj2);
     }
+}
+
+// Diff player HP across a state update and enqueue a floating damage
+// popup over each player whose HP dropped. Triggered for any cause
+// (hp_cost spells, fatigue, minion-attack-on-player, etc.) so every
+// life-total hit is visible.
+function derivePlayerHpDeltaAnims(prev, next) {
+    var jobs = [];
+    if (!prev || !next || !prev.players || !next.players) return jobs;
+    for (var i = 0; i < 2; i++) {
+        var prevP = prev.players[i];
+        var nextP = next.players[i];
+        if (!prevP || !nextP) continue;
+        if (typeof prevP.hp !== 'number' || typeof nextP.hp !== 'number') continue;
+        var delta = nextP.hp - prevP.hp;
+        if (delta < 0) {
+            jobs.push({
+                type: 'hp_damage_popup',
+                playerIdx: i,
+                delta: delta,
+                stateApplied: true,
+            });
+        }
+    }
+    return jobs;
+}
+
+function _hpStatElementId(playerIdx) {
+    if (sandboxMode) return 'sandbox-p' + playerIdx + '-hp';
+    return playerIdx === myPlayerIdx ? 'self-hp' : 'opp-hp';
+}
+
+function playHpDamagePopup(job, done) {
+    var el = document.getElementById(_hpStatElementId(job.playerIdx));
+    if (!el) { setTimeout(done, 0); return; }
+    var rect = el.getBoundingClientRect();
+    var pop = document.createElement('div');
+    pop.className = 'damage-popup hp-damage-popup';
+    pop.style.position = 'fixed';
+    pop.style.left = (rect.left + rect.width / 2 - 20) + 'px';
+    pop.style.top = (rect.top - 8) + 'px';
+    pop.textContent = job.delta;  // already negative (e.g. "-25")
+    document.body.appendChild(pop);
+    // Red flash on the HP stat to draw the eye.
+    el.classList.add('hp-flash');
+    var finished = false;
+    function finish() {
+        if (finished) return;
+        finished = true;
+        if (pop.parentNode) pop.parentNode.removeChild(pop);
+        el.classList.remove('hp-flash');
+        done();
+    }
+    setTimeout(finish, 950);
 }
 
 // ============================================================
@@ -6324,6 +6389,9 @@ function setupSandboxSocketHandlers() {
         var spellStageNid = (sandboxMode && prevForFly)
             ? detectSpellCast(prevForFly, payload.state)
             : null;
+        var hpJobsSb = (sandboxMode && prevForFly)
+            ? derivePlayerHpDeltaAnims(prevForFly, payload.state)
+            : [];
 
         sandboxState = payload.state;
         sandboxLegalActions = payload.legal_actions || [];
@@ -6353,6 +6421,9 @@ function setupSandboxSocketHandlers() {
         // renderSandbox() replaced it.
         for (var _fi = 0; _fi < flyJobs.length; _fi++) {
             enqueueAnimation(flyJobs[_fi]);
+        }
+        for (var _hi = 0; _hi < hpJobsSb.length; _hi++) {
+            enqueueAnimation(hpJobsSb[_hi]);
         }
         if (spellStageNid != null) {
             setTimeout(function() { _showSpellStage(spellStageNid); }, 0);

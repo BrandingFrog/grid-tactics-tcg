@@ -3527,6 +3527,26 @@ body {
   animation: damage-float 900ms ease-out forwards;
 }
 
+/* HP life-total popups — same float animation as minion damage, but
+   positioned absolutely by the runtime and escalated to fixed z-index
+   so they ride over pile buttons and the sandbox toolbar. */
+.hp-damage-popup {
+  position: fixed;
+  font-size: 42px;
+  color: #ff4040;
+  text-shadow: 0 3px 6px rgba(0,0,0,0.9), 0 0 16px rgba(255,64,64,0.8);
+  z-index: 9998;
+}
+
+/* Brief red flash on the HP stat number whose value just dropped. */
+.hp-flash {
+  animation: hp-flash-pulse 600ms ease-out;
+}
+@keyframes hp-flash-pulse {
+  0%   { color: #ff4040; transform: scale(1.4); text-shadow: 0 0 16px rgba(255,64,64,1); }
+  100% { color: inherit; transform: scale(1); text-shadow: none; }
+}
+
 /* ---------------------------------------------------------------- */
 /* Phase 14.3-03: Move animation (lift -> translate -> drop)        */
 /* ---------------------------------------------------------------- */
