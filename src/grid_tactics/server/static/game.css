@@ -198,7 +198,13 @@
   will-change: transform, opacity;
 }
 .spell-stage-card {
-  overflow: hidden;
+  /* overflow: visible so the inner `.spell-stage-card-inner` can be
+     rendered OUTSIDE this slot's rect during the shift-glide animation
+     (it starts at `translate(+dx, 0)` sitting in the RIGHT slot's area
+     and glides back here). With `overflow: hidden` the glide was
+     partially clipped — user saw "card half-hidden under the UI".
+     See .planning/debug/resolved/spell-stage-lag-and-clip.md. */
+  overflow: visible;
   transition: transform 350ms cubic-bezier(0.2, 0.7, 0.3, 1),
               opacity 350ms ease;
 }

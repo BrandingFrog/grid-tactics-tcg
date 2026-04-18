@@ -1,15 +1,15 @@
 ---
-status: resolved
+status: investigating
 trigger: "spell-stage center-screen chain overlay has lag/stutter and clipping issues after v0.11.31 rewrite"
 created: 2026-04-18T00:00:00Z
-updated: 2026-04-18T00:00:00Z
+updated: 2026-04-18T14:30:00Z
 ---
 
 ## Current Focus
 
-hypothesis: ROOT CAUSE CONFIRMED. The fly-from-hand transition never animates. The `appendChild → getBoundingClientRect → setTransform → setTransition` sequence in `_showSpellStage` causes the browser to skip rendering the initial transform because no reflow happens between setting the initial transform and setting the transition property. The "lag" complaint = no animation runs at all. The "clipping" complaint = without animation, the card just appears at the slot.
-test: DONE - Playwright shows computed transform = identity throughout, transition never runs. FIX_A (void wrap.offsetWidth between transform set and transition set) restores animation.
-next_action: Apply fix and verify against original symptoms.
+hypothesis: SECOND ROOT CAUSE CONFIRMED. The v0.11.32 transform-commit fix made the fly animation play, but a SEPARATE clipping bug remains in the shift path. `.spell-stage-card { overflow: hidden }` at game.css:201 applies to the LEFT slot (#spell-stage-card). When the shift animation mounts `.spell-stage-card-inner` in the LEFT slot with `transform: translate(+dx, 0)` (positioned to the RIGHT of the slot's bounds) and animates it back to identity, the inner is clipped to the LEFT slot's rect for the entire glide. User sees the card "half hidden under UI" because the RIGHT half of the inner card is being clipped by the parent's overflow rule. Fix: change `overflow: hidden` → `overflow: visible` on `.spell-stage-card`.
+test: Apply fix, commit, push, verify live site.
+next_action: Edit game.css line 201, commit, push.
 
 ## Symptoms
 
@@ -165,3 +165,78 @@ verification: |
 
 files_changed:
   - src/grid_tactics/server/static/game.js (2 edits: fly + shift)
+
+## Re-opened 2026-04-18
+
+User reports after v0.11.32 deployed:
+- "half the card is hidden under the ui"
+- "there is still a laggy issue with the naimation"
+- Screenshot shows the Prohibition react card appearing in the LEFT slot area but visually cut — approximately half the card obscured by the surrounding UI boxes/panels.
+
+The prior fix (void wrap.offsetWidth) was correct and made the fly animation play, but was INSUFFICIENT. The re-opened complaint is a different failure mode that was masked by the no-animation bug: once the animation plays, a CSS overflow clipping rule becomes visually observable.
+
+### Re-opened Evidence
+
+- timestamp: reopen-1
+  checked: game.css full scan for rules applying to .spell-stage, .spell-stage-card, .spell-stage-react, .spell-stage-card-inner
+  found:
+    - .spell-stage (#spell-stage): position: fixed, z-index: 200, pointer-events: none, transform: translate(-50%,-50%), display: flex.
+    - .spell-stage-card + .spell-stage-react (shared): width 280px, aspect-ratio 2/3, border-radius 14px, will-change transform+opacity, box-shadow.
+    - .spell-stage-card (LEFT slot ONLY) line 200-204: **overflow: hidden**, transition: transform 350ms, opacity 350ms.
+    - .spell-stage-react (RIGHT slot): background dashed-border, NO overflow rule (inherits visible).
+    - .spell-stage-card-inner: width/height 100%, will-change transform+opacity, transform-origin center. NO overflow rule.
+  implication: The LEFT slot (`#spell-stage-card`) clips its children. The RIGHT slot (`#spell-stage-react`) does not. This asymmetry is the bug: `.spell-stage-card` was given `overflow: hidden` (probably to clip the card frame to the slot's rounded-rect) but this clips the inner card during the shift-glide animation where it starts at `translate(+dx, 0)` — positioned to the right of the slot's rect.
+
+- timestamp: reopen-2
+  checked: Code path confirmation — game.js:3487-3504 (_performStageShift)
+  found: leftWrap (class .spell-stage-card-inner) is appended to `els.left` which is `#spell-stage-card`. leftWrap.style.transform is set to `translate(<right-slot.left - left-slot.left>, 0)` = approximately +280px+gap = +308px. The inner card is then glided back to `translate(0,0)` over 440ms.
+  implication: For the entire 440ms glide, the inner card's rendered position is between +308px and +0px RIGHT of where the parent ends, and the `overflow: hidden` on the parent clips everything outside its rect. At the start the card is fully invisible (entirely off-rect), mid-flight only the LEFT portion is visible (the part that has entered the parent's rect), and only at the end is the card fully visible. Exactly matches the user screenshot ("half the card hidden").
+
+- timestamp: reopen-3
+  checked: Is overflow: hidden needed for any visual reason?
+  found: The card-frame-full child uses `max-width: 100%; height: 100%;` so it fits inside the slot naturally. The border-radius: 14px on `.spell-stage-card` was probably the original intent for `overflow: hidden` (clip the card HTML's corners to the slot's rounded rect). But the inner card html itself already has its own border-radius, so clipping on the slot level is redundant. Additionally, the sibling `.spell-stage-react` already works fine without overflow: hidden.
+  implication: Safe to remove `overflow: hidden`. No visual regression expected because the card HTML has its own corner styling.
+
+- timestamp: reopen-4
+  checked: Does the fly-from-hand animation ALSO suffer this bug?
+  found: No — fly-from-hand mounts the inner into `els.right` (`.spell-stage-react`) which has NO overflow rule. The card flies in freely with no clipping. This matches the user's report that the complaint is specifically "in the LEFT slot area".
+  implication: Only the shift-glide is affected. The fix is a single-line CSS change.
+
+- timestamp: reopen-5
+  checked: Lag complaint analysis — "still a laggy issue with the naimation"
+  found: The shift timer is 1000ms (line 3458). During the 1s hold the card sits in RIGHT slot idle. Then shift begins: old LEFT card (if any) slides out over 420ms (line 3473), and NEW card glides into LEFT slot over 440ms (line 3501). Total perceived: 1s idle + 440ms glide. With the clipping bug the glide is partially invisible, and the user likely experiences the moment of "card materializing" at the end of the glide (when it enters the un-clipped final position) as "lag/stutter". Once overflow: visible is applied, the glide will be fully visible and the lag perception should resolve.
+  implication: The "lag" is a consequence of the clipping — not a separate timing bug. Removing the clip should fix both symptoms simultaneously. If user still reports lag after the fix, re-open with timing-specific evidence.
+
+### Re-opened Resolution
+
+root_cause_v2: |
+  `.spell-stage-card { overflow: hidden }` at game.css line 201 clips the
+  inner `.spell-stage-card-inner` during the shift-glide animation. The
+  inner card starts at `transform: translate(+dx, 0)` (positioned to the
+  right of the LEFT slot's rect, where the RIGHT slot is) and glides to
+  identity. For the full 440ms glide only the portion of the inner card
+  that has entered the parent's rect is visible; the rest is clipped.
+  User perceives "card half-hidden under the UI" and "laggy animation"
+  (really: partially invisible animation).
+
+  This was masked by the prior no-animation bug (v0.11.31 and earlier).
+  The v0.11.32 fix made the animation play — which exposed this
+  second-order clipping bug.
+
+fix_v2: |
+  Change `overflow: hidden` → `overflow: visible` on `.spell-stage-card`
+  in src/grid_tactics/server/static/game.css line 201. The slot's width
+  constraint (280px) is still respected by the flex layout, so the card
+  sits correctly at rest. During the glide animation, the inner can now
+  be rendered outside the slot's bounds without being clipped.
+
+  No visual regression expected: the inner card HTML already has its own
+  border-radius, and the sibling `.spell-stage-react` already works with
+  overflow: visible.
+
+verification_v2: |
+  Pending: deploy to Railway, reproduce on live site, confirm card is
+  fully visible throughout the shift glide.
+
+files_changed_v2:
+  - src/grid_tactics/server/static/game.css (line 201: overflow: hidden → overflow: visible)
