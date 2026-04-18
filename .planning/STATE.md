@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Online PvP Dueling
 status: in_progress
-stopped_at: "Phase 14.7 Plan 02 SHIPPED. 3-phase turn state machine wired: TurnPhase extended append-only with START_OF_TURN=2 / END_OF_TURN=3, ReactContext IntEnum introduced (6 values tagging WHY a REACT window is open), GameState gains react_context + react_return_phase fields (default None, full to_dict/from_dict round-trip). resolve_react_stack dispatches on react_return_phase instead of hardcoding turn-advance: None defaults to legacy AFTER_ACTION path so pre-14.7 callers are byte-identical. Four new phase-transition helpers exported from react_stack.py: enter_start_of_turn / enter_end_of_turn (placeholders passing straight through until 14.7-03 hooks trigger firing), close_start_react_and_enter_action (start react PASS-PASS exit — no turn flip), close_end_react_and_advance_turn (end/legacy react PASS-PASS exit — runs tail + enters new active player's START). _close_end_of_turn_and_flip helper deduplicated the turn-advance tail: the pending_death_target resume path in action_resolver.py shrank from ~35 inline lines to a single call. All 6 `phase=TurnPhase.REACT` sites in action_resolver.py now tag react_context=AFTER_ACTION / react_return_phase=ACTION. legal_actions returns () for START/END phases; events.py submit_action loop detects START/END and calls enter_start_of_turn / enter_end_of_turn directly (resolve_action does NOT accept START/END phase inputs — would raise). Safety counter AUTO_ADVANCE_MAX=50 catches infinite-loop regressions. Rule-1 fix captured inside the helper: the old main resolve_react_stack tail silently skipped the discarded_this_turn → discarded_last_turn flip; the resume path did it. Helper now always flips — correct behavior for Prohibition's discarded_last_turn gate. 16 new tests (test_enums +5, test_game_state +4, test_react_stack +12). view_filter.py byte-unchanged — confirmed via grep, uses copy.deepcopy so int fields flow through transparently. Commits: d2e6303 (feat Task 1) + d842ab7 (feat Task 2). Both pushed to master; Railway auto-deployed. Baseline failures unchanged at 6 (5 from 14.7-01 closeout + 1 RL test_self_play that was already on master — verified via git stash). Next: 14.7-03 (ON_START_OF_TURN / ON_END_OF_TURN triggered effects + card JSON retagging). Hook points ready: enter_start_of_turn and enter_end_of_turn have placeholder bodies that 14.7-03 will populate with trigger firing + conditional REACT opening."
-last_updated: "2026-04-18T18:48:00.000Z"
+stopped_at: "Phase 14.7 Plan 03 SHIPPED. Start/End/Summon triggered effects pipeline live. TriggerType IntEnum extended append-only with ON_SUMMON=8, ON_START_OF_TURN=9, ON_END_OF_TURN=10 (legacy PASSIVE=5 kept for forward-compat but no card uses it anymore). 9 card JSONs retagged (3 Diodebots + Eclipse Shade + Flame Wyrm draw + Gargoyle Sorceress buffs -> on_summon; Fallen Paladin -> on_start_of_turn; Emberplague Rat + Dark Matter Battery -> on_end_of_turn). react_stack.py gains fire_start_of_turn_triggers / fire_end_of_turn_triggers (row-col order, active player's minions only). enter_start_of_turn populated: phase=START -> tick_status_effects (burns) -> fire Start triggers -> open REACT window (AFTER_START_TRIGGER, return=START) when triggers fired; else shortcut to ACTION. enter_end_of_turn populated: phase=END -> fire End triggers -> open REACT (BEFORE_END_OF_TURN, return=END) when triggers fired; else shortcut to _close_end_of_turn_and_flip + enter_start_of_turn. resolve_react_stack AFTER_ACTION path rewired via enter_end_of_turn (shortcut-when-no-triggers preserves legacy observable behavior for ~99% of turns). _close_end_of_turn_and_flip slimmed: no more tick/passive calls (moved to enter_start_of_turn) — just discard flip + active-player flip + mana regen + auto-draw. Bridge in action_resolver._deploy_minion fires BOTH ON_PLAY and ON_SUMMON so retagged Summon: minions keep working until 14.7-04 wires compound two-window dispatch. advance_to_next_turn test helper drives PASS through any open react/start/end phase to next ACTION (safety cap 50 matching events.py). +22 new tests across test_enums (+1), test_card_loader (+10), test_react_stack (+11). Baseline failures unchanged at 10 (1 spectator, 4 LEAP, 1 RL self-play, 4 tensor engine parity — all pre-existing). Commits: b9e5af2 (feat Task 1) + 4dca00b (feat Task 2). Both pushed to master; Railway auto-deployed. Net observable behavior: Fallen Paladin heals at owner's turn start; Emberplague Rat applies burn to adjacent enemies at owner's turn end; Dark Matter Battery damages opponent at owner's turn end — all gated by REACT windows for 14.7-07's OPPONENT_START_OF_TURN / OPPONENT_END_OF_TURN wiring. Next: 14.7-04 (summon compound windows — Window A declaration react + Window B post-effect react; replaces the _deploy_minion bridge)."
+last_updated: "2026-04-18T21:45:00.000Z"
 last_activity: 2026-04-18
 progress:
   total_phases: 6
   completed_phases: 4
   total_plans: 23
-  completed_plans: 14
+  completed_plans: 15
   percent: 0
 ---
 
@@ -25,10 +25,10 @@ See: .planning/PROJECT.md (updated 2026-04-04)
 
 ## Current Position
 
-Phase: 14.7 (turn-structure-overhaul) — IN PROGRESS (Plans 01 + 02 of 10 shipped 2026-04-18)
-Plan: 2 of 10 (3-phase turn state machine + react_return_phase dispatch) — COMPLETE
-Next: 14.7-03 (ON_START_OF_TURN / ON_END_OF_TURN triggered effects + card JSON retagging) — 14.7-04 through 14.7-10 queued
-Status: Plan 14.7-02 shipped as pure state-machine wiring — no observable behavior change today. TurnPhase extended append-only (START_OF_TURN=2, END_OF_TURN=3). ReactContext IntEnum introduced. GameState.react_context + react_return_phase fields added with full to_dict/from_dict round-trip. resolve_react_stack dispatches on react_return_phase (None default = legacy AFTER_ACTION). 4 phase-transition helpers in react_stack.py: enter_start_of_turn, enter_end_of_turn (both placeholders until 14.7-03), close_start_react_and_enter_action, close_end_react_and_advance_turn. _close_end_of_turn_and_flip helper deduplicated turn-advance tail. All 6 phase=REACT sites in action_resolver.py tag context + return_phase. legal_actions returns () for START/END phases. events.py auto-advance loop routes to helpers with safety counter=50. Rule-1 fix captured: discard-flip now correctly happens on main path too (was only on pending_death resume path before). 16 new tests; 0 regressions. Commits: d2e6303 (feat Task 1) + d842ab7 (feat Task 2). Both pushed to master; Railway auto-deployed. Baseline failures 6 unchanged. Hook points ready for 14.7-03 start/end trigger firing.
+Phase: 14.7 (turn-structure-overhaul) — IN PROGRESS (Plans 01 + 02 + 03 of 10 shipped 2026-04-18)
+Plan: 3 of 10 (Start/End/Summon triggered effects pipeline) — COMPLETE
+Next: 14.7-04 (summon compound windows — Window A + Window B dispatch; replaces _deploy_minion bridge) — 14.7-05 through 14.7-10 queued
+Status: Plan 14.7-03 shipped with observable gameplay wiring: Fallen Paladin heals at owner's turn start; Emberplague Rat applies burn to adjacent enemies at owner's turn end; Dark Matter Battery damages opponent at owner's turn end. All gated by REACT windows (AFTER_START_TRIGGER / BEFORE_END_OF_TURN) for 14.7-07's OPPONENT_START_OF_TURN / OPPONENT_END_OF_TURN react conditions. TriggerType IntEnum extended append-only: ON_SUMMON=8, ON_START_OF_TURN=9, ON_END_OF_TURN=10. 9 card JSONs retagged (6 Summon: minions on_play -> on_summon; Fallen Paladin passive -> on_start_of_turn; Emberplague + DM Battery passive -> on_end_of_turn). fire_start_of_turn_triggers / fire_end_of_turn_triggers helpers fire ON_START_OF_TURN / ON_END_OF_TURN effects in (row, col) order for active-player-owned minions. enter_start_of_turn: phase=START -> tick burns -> fire Start triggers -> open REACT if triggers (AFTER_START_TRIGGER / return=START) else shortcut to ACTION. enter_end_of_turn: phase=END -> fire End triggers -> open REACT if triggers (BEFORE_END_OF_TURN / return=END) else shortcut to _close_end_of_turn_and_flip + enter_start_of_turn. resolve_react_stack AFTER_ACTION path rewired via enter_end_of_turn (shortcut-when-no-triggers preserves legacy observable behavior for ~99% of turns with no End-trigger minions). _close_end_of_turn_and_flip slimmed (no more tick/passive — moved to enter_start_of_turn). Bridge in action_resolver._deploy_minion fires BOTH ON_PLAY and ON_SUMMON so the 6 retagged Summon: minions keep working until 14.7-04 wires compound two-window dispatch. advance_to_next_turn test helper added (safety cap 50). 22 new tests (+1 enums, +10 card_loader, +11 react_stack); 0 regressions. Commits: b9e5af2 (feat Task 1) + 4dca00b (feat Task 2). Both pushed to master; Railway auto-deployed. Baseline failures unchanged at 10 (1 spectator, 4 LEAP game_loop, 1 RL self-play, 4 tensor engine parity — all pre-existing and predating 14.7). Hook points ready for 14.7-04 compound summon windows (declaration react -> fire ON_SUMMON -> post-effect react).
 
 ### Phase 14.6 closeout context (retained for lookback)
 
@@ -74,7 +74,7 @@ Audits (both PASS):
 
 All 9 roadmap success criteria PASS. DEV-01 through DEV-09 marked Complete in REQUIREMENTS.md traceability table. Phase 14.6 marked `[x]` complete (2026-04-11) in ROADMAP.md with 4/4 plans.
 
-Last activity: 2026-04-18 — Completed 14.7-02-PLAN.md (3-phase turn state machine wired: TurnPhase extended with START_OF_TURN/END_OF_TURN, ReactContext enum, react_return_phase dispatch, 4 phase-transition helpers; infrastructure for 14.7-03 triggered-effect firing). Previous: 14.7-01 (Deferred magic resolution via cast_mode originator).
+Last activity: 2026-04-18 — Completed 14.7-03-PLAN.md (Start/End/Summon triggered effects pipeline: TriggerType extended append-only with ON_SUMMON/ON_START_OF_TURN/ON_END_OF_TURN, 9 card JSONs retagged, fire_start/end_of_turn_triggers helpers + populated enter_start/end_of_turn with real trigger firing and react windows, resolve_react_stack AFTER_ACTION rewired through enter_end_of_turn with shortcut-when-no-triggers, _deploy_minion bridge for on_summon until 14.7-04 wires compound windows). Previous: 14.7-02 (3-phase turn state machine), 14.7-01 (Deferred magic resolution).
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -97,6 +97,34 @@ Reusable infrastructure for later 14.7 plans:
 - 14.7-03: ReactContext already has AFTER_START_TRIGGER + BEFORE_END_OF_TURN members — 14.7-03 just uses them.
 - 14.7-03: React windows from start/end triggers set react_return_phase=START_OF_TURN / END_OF_TURN; resolve_react_stack already routes correctly.
 - 14.7-04 (summon compound windows): ReactContext.AFTER_SUMMON_DECLARATION / AFTER_SUMMON_EFFECT already reserved.
+
+### Phase 14.7 Plan 03 closeout (2026-04-18)
+
+Plan 14.7-03 shipped as the third plan of Phase 14.7 — Start/End/Summon triggered effects pipeline. First plan of the phase that produces observable gameplay changes (prior plans were pure infrastructure). Commit trail:
+
+- b9e5af2 feat(14.7-03): add ON_SUMMON/ON_START_OF_TURN/ON_END_OF_TURN triggers + retag 9 cards (Task 1)
+- 4dca00b feat(14.7-03): wire Start/End trigger firing + react windows + advance_to_next_turn (Task 2)
+
+Both commits pushed to master; Railway auto-deployed. The 14.7-02 placeholder helpers (enter_start_of_turn, enter_end_of_turn) are now populated with real trigger firing + REACT window opening. Shortcut-when-no-triggers policy (only open a REACT window when triggers fire) kept the ~40 direct resolve_react_stack test callers passing without xfails.
+
+Observable gameplay impact:
+- Fallen Paladin now heals 2🤍 at its owner's turn start (was "end of turn" semantically, but rules wording already matched)
+- Emberplague Rat applies is_burning to adjacent enemies at its owner's turn end (was firing at owner's turn start; rules text said "end of turn" so flavor-code alignment fixed)
+- Dark Matter Battery deals damage-equal-to-its-DM-stacks to opponent at its owner's turn end (was "end of turn" flavor already; code alignment fixed)
+- 6 Summon: minions (Diodebots tutor + Eclipse Shade self-burn + Flame Wyrm draw + Gargoyle Sorceress buffs) retagged on_play -> on_summon. Behavior preserved through a one-line bridge in _deploy_minion that fires both ON_PLAY and ON_SUMMON. 14.7-04 replaces the bridge with compound two-window dispatch.
+
+Data/code symmetry audit:
+- No card JSON uses `trigger: "passive"` anymore (grep verified empty).
+- TriggerType.PASSIVE kept in the enum and _fire_passive_effects kept as a LEGACY no-op in case a future card re-introduces the trigger.
+- GLOSSARY.md and game.js KEYWORD_GLOSSARY already had Start:/End:/Summon: entries in lock-step (added in earlier plan work per CLAUDE.md sync convention). No edits required.
+
+Test posture: 745 non-RL tests pass (up from 727 pre-plan). Baseline failures unchanged at 10 (1 spectator + 4 LEAP game_loop + 1 RL self-play + 4 tensor engine parity — all pre-existing and predating 14.7). Added 22 new tests (+1 enums, +10 card_loader, +11 react_stack).
+
+Reusable infrastructure for later 14.7 plans:
+- 14.7-04 (summon compound windows): 6 Summon: minion JSONs already retagged on_summon. ReactContext.AFTER_SUMMON_DECLARATION/AFTER_SUMMON_EFFECT reserved since 14.7-02. `_deploy_minion` bridge provides a well-isolated single site for 14.7-04 to replace with the two-window handler.
+- 14.7-05 (simultaneous priority + modal): fire_start_of_turn_triggers / fire_end_of_turn_triggers use (row, col) ordering today; 14.7-05 replaces with priority queue + modal for multi-owner simultaneous triggers.
+- 14.7-06 (fizzle rule): triggers resolve blindly today; 14.7-06 adds fizzle checks inside fire_*_triggers helpers.
+- 14.7-07 (react condition matching): shortcut-when-no-triggers gate (`_has_triggers_for`) is the clean extension point — 14.7-07 will also return True when opponent has react cards matching OPPONENT_START_OF_TURN / OPPONENT_END_OF_TURN.
 
 ### Phase 14.7 Plan 01 closeout (2026-04-18)
 
