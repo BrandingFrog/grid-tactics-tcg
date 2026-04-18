@@ -263,6 +263,22 @@ def _fanout_game_start_to_spectators(session, base_state_dict, card_defs):
         )
 
 
+def _tests_results_path():
+    """Resolve the filesystem path the test results log writes to.
+
+    Railway mounts a persistent volume at /data/persist (configured via
+    the Railway GraphQL API) so the log survives redeploys. The server
+    reads TESTS_RESULTS_PATH from the environment so the deploy can swap
+    this at runtime; local dev falls back to the repo-relative path.
+    """
+    import os
+    from pathlib import Path
+    env_path = os.environ.get("TESTS_RESULTS_PATH")
+    if env_path:
+        return Path(env_path)
+    return Path(__file__).resolve().parents[3] / "data" / "tests" / "results.jsonl"
+
+
 def _apply_test_op(sandbox, op):
     """Apply a single test-scenario setup op to the given sandbox session.
 
@@ -1072,9 +1088,8 @@ def register_events(room_manager: RoomManager) -> None:
 
     @socketio.on("tests_submit_result")
     def handle_tests_submit_result(data):
-        import json as _json
         import datetime as _dt
-        from pathlib import Path
+        import json as _json
         if not isinstance(data, dict):
             emit("error", {"msg": "tests_submit_result requires a dict"})
             return
@@ -1088,7 +1103,7 @@ def register_events(room_manager: RoomManager) -> None:
         if entry["result"] not in ("pass", "fail", "skip"):
             emit("error", {"msg": "result must be pass/fail/skip"})
             return
-        path = Path(__file__).resolve().parents[3] / "data" / "tests" / "results.jsonl"
+        path = _tests_results_path()
         try:
             path.parent.mkdir(parents=True, exist_ok=True)
             with open(path, "a", encoding="utf-8") as f:
@@ -1108,8 +1123,7 @@ def register_events(room_manager: RoomManager) -> None:
         500 entries to keep the payload sane.
         """
         import json as _json
-        from pathlib import Path
-        path = Path(__file__).resolve().parents[3] / "data" / "tests" / "results.jsonl"
+        path = _tests_results_path()
         entries: list[dict] = []
         try:
             with open(path, encoding="utf-8") as f:
