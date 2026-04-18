@@ -4138,11 +4138,12 @@ function getLegalByType(actionType) {
 
 // True when the server has put us in a react window
 function isReactWindow() {
-    return gameState
-        && gameState.phase === 1
-        && gameState.react_player_idx === myPlayerIdx
-        && legalActions
-        && legalActions.length > 0;
+    if (!gameState || gameState.phase !== 1) return false;
+    if (!legalActions || legalActions.length === 0) return false;
+    // Sandbox drives both sides, so any viewer is "in the react window"
+    // when the state is in REACT phase with legal reacts available.
+    if (sandboxMode) return true;
+    return gameState.react_player_idx === myPlayerIdx;
 }
 
 // Hand indices that are legal as PLAY_REACT (action_type 5)
@@ -4404,10 +4405,18 @@ function canPlayCard(handIdx) {
 }
 
 // Handle clicking a hand card
-function onHandCardClick(handIdx) {
+// ownerIdx — in sandbox, which player's hand the card came from. Live
+// game passes nothing; own hand is always myPlayerIdx.
+function onHandCardClick(handIdx, ownerIdx) {
     if (isSpectator) return;  // spectators cannot play cards
-    // Phase 14 PLAY-02: react window has its own click semantics
+    // Phase 14 PLAY-02: react window has its own click semantics.
+    // Sandbox: the clicked hand's owner must be the current reacting
+    // player — otherwise the card_index matches the wrong side's legal
+    // actions and we'd submit the opponent's react.
     if (isReactWindow()) {
+        if (sandboxMode && ownerIdx != null && gameState && ownerIdx !== gameState.react_player_idx) {
+            return;  // this hand isn't the reacting side — inert click
+        }
         var reactAction = null;
         legalActions.forEach(function(a) {
             if (a.action_type === 5 && a.card_index === handIdx) reactAction = a;
@@ -4417,6 +4426,11 @@ function onHandCardClick(handIdx) {
             if (reactAction.target_pos) payload.target_pos = reactAction.target_pos;
             submitAction(payload);
         }
+        return;
+    }
+    // Outside react phase, in sandbox, the clicked hand's owner must be
+    // the active player — otherwise PLAY_CARD actions wouldn't match.
+    if (sandboxMode && ownerIdx != null && gameState && gameState.phase === 0 && ownerIdx !== gameState.active_player_idx) {
         return;
     }
     var isMyTurn = legalActions && legalActions.length > 0;
@@ -5688,10 +5702,19 @@ function highlightBoard() {
 function updateHandHighlights() {
     if (isReactWindow()) {
         var reactIdxMap = getLegalReactCardIndices();
+        // Sandbox: card_index in legalActions refers to react_player's
+        // hand only. Restrict the playable glow to that hand's DOM
+        // mount so the OTHER player's cards don't falsely light up.
+        var reactOnlyContainer = null;
+        if (sandboxMode && gameState) {
+            reactOnlyContainer = document.getElementById(
+                'sandbox-hand-p' + gameState.react_player_idx);
+        }
         document.querySelectorAll('.card-frame-hand').forEach(function(card) {
             var idx = parseInt(card.dataset.handIdx, 10);
             card.classList.remove('card-playable', 'card-selected-hand');
-            if (reactIdxMap[idx]) {
+            var inReactHand = !reactOnlyContainer || reactOnlyContainer.contains(card);
+            if (inReactHand && reactIdxMap[idx]) {
                 card.classList.add('card-react-playable');
             } else {
                 card.classList.remove('card-react-playable');
@@ -6131,13 +6154,13 @@ function renderHand(opts) {
                         hideGameTooltip();
                     }
                 });
-                (function(idx, nid) {
+                (function(idx, nid, owner) {
                     cardEl.addEventListener('click', function() {
                         // Pin preview in the tooltip sidebar
                         pinHandCardPreview(nid, this);
-                        onHandCardClick(idx);
+                        onHandCardClick(idx, owner);
                     });
-                })(handIndex, numericId);
+                })(handIndex, numericId, ownerIdx);
                 // Phase 14.6-03: additive "Move to..." affordance in sandbox
                 // mode. The existing play-from-hand click handler above is
                 // unchanged; this button is a sibling affordance.
