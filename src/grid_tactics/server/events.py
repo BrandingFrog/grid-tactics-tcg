@@ -1104,6 +1104,10 @@ def register_events(room_manager: RoomManager) -> None:
             "title": test["title"],
             "instructions": test.get("instructions", ""),
             "expected": test.get("expected", ""),
+            # Optional client hint — e.g. `{ "sacrifice_animation": "shatter" }`
+            # picks which of the four transcend variants fires on the next
+            # SACRIFICE. The client sets window.__sacrificeVariant from this.
+            "client_hints": test.get("client_hints") or {},
         })
 
     @socketio.on("tests_submit_result")

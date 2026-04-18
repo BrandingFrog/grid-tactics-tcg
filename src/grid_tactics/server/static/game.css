@@ -3538,6 +3538,14 @@ body {
   animation: damage-float 900ms ease-out forwards;
 }
 
+/* Sacrifice portal variant — flickers the ring's dash pattern while
+   the JS transition handles scale + opacity independently. */
+@keyframes sac-portal-spin {
+  0%   { border-style: solid; }
+  50%  { border-style: dashed; }
+  100% { border-style: solid; }
+}
+
 /* HP life-total popups — same float animation as minion damage, but
    positioned absolutely by the runtime and escalated to fixed z-index
    so they ride over pile buttons and the sandbox toolbar. */

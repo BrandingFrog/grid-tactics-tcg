@@ -3098,23 +3098,32 @@ var SACRIFICE_JUMPER_SVG = (
     + '</g></svg>'
 );
 
+// Dispatcher — picks one of four sacrifice animation variants based on
+// window.__sacrificeVariant (set by the Tests tab when a scenario
+// specifies a "variant" field, or manually in the console). Defaults
+// to 'jumper' (the original pixel silhouette).
 function playSacrificeTranscendAnimation(job, done) {
-    var pos = job.payload && job.payload.pos;
-    if (!pos) { setTimeout(done, 0); return; }
+    var variant = (typeof window !== 'undefined' && window.__sacrificeVariant)
+        || 'jumper';
+    var impl = ({
+        jumper: _playSacJumper,
+        ghost:  _playSacGhostRise,
+        shatter: _playSacShatter,
+        portal: _playSacPortal,
+    })[variant] || _playSacJumper;
+    impl(job, done);
+}
 
+// Shared helpers — resolve the source tile rect and the enemy-face vector.
+function _sacrificeTileContext(job) {
+    var pos = job.payload && job.payload.pos;
+    if (!pos) return null;
     var tile = document.querySelector(
         '.board-cell[data-row="' + pos[0] + '"][data-col="' + pos[1] + '"]');
-    if (!tile) { setTimeout(done, 0); return; }
-
+    if (!tile) return null;
     var minionEl = tile.querySelector('.board-minion');
     var rect = (minionEl || tile).getBoundingClientRect();
-
-    // Hide the original sprite so only the silhouette is visible during the jump.
     if (minionEl) minionEl.style.visibility = 'hidden';
-
-    // Target the enemy HP display for the jump vector. If the sacrificed minion
-    // sat on row 4 (P2's back row) the enemy is P2 (index 1); row 0 (P1's back
-    // row) means the enemy is P1.
     var enemyIdx = (pos[0] === 4) ? 1 : 0;
     var enemyHpEl = document.getElementById(_hpStatElementId(enemyIdx));
     var jumpDx = 0;
@@ -3125,37 +3134,155 @@ function playSacrificeTranscendAnimation(job, done) {
         var mCy = rect.top + rect.height / 2;
         var hCx = hpRect.left + hpRect.width / 2;
         var hCy = hpRect.top + hpRect.height / 2;
-        jumpDx = (hCx - mCx) * 0.35;
-        jumpDy = (hCy - mCy) * 0.35;
+        jumpDx = (hCx - mCx) * 0.45;
+        jumpDy = (hCy - mCy) * 0.45;
     }
+    return { rect: rect, enemyIdx: enemyIdx, jumpDx: jumpDx, jumpDy: jumpDy };
+}
 
+// A — Jumper silhouette leaps toward enemy face, fades.
+function _playSacJumper(job, done) {
+    var ctx = _sacrificeTileContext(job);
+    if (!ctx) { setTimeout(done, 0); return; }
     var jumper = document.createElement('div');
-    jumper.className = 'sacrifice-jumper';
-    jumper.style.position = 'fixed';
-    jumper.style.left = rect.left + 'px';
-    jumper.style.top = rect.top + 'px';
-    jumper.style.width = rect.width + 'px';
-    jumper.style.height = rect.height + 'px';
-    jumper.style.zIndex = '150';
-    jumper.style.pointerEvents = 'none';
-    jumper.style.transition = 'transform 850ms cubic-bezier(0.2, 0.6, 0.3, 1), opacity 850ms ease-in';
-    jumper.style.willChange = 'transform, opacity';
+    jumper.className = 'sacrifice-jumper sac-anim-overlay';
+    jumper.style.cssText = 'position:fixed;left:' + ctx.rect.left + 'px;top:' + ctx.rect.top + 'px;width:' + ctx.rect.width + 'px;height:' + ctx.rect.height + 'px;z-index:150;pointer-events:none;transition:transform 850ms cubic-bezier(0.2,0.6,0.3,1),opacity 850ms ease-in;will-change:transform,opacity;';
     jumper.innerHTML = SACRIFICE_JUMPER_SVG;
     document.body.appendChild(jumper);
-
-    // Two rAFs guarantee the browser picks up the initial style before the
-    // transition kicks off (otherwise the transform jumps instantly).
-    requestAnimationFrame(function() {
-        requestAnimationFrame(function() {
-            jumper.style.transform = 'translate(' + jumpDx + 'px, ' + jumpDy + 'px) scale(1.3)';
-            jumper.style.opacity = '0';
-        });
-    });
-
+    requestAnimationFrame(function() { requestAnimationFrame(function() {
+        jumper.style.transform = 'translate(' + ctx.jumpDx + 'px,' + ctx.jumpDy + 'px) scale(1.3)';
+        jumper.style.opacity = '0';
+    }); });
     setTimeout(function() {
         if (jumper.parentNode) jumper.parentNode.removeChild(jumper);
         done();
     }, 880);
+}
+
+// B — Ghost rise: purple ghost silhouette ascends out of the tile and
+// dissolves while the original sprite tinges purple before fading.
+function _playSacGhostRise(job, done) {
+    var ctx = _sacrificeTileContext(job);
+    if (!ctx) { setTimeout(done, 0); return; }
+    var ghost = document.createElement('div');
+    ghost.className = 'sac-anim-overlay sac-ghost';
+    ghost.style.cssText = 'position:fixed;left:' + ctx.rect.left + 'px;top:' + ctx.rect.top + 'px;width:' + ctx.rect.width + 'px;height:' + ctx.rect.height + 'px;z-index:150;pointer-events:none;transition:transform 1000ms cubic-bezier(0.3,0,0.4,1),opacity 1000ms ease-out,filter 1000ms ease-out;will-change:transform,opacity,filter;';
+    ghost.innerHTML = (
+        '<div style="position:absolute;inset:0;border-radius:12px;background:radial-gradient(circle at 50% 60%, rgba(179,71,255,0.75) 0%, rgba(130,30,200,0.55) 35%, rgba(40,0,80,0.2) 65%, transparent 85%);mix-blend-mode:screen;filter:blur(2px);"></div>'
+        + '<div style="position:absolute;inset:-12% 10% 30% 10%;border-radius:50%;background:radial-gradient(ellipse at 50% 40%, rgba(255,255,255,0.85) 0%, rgba(217,168,255,0.55) 35%, transparent 75%);mix-blend-mode:screen;filter:blur(3px);"></div>'
+    );
+    document.body.appendChild(ghost);
+    requestAnimationFrame(function() { requestAnimationFrame(function() {
+        ghost.style.transform = 'translate(' + (ctx.jumpDx * 0.3) + 'px,' + (ctx.jumpDy * 0.7 - 40) + 'px) scale(1.4)';
+        ghost.style.opacity = '0';
+        ghost.style.filter = 'blur(8px)';
+    }); });
+    setTimeout(function() {
+        if (ghost.parentNode) ghost.parentNode.removeChild(ghost);
+        done();
+    }, 1050);
+}
+
+// C — Shatter: 8 purple fragments scatter from the tile center outward
+// and fade. A brief white flash kicks it off.
+function _playSacShatter(job, done) {
+    var ctx = _sacrificeTileContext(job);
+    if (!ctx) { setTimeout(done, 0); return; }
+    var cx = ctx.rect.left + ctx.rect.width / 2;
+    var cy = ctx.rect.top + ctx.rect.height / 2;
+
+    var flash = document.createElement('div');
+    flash.className = 'sac-anim-overlay sac-flash';
+    flash.style.cssText = 'position:fixed;left:' + (cx - 60) + 'px;top:' + (cy - 60) + 'px;width:120px;height:120px;z-index:151;pointer-events:none;border-radius:50%;background:radial-gradient(circle,rgba(255,255,255,0.95) 0%,rgba(217,168,255,0.6) 40%,transparent 75%);opacity:0;transition:opacity 160ms ease-out,transform 160ms ease-out;';
+    document.body.appendChild(flash);
+
+    var fragEls = [];
+    var N = 8;
+    for (var i = 0; i < N; i++) {
+        var frag = document.createElement('div');
+        var angle = (i / N) * Math.PI * 2;
+        var size = 18 + Math.random() * 14;
+        frag.className = 'sac-anim-overlay sac-frag';
+        frag.style.cssText = 'position:fixed;left:' + (cx - size/2) + 'px;top:' + (cy - size/2) + 'px;width:' + size + 'px;height:' + size + 'px;z-index:150;pointer-events:none;background:linear-gradient(135deg,#d9a8ff 0%,#8822cc 100%);box-shadow:0 0 12px rgba(179,71,255,0.8);clip-path:polygon(20% 0%,80% 0%,100% 50%,80% 100%,20% 100%,0% 50%);transition:transform 900ms cubic-bezier(0.2,0.6,0.3,1),opacity 900ms ease-in;will-change:transform,opacity;';
+        frag._angle = angle;
+        document.body.appendChild(frag);
+        fragEls.push(frag);
+    }
+
+    requestAnimationFrame(function() { requestAnimationFrame(function() {
+        flash.style.opacity = '1';
+        flash.style.transform = 'scale(1.8)';
+        fragEls.forEach(function(f) {
+            var dist = 110 + Math.random() * 50;
+            var dx = Math.cos(f._angle) * dist + ctx.jumpDx * 0.4;
+            var dy = Math.sin(f._angle) * dist + ctx.jumpDy * 0.4;
+            f.style.transform = 'translate(' + dx + 'px,' + dy + 'px) rotate(' + (Math.random() * 720 - 360) + 'deg)';
+            f.style.opacity = '0';
+        });
+    }); });
+    setTimeout(function() {
+        flash.style.opacity = '0';
+        flash.style.transform = 'scale(3)';
+    }, 200);
+
+    setTimeout(function() {
+        fragEls.forEach(function(f) { if (f.parentNode) f.parentNode.removeChild(f); });
+        if (flash.parentNode) flash.parentNode.removeChild(flash);
+        done();
+    }, 950);
+}
+
+// D — Portal warp: a swirling purple ring opens beneath the minion;
+// the minion spirals inward while shrinking to a point, then the portal
+// closes. Uses a clone of the minion so the CSS rotation doesn't spin
+// the whole board cell.
+function _playSacPortal(job, done) {
+    var ctx = _sacrificeTileContext(job);
+    if (!ctx) { setTimeout(done, 0); return; }
+    var pos = job.payload && job.payload.pos;
+    var tile = document.querySelector(
+        '.board-cell[data-row="' + pos[0] + '"][data-col="' + pos[1] + '"]');
+    var minionEl = tile && tile.querySelector('.board-minion');
+
+    var cx = ctx.rect.left + ctx.rect.width / 2;
+    var cy = ctx.rect.top + ctx.rect.height / 2;
+
+    // Portal ring — a purple double-ring that grows then shrinks.
+    var portal = document.createElement('div');
+    portal.className = 'sac-anim-overlay sac-portal';
+    portal.style.cssText = 'position:fixed;left:' + (cx - 90) + 'px;top:' + (cy - 90) + 'px;width:180px;height:180px;z-index:149;pointer-events:none;border-radius:50%;border:4px solid rgba(217,168,255,0.9);box-shadow:0 0 24px rgba(179,71,255,0.8),inset 0 0 32px rgba(179,71,255,0.7);background:radial-gradient(circle,rgba(40,0,80,0.7) 0%,rgba(179,71,255,0.3) 50%,transparent 80%);opacity:0;transform:scale(0.2) rotate(0deg);transition:transform 900ms cubic-bezier(0.2,0.6,0.3,1),opacity 900ms ease-out;animation:sac-portal-spin 900ms linear;';
+    document.body.appendChild(portal);
+
+    // Clone the minion so we can spiral/shrink it without touching the real tile.
+    var clone = null;
+    if (minionEl) {
+        clone = minionEl.cloneNode(true);
+        clone.className = 'sac-anim-overlay sac-portal-clone ' + minionEl.className;
+        clone.style.cssText = 'position:fixed;left:' + ctx.rect.left + 'px;top:' + ctx.rect.top + 'px;width:' + ctx.rect.width + 'px;height:' + ctx.rect.height + 'px;z-index:150;pointer-events:none;visibility:visible;transition:transform 900ms cubic-bezier(0.4,0,1,0.7),opacity 900ms ease-in;will-change:transform,opacity;';
+        document.body.appendChild(clone);
+    }
+
+    requestAnimationFrame(function() { requestAnimationFrame(function() {
+        portal.style.opacity = '1';
+        portal.style.transform = 'scale(1) rotate(360deg)';
+        if (clone) {
+            clone.style.transform = 'translate(' + (ctx.jumpDx * 0.2) + 'px,' + (ctx.jumpDy * 0.2) + 'px) scale(0.05) rotate(720deg)';
+            clone.style.opacity = '0';
+        }
+    }); });
+
+    // Close portal (shrink + fade) after main phase.
+    setTimeout(function() {
+        portal.style.transition = 'transform 300ms ease-in,opacity 300ms ease-in';
+        portal.style.transform = 'scale(0.1) rotate(540deg)';
+        portal.style.opacity = '0';
+    }, 700);
+
+    setTimeout(function() {
+        if (portal.parentNode) portal.parentNode.removeChild(portal);
+        if (clone && clone.parentNode) clone.parentNode.removeChild(clone);
+        done();
+    }, 1050);
 }
 
 // ============================================================
@@ -6382,6 +6509,9 @@ function _wireTestsOnce() {
             _setTestsExpected(data.expected || '');
             var ta = document.getElementById('tests-comment');
             if (ta) ta.value = '';
+            // Client hints — picks which animation variant a test wants.
+            var hints = data.client_hints || {};
+            window.__sacrificeVariant = hints.sacrifice_animation || null;
         });
         socket.on('tests_result_saved', function() {
             // Move to next test (or show summary when done).

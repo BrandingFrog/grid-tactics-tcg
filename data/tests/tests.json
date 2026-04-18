@@ -10,10 +10,53 @@
     },
     "tests": [
         {
-            "id": "sacrifice-transcend-animation",
-            "title": "Sacrifice across the field — minion transcends with jumper silhouette + damage blip",
-            "instructions": "1. P1's Common Rat is pre-placed on row 4 — P2's back row, the far edge — ready to jump off.\n2. If the instructions overlay covers the board, use the minimize button in its header.\n3. Click the Rat at the top of the board to select it.\n4. Click the Sacrifice action button.",
-            "expected": "The Rat sprite transforms into a pixel-style silhouette of a jumping figure (purple outlined, white glowing, limbs stretched). The silhouette jumps a short distance forward, then fades/transcends out of view. A damage blip pops on P2's face showing the damage dealt, and P2's HP drops by that amount.",
+            "id": "sacrifice-variant-a-jumper",
+            "title": "Sacrifice anim A — JUMPER (pixel silhouette leaps toward enemy face)",
+            "instructions": "1. P1's Common Rat is pre-placed on row 4 — ready to jump off.\n2. Click the Rat to select it.\n3. Click the Sacrifice action button.",
+            "expected": "Option A: A purple-outlined, white-glowing pixel-art silhouette of a jumping figure replaces the Rat, leaps toward P2's HP, and fades out mid-arc. P2 HP drops.",
+            "client_hints": {"sacrifice_animation": "jumper"},
+            "setup": [
+                {"op": "reset"},
+                {"op": "set_player", "player_idx": 0, "field": "current_mana", "value": 10},
+                {"op": "set_player", "player_idx": 0, "field": "max_mana", "value": 10},
+                {"op": "place", "player_idx": 0, "card_id": "rat", "row": 4, "col": 2},
+                {"op": "set_active", "player_idx": 0}
+            ]
+        },
+        {
+            "id": "sacrifice-variant-b-ghost",
+            "title": "Sacrifice anim B — GHOST RISE (purple spirit ascends)",
+            "instructions": "1. Click the Rat on row 4.\n2. Click the Sacrifice action button.",
+            "expected": "Option B: A soft purple glow wells up from the Rat, a ghostly spirit silhouette rises out of the tile, blurs and fades upward toward P2. No sharp pixel art — more of an aura/dissolve.",
+            "client_hints": {"sacrifice_animation": "ghost"},
+            "setup": [
+                {"op": "reset"},
+                {"op": "set_player", "player_idx": 0, "field": "current_mana", "value": 10},
+                {"op": "set_player", "player_idx": 0, "field": "max_mana", "value": 10},
+                {"op": "place", "player_idx": 0, "card_id": "rat", "row": 4, "col": 2},
+                {"op": "set_active", "player_idx": 0}
+            ]
+        },
+        {
+            "id": "sacrifice-variant-c-shatter",
+            "title": "Sacrifice anim C — SHATTER (white flash then 8 purple shards)",
+            "instructions": "1. Click the Rat on row 4.\n2. Click the Sacrifice action button.",
+            "expected": "Option C: A brief white-purple flash pops on the tile, then eight hexagonal purple shards fly outward in all directions, rotating as they go, and fade. The Rat is gone.",
+            "client_hints": {"sacrifice_animation": "shatter"},
+            "setup": [
+                {"op": "reset"},
+                {"op": "set_player", "player_idx": 0, "field": "current_mana", "value": 10},
+                {"op": "set_player", "player_idx": 0, "field": "max_mana", "value": 10},
+                {"op": "place", "player_idx": 0, "card_id": "rat", "row": 4, "col": 2},
+                {"op": "set_active", "player_idx": 0}
+            ]
+        },
+        {
+            "id": "sacrifice-variant-d-portal",
+            "title": "Sacrifice anim D — PORTAL (swirling ring pulls minion in)",
+            "instructions": "1. Click the Rat on row 4.\n2. Click the Sacrifice action button.",
+            "expected": "Option D: A purple swirling ring opens beneath the Rat. The Rat spirals inward and shrinks to a point while rotating; the ring then closes and fades.",
+            "client_hints": {"sacrifice_animation": "portal"},
             "setup": [
                 {"op": "reset"},
                 {"op": "set_player", "player_idx": 0, "field": "current_mana", "value": 10},
