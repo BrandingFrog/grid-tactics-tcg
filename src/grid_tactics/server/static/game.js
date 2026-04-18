@@ -4536,26 +4536,29 @@ function showSacrificePicker(handIdx, deployPos, targetPos, sacChoices) {
     var discardCount = (playedDef && playedDef.discard_cost_count) || 1;
     var picks = [];
 
+    // Class names mirror the "discard" semantics (cards go to Exhaust,
+    // not the grave — it's not a sacrifice). CSS continues to provide
+    // back-compat selectors for .sacrifice-picker-* while new markup
+    // uses .discard-picker-* so the DOM reads correctly.
     var modal = document.createElement('div');
     modal.id = 'sacrifice-picker';
-    modal.className = 'sacrifice-picker-overlay';
+    modal.className = 'discard-picker-overlay sacrifice-picker-overlay';
     var inner = document.createElement('div');
-    inner.className = 'sacrifice-picker-modal';
+    inner.className = 'discard-picker-modal sacrifice-picker-modal';
     var title = document.createElement('div');
-    title.className = 'sacrifice-picker-title';
+    title.className = 'discard-picker-title sacrifice-picker-title';
     var progress = document.createElement('div');
-    progress.className = 'sacrifice-picker-progress';
+    progress.className = 'discard-picker-progress sacrifice-picker-progress';
     inner.appendChild(title);
     inner.appendChild(progress);
     var row = document.createElement('div');
-    row.className = 'sacrifice-picker-row';
+    row.className = 'discard-picker-row sacrifice-picker-row';
     inner.appendChild(row);
 
     function refresh() {
-        var remaining = discardCount - picks.length;
         title.textContent = discardCount > 1
-            ? 'Choose ' + discardCount + ' cards to exhaust'
-            : 'Choose card to exhaust';
+            ? 'Pick ' + discardCount + ' cards to Discard'
+            : 'Pick a card to Discard';
         progress.textContent = discardCount > 1
             ? (picks.length + ' / ' + discardCount + ' picked')
             : '';
@@ -4565,12 +4568,18 @@ function showSacrificePicker(handIdx, deployPos, targetPos, sacChoices) {
             var c = cardDefs[cardId];
             if (!c) return;
             var btn = document.createElement('button');
-            btn.className = 'sacrifice-picker-card';
+            btn.className = 'discard-picker-card sacrifice-picker-card';
             var picked = picks.indexOf(sacIdx) !== -1;
             if (picked) btn.className += ' picked';
-            btn.innerHTML = '<div class="sp-name">' + c.name + '</div>' +
-                            '<div class="sp-meta">' + (c.tribe || '') + '</div>' +
-                            (picked ? '<div class="sp-badge">✓</div>' : '');
+            // Render the full card frame — same look as the tutor modal —
+            // instead of a tiny name/tribe button. The badge stays on
+            // top-right when picked.
+            btn.innerHTML = renderCardFrame(c, {
+                context: 'tooltip',
+                numericId: cardId,
+                interactive: false,
+                showReactDeploy: false,
+            }) + (picked ? '<div class="sp-badge">✓</div>' : '');
             btn.addEventListener('click', function() {
                 if (picked) {
                     // Unpick

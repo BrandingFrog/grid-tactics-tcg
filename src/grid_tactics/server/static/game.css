@@ -18,14 +18,14 @@
   --text: #e0e0e0;
   --muted: #777;
   --dim: #444;
-  --dm: #b14cff;
+  --dm: #d9a8ff;
 }
 
 /* Live Dark Matter number substituted into card rules in active games. */
 .dm-live-num {
   color: var(--dm);
   font-weight: 900;
-  text-shadow: 0 0 6px rgba(177, 76, 255, 0.45);
+  text-shadow: 0 0 6px rgba(217, 168, 255, 0.65);
 }
 
 /* Card-fly ghost: clone of a hand card that tweens from its hand slot to
@@ -2095,23 +2095,33 @@ body {
   overflow-y: auto;
 }
 
-.sacrifice-picker-card {
+.sacrifice-picker-card,
+.discard-picker-card {
   position: relative;
-  background: var(--card2);
-  border: 1px solid var(--border);
+  background: transparent;
+  border: none;
   color: var(--text);
-  padding: 12px 16px;
+  padding: 0;
   border-radius: 8px;
   cursor: pointer;
   font-family: 'Inter', system-ui, sans-serif;
-  min-width: 140px;
-  transition: border-color 150ms ease, transform 150ms ease, filter 150ms ease;
+  width: 200px;
+  flex: 0 0 auto;
+  transition: transform 150ms ease, filter 150ms ease;
 }
 
-.sacrifice-picker-card:hover {
-  border-color: var(--cyan);
+.sacrifice-picker-card:hover,
+.discard-picker-card:hover {
   transform: translateY(-4px) scale(1.03);
-  filter: drop-shadow(0 6px 18px rgba(0, 212, 255, 0.35));
+  filter: drop-shadow(0 6px 18px rgba(0, 212, 255, 0.45));
+}
+
+/* Dim the card + tint a cyan ring when picked so the viewer can see
+   what's already committed. */
+.discard-picker-card.picked,
+.sacrifice-picker-card.picked {
+  opacity: 0.55;
+  filter: drop-shadow(0 0 8px rgba(0, 212, 255, 0.7));
 }
 
 .sacrifice-picker-modal .btn-secondary {
@@ -2119,20 +2129,9 @@ body {
   align-self: flex-end;
 }
 
-.sp-name {
-  font-size: 13px;
-  font-weight: 700;
-  color: white;
-}
-
-.sp-meta {
-  font-size: 10px;
-  color: var(--muted);
-  margin-top: 4px;
-}
-
 /* Multi-pick progress line (discard_cost_count > 1). */
-.sacrifice-picker-progress {
+.sacrifice-picker-progress,
+.discard-picker-progress {
   font-size: 12px;
   color: var(--cyan);
   letter-spacing: 1.5px;
@@ -2140,22 +2139,25 @@ body {
   margin: -6px 0 8px;
 }
 
-/* Picked state — dims the card and stamps a cyan checkmark badge. */
-.sacrifice-picker-card.picked {
-  opacity: 0.55;
-  border-color: var(--cyan);
-  background: rgba(0, 212, 255, 0.08);
-}
-.sacrifice-picker-card .sp-badge {
+/* Cyan check badge stamped on picked cards. */
+.sacrifice-picker-card .sp-badge,
+.discard-picker-card .sp-badge {
   position: absolute;
-  top: 4px;
-  right: 6px;
-  color: var(--cyan);
+  top: 8px;
+  right: 8px;
+  background: var(--cyan);
+  color: #001018;
   font-weight: 900;
   font-size: 14px;
-  text-shadow: 0 0 6px rgba(0, 212, 255, 0.6);
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 8px rgba(0, 212, 255, 0.7);
+  z-index: 2;
 }
-.sacrifice-picker-card { position: relative; }
 
 /* Tutor toast notification */
 .tutor-toast {
