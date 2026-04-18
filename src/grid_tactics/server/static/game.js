@@ -3194,15 +3194,14 @@ function _playSacShatter(job, done) {
     var cx = ctx.rect.left + ctx.rect.width / 2;
     var cy = ctx.rect.top + ctx.rect.height / 2;
 
-    // Beat 1 — launch flash anchored under the silhouette's feet
-    // (roughly 82% down the tile) so the jumper visibly rises out of it.
-    // Z-index 149 sits beneath the jumper (152) so the silhouette
-    // layers on top.
+    // Beat 1 — tight launch flash under the silhouette's feet. Short
+    // and small: a blink rather than a burst, so the jumper reads as
+    // the main visual.
     var feetY = ctx.rect.top + ctx.rect.height * 0.82;
-    var flashSize = 72;
+    var flashSize = 32;
     var flash = document.createElement('div');
     flash.className = 'sac-anim-overlay sac-flash';
-    flash.style.cssText = 'position:fixed;left:' + (cx - flashSize / 2) + 'px;top:' + (feetY - flashSize / 2) + 'px;width:' + flashSize + 'px;height:' + flashSize + 'px;z-index:149;pointer-events:none;border-radius:50%;background:radial-gradient(circle,rgba(255,255,255,0.95) 0%,rgba(217,168,255,0.6) 40%,transparent 75%);opacity:0;transition:opacity 160ms ease-out,transform 160ms ease-out;';
+    flash.style.cssText = 'position:fixed;left:' + (cx - flashSize / 2) + 'px;top:' + (feetY - flashSize / 2) + 'px;width:' + flashSize + 'px;height:' + flashSize + 'px;z-index:149;pointer-events:none;border-radius:50%;background:radial-gradient(circle,rgba(255,255,255,0.95) 0%,rgba(217,168,255,0.6) 40%,transparent 75%);opacity:0;transition:opacity 70ms ease-out,transform 70ms ease-out;';
     document.body.appendChild(flash);
 
     // Beat 2 — jumper silhouette rises out of the flash and leaps.
@@ -3240,11 +3239,11 @@ function _playSacShatter(job, done) {
         jumper.style.transform = 'translate(' + (ctx.jumpDx * 0.6) + 'px,' + (ctx.jumpDy * 0.6) + 'px) scale(1.15)';
     }); });
 
-    // Fade the flash out.
+    // Fade the flash out fast — a brief blink that seeds the jump.
     setTimeout(function() {
         flash.style.opacity = '0';
-        flash.style.transform = 'scale(3)';
-    }, 200);
+        flash.style.transform = 'scale(2)';
+    }, 80);
 
     // Mid-arc: pop the jumper, launch the shards.
     setTimeout(function() {
