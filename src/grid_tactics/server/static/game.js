@@ -2961,6 +2961,8 @@ function onStateUpdate(data) {
     var spellNid = detectSpellCast(prev, next);
     if (spellNid != null) {
         setTimeout(function() { _showSpellStage(spellNid); }, 0);
+    } else if (detectReactWindowClose(prev, next)) {
+        setTimeout(_spellStageOnReactClosed, 0);
     }
 
     var hpJobs = derivePlayerHpDeltaAnims(prev, next);
@@ -3401,15 +3403,40 @@ function _showSpellStage(numericId) {
     _armSpellStageThumbs();
 }
 
+// Stage waits indefinitely while a react window is open. The thumbs-up
+// is driven from state — when a state update reports the react window
+// has closed (phase returned to ACTION with an empty react stack), we
+// call _spellStageOnReactClosed which flips ? → 👍 and schedules the
+// fade. A max-linger safety timeout keeps the stage from stalling if
+// state updates stop arriving for any reason.
 function _armSpellStageThumbs() {
+    // Safety net only — close the stage if no state change arrives in 8s.
     _spellStage.thumbsTimer = setTimeout(function() {
-        var els = _spellStageEls();
-        if (!els.react) return;
-        els.react.textContent = '👍';
-        els.react.classList.add('confirmed');
-        // Linger briefly then fade out.
-        _spellStage.exitTimer = setTimeout(_hideSpellStage, 900);
-    }, 1000);
+        _spellStageOnReactClosed();
+    }, 8000);
+}
+
+function _spellStageOnReactClosed() {
+    if (_spellStage.thumbsTimer) {
+        clearTimeout(_spellStage.thumbsTimer);
+        _spellStage.thumbsTimer = null;
+    }
+    var els = _spellStageEls();
+    if (!els.react || !els.root || els.root.hidden) return;
+    els.react.textContent = '👍';
+    els.react.classList.add('confirmed');
+    _spellStage.exitTimer = setTimeout(_hideSpellStage, 900);
+}
+
+// True if the state just transitioned out of REACT phase into ACTION
+// with an empty react stack — meaning the pending spell chain resolved.
+function detectReactWindowClose(prev, next) {
+    if (!prev || !next) return false;
+    var prevStack = prev.react_stack || [];
+    var nextStack = next.react_stack || [];
+    var wasReactOrHadStack = prev.phase === 1 || prevStack.length > 0;
+    var nowCalm = next.phase !== 1 && nextStack.length === 0;
+    return wasReactOrHadStack && nowCalm;
 }
 
 function _resetSpellStageTimers() {
@@ -5722,14 +5749,23 @@ function updateHandHighlights() {
         });
         return;
     }
+    // Sandbox has both hands in the DOM, so card_index alone is ambiguous.
+    // Scope the "selected" / "playable" state to the ACTIVE player's hand
+    // container; the other side's matching index stays inert.
+    var activeContainer = null;
+    if (sandboxMode && gameState) {
+        activeContainer = document.getElementById(
+            'sandbox-hand-p' + gameState.active_player_idx);
+    }
     document.querySelectorAll('.card-frame-hand').forEach(function(card) {
         var idx = parseInt(card.dataset.handIdx, 10);
         card.classList.remove('card-playable', 'card-selected-hand', 'card-react-playable', 'card-confirm-armed');
-        if (selectedHandIdx === idx && interactionMode === 'confirm') {
+        var inActiveHand = !activeContainer || activeContainer.contains(card);
+        if (inActiveHand && selectedHandIdx === idx && interactionMode === 'confirm') {
             card.classList.add('card-confirm-armed');
-        } else if (selectedHandIdx === idx && (interactionMode === 'play' || interactionMode === 'target')) {
+        } else if (inActiveHand && selectedHandIdx === idx && (interactionMode === 'play' || interactionMode === 'target')) {
             card.classList.add('card-selected-hand');
-        } else if (canPlayCard(idx)) {
+        } else if (inActiveHand && canPlayCard(idx)) {
             card.classList.add('card-playable');
         }
     });
@@ -6706,6 +6742,9 @@ function setupSandboxSocketHandlers() {
         var spellStageNid = (sandboxMode && prevForFly)
             ? detectSpellCast(prevForFly, payload.state)
             : null;
+        var spellStageClose = (sandboxMode && prevForFly && spellStageNid == null)
+            ? detectReactWindowClose(prevForFly, payload.state)
+            : false;
         var hpJobsSb = (sandboxMode && prevForFly)
             ? derivePlayerHpDeltaAnims(prevForFly, payload.state)
             : [];
@@ -6766,6 +6805,8 @@ function setupSandboxSocketHandlers() {
         }
         if (spellStageNid != null) {
             setTimeout(function() { _showSpellStage(spellStageNid); }, 0);
+        } else if (spellStageClose) {
+            setTimeout(_spellStageOnReactClosed, 0);
         }
     });
     // === SANDBOX-STATE-HANDLER-END ===
