@@ -4110,6 +4110,23 @@ function onHandCardClick(handIdx) {
         return;
     }
 
+    // Magic with exactly ONE legal target — auto-arm AND auto-target on
+    // first click. Users kept failing to click the highlighted tile (the
+    // enemy minion draws over the cell) so for a one-target spell there's
+    // nothing for them to resolve — just submit directly. A second click
+    // on the same card re-selects in case they want to back out.
+    if (deployPositions.length === 0 && targetOnly.length === 1) {
+        var onlyTarget = targetOnly[0];
+        var onlyMatch = findCardAction(handIdx, null, onlyTarget);
+        if (onlyMatch) {
+            submitAction(_playCardPayload(onlyMatch));
+            clearSelection();
+            highlightBoard();
+            updateHandHighlights();
+            return;
+        }
+    }
+
     // Magic with target selection: no deploy positions, only target_pos
     if (deployPositions.length === 0 && targetOnly.length > 0) {
         selectedHandIdx = handIdx;
