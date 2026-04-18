@@ -412,3 +412,215 @@ class TestLegalActionsConsistency:
                 resolve_action(state, a, library)
             except ValueError as e:
                 pytest.fail(f"Step 3 invalid action {a}: {e}")
+
+
+# ---------------------------------------------------------------------------
+# Phase 14.7-01: Deferred magic resolution via cast_mode originator
+# ---------------------------------------------------------------------------
+
+
+class TestAcidicRainProhibition:
+    """Plan 14.7-01 headline scenarios: Acidic Rain cast, Prohibition counter.
+
+    Spec §4.2 / §6.3:
+      - Costs (mana) resolve on play
+      - ON_PLAY effects sit at the BOTTOM of the react stack (cast_mode
+        originator) and resolve LAST, LIFO
+      - Prohibition played on top of the originator cancels the cast
+    """
+
+    def _setup_acidic_rain_scenario(self, library, give_prohibition=True):
+        """Build a board with a Blue Diodebot (Robot + metal) enemy of P1.
+
+        Acidic Rain burns Robot/Machine/Metal targets, so the Diodebot is a
+        valid burn target for observability. P1 has Acidic Rain; P2 has
+        Prohibition if `give_prohibition` is True.
+        """
+        acidic_rain_id = library.get_numeric_id("acidic_rain")
+        diodebot_id = library.get_numeric_id("blue_diodebot")
+        diodebot = MinionInstance(
+            instance_id=0, card_numeric_id=diodebot_id,
+            owner=PlayerSide.PLAYER_2, position=(4, 2), current_health=8,
+        )
+        p2_hand = ()
+        if give_prohibition:
+            prohibition_id = library.get_numeric_id("prohibition")
+            p2_hand = (prohibition_id,)
+        state = _make_state(
+            p1_hand=(acidic_rain_id,),
+            p2_hand=p2_hand,
+            p1_mana=6,
+            p2_mana=6,
+            minions=(diodebot,),
+        )
+        return state, acidic_rain_id, diodebot_id
+
+    def test_acidic_rain_cast_defers_effects(self, library):
+        """Cast alone: costs paid, originator on stack, burn NOT yet applied."""
+        state, acidic_rain_id, _ = self._setup_acidic_rain_scenario(library, give_prohibition=False)
+
+        # P1 casts Acidic Rain — all-minions target, no target_pos needed
+        state = resolve_action(state, play_card_action(card_index=0), library)
+
+        # Costs paid
+        assert state.players[0].current_mana == 1  # 6 - 5
+        assert len(state.players[0].hand) == 0
+        assert acidic_rain_id in state.players[0].grave
+
+        # Originator pushed and REACT phase entered
+        assert state.phase == TurnPhase.REACT
+        assert state.react_player_idx == 1
+        assert len(state.react_stack) == 1
+        origin = state.react_stack[0]
+        assert origin.is_originator is True
+        assert origin.origin_kind == "magic_cast"
+        assert origin.card_numeric_id == acidic_rain_id
+
+        # Burn NOT yet applied to the Diodebot
+        diodebot = state.get_minion(0)
+        assert diodebot is not None
+        assert diodebot.is_burning is False
+
+    def test_acidic_rain_resolves_when_no_prohibition(self, library):
+        """14.7-01: With no react, the originator resolves and applies burn."""
+        state, _, _ = self._setup_acidic_rain_scenario(library, give_prohibition=False)
+
+        # P1 casts
+        state = resolve_action(state, play_card_action(card_index=0), library)
+        # P2 passes react — stack resolves LIFO, originator fires, burn applied
+        state = resolve_action(state, pass_action(), library)
+
+        # Burn was applied to the Diodebot (tribe=Robot matches)
+        diodebot = state.get_minion(0)
+        assert diodebot is not None, "Diodebot should still be on the board after one burn"
+        assert diodebot.is_burning is True
+
+        # Turn advanced
+        assert state.phase == TurnPhase.ACTION
+        assert state.active_player_idx == 1
+
+    def test_acidic_rain_negated_by_prohibition(self, library):
+        """14.7-01: Prohibition on top of the originator negates the cast.
+
+        Full chain (single-pass resolution model):
+          1. P1 casts Acidic Rain -> originator on stack, REACT, P2 to react
+          2. P2 plays Prohibition -> prohibition on stack (top), P1 to counter
+          3. P1 passes -> resolves entire stack LIFO in ONE step:
+             - Prohibition (index 0 in LIFO) resolves first: NEGATE adds
+               index 1 to negated_indices
+             - originator (index 1 in LIFO) is negated and skipped
+          4. Turn advances to P2; Diodebot not burning; both cards in grave.
+        """
+        state, _, _ = self._setup_acidic_rain_scenario(library, give_prohibition=True)
+
+        # 1. P1 casts Acidic Rain
+        state = resolve_action(state, play_card_action(card_index=0), library)
+        assert state.phase == TurnPhase.REACT
+        assert state.react_player_idx == 1
+        assert len(state.react_stack) == 1
+        assert state.react_stack[0].is_originator is True
+
+        # Burn not yet applied
+        assert state.get_minion(0).is_burning is False
+
+        # 2. P2 plays Prohibition
+        state = resolve_action(state, play_react_action(card_index=0), library)
+        assert len(state.react_stack) == 2
+        assert state.react_stack[1].is_originator is False  # prohibition is a normal react
+        assert state.react_player_idx == 0  # P1 can counter
+
+        # 3. P1 passes -> single-pass resolves whole stack LIFO
+        state = resolve_action(state, pass_action(), library)
+
+        # Diodebot is STILL not burning — cast was negated
+        diodebot = state.get_minion(0)
+        assert diodebot is not None
+        assert diodebot.is_burning is False, (
+            "Acidic Rain should have been negated by Prohibition — "
+            "Diodebot should not be burning"
+        )
+
+        # Turn still advances (mana was spent; scorched-earth by design)
+        assert state.phase == TurnPhase.ACTION
+        assert state.active_player_idx == 1
+
+        # Both players' mana was spent
+        assert state.players[0].current_mana == 1  # 6 - 5 (Acidic Rain)
+        # P2 had 6 - 4 (Prohibition), then may have gained regen on their turn flip
+        # The invariant we care about is that each card was actually resolved
+        # out of hand and into grave (costs paid, scorched-earth by design).
+        p1_grave_card_ids = {library.get_by_id(nid).card_id for nid in state.players[0].grave}
+        assert "acidic_rain" in p1_grave_card_ids
+
+        p2_grave_card_ids = {library.get_by_id(nid).card_id for nid in state.players[1].grave}
+        assert "prohibition" in p2_grave_card_ids
+
+
+class TestMultiPurposeMagicReactArm:
+    """14.7-01: Multi-purpose magic+react cards still fire their react_effect
+    correctly when PLAYED AS A REACTION (not as an originator).
+
+    Acidic Rain is multi-purpose — as a react it plays for react_mana_cost (2)
+    with react_condition=opponent_ends_turn, and its react_effect is
+    {type:draw, amount:1}. Only the react_effect fires on resolution; the
+    burn (ON_PLAY) does not.
+    """
+
+    def test_acidic_rain_react_arm_draws_card_unchanged(self, library):
+        """P1 casts a magic (originator). P2 plays Acidic Rain AS a react.
+        P1 passes -> stack resolves LIFO. Acidic Rain's react_effect fires
+        first (P2 draws), then the originator resolves.
+
+        We assert P2's react_effect fired (drew 1 card), NOT that the
+        originator produced any particular observable state. The point of
+        this test is that the react arm of a multi-purpose card is
+        unaffected by the deferred-magic-resolution refactor.
+        """
+        # Use to_the_ratmobile as a neutral originator magic. It tutors a rat
+        # if P1's deck has one — we intentionally give P1 an EMPTY deck so
+        # tutor finds zero matches and skips pending_tutor entirely (amount=1
+        # tutor with 0 matches just no-ops out of _enter_pending_tutor).
+        ratmobile_id = library.get_numeric_id("to_the_ratmobile")
+        acidic_rain_id = library.get_numeric_id("acidic_rain")
+        rat_id = library.get_numeric_id("rat")
+
+        # P2 has Acidic Rain in hand + a deck slot to draw from
+        state = _make_state(
+            p1_hand=(ratmobile_id,),
+            p1_mana=5,
+            p1_deck=(),  # empty deck — tutor will find no matches
+            p2_hand=(acidic_rain_id,),
+            p2_mana=6,
+            p2_deck=(rat_id,),  # deck slot for the react-mode draw
+        )
+
+        # 1. P1 casts to_the_ratmobile (magic, originator)
+        state = resolve_action(state, play_card_action(card_index=0), library)
+        assert state.phase == TurnPhase.REACT
+        assert state.react_player_idx == 1
+        assert len(state.react_stack) == 1
+        assert state.react_stack[0].is_originator is True
+
+        # 2. P2 plays Acidic Rain as a REACT (react_condition=opponent_ends_turn,
+        # matches any opponent action; react_mana_cost=2)
+        p2_hand_count_before_react = len(state.players[1].hand)
+        p2_deck_count_before_react = len(state.players[1].deck)
+
+        state = resolve_action(state, play_react_action(card_index=0), library)
+        assert len(state.react_stack) == 2
+        react_entry = state.react_stack[1]
+        # Played as a react — entry is NOT an originator; origin_kind is None.
+        assert react_entry.is_originator is False
+        assert react_entry.origin_kind is None
+        assert state.react_player_idx == 0
+
+        # Card left hand (discarded to grave); no draw yet (react_effect fires on resolve)
+        assert len(state.players[1].hand) == p2_hand_count_before_react - 1
+        assert acidic_rain_id in state.players[1].grave
+
+        # 3. P1 passes -> single-pass resolves whole stack LIFO
+        state = resolve_action(state, pass_action(), library)
+
+        # P2's react_effect fired: drew 1 card from deck to hand
+        assert len(state.players[1].deck) == p2_deck_count_before_react - 1
+        assert rat_id in state.players[1].hand

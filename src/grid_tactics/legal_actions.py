@@ -754,6 +754,14 @@ def _react_phase_actions(
 
     React cards are only legal if their react_condition matches the
     pending action or last react on the stack.
+
+    Phase 14.7-01: After this plan, ``state.react_stack[0]`` may be a
+    magic_cast originator (is_originator=True, origin_kind="magic_cast").
+    The enumeration below is unaffected — we read the reacting player's
+    hand, and ``_check_react_condition`` treats the stack's most-recent
+    entry uniformly (an originator's card_def is a MAGIC card, so
+    OPPONENT_PLAYS_MAGIC matches it exactly as it matched a pending
+    PLAY_CARD of a magic before deferred resolution).
     """
     actions: list[Action] = []
     react_player = state.players[state.react_player_idx]
