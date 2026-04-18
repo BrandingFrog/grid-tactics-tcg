@@ -2958,9 +2958,9 @@ function onStateUpdate(data) {
     // Spell-cast center stage. Detect before apply because we look at the
     // grave/react_stack diff; trigger after a short tick so the new frame
     // is on screen first.
-    var spellNid = detectSpellCast(prev, next);
-    if (spellNid != null) {
-        setTimeout(function() { _showSpellStage(spellNid); }, 0);
+    var spellCast = detectSpellCast(prev, next);
+    if (spellCast != null) {
+        setTimeout(function() { _showSpellStage(spellCast.nid, spellCast.playerIdx); }, 0);
     } else if (detectReactWindowClose(prev, next)) {
         setTimeout(_spellStageOnReactClosed, 0);
     }
@@ -3372,7 +3372,25 @@ function _spellStageCardHtml(numericId) {
     });
 }
 
-function _showSpellStage(numericId) {
+// Hand / source rect for the fly-from-hand origin of a newly-cast card.
+// In sandbox both hands are mounted so we use #sandbox-hand-p<idx>.
+// In live game the opponent's hand is the back row; the own hand is
+// the front. Falls back to the far-right edge if nothing found.
+function _spellStageSourceRect(playerIdx) {
+    if (playerIdx != null) {
+        if (sandboxMode) {
+            var el = document.getElementById('sandbox-hand-p' + playerIdx);
+            if (el) return el.getBoundingClientRect();
+        } else {
+            var id = (playerIdx === myPlayerIdx) ? 'hand-container' : 'oppHandRow';
+            var el2 = document.getElementById(id);
+            if (el2) return el2.getBoundingClientRect();
+        }
+    }
+    return { left: window.innerWidth, top: window.innerHeight / 2, width: 1, height: 1 };
+}
+
+function _showSpellStage(numericId, sourcePlayerIdx) {
     var els = _spellStageEls();
     if (!els.root || !els.left || !els.right) return;
     var html = _spellStageCardHtml(numericId);
@@ -3385,8 +3403,7 @@ function _showSpellStage(numericId) {
     }
 
     // If a shift is pending from the previous push, flush it now so the
-    // chain conveyor keeps moving — no card should ever "win the race"
-    // and land in the RIGHT slot while another is already there.
+    // conveyor never holds two cards in the same slot.
     if (_spellStage.pendingShiftTimer) {
         clearTimeout(_spellStage.pendingShiftTimer);
         _spellStage.pendingShiftTimer = null;
@@ -3400,42 +3417,82 @@ function _showSpellStage(numericId) {
     void els.root.offsetWidth;
     els.root.classList.add('enter');
 
-    // Drop the card into the RIGHT slot with a slide-in from the right.
+    // Create the card in the RIGHT slot. Pre-position it over the source
+    // hand via an initial transform, then transition to identity so it
+    // flies from hand → slot over the entire UI.
     els.right.textContent = '';
     els.right.classList.remove('confirmed');
+    els.right.classList.add('has-card');
     var wrap = document.createElement('div');
-    wrap.className = 'spell-stage-card-inner slide-in-right';
+    wrap.className = 'spell-stage-card-inner';
     wrap.innerHTML = html;
     els.right.appendChild(wrap);
     _spellStage.rightCardEl = wrap;
 
-    // 1s beat so the viewer can read the new card, then shift left.
+    // Measure after mount so getBoundingClientRect is accurate.
+    var slot = els.right.getBoundingClientRect();
+    var src = _spellStageSourceRect(sourcePlayerIdx);
+    var dx = (src.left + src.width / 2) - (slot.left + slot.width / 2);
+    var dy = (src.top + src.height / 2) - (slot.top + slot.height / 2);
+    wrap.style.transform = 'translate(' + dx + 'px,' + dy + 'px) scale(0.45)';
+    wrap.style.opacity = '0';
+    wrap.style.transition = 'transform 520ms cubic-bezier(0.2, 0.7, 0.3, 1), opacity 260ms ease-out';
+    // Two rAFs guarantee the initial values commit before the transition.
+    requestAnimationFrame(function() { requestAnimationFrame(function() {
+        wrap.style.transform = 'translate(0, 0) scale(1)';
+        wrap.style.opacity = '1';
+    }); });
+
+    // 1s beat so the viewer reads the card, then shift into the LEFT slot.
     _spellStage.pendingShiftTimer = setTimeout(function() {
         _spellStage.pendingShiftTimer = null;
         _performStageShift();
     }, 1000);
 }
 
-// Shift: old LEFT card (if any) slides off-screen-left; the current
-// RIGHT card animates into the LEFT slot; a fresh "?" appears in the
-// RIGHT slot waiting for the next react.
+// Shift (no DOM reparenting — source of the earlier glitches):
+// - OLD left card slides off-screen LEFT and is removed.
+// - RIGHT card is removed; a fresh card for the same nid is mounted
+//   into the LEFT slot with a slide-in-from-right animation so it
+//   visually "moves" across the gap.
+// - "?" returns to the RIGHT slot waiting for the next react.
 function _performStageShift() {
     var els = _spellStageEls();
+    var nid = _spellStage.chain[_spellStage.chain.length - 1];
+
     if (_spellStage.leftCardEl) {
         var old = _spellStage.leftCardEl;
-        old.classList.remove('slide-in-right', 'slide-in-from-left', 'in-left');
-        old.classList.add('slide-off-left');
-        setTimeout(function() { if (old.parentNode) old.parentNode.removeChild(old); }, 440);
+        old.style.transition = 'transform 420ms cubic-bezier(0.5, 0, 0.8, 0.3), opacity 420ms ease-in';
+        old.style.transform = 'translate(-70vw, 0) rotate(-10deg)';
+        old.style.opacity = '0';
+        setTimeout(function() { if (old.parentNode) old.parentNode.removeChild(old); }, 460);
         _spellStage.leftCardEl = null;
     }
     if (_spellStage.rightCardEl) {
         var right = _spellStage.rightCardEl;
-        right.classList.remove('slide-in-right');
-        right.classList.add('in-left');
-        els.left.appendChild(right);
-        _spellStage.leftCardEl = right;
+        if (right.parentNode) right.parentNode.removeChild(right);
         _spellStage.rightCardEl = null;
     }
+    if (nid != null) {
+        var html = _spellStageCardHtml(nid);
+        if (html) {
+            var leftWrap = document.createElement('div');
+            leftWrap.className = 'spell-stage-card-inner';
+            leftWrap.innerHTML = html;
+            els.left.appendChild(leftWrap);
+            // Start offset to the right of the LEFT slot (roughly where the
+            // RIGHT slot is), then glide home.
+            var dx = (els.right.getBoundingClientRect().left - els.left.getBoundingClientRect().left);
+            leftWrap.style.transform = 'translate(' + dx + 'px, 0)';
+            leftWrap.style.opacity = '1';
+            leftWrap.style.transition = 'transform 440ms cubic-bezier(0.2, 0.7, 0.3, 1)';
+            requestAnimationFrame(function() { requestAnimationFrame(function() {
+                leftWrap.style.transform = 'translate(0, 0)';
+            }); });
+            _spellStage.leftCardEl = leftWrap;
+        }
+    }
+    els.right.classList.remove('has-card');
     els.right.textContent = '?';
     els.right.classList.remove('confirmed');
 }
@@ -3484,8 +3541,8 @@ function _resolveSpellStageChain() {
         wrap.className = 'spell-stage-card-inner slide-in-from-left';
         wrap.innerHTML = html;
         els.left.appendChild(wrap);
+        els.right.classList.remove('has-card', 'confirmed');
         els.right.textContent = '⚡';
-        els.right.classList.remove('confirmed');
         setTimeout(function() {
             wrap.classList.remove('slide-in-from-left');
             wrap.classList.add('slide-off-right');
@@ -3539,44 +3596,40 @@ function _hideSpellStage() {
 
 // Detect spell-cast events from a prev→next state transition. Fires the
 // stage for any new magic/react card that just entered grave or the top
-// of the react_stack. Returns the last-detected nid (for chain display).
+// of the react_stack. Returns { nid, playerIdx } (or null).
 function detectSpellCast(prev, next) {
     if (!next) return null;
-    var nid = null;
 
     // 1) New top of react_stack → that react was just played.
     var prevStack = (prev && prev.react_stack) || [];
     var nextStack = (next && next.react_stack) || [];
     if (nextStack.length > prevStack.length) {
         var entry = nextStack[nextStack.length - 1];
-        if (entry && entry.card_numeric_id != null) nid = entry.card_numeric_id;
+        if (entry && entry.card_numeric_id != null) {
+            return { nid: entry.card_numeric_id, playerIdx: entry.player_idx };
+        }
     }
 
     // 2) Otherwise, compare graves for a newly-landed MAGIC/REACT card.
-    if (nid == null && prev && next.players) {
+    if (prev && next.players) {
         for (var i = 0; i < next.players.length; i++) {
             var prevG = (prev.players && prev.players[i] && prev.players[i].grave) || [];
             var nextG = (next.players[i] && next.players[i].grave) || [];
             if (nextG.length <= prevG.length) continue;
-            // Multiset diff — which nids entered grave this step?
             var prevCnt = {};
             for (var p = 0; p < prevG.length; p++) prevCnt[prevG[p]] = (prevCnt[prevG[p]] || 0) + 1;
             for (var q = 0; q < nextG.length; q++) {
                 var gid = nextG[q];
                 if (prevCnt[gid] > 0) { prevCnt[gid] -= 1; continue; }
-                // gid is new this step — is it magic or react?
                 var def = (cardDefs && cardDefs[gid]) ||
                           (window.sandboxCardDefs && window.sandboxCardDefs[gid]);
                 if (def && (def.card_type === 1 || def.card_type === 2)) {
-                    nid = gid;
-                    break;
+                    return { nid: gid, playerIdx: i };
                 }
             }
-            if (nid != null) break;
         }
     }
-
-    return nid;
+    return null;
 }
 
 // Diff hand → grave / exhaust transitions and emit card_fly jobs.
@@ -6814,10 +6867,10 @@ function setupSandboxSocketHandlers() {
         var flyJobs = (sandboxMode && prevForFly)
             ? deriveCardFlyJobs(prevForFly, payload.state)
             : [];
-        var spellStageNid = (sandboxMode && prevForFly)
+        var spellStageCast = (sandboxMode && prevForFly)
             ? detectSpellCast(prevForFly, payload.state)
             : null;
-        var spellStageClose = (sandboxMode && prevForFly && spellStageNid == null)
+        var spellStageClose = (sandboxMode && prevForFly && spellStageCast == null)
             ? detectReactWindowClose(prevForFly, payload.state)
             : false;
         var hpJobsSb = (sandboxMode && prevForFly)
@@ -6878,8 +6931,8 @@ function setupSandboxSocketHandlers() {
         for (var _hi = 0; _hi < hpJobsSb.length; _hi++) {
             enqueueAnimation(hpJobsSb[_hi]);
         }
-        if (spellStageNid != null) {
-            setTimeout(function() { _showSpellStage(spellStageNid); }, 0);
+        if (spellStageCast != null) {
+            setTimeout(function() { _showSpellStage(spellStageCast.nid, spellStageCast.playerIdx); }, 0);
         } else if (spellStageClose) {
             setTimeout(_spellStageOnReactClosed, 0);
         }
