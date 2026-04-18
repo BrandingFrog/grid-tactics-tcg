@@ -411,3 +411,298 @@ class TestActionResolverReactDelegation:
         result = resolve_action(react_state_empty_stack, action, library)
         assert len(result.react_stack) == 1
         assert result.phase == TurnPhase.REACT
+
+
+# ---------------------------------------------------------------------------
+# Phase 14.7-02: 3-phase turn model + react_return_phase dispatch
+# ---------------------------------------------------------------------------
+
+
+class TestTurnPhaseNewValues:
+    """TurnPhase has START_OF_TURN=2 / END_OF_TURN=3 appended in 14.7-02."""
+
+    def test_new_values_pin(self):
+        assert TurnPhase.START_OF_TURN == 2
+        assert TurnPhase.END_OF_TURN == 3
+
+    def test_round_trip_int(self):
+        assert TurnPhase(2) is TurnPhase.START_OF_TURN
+        assert TurnPhase(3) is TurnPhase.END_OF_TURN
+
+
+class TestReactReturnPhaseDispatch:
+    """resolve_react_stack uses state.react_return_phase to decide where to go after PASS-PASS."""
+
+    def test_react_window_returns_to_action_by_default(
+        self, react_state_empty_stack, library,
+    ):
+        """Legacy path: react_return_phase=None (unset) defaults to ACTION → advance turn.
+
+        Backward-compat — pre-14.7-02 code never set react_return_phase
+        so the default path MUST behave like the old turn-advance tail.
+        """
+        state = react_state_empty_stack
+        # Baseline sanity: fixture does not set react_return_phase.
+        assert state.react_return_phase is None
+
+        result = resolve_react_stack(state, library)
+
+        # Same as the old behavior: turn flip + phase=ACTION + inc turn number.
+        assert result.phase == TurnPhase.ACTION
+        assert result.active_player_idx == 1
+        assert result.turn_number == 2
+        assert result.react_return_phase is None
+        assert result.react_context is None
+
+    def test_react_window_returns_to_start(self, react_state_empty_stack, library):
+        """react_return_phase=START_OF_TURN → transition to ACTION without turn flip.
+
+        The start-of-turn react window closes by entering ACTION for the
+        SAME player (no turn advancement). Mana, turn_number and
+        active_player_idx stay put.
+        """
+        from grid_tactics.enums import ReactContext
+
+        state = replace(
+            react_state_empty_stack,
+            react_context=ReactContext.AFTER_START_TRIGGER,
+            react_return_phase=TurnPhase.START_OF_TURN,
+        )
+        original_active = state.active_player_idx
+        original_turn = state.turn_number
+
+        result = resolve_react_stack(state, library)
+
+        assert result.phase == TurnPhase.ACTION
+        # NO turn flip, NO turn_number increment
+        assert result.active_player_idx == original_active
+        assert result.turn_number == original_turn
+        # React bookkeeping cleared
+        assert result.react_stack == ()
+        assert result.react_player_idx is None
+        assert result.react_context is None
+        assert result.react_return_phase is None
+
+    def test_react_window_returns_to_end(self, react_state_empty_stack, library):
+        """react_return_phase=END_OF_TURN → advance turn (same as legacy ACTION path)."""
+        from grid_tactics.enums import ReactContext
+
+        state = replace(
+            react_state_empty_stack,
+            react_context=ReactContext.BEFORE_END_OF_TURN,
+            react_return_phase=TurnPhase.END_OF_TURN,
+        )
+
+        result = resolve_react_stack(state, library)
+
+        # Turn flip + increment + phase=ACTION (enter new active player's
+        # START_OF_TURN which immediately passes through to ACTION in 14.7-02).
+        assert result.phase == TurnPhase.ACTION
+        assert result.active_player_idx == 1
+        assert result.turn_number == 2
+        assert result.react_stack == ()
+        assert result.react_player_idx is None
+        assert result.react_context is None
+        assert result.react_return_phase is None
+
+
+class TestPhaseTransitionHelpers:
+    """The 4 new phase-transition helpers exist and behave as placeholders."""
+
+    def test_enter_start_of_turn_passthrough(self, library):
+        """enter_start_of_turn() currently immediately transitions to ACTION.
+
+        14.7-03 will insert trigger firing + react window — for 14.7-02
+        it's a byte-simple phase flip.
+        """
+        from grid_tactics.react_stack import enter_start_of_turn
+
+        state = GameState(
+            board=Board.empty(),
+            players=(
+                Player(side=PlayerSide.PLAYER_1, hp=20, current_mana=3, max_mana=3, hand=(), deck=(), grave=()),
+                Player(side=PlayerSide.PLAYER_2, hp=20, current_mana=3, max_mana=3, hand=(), deck=(), grave=()),
+            ),
+            active_player_idx=0,
+            phase=TurnPhase.START_OF_TURN,
+            turn_number=1,
+            seed=42,
+        )
+
+        result = enter_start_of_turn(state, library)
+
+        assert result.phase == TurnPhase.ACTION
+        # No other state mutated
+        assert result.active_player_idx == 0
+        assert result.turn_number == 1
+
+    def test_enter_end_of_turn_runs_tail_and_enters_next_start(self, library):
+        """enter_end_of_turn() runs the end-of-turn tail then enter_start_of_turn."""
+        from grid_tactics.react_stack import enter_end_of_turn
+
+        state = GameState(
+            board=Board.empty(),
+            players=(
+                Player(side=PlayerSide.PLAYER_1, hp=20, current_mana=3, max_mana=3, hand=(), deck=(), grave=()),
+                Player(side=PlayerSide.PLAYER_2, hp=20, current_mana=3, max_mana=3, hand=(), deck=(), grave=()),
+            ),
+            active_player_idx=0,
+            phase=TurnPhase.END_OF_TURN,
+            turn_number=1,
+            seed=42,
+        )
+
+        result = enter_end_of_turn(state, library)
+
+        # Turn advanced: P2 now active, turn 2, phase = ACTION (because
+        # START_OF_TURN placeholder immediately passes through).
+        assert result.phase == TurnPhase.ACTION
+        assert result.active_player_idx == 1
+        assert result.turn_number == 2
+
+    def test_close_start_react_and_enter_action_clears_react(self, library):
+        """close_start_react_and_enter_action clears react state, phase=ACTION, no turn flip."""
+        from grid_tactics.enums import ReactContext
+        from grid_tactics.react_stack import close_start_react_and_enter_action
+
+        state = GameState(
+            board=Board.empty(),
+            players=(
+                Player(side=PlayerSide.PLAYER_1, hp=20, current_mana=3, max_mana=3, hand=(), deck=(), grave=()),
+                Player(side=PlayerSide.PLAYER_2, hp=20, current_mana=3, max_mana=3, hand=(), deck=(), grave=()),
+            ),
+            active_player_idx=0,
+            phase=TurnPhase.REACT,
+            turn_number=1,
+            seed=42,
+            react_player_idx=1,
+            react_context=ReactContext.AFTER_START_TRIGGER,
+            react_return_phase=TurnPhase.START_OF_TURN,
+        )
+
+        result = close_start_react_and_enter_action(state, library)
+
+        assert result.phase == TurnPhase.ACTION
+        assert result.active_player_idx == 0  # no turn flip
+        assert result.turn_number == 1
+        assert result.react_stack == ()
+        assert result.react_player_idx is None
+        assert result.react_context is None
+        assert result.react_return_phase is None
+
+    def test_close_end_react_and_advance_turn_flips(self, library):
+        """close_end_react_and_advance_turn clears react, flips active, enters new START."""
+        from grid_tactics.enums import ReactContext
+        from grid_tactics.react_stack import close_end_react_and_advance_turn
+
+        state = GameState(
+            board=Board.empty(),
+            players=(
+                Player(side=PlayerSide.PLAYER_1, hp=20, current_mana=3, max_mana=3, hand=(), deck=(), grave=()),
+                Player(side=PlayerSide.PLAYER_2, hp=20, current_mana=3, max_mana=3, hand=(), deck=(), grave=()),
+            ),
+            active_player_idx=0,
+            phase=TurnPhase.REACT,
+            turn_number=1,
+            seed=42,
+            react_player_idx=1,
+            react_context=ReactContext.BEFORE_END_OF_TURN,
+            react_return_phase=TurnPhase.END_OF_TURN,
+        )
+
+        result = close_end_react_and_advance_turn(state, library)
+
+        # After tail + enter_start_of_turn placeholder passthrough.
+        assert result.phase == TurnPhase.ACTION
+        assert result.active_player_idx == 1
+        assert result.turn_number == 2
+        assert result.react_stack == ()
+        assert result.react_player_idx is None
+        assert result.react_context is None
+        assert result.react_return_phase is None
+
+
+class TestActionResolverSetsReactContext:
+    """Every ``phase=TurnPhase.REACT`` site in action_resolver sets react_context/return_phase."""
+
+    def test_magic_cast_originator_sets_context(self, library):
+        """_cast_magic originator path tags AFTER_ACTION / return ACTION.
+
+        Uses Acidic Rain (cost 5, on_play burn to all metal/robot minions)
+        — a magic card whose cast path routes through _cast_magic's
+        originator pipeline and should emerge in REACT phase tagged
+        AFTER_ACTION / return ACTION.
+        """
+        from grid_tactics.action_resolver import resolve_action
+        from grid_tactics.actions import play_card_action
+        from grid_tactics.enums import ReactContext
+
+        acidic_rain_id = library.get_numeric_id("acidic_rain")
+
+        p1 = Player(
+            side=PlayerSide.PLAYER_1,
+            hp=STARTING_HP,
+            current_mana=5, max_mana=5,
+            hand=(acidic_rain_id,), deck=(), grave=(),
+        )
+        p2 = Player(
+            side=PlayerSide.PLAYER_2,
+            hp=STARTING_HP,
+            current_mana=5, max_mana=5,
+            hand=(), deck=(), grave=(),
+        )
+        state = GameState(
+            board=Board.empty(),
+            players=(p1, p2),
+            active_player_idx=0,
+            phase=TurnPhase.ACTION,
+            turn_number=1,
+            seed=42,
+        )
+
+        action = play_card_action(card_index=0)
+        result = resolve_action(state, action, library)
+
+        assert result.phase == TurnPhase.REACT
+        assert result.react_context == ReactContext.AFTER_ACTION
+        assert result.react_return_phase == TurnPhase.ACTION
+
+
+class TestLegalActionsStartEndPhases:
+    """Phase 14.7-02: legal_actions returns () during START_OF_TURN / END_OF_TURN."""
+
+    def test_legal_actions_empty_in_start_of_turn(self, library):
+        """START_OF_TURN is a placeholder; legal_actions is empty so server auto-advances."""
+        from grid_tactics.legal_actions import legal_actions
+
+        state = GameState(
+            board=Board.empty(),
+            players=(
+                Player(side=PlayerSide.PLAYER_1, hp=20, current_mana=3, max_mana=3, hand=(), deck=(), grave=()),
+                Player(side=PlayerSide.PLAYER_2, hp=20, current_mana=3, max_mana=3, hand=(), deck=(), grave=()),
+            ),
+            active_player_idx=0,
+            phase=TurnPhase.START_OF_TURN,
+            turn_number=1,
+            seed=42,
+        )
+
+        assert legal_actions(state, library) == ()
+
+    def test_legal_actions_empty_in_end_of_turn(self, library):
+        """END_OF_TURN is a placeholder; legal_actions is empty so server auto-advances."""
+        from grid_tactics.legal_actions import legal_actions
+
+        state = GameState(
+            board=Board.empty(),
+            players=(
+                Player(side=PlayerSide.PLAYER_1, hp=20, current_mana=3, max_mana=3, hand=(), deck=(), grave=()),
+                Player(side=PlayerSide.PLAYER_2, hp=20, current_mana=3, max_mana=3, hand=(), deck=(), grave=()),
+            ),
+            active_player_idx=0,
+            phase=TurnPhase.END_OF_TURN,
+            turn_number=1,
+            seed=42,
+        )
+
+        assert legal_actions(state, library) == ()

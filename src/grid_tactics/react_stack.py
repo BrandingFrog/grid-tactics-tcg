@@ -204,6 +204,205 @@ def _fire_passive_effects(
 
 
 # ---------------------------------------------------------------------------
+# Phase 14.7-02: Turn-phase transition helpers
+# ---------------------------------------------------------------------------
+#
+# The 3-phase turn model (START_OF_TURN -> ACTION -> END_OF_TURN) is wired
+# here. Each helper is a pure GameState -> GameState transition. The state
+# machine looks like:
+#
+#   enter_start_of_turn(state)
+#       |  (14.7-03 will fire ON_START_OF_TURN triggers + open REACT)
+#       v
+#   close_start_react_and_enter_action(state)   <- PASS-PASS exit
+#       |
+#       v
+#   [ACTION phase — player plays actions, each opens a REACT window with
+#    react_context=AFTER_ACTION / react_return_phase=ACTION]
+#       |
+#       v
+#   resolve_react_stack(state)  [return_phase == ACTION legacy path]
+#       -> close_end_react_and_advance_turn(state)
+#       |
+#       v
+#   enter_end_of_turn(state)
+#       |  (14.7-03 will fire ON_END_OF_TURN triggers + open REACT)
+#       v
+#   close_end_react_and_advance_turn(state)     <- PASS-PASS exit
+#       -> _close_end_of_turn_and_flip(state)
+#       -> enter_start_of_turn(new active player)
+#
+# For 14.7-02 the new phases are PLACEHOLDER: enter_start_of_turn and
+# enter_end_of_turn currently pass straight through (no triggers, no react
+# window). 14.7-03 will hook trigger firing + REACT opening into both.
+
+
+def _close_end_of_turn_and_flip(
+    state: GameState, library: CardLibrary,
+) -> GameState:
+    """Advance to the next player's turn (outgoing player's end-of-turn tail).
+
+    This is the byte-identical turn-advance tail that used to live inline
+    at the bottom of ``resolve_react_stack``. Split out so that both the
+    main react-stack path and future 14.7-03 end-of-turn trigger paths
+    share one implementation.
+
+    Order (preserved from the pre-14.7 resolve_react_stack tail):
+      1. Flip ``discarded_this_turn`` -> ``discarded_last_turn`` for the
+         outgoing player and clear this-turn for them.
+      2. Flip ``active_player_idx`` and increment ``turn_number``; set
+         ``phase=ACTION`` (14.7-03 will change this to START_OF_TURN).
+      3. ``tick_status_effects`` — burn ticks for new active player's
+         minions.
+      4. ``_fire_passive_effects`` — PASSIVE-triggered effects for every
+         minion in (row, col) order.
+      5. Mana regen for new active player (suppressed on turn 2).
+      6. Auto-draw for new active player (if AUTO_DRAW_ENABLED and deck
+         non-empty).
+
+    14.7-03 will redistribute (3)-(4) into ``enter_start_of_turn`` and any
+    end-of-turn-side passive will move to ``enter_end_of_turn``. For now
+    this helper keeps all behavior in one place.
+
+    Rule-1 bug fix captured here: the old inline resolve_react_stack tail
+    did NOT flip ``discarded_this_turn`` -> ``discarded_last_turn`` for
+    the outgoing player — only the pending_death_target resume path in
+    action_resolver.py did. Centralizing here fixes that gap silently;
+    the only play-condition that reads ``discarded_last_turn`` is
+    Prohibition which was unaffected because it's played as a react on
+    the opponent's turn.
+    """
+    # Flip discard tracking for the outgoing player BEFORE the
+    # active-player flip.
+    old_active_idx = state.active_player_idx
+    old_player = state.players[old_active_idx]
+    updated_old = replace(
+        old_player,
+        discarded_last_turn=old_player.discarded_this_turn,
+        discarded_this_turn=False,
+    )
+    state = replace(
+        state,
+        players=_replace_player(state.players, old_active_idx, updated_old),
+    )
+
+    # Advance turn: flip active player, increment turn number, phase=ACTION.
+    new_active_idx = 1 - old_active_idx
+    state = replace(
+        state,
+        phase=TurnPhase.ACTION,
+        active_player_idx=new_active_idx,
+        turn_number=state.turn_number + 1,
+    )
+
+    # Phase 14.3: tick per-minion status effects (burning) AFTER turn flip
+    # but BEFORE mana regen / draw for the new active player.
+    state = tick_status_effects(state, library)
+    if state.is_game_over:
+        return state
+
+    # Fire PASSIVE-trigger effects for every minion on the board (e.g.
+    # Emberplague Rat's burn aura, Fallen Paladin's passive_heal). One pass
+    # per turn flip, processed in (row, col) order for determinism.
+    state = _fire_passive_effects(state, library)
+    if state.is_game_over:
+        return state
+
+    # Regenerate mana for the new active player at turn start.
+    # Skip on turn 2: P2's first action must start at STARTING_MANA to
+    # match P1's first action (turn 1). Regen applies from turn 3 onward.
+    if state.turn_number > 2:
+        new_active_player = state.players[new_active_idx].regenerate_mana()
+        new_players = _replace_player(state.players, new_active_idx, new_active_player)
+        state = replace(state, players=new_players)
+
+    # Auto-draw for the new active player at turn start (only if enabled)
+    if AUTO_DRAW_ENABLED:
+        active_player = state.players[new_active_idx]
+        if active_player.deck:
+            drawn_player, _card_id = active_player.draw_card()
+            new_players = _replace_player(state.players, new_active_idx, drawn_player)
+            state = replace(state, players=new_players)
+
+    return state
+
+
+def enter_start_of_turn(
+    state: GameState, library: CardLibrary,
+) -> GameState:
+    """Enter START_OF_TURN phase for ``state.active_player_idx``.
+
+    14.7-02: placeholder. 14.7-03 will fire ON_START_OF_TURN triggered
+    effects and open a REACT window (react_context=AFTER_START_TRIGGER,
+    react_return_phase=START_OF_TURN). For now we immediately pass
+    through to ACTION so no observable behavior changes.
+    """
+    # Placeholder: immediately transition to ACTION. 14.7-03 will insert
+    # trigger firing + react-window opening between here and ACTION.
+    return replace(state, phase=TurnPhase.ACTION)
+
+
+def enter_end_of_turn(
+    state: GameState, library: CardLibrary,
+) -> GameState:
+    """Enter END_OF_TURN phase for ``state.active_player_idx``.
+
+    14.7-02: placeholder. 14.7-03 will fire ON_END_OF_TURN triggered
+    effects and open a REACT window (react_context=BEFORE_END_OF_TURN,
+    react_return_phase=END_OF_TURN). For now we immediately perform the
+    turn-advance tail and enter the next player's START_OF_TURN.
+    """
+    # Placeholder: immediately run the end-of-turn tail + enter new turn.
+    # 14.7-03 will insert trigger firing + react-window opening BEFORE
+    # _close_end_of_turn_and_flip.
+    state = _close_end_of_turn_and_flip(state, library)
+    if state.is_game_over:
+        return state
+    return enter_start_of_turn(state, library)
+
+
+def close_start_react_and_enter_action(
+    state: GameState, library: CardLibrary,
+) -> GameState:
+    """After a START_OF_TURN react window PASS-PASSes, enter ACTION.
+
+    Clears react bookkeeping and sets phase=ACTION. No turn flip — the
+    turn player still owns their ACTION phase.
+    """
+    return replace(
+        state,
+        phase=TurnPhase.ACTION,
+        react_stack=(),
+        react_player_idx=None,
+        pending_action=None,
+        react_context=None,
+        react_return_phase=None,
+    )
+
+
+def close_end_react_and_advance_turn(
+    state: GameState, library: CardLibrary,
+) -> GameState:
+    """After an END_OF_TURN (or legacy after-action) react window PASS-PASSes, advance turn.
+
+    Clears react bookkeeping, runs the end-of-turn tail for the current
+    active player, and enters the NEW active player's START_OF_TURN.
+    """
+    state = replace(
+        state,
+        react_stack=(),
+        react_player_idx=None,
+        pending_action=None,
+        react_context=None,
+        react_return_phase=None,
+    )
+    state = _close_end_of_turn_and_flip(state, library)
+    if state.is_game_over:
+        return state
+    return enter_start_of_turn(state, library)
+
+
+# ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
 
@@ -476,45 +675,21 @@ def resolve_react_stack(
     if state.pending_death_target is not None:
         return state
 
-    # Advance turn: flip active player, increment turn number, clear react state
-    new_active_idx = 1 - state.active_player_idx
-    state = replace(
-        state,
-        react_stack=(),
-        react_player_idx=None,
-        pending_action=None,
-        phase=TurnPhase.ACTION,
-        active_player_idx=new_active_idx,
-        turn_number=state.turn_number + 1,
-    )
+    # Phase 14.7-02: Dispatch on ``react_return_phase`` — where did we
+    # come from? Pre-14.7 callers didn't set this field so it's None,
+    # which we treat as the legacy after-action path (return ACTION ->
+    # advance turn).
+    return_phase = state.react_return_phase or TurnPhase.ACTION
 
-    # Phase 14.3: tick per-minion status effects (burning) AFTER turn flip
-    # but BEFORE mana regen / draw for the new active player.
-    state = tick_status_effects(state, library)
-    if state.is_game_over:
-        return state
-
-    # Fire PASSIVE-trigger effects for every minion on the board (e.g.
-    # Emberplague Rat's burn aura, Fallen Paladin's passive_heal). One pass
-    # per turn flip, processed in (row, col) order for determinism.
-    state = _fire_passive_effects(state, library)
-    if state.is_game_over:
-        return state
-
-    # Regenerate mana for the new active player at turn start.
-    # Skip on turn 2: P2's first action must start at STARTING_MANA to
-    # match P1's first action (turn 1). Regen applies from turn 3 onward.
-    if state.turn_number > 2:
-        new_active_player = state.players[new_active_idx].regenerate_mana()
-        new_players = _replace_player(state.players, new_active_idx, new_active_player)
-        state = replace(state, players=new_players)
-
-    # Auto-draw for the new active player at turn start (only if enabled)
-    if AUTO_DRAW_ENABLED:
-        active_player = state.players[new_active_idx]
-        if active_player.deck:
-            drawn_player, _card_id = active_player.draw_card()
-            new_players = _replace_player(state.players, new_active_idx, drawn_player)
-            state = replace(state, players=new_players)
-
-    return state
+    if return_phase == TurnPhase.ACTION:
+        # Legacy after-action react window closed — advance turn.
+        return close_end_react_and_advance_turn(state, library)
+    elif return_phase == TurnPhase.START_OF_TURN:
+        # 14.7-03: after a start-of-turn react window, enter ACTION.
+        return close_start_react_and_enter_action(state, library)
+    elif return_phase == TurnPhase.END_OF_TURN:
+        # 14.7-03: after an end-of-turn react window, advance turn.
+        return close_end_react_and_advance_turn(state, library)
+    else:
+        # Shouldn't happen — default to turn advance for safety.
+        return close_end_react_and_advance_turn(state, library)

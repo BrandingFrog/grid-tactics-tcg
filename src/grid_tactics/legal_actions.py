@@ -150,6 +150,14 @@ def legal_actions(
         return _action_phase_actions(state, library)
     elif state.phase == TurnPhase.REACT:
         return _react_phase_actions(state, library)
+    elif state.phase == TurnPhase.START_OF_TURN or state.phase == TurnPhase.END_OF_TURN:
+        # Phase 14.7-02: START/END phases are empty and auto-advance via
+        # the server's submit_action loop (events.py). Returning an empty
+        # tuple signals the caller to call enter_start_of_turn /
+        # enter_end_of_turn to transition out. 14.7-03 will populate these
+        # phases with ON_START_OF_TURN / ON_END_OF_TURN triggers and REACT
+        # windows; for now they auto-transition with no observable effects.
+        return ()
     else:
         # Unknown phase -- return only PASS as safe fallback
         return (pass_action(),)

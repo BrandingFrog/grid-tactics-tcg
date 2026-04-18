@@ -671,11 +671,50 @@ def register_events(room_manager: RoomManager) -> None:
             try:
                 session.state = resolve_action(session.state, action, session.library)
 
-                # Auto-pass loop: when player has zero legal actions (fatigue bleed)
+                # Auto-pass / auto-advance loop.
+                # Two reasons to stay in the loop:
+                #   (1) Fatigue bleed — legal_actions is empty during an
+                #       ACTION phase. Submit PASS to resolve_action.
+                #   (2) Phase 14.7-02: legal_actions is empty during
+                #       START_OF_TURN / END_OF_TURN phases because those
+                #       phases are placeholders. Call the react_stack
+                #       helpers directly — resolve_action does NOT accept
+                #       START/END phase inputs.
+                # Safety counter: hard cap iterations to catch any
+                # infinite-loop regressions (triggers a 500 rather than a
+                # silent wedge).
+                from grid_tactics.enums import TurnPhase as _TurnPhase
+                from grid_tactics.react_stack import (
+                    enter_end_of_turn as _enter_end_of_turn,
+                    enter_start_of_turn as _enter_start_of_turn,
+                )
+                _auto_advance_counter = 0
+                _AUTO_ADVANCE_MAX = 50
                 while not session.state.is_game_over:
+                    _auto_advance_counter += 1
+                    if _auto_advance_counter > _AUTO_ADVANCE_MAX:
+                        raise RuntimeError(
+                            "Phase auto-advance loop exceeded safety counter "
+                            f"({_AUTO_ADVANCE_MAX} iterations) — possible "
+                            "infinite-loop regression in START/END phase "
+                            "handling."
+                        )
+                    # 14.7-02 START/END placeholder phases take precedence
+                    # over legal_actions (which returns () for them).
+                    if session.state.phase == _TurnPhase.START_OF_TURN:
+                        session.state = _enter_start_of_turn(
+                            session.state, session.library
+                        )
+                        continue
+                    if session.state.phase == _TurnPhase.END_OF_TURN:
+                        session.state = _enter_end_of_turn(
+                            session.state, session.library
+                        )
+                        continue
                     next_actions = legal_actions(session.state, session.library)
                     if len(next_actions) > 0:
                         break
+                    # ACTION phase with no legal actions = fatigue bleed.
                     session.state = resolve_action(
                         session.state, pass_action(), session.library
                     )

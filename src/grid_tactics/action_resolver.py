@@ -29,6 +29,7 @@ from grid_tactics.enums import (
     CardType,
     EffectType,
     PlayerSide,
+    ReactContext,
     TriggerType,
     TurnPhase,
 )
@@ -662,6 +663,10 @@ def _cast_magic(
         react_stack=new_stack,
         react_player_idx=1 - state.active_player_idx,
         phase=TurnPhase.REACT,
+        # Phase 14.7-02: tag the REACT window as "after an ACTION" so
+        # resolve_react_stack returns to ACTION-phase turn advance.
+        react_context=ReactContext.AFTER_ACTION,
+        react_return_phase=TurnPhase.ACTION,
     )
 
 
@@ -1435,51 +1440,26 @@ def resolve_action(
                 state,
                 phase=TurnPhase.REACT,
                 react_player_idx=1 - state.active_player_idx,
+                # Phase 14.7-02: after-action react window.
+                react_context=ReactContext.AFTER_ACTION,
+                react_return_phase=TurnPhase.ACTION,
             )
             return state
         else:
             # Phase 14.1+: a react-triggered death cleared its modal.
-            # Re-run the tail of resolve_react_stack (turn advance + status
-            # ticks + passive effects + regen + auto-draw). Since we can't
-            # easily resume mid-function, we mirror those steps here.
+            # We were mid-resolution of the react stack when the cleanup
+            # paused for the modal pick. Now that it's drained, re-enter
+            # the end-of-turn tail (same code path resolve_react_stack
+            # would have taken had the death not interrupted it).
+            #
+            # Phase 14.7-02: deduplicated from ~35 lines of inlined tail
+            # logic into a single call to close_end_react_and_advance_turn.
+            # One source of truth; when 14.7-03 adds start/end trigger
+            # firing to the tail, this resume path picks it up for free.
             from grid_tactics.react_stack import (
-                _fire_passive_effects, tick_status_effects,
+                close_end_react_and_advance_turn,
             )
-            from grid_tactics.types import AUTO_DRAW_ENABLED
-            old_active_idx = state.active_player_idx
-            new_active_idx = 1 - old_active_idx
-            # Flip discard tracking: this_turn → last_turn for the player whose turn ended
-            old_player = state.players[old_active_idx]
-            updated_old = replace(old_player,
-                                  discarded_last_turn=old_player.discarded_this_turn,
-                                  discarded_this_turn=False)
-            state = replace(state, players=_replace_player(state.players, old_active_idx, updated_old))
-            state = replace(
-                state,
-                react_stack=(),
-                react_player_idx=None,
-                pending_action=None,
-                phase=TurnPhase.ACTION,
-                active_player_idx=new_active_idx,
-                turn_number=state.turn_number + 1,
-            )
-            state = tick_status_effects(state, library)
-            if state.is_game_over:
-                return state
-            state = _fire_passive_effects(state, library)
-            if state.is_game_over:
-                return state
-            if state.turn_number > 2:
-                new_active_player = state.players[new_active_idx].regenerate_mana()
-                new_players = _replace_player(state.players, new_active_idx, new_active_player)
-                state = replace(state, players=new_players)
-            if AUTO_DRAW_ENABLED:
-                active_player = state.players[new_active_idx]
-                if active_player.deck:
-                    drawn_player, _card_id = active_player.draw_card()
-                    new_players = _replace_player(state.players, new_active_idx, drawn_player)
-                    state = replace(state, players=new_players)
-            return state
+            return close_end_react_and_advance_turn(state, library)
 
     # Pending revive-place gate — runs before REACT delegation so the player
     # can place revived minions even when the state is technically in REACT
@@ -1588,6 +1568,9 @@ def resolve_action(
             state,
             phase=TurnPhase.REACT,
             react_player_idx=1 - state.active_player_idx,
+            # Phase 14.7-02: after-action react window (conjure deploy).
+            react_context=ReactContext.AFTER_ACTION,
+            react_return_phase=TurnPhase.ACTION,
         )
         return state
 
@@ -1725,6 +1708,9 @@ def resolve_action(
             state,
             phase=TurnPhase.REACT,
             react_player_idx=1 - state.active_player_idx,
+            # Phase 14.7-02: after-action react window (tutor resolve).
+            react_context=ReactContext.AFTER_ACTION,
+            react_return_phase=TurnPhase.ACTION,
         )
         return state
 
@@ -1790,6 +1776,9 @@ def resolve_action(
             state,
             phase=TurnPhase.REACT,
             react_player_idx=1 - state.active_player_idx,
+            # Phase 14.7-02: after-action react window (melee post-move).
+            react_context=ReactContext.AFTER_ACTION,
+            react_return_phase=TurnPhase.ACTION,
         )
         return state
 
@@ -1859,10 +1848,15 @@ def resolve_action(
         return state
 
     # Transition to REACT phase (D-13)
+    # Phase 14.7-02: tag the REACT window as "after an ACTION" so
+    # resolve_react_stack's react_return_phase dispatch sends it back
+    # through close_end_react_and_advance_turn (legacy path).
     state = replace(
         state,
         phase=TurnPhase.REACT,
         react_player_idx=1 - state.active_player_idx,
+        react_context=ReactContext.AFTER_ACTION,
+        react_return_phase=TurnPhase.ACTION,
     )
 
     return state
