@@ -148,6 +148,70 @@ class TestSerialization:
         assert isinstance(restored.board.cells, tuple)
 
 
+class TestSerializationPhase14_7_02:
+    """Phase 14.7-02: react_context + react_return_phase round-trip."""
+
+    def test_defaults_none(self):
+        """Fresh game has both fields default to None."""
+        state, _ = GameState.new_game(42, DECK_P1, DECK_P2)
+        assert state.react_context is None
+        assert state.react_return_phase is None
+
+    def test_serialize_new_phase_fields(self):
+        """A state mid-react with context + return_phase round-trips."""
+        from grid_tactics.enums import ReactContext
+
+        state, _ = GameState.new_game(42, DECK_P1, DECK_P2)
+        state = dataclasses.replace(
+            state,
+            phase=TurnPhase.REACT,
+            react_context=ReactContext.AFTER_ACTION,
+            react_return_phase=TurnPhase.ACTION,
+        )
+
+        d = state.to_dict()
+        # JSON-serializable
+        json_str = json.dumps(d)
+        assert isinstance(json_str, str)
+        # Verify raw dict uses ints
+        assert d["react_context"] == int(ReactContext.AFTER_ACTION)
+        assert d["react_return_phase"] == int(TurnPhase.ACTION)
+
+        restored = GameState.from_dict(d)
+        assert restored.react_context == ReactContext.AFTER_ACTION
+        assert isinstance(restored.react_context, ReactContext)
+        assert restored.react_return_phase == TurnPhase.ACTION
+        assert isinstance(restored.react_return_phase, TurnPhase)
+        assert restored == state
+
+    def test_serialize_new_phase_fields_none_preserved(self):
+        """None round-trips as None (no KeyError on old dicts)."""
+        state, _ = GameState.new_game(42, DECK_P1, DECK_P2)
+        d = state.to_dict()
+        # Omit the keys (simulates an older dict)
+        d.pop("react_context", None)
+        d.pop("react_return_phase", None)
+        restored = GameState.from_dict(d)
+        assert restored.react_context is None
+        assert restored.react_return_phase is None
+
+    def test_serialize_end_of_turn_return(self):
+        """react_return_phase=END_OF_TURN round-trips (new enum value)."""
+        from grid_tactics.enums import ReactContext
+
+        state, _ = GameState.new_game(42, DECK_P1, DECK_P2)
+        state = dataclasses.replace(
+            state,
+            phase=TurnPhase.REACT,
+            react_context=ReactContext.BEFORE_END_OF_TURN,
+            react_return_phase=TurnPhase.END_OF_TURN,
+        )
+        d = state.to_dict()
+        restored = GameState.from_dict(d)
+        assert restored.react_context == ReactContext.BEFORE_END_OF_TURN
+        assert restored.react_return_phase == TurnPhase.END_OF_TURN
+
+
 # ---------------------------------------------------------------------------
 # Phase 3: Extended GameState tests
 # ---------------------------------------------------------------------------

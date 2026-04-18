@@ -12,7 +12,7 @@ from typing import Optional
 
 from grid_tactics.actions import Action
 from grid_tactics.board import Board
-from grid_tactics.enums import PlayerSide, TurnPhase
+from grid_tactics.enums import PlayerSide, ReactContext, TurnPhase
 from grid_tactics.minion import MinionInstance
 from grid_tactics.player import Player
 from grid_tactics.rng import GameRNG
@@ -94,6 +94,17 @@ class GameState:
     react_stack: tuple = ()  # react chain state (will hold ReactEntry tuples in Plan 03)
     react_player_idx: Optional[int] = None  # whose turn to react (None = not in react window)
     pending_action: Optional[Action] = None  # action waiting for react resolution
+
+    # Phase 14.7-02: 3-phase turn model. ``react_context`` tags WHY the
+    # current REACT window is open (after an action, after a start-of-turn
+    # trigger, before end-of-turn, etc.) so react_condition matching and
+    # UI animations can branch on it. ``react_return_phase`` tells
+    # resolve_react_stack WHERE to transition when the chain PASS-PASSes
+    # out (START -> ACTION, ACTION -> advance turn via END, END -> next
+    # turn's START). Both default None — set alongside phase=REACT at the
+    # REACT-entry sites in action_resolver.py and (in 14.7-03) react_stack.
+    react_context: Optional[ReactContext] = None
+    react_return_phase: Optional[TurnPhase] = None
 
     # Phase 4: Win/draw detection
     winner: Optional[PlayerSide] = None  # which player won (None = no winner yet, or draw)
@@ -285,6 +296,13 @@ class GameState:
                 for entry in self.react_stack
             ],
             "react_player_idx": self.react_player_idx,
+            # Phase 14.7-02: 3-phase turn model fields
+            "react_context": (
+                int(self.react_context) if self.react_context is not None else None
+            ),
+            "react_return_phase": (
+                int(self.react_return_phase) if self.react_return_phase is not None else None
+            ),
             "pending_action": None,
             # Phase 4: Win/draw detection
             "winner": int(self.winner) if self.winner is not None else None,
@@ -367,6 +385,12 @@ class GameState:
         winner = PlayerSide(winner_raw) if winner_raw is not None else None
         is_game_over = d.get("is_game_over", False)
 
+        # Phase 14.7-02: 3-phase turn model fields
+        rc_raw = d.get("react_context")
+        react_context = ReactContext(rc_raw) if rc_raw is not None else None
+        rrp_raw = d.get("react_return_phase")
+        react_return_phase = TurnPhase(rrp_raw) if rrp_raw is not None else None
+
         # Reconstruct react_stack entries (Phase 14.7-01: includes originator fields)
         from grid_tactics.react_stack import ReactEntry
         react_stack_data = d.get("react_stack", ())
@@ -417,6 +441,8 @@ class GameState:
             react_stack=tuple(react_stack_entries),
             react_player_idx=d.get("react_player_idx"),
             pending_action=pending_action,
+            react_context=react_context,
+            react_return_phase=react_return_phase,
             winner=winner,
             is_game_over=is_game_over,
             fatigue_counts=tuple(d.get("fatigue_counts", (0, 0))),

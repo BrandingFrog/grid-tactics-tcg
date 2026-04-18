@@ -9,10 +9,43 @@ class PlayerSide(IntEnum):
 
 
 class TurnPhase(IntEnum):
-    """Current phase within a turn. ACTION = active player acts, REACT = opponent may counter."""
+    """Current phase within a turn.
+
+    ACTION = active player acts, REACT = opponent may counter.
+    Phase 14.7-02: extended with START_OF_TURN and END_OF_TURN for the
+    3-phase turn model mandated by the turn-structure spec. Each turn now
+    progresses START_OF_TURN -> ACTION -> END_OF_TURN with a REACT window
+    open after each phase's triggered effects finish firing. Values are
+    append-only so downstream numpy/tensor/int encodings stay stable.
+    """
 
     ACTION = 0
     REACT = 1
+    START_OF_TURN = 2   # New: Phase 14.7-02
+    END_OF_TURN = 3     # New: Phase 14.7-02
+
+
+class ReactContext(IntEnum):
+    """Which kind of event opened the current REACT window.
+
+    Drives react_condition matching (plan 14.7-07) and tells the UI which
+    animation to play (plan 14.7-09). ``react_return_phase`` on GameState
+    tells the state machine which phase to transition back to after PASS-
+    PASS closes the react chain.
+
+    Phase 14.7-02: enum introduced. Today only AFTER_ACTION is used
+    (backwards-compat with legacy after-action react window). The other
+    values are reserved for later plans in Phase 14.7 that wire start-of-
+    turn triggers (14.7-03), summon compound windows (14.7-04), and death
+    windows.
+    """
+
+    AFTER_START_TRIGGER = 0
+    AFTER_ACTION = 1
+    AFTER_SUMMON_DECLARATION = 2
+    AFTER_SUMMON_EFFECT = 3
+    AFTER_DEATH_EFFECT = 4
+    BEFORE_END_OF_TURN = 5
 
 
 # ---------------------------------------------------------------------------

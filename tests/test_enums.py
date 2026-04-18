@@ -13,6 +13,7 @@ from grid_tactics.enums import (
     EffectType,
     Element,
     PlayerSide,
+    ReactContext,
     TargetType,
     TriggerType,
     TurnPhase,
@@ -62,6 +63,39 @@ class TestTurnPhase:
 
     def test_name_lookup(self) -> None:
         assert TurnPhase["ACTION"] is TurnPhase.ACTION
+
+    def test_phase_14_7_02_new_values(self) -> None:
+        """Phase 14.7-02: START_OF_TURN=2, END_OF_TURN=3 appended."""
+        assert TurnPhase.START_OF_TURN == 2
+        assert TurnPhase.END_OF_TURN == 3
+        assert TurnPhase(2) is TurnPhase.START_OF_TURN
+        assert TurnPhase(3) is TurnPhase.END_OF_TURN
+        # Existing values must not shift (append-only invariant)
+        assert TurnPhase.ACTION == 0
+        assert TurnPhase.REACT == 1
+        # Exactly 4 members total
+        assert len(TurnPhase) == 4
+
+
+class TestReactContext:
+    """Phase 14.7-02: ReactContext tags why the current REACT window is open."""
+
+    def test_member_count(self) -> None:
+        assert len(ReactContext) == 6
+
+    def test_values(self) -> None:
+        assert ReactContext.AFTER_START_TRIGGER == 0
+        assert ReactContext.AFTER_ACTION == 1
+        assert ReactContext.AFTER_SUMMON_DECLARATION == 2
+        assert ReactContext.AFTER_SUMMON_EFFECT == 3
+        assert ReactContext.AFTER_DEATH_EFFECT == 4
+        assert ReactContext.BEFORE_END_OF_TURN == 5
+
+    def test_is_intenum(self) -> None:
+        assert isinstance(ReactContext.AFTER_ACTION, IntEnum)
+
+    def test_name_lookup(self) -> None:
+        assert ReactContext["AFTER_ACTION"] is ReactContext.AFTER_ACTION
 
 
 # ---------------------------------------------------------------------------
