@@ -4069,7 +4069,19 @@ function onHandCardClick(handIdx) {
     var isMyTurn = legalActions && legalActions.length > 0;
     if (!isMyTurn) return;
 
-    // If already selected, deselect
+    // Second click on an already-armed untargeted magic → confirm and cast.
+    // This is the commit half of the two-click-to-cast flow below, so
+    // accidentally brushing a magic card doesn't fire it immediately.
+    if (selectedHandIdx === handIdx && interactionMode === 'confirm') {
+        var armed = findCardAction(handIdx, null, null);
+        if (armed) submitAction(_playCardPayload(armed));
+        clearSelection();
+        highlightBoard();
+        updateHandHighlights();
+        return;
+    }
+
+    // If already selected in play/target mode, deselect.
     if (selectedHandIdx === handIdx && (interactionMode === 'play' || interactionMode === 'target')) {
         clearSelection();
         highlightBoard();
@@ -4080,14 +4092,17 @@ function onHandCardClick(handIdx) {
     var deployPositions = getDeployPositions(handIdx);
     var targetOnly = getTargetPositions(handIdx, null); // for magics with no deploy
 
-    // Untargeted magic: find action with no position and no target.
-    // Rebuild the payload from the matched action so sacrifice_minion_id and
-    // discard_card_index (both optional on PLAY_CARD) propagate — otherwise
-    // the server rejects the bare action as illegal for cards that carry
-    // a sacrifice_ally_cost (e.g. Feed the Shadow) or a discard cost.
+    // Untargeted magic: find an action with no position and no target. Arm
+    // the card and wait for a second click to confirm — prevents an
+    // accidental tap from firing an expensive board-wide spell.
     var untargeted = findCardAction(handIdx, null, null);
     if (deployPositions.length === 0 && targetOnly.length === 0 && untargeted) {
-        submitAction(_playCardPayload(untargeted));
+        selectedHandIdx = handIdx;
+        selectedMinionId = null;
+        selectedDeployPos = null;
+        interactionMode = 'confirm';
+        highlightBoard();
+        updateHandHighlights();
         return;
     }
 
@@ -4207,6 +4222,16 @@ function onBoardCellClick(row, col) {
             selectedAbilityMinionId = null;
             interactionMode = null;
         }
+        return;
+    }
+
+    // Armed untargeted magic: a click anywhere on the board (nothing to
+    // target here) cancels the arm so the card doesn't stay committed
+    // on deck after a stray click.
+    if (interactionMode === 'confirm') {
+        clearSelection();
+        highlightBoard();
+        updateHandHighlights();
         return;
     }
 
@@ -5298,8 +5323,10 @@ function updateHandHighlights() {
     }
     document.querySelectorAll('.card-frame-hand').forEach(function(card) {
         var idx = parseInt(card.dataset.handIdx, 10);
-        card.classList.remove('card-playable', 'card-selected-hand', 'card-react-playable');
-        if (selectedHandIdx === idx && (interactionMode === 'play' || interactionMode === 'target')) {
+        card.classList.remove('card-playable', 'card-selected-hand', 'card-react-playable', 'card-confirm-armed');
+        if (selectedHandIdx === idx && interactionMode === 'confirm') {
+            card.classList.add('card-confirm-armed');
+        } else if (selectedHandIdx === idx && (interactionMode === 'play' || interactionMode === 'target')) {
             card.classList.add('card-selected-hand');
         } else if (canPlayCard(idx)) {
             card.classList.add('card-playable');

@@ -2369,6 +2369,35 @@ body {
   z-index: 101;
 }
 
+/* Armed-to-confirm state — first click on an untargeted magic arms the
+   card; second click on the same card casts. A pulsing amber border plus
+   a "CLICK TO CAST" ribbon make the confirmation step obvious. */
+.card-frame-hand.card-confirm-armed {
+  cursor: pointer;
+  border-color: var(--yellow);
+  box-shadow: 0 0 24px rgba(255, 152, 0, 0.85);
+  transform: rotate(calc(var(--offset) * 3deg)) translateY(-22px) scale(1.06) !important;
+  z-index: 102;
+  animation: confirm-armed-pulse 1100ms ease-in-out infinite;
+}
+.card-frame-hand.card-confirm-armed::after {
+  content: 'CLICK TO CAST';
+  position: absolute;
+  inset: auto 0 -22px 0;
+  text-align: center;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 2px;
+  color: var(--yellow);
+  text-shadow: 0 0 6px rgba(0, 0, 0, 0.9), 0 1px 2px rgba(0, 0, 0, 0.9);
+  pointer-events: none;
+  white-space: nowrap;
+}
+@keyframes confirm-armed-pulse {
+  0%, 100% { box-shadow: 0 0 18px rgba(255, 152, 0, 0.6); }
+  50%      { box-shadow: 0 0 32px rgba(255, 152, 0, 1); }
+}
+
 /* Action bar (pass/skip buttons) */
 .action-bar {
   display: flex;
