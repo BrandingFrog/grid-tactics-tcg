@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Online PvP Dueling
 status: in_progress
-stopped_at: "Phase 14.7 Plan 04 SHIPPED. Compound summon two-window dispatch now live: _deploy_minion no longer lands minions inline — it pushes a summon_declaration originator onto the react stack (phase=REACT, react_context=AFTER_SUMMON_DECLARATION, return=ACTION). Window A resolution (LIFO consumes the declaration entry) invokes resolve_summon_declaration_originator which: (a) lands the minion on the board, (b) if the minion has any ON_SUMMON effects, RESETS the react stack to a fresh summon_effect originator + re-sets phase=REACT with AFTER_SUMMON_EFFECT context (Window B), else drains out. resolve_react_stack gains a pre-resolution stack-identity snapshot + post-LIFO early-return: if state.react_stack is not the same tuple AND contains an originator, return state as-is (Window B opens naturally for opponent). Same function also gained a pending-modal hand-off: if originator resolution set pending_tutor_player_idx or pending_revive_player_idx, close the react window (phase=ACTION, clear react bookkeeping) WITHOUT advancing the turn — the modal owner is the correct next decision-maker. This also fixes a latent 14.7-01 bug where Ratmobile-style magic tutors advanced the turn before the caster picked. Window A negate is HARSH: mana + discard + destroy-ally costs all forfeit, minion does not land (per spec §4.2 / key_user_decisions #2). Window B negate is SOFT: effect cancelled, minion stays on board. Gargoyle Sorceress's two ON_SUMMON effects share one Window B (JSON-order). Minion ON_PLAY triggers are now orphaned — only ON_SUMMON fires through the compound pipeline (no real card uses trigger=on_play on a minion; grep-verified). resolve_action's terminal AFTER_ACTION REACT transition now short-circuits when state.phase is already REACT, so _deploy_minion's AFTER_SUMMON_DECLARATION context isn't overwritten. +7 unit tests (TestSummonCompoundWindows in test_react_stack.py), +4 integration tests + +1 random-games regression (test_integration.py), +2 sandbox round-trip tests (tests/server/test_sandbox_session.py). 6 deploy tests in test_action_resolver.py updated to drain Window A before asserting landed minion. All 6 Summon: minion JSONs flow correctly: 3 Diodebots' tutor chain, Eclipse Shade self-burn, Flame Wyrm draw, Gargoyle Sorceress buffs. Commits: 8b093af (feat Task 1) + 7639986 (test Task 2). Both pushed to master; Railway auto-deployed. Test posture: 784 non-RL tests pass (up from 745); baseline failures unchanged at 10 (1 spectator + 4 LEAP + 1 RL self-play + 4 tensor engine parity — all pre-existing and predating 14.7). Next: 14.7-05 (simultaneous-trigger priority queue + modal picker for multi-owner Start: / End: / Summon: effects)."
-last_updated: "2026-04-18T23:00:00.000Z"
-last_activity: 2026-04-18
+stopped_at: "Phase 14.7 Plan 08 SHIPPED. Melee move+attack chains now open TWO independent react windows (post-move + post-attack) per spec v2 §4.1, superseding Phase 14.1's combined-single-window decision. Engine changes: (1) _apply_move unchanged for the pending flag — it still sets pending_post_move_attacker_id when melee + in-range enemies — but resolve_action's MOVE fall-through now transitions to REACT (AFTER_ACTION / return=ACTION) with the pending flag preserved, opening the post-move window. (2) resolve_react_stack's AFTER_ACTION dispatch checks pending_post_move_attacker_id before calling enter_end_of_turn: if set, clears react bookkeeping but keeps pending and returns to ACTION for the sub-action. (3) The ACTION-phase pending_post_move gate in resolve_action splits ATTACK vs DECLINE: ATTACK opens the second AFTER_ACTION window as before; DECLINE short-circuits to enter_end_of_turn directly (no phantom window). (4) legal_actions pending-post-move enumeration is now gated on phase==ACTION so the reacting player's REACT-phase enumeration isn't shadowed during the post-move window. (5) pending_death_target resume path falls through to REACT transition for pending_post_move (no inline return). Client: syncPendingPostMoveAttackUI gates the attack-pick mode + Decline button on phase==ACTION so the picker UI only surfaces between the two windows. Ranged minions unchanged (no pending, single window). Tensor engine untouched (on hold per CLAUDE.md). 4 migrated 14.1 tests (added drain-W1 step; renamed test_pending_decline_clears_state_with_one_react → test_pending_decline_skips_second_react_window) + 7 new TestMeleeTwoReactWindows unit tests + 2 new TestMeleeTwoReactWindowsIntegration end-to-end tests. Commits: eed9f7f (feat Task 1) + 8009ae0 (test Task 2). Both pushed to master; Railway auto-deployed. Test posture: 336 engine-suite tests pass; 66 sandbox session tests pass; baseline failures unchanged at 10 (1 spectator + 4 LEAP + 1 RL self-play + 4 tensor engine parity — all pre-existing). Next: 14.7-05 (simultaneous-trigger priority queue) OR 14.7-07 (OPPONENT_SUMMONS_MINION / OPPONENT_MOVES_MINION react conditions) — 14.7-08 leaves AFTER_ACTION infrastructure ready for both."
+last_updated: "2026-04-19T00:30:00.000Z"
+last_activity: 2026-04-19
 progress:
   total_phases: 6
   completed_phases: 4
@@ -25,9 +25,9 @@ See: .planning/PROJECT.md (updated 2026-04-04)
 
 ## Current Position
 
-Phase: 14.7 (turn-structure-overhaul) — IN PROGRESS (Plans 01 + 02 + 03 + 04 of 10 shipped 2026-04-18)
-Plan: 4 of 10 (Summon compound react windows) — COMPLETE
-Next: 14.7-05 (simultaneous-trigger priority queue + modal picker) — 14.7-06 through 14.7-10 queued
+Phase: 14.7 (turn-structure-overhaul) — IN PROGRESS (Plans 01 + 02 + 03 + 04 shipped 2026-04-18; Plan 08 shipped 2026-04-19)
+Plan: 08 of 10 (Melee move+attack two react windows) — COMPLETE (pulled ahead out-of-order; depends only on 14.7-02 which is satisfied)
+Next: 14.7-05 (simultaneous-trigger priority queue + modal picker) OR 14.7-07 (new ReactCondition values) — both 14.7-06 (fizzle rule) and 14.7-09/10 (turn banner + test migration) remain queued
 Status: Plan 14.7-04 shipped: summon compound two-window dispatch is now live. _deploy_minion pushes a summon_declaration originator onto the react stack (Window A: AFTER_SUMMON_DECLARATION); on PASS-PASS, resolve_summon_declaration_originator lands the minion and — if ON_SUMMON effects exist — pushes a summon_effect originator to open Window B (AFTER_SUMMON_EFFECT). Window A negate = FULL forfeit (costs spent, minion doesn't land — spec §4.2 harsh-by-design). Window B negate = effect cancelled but minion stays. resolve_react_stack grew a stack-identity snapshot for compound-window hand-off + a pending-modal hand-off that fixes a latent 14.7-01 bug (Ratmobile-style tutor advancing turn before caster picks). 6 Summon: minion JSONs flow correctly: 3 Diodebots' tutor chain, Eclipse Shade self-burn, Flame Wyrm draw, Gargoyle Sorceress's two buffs share one Window B. Minion ON_PLAY triggers are orphaned (no card JSON uses them; only ON_SUMMON fires through compound pipeline). resolve_action's terminal AFTER_ACTION block now short-circuits when state.phase==REACT to respect originator handlers' inline react_context. +7 unit tests + +4 integration tests + +1 random-games regression (30 deterministic seeds, 150 iterations each) + +2 sandbox slot round-trip tests; 6 existing deploy tests updated to drain Window A before asserting landed minion. Commits: 8b093af (feat Task 1: _deploy_minion refactor + resolve helpers + 7 unit tests) + 7639986 (test Task 2: integration + random-games + sandbox round-trip). Both pushed to master; Railway auto-deployed. Test posture: 784 non-RL tests pass (up from 745); baseline failures unchanged at 10 (1 spectator + 4 LEAP + 1 RL self-play + 4 tensor engine parity — all pre-existing, predating 14.7). Hook points ready for 14.7-05 (Gargoyle's two-effect Window B is the insertion point for priority-queue modal picker) + 14.7-06 (fizzle markers in place for "cell occupied mid-chain" and "source minion died" edge cases) + 14.7-07 (ReactContext.AFTER_SUMMON_DECLARATION / AFTER_SUMMON_EFFECT already drive react windows so the new OPPONENT_SUMMONS_MINION condition just needs matching logic).
 
 ### Phase 14.6 closeout context (retained for lookback)
@@ -74,7 +74,7 @@ Audits (both PASS):
 
 All 9 roadmap success criteria PASS. DEV-01 through DEV-09 marked Complete in REQUIREMENTS.md traceability table. Phase 14.6 marked `[x]` complete (2026-04-11) in ROADMAP.md with 4/4 plans.
 
-Last activity: 2026-04-18 — Completed 14.7-04-PLAN.md (Summon compound react windows: _deploy_minion pushes summon_declaration originator, Window A resolves → land minion + open Window B iff ON_SUMMON effects, Window B resolves → fire ON_SUMMON via magic_cast-pattern dispatch. Harsh Window A negate, soft Window B negate. Pending-modal hand-off fixes latent 14.7-01 Ratmobile-tutor-during-react turn-advance bug. 6 Summon: minion JSONs flow correctly; minion ON_PLAY triggers orphaned.). Previous: 14.7-03 (Start/End/Summon triggered effects pipeline), 14.7-02 (3-phase turn state machine), 14.7-01 (Deferred magic resolution).
+Last activity: 2026-04-19 — Completed 14.7-08-PLAN.md (Melee move+attack opens TWO independent react windows per spec v2 §4.1, superseding 14.1's combined-single-window decision. pending_post_move_attacker_id survives the post-move REACT window; resolve_react_stack AFTER_ACTION dispatch checks the flag before advancing to END_OF_TURN and re-enters ACTION if set. DECLINE short-circuits to enter_end_of_turn directly — no phantom second window. Ranged minions unchanged. legal_actions pending enum gated on phase==ACTION so REACT enum isn't shadowed. Client picker UI gated on phase==ACTION.). Previous: 14.7-04 (Summon compound react windows), 14.7-03 (Start/End/Summon triggered effects pipeline), 14.7-02 (3-phase turn state machine), 14.7-01 (Deferred magic resolution).
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -125,6 +125,59 @@ Reusable infrastructure for later 14.7 plans:
 - 14.7-05 (simultaneous priority + modal): fire_start_of_turn_triggers / fire_end_of_turn_triggers use (row, col) ordering today; 14.7-05 replaces with priority queue + modal for multi-owner simultaneous triggers.
 - 14.7-06 (fizzle rule): triggers resolve blindly today; 14.7-06 adds fizzle checks inside fire_*_triggers helpers.
 - 14.7-07 (react condition matching): shortcut-when-no-triggers gate (`_has_triggers_for`) is the clean extension point — 14.7-07 will also return True when opponent has react cards matching OPPONENT_START_OF_TURN / OPPONENT_END_OF_TURN.
+
+### Phase 14.7 Plan 08 closeout (2026-04-19)
+
+Plan 14.7-08 shipped out-of-order (plan sequencing in 14.7 is wave-based: 14.7-08 depends only on 14.7-02 which was satisfied back on 2026-04-18). This plan supersedes Phase 14.1's combined-single-react-window decision per spec v2 §4.1 and key_user_decisions #1. Commit trail:
+
+- eed9f7f feat(14.7-08): melee move+attack opens TWO independent react windows (Task 1 — engine rewiring + 4 migrated tests + 7 new unit tests)
+- 8009ae0 test(14.7-08): UI phase gate + full-chain integration coverage (Task 2 — game.js phase gate + 2 integration tests)
+
+Both commits pushed to master; Railway auto-deployed.
+
+Observable gameplay impact:
+- Moving a melee minion into in-range state now opens a react window **immediately** — before the player chooses ATTACK or DECLINE. Opponent gets first pass on the move itself.
+- If the attacker chooses ATTACK, a second react window opens after the damage exchange (standard post-attack behavior; already existed in 14.1 but was the only window).
+- If the attacker DECLINEs, the turn advances directly. No phantom REACT window wasted on a non-action.
+- Ranged minions unchanged: move → single react window → turn advances.
+
+Engine changes:
+- `_apply_move` unchanged for the pending flag setting (still `pending_post_move_attacker_id = minion.instance_id` when range=0 + in-range enemies). The REACT transition happens at the caller site (`resolve_action`'s MOVE fall-through), which now detects pending + melee and enters REACT with `react_context=AFTER_ACTION` / `react_return_phase=ACTION` instead of returning inline in ACTION.
+- `resolve_react_stack` AFTER_ACTION dispatch: checks `pending_post_move_attacker_id` BEFORE clearing bookkeeping + calling `enter_end_of_turn`. If set, clears react bookkeeping (stack, player, context, return_phase, pending_action) but KEEPS pending and returns to ACTION for the sub-action.
+- `resolve_action` pending_post_move gate (line ~1773): split ATTACK vs DECLINE handling. ATTACK opens the second AFTER_ACTION window (standard path). DECLINE short-circuits to `enter_end_of_turn(state, library)` — no REACT transition, no second window.
+- `pending_death_target` resume path (action_resolver.py ~line 1454): pending_post_move no longer returns inline in ACTION; falls through to the REACT transition so the post-move window opens even when cleanup yielded a death modal.
+- `legal_actions`: the pending-post-move enumeration branch is now gated on `phase==ACTION`. During the post-move REACT window, the reacting player gets standard REACT-phase enumeration (PASS + legal react cards), not the attack-or-decline menu meant for the caster.
+
+Client changes:
+- `syncPendingPostMoveAttackUI` in game.js: gates the attack-pick-mode + Decline button on `gameState.phase === 0` (ACTION). During the post-move REACT window the picker UI hides and reappears when the window closes. Prevents premature Decline button clicks that would be rejected by the server.
+
+Test migration posture:
+- Four pre-existing 14.1 tests in `TestPendingPostMoveAttack` encoded the superseded single-window assumption. Migrated in-place (no xfails, no deletions):
+  * `test_melee_move_sets_pending_state_when_target_in_range` now asserts `phase == REACT` + `react_context == AFTER_ACTION` + `react_return_phase == ACTION` + `react_player_idx == 1`.
+  * `test_pending_attack_resolves_combat_and_clears_state` got a single-PASS drain of W1 before the ATTACK.
+  * `test_pending_decline_clears_state_with_one_react` renamed to `test_pending_decline_skips_second_react_window`; asserts `active_player_idx == 1` + `phase == ACTION` (turn advanced to P2) instead of `phase == REACT`.
+  * `test_pending_state_blocks_unrelated_actions` + `test_pending_attack_only_with_pending_attacker` got drain-W1 steps so the gate tests run against the between-windows ACTION phase.
+
+New coverage:
+- +7 unit tests (`TestMeleeTwoReactWindows` in test_action_resolver.py): opens-window-1, opens-window-2-on-attack, skips-window-2-on-decline, ranged-unchanged, no-targets-single-window, legal_actions-during-window (react-only), legal_actions-between-windows (attack-or-decline-only).
+- +2 integration tests (`TestMeleeTwoReactWindowsIntegration` in test_integration.py): Common Rat vs Common Rat full chain (move → W1 → PASS → ACTION → ATTACK → W2 → PASS → P2 turn) and DECLINE variant (move → W1 → PASS → DECLINE → P2 turn direct).
+
+Test posture:
+- Plan verification suite (207 tests) GREEN: test_action_resolver + test_react_stack + test_legal_actions + test_integration + test_view_filter.
+- Broader engine suite (336 tests) GREEN: adds game_state + effect_resolver + pvp_server + game_flow + sacrifice + status_effects.
+- Sandbox session tests (66/66) GREEN. Pending flag survives save/load (no schema change).
+- Baseline failures unchanged at 10 (1 spectator + 4 LEAP + 1 RL self-play + 4 tensor engine parity — all pre-existing and predating 14.7).
+- `node -c game.js`: OK.
+
+Reusable infrastructure for later 14.7 plans:
+- 14.7-07 (ReactCondition matching): the post-move window uses `react_context=AFTER_ACTION` and pending_action is the MOVE. A future `OPPONENT_MOVES_MINION` condition can match without engine wiring — just add the enum value and predicate.
+- 14.7-09 (turn banner): client already receives phase + pending_post_move_attacker_id. A banner can distinguish "Post-move react" (pending set + phase=REACT) from "Post-attack react" (pending cleared + phase=REACT) without server changes.
+- 14.7-10 (test migration): the in-place migration pattern (drain W1 via single PASS before asserting between-window state) is the reference for any remaining 14.1-era tests.
+
+Non-goals / limits documented by this plan:
+- Tensor engine untouched (on hold per CLAUDE.md). Tensor engine's 14.1-02 parity work already stale; 14.7-08 defers its re-alignment.
+- pending_post_move_attacker_id serialization unchanged (field predates 14.7-08). Sandbox save/load works unchanged.
+- Prohibition (OPPONENT_PLAYS_MAGIC) is not legal in the post-move window — MOVE is not a magic play. Filtered correctly via existing `_check_react_condition`. No 14.7-07 changes required by this plan.
 
 ### Phase 14.7 Plan 04 closeout (2026-04-18)
 
