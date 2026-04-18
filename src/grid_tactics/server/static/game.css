@@ -160,7 +160,10 @@
 
 /* Spell cast center stage — giant [card] ▶ [? / 👍] overlay that
    flashes when a magic or react is cast. pointer-events: none so the
-   player can still interact with the board underneath. */
+   player can still interact with the board underneath.
+   `display: flex` below would override the browser's default for the
+   `hidden` attribute, so explicitly re-hide it here. */
+.spell-stage[hidden] { display: none !important; }
 .spell-stage {
   position: fixed;
   top: 50%;
