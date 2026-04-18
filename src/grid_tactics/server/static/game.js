@@ -3941,6 +3941,19 @@ function getTargetPositions(handIdx, deployPos) {
 }
 
 // Find a legal action for this card matching position+target_pos
+// Build a submit-ready payload for a PLAY_CARD action that preserves every
+// optional field the server checks (position, target_pos, discard_card_index,
+// sacrifice_minion_id). Synthesising payloads from (handIdx, target) alone
+// drops sacrifice_minion_id and makes cards like Feed the Shadow look illegal.
+function _playCardPayload(action) {
+    var payload = { action_type: 0, card_index: action.card_index };
+    if (action.position) payload.position = action.position;
+    if (action.target_pos) payload.target_pos = action.target_pos;
+    if (action.discard_card_index != null) payload.discard_card_index = action.discard_card_index;
+    if (action.sacrifice_minion_id != null) payload.sacrifice_minion_id = action.sacrifice_minion_id;
+    return payload;
+}
+
 function findCardAction(handIdx, deployPos, targetPos) {
     for (var i = 0; i < legalActions.length; i++) {
         var a = legalActions[i];
@@ -3962,22 +3975,29 @@ function findCardAction(handIdx, deployPos, targetPos) {
     return null;
 }
 
-// Get unique sacrifice card indices for this card (for cards with discard_cost_tribe)
+// Collect every discard-candidate hand index for this (handIdx, deployPos,
+// targetPos) — the union of every index that appears in any legal action's
+// discard_card_indices (falling back to the legacy single-index field).
+// Without the union, multi-discard cards miss candidates because
+// itertools.combinations is sorted, so the highest index never shows up as
+// the first element.
 function getSacrificeChoices(handIdx, deployPos, targetPos) {
     var seen = {};
     var choices = [];
     legalActions.forEach(function(a) {
         if (a.action_type !== 0 || a.card_index !== handIdx) return;
-        if (a.discard_card_index == null) return;
         if (deployPos != null && a.position) {
             if (a.position[0] !== deployPos[0] || a.position[1] !== deployPos[1]) return;
         }
         if (targetPos != null && a.target_pos) {
             if (a.target_pos[0] !== targetPos[0] || a.target_pos[1] !== targetPos[1]) return;
         }
-        if (!seen[a.discard_card_index]) {
-            seen[a.discard_card_index] = true;
-            choices.push(a.discard_card_index);
+        var indices = (a.discard_card_indices && a.discard_card_indices.length > 0)
+            ? a.discard_card_indices
+            : (a.discard_card_index != null ? [a.discard_card_index] : []);
+        for (var k = 0; k < indices.length; k++) {
+            var v = indices[k];
+            if (!seen[v]) { seen[v] = true; choices.push(v); }
         }
     });
     return choices;
@@ -4060,10 +4080,14 @@ function onHandCardClick(handIdx) {
     var deployPositions = getDeployPositions(handIdx);
     var targetOnly = getTargetPositions(handIdx, null); // for magics with no deploy
 
-    // Untargeted magic: find action with no position and no target
+    // Untargeted magic: find action with no position and no target.
+    // Rebuild the payload from the matched action so sacrifice_minion_id and
+    // discard_card_index (both optional on PLAY_CARD) propagate — otherwise
+    // the server rejects the bare action as illegal for cards that carry
+    // a sacrifice_ally_cost (e.g. Feed the Shadow) or a discard cost.
     var untargeted = findCardAction(handIdx, null, null);
     if (deployPositions.length === 0 && targetOnly.length === 0 && untargeted) {
-        submitAction({ action_type: 0, card_index: handIdx });
+        submitAction(_playCardPayload(untargeted));
         return;
     }
 
@@ -4205,10 +4229,15 @@ function onBoardCellClick(row, col) {
                 showSacrificePicker(selectedHandIdx, [row, col], null, sacChoices);
                 return;
             }
-            // No targeting/sacrifice needed — submit now
-            var payload = { action_type: 0, card_index: selectedHandIdx, position: [row, col] };
-            if (sacChoices.length === 1) payload.discard_card_index = sacChoices[0];
-            submitAction(payload);
+            // No targeting/sacrifice needed — submit via matched action so
+            // sacrifice_minion_id (minions with sacrifice_ally_cost — not
+            // currently used by minions, but future-proof) propagates.
+            var matched0 = findCardAction(selectedHandIdx, [row, col], null);
+            if (matched0) {
+                var payload = _playCardPayload(matched0);
+                if (sacChoices.length === 1) payload.discard_card_index = sacChoices[0];
+                submitAction(payload);
+            }
         }
         return;
     }
@@ -4225,10 +4254,16 @@ function onBoardCellClick(row, col) {
                 showSacrificePicker(selectedHandIdx, selectedDeployPos, [row, col], sacChoices2);
                 return;
             }
-            var payload = { action_type: 0, card_index: selectedHandIdx, target_pos: [row, col] };
-            if (selectedDeployPos) payload.position = selectedDeployPos;
-            if (sacChoices2.length === 1) payload.discard_card_index = sacChoices2[0];
-            submitAction(payload);
+            // Find the FULL matched legal action and rebuild the payload from
+            // it — carries sacrifice_minion_id for sacrifice_ally_cost cards
+            // (e.g. Feed the Shadow) that the synthesised payload used to
+            // drop. First match wins the ally pick for cards with >1 ally.
+            var matched = findCardAction(selectedHandIdx, selectedDeployPos, [row, col]);
+            if (matched) {
+                var payload = _playCardPayload(matched);
+                if (sacChoices2.length === 1) payload.discard_card_index = sacChoices2[0];
+                submitAction(payload);
+            }
         }
         return;
     }
@@ -4459,9 +4494,19 @@ function hideMinionActionMenu() {
 }
 
 // Sacrifice picker — shown when a card requires a tribe sacrifice and there are multiple candidates
+// Sacrifice picker — collects one or more hand-index picks (based on the
+// played card's discard_cost_count) then submits the matching PLAY_CARD
+// action. Multi-pick cards re-render the grid after each click, disabling
+// already-picked cards; submission fires when pick count reaches the
+// required discard count.
 function showSacrificePicker(handIdx, deployPos, targetPos, sacChoices) {
     hideSacrificePicker();
     var myPlayer = gameState.players[myPlayerIdx];
+    var playedCardId = myPlayer.hand[handIdx];
+    var playedDef = cardDefs[playedCardId];
+    var discardCount = (playedDef && playedDef.discard_cost_count) || 1;
+    var picks = [];
+
     var modal = document.createElement('div');
     modal.id = 'sacrifice-picker';
     modal.className = 'sacrifice-picker-overlay';
@@ -4469,27 +4514,82 @@ function showSacrificePicker(handIdx, deployPos, targetPos, sacChoices) {
     inner.className = 'sacrifice-picker-modal';
     var title = document.createElement('div');
     title.className = 'sacrifice-picker-title';
-    title.textContent = 'Choose card to exhaust';
+    var progress = document.createElement('div');
+    progress.className = 'sacrifice-picker-progress';
     inner.appendChild(title);
+    inner.appendChild(progress);
     var row = document.createElement('div');
     row.className = 'sacrifice-picker-row';
-    sacChoices.forEach(function(sacIdx) {
-        var cardId = myPlayer.hand[sacIdx];
-        var c = cardDefs[cardId];
-        if (!c) return;
-        var btn = document.createElement('button');
-        btn.className = 'sacrifice-picker-card';
-        btn.innerHTML = '<div class="sp-name">' + c.name + '</div><div class="sp-meta">' + (c.tribe || '') + '</div>';
-        btn.addEventListener('click', function() {
-            var payload = { action_type: 0, card_index: handIdx, discard_card_index: sacIdx };
-            if (deployPos) payload.position = deployPos;
-            if (targetPos) payload.target_pos = targetPos;
-            hideSacrificePicker();
-            submitAction(payload);
-        });
-        row.appendChild(btn);
-    });
     inner.appendChild(row);
+
+    function refresh() {
+        var remaining = discardCount - picks.length;
+        title.textContent = discardCount > 1
+            ? 'Choose ' + discardCount + ' cards to exhaust'
+            : 'Choose card to exhaust';
+        progress.textContent = discardCount > 1
+            ? (picks.length + ' / ' + discardCount + ' picked')
+            : '';
+        row.innerHTML = '';
+        sacChoices.forEach(function(sacIdx) {
+            var cardId = myPlayer.hand[sacIdx];
+            var c = cardDefs[cardId];
+            if (!c) return;
+            var btn = document.createElement('button');
+            btn.className = 'sacrifice-picker-card';
+            var picked = picks.indexOf(sacIdx) !== -1;
+            if (picked) btn.className += ' picked';
+            btn.innerHTML = '<div class="sp-name">' + c.name + '</div>' +
+                            '<div class="sp-meta">' + (c.tribe || '') + '</div>' +
+                            (picked ? '<div class="sp-badge">✓</div>' : '');
+            btn.addEventListener('click', function() {
+                if (picked) {
+                    // Unpick
+                    picks = picks.filter(function(i) { return i !== sacIdx; });
+                    refresh();
+                    return;
+                }
+                picks.push(sacIdx);
+                if (picks.length < discardCount) {
+                    refresh();
+                    return;
+                }
+                // All picks collected — match the legal action.
+                var sortedPicks = picks.slice().sort(function(a, b) { return a - b; });
+                var matched = null;
+                for (var mi = 0; mi < legalActions.length; mi++) {
+                    var la = legalActions[mi];
+                    if (la.action_type !== 0 || la.card_index !== handIdx) continue;
+                    if (deployPos) {
+                        if (!la.position || la.position[0] !== deployPos[0] || la.position[1] !== deployPos[1]) continue;
+                    } else if (la.position) continue;
+                    if (targetPos) {
+                        if (!la.target_pos || la.target_pos[0] !== targetPos[0] || la.target_pos[1] !== targetPos[1]) continue;
+                    } else if (la.target_pos) continue;
+                    var laIndices = la.discard_card_indices || (la.discard_card_index != null ? [la.discard_card_index] : []);
+                    if (laIndices.length !== sortedPicks.length) continue;
+                    var sorted = laIndices.slice().sort(function(a, b) { return a - b; });
+                    var same = sorted.every(function(v, i) { return v === sortedPicks[i]; });
+                    if (same) { matched = la; break; }
+                }
+                var payload;
+                if (matched) {
+                    payload = _playCardPayload(matched);
+                } else {
+                    payload = { action_type: 0, card_index: handIdx };
+                    if (deployPos) payload.position = deployPos;
+                    if (targetPos) payload.target_pos = targetPos;
+                    payload.discard_card_index = sortedPicks[0];
+                    payload.discard_card_indices = sortedPicks;
+                }
+                hideSacrificePicker();
+                submitAction(payload);
+            });
+            row.appendChild(btn);
+        });
+    }
+    refresh();
+
     var cancel = document.createElement('button');
     cancel.className = 'btn btn-secondary';
     cancel.textContent = 'Cancel';

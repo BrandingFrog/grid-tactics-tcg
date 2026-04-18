@@ -317,20 +317,21 @@ def _apply_play_card(
         new_player = new_player.discard_from_hand(card_numeric_id)
 
     # Summon sacrifice: exhaust card(s) of the required tribe from hand (cost).
-    # Use the user's chosen discard_card_index if provided; otherwise auto-pick first.
+    # Prefer the user's explicit pick list (discard_card_indices), falling back
+    # to the legacy single-index field, and finally auto-pick the first tribe
+    # match. Indices reference the ORIGINAL hand (before the played card was
+    # removed) to stay stable across the intermediate remove_from_hand call.
     if card_def.discard_cost_tribe:
         sac_count = card_def.discard_cost_count
+        pick_indices = list(action.discard_card_indices or ())
+        if not pick_indices and action.discard_card_index is not None:
+            pick_indices = [action.discard_card_index]
         for _sac_i in range(sac_count):
             sacrifice_id = None
-            if _sac_i == 0 and action.discard_card_index is not None:
-                # Note: action.discard_card_index references the ORIGINAL hand
-                # (before this card was discarded). We recompute the index
-                # by using the original `player.hand`, since `new_player.hand`
-                # has the played card removed.
-                sac_idx = action.discard_card_index
+            if _sac_i < len(pick_indices):
+                sac_idx = pick_indices[_sac_i]
                 if 0 <= sac_idx < len(player.hand):
                     candidate_id = player.hand[sac_idx]
-                    # Verify it's still in new_player.hand and tribe matches
                     cand_def = library.get_by_id(candidate_id)
                     tribe_match = (card_def.discard_cost_tribe == "any"
                                    or card_def.discard_cost_tribe in (cand_def.tribe or "").split())

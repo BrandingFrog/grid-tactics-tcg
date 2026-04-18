@@ -47,6 +47,9 @@ def serialize_action(action: Action) -> dict:
     if action.discard_card_index is not None:
         result["discard_card_index"] = action.discard_card_index
 
+    if action.discard_card_indices:
+        result["discard_card_indices"] = list(action.discard_card_indices)
+
     if action.transform_target is not None:
         result["transform_target"] = action.transform_target
 
@@ -99,6 +102,8 @@ def reconstruct_action(data) -> Action:
             target_pos = tuple(target_pos)
 
         discard_card_index = data.get("discard_card_index")
+        _raw_indices = data.get("discard_card_indices")
+        discard_card_indices = tuple(_raw_indices) if _raw_indices else ()
         transform_target = data.get("transform_target")
         sacrifice_minion_id = data.get("sacrifice_minion_id")
 
@@ -110,6 +115,7 @@ def reconstruct_action(data) -> Action:
             target_id=target_id,
             target_pos=target_pos,
             discard_card_index=discard_card_index,
+            discard_card_indices=discard_card_indices,
             transform_target=transform_target,
             sacrifice_minion_id=sacrifice_minion_id,
         )

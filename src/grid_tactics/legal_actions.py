@@ -187,24 +187,32 @@ def _action_phase_actions(
         if card_def.hp_cost is not None and player.hp < card_def.hp_cost:
             continue
 
-        # Summon sacrifice check: enumerate one action per valid sacrifice choice
-        sacrifice_choices: list[Optional[int]] = [None]
+        # Summon sacrifice check: enumerate every valid *combination* of
+        # hand-card picks. For discard_cost_count=1 each combo is a single
+        # index; for count>1 each combo is a tuple of distinct picks. The
+        # action carries them as both `discard_card_index` (= combo[0], for
+        # back-compat) and `discard_card_indices` (the full tuple).
+        sacrifice_combos: list[Optional[tuple[int, ...]]] = [None]
         if card_def.discard_cost_tribe:
-            sacrifice_choices = []
+            candidates: list[int] = []
             for j in range(len(player.hand)):
                 if j == idx:
                     continue
                 if card_def.discard_cost_tribe == "any":
-                    sacrifice_choices.append(j)
+                    candidates.append(j)
                 else:
                     hand_card = library.get_by_id(player.hand[j])
                     if card_def.discard_cost_tribe in (hand_card.tribe or "").split():
-                        sacrifice_choices.append(j)
+                        candidates.append(j)
             sac_needed = card_def.discard_cost_count
-            if len(sacrifice_choices) < sac_needed:
+            if len(candidates) < sac_needed:
                 continue  # not enough sacrifice cards -> can't play
+            import itertools as _itertools
+            sacrifice_combos = [tuple(c) for c in _itertools.combinations(candidates, sac_needed)]
 
-        for sac_idx in sacrifice_choices:
+        for sac_combo in sacrifice_combos:
+            sac_idx = sac_combo[0] if sac_combo else None
+            sac_indices = sac_combo if sac_combo else ()
             if card_def.card_type == CardType.MINION:
                 deploy_positions = _valid_deploy_positions(state, card_def, player_side)
                 for pos in deploy_positions:
@@ -222,18 +230,21 @@ def _action_phase_actions(
                                     action_type=ActionType.PLAY_CARD,
                                     card_index=idx, position=pos, target_pos=target_pos,
                                     discard_card_index=sac_idx,
+                                    discard_card_indices=sac_indices,
                                 ))
                         else:
                             actions.append(Action(
                                 action_type=ActionType.PLAY_CARD,
                                 card_index=idx, position=pos,
                                 discard_card_index=sac_idx,
+                                discard_card_indices=sac_indices,
                             ))
                     else:
                         actions.append(Action(
                             action_type=ActionType.PLAY_CARD,
                             card_index=idx, position=pos,
                             discard_card_index=sac_idx,
+                            discard_card_indices=sac_indices,
                         ))
 
             elif card_def.card_type == CardType.MAGIC:
@@ -259,6 +270,7 @@ def _action_phase_actions(
                                 action_type=ActionType.PLAY_CARD,
                                 card_index=idx, target_pos=target_pos,
                                 discard_card_index=sac_idx,
+                                discard_card_indices=sac_indices,
                                 sacrifice_minion_id=sac_ally_id,
                             ))
                     else:
@@ -266,6 +278,7 @@ def _action_phase_actions(
                             action_type=ActionType.PLAY_CARD,
                             card_index=idx,
                             discard_card_index=sac_idx,
+                            discard_card_indices=sac_indices,
                             sacrifice_minion_id=sac_ally_id,
                         ))
 

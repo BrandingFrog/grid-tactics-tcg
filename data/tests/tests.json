@@ -73,6 +73,57 @@
             ]
         },
         {
+            "id": "feed-the-shadow-sacrifice-ally",
+            "title": "Feed the Shadow — magic spell with sacrifice ally cost actually casts",
+            "instructions": "1. P1 has 2 mana, a Common Rat at (3,2), and Feed the Shadow in hand.\n2. Click Feed the Shadow.\n3. Click the enemy Rat at (1,2) as the target.",
+            "expected": "The card casts without an 'Illegal action' error. Your Common Rat at (3,2) is destroyed. The enemy Rat takes damage equal to the sacrificed Rat's attack (10). Your Gargoyle Sorceress (Dark Mage) on the board gains +1 Dark Matter.",
+            "setup": [
+                {"op": "reset"},
+                {"op": "set_player", "player_idx": 0, "field": "current_mana", "value": 2},
+                {"op": "set_player", "player_idx": 0, "field": "max_mana", "value": 2},
+                {"op": "place", "player_idx": 0, "card_id": "rat", "row": 3, "col": 2},
+                {"op": "place", "player_idx": 0, "card_id": "gargoyle_sorceress", "row": 4, "col": 2},
+                {"op": "place", "player_idx": 1, "card_id": "rat", "row": 1, "col": 2},
+                {"op": "add_to_hand", "player_idx": 0, "card_id": "feed_the_shadow"},
+                {"op": "set_active", "player_idx": 0}
+            ]
+        },
+        {
+            "id": "gargoyle-sorceress-multi-discard",
+            "title": "Gargoyle Sorceress — player picks BOTH discard cards",
+            "instructions": "1. Click Gargoyle Sorceress in P1's hand.\n2. Pick any empty back-two-row tile to deploy.\n3. The picker modal should appear showing ALL 3 other hand cards.\n4. Click the first card you want to exhaust. Modal stays open; the card becomes dimmed with a ✓.\n5. Click a second card. As soon as you hit the required count (2), Gargoyle deploys and both cards go to the Exhaust pile.",
+            "expected": "The picker modal does NOT submit after just one click. It waits for 2 picks (progress shows '1 / 2 picked' then '2 / 2 picked'). Clicking an already-picked card un-picks it. After the second pick the Gargoyle Sorceress appears on the chosen tile and exactly the 2 cards you picked land in P1's Exhaust pile.",
+            "setup": [
+                {"op": "reset"},
+                {"op": "set_player", "player_idx": 0, "field": "current_mana", "value": 10},
+                {"op": "set_player", "player_idx": 0, "field": "max_mana", "value": 10},
+                {"op": "add_to_hand", "player_idx": 0, "card_id": "gargoyle_sorceress"},
+                {"op": "add_to_hand", "player_idx": 0, "card_id": "rat"},
+                {"op": "add_to_hand", "player_idx": 0, "card_id": "acidic_rain"},
+                {"op": "add_to_hand", "player_idx": 0, "card_id": "flame_wyrm"},
+                {"op": "set_active", "player_idx": 0}
+            ]
+        },
+        {
+            "id": "modals-share-one-style",
+            "title": "All pickers share the same visual style (tutor is the reference)",
+            "instructions": "1. Play 'To The Ratmobile!' from P1's hand (3 mana; tutors 2 Rats from deck). Observe the tutor modal — note its chrome (cyan border, dark header bar with title, card grid, close button).\n2. Click Reset in the test panel.\n3. Play Gargoyle Sorceress from P1's hand (5 mana) — it needs to exhaust 2 cards. Observe the sacrifice picker modal.",
+            "expected": "The sacrifice picker modal uses the SAME visual chrome as the tutor modal — cyan border, dark header bar with title text, card list in the body, consistent spacing. The buttons inside may differ (Cancel for sacrifice vs Close for tutor) but the overall look is unified, not a different red/compact modal.",
+            "setup": [
+                {"op": "reset"},
+                {"op": "set_player", "player_idx": 0, "field": "current_mana", "value": 10},
+                {"op": "set_player", "player_idx": 0, "field": "max_mana", "value": 10},
+                {"op": "add_to_hand", "player_idx": 0, "card_id": "to_the_ratmobile"},
+                {"op": "add_to_hand", "player_idx": 0, "card_id": "gargoyle_sorceress"},
+                {"op": "add_to_hand", "player_idx": 0, "card_id": "rat"},
+                {"op": "add_to_hand", "player_idx": 0, "card_id": "flame_wyrm"},
+                {"op": "add_to_zone", "player_idx": 0, "card_id": "rat", "zone": "deck_top"},
+                {"op": "add_to_zone", "player_idx": 0, "card_id": "rat", "zone": "deck_top"},
+                {"op": "add_to_zone", "player_idx": 0, "card_id": "rat", "zone": "deck_top"},
+                {"op": "set_active", "player_idx": 0}
+            ]
+        },
+        {
             "id": "matter-possessed-hp-cost",
             "title": "Matter Possessed — Cost: Deal 25🤍 to own face",
             "instructions": "1. Hover Matter Possessed in P1's hand and confirm the cost line reads 'Cost: Deal 25🤍 to own face'.\n2. P1 HP is 30 and mana is 1.\n3. Play Matter Possessed onto any empty tile in P1's back two rows.",
