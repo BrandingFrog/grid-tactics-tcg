@@ -792,6 +792,110 @@ class TestSummonCompoundWindowsIntegration:
         assert state.active_player_idx == 1
 
 
+class TestMeleeTwoReactWindowsIntegration:
+    """14.7-08: end-to-end melee move + attack chain fires TWO react windows.
+
+    Supersedes 14.1's single-window assumption per spec v2 §4.1.
+    """
+
+    def test_full_melee_chain_with_two_react_windows(self, library):
+        """Play a melee minion, advance turn, move forward, verify TWO react
+        windows are separated by the ATTACK / DECLINE sub-action choice.
+        """
+        rat_id = library.get_numeric_id("rat")
+
+        # P1 pre-deployed at (1, 2); P2 minion at (2, 3) in range for the
+        # attack after P1 moves to (2, 2). attack_range=0 melee.
+        p1_rat = MinionInstance(
+            instance_id=0, card_numeric_id=rat_id,
+            owner=PlayerSide.PLAYER_1, position=(1, 2), current_health=10,
+        )
+        p2_rat = MinionInstance(
+            instance_id=1, card_numeric_id=rat_id,
+            owner=PlayerSide.PLAYER_2, position=(2, 3), current_health=10,
+        )
+        state = _make_state(minions=[p1_rat, p2_rat])
+
+        # 1) MOVE P1 rat from (1,2) -> (2,2). Melee, in-range target (2,3).
+        state = resolve_action(
+            state, move_action(minion_id=0, position=(2, 2)), library,
+        )
+        # Window 1 open: post-move REACT.
+        assert state.phase == TurnPhase.REACT
+        assert state.pending_post_move_attacker_id == 0
+        assert state.react_player_idx == 1
+        # Opponent legal_actions = PASS only in this fixture (no react cards).
+        acts = legal_actions(state, library)
+        assert len(acts) == 1 and acts[0].action_type == ActionType.PASS
+
+        # 2) Close Window 1 via single opponent PASS.
+        state = resolve_action(state, pass_action(), library)
+        assert state.phase == TurnPhase.ACTION
+        assert state.pending_post_move_attacker_id == 0  # still set
+        assert state.active_player_idx == 0  # still P1's turn
+
+        # 3) Between windows: legal_actions restricts to ATTACK + DECLINE only.
+        mid_acts = legal_actions(state, library)
+        mid_types = {a.action_type for a in mid_acts}
+        assert ActionType.ATTACK in mid_types
+        assert ActionType.DECLINE_POST_MOVE_ATTACK in mid_types
+        assert ActionType.MOVE not in mid_types
+        assert ActionType.PLAY_CARD not in mid_types
+
+        # 4) ATTACK opens Window 2.
+        state = resolve_action(
+            state, attack_action(minion_id=0, target_id=1), library,
+        )
+        assert state.phase == TurnPhase.REACT
+        assert state.pending_post_move_attacker_id is None  # cleared by attack
+        # Combat happened simultaneously (D-01): each 10🗡️/10🤍 killed the other
+        # and cleanup removed both bodies. Verify BOTH are gone from the board.
+        assert state.get_minion(0) is None
+        assert state.get_minion(1) is None
+        assert state.react_context.name == "AFTER_ACTION"
+        assert state.react_return_phase == TurnPhase.ACTION
+
+        # 5) Close Window 2 → turn advances to P2.
+        state = resolve_action(state, pass_action(), library)
+        assert state.active_player_idx == 1
+        assert state.phase == TurnPhase.ACTION
+        assert state.turn_number == 2  # exactly one turn consumed
+
+    def test_decline_after_post_move_window_advances_turn(self, library):
+        """DECLINE skips the second react window — turn advances directly."""
+        rat_id = library.get_numeric_id("rat")
+
+        p1_rat = MinionInstance(
+            instance_id=0, card_numeric_id=rat_id,
+            owner=PlayerSide.PLAYER_1, position=(1, 2), current_health=10,
+        )
+        p2_rat = MinionInstance(
+            instance_id=1, card_numeric_id=rat_id,
+            owner=PlayerSide.PLAYER_2, position=(2, 3), current_health=10,
+        )
+        state = _make_state(minions=[p1_rat, p2_rat])
+
+        state = resolve_action(
+            state, move_action(minion_id=0, position=(2, 2)), library,
+        )
+        assert state.phase == TurnPhase.REACT
+        state = resolve_action(state, pass_action(), library)  # close W1
+        assert state.phase == TurnPhase.ACTION
+        assert state.pending_post_move_attacker_id == 0
+
+        # DECLINE: no W2, turn flips to P2 directly.
+        from grid_tactics.actions import Action as _A
+        state = resolve_action(
+            state, _A(action_type=ActionType.DECLINE_POST_MOVE_ATTACK), library,
+        )
+        assert state.pending_post_move_attacker_id is None
+        assert state.active_player_idx == 1
+        assert state.phase == TurnPhase.ACTION
+        # Both rats survive — no combat occurred.
+        assert state.get_minion(0).current_health == 10
+        assert state.get_minion(1).current_health == 10
+
+
 class TestRandomGamesDoNotCrash:
     """Deterministic random-agent games through the compound-window pipeline.
 

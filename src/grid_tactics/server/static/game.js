@@ -5189,11 +5189,20 @@ function getMinionAt(row, col) {
     return null;
 }
 
-// Phase 14.1: post-move attack-pick mode sync. Reads server-provided
+// Phase 14.1 / 14.7-08: post-move attack-pick mode sync. Reads server-provided
 // pending_post_move_attacker_id and sets interactionMode + decline button.
+//
+// 14.7-08 refinement: the pending flag now survives the post-move REACT
+// window (two independent react windows per melee chain per spec v2 §4.1).
+// Only surface the picker UI when we are BETWEEN the two windows — i.e.
+// phase === ACTION. During the post-move REACT window the caster is
+// waiting on the opponent's react decision, and showing the picker is
+// premature (and the server would reject ATTACK/DECLINE anyway).
 function syncPendingPostMoveAttackUI() {
     var pendingId = gameState && gameState.pending_post_move_attacker_id;
-    if (pendingId != null) {
+    // PHASE_ACTION = 0 (see PHASE_DISPLAY at top of file).
+    var inActionPhase = gameState && gameState.phase === 0;
+    if (pendingId != null && inActionPhase) {
         // Find the attacker minion to determine ownership; only the owner
         // (the player whose turn it is) sees the picker UI.
         var attacker = null;
@@ -5207,7 +5216,7 @@ function syncPendingPostMoveAttackUI() {
             return;
         }
     }
-    // Not pending (or not my pending) — make sure the button is gone.
+    // Not pending, or mid-REACT, or not my pending — hide the button.
     hideDeclinePostMoveAttackButton();
 }
 
