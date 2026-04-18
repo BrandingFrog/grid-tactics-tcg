@@ -12,7 +12,7 @@
     "effects": [
         {
             "type": "burn",
-            "trigger": "passive",
+            "trigger": "on_end_of_turn",
             "target": "adjacent",
             "amount": 5
         }

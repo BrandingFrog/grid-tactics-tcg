@@ -12,7 +12,7 @@
     "effects": [
         {
             "type": "burn",
-            "trigger": "on_play",
+            "trigger": "on_summon",
             "target": "self_owner",
             "amount": 5
         }

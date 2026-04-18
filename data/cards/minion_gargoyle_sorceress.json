@@ -14,7 +14,7 @@
     "effects": [
         {
             "type": "buff_attack",
-            "trigger": "on_play",
+            "trigger": "on_summon",
             "target": "self_owner",
             "amount": 0,
             "scale_with": "dark_matter",
@@ -23,7 +23,7 @@
         },
         {
             "type": "buff_health",
-            "trigger": "on_play",
+            "trigger": "on_summon",
             "target": "self_owner",
             "amount": 0,
             "scale_with": "dark_matter",

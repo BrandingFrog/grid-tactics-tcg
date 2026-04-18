@@ -446,9 +446,21 @@ def _deploy_minion(
         next_minion_id=state.next_minion_id + 1,
     )
 
-    # Trigger ON_PLAY effects
+    # Trigger ON_PLAY effects (surgefed_sparkbot keeps this — react_effect
+    # deploy_self resolves at react-stack-resolve time, not here).
     state = resolve_effects_for_trigger(
         state, TriggerType.ON_PLAY, minion, library, action.target_pos,
+    )
+
+    # Phase 14.7-03: Also fire ON_SUMMON effects. This is the data-rename
+    # bridge: 6 minion effects (3 Diodebots + Eclipse Shade + Flame Wyrm
+    # draw + Gargoyle Sorceress buffs) were retagged on_play -> on_summon.
+    # Without this second call their effects would go silent until 14.7-04
+    # wires compound windows. 14.7-04 will replace this bridge with the
+    # proper two-window (Window A declaration react + Window B post-effect
+    # react) dispatch.
+    state = resolve_effects_for_trigger(
+        state, TriggerType.ON_SUMMON, minion, library, action.target_pos,
     )
 
     return state

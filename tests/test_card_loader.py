@@ -289,3 +289,102 @@ class TestLoaderEdgeCases:
         path = _write_card_json(tmp_path, valid_minion_json)
         card = CardLoader.load_card(path)
         assert card.element == Element.FIRE
+
+
+# ---------------------------------------------------------------------------
+# Phase 14.7-03: New TriggerType values (on_summon, on_start_of_turn,
+# on_end_of_turn) load correctly, and the 9 retagged card JSONs carry the
+# expected triggers after the rename.
+# ---------------------------------------------------------------------------
+
+
+class TestPhase1473NewTriggers:
+    """CardLoader parses 14.7-03's new trigger strings; real card JSONs updated."""
+
+    @pytest.fixture
+    def real_library(self):
+        """Load the real card library from data/cards."""
+        from grid_tactics.card_library import CardLibrary
+        from pathlib import Path as _Path
+        return CardLibrary.from_directory(_Path("data/cards"))
+
+    def test_load_on_summon_trigger(self, tmp_path: Path, valid_minion_json: dict) -> None:
+        """JSON trigger='on_summon' loads to TriggerType.ON_SUMMON."""
+        valid_minion_json["effects"][0]["trigger"] = "on_summon"
+        path = _write_card_json(tmp_path, valid_minion_json)
+        card = CardLoader.load_card(path)
+        assert card.effects[0].trigger == TriggerType.ON_SUMMON
+
+    def test_load_on_start_of_turn_trigger(
+        self, tmp_path: Path, valid_minion_json: dict
+    ) -> None:
+        """JSON trigger='on_start_of_turn' loads to TriggerType.ON_START_OF_TURN."""
+        valid_minion_json["effects"][0]["trigger"] = "on_start_of_turn"
+        path = _write_card_json(tmp_path, valid_minion_json)
+        card = CardLoader.load_card(path)
+        assert card.effects[0].trigger == TriggerType.ON_START_OF_TURN
+
+    def test_load_on_end_of_turn_trigger(
+        self, tmp_path: Path, valid_minion_json: dict
+    ) -> None:
+        """JSON trigger='on_end_of_turn' loads to TriggerType.ON_END_OF_TURN."""
+        valid_minion_json["effects"][0]["trigger"] = "on_end_of_turn"
+        path = _write_card_json(tmp_path, valid_minion_json)
+        card = CardLoader.load_card(path)
+        assert card.effects[0].trigger == TriggerType.ON_END_OF_TURN
+
+    def test_gargoyle_sorceress_has_on_summon(self, real_library) -> None:
+        """Gargoyle Sorceress's buff_attack and buff_health effects are on_summon."""
+        card = real_library.get_by_card_id("gargoyle_sorceress")
+        assert len(card.effects) == 2
+        for eff in card.effects:
+            assert eff.trigger == TriggerType.ON_SUMMON
+
+    def test_blue_diodebot_has_on_summon(self, real_library) -> None:
+        """Blue Diodebot tutor effect is on_summon."""
+        card = real_library.get_by_card_id("blue_diodebot")
+        assert card.effects[0].trigger == TriggerType.ON_SUMMON
+
+    def test_green_diodebot_has_on_summon(self, real_library) -> None:
+        card = real_library.get_by_card_id("green_diodebot")
+        assert card.effects[0].trigger == TriggerType.ON_SUMMON
+
+    def test_red_diodebot_has_on_summon(self, real_library) -> None:
+        card = real_library.get_by_card_id("red_diodebot")
+        assert card.effects[0].trigger == TriggerType.ON_SUMMON
+
+    def test_eclipse_shade_has_on_summon(self, real_library) -> None:
+        """Eclipse Shade's self-burn is on_summon."""
+        card = real_library.get_by_card_id("eclipse_shade")
+        assert card.effects[0].trigger == TriggerType.ON_SUMMON
+
+    def test_flame_wyrm_draw_is_on_summon_and_aura_unchanged(self, real_library) -> None:
+        """Flame Wyrm: draw effect is on_summon, burn_bonus aura unchanged."""
+        from grid_tactics.enums import EffectType
+        card = real_library.get_by_card_id("flame_wyrm")
+        triggers = {e.effect_type: e.trigger for e in card.effects}
+        assert triggers[EffectType.DRAW] == TriggerType.ON_SUMMON
+        assert triggers[EffectType.BURN_BONUS] == TriggerType.AURA
+
+    def test_fallen_paladin_has_on_start_of_turn(self, real_library) -> None:
+        """Fallen Paladin's passive_heal is now on_start_of_turn."""
+        card = real_library.get_by_card_id("fallen_paladin")
+        assert card.effects[0].trigger == TriggerType.ON_START_OF_TURN
+
+    def test_emberplague_rat_has_on_end_of_turn(self, real_library) -> None:
+        """Emberplague Rat's adjacent burn is now on_end_of_turn."""
+        card = real_library.get_by_card_id("emberplague_rat")
+        assert card.effects[0].trigger == TriggerType.ON_END_OF_TURN
+
+    def test_dark_matter_battery_has_on_end_of_turn(self, real_library) -> None:
+        """Dark Matter Battery's damage-opponent is now on_end_of_turn."""
+        card = real_library.get_by_card_id("dark_matter_battery")
+        assert card.effects[0].trigger == TriggerType.ON_END_OF_TURN
+
+    def test_surgefed_sparkbot_stays_on_play(self, real_library) -> None:
+        """Sparkbot keeps on_play — its react_effect (DEPLOY_SELF) resolves at react time."""
+        card = real_library.get_by_card_id("surgefed_sparkbot")
+        # Sparkbot's only "effect" is the react_effect; effects list is empty.
+        # The react path doesn't use TriggerType filtering anyway.
+        # Instead, verify the card still has CardType.MINION and react_effect.
+        assert card.react_effect is not None

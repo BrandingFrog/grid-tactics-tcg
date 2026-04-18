@@ -130,9 +130,13 @@ class TriggerType(IntEnum):
     ON_ATTACK = 2   # When the minion attacks
     ON_DAMAGED = 3  # When the minion takes damage
     ON_MOVE = 4     # When the minion moves
-    PASSIVE = 5     # Fires every turn (end of turn effects)
+    PASSIVE = 5     # Fires every turn (end of turn effects) - LEGACY, kept for backward compat until migration complete
     ON_DISCARD = 6  # Fires when this card is discarded (sent from hand to exhaust pile)
     AURA = 7        # Always active while this minion is alive on the board
+    # Phase 14.7-03: explicit turn-phase and summon triggers
+    ON_SUMMON = 8             # When minion is deployed from hand (14.7-04 opens compound windows)
+    ON_START_OF_TURN = 9      # At the start of the owner's turn (after burn ticks, before ACTION)
+    ON_END_OF_TURN = 10       # At the end of the owner's turn (before turn passes)
 
 
 class TargetType(IntEnum):

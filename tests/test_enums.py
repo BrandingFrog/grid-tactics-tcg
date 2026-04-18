@@ -217,12 +217,25 @@ class TestTriggerType:
             assert isinstance(member, IntEnum)
 
     def test_member_count(self) -> None:
-        # Append-only. 8 members: ON_PLAY, ON_DEATH, ON_ATTACK, ON_DAMAGED,
-        # ON_MOVE, PASSIVE, ON_DISCARD, AURA.
-        assert len(TriggerType) == 8
+        # Append-only. 11 members: ON_PLAY, ON_DEATH, ON_ATTACK, ON_DAMAGED,
+        # ON_MOVE, PASSIVE, ON_DISCARD, AURA (original 8) + 14.7-03 adds
+        # ON_SUMMON, ON_START_OF_TURN, ON_END_OF_TURN.
+        assert len(TriggerType) == 11
 
     def test_bracket_lookup(self) -> None:
         assert TriggerType["ON_PLAY"] is TriggerType.ON_PLAY
+
+    def test_phase_14_7_03_new_values(self) -> None:
+        """Phase 14.7-03: ON_SUMMON=8, ON_START_OF_TURN=9, ON_END_OF_TURN=10."""
+        assert TriggerType.ON_SUMMON == 8
+        assert TriggerType.ON_START_OF_TURN == 9
+        assert TriggerType.ON_END_OF_TURN == 10
+        assert TriggerType(8) is TriggerType.ON_SUMMON
+        assert TriggerType(9) is TriggerType.ON_START_OF_TURN
+        assert TriggerType(10) is TriggerType.ON_END_OF_TURN
+        # Existing values must not shift (append-only invariant)
+        assert TriggerType.ON_PLAY == 0
+        assert TriggerType.AURA == 7
 
 
 class TestTargetType:
