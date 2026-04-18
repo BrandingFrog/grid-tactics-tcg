@@ -1098,6 +1098,36 @@ def register_events(room_manager: RoomManager) -> None:
             return
         emit("tests_result_saved", {"id": entry["test_id"], "result": entry["result"]})
 
+    @socketio.on("tests_fetch_results")
+    def handle_tests_fetch_results(_data=None):
+        """Read the entire test result log and emit it back.
+
+        Debug helper so the harness can pull UAT results without shell
+        access to the Railway container. Parses one JSON line per entry;
+        malformed lines are skipped silently. Tail-caps at the most recent
+        500 entries to keep the payload sane.
+        """
+        import json as _json
+        from pathlib import Path
+        path = Path(__file__).resolve().parents[3] / "data" / "tests" / "results.jsonl"
+        entries: list[dict] = []
+        try:
+            with open(path, encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        entries.append(_json.loads(line))
+                    except _json.JSONDecodeError:
+                        continue
+        except FileNotFoundError:
+            pass
+        except OSError as e:
+            emit("error", {"msg": f"Failed to read results: {e}"})
+            return
+        emit("tests_results_snapshot", {"entries": entries[-500:], "total": len(entries)})
+
     @socketio.on("disconnect")
     def handle_disconnect():
         """Phase 14.4: clean up spectator entries on disconnect.
