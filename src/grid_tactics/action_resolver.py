@@ -391,10 +391,32 @@ def _deploy_minion(
     active_side: PlayerSide,
     library: CardLibrary,
 ) -> GameState:
-    """Deploy a minion card to the board.
+    """Push a summon_declaration originator onto the react stack (Phase 14.7-04).
+
+    Deployment becomes a compound two-window event (spec §4.2):
+      * Window A (AFTER_SUMMON_DECLARATION): opens here immediately after
+        validation. Opponent may negate the summon itself — a successful
+        NEGATE destroys the entire summon and the costs are FORFEIT (mana,
+        discard, and destroy-ally do NOT refund — harsh by design).
+      * Window B (AFTER_SUMMON_EFFECT): opened only after Window A resolves
+        WITHOUT negation, by ``resolve_summon_declaration_originator``
+        (react_stack.py). Window B covers the minion's ON_SUMMON effects;
+        a NEGATE there cancels the effects only — the minion stays on the
+        board.
+
+    Validation (deploy zone + occupancy) still runs here so an illegal
+    target raises BEFORE any cost is paid. Once validation passes we push
+    a ``summon_declaration`` originator entry onto the react stack; the
+    minion is NOT placed on the board at this call site. It lands later
+    (during stack resolution) via ``resolve_summon_declaration_originator``
+    — OR never, if Window A negates.
 
     D-08: Melee (range=0) can deploy to any empty cell in friendly rows.
     D-09: Ranged (range>=1) must deploy to back row only.
+
+    Cost semantics: ``_apply_play_card`` already spent mana + handled the
+    discard/HP cost BEFORE invoking _deploy_minion, so the summon_declaration
+    originator only needs to remember the deployment position + card.
     """
     deploy_pos = action.position
     if deploy_pos is None:
@@ -423,47 +445,35 @@ def _deploy_minion(
                 f"Ranged minion must deploy to back row {back_row}, got row {row}"
             )
 
-    # Check cell is empty
+    # Check cell is empty (minion doesn't land yet — this just rejects
+    # illegal targets before the cost becomes forfeit to Window A).
     if state.board.get(row, col) is not None:
         raise ValueError(f"Cell ({row}, {col}) is occupied")
 
-    # Create the MinionInstance
-    minion = MinionInstance(
-        instance_id=state.next_minion_id,
+    # Push summon_declaration originator onto the react stack.
+    # card_index=-1: the card has already been removed from hand by the
+    # caller (see _apply_play_card). source_minion_id=None: the minion
+    # doesn't exist yet — it is created in resolve_summon_declaration_originator.
+    from grid_tactics.react_stack import ReactEntry
+    originator = ReactEntry(
+        player_idx=state.active_player_idx,
+        card_index=-1,
         card_numeric_id=card_numeric_id,
-        owner=active_side,
-        position=deploy_pos,
-        current_health=card_def.health,
+        target_pos=tuple(deploy_pos),
+        is_originator=True,
+        origin_kind="summon_declaration",
+        source_minion_id=None,
+        effect_payload=None,  # no effects at declaration stage
     )
-
-    # Update board and state
-    new_board = state.board.place(row, col, minion.instance_id)
-    new_minions = state.minions + (minion,)
-    state = replace(
+    new_stack = state.react_stack + (originator,)
+    return replace(
         state,
-        board=new_board,
-        minions=new_minions,
-        next_minion_id=state.next_minion_id + 1,
+        react_stack=new_stack,
+        react_player_idx=1 - state.active_player_idx,
+        phase=TurnPhase.REACT,
+        react_context=ReactContext.AFTER_SUMMON_DECLARATION,
+        react_return_phase=TurnPhase.ACTION,
     )
-
-    # Trigger ON_PLAY effects (surgefed_sparkbot keeps this — react_effect
-    # deploy_self resolves at react-stack-resolve time, not here).
-    state = resolve_effects_for_trigger(
-        state, TriggerType.ON_PLAY, minion, library, action.target_pos,
-    )
-
-    # Phase 14.7-03: Also fire ON_SUMMON effects. This is the data-rename
-    # bridge: 6 minion effects (3 Diodebots + Eclipse Shade + Flame Wyrm
-    # draw + Gargoyle Sorceress buffs) were retagged on_play -> on_summon.
-    # Without this second call their effects would go silent until 14.7-04
-    # wires compound windows. 14.7-04 will replace this bridge with the
-    # proper two-window (Window A declaration react + Window B post-effect
-    # react) dispatch.
-    state = resolve_effects_for_trigger(
-        state, TriggerType.ON_SUMMON, minion, library, action.target_pos,
-    )
-
-    return state
 
 
 def _enter_pending_revive(
@@ -1857,6 +1867,15 @@ def resolve_action(
     # Phase 14.6: If conjure-deploy is pending, defer the react window until
     # CONJURE_DEPLOY/DECLINE_CONJURE clears it.
     if state.pending_conjure_deploy_card is not None:
+        return state
+
+    # Phase 14.7-01 / 14.7-04: originator-pattern handlers (_cast_magic and
+    # _deploy_minion) set their own REACT phase + react_context inline
+    # (AFTER_ACTION for magic, AFTER_SUMMON_DECLARATION for minion summon)
+    # and push their originator onto the stack BEFORE returning. Respect
+    # that — only emit the generic AFTER_ACTION transition for actions
+    # that didn't already arrange their own react window.
+    if state.phase == TurnPhase.REACT:
         return state
 
     # Transition to REACT phase (D-13)

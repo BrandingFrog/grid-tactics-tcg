@@ -602,6 +602,164 @@ def advance_to_next_turn(
 
 
 # ---------------------------------------------------------------------------
+# Phase 14.7-04: Summon compound-window originator resolvers
+# ---------------------------------------------------------------------------
+#
+# Minion summons open two sequential react windows (spec §4.2):
+#
+#   Window A (AFTER_SUMMON_DECLARATION):
+#     Opens when _deploy_minion pushes a summon_declaration originator.
+#     A NEGATE on this originator destroys the entire summon AND forfeits
+#     the costs (mana/discard/destroy-ally) — harsh by design.
+#
+#   Window B (AFTER_SUMMON_EFFECT):
+#     Opens by resolve_summon_declaration_originator AFTER the minion
+#     lands, ONLY if the minion has ON_SUMMON effects. A NEGATE here
+#     cancels the effects only — the minion stays on the board.
+#
+# A minion with NO ON_SUMMON effects opens only Window A (no dead-air
+# Window B). Gargoyle Sorceress's two ON_SUMMON buffs resolve under a
+# SINGLE Window B.
+#
+# Implementation uses the same originator-push pattern established in
+# 14.7-01's magic_cast flow (no pending_sub_actions field — compound
+# windows are implemented via stack-pushing originators).
+
+
+def resolve_summon_declaration_originator(
+    state: GameState, entry: ReactEntry, library: CardLibrary,
+) -> GameState:
+    """Window A resolved WITHOUT negate → land the minion on the board.
+
+    Called from resolve_react_stack's LIFO loop when it encounters a
+    summon_declaration originator that was not negated. The negation skip
+    happens in the caller's ``negated_indices`` check.
+
+    If the minion has any ON_SUMMON effects, push a summon_effect
+    originator onto the stack and set the state to REACT /
+    AFTER_SUMMON_EFFECT — the outer resolve_react_stack's early-return
+    check detects this and hands control back to the caller so Window B
+    opens naturally for the opponent. The old Window A entries have
+    already been consumed by the LIFO loop at this point, so the stack
+    is RESET (not appended) to contain only the new summon_effect entry.
+
+    If the cell is no longer empty (rare edge case: another effect placed
+    a minion there during the react chain), the summon fizzles silently.
+    Proper spec §7 fizzle rule lands in 14.7-06.
+    """
+    from grid_tactics.minion import MinionInstance
+
+    card_def = library.get_by_id(entry.card_numeric_id)
+    owner_side = state.players[entry.player_idx].side
+    pos = entry.target_pos
+    if pos is None:
+        return state
+
+    row, col = pos
+    # Edge case: cell occupied mid-chain → summon fizzles silently (no
+    # refund). Proper fizzle handling lands in 14.7-06.
+    if state.board.get(row, col) is not None:
+        return state
+
+    minion = MinionInstance(
+        instance_id=state.next_minion_id,
+        card_numeric_id=entry.card_numeric_id,
+        owner=owner_side,
+        position=pos,
+        current_health=card_def.health,
+        from_deck=True,
+    )
+    new_board = state.board.place(row, col, minion.instance_id)
+    state = replace(
+        state,
+        board=new_board,
+        minions=state.minions + (minion,),
+        next_minion_id=state.next_minion_id + 1,
+    )
+
+    # Collect ON_SUMMON effects; if none, skip Window B entirely.
+    on_summon_indices = [
+        i for i, e in enumerate(card_def.effects)
+        if e.trigger == TriggerType.ON_SUMMON
+    ]
+    if not on_summon_indices:
+        return state
+
+    # Build effect_payload for Window B. Summon: triggers don't take the
+    # action's target_pos (they're minion-self triggers, so target_pos=None).
+    effects_payload = tuple(
+        (i, None, int(owner_side)) for i in on_summon_indices
+    )
+    effect_originator = ReactEntry(
+        player_idx=entry.player_idx,
+        card_index=-1,
+        card_numeric_id=entry.card_numeric_id,
+        target_pos=None,
+        is_originator=True,
+        origin_kind="summon_effect",
+        source_minion_id=minion.instance_id,
+        effect_payload=effects_payload,
+    )
+    # RESET stack (not append): the LIFO loop has already consumed the
+    # Window A entries. Window B starts with a fresh single-entry stack.
+    return replace(
+        state,
+        react_stack=(effect_originator,),
+        phase=TurnPhase.REACT,
+        react_player_idx=1 - state.active_player_idx,
+        react_context=ReactContext.AFTER_SUMMON_EFFECT,
+        react_return_phase=TurnPhase.ACTION,
+    )
+
+
+def resolve_summon_effect_originator(
+    state: GameState, entry: ReactEntry, library: CardLibrary,
+) -> GameState:
+    """Window B resolved WITHOUT negate → fire the minion's ON_SUMMON effects.
+
+    Same dispatch pattern as the magic_cast originator (14.7-01): TUTOR /
+    REVIVE route through their pending-entry shims; all other effects
+    dispatch through resolve_effect. Multiple ON_SUMMON effects (e.g.
+    Gargoyle Sorceress's buff_attack + buff_health) resolve in-order under
+    the one window.
+
+    Source position for resolve_effect is the minion's current board
+    position (so placement_condition / self_owner targeting works). If the
+    source minion died between declaration and effect resolution (rare
+    edge — e.g. an on-summon aura killed it) the effect still fires from
+    a sentinel (0, 0) position. True fizzle logic lands in 14.7-06.
+    """
+    from grid_tactics.effect_resolver import resolve_effect, _enter_pending_tutor
+    from grid_tactics.action_resolver import _enter_pending_revive
+
+    card_def = library.get_by_id(entry.card_numeric_id)
+    caster_owner = state.players[entry.player_idx].side
+
+    source_pos: tuple[int, int] = (0, 0)
+    if entry.source_minion_id is not None:
+        src = state.get_minion(entry.source_minion_id)
+        if src is not None:
+            source_pos = src.position
+
+    for (effect_idx, _target_pos_raw, _caster_owner_int) in (entry.effect_payload or ()):
+        if effect_idx < 0 or effect_idx >= len(card_def.effects):
+            continue
+        effect = card_def.effects[effect_idx]
+        if effect.effect_type == EffectType.TUTOR:
+            state = _enter_pending_tutor(
+                state, card_def, caster_owner, library,
+                amount=max(1, effect.amount or 1),
+            )
+        elif effect.effect_type == EffectType.REVIVE:
+            state = _enter_pending_revive(state, card_def, caster_owner, library)
+        else:
+            state = resolve_effect(
+                state, effect, source_pos, caster_owner, library, target_pos=None,
+            )
+    return state
+
+
+# ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
 
@@ -730,6 +888,15 @@ def resolve_react_stack(
     """
     from grid_tactics.effect_resolver import resolve_effect
 
+    # Snapshot the pre-resolution stack so the 14.7-04 compound-window
+    # early-return check can detect when a helper (e.g.
+    # resolve_summon_declaration_originator) replaced the stack with a
+    # fresh Window B entry. If state.react_stack is unchanged after the
+    # LIFO loop, resolution completed normally and we proceed to the
+    # return_phase dispatch. If it was replaced with a new originator,
+    # return early so the new react window opens for the opponent.
+    _pre_resolution_stack = state.react_stack
+
     # Resolve stack LIFO (D-06)
     # Track negated entries -- a NEGATE effect cancels the next entry in the stack
     negated_indices: set[int] = set()
@@ -779,6 +946,17 @@ def resolve_react_stack(
                         state, resolved_effect, (0, 0), caster_owner, library, tp,
                     )
             continue  # originator handled; skip the card_type dispatch below
+
+        # Phase 14.7-04: Summon compound windows — dispatch declaration
+        # (Window A: land the minion + maybe open Window B) and effect
+        # (Window B: fire ON_SUMMON effects).
+        if entry.is_originator and entry.origin_kind == "summon_declaration":
+            state = resolve_summon_declaration_originator(state, entry, library)
+            continue
+
+        if entry.is_originator and entry.origin_kind == "summon_effect":
+            state = resolve_summon_effect_originator(state, entry, library)
+            continue
 
         if card_def.card_type == CardType.REACT:
             # Check if this react has NEGATE effects
@@ -873,6 +1051,46 @@ def resolve_react_stack(
     # it re-enters the turn-advance tail inline (see action_resolver.py).
     if state.pending_death_target is not None:
         return state
+
+    # Phase 14.7-04: compound-window hand-off. If a summon_declaration
+    # originator just landed a minion with ON_SUMMON effects, the helper
+    # RESET the react stack to a fresh summon_effect originator and set
+    # phase=REACT. Detect this by comparing against the pre-resolution
+    # snapshot: a stack-identity change + at least one originator means a
+    # new window is open for the opponent. Return state as-is so the new
+    # window takes over — do NOT clear the stack or advance turn.
+    if (
+        state.react_stack is not _pre_resolution_stack
+        and state.phase == TurnPhase.REACT
+        and state.react_stack
+        and any(getattr(e, "is_originator", False) for e in state.react_stack)
+    ):
+        return state
+
+    # Phase 14.7-04: Pending-modal hand-off. When an originator (magic_cast
+    # or summon_effect) fires a TUTOR or REVIVE effect during stack
+    # resolution, the effect opens a pending modal (pending_tutor /
+    # pending_revive) that the CASTER must resolve before the turn
+    # advances. Legacy behavior (pre-14.7-01) entered these modals INSIDE
+    # the action handler (before the react window opened) so they never
+    # appeared during react-stack resolution. With deferred resolution,
+    # they can. Close the react window but keep the turn in ACTION for
+    # the modal owner — resolve_action's pending_tutor / pending_revive
+    # gates will route TUTOR_SELECT / REVIVE_PLACE from the owner. After
+    # the modal clears, the turn advances via that gate's resume logic.
+    if (
+        state.pending_tutor_player_idx is not None
+        or state.pending_revive_player_idx is not None
+    ):
+        return replace(
+            state,
+            phase=TurnPhase.ACTION,
+            react_stack=(),
+            react_player_idx=None,
+            pending_action=None,
+            react_context=None,
+            react_return_phase=None,
+        )
 
     # Phase 14.7-02: Dispatch on ``react_return_phase`` — where did we
     # come from? Pre-14.7 callers didn't set this field so it's None,

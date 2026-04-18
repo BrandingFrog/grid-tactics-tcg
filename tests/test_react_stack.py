@@ -1115,3 +1115,304 @@ class TestResolveReactStackAfterActionRoutesThroughEnterEnd:
         assert result.turn_number == 3
         # And the End trigger damage fired: P2 HP dropped by 1
         assert result.players[1].hp == STARTING_HP - 1
+
+
+# ---------------------------------------------------------------------------
+# Phase 14.7-04: Summon compound react windows (declaration + effect)
+# ---------------------------------------------------------------------------
+
+
+class TestSummonCompoundWindows:
+    """Deploying a minion opens Window A (declaration) then Window B (effect).
+
+    Window A negate → summon + costs are forfeit (minion does NOT land,
+    mana does NOT refund — harsh by design, spec §4.2).
+    Window B negate → ON_SUMMON effect cancelled but minion stays on board.
+    Minions with no ON_SUMMON effects skip Window B entirely.
+    """
+
+    def _setup_p1_deploy(self, library, card_id, p1_mana=5, p2_hand_ids=(), p2_mana=5):
+        """Build a state with P1 holding `card_id` ready to deploy."""
+        from grid_tactics.actions import play_card_action
+        card_id_num = library.get_numeric_id(card_id)
+        p1 = Player(
+            side=PlayerSide.PLAYER_1, hp=STARTING_HP,
+            current_mana=p1_mana, max_mana=p1_mana,
+            hand=(card_id_num,), deck=(), grave=(),
+        )
+        p2 = Player(
+            side=PlayerSide.PLAYER_2, hp=STARTING_HP,
+            current_mana=p2_mana, max_mana=p2_mana,
+            hand=tuple(p2_hand_ids), deck=(), grave=(),
+        )
+        state = GameState(
+            board=Board.empty(), players=(p1, p2),
+            active_player_idx=0,
+            phase=TurnPhase.ACTION,
+            turn_number=3,
+            seed=42,
+        )
+        return state, card_id_num
+
+    def test_summon_declaration_opens_window_a(self, library):
+        """P1 plays Blue Diodebot → Window A opens with summon_declaration originator.
+
+        Minion is NOT yet on the board; only the originator is pushed. Costs
+        (mana) were deducted in _apply_play_card before the declaration fired.
+        """
+        from grid_tactics.action_resolver import resolve_action
+        from grid_tactics.actions import play_card_action
+        from grid_tactics.enums import ReactContext
+
+        state, diodebot_id = self._setup_p1_deploy(library, "blue_diodebot")
+
+        state = resolve_action(state, play_card_action(card_index=0, position=(1, 0)), library)
+
+        # Phase = REACT with Window A context
+        assert state.phase == TurnPhase.REACT
+        assert state.react_context == ReactContext.AFTER_SUMMON_DECLARATION
+        assert state.react_return_phase == TurnPhase.ACTION
+        assert state.react_player_idx == 1  # P2 to react
+
+        # Originator on stack
+        assert len(state.react_stack) == 1
+        origin = state.react_stack[0]
+        assert origin.is_originator is True
+        assert origin.origin_kind == "summon_declaration"
+        assert origin.card_numeric_id == diodebot_id
+        assert origin.target_pos == (1, 0)
+
+        # Minion NOT yet on the board
+        assert len(state.minions) == 0
+        assert state.board.get(1, 0) is None
+
+        # Mana DEDUCTED (cost is forfeit on negate — per §4.2)
+        assert state.players[0].current_mana == 5 - 2  # Blue Diodebot cost=2
+
+    def test_summon_window_a_negate_loses_cost_and_summon(self, library):
+        """Prohibition on Window A → minion does NOT land, mana NOT refunded.
+
+        Key user decision: negate-on-summon is HARSH. Window A negate destroys
+        the summon entirely and the costs stay spent. No refund.
+        """
+        from grid_tactics.action_resolver import resolve_action
+        from grid_tactics.actions import pass_action, play_card_action, play_react_action
+
+        prohibition_id = library.get_numeric_id("prohibition")
+        state, diodebot_id = self._setup_p1_deploy(
+            library, "blue_diodebot", p1_mana=5,
+            p2_hand_ids=(prohibition_id,), p2_mana=5,
+        )
+
+        # P1 deploys
+        state = resolve_action(state, play_card_action(card_index=0, position=(1, 0)), library)
+        # P2 plays Prohibition on top of the summon_declaration originator.
+        # Prohibition's condition is OPPONENT_PLAYS_MAGIC, but during react-
+        # stack resolution the NEGATE flag targets the next LIFO entry
+        # regardless of condition (the condition gate is on PLAYABILITY, not
+        # on what NEGATE can cancel).
+        state = resolve_action(state, play_react_action(card_index=0), library)
+        # P1 passes → resolve LIFO. Prohibition negates summon_declaration.
+        state = resolve_action(state, pass_action(), library)
+
+        # Minion did NOT land
+        assert len(state.minions) == 0
+        assert state.board.get(1, 0) is None
+
+        # Mana stayed SPENT (P1 paid 2 for Blue Diodebot, no refund on negate)
+        assert state.players[0].current_mana == 5 - 2
+
+        # Turn advanced (normal post-action flow)
+        assert state.phase == TurnPhase.ACTION
+        assert state.active_player_idx == 1
+
+    def test_summon_window_a_pass_lands_minion_and_opens_window_b(self, library):
+        """P1 plays Blue Diodebot, P2 passes Window A → minion lands + Window B opens.
+
+        Because Blue Diodebot has an ON_SUMMON tutor effect, Window B opens
+        automatically for the opponent after Window A resolves without negate.
+        """
+        from grid_tactics.action_resolver import resolve_action
+        from grid_tactics.actions import pass_action, play_card_action
+        from grid_tactics.enums import ReactContext
+
+        state, diodebot_id = self._setup_p1_deploy(library, "blue_diodebot")
+        state = resolve_action(state, play_card_action(card_index=0, position=(1, 0)), library)
+        # P2 passes Window A.
+        state = resolve_action(state, pass_action(), library)
+
+        # Minion landed
+        assert len(state.minions) == 1
+        landed = state.minions[0]
+        assert landed.card_numeric_id == diodebot_id
+        assert landed.position == (1, 0)
+
+        # Window B opened: still REACT, new context.
+        assert state.phase == TurnPhase.REACT
+        assert state.react_context == ReactContext.AFTER_SUMMON_EFFECT
+        assert state.react_return_phase == TurnPhase.ACTION
+        # New originator on stack: summon_effect carrying the landed
+        # minion's instance_id and the ON_SUMMON effect payload.
+        assert len(state.react_stack) == 1
+        b_origin = state.react_stack[0]
+        assert b_origin.is_originator is True
+        assert b_origin.origin_kind == "summon_effect"
+        assert b_origin.source_minion_id == landed.instance_id
+        assert b_origin.effect_payload is not None
+        assert len(b_origin.effect_payload) >= 1
+
+    def test_summon_window_b_negate_cancels_effect_not_minion(self, library):
+        """Prohibition on Window B → tutor does NOT fire, minion STAYS on board.
+
+        Unlike Window A (harsh: minion + costs forfeit), Window B negate only
+        cancels the effect.
+        """
+        from grid_tactics.action_resolver import resolve_action
+        from grid_tactics.actions import pass_action, play_card_action, play_react_action
+
+        prohibition_id = library.get_numeric_id("prohibition")
+        red_id = library.get_numeric_id("red_diodebot")
+        state, diodebot_id = self._setup_p1_deploy(
+            library, "blue_diodebot", p1_mana=5,
+            p2_hand_ids=(prohibition_id,), p2_mana=5,
+        )
+        # Blue Diodebot tutors red_diodebot — seed a Red in P1's deck so the
+        # tutor would have a valid match (to prove it DIDN'T fire after negate).
+        p1 = state.players[0]
+        p1_with_deck = replace(p1, deck=(red_id,))
+        state = replace(state, players=(p1_with_deck, state.players[1]))
+
+        # P1 deploys Blue Diodebot
+        state = resolve_action(state, play_card_action(card_index=0, position=(1, 0)), library)
+        # P2 passes Window A → minion lands + Window B opens
+        state = resolve_action(state, pass_action(), library)
+        # P2 plays Prohibition on Window B's summon_effect originator
+        state = resolve_action(state, play_react_action(card_index=0), library)
+        # P1 passes → resolve LIFO. Prohibition negates summon_effect.
+        state = resolve_action(state, pass_action(), library)
+
+        # Minion STAYS on board
+        assert len(state.minions) == 1
+        assert state.minions[0].card_numeric_id == diodebot_id
+        # Tutor did NOT fire: Red Diodebot still in P1's deck, hand empty
+        assert red_id in state.players[0].deck
+        assert red_id not in state.players[0].hand
+        # No pending tutor open
+        assert state.pending_tutor_player_idx is None
+
+    def test_summon_no_on_summon_skips_window_b(self, library):
+        """A minion with NO on_summon effects skips Window B entirely.
+
+        Plain Rat has no ON_SUMMON effects → after Window A resolves the
+        stack drains all the way out, turn advances.
+        """
+        from grid_tactics.action_resolver import resolve_action
+        from grid_tactics.actions import pass_action, play_card_action
+
+        state, rat_id = self._setup_p1_deploy(library, "rat", p1_mana=5)
+        state = resolve_action(state, play_card_action(card_index=0, position=(1, 0)), library)
+        # P2 passes Window A. Since Rat has no ON_SUMMON effects, the
+        # declaration originator resolves and no Window B opens — the
+        # normal post-action flow continues (turn advances).
+        state = resolve_action(state, pass_action(), library)
+
+        # Minion landed
+        assert len(state.minions) == 1
+        assert state.minions[0].card_numeric_id == rat_id
+        # Phase advanced (no dead-air Window B)
+        assert state.phase == TurnPhase.ACTION
+        assert state.active_player_idx == 1
+
+    def test_gargoyle_sorceress_compound_effects_resolve_together(self, library):
+        """Gargoyle Sorceress has TWO ON_SUMMON effects — both resolve under a SINGLE Window B.
+
+        The effect_payload on the summon_effect originator carries indices for
+        BOTH effects (buff_attack + buff_health). After Window B passes both
+        are dispatched in JSON-order under one window (not two sequential
+        windows). Ordering / priority picker is 14.7-05's concern.
+        """
+        from grid_tactics.action_resolver import resolve_action
+        from grid_tactics.actions import pass_action, play_card_action
+        from grid_tactics.enums import ReactContext
+
+        # Gargoyle costs 5 mana and demands 2 any-tribe discards. Stack P1
+        # with 2 rats in hand to pay the discard cost.
+        gargoyle_id = library.get_numeric_id("gargoyle_sorceress")
+        rat_id = library.get_numeric_id("rat")
+        p1 = Player(
+            side=PlayerSide.PLAYER_1, hp=STARTING_HP,
+            current_mana=5, max_mana=5,
+            hand=(gargoyle_id, rat_id, rat_id), deck=(), grave=(),
+        )
+        p2 = Player(
+            side=PlayerSide.PLAYER_2, hp=STARTING_HP,
+            current_mana=5, max_mana=5,
+            hand=(), deck=(), grave=(),
+        )
+        state = GameState(
+            board=Board.empty(), players=(p1, p2),
+            active_player_idx=0,
+            phase=TurnPhase.ACTION,
+            turn_number=3,
+            seed=42,
+        )
+
+        # P1 deploys Gargoyle, discarding 2 rats as cost. play_card_action()
+        # helper doesn't expose discard_card_indices, so construct the
+        # Action directly.
+        from grid_tactics.actions import Action
+        state = resolve_action(
+            state,
+            Action(
+                action_type=ActionType.PLAY_CARD,
+                card_index=0, position=(1, 0),
+                discard_card_indices=(1, 2),
+            ),
+            library,
+        )
+        # P2 passes Window A
+        state = resolve_action(state, pass_action(), library)
+
+        # Window B opened with BOTH on_summon effect indices in payload
+        assert state.phase == TurnPhase.REACT
+        assert state.react_context == ReactContext.AFTER_SUMMON_EFFECT
+        assert len(state.react_stack) == 1
+        b_origin = state.react_stack[0]
+        assert b_origin.origin_kind == "summon_effect"
+        assert len(b_origin.effect_payload) == 2  # buff_attack + buff_health
+
+        # P2 passes Window B → both effects resolve, turn advances
+        state = resolve_action(state, pass_action(), library)
+        assert state.phase == TurnPhase.ACTION
+        assert state.active_player_idx == 1
+        # Gargoyle still on board
+        assert len(state.minions) == 1
+        assert state.minions[0].card_numeric_id == gargoyle_id
+
+    def test_summon_declaration_and_effect_serialize_via_to_from_dict(self, library):
+        """ReactEntry origin_kind='summon_declaration' / 'summon_effect' round-trip through to_dict / from_dict.
+
+        Baseline serializer already supports generic origin_kind strings
+        (see 14.7-01 GameState.to_dict). This pins that compound-window
+        originators survive a save/load cycle.
+        """
+        from grid_tactics.action_resolver import resolve_action
+        from grid_tactics.actions import pass_action, play_card_action
+
+        state, diodebot_id = self._setup_p1_deploy(library, "blue_diodebot")
+
+        # Window A state
+        window_a_state = resolve_action(state, play_card_action(card_index=0, position=(1, 0)), library)
+        round_trip_a = GameState.from_dict(window_a_state.to_dict())
+        assert len(round_trip_a.react_stack) == 1
+        assert round_trip_a.react_stack[0].is_originator is True
+        assert round_trip_a.react_stack[0].origin_kind == "summon_declaration"
+        assert round_trip_a.react_stack[0].target_pos == (1, 0)
+
+        # Window B state
+        window_b_state = resolve_action(window_a_state, pass_action(), library)
+        round_trip_b = GameState.from_dict(window_b_state.to_dict())
+        assert len(round_trip_b.react_stack) == 1
+        assert round_trip_b.react_stack[0].is_originator is True
+        assert round_trip_b.react_stack[0].origin_kind == "summon_effect"
+        assert round_trip_b.react_stack[0].source_minion_id is not None
