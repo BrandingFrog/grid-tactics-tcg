@@ -3098,19 +3098,20 @@ var SACRIFICE_JUMPER_SVG = (
     + '</g></svg>'
 );
 
-// Dispatcher — picks one of four sacrifice animation variants based on
+// Dispatcher — picks a sacrifice animation variant based on
 // window.__sacrificeVariant (set by the Tests tab when a scenario
-// specifies a "variant" field, or manually in the console). Defaults
-// to 'jumper' (the original pixel silhouette).
+// specifies a sacrifice_animation hint, or manually in the console).
+// Default is 'shatter' — the jumper-leap-into-shard-explosion combo
+// the user picked as the canonical sacrifice visual.
 function playSacrificeTranscendAnimation(job, done) {
     var variant = (typeof window !== 'undefined' && window.__sacrificeVariant)
-        || 'jumper';
+        || 'shatter';
     var impl = ({
         jumper: _playSacJumper,
         ghost:  _playSacGhostRise,
         shatter: _playSacShatter,
         portal: _playSacPortal,
-    })[variant] || _playSacJumper;
+    })[variant] || _playSacShatter;
     impl(job, done);
 }
 
@@ -3183,19 +3184,34 @@ function _playSacGhostRise(job, done) {
     }, 1050);
 }
 
-// C — Shatter: 8 purple fragments scatter from the tile center outward
-// and fade. A brief white flash kicks it off.
+// C — Jumper-Shatter combo: white-purple flash erupts on the tile, the
+// pixel-art jumper silhouette leaps toward the enemy face; mid-arc it
+// explodes into 8 purple shards that continue outward and fade. The
+// jumper (variant A) is absorbed into this variant as the first beat.
 function _playSacShatter(job, done) {
     var ctx = _sacrificeTileContext(job);
     if (!ctx) { setTimeout(done, 0); return; }
     var cx = ctx.rect.left + ctx.rect.width / 2;
     var cy = ctx.rect.top + ctx.rect.height / 2;
 
+    // Beat 1 — launch flash.
     var flash = document.createElement('div');
     flash.className = 'sac-anim-overlay sac-flash';
     flash.style.cssText = 'position:fixed;left:' + (cx - 60) + 'px;top:' + (cy - 60) + 'px;width:120px;height:120px;z-index:151;pointer-events:none;border-radius:50%;background:radial-gradient(circle,rgba(255,255,255,0.95) 0%,rgba(217,168,255,0.6) 40%,transparent 75%);opacity:0;transition:opacity 160ms ease-out,transform 160ms ease-out;';
     document.body.appendChild(flash);
 
+    // Beat 2 — jumper silhouette rises out of the flash and leaps.
+    var jumper = document.createElement('div');
+    jumper.className = 'sacrifice-jumper sac-anim-overlay';
+    jumper.style.cssText = 'position:fixed;left:' + ctx.rect.left + 'px;top:' + ctx.rect.top + 'px;width:' + ctx.rect.width + 'px;height:' + ctx.rect.height + 'px;z-index:152;pointer-events:none;transition:transform 400ms cubic-bezier(0.2,0.6,0.3,1),opacity 400ms ease-out;will-change:transform,opacity;';
+    jumper.innerHTML = SACRIFICE_JUMPER_SVG;
+    document.body.appendChild(jumper);
+
+    // Beat 3 — shards pre-built at the tile, kicked off when the jumper
+    // "explodes" mid-arc. Launch position follows the jumper's mid-arc
+    // delta so the explosion happens where the silhouette lands.
+    var shardDx = ctx.jumpDx * 0.6;
+    var shardDy = ctx.jumpDy * 0.6;
     var fragEls = [];
     var N = 8;
     for (var i = 0; i < N; i++) {
@@ -3203,33 +3219,51 @@ function _playSacShatter(job, done) {
         var angle = (i / N) * Math.PI * 2;
         var size = 18 + Math.random() * 14;
         frag.className = 'sac-anim-overlay sac-frag';
-        frag.style.cssText = 'position:fixed;left:' + (cx - size/2) + 'px;top:' + (cy - size/2) + 'px;width:' + size + 'px;height:' + size + 'px;z-index:150;pointer-events:none;background:linear-gradient(135deg,#d9a8ff 0%,#8822cc 100%);box-shadow:0 0 12px rgba(179,71,255,0.8);clip-path:polygon(20% 0%,80% 0%,100% 50%,80% 100%,20% 100%,0% 50%);transition:transform 900ms cubic-bezier(0.2,0.6,0.3,1),opacity 900ms ease-in;will-change:transform,opacity;';
+        frag.style.cssText = 'position:fixed;left:' + (cx - size/2) + 'px;top:' + (cy - size/2) + 'px;width:' + size + 'px;height:' + size + 'px;z-index:150;pointer-events:none;background:linear-gradient(135deg,#d9a8ff 0%,#8822cc 100%);box-shadow:0 0 12px rgba(179,71,255,0.8);clip-path:polygon(20% 0%,80% 0%,100% 50%,80% 100%,20% 100%,0% 50%);opacity:0;transform:translate(' + shardDx + 'px,' + shardDy + 'px) scale(0.4);transition:transform 650ms cubic-bezier(0.2,0.6,0.3,1),opacity 650ms ease-in;will-change:transform,opacity;';
         frag._angle = angle;
+        frag._finalDx = Math.cos(angle) * (110 + Math.random() * 50) + shardDx;
+        frag._finalDy = Math.sin(angle) * (110 + Math.random() * 50) + shardDy;
+        frag._finalRot = Math.random() * 720 - 360;
         document.body.appendChild(frag);
         fragEls.push(frag);
     }
 
+    // Kick beat 1+2 on the next frame pair.
     requestAnimationFrame(function() { requestAnimationFrame(function() {
         flash.style.opacity = '1';
         flash.style.transform = 'scale(1.8)';
-        fragEls.forEach(function(f) {
-            var dist = 110 + Math.random() * 50;
-            var dx = Math.cos(f._angle) * dist + ctx.jumpDx * 0.4;
-            var dy = Math.sin(f._angle) * dist + ctx.jumpDy * 0.4;
-            f.style.transform = 'translate(' + dx + 'px,' + dy + 'px) rotate(' + (Math.random() * 720 - 360) + 'deg)';
-            f.style.opacity = '0';
-        });
+        jumper.style.transform = 'translate(' + (ctx.jumpDx * 0.6) + 'px,' + (ctx.jumpDy * 0.6) + 'px) scale(1.15)';
     }); });
+
+    // Fade the flash out.
     setTimeout(function() {
         flash.style.opacity = '0';
         flash.style.transform = 'scale(3)';
     }, 200);
 
+    // Mid-arc: pop the jumper, launch the shards.
+    setTimeout(function() {
+        jumper.style.transition = 'transform 200ms ease-out,opacity 200ms ease-out,filter 200ms ease-out';
+        jumper.style.transform = 'translate(' + (ctx.jumpDx * 0.65) + 'px,' + (ctx.jumpDy * 0.65) + 'px) scale(1.45)';
+        jumper.style.opacity = '0';
+        jumper.style.filter = 'brightness(2) saturate(1.3)';
+        fragEls.forEach(function(f) {
+            f.style.opacity = '1';
+            f.style.transform = 'translate(' + f._finalDx + 'px,' + f._finalDy + 'px) rotate(' + f._finalRot + 'deg) scale(1)';
+        });
+        // Fade shards on the tail.
+        setTimeout(function() {
+            fragEls.forEach(function(f) { f.style.opacity = '0'; });
+        }, 350);
+    }, 420);
+
+    // Cleanup.
     setTimeout(function() {
         fragEls.forEach(function(f) { if (f.parentNode) f.parentNode.removeChild(f); });
         if (flash.parentNode) flash.parentNode.removeChild(flash);
+        if (jumper.parentNode) jumper.parentNode.removeChild(jumper);
         done();
-    }, 950);
+    }, 1150);
 }
 
 // D — Portal warp: a swirling purple ring opens beneath the minion;

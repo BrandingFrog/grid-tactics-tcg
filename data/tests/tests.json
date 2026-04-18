@@ -10,53 +10,11 @@
     },
     "tests": [
         {
-            "id": "sacrifice-variant-a-jumper",
-            "title": "Sacrifice anim A — JUMPER (pixel silhouette leaps toward enemy face)",
+            "id": "sacrifice-transcend-animation",
+            "title": "Sacrifice — jumper leaps, shatters mid-arc (default visual)",
             "instructions": "1. P1's Common Rat is pre-placed on row 4 — ready to jump off.\n2. Click the Rat to select it.\n3. Click the Sacrifice action button.",
-            "expected": "Option A: A purple-outlined, white-glowing pixel-art silhouette of a jumping figure replaces the Rat, leaps toward P2's HP, and fades out mid-arc. P2 HP drops.",
-            "client_hints": {"sacrifice_animation": "jumper"},
-            "setup": [
-                {"op": "reset"},
-                {"op": "set_player", "player_idx": 0, "field": "current_mana", "value": 10},
-                {"op": "set_player", "player_idx": 0, "field": "max_mana", "value": 10},
-                {"op": "place", "player_idx": 0, "card_id": "rat", "row": 4, "col": 2},
-                {"op": "set_active", "player_idx": 0}
-            ]
-        },
-        {
-            "id": "sacrifice-variant-b-ghost",
-            "title": "Sacrifice anim B — GHOST RISE (purple spirit ascends)",
-            "instructions": "1. Click the Rat on row 4.\n2. Click the Sacrifice action button.",
-            "expected": "Option B: A soft purple glow wells up from the Rat, a ghostly spirit silhouette rises out of the tile, blurs and fades upward toward P2. No sharp pixel art — more of an aura/dissolve.",
-            "client_hints": {"sacrifice_animation": "ghost"},
-            "setup": [
-                {"op": "reset"},
-                {"op": "set_player", "player_idx": 0, "field": "current_mana", "value": 10},
-                {"op": "set_player", "player_idx": 0, "field": "max_mana", "value": 10},
-                {"op": "place", "player_idx": 0, "card_id": "rat", "row": 4, "col": 2},
-                {"op": "set_active", "player_idx": 0}
-            ]
-        },
-        {
-            "id": "sacrifice-variant-c-shatter",
-            "title": "Sacrifice anim C — SHATTER (white flash then 8 purple shards)",
-            "instructions": "1. Click the Rat on row 4.\n2. Click the Sacrifice action button.",
-            "expected": "Option C: A brief white-purple flash pops on the tile, then eight hexagonal purple shards fly outward in all directions, rotating as they go, and fade. The Rat is gone.",
+            "expected": "Beat 1: white-purple flash erupts on the tile. Beat 2: the pixel-art jumper silhouette (purple outline, white glow) leaps forward toward P2's HP. Beat 3: mid-arc the silhouette explodes into 8 hexagonal purple shards that fly outward spinning and fade. HP damage popup fires after. A+C combined — this is the default.",
             "client_hints": {"sacrifice_animation": "shatter"},
-            "setup": [
-                {"op": "reset"},
-                {"op": "set_player", "player_idx": 0, "field": "current_mana", "value": 10},
-                {"op": "set_player", "player_idx": 0, "field": "max_mana", "value": 10},
-                {"op": "place", "player_idx": 0, "card_id": "rat", "row": 4, "col": 2},
-                {"op": "set_active", "player_idx": 0}
-            ]
-        },
-        {
-            "id": "sacrifice-variant-d-portal",
-            "title": "Sacrifice anim D — PORTAL (swirling ring pulls minion in)",
-            "instructions": "1. Click the Rat on row 4.\n2. Click the Sacrifice action button.",
-            "expected": "Option D: A purple swirling ring opens beneath the Rat. The Rat spirals inward and shrinks to a point while rotating; the ring then closes and fades.",
-            "client_hints": {"sacrifice_animation": "portal"},
             "setup": [
                 {"op": "reset"},
                 {"op": "set_player", "player_idx": 0, "field": "current_mana", "value": 10},
