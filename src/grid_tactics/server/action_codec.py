@@ -53,8 +53,8 @@ def serialize_action(action: Action) -> dict:
     if action.transform_target is not None:
         result["transform_target"] = action.transform_target
 
-    if action.sacrifice_minion_id is not None:
-        result["sacrifice_minion_id"] = action.sacrifice_minion_id
+    if action.destroyed_minion_id is not None:
+        result["destroyed_minion_id"] = action.destroyed_minion_id
 
     return result
 
@@ -105,7 +105,12 @@ def reconstruct_action(data) -> Action:
         _raw_indices = data.get("discard_card_indices")
         discard_card_indices = tuple(_raw_indices) if _raw_indices else ()
         transform_target = data.get("transform_target")
-        sacrifice_minion_id = data.get("sacrifice_minion_id")
+        # Accept either the new destroyed_minion_id name or the legacy
+        # sacrifice_minion_id spelling from older clients.
+        destroyed_minion_id = data.get(
+            "destroyed_minion_id",
+            data.get("sacrifice_minion_id"),
+        )
 
         return Action(
             action_type=action_type,
@@ -117,7 +122,7 @@ def reconstruct_action(data) -> Action:
             discard_card_index=discard_card_index,
             discard_card_indices=discard_card_indices,
             transform_target=transform_target,
-            sacrifice_minion_id=sacrifice_minion_id,
+            destroyed_minion_id=destroyed_minion_id,
         )
     except (KeyError, TypeError) as e:
         raise ValueError(f"Invalid action data: {e}") from e

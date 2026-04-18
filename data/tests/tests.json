@@ -86,10 +86,10 @@
             ]
         },
         {
-            "id": "feed-the-shadow-sacrifice-ally",
-            "title": "Feed the Shadow — magic spell with sacrifice ally cost actually casts",
-            "instructions": "1. P1 has 2 mana, a Common Rat at (3,2), and Feed the Shadow in hand.\n2. Click Feed the Shadow.\n3. Click the enemy Rat at (1,2) as the target.",
-            "expected": "The card casts without an 'Illegal action' error. Your Common Rat at (3,2) is destroyed. The enemy Rat takes damage equal to the sacrificed Rat's attack (10). Your Gargoyle Sorceress (Dark Mage) on the board gains +1 Dark Matter.",
+            "id": "feed-the-shadow-destroy-ally",
+            "title": "Feed the Shadow — magic spell with destroy-ally cost actually casts",
+            "instructions": "1. P1 has 2 mana, a Common Rat at (3,2), and Feed the Shadow in hand.\n2. Click Feed the Shadow (with only one legal target the cast auto-resolves).",
+            "expected": "The card casts without an 'Illegal action' error. Your Common Rat at (3,2) is destroyed. The enemy Rat takes damage equal to the destroyed Rat's attack (10). Your Gargoyle Sorceress (Dark Mage) on the board gains +1 Dark Matter.",
             "setup": [
                 {"op": "reset"},
                 {"op": "set_player", "player_idx": 0, "field": "current_mana", "value": 2},
@@ -120,8 +120,8 @@
         {
             "id": "modals-share-one-style",
             "title": "All pickers share the same visual style (tutor is the reference)",
-            "instructions": "1. Play 'To The Ratmobile!' from P1's hand (3 mana; tutors 2 Rats from deck). Observe the tutor modal — note its chrome (cyan border, dark header bar with title, card grid, close button).\n2. Click Reset in the test panel.\n3. Play Gargoyle Sorceress from P1's hand (5 mana) — it needs to exhaust 2 cards. Observe the sacrifice picker modal.",
-            "expected": "The sacrifice picker modal uses the SAME visual chrome as the tutor modal — cyan border, dark header bar with title text, card list in the body, consistent spacing. The buttons inside may differ (Cancel for sacrifice vs Close for tutor) but the overall look is unified, not a different red/compact modal.",
+            "instructions": "1. Play 'To The Ratmobile!' from P1's hand (3 mana; tutors 2 Rats from deck). Observe the tutor modal — note its chrome (cyan border, dark header bar with title, card grid, close button).\n2. Click Reset in the test panel.\n3. Play Gargoyle Sorceress from P1's hand (5 mana) — it needs to discard 2 cards. Observe the discard picker modal.",
+            "expected": "The discard picker modal uses the SAME visual chrome as the tutor modal — cyan border, dark header bar with title text, card grid body, consistent spacing. The words 'sacrifice' should NOT appear anywhere; this is a DISCARD (cards go to Exhaust). Title should read 'Pick 2 cards to Discard'.",
             "setup": [
                 {"op": "reset"},
                 {"op": "set_player", "player_idx": 0, "field": "current_mana", "value": 10},

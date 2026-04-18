@@ -39,7 +39,7 @@ class Action:
     discard_card_index: Optional[int] = None  # for PLAY_CARD with discard_cost_tribe (count=1 shorthand)
     discard_card_indices: tuple[int, ...] = ()  # multi-discard picks; overrides discard_card_index when non-empty
     transform_target: Optional[str] = None  # for TRANSFORM action: target card_id
-    sacrifice_minion_id: Optional[int] = None  # for cards with sacrifice_ally_cost: ally to destroy
+    destroyed_minion_id: Optional[int] = None  # for cards with destroy_ally_cost: ally minion on the board to destroy
 
 
 # ---------------------------------------------------------------------------

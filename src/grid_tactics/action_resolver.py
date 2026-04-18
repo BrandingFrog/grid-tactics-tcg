@@ -316,45 +316,47 @@ def _apply_play_card(
     else:
         new_player = new_player.discard_from_hand(card_numeric_id)
 
-    # Summon sacrifice: exhaust card(s) of the required tribe from hand (cost).
-    # Prefer the user's explicit pick list (discard_card_indices), falling back
-    # to the legacy single-index field, and finally auto-pick the first tribe
-    # match. Indices reference the ORIGINAL hand (before the played card was
-    # removed) to stay stable across the intermediate remove_from_hand call.
+    # Discard cost: exhaust card(s) of the required tribe from hand. This is
+    # a DISCARD (hand → Exhaust Pile), NOT a SACRIFICE (board-crossing win
+    # move). Prefer the user's explicit pick list (discard_card_indices),
+    # fall back to the legacy single-index field, and finally auto-pick the
+    # first tribe match. Indices reference the ORIGINAL hand (before the
+    # played card was removed) to stay stable across the intermediate
+    # remove_from_hand call.
     if card_def.discard_cost_tribe:
-        sac_count = card_def.discard_cost_count
+        discard_needed = card_def.discard_cost_count
         pick_indices = list(action.discard_card_indices or ())
         if not pick_indices and action.discard_card_index is not None:
             pick_indices = [action.discard_card_index]
-        for _sac_i in range(sac_count):
-            sacrifice_id = None
-            if _sac_i < len(pick_indices):
-                sac_idx = pick_indices[_sac_i]
-                if 0 <= sac_idx < len(player.hand):
-                    candidate_id = player.hand[sac_idx]
+        for _discard_i in range(discard_needed):
+            discard_id = None
+            if _discard_i < len(pick_indices):
+                pick_idx = pick_indices[_discard_i]
+                if 0 <= pick_idx < len(player.hand):
+                    candidate_id = player.hand[pick_idx]
                     cand_def = library.get_by_id(candidate_id)
                     tribe_match = (card_def.discard_cost_tribe == "any"
                                    or card_def.discard_cost_tribe in (cand_def.tribe or "").split())
                     if tribe_match and candidate_id in new_player.hand:
-                        sacrifice_id = candidate_id
-            if sacrifice_id is None:
+                        discard_id = candidate_id
+            if discard_id is None:
                 # Fallback: auto-pick first matching card
                 for hand_card_id in new_player.hand:
                     if card_def.discard_cost_tribe == "any":
-                        sacrifice_id = hand_card_id
+                        discard_id = hand_card_id
                         break
                     hand_card_def = library.get_by_id(hand_card_id)
                     if card_def.discard_cost_tribe in (hand_card_def.tribe or "").split():
-                        sacrifice_id = hand_card_id
+                        discard_id = hand_card_id
                         break
-            if sacrifice_id is None:
+            if discard_id is None:
                 raise ValueError(
-                    f"No {card_def.discard_cost_tribe} card in hand to sacrifice"
+                    f"No {card_def.discard_cost_tribe} card in hand to discard"
                 )
             # Discard: send from hand to exhaust pile.
-            new_player = new_player.exhaust_from_hand(sacrifice_id)
+            new_player = new_player.exhaust_from_hand(discard_id)
             # Fire ON_DISCARD effects on the discarded card
-            discarded_def = library.get_by_id(sacrifice_id)
+            discarded_def = library.get_by_id(discard_id)
             discard_effects = [e for e in discarded_def.effects if e.trigger == TriggerType.ON_DISCARD]
             if discard_effects:
                 # Temporarily commit player state so effects can read board
@@ -597,24 +599,25 @@ def _cast_magic(
     """
     caster_pos = action.position if action.position is not None else (0, 0)
 
-    # Sacrifice ally cost: destroy a friendly minion before effects resolve
-    sacrificed_attack = 0
-    sacrificed_dm = 0
-    if card_def.sacrifice_ally_cost and action.sacrifice_minion_id is not None:
-        sac_minion = state.get_minion(action.sacrifice_minion_id)
-        if sac_minion is not None and sac_minion.owner == active_side:
-            sac_def = library.get_by_id(sac_minion.card_numeric_id)
-            sacrificed_attack = sac_def.attack + sac_minion.attack_bonus
-            sacrificed_dm = sac_minion.dark_matter_stacks
+    # Destroy-ally cost: remove a friendly minion from the board before
+    # effects resolve. Distinct from the board-crossing SACRIFICE action.
+    destroyed_attack = 0
+    destroyed_dm = 0
+    if card_def.destroy_ally_cost and action.destroyed_minion_id is not None:
+        destroyed_minion = state.get_minion(action.destroyed_minion_id)
+        if destroyed_minion is not None and destroyed_minion.owner == active_side:
+            destroyed_def = library.get_by_id(destroyed_minion.card_numeric_id)
+            destroyed_attack = destroyed_def.attack + destroyed_minion.attack_bonus
+            destroyed_dm = destroyed_minion.dark_matter_stacks
             # Remove from board
-            new_board = state.board.remove(sac_minion.position[0], sac_minion.position[1])
-            new_minions = tuple(m for m in state.minions if m.instance_id != sac_minion.instance_id)
+            new_board = state.board.remove(destroyed_minion.position[0], destroyed_minion.position[1])
+            new_minions = tuple(m for m in state.minions if m.instance_id != destroyed_minion.instance_id)
             # Add to grave if from_deck
             active_idx = state.active_player_idx
             new_players = state.players
-            if sac_minion.from_deck:
+            if destroyed_minion.from_deck:
                 p = state.players[active_idx]
-                new_p = p.add_to_grave(sac_minion.card_numeric_id)
+                new_p = p.add_to_grave(destroyed_minion.card_numeric_id)
                 new_players = _replace_player(new_players, active_idx, new_p)
             state = replace(state, board=new_board, minions=new_minions, players=new_players)
 
@@ -625,10 +628,10 @@ def _cast_magic(
                 _enter_pending_tutor,
             )
 
-            # Pre-scale effects that depend on sacrificed ally's attack
+            # Pre-scale effects that depend on destroyed ally's attack
             resolved_effect = effect
-            if effect.scale_with in ("sacrificed_attack", "sacrificed_attack_plus_dm"):
-                bonus = sacrificed_attack + sacrificed_dm if effect.scale_with == "sacrificed_attack_plus_dm" else sacrificed_attack
+            if effect.scale_with in ("destroyed_attack", "destroyed_attack_plus_dm"):
+                bonus = destroyed_attack + destroyed_dm if effect.scale_with == "destroyed_attack_plus_dm" else destroyed_attack
                 if bonus > 0:
                     resolved_effect = replace(effect, amount=effect.amount + bonus)
 

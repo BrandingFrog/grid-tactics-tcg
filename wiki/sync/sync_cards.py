@@ -155,8 +155,8 @@ def derive_keywords(card: dict) -> list[str]:
         kws.add("Cost")
         kws.add("Dark Matter")
 
-    # Sacrifice ally cost
-    if card.get("sacrifice_ally_cost"):
+    # Destroy-ally cost (legacy key sacrifice_ally_cost accepted too).
+    if card.get("destroy_ally_cost") or card.get("sacrifice_ally_cost"):
         kws.add("Cost")
         kws.add("Destroy")
 
@@ -253,8 +253,8 @@ def build_rules_text(card: dict, name_map: dict[str, str] | None = None) -> str:
             plural = "s" if sac_count > 1 else ""
             parts.append(f"[[Cost]]: [[Discard]] any {count_text}[[{discard_tribe}]]{plural}")
 
-    # Destroy ally cost
-    if card.get("sacrifice_ally_cost"):
+    # Destroy-ally cost (legacy key sacrifice_ally_cost accepted too).
+    if card.get("destroy_ally_cost") or card.get("sacrifice_ally_cost"):
         parts.append("[[Cost]]: [[Destroy]] an ally")
 
     # HP cost — caster takes damage to own life on play
@@ -315,7 +315,8 @@ def build_rules_text(card: dict, name_map: dict[str, str] | None = None) -> str:
             scale = eff.get("scale_with")
             if scale == "dark_matter":
                 desc = f"{pfx}Deal ([[Dark Matter]]) damage" if amount == 0 else f"{pfx}Deal {amount} + ([[Dark Matter]]) damage"
-            elif scale in ("sacrificed_attack", "sacrificed_attack_plus_dm"):
+            elif scale in ("destroyed_attack", "destroyed_attack_plus_dm",
+                           "sacrificed_attack", "sacrificed_attack_plus_dm"):
                 dm_part = " + ([[Dark Matter]])" if "dm" in scale else ""
                 desc = f"{pfx}Deal destroyed ally's 🗡️{dm_part} as damage"
             else:

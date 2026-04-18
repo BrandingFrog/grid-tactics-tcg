@@ -256,13 +256,13 @@ def _action_phase_actions(
 
                 # Sacrifice ally cost: enumerate ally minion choices
                 ally_choices: list[Optional[int]] = [None]
-                if card_def.sacrifice_ally_cost:
+                if card_def.destroy_ally_cost:
                     friendly = [m for m in state.minions if m.owner == player_side and m.current_health > 0]
                     if not friendly:
                         continue  # can't play without an ally to sacrifice
                     ally_choices = [m.instance_id for m in friendly]
 
-                for sac_ally_id in ally_choices:
+                for destroy_ally_id in ally_choices:
                     if has_single_target:
                         enemy_positions = _get_enemy_minion_positions(state, player_side)
                         for target_pos in enemy_positions:
@@ -271,7 +271,7 @@ def _action_phase_actions(
                                 card_index=idx, target_pos=target_pos,
                                 discard_card_index=sac_idx,
                                 discard_card_indices=sac_indices,
-                                sacrifice_minion_id=sac_ally_id,
+                                destroyed_minion_id=destroy_ally_id,
                             ))
                     else:
                         actions.append(Action(
@@ -279,7 +279,7 @@ def _action_phase_actions(
                             card_index=idx,
                             discard_card_index=sac_idx,
                             discard_card_indices=sac_indices,
-                            sacrifice_minion_id=sac_ally_id,
+                            destroyed_minion_id=destroy_ally_id,
                         ))
 
         # Skip CardType.REACT during ACTION phase

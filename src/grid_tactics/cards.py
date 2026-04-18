@@ -146,8 +146,10 @@ class CardDefinition:
     # Play condition: e.g. "discarded_last_turn" — card can only be played if condition met
     play_condition: Optional[str] = None
 
-    # Sacrifice ally cost: must destroy a friendly minion to play this card
-    sacrifice_ally_cost: bool = False
+    # Destroy-ally cost: must destroy a friendly minion on the board to play
+    # this card. Named "destroy" (not "sacrifice") because the board-crossing
+    # SACRIFICE action is a distinct game mechanic — see ActionType.SACRIFICE.
+    destroy_ally_cost: bool = False
 
     # HP cost: caster takes this much damage to their own life total on play.
     # Enforced at legal_actions (caller must have hp >= hp_cost) and applied

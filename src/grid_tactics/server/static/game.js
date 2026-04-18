@@ -4008,7 +4008,7 @@ function getTargetPositions(handIdx, deployPos) {
 // Find a legal action for this card matching position+target_pos
 // Build a submit-ready payload for a PLAY_CARD action that preserves every
 // optional field the server checks (position, target_pos, discard_card_index,
-// discard_card_indices, sacrifice_minion_id). Synthesising payloads from
+// discard_card_indices, destroyed_minion_id). Synthesising payloads from
 // (handIdx, target) alone drops these and the server's `action not in
 // valid_actions` check rejects it as "Illegal action".
 function _playCardPayload(action) {
@@ -4019,7 +4019,12 @@ function _playCardPayload(action) {
     if (action.discard_card_indices && action.discard_card_indices.length > 0) {
         payload.discard_card_indices = action.discard_card_indices;
     }
-    if (action.sacrifice_minion_id != null) payload.sacrifice_minion_id = action.sacrifice_minion_id;
+    // destroyed_minion_id on the wire; accept legacy sacrifice_minion_id
+    // from an older server frame so a half-deployed stack doesn't break.
+    var destroyed = (action.destroyed_minion_id != null)
+        ? action.destroyed_minion_id
+        : action.sacrifice_minion_id;
+    if (destroyed != null) payload.destroyed_minion_id = destroyed;
     return payload;
 }
 
@@ -4333,15 +4338,15 @@ function onBoardCellClick(row, col) {
                 highlightBoard();
                 return;
             }
-            // Check for sacrifice choices (discard_cost_tribe card)
+            // Check for discard-cost choices (discard_cost_tribe card)
             var sacChoices = getSacrificeChoices(selectedHandIdx, [row, col], null);
             if (sacChoices.length > 1) {
                 selectedDeployPos = [row, col];
                 showSacrificePicker(selectedHandIdx, [row, col], null, sacChoices);
                 return;
             }
-            // No targeting/sacrifice needed — submit via matched action so
-            // sacrifice_minion_id (minions with sacrifice_ally_cost — not
+            // No targeting/discard needed — submit via matched action so
+            // destroyed_minion_id (minions with destroy_ally_cost — not
             // currently used by minions, but future-proof) propagates.
             var matched0 = findCardAction(selectedHandIdx, [row, col], null);
             if (matched0) {
@@ -4359,14 +4364,14 @@ function onBoardCellClick(row, col) {
             return p[0] === row && p[1] === col;
         });
         if (validTarget) {
-            // Check for sacrifice choices at this combo
+            // Check for discard-cost choices at this combo
             var sacChoices2 = getSacrificeChoices(selectedHandIdx, selectedDeployPos, [row, col]);
             if (sacChoices2.length > 1) {
                 showSacrificePicker(selectedHandIdx, selectedDeployPos, [row, col], sacChoices2);
                 return;
             }
             // Find the FULL matched legal action and rebuild the payload from
-            // it — carries sacrifice_minion_id for sacrifice_ally_cost cards
+            // it — carries destroyed_minion_id for destroy_ally_cost cards
             // (e.g. Feed the Shadow) that the synthesised payload used to
             // drop. First match wins the ally pick for cards with >1 ally.
             var matched = findCardAction(selectedHandIdx, selectedDeployPos, [row, col]);
@@ -4604,9 +4609,8 @@ function hideMinionActionMenu() {
     if (existing) existing.remove();
 }
 
-// Sacrifice picker — shown when a card requires a tribe sacrifice and there are multiple candidates
-// Sacrifice picker — collects one or more hand-index picks (based on the
-// played card's discard_cost_count) then submits the matching PLAY_CARD
+// Discard-cost picker — collects one or more hand-index picks (based on
+// the played card's discard_cost_count) then submits the matching PLAY_CARD
 // action. Multi-pick cards re-render the grid after each click, disabling
 // already-picked cards; submission fires when pick count reaches the
 // required discard count.
@@ -5973,9 +5977,9 @@ function getEffectDescription(effects, cardData) {
             if (eff.scale_with === 'dark_matter') {
                 desc = prefix + 'Deal ' + DM + ' damage';
                 if (amount > 0) desc = prefix + 'Deal ' + amount + ' + ' + DM + ' damage';
-            } else if (eff.scale_with === 'sacrificed_attack_plus_dm') {
+            } else if (eff.scale_with === 'destroyed_attack_plus_dm' || eff.scale_with === 'sacrificed_attack_plus_dm') {
                 desc = prefix + "Deal destroyed ally's " + SWORD + ' + ' + DM + ' as damage';
-            } else if (eff.scale_with === 'sacrificed_attack') {
+            } else if (eff.scale_with === 'destroyed_attack' || eff.scale_with === 'sacrificed_attack') {
                 desc = prefix + "Deal destroyed ally's " + SWORD + ' as damage';
             } else {
                 desc = prefix + 'Deal ' + amount + ' damage';
