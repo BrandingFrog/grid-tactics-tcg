@@ -18,6 +18,7 @@ from grid_tactics.server.view_filter import (
     enrich_pending_death_target,
     enrich_pending_post_move_attack,
     enrich_pending_revive,
+    enrich_pending_trigger_for_viewer,
     enrich_pending_tutor_for_viewer,
     filter_state_for_player,
     filter_state_for_spectator,
@@ -166,6 +167,7 @@ def _emit_state_to_players(session, state, prev_state=None, resolved_action=None
         enrich_pending_conjure_deploy(state, filtered, idx, session.library)
         enrich_pending_death_target(state, filtered, idx, session.library)
         enrich_pending_revive(state, filtered, idx, session.library)
+        enrich_pending_trigger_for_viewer(state, filtered, idx, session.library)
         emit("state_update", {
             "state": filtered,
             "legal_actions": serialized_actions if idx == decision_idx else [],
@@ -198,6 +200,7 @@ def _fanout_state_to_spectators(session, state, base_state_dict, resolved_action
             enrich_pending_conjure_deploy(state, spec_state, 0, session.library)
             enrich_pending_death_target(state, spec_state, 0, session.library)
             enrich_pending_revive(state, spec_state, 0, session.library)
+            enrich_pending_trigger_for_viewer(state, spec_state, 0, session.library)
         if event_name == "state_update":
             emit("state_update", {
                 "state": spec_state,
@@ -224,6 +227,7 @@ def _emit_game_over(session, state):
         enrich_pending_conjure_deploy(state, filtered, idx, session.library)
         enrich_pending_death_target(state, filtered, idx, session.library)
         enrich_pending_revive(state, filtered, idx, session.library)
+        enrich_pending_trigger_for_viewer(state, filtered, idx, session.library)
         emit("game_over", {
             "winner": int(state.winner) if state.winner is not None else None,
             "final_state": filtered,
@@ -252,6 +256,7 @@ def _fanout_game_start_to_spectators(session, base_state_dict, card_defs):
             enrich_pending_conjure_deploy(session.state, spec_state, 0, session.library)
             enrich_pending_death_target(session.state, spec_state, 0, session.library)
             enrich_pending_revive(session.state, spec_state, 0, session.library)
+            enrich_pending_trigger_for_viewer(session.state, spec_state, 0, session.library)
         emit(
             "game_start",
             {
@@ -431,6 +436,7 @@ def register_events(room_manager: RoomManager) -> None:
                 enrich_pending_conjure_deploy(session.state, filtered, idx, session.library)
                 enrich_pending_death_target(session.state, filtered, idx, session.library)
                 enrich_pending_revive(session.state, filtered, idx, session.library)
+                enrich_pending_trigger_for_viewer(session.state, filtered, idx, session.library)
                 emit(
                     "game_start",
                     {
@@ -482,6 +488,7 @@ def register_events(room_manager: RoomManager) -> None:
                 enrich_pending_conjure_deploy(session.state, spec_state, 0, session.library)
                 enrich_pending_death_target(session.state, spec_state, 0, session.library)
                 enrich_pending_revive(session.state, spec_state, 0, session.library)
+                enrich_pending_trigger_for_viewer(session.state, spec_state, 0, session.library)
             card_defs = _build_card_defs(session.library)
             emit("game_start", {
                 "your_player_idx": 0,
@@ -543,6 +550,7 @@ def register_events(room_manager: RoomManager) -> None:
             enrich_pending_conjure_deploy(new_session.state, filtered, idx, new_session.library)
             enrich_pending_death_target(new_session.state, filtered, idx, new_session.library)
             enrich_pending_revive(new_session.state, filtered, idx, new_session.library)
+            enrich_pending_trigger_for_viewer(new_session.state, filtered, idx, new_session.library)
             sid = new_session.player_sids[idx]
             if sid is None:
                 continue
@@ -789,6 +797,14 @@ def register_events(room_manager: RoomManager) -> None:
         enrich_pending_tutor_for_viewer(state, state_dict, tutor_viewer, sandbox.library)
         enrich_pending_death_target(state, state_dict, death_viewer, sandbox.library)
         enrich_pending_conjure_deploy(state, state_dict, conjure_viewer, sandbox.library)
+        # Phase 14.7-05: sandbox view always picks the picker's own POV so
+        # the full picker_options payload appears in the sandbox UI.
+        trigger_viewer = (
+            state.pending_trigger_picker_idx
+            if state.pending_trigger_picker_idx is not None
+            else 0
+        )
+        enrich_pending_trigger_for_viewer(state, state_dict, trigger_viewer, sandbox.library)
         actions = sandbox.legal_actions() if not sandbox.state.is_game_over else ()
         serialized = [serialize_action(a) for a in actions]
         emit("sandbox_state", {

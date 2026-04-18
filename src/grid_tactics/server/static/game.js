@@ -4248,6 +4248,8 @@ function renderGame() {
     syncPendingConjureDeployUI();
     syncPendingDeathTargetUI();
     syncPendingReviveUI();
+    // Phase 14.7-05: simultaneous-trigger priority picker modal.
+    syncPendingTriggerPickerUI();
     // Always refresh highlights — even when it's not my turn — so stale
     // .card-playable classes from the previous render are cleared.
     highlightBoard();
@@ -5377,6 +5379,148 @@ function showOpponentTutoringToast() {
 
 function hideOpponentTutoringToast() {
     var existing = document.getElementById('opponent-tutoring-toast');
+    if (existing) existing.remove();
+}
+
+// =============================================
+// Phase 14.7-05: Trigger picker modal (simultaneous START/END triggers)
+// =============================================
+// When 2+ ON_START_OF_TURN or ON_END_OF_TURN effects fire simultaneously,
+// the picker owner sees a modal with each triggering minion's full card
+// face (reusing renderDeckBuilderCard — user directive "we want to use
+// existing modals"). Clicking a card emits TRIGGER_PICK(queue_idx=i).
+// A Skip button emits DECLINE_TRIGGER which fizzles the remaining queue.
+// The opponent sees a passive toast while the picker is deciding.
+
+var triggerPickerModalOpen = false;
+
+function syncPendingTriggerPickerUI() {
+    if (!gameState) {
+        if (triggerPickerModalOpen) closeTriggerPickerModal();
+        hideOpponentTriggerPickerToast();
+        return;
+    }
+    var pickerIdx = gameState.pending_trigger_picker_idx;
+    if (pickerIdx == null) {
+        if (triggerPickerModalOpen) closeTriggerPickerModal();
+        hideOpponentTriggerPickerToast();
+        return;
+    }
+    // Sandbox is god-mode — always show the modal regardless of myPlayerIdx.
+    var isPicker = sandboxMode || pickerIdx === myPlayerIdx;
+    if (isPicker) {
+        hideOpponentTriggerPickerToast();
+        if (!triggerPickerModalOpen) {
+            var options = gameState.pending_trigger_picker_options || [];
+            showTriggerPickerModal(options);
+        }
+    } else {
+        if (triggerPickerModalOpen) closeTriggerPickerModal();
+        showOpponentTriggerPickerToast();
+    }
+}
+
+function showTriggerPickerModal(options) {
+    closeTriggerPickerModal();
+    triggerPickerModalOpen = true;
+
+    var overlay = document.createElement('div');
+    // Reuse tutor-modal CSS class — same layout, same animations. Adding
+    // a distinguishing class lets us restyle later without touching tutor.
+    overlay.className = 'tutor-modal-overlay trigger-picker-modal-overlay';
+    overlay.id = 'trigger-picker-modal-overlay';
+
+    var modal = document.createElement('div');
+    modal.className = 'tutor-modal trigger-picker-modal';
+
+    var header = document.createElement('div');
+    header.className = 'tutor-modal-header';
+    var title = document.createElement('div');
+    title.className = 'tutor-modal-title';
+    title.textContent = 'Pick the order to resolve these effects';
+    var sub = document.createElement('div');
+    sub.className = 'tutor-modal-deckline';
+    sub.textContent = (options || []).length + ' triggers waiting';
+    header.appendChild(title);
+    header.appendChild(sub);
+    modal.appendChild(header);
+
+    var fan = document.createElement('div');
+    fan.className = 'tutor-modal-cards';
+
+    if (!options || options.length === 0) {
+        var empty = document.createElement('div');
+        empty.className = 'tutor-modal-empty';
+        empty.textContent = 'No triggers to pick.';
+        fan.appendChild(empty);
+    } else {
+        options.forEach(function(opt) {
+            var nid = opt.source_card_numeric_id;
+            var queueIdx = opt.queue_idx;
+            var tile = document.createElement('div');
+            tile.className = 'tutor-modal-card trigger-picker-card';
+            // Reuse renderDeckBuilderCard — same full-face card render
+            // the tutor modal uses. count=-1 suppresses the deck count pill.
+            tile.innerHTML = renderDeckBuilderCard(nid, -1);
+
+            // Optional label showing the trigger kind (Start/End/etc.)
+            var kindPill = document.createElement('div');
+            kindPill.className = 'tutor-copy-count';
+            var kindLabel = opt.trigger_kind === 'start_of_turn'
+                ? 'Start of Turn'
+                : (opt.trigger_kind === 'end_of_turn' ? 'End of Turn' : opt.trigger_kind);
+            kindPill.textContent = kindLabel;
+            tile.appendChild(kindPill);
+
+            tile.addEventListener('click', function(e) {
+                e.stopPropagation();
+                // ActionType.TRIGGER_PICK = 17 (Phase 14.7-05).
+                // card_index reused as queue_idx.
+                submitAction({ action_type: 17, card_index: queueIdx });
+            });
+            fan.appendChild(tile);
+        });
+    }
+    modal.appendChild(fan);
+
+    var footer = document.createElement('div');
+    footer.className = 'tutor-modal-footer';
+    var skipBtn = document.createElement('button');
+    skipBtn.className = 'tutor-skip-button';
+    skipBtn.textContent = 'Skip remaining';
+    skipBtn.title = 'Decline remaining triggers — they fizzle silently';
+    skipBtn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        // ActionType.DECLINE_TRIGGER = 18 (Phase 14.7-05).
+        submitAction({ action_type: 18 });
+    });
+    footer.appendChild(skipBtn);
+    modal.appendChild(footer);
+
+    overlay.appendChild(modal);
+    // Block background clicks — must Skip explicitly (matches tutor modal UX).
+    overlay.addEventListener('click', function(e) { e.stopPropagation(); });
+    document.body.appendChild(overlay);
+}
+
+function closeTriggerPickerModal() {
+    var existing = document.getElementById('trigger-picker-modal-overlay');
+    if (existing) existing.remove();
+    triggerPickerModalOpen = false;
+}
+
+function showOpponentTriggerPickerToast() {
+    if (document.getElementById('opponent-trigger-picker-toast')) return;
+    var toast = document.createElement('div');
+    toast.id = 'opponent-trigger-picker-toast';
+    // Reuse tutor-toast styling — same "waiting on opponent" visual treatment.
+    toast.className = 'tutor-toast';
+    toast.textContent = 'Opponent is ordering effects…';
+    document.body.appendChild(toast);
+}
+
+function hideOpponentTriggerPickerToast() {
+    var existing = document.getElementById('opponent-trigger-picker-toast');
     if (existing) existing.remove();
 }
 
@@ -7035,6 +7179,7 @@ function renderSandbox() {
     if (typeof syncPendingConjureDeployUI === 'function') syncPendingConjureDeployUI();
     if (typeof syncPendingDeathTargetUI === 'function') syncPendingDeathTargetUI();
     if (typeof syncPendingReviveUI === 'function') syncPendingReviveUI();
+    if (typeof syncPendingTriggerPickerUI === 'function') syncPendingTriggerPickerUI();
     if (typeof highlightBoard === 'function') highlightBoard();
 }
 

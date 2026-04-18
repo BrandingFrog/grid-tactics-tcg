@@ -432,3 +432,121 @@ class TestNoAutoDraw:
         # Deck size also unchanged (no card drawn)
         p1_deck_after = len(new_state.players[1].deck)
         assert p1_deck_after == p1_deck_before
+
+
+# ---------------------------------------------------------------------------
+# Phase 14.7-05: enrich_pending_trigger_for_viewer
+# ---------------------------------------------------------------------------
+
+
+class TestEnrichPendingTriggerForViewer:
+    """Asymmetric filter: picker sees full options; opponent sees only picker_idx + count.
+
+    Mirrors the enrich_pending_tutor_for_viewer (14.2) pattern.
+    """
+
+    def _build_state_with_trigger_queue(self):
+        """Build a GameState with 2 turn triggers + 1 other trigger + picker_idx=0."""
+        from dataclasses import replace
+        from grid_tactics.board import Board
+        from grid_tactics.enums import PlayerSide, TurnPhase
+        from grid_tactics.game_state import GameState, PendingTrigger
+        from grid_tactics.player import Player
+        from grid_tactics.types import STARTING_HP
+
+        p1 = Player(
+            side=PlayerSide.PLAYER_1, hp=STARTING_HP,
+            current_mana=3, max_mana=3, hand=(), deck=(), grave=(),
+        )
+        p2 = Player(
+            side=PlayerSide.PLAYER_2, hp=STARTING_HP,
+            current_mana=3, max_mana=3, hand=(), deck=(), grave=(),
+        )
+        turn_triggers = (
+            PendingTrigger(
+                trigger_kind="start_of_turn",
+                source_minion_id=1,
+                source_card_numeric_id=9,
+                effect_idx=0,
+                owner_idx=0,
+                captured_position=(0, 1),
+                target_pos=None,
+            ),
+            PendingTrigger(
+                trigger_kind="start_of_turn",
+                source_minion_id=2,
+                source_card_numeric_id=9,
+                effect_idx=0,
+                owner_idx=0,
+                captured_position=(1, 2),
+                target_pos=None,
+            ),
+        )
+        other_triggers = (
+            PendingTrigger(
+                trigger_kind="end_of_turn",
+                source_minion_id=3,
+                source_card_numeric_id=11,
+                effect_idx=1,
+                owner_idx=1,
+                captured_position=(4, 3),
+                target_pos=None,
+            ),
+        )
+        return GameState(
+            board=Board.empty(), players=(p1, p2),
+            active_player_idx=0,
+            phase=TurnPhase.START_OF_TURN,
+            turn_number=3, seed=42,
+            pending_trigger_queue_turn=turn_triggers,
+            pending_trigger_queue_other=other_triggers,
+            pending_trigger_picker_idx=0,
+        )
+
+    def test_picker_sees_full_options(self):
+        """Viewer == picker sees full list of queue entries."""
+        from grid_tactics.server.view_filter import enrich_pending_trigger_for_viewer
+
+        state = self._build_state_with_trigger_queue()
+        filtered: dict = {}
+        enrich_pending_trigger_for_viewer(state, filtered, viewer_idx=0, library=None)
+
+        assert filtered["pending_trigger_picker_idx"] == 0
+        assert filtered["pending_trigger_queue_length"] == 2
+        options = filtered["pending_trigger_picker_options"]
+        assert len(options) == 2
+        # Each entry has the fields the client needs to render via
+        # renderDeckBuilderCard.
+        for i, opt in enumerate(options):
+            assert opt["queue_idx"] == i
+            assert opt["trigger_kind"] == "start_of_turn"
+            assert opt["source_card_numeric_id"] == 9
+            assert opt["owner_idx"] == 0
+            assert len(opt["captured_position"]) == 2
+
+    def test_opponent_sees_only_picker_idx(self):
+        """Viewer != picker sees NO options (empty list), just the picker_idx + count."""
+        from grid_tactics.server.view_filter import enrich_pending_trigger_for_viewer
+
+        state = self._build_state_with_trigger_queue()
+        filtered: dict = {}
+        enrich_pending_trigger_for_viewer(state, filtered, viewer_idx=1, library=None)
+
+        assert filtered["pending_trigger_picker_idx"] == 0
+        # Queue length still exposed so the opponent toast can read it.
+        assert filtered["pending_trigger_queue_length"] == 2
+        # BUT the options list is empty — no card identities leaked.
+        assert filtered["pending_trigger_picker_options"] == []
+
+    def test_no_picker_passes_through(self):
+        """When pending_trigger_picker_idx is None, all fields default to safe values."""
+        from grid_tactics.game_state import GameState
+        from grid_tactics.server.view_filter import enrich_pending_trigger_for_viewer
+
+        state, _ = GameState.new_game(42, tuple(range(1, 41)), tuple(range(101, 141)))
+        filtered: dict = {}
+        enrich_pending_trigger_for_viewer(state, filtered, viewer_idx=0, library=None)
+
+        assert filtered["pending_trigger_picker_idx"] is None
+        assert filtered["pending_trigger_picker_options"] == []
+        assert filtered["pending_trigger_queue_length"] == 0

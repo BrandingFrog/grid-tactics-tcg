@@ -395,6 +395,70 @@ def enrich_pending_revive(
         filtered_dict["pending_revive_card_numeric_id"] = None
 
 
+def enrich_pending_trigger_for_viewer(
+    state, filtered_dict: dict, viewer_idx: int, library,
+) -> None:
+    """Expose Phase 14.7-05 pending_trigger_picker state to the client.
+
+    Asymmetric, mirroring enrich_pending_tutor_for_viewer:
+      - The picker (whose queue's modal is open) gets the full list of
+        queue entries so game.js can render each source card via
+        renderDeckBuilderCard (the existing tutor modal primitive —
+        user directive "we want to use existing modals").
+      - The opponent gets only the picker_idx so they can show a
+        passive "Opponent is ordering effects..." toast.
+
+    Mutates filtered_dict in place. Adds:
+      - pending_trigger_picker_idx: int | None (always)
+      - pending_trigger_picker_options: list[{queue_idx, trigger_kind,
+            source_card_numeric_id, source_minion_id, owner_idx,
+            captured_position}]  (picker only; empty list for opponent)
+      - pending_trigger_queue_length: int (always — useful for the
+            opponent toast even without contents exposure)
+    """
+    picker = getattr(state, "pending_trigger_picker_idx", None)
+    filtered_dict["pending_trigger_picker_idx"] = picker
+    filtered_dict["pending_trigger_picker_options"] = []
+    filtered_dict["pending_trigger_queue_length"] = 0
+
+    if picker is None:
+        return
+
+    # Determine which queue the picker owns.
+    is_turn_queue = (picker == state.active_player_idx)
+    q = (
+        state.pending_trigger_queue_turn
+        if is_turn_queue
+        else state.pending_trigger_queue_other
+    )
+    filtered_dict["pending_trigger_queue_length"] = len(q)
+
+    if viewer_idx != picker:
+        # Opponent view — only picker_idx + queue_length exposed (enough
+        # to render a "waiting on opponent" toast).
+        return
+
+    # Picker view: serialize each queue entry for the modal.
+    options: list[dict] = []
+    for i, t in enumerate(q):
+        options.append(
+            {
+                "queue_idx": i,
+                "trigger_kind": t.trigger_kind,
+                "source_card_numeric_id": int(t.source_card_numeric_id),
+                "source_minion_id": (
+                    int(t.source_minion_id) if t.source_minion_id is not None else None
+                ),
+                "owner_idx": int(t.owner_idx),
+                "captured_position": [
+                    int(t.captured_position[0]),
+                    int(t.captured_position[1]),
+                ],
+            }
+        )
+    filtered_dict["pending_trigger_picker_options"] = options
+
+
 def enrich_pending_conjure_deploy(
     state, filtered_dict: dict, viewer_idx: int, library
 ) -> None:

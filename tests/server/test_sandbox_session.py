@@ -708,3 +708,111 @@ def test_sandbox_saves_summon_effect_state(
     # And the landed minion survives the round trip.
     assert len(s2.state.minions) == 1
     assert s2.state.minions[0].card_numeric_id == blue_nid
+
+
+def test_sandbox_saves_pending_trigger_queue_state(
+    library: CardLibrary, isolated_slot_dir,
+) -> None:
+    """Phase 14.7-05: pending_trigger_queue_{turn,other} + picker_idx round-trip through save/load.
+
+    Builds a state with 2 entries in turn queue + 1 in other queue and
+    pending_trigger_picker_idx=0 (the modal is open for P1). Save, load
+    into a fresh session, assert all three fields survive the round
+    trip. This exercises the serializer/deserializer path for the new
+    priority-queue fields added in 14.7-05 Task 1.
+    """
+    from grid_tactics.board import Board
+    from grid_tactics.enums import PlayerSide, TurnPhase
+    from grid_tactics.game_state import GameState, PendingTrigger
+    from grid_tactics.player import Player
+    from grid_tactics.types import STARTING_HP
+
+    paladin_nid = _find_numeric_id(library, "fallen_paladin")
+    ember_nid = _find_numeric_id(library, "emberplague_rat")
+
+    p1 = Player(
+        side=PlayerSide.PLAYER_1, hp=STARTING_HP,
+        current_mana=3, max_mana=3, hand=(), deck=(), grave=(),
+    )
+    p2 = Player(
+        side=PlayerSide.PLAYER_2, hp=STARTING_HP,
+        current_mana=3, max_mana=3, hand=(), deck=(), grave=(),
+    )
+
+    # Synthesize queue entries. The captured_position + source_card_numeric_id
+    # are the fields the picker modal uses to render the full card face.
+    turn_triggers = (
+        PendingTrigger(
+            trigger_kind="start_of_turn",
+            source_minion_id=10,
+            source_card_numeric_id=paladin_nid,
+            effect_idx=0,
+            owner_idx=0,
+            captured_position=(0, 0),
+            target_pos=None,
+        ),
+        PendingTrigger(
+            trigger_kind="start_of_turn",
+            source_minion_id=11,
+            source_card_numeric_id=paladin_nid,
+            effect_idx=0,
+            owner_idx=0,
+            captured_position=(2, 3),
+            target_pos=None,
+        ),
+    )
+    other_triggers = (
+        PendingTrigger(
+            trigger_kind="end_of_turn",
+            source_minion_id=20,
+            source_card_numeric_id=ember_nid,
+            effect_idx=0,
+            owner_idx=1,
+            captured_position=(4, 4),
+            target_pos=(1, 2),
+        ),
+    )
+
+    state = GameState(
+        board=Board.empty(), players=(p1, p2),
+        active_player_idx=0,
+        phase=TurnPhase.START_OF_TURN,
+        turn_number=3, seed=42,
+        pending_trigger_queue_turn=turn_triggers,
+        pending_trigger_queue_other=other_triggers,
+        pending_trigger_picker_idx=0,
+    )
+
+    # Install into a session via load_dict (same shape sandbox save/load uses).
+    s1 = SandboxSession(library, "a")
+    s1.load_dict({"state": state.to_dict(), "active_view_idx": 0})
+    assert s1.state.pending_trigger_picker_idx == 0
+    assert len(s1.state.pending_trigger_queue_turn) == 2
+    assert len(s1.state.pending_trigger_queue_other) == 1
+
+    # Save + load through the file-based slot persistence layer.
+    s1.save_to_slot("pending_trigger_round_trip")
+
+    s2 = SandboxSession(library, "b")
+    s2.load_from_slot("pending_trigger_round_trip")
+
+    # All three fields reconstituted.
+    assert s2.state.pending_trigger_picker_idx == 0
+    assert len(s2.state.pending_trigger_queue_turn) == 2
+    assert len(s2.state.pending_trigger_queue_other) == 1
+
+    # Spot-check payload integrity.
+    t0 = s2.state.pending_trigger_queue_turn[0]
+    assert isinstance(t0, PendingTrigger)
+    assert t0.trigger_kind == "start_of_turn"
+    assert t0.source_minion_id == 10
+    assert t0.source_card_numeric_id == paladin_nid
+    assert t0.captured_position == (0, 0)
+    assert t0.target_pos is None
+
+    o0 = s2.state.pending_trigger_queue_other[0]
+    assert o0.trigger_kind == "end_of_turn"
+    assert o0.source_minion_id == 20
+    assert o0.source_card_numeric_id == ember_nid
+    assert o0.captured_position == (4, 4)
+    assert o0.target_pos == (1, 2)

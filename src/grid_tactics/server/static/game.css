@@ -2263,6 +2263,11 @@ body {
   padding: 20px;
 }
 
+/* Phase 14.7-05: trigger picker modal reuses .tutor-modal-overlay /
+   .tutor-modal styling verbatim — this selector is a hook for any future
+   tweaks that should apply only to the simultaneous-trigger picker. */
+.trigger-picker-modal-overlay .trigger-picker-modal { /* inherits tutor-modal */ }
+
 .tutor-modal {
   background: var(--card);
   border: 2px solid var(--cyan);
