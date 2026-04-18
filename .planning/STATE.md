@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Online PvP Dueling
-status: phase_complete
-stopped_at: "Phase 14.6 COMPLETE (all 4 plans shipped). Sandbox Mode dev tooling fully delivered: SandboxSession thin wrapper over immutable engine (15 dataclasses.replace callsites, zero engine duplication) + RoomManager._sandboxes SID-keyed dict + 16 sandbox_* Socket.IO handlers (14.6-01); sandbox nav tab + #screen-sandbox scaffold + opts-refactored renderBoard/renderHand + sandboxActivate/Deactivate global-swap pair + SANDBOX-SECTION anchor comments (14.6-02); full 4-row toolbar + SANDBOX-EMIT-GATE in submitAction + additive Move-to injection + TextEncoder share codes + localStorage autosave + server-saves panel + renderSandboxToolbarState (14.6-03); 5-test Playwright E2E suite in tests/e2e/test_sandbox_smoke.py (increasing-complexity: screen-renders → layout-fixed → search-add-to-hand → cheat-mana → server-slot round trip), all green in 10.9s; playwright added to pyproject.toml dev deps (14.6-04). MID-EXECUTION REPAIR (commits ca09eae + baa239e between Task 1 and Task 3): user reported visual breakage after Task 1 UAT return; investigation found 3 stacked bugs from Plan 14.6-02 (collapsed .sandbox-container height, missing .game-board class on #sandbox-board so renderBoard's 25 cells had no grid layout, #pileModal ancestor-nested in #screen-game so unreachable from sandbox). User directive: 'make the sandbox screen look identical to the play screen but instead of the chat tab we have the sandbox control tab.' Rebuilt #screen-sandbox to mirror #screen-game's .game-layout 3-column grid exactly — same .game-main middle column (room-bar, P2 info-bar, P2 hand face-up, 5x5 board, P1 info-bar, P1 hand), same .game-sidebar right column but holding the sandbox toolbar instead of Log/Chat. This INVERTS the original Phase 14.6 CONTEXT D1 seat order (D1 said P1 top / P2 bottom; final ships P2 top / P1 bottom, matching the live play screen's god-view layout). Still fixed, still both hands face-up, still no flip/view-toggle button. Playwright suite rewritten against the new DOM. All 9 roadmap success criteria PASS. AUDITS PASS: view_filter.py byte-unchanged across the entire phase (git diff bee1aad..HEAD empty); data/sandbox_saves/ contains exactly .gitkeep (git ls-files confirms); .gitignore has data/sandbox_saves/* + !data/sandbox_saves/.gitkeep. Next: Phase 15 (Resilience & Polish)."
-last_updated: "2026-04-11T12:30:00.000Z"
-last_activity: 2026-04-11
+status: in_progress
+stopped_at: "Phase 14.7 Plan 01 SHIPPED. Acidic-Rain-vs-Prohibition fix independently delivered: magic ON_PLAY effects now defer behind a cast_mode originator at the bottom of the react stack, so Prohibition played in response cancels the cast entirely (closes SC4, TURN-08, TURN-11). ReactEntry gained 6 additive originator fields (is_originator, origin_kind, source_minion_id, effect_payload, destroyed_attack, destroyed_dm) — all default-valued for backward compat. _cast_magic no longer resolves effects inline; captures ON_PLAY effect tuples into the originator payload and pushes it to state.react_stack[0] with phase=REACT. resolve_react_stack gained a pre-dispatch branch that handles is_originator+origin_kind==magic_cast entries through the same TUTOR/REVIVE/resolve_effect routing the old inline loop used, with scale_with bonus re-applied from originator's destroyed_attack/destroyed_dm. NEGATE required zero code change — existing negated_indices.add(i+1) correctly cancels the originator when Prohibition sits on top (LIFO iteration: Prohibition at index 0, originator at index 1). to_dict/from_dict round-trip preserves originator fields (JSON serialization-safe; sandbox save/load survives mid-cast states). view_filter.py UNCHANGED — confirmed filter_state_for_player uses copy.deepcopy so new fields flow through transparently. legal_actions._react_phase_actions gained a docstring note but NO functional change (OPPONENT_PLAYS_MAGIC in _check_react_condition matches the originator's MAGIC card_def exactly). Tests: retired test_magic_card_resolves_effect_and_discards; split into test_magic_cast_pushes_originator_without_resolving_effect + test_magic_cast_resolves_after_both_pass_react. Added test_react_entry_roundtrip_preserves_originator_fields (JSON round-trip). Added TestAcidicRainProhibition (3 tests: cast-defers / resolves-when-no-prohibition / negated-by-prohibition) + TestMultiPurposeMagicReactArm::test_acidic_rain_react_arm_draws_card_unchanged. Bumped _play_to_completion iteration cap 500→1500 (deferred resolution doubles loop iterations; also repaired pre-existing test_complete_game failure). Final: 727 passed, 5 pre-existing baseline failures (4 LEAP game_loop, 1 spectator) — all untouched by this plan. Commits: 6592857 (feat Task 1) + 855c962 (test Task 2). Both pushed to master; Railway auto-deployed. Next: 14.7-02 (start-of-turn / end-of-turn react windows)."
+last_updated: "2026-04-18T18:15:00.000Z"
+last_activity: 2026-04-18
 progress:
-  total_phases: 5
+  total_phases: 6
   completed_phases: 4
-  total_plans: 13
-  completed_plans: 13
+  total_plans: 23
+  completed_plans: 14
   percent: 0
 ---
 
@@ -25,10 +25,14 @@ See: .planning/PROJECT.md (updated 2026-04-04)
 
 ## Current Position
 
-Phase: 14.6 (sandbox-mode) — COMPLETE (2026-04-11)
-Plan: 4 of 4 (Playwright E2E + closeout) — COMPLETE
-Next: Phase 15 (Resilience & Polish) — reconnection, game log sidebar, rematch flow
-Status: Phase 14.6 fully shipped. All 9 roadmap success criteria and DEV-01..DEV-09 requirements verified PASS via the 5-test Playwright suite (all green in 10.9s against localhost:5000) plus orchestrator-run Playwright-driven UAT walkthrough (rat added to P1 board + rat added to P2 hand via sandbox_apply_action; both visible). AUDIT: view_filter.py byte-unchanged across the entire phase (git diff bee1aad..HEAD empty). AUDIT: data/sandbox_saves/ gitignored except .gitkeep (git ls-files returns only data/sandbox_saves/.gitkeep). Plan 03 sandbox interactive surface detail:
+Phase: 14.7 (turn-structure-overhaul) — IN PROGRESS (Plan 01 of 10 shipped 2026-04-18)
+Plan: 1 of 10 (Fix Acidic-Rain-vs-Prohibition via deferred magic resolution) — COMPLETE
+Next: 14.7-02 (start-of-turn / end-of-turn react windows) — 14.7-03 through 14.7-10 queued
+Status: Plan 14.7-01 fully shipped standalone per user directive (high priority — user has been bitten multiple times by the Acidic Rain bug). Closed SC4, TURN-08, TURN-11. Two commits (6592857 + 855c962) pushed to master; Railway auto-deployed. 727 non-RL tests pass (5 pre-existing baseline failures unchanged: 4 LEAP game_loop smoke, 1 spectator). 153 plan-verification tests all green. Originator pattern established for future plans (14.7-02 can reuse origin_kind for start-of-turn/end-of-turn declarations; 14.7-04 can reuse source_minion_id for summon declarations).
+
+### Phase 14.6 closeout context (retained for lookback)
+
+Plan 03 sandbox interactive surface detail:
 - `submitAction` at game.js:3328 with SANDBOX-EMIT-GATE-START at 3331 and SANDBOX-EMIT-GATE-END at 3337 -- single conditional `if (sandboxMode) socket.emit('sandbox_apply_action', actionData); else socket.emit('submit_action', actionData);`. Click handlers (onHandCardClick / onBoardCellClick / legacy minion menus) reuse the 14.6-02 global-swap unchanged. NO accessor shims were added.
 - `showPileModal` at game.js:1884 extended with optional third arg `sandboxCtx = { pileType, playerIdx }`. Per-cell injection at game.js:1908 appends `makeSandboxMoveButton(playerIdx, nid, srcZone)` when sandboxMode && sandboxCtx are truthy. All existing 2-arg live-game callers work unchanged.
 - `renderHand` at game.js:4850 per-card append loop at game.js:4894 gained an `if (sandboxMode && typeof makeSandboxMoveButton === 'function')` block that appends the Move-to button next to the existing card element. Play-from-hand click handler is unchanged.
@@ -70,9 +74,23 @@ Audits (both PASS):
 
 All 9 roadmap success criteria PASS. DEV-01 through DEV-09 marked Complete in REQUIREMENTS.md traceability table. Phase 14.6 marked `[x]` complete (2026-04-11) in ROADMAP.md with 4/4 plans.
 
-Last activity: 2026-04-11 — Completed 14.6-04-PLAN.md (Playwright E2E + closeout); Phase 14.6 Sandbox Mode COMPLETE.
+Last activity: 2026-04-18 — Completed 14.7-01-PLAN.md (Deferred magic resolution via cast_mode originator; closes SC4, TURN-08, TURN-11; fixes the Acidic Rain / Prohibition bug standalone per user's high-priority directive).
 
 Progress: [░░░░░░░░░░] 0%
+
+### Phase 14.7 Plan 01 closeout (2026-04-18)
+
+Plan 14.7-01 shipped as the first plan of Phase 14.7 — the broader Turn Structure Overhaul. This plan was pulled ahead and delivered as an INDEPENDENTLY SHIPPABLE fix per user directive (the Acidic Rain bug has been biting them repeatedly). Commit trail:
+
+- 6592857 feat(14.7-01): defer magic ON_PLAY effects via cast_mode originator (Task 1)
+- 855c962 test(14.7-01): add Acidic-Rain-vs-Prohibition integration coverage (Task 2)
+
+Both commits pushed to master; Railway auto-deployed. The originator pattern established here is re-usable by future 14.7 plans:
+- 14.7-02 (start-of-turn/end-of-turn react windows) — reuses `origin_kind` field with new values "start_of_turn" / "end_of_turn"
+- 14.7-04 (summon compound windows) — reuses `source_minion_id` field to carry the summoning minion
+- 14.7-10 (test migration) — reuses the "cast + originator-on-stack + PASS-resolves" test template
+
+Test posture: 727 non-RL tests pass; 5 pre-existing baseline failures remain untouched (4 LEAP-related in test_game_loop, 1 spectator in test_events). Full plan-verification set (153 tests) all green.
 
 ## Performance Metrics
 
@@ -211,6 +229,23 @@ Recent decisions affecting current work:
 - [Phase 14.4-04]: Client routes spectators through the existing applyStateFrame → renderGame pipeline (NOT a separate renderSpectatorView branch) — preserves Phase 14.3 animation contract for free. isSpectator + spectatorGodMode re-synced from every frame (onSpectatorJoined + onGameStart + _applyStateFrameImmediate) — reconnection/late-join safe, no drift. Dual-hand god view reuses renderHandCard verbatim with labeled dividers (no new DOM container). renderHandCard(..., isMyTurn && !isSpectator) prevents "my turn" glow leaking onto spectator hands.
 - [Phase 14.4-05]: Task 4 (multi-tab visual smoke test) deferred to post-deploy Playwright E2E against Railway (same posture as prior 14.x closeouts). Automated coverage = tests/test_room_manager.py (8 tests, always run) + tests/test_events.py (6 tests, gated on flask_socketio via conftest collect_ignore_glob).
 
+### Phase 14.7 Plan 01 — Deferred magic resolution (2026-04-18)
+
+- 6592857 feat(14.7-01): defer magic ON_PLAY effects via cast_mode originator
+- 855c962 test(14.7-01): add Acidic-Rain-vs-Prohibition integration coverage
+
+Key decisions:
+- [Phase 14.7-01]: Magic cast is now DEFERRED. Costs (mana/HP/destroy-ally/discard) resolve on play; ON_PLAY effects captured as a cast_mode originator at the BOTTOM of the react stack; chain resolves LIFO; Prohibition on top of the originator cancels the cast entirely (scorched-earth — mana is spent regardless, by design).
+- [Phase 14.7-01]: ReactEntry gained 6 additive originator fields (`is_originator: bool`, `origin_kind: Optional[str]`, `source_minion_id: Optional[int]`, `effect_payload: Optional[tuple]`, `destroyed_attack: int`, `destroyed_dm: int`) — all default-valued for backward compat. Legacy react-entry construction in `_play_react` unchanged.
+- [Phase 14.7-01]: `effect_payload` uses tuple-of-tuples (NOT dict) to keep the frozen dataclass hashable-friendly. Each entry is `(effect_idx, target_pos_or_None, caster_owner_int)`. Effect_idx indexes into `card_def.effects`, so the originator only needs the card_numeric_id + effect indices — no full effect objects stored.
+- [Phase 14.7-01]: `origin_kind: Optional[str]` chose str-typed (not IntEnum) for extensibility. 14.7-02 will add "start_of_turn" / "end_of_turn"; 14.7-04 will add "summon_declaration". The sentinel `None` means "legacy react card" (no originator).
+- [Phase 14.7-01]: `_cast_magic` sets `phase=REACT` and `react_player_idx=1-active` INSIDE the function. The subsequent unconditional phase transition at the end of `resolve_action` (action_resolver.py:1849-1853) does the same thing — no-op when reached, but `_cast_magic` is now self-contained so future refactors can't accidentally break it.
+- [Phase 14.7-01]: NEGATE handling required ZERO code change in react_stack.py. The existing `negated_indices.add(i + 1)` at line 324 already handles originator cancellation correctly: when Prohibition sits atop a magic_cast originator, Prohibition appears at LIFO index 0, the originator at LIFO index 1, and `add(1)` negates the originator exactly as intended.
+- [Phase 14.7-01]: view_filter.py is BYTE-UNCHANGED. Confirmed by reading the file: `filter_state_for_player` uses `copy.deepcopy(state_dict)` where state_dict is already produced by `to_dict()`; new ReactEntry fields flow through transparently for per-player filtering.
+- [Phase 14.7-01]: legal_actions._react_phase_actions gained a docstring paragraph noting that `state.react_stack[0]` may now be a magic_cast originator, but has NO functional change. `_check_react_condition` treats the stack's most-recent entry uniformly, and an originator's card_def is MAGIC so OPPONENT_PLAYS_MAGIC matches it exactly (enables Prohibition).
+- [Phase 14.7-01]: Scale_with bonus is captured at cast time on the originator (`destroyed_attack` + `destroyed_dm`) and re-applied during resolution. This matches the old inline `_cast_magic` semantics exactly — destroy-ally effects still benefit from the sacrificed minion's attack/DM even though the sacrifice already resolved before the react window opened.
+- [Phase 14.7-01]: Test posture: 727 non-RL tests pass; 5 pre-existing baseline failures untouched (4 LEAP game_loop smoke, 1 spectator in test_events). `_play_to_completion` iteration cap bumped 500→1500 to accommodate deferred resolution (each magic cast now uses 2 loop iterations). Side-benefit: pre-existing `test_complete_game` at the 500 cap now passes too.
+
 ### Phase 14.5 Wave 4 (2026-04-08)
 
 - 8788c43 refactor(14.5-04): extract shared renderCardFrame for hand/deck/tooltip
@@ -256,8 +291,8 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-04-11T12:30:00.000Z — Completed 14.6 Phase (all 4 plans + closeout). Previous: 2026-04-11T11:10:00.000Z (14.6-03 sandbox interactive controls).
-Stopped at: Phase 14.6 Sandbox Mode COMPLETE. 4 plans shipped with 15 commits (eed0d77 / 4eb4bd2 / fafc7f1 / 2603ec7 / 2d7e3be for 14.6-01; 73fa68d / 7e3eb70 / e0f1ac1 for 14.6-02; 79570a1 / 3a96f7e / 4f4fa10 for 14.6-03; 099113c / ca09eae / baa239e for 14.6-04 including mid-phase orchestrator repair that rebuilt #screen-sandbox to mirror the live play layout per user override of the original D1 seat order). Playwright suite green (5/5 in 10.9s). Audits green (view_filter.py byte-unchanged, data/sandbox_saves gitignored). DEV-01..DEV-09 all Complete in REQUIREMENTS.md. Next: Phase 15 (Resilience & Polish) — reconnection handling, scrollable game log, rematch flow.
+Last session: 2026-04-18T18:15:00.000Z — Completed 14.7-01 standalone (Deferred magic resolution via cast_mode originator; fixes Acidic-Rain-vs-Prohibition). Previous: 2026-04-11T12:30:00.000Z (14.6 Phase closeout).
+Stopped at: Plan 14.7-01 SHIPPED. Two commits (6592857 Task 1 feat + 855c962 Task 2 test) pushed to master; Railway auto-deployed. Closes SC4 / TURN-08 / TURN-11. 727 non-RL tests pass; 5 pre-existing baseline failures unchanged. Originator pattern (ReactEntry.is_originator + origin_kind + effect_payload + destroyed_attack/dm + source_minion_id) available for reuse by 14.7-02 (start-of-turn declarations), 14.7-04 (summon declarations), 14.7-10 (test migration template). Next: 14.7-02 (start-of-turn / end-of-turn react windows).
 
 Previous session (2026-04-07T20:45:00.000Z): Card-effects-and-action-flow audit followups complete. Tensor-engine parity for LEAP (CardTable.leap_amount precompute + _compute_move_mask LEAP override + apply_move_batch leap landing) and PASSIVE pipeline (CardTable.passive_burn_amount/passive_heal_amount + engine._fire_passive_effects_batch at turn flip, mirroring Python react_stack._fire_passive_effects). Bug-4 design clarification: BURN handler now stacks `int(effect.amount)` per tick so Emberplague's JSON amount=5 takes effect; tensor side already uses passive_burn_amount from the same JSON field. ActionEncoder _encode_move/_decode_move now leap-aware (collapse multi-step forward to unit cardinal on encode, walk over blockers on decode). 42 stale-assertion test failures swept to zero — pure test maintenance, no engine behavior changes. tests/conftest.py grew collect_ignore_glob for RL/tensor/server test files when torch/sb3/flask_socketio missing (single source of truth for ML-dep gating). Final: 538 passed, 4 skipped, 0 failed locally. Next: Phase 15 Resilience & Polish.
 Resume file: None
