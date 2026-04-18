@@ -263,6 +263,52 @@ def _fanout_game_start_to_spectators(session, base_state_dict, card_defs):
         )
 
 
+def _apply_test_op(sandbox, op):
+    """Apply a single test-scenario setup op to the given sandbox session.
+
+    Thin wrapper over SandboxSession primitives so test manifests stay
+    declarative. Unknown ops raise ValueError.
+    """
+    name = op.get("op")
+    if name == "reset":
+        sandbox.reset()
+        return
+    if name == "set_player":
+        sandbox.set_player_field(
+            int(op["player_idx"]), str(op["field"]), int(op["value"])
+        )
+        return
+    if name in ("add_to_hand", "add_to_zone"):
+        zone = op.get("zone", "hand")
+        card_id = op["card_id"]
+        nid = sandbox.library.get_numeric_id(card_id)
+        sandbox.add_card_to_zone(int(op["player_idx"]), nid, zone)
+        return
+    if name == "place":
+        card_id = op["card_id"]
+        nid = sandbox.library.get_numeric_id(card_id)
+        sandbox.place_on_board(
+            int(op["player_idx"]), nid, int(op["row"]), int(op["col"]),
+        )
+        # Optional post-placement DM injection (replaces the just-placed
+        # minion with a copy carrying dark_matter_stacks). Kept as a direct
+        # state edit rather than an engine call — tests need a way to seed
+        # DM without having to chain buff cards for every scenario.
+        dm = op.get("dark_matter")
+        if dm is not None and dm > 0:
+            from dataclasses import replace as _replace
+            minions = list(sandbox._state.minions)
+            if minions:
+                last = minions[-1]
+                minions[-1] = _replace(last, dark_matter_stacks=int(dm))
+                sandbox._state = _replace(sandbox._state, minions=tuple(minions))
+        return
+    if name == "set_active":
+        sandbox.set_active_player(int(op["player_idx"]))
+        return
+    raise ValueError(f"Unknown test op: {name!r}")
+
+
 def register_events(room_manager: RoomManager) -> None:
     """Register all Socket.IO event handlers with the given room manager."""
     global _room_manager
@@ -958,6 +1004,99 @@ def register_events(room_manager: RoomManager) -> None:
             return
         emit("sandbox_slot_deleted", {"slot_name": slot_name, "existed": existed})
         emit("sandbox_slot_list", {"slots": SandboxSession.list_slots()})
+
+    # --- Tests tab: structured UAT survey --------------------------------
+    # Test manifest lives at data/tests/tests.json; each test has a setup
+    # op list executed against a fresh sandbox session. Results append to
+    # data/tests/results.jsonl on the server. Everything reuses existing
+    # SandboxSession primitives so the board renders exactly like sandbox.
+
+    @socketio.on("tests_list")
+    def handle_tests_list(_data=None):
+        import json
+        from pathlib import Path
+        path = Path(__file__).resolve().parents[3] / "data" / "tests" / "tests.json"
+        try:
+            with open(path, encoding="utf-8") as f:
+                manifest = json.load(f)
+        except (OSError, json.JSONDecodeError) as e:
+            emit("error", {"msg": f"Failed to load tests manifest: {e}"})
+            return
+        # Only send what the client needs per-test (server keeps setup ops).
+        tests = [
+            {"id": t["id"], "title": t["title"]}
+            for t in manifest.get("tests", [])
+        ]
+        emit("tests_list_result", {"tests": tests})
+
+    @socketio.on("tests_load")
+    def handle_tests_load(data):
+        import json
+        from pathlib import Path
+        test_id = (data or {}).get("id")
+        if not test_id:
+            emit("error", {"msg": "tests_load requires 'id'"})
+            return
+        path = Path(__file__).resolve().parents[3] / "data" / "tests" / "tests.json"
+        try:
+            with open(path, encoding="utf-8") as f:
+                manifest = json.load(f)
+        except (OSError, json.JSONDecodeError) as e:
+            emit("error", {"msg": f"Failed to load tests manifest: {e}"})
+            return
+        test = next((t for t in manifest.get("tests", []) if t["id"] == test_id), None)
+        if test is None:
+            emit("error", {"msg": f"Unknown test id: {test_id}"})
+            return
+
+        # Ensure a sandbox session exists for this SID and reset it.
+        sandbox = _room_manager.get_sandbox(request.sid)
+        if sandbox is None:
+            sandbox = _room_manager.create_sandbox(request.sid)
+        with sandbox.lock:
+            try:
+                sandbox.reset()
+                for op in test.get("setup", []):
+                    _apply_test_op(sandbox, op)
+            except (ValueError, KeyError, TypeError) as e:
+                emit("error", {"msg": f"Test setup failed: {e}"})
+                return
+        # Push the new state to the client plus the test metadata.
+        _emit_sandbox_state(sandbox, request.sid)
+        emit("tests_scenario_loaded", {
+            "id": test["id"],
+            "title": test["title"],
+            "instructions": test.get("instructions", ""),
+            "expected": test.get("expected", ""),
+        })
+
+    @socketio.on("tests_submit_result")
+    def handle_tests_submit_result(data):
+        import json as _json
+        import datetime as _dt
+        from pathlib import Path
+        if not isinstance(data, dict):
+            emit("error", {"msg": "tests_submit_result requires a dict"})
+            return
+        entry = {
+            "test_id": data.get("id", ""),
+            "result": data.get("result", ""),
+            "comment": (data.get("comment") or "").strip(),
+            "timestamp": _dt.datetime.utcnow().isoformat() + "Z",
+            "session_sid": request.sid,
+        }
+        if entry["result"] not in ("pass", "fail", "skip"):
+            emit("error", {"msg": "result must be pass/fail/skip"})
+            return
+        path = Path(__file__).resolve().parents[3] / "data" / "tests" / "results.jsonl"
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            with open(path, "a", encoding="utf-8") as f:
+                f.write(_json.dumps(entry) + "\n")
+        except OSError as e:
+            emit("error", {"msg": f"Failed to write result: {e}"})
+            return
+        emit("tests_result_saved", {"id": entry["test_id"], "result": entry["result"]})
 
     @socketio.on("disconnect")
     def handle_disconnect():

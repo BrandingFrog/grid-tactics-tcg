@@ -1,0 +1,76 @@
+{
+    "description": "UAT test scenarios. Each test applies its `setup` op list to a fresh sandbox session, then the user plays through the `instructions` and reports Pass/Fail/Skip + an optional comment. Results append to data/tests/results.jsonl on the server.",
+    "ops": {
+        "reset": "Reset sandbox state (empty board, empty hands, fresh player stats).",
+        "set_player": "{player_idx, field, value} — set a player field (current_mana, max_mana, hp).",
+        "add_to_hand": "{player_idx, card_id} — add a card to the player's hand.",
+        "add_to_zone": "{player_idx, card_id, zone} — add to hand/deck/grave/exhaust.",
+        "place": "{player_idx, card_id, row, col} — deploy a minion directly onto the board.",
+        "set_active": "{player_idx} — set whose turn it is."
+    },
+    "tests": [
+        {
+            "id": "acidic-rain-burns-metal-and-robots",
+            "title": "Acidic Rain burns all Metal/Robot/Machine minions — and nothing else",
+            "instructions": "1. Click Acidic Rain in P1's hand.\n2. Click any valid play indicator to cast it (it's 5 mana; P1 has 20).",
+            "expected": "All three Diodebots, the RGB Lasercannon, and the Sparkbot on P2's side should light up as BURNING (look for the fire glow/border). The Common Rat on P2 must NOT be burning.",
+            "setup": [
+                {"op": "reset"},
+                {"op": "set_player", "player_idx": 0, "field": "current_mana", "value": 20},
+                {"op": "set_player", "player_idx": 0, "field": "max_mana", "value": 20},
+                {"op": "add_to_hand", "player_idx": 0, "card_id": "acidic_rain"},
+                {"op": "place", "player_idx": 1, "card_id": "red_diodebot", "row": 1, "col": 0},
+                {"op": "place", "player_idx": 1, "card_id": "blue_diodebot", "row": 1, "col": 1},
+                {"op": "place", "player_idx": 1, "card_id": "green_diodebot", "row": 1, "col": 2},
+                {"op": "place", "player_idx": 1, "card_id": "rgb_lasercannon", "row": 1, "col": 3},
+                {"op": "place", "player_idx": 1, "card_id": "rat", "row": 1, "col": 4},
+                {"op": "place", "player_idx": 1, "card_id": "surgefed_sparkbot", "row": 0, "col": 2},
+                {"op": "set_active", "player_idx": 0}
+            ]
+        },
+        {
+            "id": "dm-number-shown-in-purple",
+            "title": "Live Dark Matter count in card text",
+            "instructions": "1. Hover (or click) Dark Matter Barrage in P1's hand.\n2. Read the rules line.",
+            "expected": "The line should read 'Deal 5 + 9 (Dark Matter) damage to all enemies' (approximately) with the number 9 glowing in PURPLE. Each of P1's three Mages has 3 Dark Matter stacks, summing to 9.",
+            "setup": [
+                {"op": "reset"},
+                {"op": "set_player", "player_idx": 0, "field": "current_mana", "value": 10},
+                {"op": "set_player", "player_idx": 0, "field": "max_mana", "value": 10},
+                {"op": "place", "player_idx": 0, "card_id": "gargoyle_sorceress", "row": 3, "col": 2, "dark_matter": 3},
+                {"op": "place", "player_idx": 0, "card_id": "shadow_blaster", "row": 3, "col": 1, "dark_matter": 3},
+                {"op": "place", "player_idx": 0, "card_id": "shadow_blaster", "row": 3, "col": 3, "dark_matter": 3},
+                {"op": "add_to_hand", "player_idx": 0, "card_id": "dark_matter_barrage"},
+                {"op": "set_active", "player_idx": 0}
+            ]
+        },
+        {
+            "id": "card-flies-to-grave-on-cast",
+            "title": "Magic cast animation — card flies from hand to grave",
+            "instructions": "1. Play Dark Matter Stash from P1's hand (5 mana).\n2. Watch the card as it leaves the hand.",
+            "expected": "The Dark Matter Stash card should visibly fly from its hand slot upward and land on the P1 Grave pile (bottom-right pile buttons), shrinking and fading as it goes. It should NOT just disappear instantly.",
+            "setup": [
+                {"op": "reset"},
+                {"op": "set_player", "player_idx": 0, "field": "current_mana", "value": 20},
+                {"op": "set_player", "player_idx": 0, "field": "max_mana", "value": 20},
+                {"op": "place", "player_idx": 0, "card_id": "gargoyle_sorceress", "row": 3, "col": 2},
+                {"op": "add_to_hand", "player_idx": 0, "card_id": "dark_matter_stash"},
+                {"op": "set_active", "player_idx": 0}
+            ]
+        },
+        {
+            "id": "matter-possessed-hp-cost",
+            "title": "Matter Possessed — Cost: Deal 25🤍 to own face",
+            "instructions": "1. Hover Matter Possessed in P1's hand and confirm the cost line reads 'Cost: Deal 25🤍 to own face'.\n2. P1 HP is 30 and mana is 1.\n3. Play Matter Possessed onto any empty tile in P1's back two rows.",
+            "expected": "P1's HP drops from 30 to 5 (dealt 25 to face). A 25/25 Dark Mage minion appears on the chosen tile. Mana drops from 1 to 0.",
+            "setup": [
+                {"op": "reset"},
+                {"op": "set_player", "player_idx": 0, "field": "current_mana", "value": 1},
+                {"op": "set_player", "player_idx": 0, "field": "max_mana", "value": 1},
+                {"op": "set_player", "player_idx": 0, "field": "hp", "value": 30},
+                {"op": "add_to_hand", "player_idx": 0, "card_id": "matter_possessed"},
+                {"op": "set_active", "player_idx": 0}
+            ]
+        }
+    ]
+}

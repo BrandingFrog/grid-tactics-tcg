@@ -195,10 +195,20 @@ function showScreen(screenId) {
         if (!sandboxMode) {
             sandboxActivate();
         }
+        testsExit();
+    } else if (screenId === 'screen-tests') {
+        // Tests piggybacks on the sandbox screen DOM. We flip the sandbox
+        // screen on (so the board renders + sandbox_state messages fire)
+        // and then layer the tests overlay on top.
+        var sbScreen = document.getElementById('screen-sandbox');
+        if (sbScreen) sbScreen.classList.add('active');
+        if (!sandboxMode) sandboxActivate();
+        testsActivate();
     } else {
         if (sandboxMode) {
             sandboxDeactivate();
         }
+        testsExit();
     }
 }
 window.showScreen = showScreen;
@@ -5786,6 +5796,147 @@ function sandboxDeactivate() {
         _sandboxPreSnapshot = null;
     }
 }
+
+// ============================================================
+// Tests screen — structured UAT survey. Rides on top of the
+// sandbox screen; each test loads a scenario server-side, the
+// user performs the steps, then submits Pass/Fail/Skip. Results
+// append to data/tests/results.jsonl on the server.
+// ============================================================
+var _testsState = {
+    active: false,
+    list: [],       // [{id, title}, ...]
+    index: 0,       // index into list of the test currently shown
+    currentId: null,
+    results: [],    // local tally; server has the authoritative log
+    wiredHandlers: false,
+    wiredButtons: false,
+};
+
+function testsActivate() {
+    if (_testsState.active) return;
+    _testsState.active = true;
+    _testsState.index = 0;
+    _testsState.results = [];
+    _wireTestsOnce();
+    var ov = document.getElementById('tests-overlay');
+    if (ov) ov.hidden = false;
+    _setTestsTitle('Loading tests…');
+    _setTestsInstructions('');
+    _setTestsExpected('');
+    _setTestsProgress('Test 0 / 0');
+    _hideTestsSummary();
+    if (socket && socket.connected) {
+        socket.emit('tests_list');
+    }
+}
+
+function testsExit() {
+    if (!_testsState.active) return;
+    _testsState.active = false;
+    var ov = document.getElementById('tests-overlay');
+    if (ov) ov.hidden = true;
+}
+
+function _wireTestsOnce() {
+    if (!_testsState.wiredButtons) {
+        _testsState.wiredButtons = true;
+        var pass = document.getElementById('tests-btn-pass');
+        var fail = document.getElementById('tests-btn-fail');
+        var skip = document.getElementById('tests-btn-skip');
+        var exitBtn = document.getElementById('tests-exit');
+        if (pass) pass.addEventListener('click', function() { _submitTestResult('pass'); });
+        if (fail) fail.addEventListener('click', function() { _submitTestResult('fail'); });
+        if (skip) skip.addEventListener('click', function() { _submitTestResult('skip'); });
+        if (exitBtn) exitBtn.addEventListener('click', function() { showScreen('screen-sandbox'); });
+    }
+    if (!_testsState.wiredHandlers && socket) {
+        _testsState.wiredHandlers = true;
+        socket.on('tests_list_result', function(data) {
+            _testsState.list = (data && data.tests) || [];
+            _testsState.index = 0;
+            if (_testsState.list.length === 0) {
+                _setTestsTitle('No tests available');
+                _setTestsInstructions('The server test manifest is empty.');
+                _setTestsExpected('');
+                return;
+            }
+            _loadCurrentTest();
+        });
+        socket.on('tests_scenario_loaded', function(data) {
+            if (!data) return;
+            _testsState.currentId = data.id;
+            _setTestsProgress('Test ' + (_testsState.index + 1) + ' / ' + _testsState.list.length);
+            _setTestsTitle(data.title || data.id);
+            _setTestsInstructions(data.instructions || '');
+            _setTestsExpected(data.expected || '');
+            var ta = document.getElementById('tests-comment');
+            if (ta) ta.value = '';
+        });
+        socket.on('tests_result_saved', function() {
+            // Move to next test (or show summary when done).
+            _testsState.index += 1;
+            if (_testsState.index >= _testsState.list.length) {
+                _renderTestsSummary();
+            } else {
+                _loadCurrentTest();
+            }
+        });
+    }
+}
+
+function _loadCurrentTest() {
+    var t = _testsState.list[_testsState.index];
+    if (!t) return;
+    _setTestsProgress('Loading ' + (_testsState.index + 1) + ' / ' + _testsState.list.length + '…');
+    _setTestsTitle(t.title || t.id);
+    _setTestsInstructions('');
+    _setTestsExpected('');
+    socket.emit('tests_load', { id: t.id });
+}
+
+function _submitTestResult(result) {
+    if (!_testsState.currentId) return;
+    var ta = document.getElementById('tests-comment');
+    var comment = ta ? ta.value : '';
+    _testsState.results.push({ id: _testsState.currentId, result: result, comment: comment });
+    socket.emit('tests_submit_result', {
+        id: _testsState.currentId,
+        result: result,
+        comment: comment,
+    });
+    _testsState.currentId = null;  // prevent double-submit until next loads
+}
+
+function _renderTestsSummary() {
+    var pass = 0, fail = 0, skip = 0;
+    for (var i = 0; i < _testsState.results.length; i++) {
+        var r = _testsState.results[i].result;
+        if (r === 'pass') pass++;
+        else if (r === 'fail') fail++;
+        else if (r === 'skip') skip++;
+    }
+    _setTestsTitle('Tests complete');
+    _setTestsInstructions('');
+    _setTestsExpected('');
+    _setTestsProgress(_testsState.list.length + ' / ' + _testsState.list.length);
+    var summary = document.getElementById('tests-summary');
+    if (summary) {
+        summary.hidden = false;
+        summary.innerHTML =
+            '<strong>Summary:</strong> ' +
+            '<span style="color:var(--green)">' + pass + ' pass</span> · ' +
+            '<span style="color:var(--red)">' + fail + ' fail</span> · ' +
+            '<span style="color:var(--muted)">' + skip + ' skip</span>' +
+            '<br><span style="color:var(--muted);font-size:0.9em">Results logged to data/tests/results.jsonl on the server.</span>';
+    }
+}
+
+function _setTestsProgress(s) { var el = document.getElementById('tests-progress'); if (el) el.textContent = s; }
+function _setTestsTitle(s) { var el = document.getElementById('tests-title'); if (el) el.textContent = s; }
+function _setTestsInstructions(s) { var el = document.getElementById('tests-instructions'); if (el) el.textContent = s; }
+function _setTestsExpected(s) { var el = document.getElementById('tests-expected'); if (el) el.textContent = s; }
+function _hideTestsSummary() { var el = document.getElementById('tests-summary'); if (el) { el.hidden = true; el.innerHTML = ''; } }
 
 function initSandboxScreen() {
     if (!socket || !socket.connected) {

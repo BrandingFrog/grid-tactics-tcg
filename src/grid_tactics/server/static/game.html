@@ -21,6 +21,7 @@
       <button class="nav-btn active" data-screen="lobby">Duel</button>
       <button class="nav-btn" data-screen="deck-builder">Deck Builder</button>
       <button class="nav-btn" data-screen="sandbox">Sandbox</button>
+      <button class="nav-btn" data-screen="tests">Tests</button>
       <a class="nav-btn" href="https://mediawiki-production-7169.up.railway.app/wiki/Main_Page" target="_blank" style="text-decoration:none;">Wiki</a>
     </nav>
     <div class="header-right">
@@ -592,6 +593,11 @@
        Moved to body-level in Phase 14.6 so it can open from either
        #screen-game or #screen-sandbox (previously nested inside
        #screen-game, which hid it when the sandbox screen was active). -->
+  <!-- Tests screen: empty placeholder. The tests flow piggybacks on the
+       sandbox board + rendering; showScreen('screen-tests') keeps
+       #screen-sandbox active beneath and shows the overlay above. -->
+  <div id="screen-tests" class="screen"></div>
+
   <div id="pileModal" class="pile-modal-overlay" style="display:none;">
     <div class="pile-modal">
       <div class="pile-modal-header">
@@ -599,6 +605,40 @@
         <button class="pile-modal-close" id="pileModalClose" title="Close">×</button>
       </div>
       <div class="pile-grid" id="pileModalGrid"></div>
+    </div>
+  </div>
+
+  <!-- Tests overlay: structured UAT survey. Rides on top of the sandbox
+       screen. Server serves tests from data/tests/tests.json; each test
+       loads a scenario into the current sandbox session via reusing
+       existing sandbox primitives. Pass/Fail/Skip writes a line to
+       data/tests/results.jsonl on the server. -->
+  <div id="tests-overlay" class="tests-overlay" hidden>
+    <div class="tests-overlay-inner">
+      <div class="tests-overlay-header">
+        <span class="tests-progress" id="tests-progress">Test 0 / 0</span>
+        <span class="tests-title" id="tests-title">Loading…</span>
+        <button class="tests-exit" id="tests-exit" title="Exit tests">×</button>
+      </div>
+      <div class="tests-overlay-body">
+        <div class="tests-section">
+          <div class="tests-section-label">Do this</div>
+          <div class="tests-instructions" id="tests-instructions"></div>
+        </div>
+        <div class="tests-section">
+          <div class="tests-section-label">Expected</div>
+          <div class="tests-expected" id="tests-expected"></div>
+        </div>
+      </div>
+      <div class="tests-overlay-footer">
+        <textarea id="tests-comment" class="tests-comment" placeholder="Optional comment…" rows="2"></textarea>
+        <div class="tests-btn-row">
+          <button class="tests-btn tests-btn-pass" id="tests-btn-pass">✓ Pass</button>
+          <button class="tests-btn tests-btn-fail" id="tests-btn-fail">✗ Fail</button>
+          <button class="tests-btn tests-btn-skip" id="tests-btn-skip">⟳ Skip</button>
+        </div>
+      </div>
+      <div class="tests-summary" id="tests-summary" hidden></div>
     </div>
   </div>
 
