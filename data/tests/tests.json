@@ -5,247 +5,71 @@
     "set_player": "{player_idx, field, value} — set a player field (current_mana, max_mana, hp).",
     "add_to_hand": "{player_idx, card_id} — add a card to the player's hand.",
     "add_to_zone": "{player_idx, card_id, zone} — add to hand/deck/grave/exhaust.",
-    "place": "{player_idx, card_id, row, col} — deploy a minion directly onto the board.",
+    "place": "{player_idx, card_id, row, col, [current_health], [dark_matter]} — deploy a minion directly onto the board. Optional current_health pre-damages the minion (min 1).",
     "set_active": "{player_idx} — set whose turn it is."
   },
   "tests": [
     {
       "id": "turn-banner-stacks-on-flip",
       "title": "14.7-09: TURN X / PLAYER X banner stacks on turn flip",
-      "instructions": "1. Observe the initial state. A TURN 1 / PLAYER 1 banner may fade on load (that's fine).\n2. Controlling P1, click Giant Rat in hand and deploy it to any row-4 tile.\n3. Pass through the react window (opponent Skip).\n4. When the turn flips to P2, watch the center of the screen.",
-      "expected": "A banner animates in at center-screen reading 'TURN 2' on top and 'PLAYER 2' on a second line BELOW it (stacked, NOT side-by-side). The banner scales up, holds ~1s, then fades out completely within ~2s. No lingering text. Banner does NOT block clicks (you can interact with the UI through it).",
+      "instructions": "GOAL: see the centred turn banner when the turn flips from P1 to P2.\n\n1. Click the Common Rat in your bottom hand.\n2. Click any green-tinted tile in the bottom two rows of the board to deploy it.\n3. Wait ~1 second. The opponent has no react cards, so the react window auto-closes and the turn flips to P2.",
+      "expected": "A banner blooms in the centre of the screen with two STACKED lines — 'TURN 2' on top and 'PLAYER 2' directly beneath it (NOT side-by-side). It scales up, holds ~1s, then fades out within ~2s. While visible the banner does not block clicks on the UI behind it.",
       "setup": [
-        {
-          "op": "reset"
-        },
-        {
-          "op": "set_player",
-          "player_idx": 0,
-          "field": "current_mana",
-          "value": 9
-        },
-        {
-          "op": "set_player",
-          "player_idx": 0,
-          "field": "max_mana",
-          "value": 9
-        },
-        {
-          "op": "set_player",
-          "player_idx": 1,
-          "field": "current_mana",
-          "value": 5
-        },
-        {
-          "op": "set_player",
-          "player_idx": 1,
-          "field": "max_mana",
-          "value": 5
-        },
-        {
-          "op": "add_to_hand",
-          "player_idx": 0,
-          "card_id": "giant_rat"
-        }
+        {"op": "reset"},
+        {"op": "set_player", "player_idx": 0, "field": "current_mana", "value": 1},
+        {"op": "add_to_hand", "player_idx": 0, "card_id": "rat"}
       ]
     },
     {
       "id": "start-of-turn-trigger-blip",
-      "title": "14.7-09: Fallen Paladin Start: heal animates source→center→target blip",
-      "instructions": "Fallen Paladin is deployed for P1. P1 is at 20 HP (hurt). Paladin has Start: heal 2 HP to owner.\n\n1. Controlling P1, click Pass to end the action phase.\n2. Let both react windows close (Skip).\n3. P2's turn starts (TURN 2 banner). Controlling P2, Pass.\n4. Let react windows close (Skip). Turn flips back to P1.\n5. Watch the board and center of the screen when the TURN 3 banner fires.",
-      "expected": "On P1's turn start (TURN 3): Fallen Paladin's source tile pulses yellow, a ⏰ glyph blooms at center-screen, then P1's face/HP target pulses and a +2🤍 heal popup floats. P1's HP goes from 20 to 22. No errors in console.",
+      "title": "14.7-09: Fallen Paladin Start: heal blip fires on turn start",
+      "instructions": "GOAL: see the start-of-turn trigger animation (source-tile pulse + ⏰ glyph at centre) and the resulting +2 self-heal on the Paladin.\n\nSetup state: P1 has a damaged Fallen Paladin on the board (current 30/42 🤍, visible in your bottom area). P2 is the active player on Turn 1 with a Common Rat in hand and 1 mana — your perspective auto-flips to P2.\n\n1. Click the Common Rat in P2's TOP hand. Then click any pink-tinted tile in the TOP two rows to deploy it. (This consumes P2's action and ends the turn.)\n2. The react window auto-closes (P1 has no react cards). Watch the Fallen Paladin's tile and the centre of the screen as the turn flips back to P1.",
+      "expected": "On the turn flip to P1 (TURN 2 banner): the Fallen Paladin's tile briefly pulses yellow, a ⏰ glyph blooms in the centre of the screen, then the Paladin's HP ticks up from 30 to 32 🤍 (Start: passive_heal +2 to itself). No console errors.",
       "setup": [
-        {
-          "op": "reset"
-        },
-        {
-          "op": "set_player",
-          "player_idx": 0,
-          "field": "current_mana",
-          "value": 9
-        },
-        {
-          "op": "set_player",
-          "player_idx": 0,
-          "field": "max_mana",
-          "value": 9
-        },
-        {
-          "op": "set_player",
-          "player_idx": 0,
-          "field": "hp",
-          "value": 20
-        },
-        {
-          "op": "set_player",
-          "player_idx": 1,
-          "field": "current_mana",
-          "value": 5
-        },
-        {
-          "op": "set_player",
-          "player_idx": 1,
-          "field": "max_mana",
-          "value": 5
-        },
-        {
-          "op": "place",
-          "player_idx": 0,
-          "card_id": "fallen_paladin",
-          "row": 4,
-          "col": 2
-        }
+        {"op": "reset"},
+        {"op": "place", "player_idx": 0, "card_id": "fallen_paladin", "row": 1, "col": 2, "current_health": 30},
+        {"op": "set_player", "player_idx": 1, "field": "current_mana", "value": 1},
+        {"op": "add_to_hand", "player_idx": 1, "card_id": "rat"},
+        {"op": "set_active", "player_idx": 1}
       ]
     },
     {
       "id": "end-of-turn-trigger-blip",
       "title": "14.7-09: Emberplague Rat End: burn-aura blip fires on turn end",
-      "instructions": "Emberplague Rat is on P1's board at (3,2). A P2 Giant Rat is adjacent at (2,2). Emberplague's End: applies burning to adjacent enemies.\n\n1. Controlling P1, click Pass to end the action phase.\n2. Watch the board just before the turn flips to P2.\n3. Let the react window close.",
-      "expected": "As P1's End-of-Turn phase resolves: Emberplague's source tile pulses, a ⏳ glyph blooms at center, and the adjacent Giant Rat's tile pulses with the burning effect. The Giant Rat now shows a 🔥 burn badge. No errors.",
+      "instructions": "GOAL: see the end-of-turn trigger animation (source pulse → ⏳ glyph → adjacent enemy pulses + becomes burning) when P1's turn ends.\n\nSetup state: P1 has an Emberplague Rat (your bottom area). P2 has a Common Rat one tile in front of it. P1 has a Common Rat in hand and 1 mana — you control P1.\n\n1. Click the Common Rat in your bottom hand. Then click any green-tinted tile to deploy it. (This consumes P1's action and ends the turn.)\n2. The react window auto-closes (P2 has no react cards). Watch the centre of the screen and the enemy Common Rat tile as P1's End-of-Turn fires.",
+      "expected": "Before the turn flips to P2: the Emberplague Rat's tile pulses, a ⏳ glyph blooms at centre, then the enemy Common Rat tile pulses. After the flip the Common Rat shows a 🔥 burn badge. No console errors.",
       "setup": [
-        {
-          "op": "reset"
-        },
-        {
-          "op": "set_player",
-          "player_idx": 0,
-          "field": "current_mana",
-          "value": 9
-        },
-        {
-          "op": "set_player",
-          "player_idx": 0,
-          "field": "max_mana",
-          "value": 9
-        },
-        {
-          "op": "set_player",
-          "player_idx": 1,
-          "field": "current_mana",
-          "value": 5
-        },
-        {
-          "op": "set_player",
-          "player_idx": 1,
-          "field": "max_mana",
-          "value": 5
-        },
-        {
-          "op": "place",
-          "player_idx": 0,
-          "card_id": "emberplague_rat",
-          "row": 3,
-          "col": 2
-        },
-        {
-          "op": "place",
-          "player_idx": 1,
-          "card_id": "giant_rat",
-          "row": 2,
-          "col": 2
-        }
+        {"op": "reset"},
+        {"op": "set_player", "player_idx": 0, "field": "current_mana", "value": 1},
+        {"op": "place", "player_idx": 0, "card_id": "emberplague_rat", "row": 1, "col": 2},
+        {"op": "place", "player_idx": 1, "card_id": "rat", "row": 2, "col": 2},
+        {"op": "add_to_hand", "player_idx": 0, "card_id": "rat"}
       ]
     },
     {
       "id": "priority-modal-two-start-triggers",
       "title": "14.7-09: Priority modal opens when 2+ same-player triggers fire",
-      "instructions": "Two Fallen Paladins are on P1's board. P1 is hurt (20 HP). When P1's turn starts, BOTH Paladins have Start: heal triggers simultaneously — the turn player picks order via a modal.\n\n1. Controlling P1, click Pass.\n2. Let react windows close. Controlling P2, Pass again.\n3. Let react windows close. On P1's next turn start (TURN 3), watch for a modal with two card faces.\n4. Click one Paladin card in the modal. That trigger fires (blip + heal). Then the modal shows the remaining one.\n5. Click it. Second trigger fires.",
-      "expected": "Priority modal opens at turn 3 start with TWO full-art Fallen Paladin cards (same style as tutor modal). After clicking the first, its blip fires and P1 heals +2🤍. Then the modal shows the second; click and second blip + heal fires. P1's final HP is 24. No modal hangs.",
+      "instructions": "GOAL: see the priority-pick modal that appears when two of P1's start-of-turn triggers fire on the same turn flip.\n\nSetup state: P1 has TWO damaged Fallen Paladins on the board (each at 30/42 🤍). P2 is the active player on Turn 1 with a Common Rat in hand and 1 mana — your perspective auto-flips to P2.\n\n1. Click the Common Rat in P2's TOP hand. Then click any pink-tinted tile in the TOP two rows to deploy it. (Ends P2's turn.)\n2. The react window auto-closes. As the turn flips back to P1, a priority-pick modal opens titled 'Pick the order to resolve these effects' showing TWO Fallen Paladin cards.\n3. Click one Paladin card. That trigger fires (blip + heal that Paladin from 30 to 32). The remaining trigger has no other choices to compete with, so it auto-resolves and the modal closes.",
+      "expected": "Modal opens with two full-art Fallen Paladin cards, styled like the tutor modal (cyan border, dark header bar reading 'Pick the order to resolve these effects' and '2 triggers waiting'). Clicking either card fires that Paladin's blip + heal (30→32 🤍). The remaining trigger then auto-resolves (second Paladin also heals 30→32 🤍) and the modal closes cleanly. Control returns to P1; both Paladins on the board now show 16/32 🤍.",
       "setup": [
-        {
-          "op": "reset"
-        },
-        {
-          "op": "set_player",
-          "player_idx": 0,
-          "field": "current_mana",
-          "value": 9
-        },
-        {
-          "op": "set_player",
-          "player_idx": 0,
-          "field": "max_mana",
-          "value": 9
-        },
-        {
-          "op": "set_player",
-          "player_idx": 0,
-          "field": "hp",
-          "value": 20
-        },
-        {
-          "op": "set_player",
-          "player_idx": 1,
-          "field": "current_mana",
-          "value": 5
-        },
-        {
-          "op": "set_player",
-          "player_idx": 1,
-          "field": "max_mana",
-          "value": 5
-        },
-        {
-          "op": "place",
-          "player_idx": 0,
-          "card_id": "fallen_paladin",
-          "row": 4,
-          "col": 1
-        },
-        {
-          "op": "place",
-          "player_idx": 0,
-          "card_id": "fallen_paladin",
-          "row": 4,
-          "col": 3
-        }
+        {"op": "reset"},
+        {"op": "place", "player_idx": 0, "card_id": "fallen_paladin", "row": 1, "col": 1, "current_health": 30},
+        {"op": "place", "player_idx": 0, "card_id": "fallen_paladin", "row": 1, "col": 3, "current_health": 30},
+        {"op": "set_player", "player_idx": 1, "field": "current_mana", "value": 1},
+        {"op": "add_to_hand", "player_idx": 1, "card_id": "rat"},
+        {"op": "set_active", "player_idx": 1}
       ]
     },
     {
       "id": "spell-stage-closes-with-thumbs-up",
-      "title": "14.7-09: Spell-stage fades with 👍 after react chain fully resolves",
-      "instructions": "Regression test — the spell-stage animation should close cleanly in sandbox (used to hang open).\n\n1. Controlling P1, click Acidic Rain, confirm cast. Stage shows [Acidic Rain] ▶ [?].\n2. Controlling P2, Skip/Pass the react window.\n3. Watch the spell stage.",
-      "expected": "Stage resolves: Acidic Rain animates out, the RIGHT slot shows 👍, then the whole stage fades away within ~1s. Metal/Robot minions on board (if any) become burning. Stage does NOT hang open with '?' still visible.",
+      "title": "14.7-09: Spell-stage fades with 👍 after react drains",
+      "instructions": "GOAL (regression): the spell-stage animation must close cleanly in sandbox (it used to hang open with the placeholder still visible).\n\nSetup state: P1 has Acidic Rain (5 mana) in hand and 5 mana available. P2 has a Red Diodebot on the board.\n\n1. Click Acidic Rain in P1's bottom hand. The card highlights with a glow (confirm-armed mode).\n2. Click Acidic Rain a SECOND time to confirm the cast.\n3. A spell stage appears in the centre: a giant Acidic Rain card slides in from the left, with a cyan ▶ arrow and a placeholder (⚡) on the right. The opponent has no react cards so the react window auto-drains.\n4. Watch the spell stage close.",
+      "expected": "After the auto-drain (~1s): the Acidic Rain card slides off to the right, the placeholder flips to a green 👍 (thumbs-up), and the whole stage fades out within ~1s. The Red Diodebot on the board becomes burning (🔥 badge). The stage does NOT hang open with a placeholder still visible.",
       "setup": [
-        {
-          "op": "reset"
-        },
-        {
-          "op": "set_player",
-          "player_idx": 0,
-          "field": "current_mana",
-          "value": 9
-        },
-        {
-          "op": "set_player",
-          "player_idx": 0,
-          "field": "max_mana",
-          "value": 9
-        },
-        {
-          "op": "set_player",
-          "player_idx": 1,
-          "field": "current_mana",
-          "value": 5
-        },
-        {
-          "op": "set_player",
-          "player_idx": 1,
-          "field": "max_mana",
-          "value": 5
-        },
-        {
-          "op": "add_to_hand",
-          "player_idx": 0,
-          "card_id": "acidic_rain"
-        },
-        {
-          "op": "place",
-          "player_idx": 1,
-          "card_id": "red_diodebot",
-          "row": 1,
-          "col": 2
-        }
+        {"op": "reset"},
+        {"op": "set_player", "player_idx": 0, "field": "current_mana", "value": 5},
+        {"op": "add_to_hand", "player_idx": 0, "card_id": "acidic_rain"},
+        {"op": "place", "player_idx": 1, "card_id": "red_diodebot", "row": 3, "col": 2}
       ]
     },
     {

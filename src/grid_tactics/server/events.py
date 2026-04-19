@@ -326,6 +326,17 @@ def _apply_test_op(sandbox, op):
                 last = minions[-1]
                 minions[-1] = _replace(last, dark_matter_stacks=int(dm))
                 sandbox._state = _replace(sandbox._state, minions=tuple(minions))
+        # Optional starting health override — lets tests pre-damage a minion
+        # without going through an attack. Caps at 1 to avoid placing a
+        # corpse; overcap above base is allowed (caller's responsibility).
+        ch = op.get("current_health")
+        if ch is not None:
+            from dataclasses import replace as _replace
+            minions = list(sandbox._state.minions)
+            if minions:
+                last = minions[-1]
+                minions[-1] = _replace(last, current_health=max(1, int(ch)))
+                sandbox._state = _replace(sandbox._state, minions=tuple(minions))
         return
     if name == "set_active":
         sandbox.set_active_player(int(op["player_idx"]))

@@ -7196,7 +7196,15 @@ function setupSandboxSocketHandlers() {
                 ? prevForFly.turn_number : 0;
             var _nextTurn = payload.state && typeof payload.state.turn_number === 'number'
                 ? payload.state.turn_number : 0;
-            if (_nextTurn > 0 && _nextTurn > _prevTurn) {
+            // Sandbox reset / undo / test reload rewinds turn_number — clear
+            // the banner dedupe key so a subsequent re-flip to the same
+            // (turn, player) pair shows the banner again.
+            if (_nextTurn < _prevTurn) {
+                _lastBannerTurnKey = null;
+            }
+            // Only fire on a real turn FLIP — skip the initial socket state
+            // emit (where _prevTurn is 0) and skip rewinds.
+            if (_prevTurn > 0 && _nextTurn > _prevTurn) {
                 _showTurnBanner(_nextTurn, payload.state.active_player_idx);
             }
         } catch (e) { /* defensive — banner is purely visual */ }
