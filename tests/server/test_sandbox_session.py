@@ -451,6 +451,64 @@ def test_to_dict_load_dict_round_trip(library: CardLibrary) -> None:
     assert s2.redo_depth == 0
 
 
+def test_to_dict_load_dict_roundtrip_on_death_pending_trigger(
+    library: CardLibrary,
+) -> None:
+    """Phase 14.7-05b: PendingTrigger entries with trigger_kind="on_death"
+    must round-trip through the sandbox save/load serializer. This
+    validates that a mid-death-cleanup state can be autosaved and
+    restored without losing queue entries.
+    """
+    from dataclasses import replace
+    from grid_tactics.game_state import PendingTrigger
+
+    s1 = SandboxSession(library, "a")
+    # Synthesize a state with a queued on_death trigger on each queue.
+    rgb_nid = library.get_numeric_id("rgb_lasercannon")
+    giant_rat_nid = library.get_numeric_id("giant_rat")
+    pt_turn = PendingTrigger(
+        trigger_kind="on_death",
+        source_minion_id=0,
+        source_card_numeric_id=rgb_nid,
+        effect_idx=0,
+        owner_idx=0,
+        captured_position=(1, 2),
+        target_pos=None,
+    )
+    pt_other = PendingTrigger(
+        trigger_kind="on_death",
+        source_minion_id=1,
+        source_card_numeric_id=giant_rat_nid,
+        effect_idx=0,
+        owner_idx=1,
+        captured_position=(2, 2),
+        target_pos=None,
+    )
+    s1._state = replace(
+        s1._state,
+        pending_trigger_queue_turn=(pt_turn,),
+        pending_trigger_queue_other=(pt_other,),
+    )
+
+    payload = s1.to_dict()
+    s2 = SandboxSession(library, "b")
+    s2.load_dict(payload)
+
+    # Round-tripped queues preserve length, trigger_kind, and card ID.
+    assert len(s2.state.pending_trigger_queue_turn) == 1
+    assert len(s2.state.pending_trigger_queue_other) == 1
+    t_turn = s2.state.pending_trigger_queue_turn[0]
+    t_other = s2.state.pending_trigger_queue_other[0]
+    assert t_turn.trigger_kind == "on_death"
+    assert t_turn.source_card_numeric_id == rgb_nid
+    assert t_turn.owner_idx == 0
+    assert t_turn.captured_position == (1, 2)
+    assert t_other.trigger_kind == "on_death"
+    assert t_other.source_card_numeric_id == giant_rat_nid
+    assert t_other.owner_idx == 1
+    assert t_other.captured_position == (2, 2)
+
+
 # ---------------------------------------------------------------------------
 # Server slot persistence (isolated tmp_path)
 # ---------------------------------------------------------------------------

@@ -1206,3 +1206,145 @@ class TestRandomGamesDoNotCrash:
                 crashed.append((seed, repr(exc)))
 
         assert not crashed, f"Random agent crashed in {len(crashed)} games: {crashed[:3]}"
+
+
+class TestDeathTriggerPriorityQueueIntegration:
+    """Phase 14.7-05b: end-to-end integration tests for the death-
+    trigger priority queue refactor, including the spec §4.3 / §7.4
+    worked example (RGB Lasercannon vs Giant Rat simultaneous deaths)."""
+
+    def test_rgb_lasercannon_vs_giant_rat_turn_player_priority(self, library):
+        """Spec §4.3 / §7.4 worked example — simultaneous deaths of
+        P1's RGB Lasercannon and P2's Giant Rat (A) during P1's turn.
+
+        Board setup:
+          - P1 (turn player) has RGB Lasercannon at (1, 2) with 1 HP.
+          - P2 has Giant Rat A at (2, 2) with 1 HP. Giant Rat is unique
+            + has PROMOTE/SELF_OWNER on_death.
+          - P2 has a plain Rat at (4, 4) which could be a PROMOTE
+            target — but the Giant Rat's `unique` constraint short-
+            circuits PROMOTE when another Giant Rat exists. Here we
+            set up so the plain Rat IS a valid promote target
+            (no second Giant Rat alive), so PROMOTE resolves.
+          - P2 has another enemy minion at (3, 0) (a plain Rat) which
+            RGB's DESTROY modal can target.
+
+        Expected flow (turn-player-first priority):
+          1. P1 attacks Rat A (Giant Rat) with RGB. 25 atk vs 1 hp →
+             Rat A dies. RGB takes 30 from Rat A's attack → RGB dies.
+             Both dead simultaneously.
+          2. _cleanup_dead_minions enqueues RGB's DESTROY trigger to
+             pending_trigger_queue_turn (P1 turn), Giant Rat's PROMOTE
+             trigger to pending_trigger_queue_other (P2 opponent).
+          3. Drain: queue_turn has 1 entry → auto-resolve → RGB's
+             DESTROY/SINGLE_TARGET opens pending_death_target for P1.
+          4. P1 picks the plain Rat at (3, 0). Rat at (3, 0) destroyed.
+          5. cleanup + drain: AFTER_DEATH_EFFECT react window opens
+             for the RGB effect.
+          6. PASS-PASS closes the window. Drain-recheck sees
+             queue_other has 1 entry (Giant Rat's PROMOTE). Auto-
+             resolve → PROMOTE tries to promote the remaining P2 Rat
+             at (4, 4) into a fresh Giant Rat.
+          7. AFTER_DEATH_EFFECT window opens for the PROMOTE.
+          8. PASS-PASS closes it. Drain empty. Turn advances.
+
+        Assertions:
+          - RGB gone, Giant Rat A gone, plain Rat at (3, 0) gone.
+          - The plain Rat at (4, 4) was promoted to a fresh Giant Rat
+            (card_numeric_id == giant_rat, full HP).
+          - No exceptions; no wedge.
+          - Queues fully drained after the chain completes.
+        """
+        from grid_tactics.enums import TurnPhase
+        rat_nid = library.get_numeric_id("rat")
+        giant_rat_nid = library.get_numeric_id("giant_rat")
+        rgb_nid = library.get_numeric_id("rgb_lasercannon")
+
+        # P1 attacker: RGB Lasercannon at (1, 2) with 1 HP (will die
+        # from Rat A's 30 attack).
+        rgb = MinionInstance(
+            instance_id=0, card_numeric_id=rgb_nid,
+            owner=PlayerSide.PLAYER_1, position=(1, 2), current_health=1,
+        )
+        # P2 defender: Giant Rat A at (2, 2) with 1 HP (will die from
+        # RGB's 25 attack).
+        rat_a = MinionInstance(
+            instance_id=1, card_numeric_id=giant_rat_nid,
+            owner=PlayerSide.PLAYER_2, position=(2, 2), current_health=1,
+        )
+        # P2 promote target: plain Rat at (4, 4).
+        rat_promote_target = MinionInstance(
+            instance_id=2, card_numeric_id=rat_nid,
+            owner=PlayerSide.PLAYER_2, position=(4, 4), current_health=5,
+        )
+        # P2 RGB destroy-target: plain Rat at (3, 0).
+        rat_destroy_target = MinionInstance(
+            instance_id=3, card_numeric_id=rat_nid,
+            owner=PlayerSide.PLAYER_2, position=(3, 0), current_health=5,
+        )
+
+        state = _make_state(
+            minions=[rgb, rat_a, rat_promote_target, rat_destroy_target],
+            active_player_idx=0,
+        )
+
+        # Step 1: P1 attacks rat_a with RGB.
+        state = resolve_action(
+            state, attack_action(minion_id=0, target_id=1), library,
+        )
+
+        # Step 2-3: RGB's DESTROY modal should now be open for P1.
+        assert state.pending_death_target is not None
+        assert state.pending_death_target.owner_idx == 0
+        # Giant Rat's PROMOTE trigger is still queued on the "other"
+        # (P2) side, waiting its turn.
+        assert len(state.pending_trigger_queue_other) == 1
+        assert state.pending_trigger_queue_other[0].trigger_kind == "on_death"
+        assert state.pending_trigger_queue_other[0].source_card_numeric_id == giant_rat_nid
+
+        # Step 4: P1 picks rat_destroy_target at (3, 0).
+        from grid_tactics.actions import Action
+        state = resolve_action(
+            state,
+            Action(action_type=ActionType.DEATH_TARGET_PICK, target_pos=(3, 0)),
+            library,
+        )
+
+        # Step 5: rat_destroy_target destroyed; AFTER_DEATH_EFFECT
+        # react window open for RGB's effect.
+        assert state.get_minion(3) is None
+        assert state.pending_death_target is None
+        # queue_other still has the Giant Rat PROMOTE entry (waiting
+        # for turn-queue drain to complete).
+        assert len(state.pending_trigger_queue_other) == 1
+        assert state.phase == TurnPhase.REACT
+
+        # Step 6: PASS-PASS closes the RGB window. drain-recheck picks
+        # up the Giant Rat PROMOTE entry.
+        state = resolve_action(state, pass_action(), library)
+
+        # PROMOTE/SELF_OWNER auto-resolves (only 1 promote candidate —
+        # the plain Rat at (4, 4)). A fresh AFTER_DEATH_EFFECT window
+        # opens for the PROMOTE effect.
+        # The plain Rat at (4, 4) should now BE a Giant Rat.
+        promoted = state.get_minion(2)
+        assert promoted is not None
+        assert promoted.card_numeric_id == giant_rat_nid, (
+            f"Expected Rat at (4, 4) promoted to Giant Rat, got card "
+            f"{promoted.card_numeric_id}"
+        )
+
+        # Step 7-8: PASS through the PROMOTE window.
+        if state.phase == TurnPhase.REACT:
+            state = resolve_action(state, pass_action(), library)
+
+        # All queues drained. Game may have advanced the turn, or
+        # settled into an END_OF_TURN state — either is acceptable.
+        assert state.pending_trigger_queue_turn == ()
+        assert state.pending_trigger_queue_other == ()
+        assert state.pending_death_target is None
+        # Both originally-dying minions gone.
+        assert state.get_minion(0) is None  # RGB
+        assert state.get_minion(1) is None  # Rat A (Giant Rat)
+        # Game should not be crashed or game over (neither player at 0 HP).
+        assert not state.is_game_over
