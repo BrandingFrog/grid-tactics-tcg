@@ -896,6 +896,236 @@ class TestMeleeTwoReactWindowsIntegration:
         assert state.get_minion(1).current_health == 10
 
 
+class TestReactConditionPhase1477Integration:
+    """Phase 14.7-07: end-to-end react_condition gating.
+
+    Complements the unit tests in test_legal_actions.py by running full
+    resolve_action flows. Asserts that:
+      (a) Prohibition still negates a magic cast (14.7-01 preserved).
+      (b) Prohibition is NOT in legal_actions during a summon-declaration
+          window — its OPPONENT_PLAYS_MAGIC condition doesn't match
+          AFTER_SUMMON_DECLARATION.
+      (c) A hypothetical card with react_condition=OPPONENT_SUMMONS_MINION
+          IS in legal_actions during a summon-declaration window.
+    """
+
+    def test_prohibition_negates_magic_and_not_legal_in_summon_window(self, library):
+        """Two-part scenario:
+
+        Part 1: P1 casts Acidic Rain, P2 plays Prohibition, chain resolves.
+                Burn negated (14.7-01 behavior preserved).
+        Part 2: Fresh state. P1 deploys Blue Diodebot. P2 has Prohibition in
+                hand. Verify Prohibition is NOT in P2's legal_actions during
+                Window A (its condition doesn't match AFTER_SUMMON_DECLARATION).
+        """
+            # ---- Part 1: Prohibition negates Acidic Rain ----
+        acidic_rain_id = library.get_numeric_id("acidic_rain")
+        prohibition_id = library.get_numeric_id("prohibition")
+        diodebot_id = library.get_numeric_id("blue_diodebot")
+
+        diodebot = MinionInstance(
+            instance_id=0, card_numeric_id=diodebot_id,
+            owner=PlayerSide.PLAYER_2, position=(4, 2), current_health=8,
+        )
+        state = _make_state(
+            p1_hand=(acidic_rain_id,),
+            p2_hand=(prohibition_id,),
+            p1_mana=6,
+            p2_mana=6,
+            minions=(diodebot,),
+        )
+
+        # P1 casts Acidic Rain → originator on stack, P2 to react
+        state = resolve_action(state, play_card_action(card_index=0), library)
+        assert state.phase == TurnPhase.REACT
+        assert state.react_stack[0].is_originator is True
+        assert state.react_stack[0].origin_kind == "magic_cast"
+
+        # Prohibition SHOULD be legal in P2's options here (AFTER_ACTION + magic originator)
+        p2_legal = legal_actions(state, library)
+        play_react_actions = [a for a in p2_legal if a.action_type == ActionType.PLAY_REACT]
+        assert len(play_react_actions) >= 1, (
+            "Prohibition should be legal during AFTER_ACTION magic cast window"
+        )
+
+        # P2 plays Prohibition; P1 passes; chain resolves
+        state = resolve_action(state, play_react_action(card_index=0), library)
+        state = resolve_action(state, pass_action(), library)
+
+        # Diodebot NOT burning — cast was negated (14.7-01 behavior preserved)
+        surviving_diodebot = state.get_minion(0)
+        assert surviving_diodebot is not None
+        assert surviving_diodebot.is_burning is False
+
+        # ---- Part 2: Prohibition NOT legal in summon Window A ----
+        state2 = _make_state(
+            p1_hand=(diodebot_id,),
+            p2_hand=(prohibition_id,),
+            p1_mana=5,
+            p2_mana=5,
+        )
+
+        # P1 deploys Blue Diodebot → Window A (AFTER_SUMMON_DECLARATION)
+        state2 = resolve_action(
+            state2, play_card_action(card_index=0, position=(1, 0)), library,
+        )
+        assert state2.phase == TurnPhase.REACT
+        assert state2.react_stack[0].origin_kind == "summon_declaration"
+
+        # Prohibition should NOT be legal — only PASS
+        p2_legal = legal_actions(state2, library)
+        play_react_actions = [a for a in p2_legal if a.action_type == ActionType.PLAY_REACT]
+        assert len(play_react_actions) == 0, (
+            "Prohibition (OPPONENT_PLAYS_MAGIC) must not be legal during "
+            "AFTER_SUMMON_DECLARATION — only magic casts should match."
+        )
+        # PASS is the sole option
+        pass_actions = [a for a in p2_legal if a.action_type == ActionType.PASS]
+        assert len(pass_actions) == 1
+
+    def test_synthetic_opponent_summons_minion_card_is_legal_in_window_a(self):
+        """Hypothetical scenario: a NEW react card with
+        react_condition=OPPONENT_SUMMONS_MINION is built in-memory (not as a
+        JSON file). P1 deploys a minion. The synthetic card must appear in
+        P2's legal_actions during Window A.
+        """
+        from grid_tactics.cards import CardDefinition, EffectDefinition
+        from grid_tactics.card_library import CardLibrary
+        from grid_tactics.enums import (
+            CardType, EffectType, ReactCondition, TargetType, TriggerType,
+        )
+
+        # Build a minimal starter library with exactly TWO cards:
+        # - A plain minion (P1 deploys it to open Window A)
+        # - A synthetic react card with OPPONENT_SUMMONS_MINION condition
+        test_rat = CardDefinition(
+            card_id="test_rat",
+            name="Test Rat",
+            card_type=CardType.MINION,
+            mana_cost=1,
+            attack=2,
+            health=2,
+            attack_range=0,
+        )
+        counter_summon = CardDefinition(
+            card_id="counter_summon",
+            name="Counter Summon",
+            card_type=CardType.REACT,
+            mana_cost=2,
+            react_condition=ReactCondition.OPPONENT_SUMMONS_MINION,
+            effects=(
+                EffectDefinition(
+                    effect_type=EffectType.NEGATE,
+                    trigger=TriggerType.ON_PLAY,
+                    target=TargetType.SINGLE_TARGET,
+                    amount=1,
+                ),
+            ),
+        )
+        tiny_library = CardLibrary({
+            "counter_summon": counter_summon,
+            "test_rat": test_rat,
+        })
+
+        rat_id = tiny_library.get_numeric_id("test_rat")
+        counter_id = tiny_library.get_numeric_id("counter_summon")
+
+        state = _make_state(
+            p1_hand=(rat_id,),
+            p2_hand=(counter_id,),
+            p1_mana=5,
+            p2_mana=5,
+        )
+
+        # P1 deploys Test Rat → Window A
+        state = resolve_action(
+            state, play_card_action(card_index=0, position=(1, 0)), tiny_library,
+        )
+        assert state.phase == TurnPhase.REACT
+        assert state.react_stack[0].origin_kind == "summon_declaration"
+
+        # The synthetic Counter Summon react MUST be legal
+        p2_legal = legal_actions(state, tiny_library)
+        play_react_actions = [a for a in p2_legal if a.action_type == ActionType.PLAY_REACT]
+        assert len(play_react_actions) >= 1, (
+            "Card with react_condition=OPPONENT_SUMMONS_MINION must be "
+            "legal during AFTER_SUMMON_DECLARATION"
+        )
+        # And its card_index in the action must point at card 0 (the counter)
+        assert play_react_actions[0].card_index == 0
+
+    def test_synthetic_start_of_turn_react_legal_only_in_start_window(self):
+        """Hypothetical card with react_condition=OPPONENT_START_OF_TURN
+        matches AFTER_START_TRIGGER and NOT AFTER_ACTION.
+
+        This is a pure legal_actions gate test — we don't advance a full
+        turn cycle since no existing card fires an ON_START_OF_TURN trigger
+        from an opponent that a react could fire against (Fallen Paladin
+        triggers are SELF_OWNER, and the start-of-turn react window only
+        opens if there are triggers — see _has_triggers_for in 14.7-03).
+        Instead we directly construct REACT-phase states with the two
+        contexts and assert the legal_actions gate.
+        """
+        from dataclasses import replace as _replace
+        from grid_tactics.cards import CardDefinition, EffectDefinition
+        from grid_tactics.card_library import CardLibrary
+        from grid_tactics.enums import (
+            CardType, EffectType, ReactCondition, ReactContext,
+            TargetType, TriggerType,
+        )
+
+        start_watcher = CardDefinition(
+            card_id="start_watcher",
+            name="Start Watcher",
+            card_type=CardType.REACT,
+            mana_cost=1,
+            react_condition=ReactCondition.OPPONENT_START_OF_TURN,
+            effects=(
+                EffectDefinition(
+                    effect_type=EffectType.DRAW,
+                    trigger=TriggerType.ON_PLAY,
+                    target=TargetType.SELF_OWNER,
+                    amount=1,
+                ),
+            ),
+        )
+        tiny_library = CardLibrary({"start_watcher": start_watcher})
+        watcher_id = tiny_library.get_numeric_id("start_watcher")
+
+        # State A: AFTER_START_TRIGGER — watcher SHOULD be legal
+        state_a = _make_state(
+            p2_hand=(watcher_id,), p2_mana=5,
+            phase=TurnPhase.REACT,
+        )
+        state_a = _replace(
+            state_a,
+            react_player_idx=1,
+            react_context=ReactContext.AFTER_START_TRIGGER,
+        )
+        actions_a = legal_actions(state_a, tiny_library)
+        play_react_a = [a for a in actions_a if a.action_type == ActionType.PLAY_REACT]
+        assert len(play_react_a) == 1, (
+            "OPPONENT_START_OF_TURN card must be legal in AFTER_START_TRIGGER window"
+        )
+
+        # State B: AFTER_ACTION — watcher should NOT be legal
+        state_b = _make_state(
+            p2_hand=(watcher_id,), p2_mana=5,
+            phase=TurnPhase.REACT,
+        )
+        state_b = _replace(
+            state_b,
+            react_player_idx=1,
+            react_context=ReactContext.AFTER_ACTION,
+            pending_action=play_card_action(card_index=0),
+        )
+        actions_b = legal_actions(state_b, tiny_library)
+        play_react_b = [a for a in actions_b if a.action_type == ActionType.PLAY_REACT]
+        assert len(play_react_b) == 0, (
+            "OPPONENT_START_OF_TURN must NOT match AFTER_ACTION windows"
+        )
+
+
 class TestRandomGamesDoNotCrash:
     """Deterministic random-agent games through the compound-window pipeline.
 
