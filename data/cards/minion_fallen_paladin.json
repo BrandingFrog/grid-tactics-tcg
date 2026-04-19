@@ -13,7 +13,7 @@
     "effects": [
         {
             "type": "passive_heal",
-            "trigger": "on_start_of_turn",
+            "trigger": "on_end_of_turn",
             "target": "self_owner",
             "amount": 2
         }
@@ -26,7 +26,7 @@
         "As an Undead, Fallen Paladin shares a tribe with Grave Caller and Reanimated Bones. A dedicated Undead package gives you access to all three transform options."
     ],
     "rulings": [
-        "The heal fires at the start of the Paladin's owner's turn (passive trigger). It heals 2 🤍 unconditionally — no condition check.",
+        "The heal fires at the end of the Paladin's owner's turn (passive trigger). It heals 2 🤍 unconditionally — no condition check.",
         "Heals up to the minion's current max HP (base 42 plus any max_health_bonus buffs). Cannot overheal above the cap.",
         "Only one tick per turn cycle — taking 30 damage and then healing means Paladin is still down 28 that round."
     ]

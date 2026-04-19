@@ -366,10 +366,10 @@ class TestPhase1473NewTriggers:
         assert triggers[EffectType.DRAW] == TriggerType.ON_SUMMON
         assert triggers[EffectType.BURN_BONUS] == TriggerType.AURA
 
-    def test_fallen_paladin_has_on_start_of_turn(self, real_library) -> None:
-        """Fallen Paladin's passive_heal is now on_start_of_turn."""
+    def test_fallen_paladin_has_on_end_of_turn(self, real_library) -> None:
+        """Fallen Paladin's passive_heal fires at end of owner's turn (matches card text)."""
         card = real_library.get_by_card_id("fallen_paladin")
-        assert card.effects[0].trigger == TriggerType.ON_START_OF_TURN
+        assert card.effects[0].trigger == TriggerType.ON_END_OF_TURN
 
     def test_emberplague_rat_has_on_end_of_turn(self, real_library) -> None:
         """Emberplague Rat's adjacent burn is now on_end_of_turn."""
