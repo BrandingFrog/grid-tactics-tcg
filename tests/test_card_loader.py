@@ -388,3 +388,51 @@ class TestPhase1473NewTriggers:
         # The react path doesn't use TriggerType filtering anyway.
         # Instead, verify the card still has CardType.MINION and react_effect.
         assert card.react_effect is not None
+
+
+class TestPhase1477NewReactConditions:
+    """Phase 14.7-07: CardLoader recognizes the three new react_condition strings.
+
+    These are forward-compat values — no card JSON uses them yet. The loader
+    is reflective (``enum_cls[value.upper()]``) so no explicit allowlist
+    edit was needed; these tests guard the contract.
+    """
+
+    def test_load_opponent_summons_minion(
+        self, tmp_path: Path, valid_react_json: dict
+    ) -> None:
+        """JSON react_condition='opponent_summons_minion' loads correctly."""
+        from grid_tactics.enums import ReactCondition
+        valid_react_json["react_condition"] = "opponent_summons_minion"
+        path = _write_card_json(tmp_path, valid_react_json)
+        card = CardLoader.load_card(path)
+        assert card.react_condition == ReactCondition.OPPONENT_SUMMONS_MINION
+
+    def test_load_opponent_start_of_turn(
+        self, tmp_path: Path, valid_react_json: dict
+    ) -> None:
+        """JSON react_condition='opponent_start_of_turn' loads correctly."""
+        from grid_tactics.enums import ReactCondition
+        valid_react_json["react_condition"] = "opponent_start_of_turn"
+        path = _write_card_json(tmp_path, valid_react_json)
+        card = CardLoader.load_card(path)
+        assert card.react_condition == ReactCondition.OPPONENT_START_OF_TURN
+
+    def test_load_opponent_end_of_turn(
+        self, tmp_path: Path, valid_react_json: dict
+    ) -> None:
+        """JSON react_condition='opponent_end_of_turn' loads correctly."""
+        from grid_tactics.enums import ReactCondition
+        valid_react_json["react_condition"] = "opponent_end_of_turn"
+        path = _write_card_json(tmp_path, valid_react_json)
+        card = CardLoader.load_card(path)
+        assert card.react_condition == ReactCondition.OPPONENT_END_OF_TURN
+
+    def test_invalid_react_condition_still_raises(
+        self, tmp_path: Path, valid_react_json: dict
+    ) -> None:
+        """Unknown react_condition strings still raise ValueError."""
+        valid_react_json["react_condition"] = "bogus_unknown_condition"
+        path = _write_card_json(tmp_path, valid_react_json)
+        with pytest.raises(ValueError, match="react_condition"):
+            CardLoader.load_card(path)

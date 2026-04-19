@@ -47,7 +47,7 @@ from grid_tactics.board import Board
 from grid_tactics.card_library import CardLibrary
 from grid_tactics.enums import (
     ActionType, CardType, EffectType, Element, PlayerSide, ReactCondition,
-    TargetType, TriggerType, TurnPhase,
+    ReactContext, TargetType, TriggerType, TurnPhase,
 )
 from grid_tactics.game_state import GameState
 from grid_tactics.types import (
@@ -722,44 +722,175 @@ def _pending_post_move_attack_actions(
 def _check_react_condition(
     condition: ReactCondition, state: GameState, library: CardLibrary,
 ) -> bool:
-    """Check if a react card's condition is met by the pending action or last react.
+    """Check if a react card's condition is met by the current react window.
 
-    Checks the pending_action (the main-phase action that opened the react window)
-    or the last react on the stack (for counter-react conditions).
+    Phase 14.7-07: Primary dispatch is now on ``state.react_context``. Three
+    new conditions (OPPONENT_SUMMONS_MINION, OPPONENT_START_OF_TURN,
+    OPPONENT_END_OF_TURN) are gated strictly on the context tag — they
+    match ONLY during the react window that context opened. Legacy
+    conditions (OPPONENT_PLAYS_MAGIC, OPPONENT_PLAYS_MINION, element
+    conditions, etc.) keep their pre-14.7 behavior: they check the
+    react_stack's most-recent entry and/or the pending_action. The
+    legacy conditions are also gated away from non-AFTER_ACTION /
+    non-summon windows so a stray START_OF_TURN trigger window can't
+    accidentally match (e.g.) an OPPONENT_PLAYS_MAGIC.
+
+    Dispatch table (context → which conditions may match):
+      - AFTER_ACTION: OPPONENT_PLAYS_MAGIC, OPPONENT_PLAYS_MINION,
+        OPPONENT_ATTACKS, OPPONENT_SACRIFICES, OPPONENT_PLAYS_REACT,
+        OPPONENT_DISCARDS, OPPONENT_ENDS_TURN, element conditions,
+        ANY_ACTION.
+      - AFTER_SUMMON_DECLARATION / AFTER_SUMMON_EFFECT:
+        OPPONENT_SUMMONS_MINION, OPPONENT_PLAYS_MINION (back-compat),
+        element conditions (match the summon's element),
+        OPPONENT_PLAYS_REACT (once a react sits on top), ANY_ACTION.
+      - AFTER_START_TRIGGER: OPPONENT_START_OF_TURN,
+        OPPONENT_PLAYS_REACT (once a react sits on top), ANY_ACTION.
+      - BEFORE_END_OF_TURN: OPPONENT_END_OF_TURN,
+        OPPONENT_PLAYS_REACT (once a react sits on top), ANY_ACTION.
+      - AFTER_DEATH_EFFECT: OPPONENT_PLAYS_REACT, ANY_ACTION (no other
+        conditions match today; future death-trigger conditions land here).
+      - None (legacy/unset): fall back to pending_action inspection.
     """
-    # If there are reacts on the stack, the most recent one is what we're reacting to
+    ctx = state.react_context
+
+    # ANY_ACTION short-circuit — always legal in any open window.
+    if condition == ReactCondition.ANY_ACTION:
+        return True
+
+    # ------------- 14.7-07: context-tagged conditions -------------
+    # These are driven purely by react_context and fire even during
+    # counter-react chains inside the same window. They're checked
+    # BEFORE the counter-react branch so a chained react doesn't
+    # mask the window's underlying trigger semantics.
+    if condition == ReactCondition.OPPONENT_SUMMONS_MINION:
+        # Fires during either summon window (declaration or effect).
+        return ctx in (
+            ReactContext.AFTER_SUMMON_DECLARATION,
+            ReactContext.AFTER_SUMMON_EFFECT,
+        )
+
+    if condition == ReactCondition.OPPONENT_START_OF_TURN:
+        return ctx == ReactContext.AFTER_START_TRIGGER
+
+    if condition == ReactCondition.OPPONENT_END_OF_TURN:
+        return ctx == ReactContext.BEFORE_END_OF_TURN
+
+    # ---------------- Counter-react (react-on-react) ----------------
+    # If a non-originator react sits on top of the stack, the player is
+    # counter-reacting. OPPONENT_PLAYS_REACT matches in ANY context.
+    # OPPONENT_PLAYS_MAGIC also matches here (a react card is magic-like
+    # for the purposes of Prohibition — preserves pre-14.7 behavior).
     if state.react_stack:
-        last_react = state.react_stack[-1]
-        last_card = library.get_by_id(last_react.card_numeric_id)
-        if condition == ReactCondition.OPPONENT_PLAYS_REACT:
-            return True  # Reacting to a react
-        if condition == ReactCondition.OPPONENT_PLAYS_MAGIC:
-            return last_card.card_type == CardType.MAGIC or last_card.card_type == CardType.REACT
-        if condition == ReactCondition.ANY_ACTION:
-            return True
+        top = state.react_stack[-1]
+        is_counter_react = not getattr(top, "is_originator", False)
+        if is_counter_react:
+            if condition == ReactCondition.OPPONENT_PLAYS_REACT:
+                return True
+            if condition == ReactCondition.OPPONENT_PLAYS_MAGIC:
+                top_card = library.get_by_id(top.card_numeric_id)
+                return top_card.card_type in (CardType.MAGIC, CardType.REACT)
+            # Element-based counter-reacts: check the top react's element.
+            _ELEM = {
+                ReactCondition.OPPONENT_PLAYS_WOOD: Element.WOOD,
+                ReactCondition.OPPONENT_PLAYS_FIRE: Element.FIRE,
+                ReactCondition.OPPONENT_PLAYS_EARTH: Element.EARTH,
+                ReactCondition.OPPONENT_PLAYS_WATER: Element.WATER,
+                ReactCondition.OPPONENT_PLAYS_METAL: Element.METAL,
+                ReactCondition.OPPONENT_PLAYS_DARK: Element.DARK,
+                ReactCondition.OPPONENT_PLAYS_LIGHT: Element.LIGHT,
+            }
+            if condition in _ELEM:
+                top_card = library.get_by_id(top.card_numeric_id)
+                return top_card.element == _ELEM[condition]
+            # All other conditions do not match a counter-react entry.
+            return False
+
+    # ------------- Summon-window legacy / element matching -------------
+    # If we're in a summon window, gate element conditions + legacy
+    # OPPONENT_PLAYS_MINION against the summon originator on the stack.
+    if ctx in (
+        ReactContext.AFTER_SUMMON_DECLARATION,
+        ReactContext.AFTER_SUMMON_EFFECT,
+    ):
+        if condition == ReactCondition.OPPONENT_PLAYS_MINION:
+            return True  # back-compat alias for OPPONENT_SUMMONS_MINION
+        # Element conditions: match the summoned minion's element.
+        _ELEM_CONDITIONS = {
+            ReactCondition.OPPONENT_PLAYS_WOOD: Element.WOOD,
+            ReactCondition.OPPONENT_PLAYS_FIRE: Element.FIRE,
+            ReactCondition.OPPONENT_PLAYS_EARTH: Element.EARTH,
+            ReactCondition.OPPONENT_PLAYS_WATER: Element.WATER,
+            ReactCondition.OPPONENT_PLAYS_METAL: Element.METAL,
+            ReactCondition.OPPONENT_PLAYS_DARK: Element.DARK,
+            ReactCondition.OPPONENT_PLAYS_LIGHT: Element.LIGHT,
+        }
+        if condition in _ELEM_CONDITIONS:
+            required_elem = _ELEM_CONDITIONS[condition]
+            # Find the summon originator on the stack.
+            for entry in state.react_stack:
+                if getattr(entry, "is_originator", False) and getattr(
+                    entry, "origin_kind", None
+                ) in ("summon_declaration", "summon_effect"):
+                    card_def = library.get_by_id(entry.card_numeric_id)
+                    return card_def.element == required_elem
+            return False
+        # OPPONENT_PLAYS_MAGIC / OPPONENT_ATTACKS / etc. do NOT match a
+        # summon window — spec §4.2 separates cast from summon.
         return False
 
-    # Otherwise check the pending_action (the main-phase action that triggered the window)
-    pending = state.pending_action
-    if pending is None:
-        return condition == ReactCondition.ANY_ACTION
+    # ------------- Start/End/Death windows: no match for legacy -------------
+    # During start-of-turn / end-of-turn / death-effect windows, legacy
+    # action-based conditions don't apply (only the 14.7-07 context
+    # conditions + ANY_ACTION + OPPONENT_PLAYS_REACT match, which were
+    # already handled above).
+    if ctx in (
+        ReactContext.AFTER_START_TRIGGER,
+        ReactContext.BEFORE_END_OF_TURN,
+        ReactContext.AFTER_DEATH_EFFECT,
+    ):
+        return False
 
+    # ------------- AFTER_ACTION / legacy fall-through -------------
+    # ctx is either AFTER_ACTION or None (pre-14.7 call sites). Use the
+    # magic-cast originator check first for OPPONENT_PLAYS_MAGIC; fall back
+    # to pending_action inspection for everything else. This preserves the
+    # 14.7-01 deferred-magic originator flow and the pre-14.7 pending_action
+    # flow simultaneously.
+
+    # OPPONENT_PLAYS_MAGIC: check for a magic_cast originator on the stack
+    # (14.7-01 deferred-magic flow). Also preserves pre-14.7 fall-through
+    # to pending_action when no originator is present (e.g. a test that
+    # manually sets pending_action without a stack entry).
     if condition == ReactCondition.OPPONENT_PLAYS_MAGIC:
+        for entry in state.react_stack:
+            if getattr(entry, "is_originator", False) and getattr(
+                entry, "origin_kind", None
+            ) == "magic_cast":
+                return True
+        pending = state.pending_action
+        if pending is None:
+            return False
         if pending.action_type == ActionType.PLAY_CARD and pending.card_index is not None:
-            # Check if the played card was magic
             acting_player = state.players[state.active_player_idx]
-            # pending_action was recorded before the card was removed from hand,
-            # so look up the card in grave (most recently added)
             if acting_player.grave:
                 last_played_id = acting_player.grave[-1]
                 card_def = library.get_by_id(last_played_id)
                 return card_def.card_type == CardType.MAGIC
         return False
 
+    # Pending-action-based conditions (MOVE / ATTACK / SACRIFICE / etc.)
+    pending = state.pending_action
+    if pending is None:
+        return False
+
     if condition == ReactCondition.OPPONENT_PLAYS_MINION:
+        # Legacy signal: PLAY_CARD with a position means a minion was deployed.
+        # Under 14.7-04 this path is rarely hit (summon routes to
+        # AFTER_SUMMON_DECLARATION above) but kept for back-compat with
+        # any test or future non-compound path.
         if pending.action_type == ActionType.PLAY_CARD:
-            # Check if a minion was deployed (new minion on board from this action)
-            return pending.position is not None  # minion deploy always has position
+            return pending.position is not None
         return False
 
     if condition == ReactCondition.OPPONENT_ATTACKS:
@@ -769,17 +900,15 @@ def _check_react_condition(
         return pending.action_type == ActionType.SACRIFICE
 
     if condition == ReactCondition.OPPONENT_PLAYS_REACT:
-        return False  # No react on stack means nothing to counter-react
-
-    if condition == ReactCondition.ANY_ACTION:
-        return True
+        # No non-originator react on stack means nothing to counter-react
+        return False
 
     # Grid Tactics is one-action-per-turn — every opponent action ends
     # their turn, so OPPONENT_ENDS_TURN fires for any pending_action.
     if condition == ReactCondition.OPPONENT_ENDS_TURN:
         return True
 
-    # Element-based conditions
+    # Element-based conditions against pending PLAY_CARD (pre-14.7 flow)
     _ELEM_CONDITIONS = {
         ReactCondition.OPPONENT_PLAYS_WOOD: Element.WOOD,
         ReactCondition.OPPONENT_PLAYS_FIRE: Element.FIRE,
@@ -792,23 +921,26 @@ def _check_react_condition(
     if condition in _ELEM_CONDITIONS:
         required_elem = _ELEM_CONDITIONS[condition]
         if pending.action_type == ActionType.PLAY_CARD:
-            # Check element of the card that was just played
             acting_player = state.players[state.active_player_idx]
             if acting_player.grave:
                 last_played_id = acting_player.grave[-1]
                 card_def = library.get_by_id(last_played_id)
                 return card_def.element == required_elem
-            # Check newly deployed minions (minion cards go to board, not grave)
             if pending.position is not None and state.minions:
-                # Find minion at the deploy position
                 for m in state.minions:
                     if m.position == pending.position:
                         card_def = library.get_by_id(m.card_numeric_id)
                         return card_def.element == required_elem
+        # Also check a magic_cast originator's element (14.7-01 deferred magic)
+        for entry in state.react_stack:
+            if getattr(entry, "is_originator", False) and getattr(
+                entry, "origin_kind", None
+            ) == "magic_cast":
+                card_def = library.get_by_id(entry.card_numeric_id)
+                return card_def.element == required_elem
         return False
 
     if condition == ReactCondition.OPPONENT_DISCARDS:
-        # Opponent discarded a card this turn (discard_cost)
         acting_player = state.players[state.active_player_idx]
         return acting_player.discarded_this_turn
 

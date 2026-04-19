@@ -120,6 +120,15 @@ class ReactCondition(IntEnum):
     OPPONENT_SACRIFICES = 12    # Opponent's minion sacrificed at your back row
     OPPONENT_DISCARDS = 13     # Opponent discarded a card from hand
     OPPONENT_ENDS_TURN = 14    # Fires after opponent's turn action (one-per-turn game — semantically "end of opponent's turn")
+    # Phase 14.7-07: react_context-aware conditions. Matched against
+    # state.react_context rather than pending_action, so they fire in the
+    # exact window opened by summon declaration / start-of-turn trigger /
+    # end-of-turn trigger respectively. No card JSON uses these yet —
+    # added for future expressivity; existing cards (Prohibition etc.)
+    # are unchanged.
+    OPPONENT_SUMMONS_MINION = 15   # Opponent deployed a minion (AFTER_SUMMON_DECLARATION)
+    OPPONENT_START_OF_TURN = 16    # Opponent's start-of-turn trigger fired (AFTER_START_TRIGGER)
+    OPPONENT_END_OF_TURN = 17      # Opponent's end-of-turn trigger fired (BEFORE_END_OF_TURN)
 
 
 class TriggerType(IntEnum):

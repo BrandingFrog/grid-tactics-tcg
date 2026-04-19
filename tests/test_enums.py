@@ -14,6 +14,7 @@ from grid_tactics.enums import (
     EffectType,
     Element,
     PlayerSide,
+    ReactCondition,
     ReactContext,
     TargetType,
     TriggerType,
@@ -317,6 +318,37 @@ class TestPhase1Constants:
     def test_starting_hp(self) -> None:
         # Audit-followup: HP scaled 20 -> 100
         assert STARTING_HP == 100
+
+
+class TestReactConditionPhase14_7_07:
+    """Phase 14.7-07: three react_context-aware conditions appended."""
+
+    def test_new_values(self) -> None:
+        # Append-only after OPPONENT_ENDS_TURN=14
+        assert ReactCondition.OPPONENT_SUMMONS_MINION == 15
+        assert ReactCondition.OPPONENT_START_OF_TURN == 16
+        assert ReactCondition.OPPONENT_END_OF_TURN == 17
+
+    def test_round_trip_by_value(self) -> None:
+        assert ReactCondition(15) is ReactCondition.OPPONENT_SUMMONS_MINION
+        assert ReactCondition(16) is ReactCondition.OPPONENT_START_OF_TURN
+        assert ReactCondition(17) is ReactCondition.OPPONENT_END_OF_TURN
+
+    def test_name_lookup(self) -> None:
+        assert ReactCondition["OPPONENT_SUMMONS_MINION"] is ReactCondition.OPPONENT_SUMMONS_MINION
+        assert ReactCondition["OPPONENT_START_OF_TURN"] is ReactCondition.OPPONENT_START_OF_TURN
+        assert ReactCondition["OPPONENT_END_OF_TURN"] is ReactCondition.OPPONENT_END_OF_TURN
+
+    def test_preserves_existing_values(self) -> None:
+        # Append-only invariant: 0..14 unchanged
+        assert ReactCondition.OPPONENT_PLAYS_MAGIC == 0
+        assert ReactCondition.OPPONENT_PLAYS_MINION == 1
+        assert ReactCondition.ANY_ACTION == 4
+        assert ReactCondition.OPPONENT_ENDS_TURN == 14
+
+    def test_member_count(self) -> None:
+        # 15 original (0..14) + 3 new (15..17) = 18 total
+        assert len(ReactCondition) == 18
 
 
 class TestActionTypePhase14_7_05:

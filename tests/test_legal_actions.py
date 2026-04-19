@@ -588,6 +588,251 @@ class TestReactPhase:
 
 
 # ---------------------------------------------------------------------------
+# Phase 14.7-07: react_condition matching against react_context
+# ---------------------------------------------------------------------------
+
+
+class TestCheckReactConditionPhase1477:
+    """Phase 14.7-07: _check_react_condition is react_context-aware.
+
+    Covers the three new conditions (OPPONENT_SUMMONS_MINION,
+    OPPONENT_START_OF_TURN, OPPONENT_END_OF_TURN) plus regression
+    assertions for the legacy Prohibition (OPPONENT_PLAYS_MAGIC) path.
+    """
+
+    def _make_react_state(
+        self, library, react_context, pending_action=None, react_stack=(), p2_hand=(),
+    ):
+        """Build a REACT-phase state with a specific react_context tag."""
+        prohibition_id = library.get_numeric_id("prohibition")
+        if not p2_hand:
+            p2_hand = (prohibition_id,)
+        state = _make_state(
+            p2_hand=p2_hand, p2_mana=10,
+            phase=TurnPhase.REACT,
+            react_player_idx=1,
+            react_stack=react_stack,
+            pending_action=pending_action,
+        )
+        # react_context isn't a _make_state kwarg — set it directly.
+        state = replace(state, react_context=react_context)
+        return state
+
+    # ---------- OPPONENT_SUMMONS_MINION ----------
+
+    def test_opponent_summons_minion_matches_summon_declaration(self, library):
+        """AFTER_SUMMON_DECLARATION context → OPPONENT_SUMMONS_MINION matches."""
+        from grid_tactics.enums import ReactCondition, ReactContext
+        from grid_tactics.legal_actions import _check_react_condition
+        state = self._make_react_state(
+            library,
+            react_context=ReactContext.AFTER_SUMMON_DECLARATION,
+        )
+        assert _check_react_condition(
+            ReactCondition.OPPONENT_SUMMONS_MINION, state, library
+        ) is True
+
+    def test_opponent_summons_minion_matches_summon_effect(self, library):
+        """AFTER_SUMMON_EFFECT context → OPPONENT_SUMMONS_MINION matches."""
+        from grid_tactics.enums import ReactCondition, ReactContext
+        from grid_tactics.legal_actions import _check_react_condition
+        state = self._make_react_state(
+            library,
+            react_context=ReactContext.AFTER_SUMMON_EFFECT,
+        )
+        assert _check_react_condition(
+            ReactCondition.OPPONENT_SUMMONS_MINION, state, library
+        ) is True
+
+    def test_opponent_summons_minion_does_not_match_after_action(self, library):
+        """AFTER_ACTION context → OPPONENT_SUMMONS_MINION does NOT match."""
+        from grid_tactics.enums import ReactCondition, ReactContext
+        from grid_tactics.legal_actions import _check_react_condition
+        state = self._make_react_state(
+            library,
+            react_context=ReactContext.AFTER_ACTION,
+            pending_action=play_card_action(card_index=0),
+        )
+        assert _check_react_condition(
+            ReactCondition.OPPONENT_SUMMONS_MINION, state, library
+        ) is False
+
+    def test_opponent_summons_minion_does_not_match_start_of_turn(self, library):
+        """AFTER_START_TRIGGER context → OPPONENT_SUMMONS_MINION does NOT match."""
+        from grid_tactics.enums import ReactCondition, ReactContext
+        from grid_tactics.legal_actions import _check_react_condition
+        state = self._make_react_state(
+            library,
+            react_context=ReactContext.AFTER_START_TRIGGER,
+        )
+        assert _check_react_condition(
+            ReactCondition.OPPONENT_SUMMONS_MINION, state, library
+        ) is False
+
+    # ---------- OPPONENT_START_OF_TURN ----------
+
+    def test_opponent_start_of_turn_matches_start_context(self, library):
+        """AFTER_START_TRIGGER → OPPONENT_START_OF_TURN matches, END_OF_TURN does not."""
+        from grid_tactics.enums import ReactCondition, ReactContext
+        from grid_tactics.legal_actions import _check_react_condition
+        state = self._make_react_state(
+            library,
+            react_context=ReactContext.AFTER_START_TRIGGER,
+        )
+        assert _check_react_condition(
+            ReactCondition.OPPONENT_START_OF_TURN, state, library
+        ) is True
+        assert _check_react_condition(
+            ReactCondition.OPPONENT_END_OF_TURN, state, library
+        ) is False
+
+    def test_opponent_start_of_turn_does_not_match_after_action(self, library):
+        """AFTER_ACTION → OPPONENT_START_OF_TURN does NOT match."""
+        from grid_tactics.enums import ReactCondition, ReactContext
+        from grid_tactics.legal_actions import _check_react_condition
+        state = self._make_react_state(
+            library,
+            react_context=ReactContext.AFTER_ACTION,
+            pending_action=play_card_action(card_index=0),
+        )
+        assert _check_react_condition(
+            ReactCondition.OPPONENT_START_OF_TURN, state, library
+        ) is False
+
+    # ---------- OPPONENT_END_OF_TURN ----------
+
+    def test_opponent_end_of_turn_matches_end_context(self, library):
+        """BEFORE_END_OF_TURN → OPPONENT_END_OF_TURN matches, START_OF_TURN does not."""
+        from grid_tactics.enums import ReactCondition, ReactContext
+        from grid_tactics.legal_actions import _check_react_condition
+        state = self._make_react_state(
+            library,
+            react_context=ReactContext.BEFORE_END_OF_TURN,
+        )
+        assert _check_react_condition(
+            ReactCondition.OPPONENT_END_OF_TURN, state, library
+        ) is True
+        assert _check_react_condition(
+            ReactCondition.OPPONENT_START_OF_TURN, state, library
+        ) is False
+
+    def test_opponent_end_of_turn_does_not_match_after_action(self, library):
+        """AFTER_ACTION → OPPONENT_END_OF_TURN does NOT match."""
+        from grid_tactics.enums import ReactCondition, ReactContext
+        from grid_tactics.legal_actions import _check_react_condition
+        state = self._make_react_state(
+            library,
+            react_context=ReactContext.AFTER_ACTION,
+            pending_action=play_card_action(card_index=0),
+        )
+        assert _check_react_condition(
+            ReactCondition.OPPONENT_END_OF_TURN, state, library
+        ) is False
+
+    # ---------- Prohibition regression: OPPONENT_PLAYS_MAGIC ----------
+
+    def test_prohibition_matches_magic_cast_originator(self, library):
+        """14.7-01 deferred magic: a magic_cast originator on the stack
+        satisfies OPPONENT_PLAYS_MAGIC during AFTER_ACTION."""
+        from grid_tactics.enums import ReactCondition, ReactContext
+        from grid_tactics.legal_actions import _check_react_condition
+        acidic_rain_id = library.get_numeric_id("acidic_rain")
+        originator = ReactEntry(
+            player_idx=0, card_index=-1, card_numeric_id=acidic_rain_id,
+            is_originator=True, origin_kind="magic_cast",
+        )
+        state = self._make_react_state(
+            library,
+            react_context=ReactContext.AFTER_ACTION,
+            pending_action=play_card_action(card_index=0),
+            react_stack=(originator,),
+        )
+        assert _check_react_condition(
+            ReactCondition.OPPONENT_PLAYS_MAGIC, state, library
+        ) is True
+
+    def test_prohibition_does_not_match_summon_declaration(self, library):
+        """14.7-04 compound summon: OPPONENT_PLAYS_MAGIC does NOT match a
+        summon declaration window — the originator's origin_kind is
+        'summon_declaration', not 'magic_cast'.
+        """
+        from grid_tactics.enums import ReactCondition, ReactContext
+        from grid_tactics.legal_actions import _check_react_condition
+        rat_id = library.get_numeric_id("rat")
+        originator = ReactEntry(
+            player_idx=0, card_index=-1, card_numeric_id=rat_id,
+            target_pos=(1, 2),
+            is_originator=True, origin_kind="summon_declaration",
+        )
+        state = self._make_react_state(
+            library,
+            react_context=ReactContext.AFTER_SUMMON_DECLARATION,
+            react_stack=(originator,),
+        )
+        assert _check_react_condition(
+            ReactCondition.OPPONENT_PLAYS_MAGIC, state, library
+        ) is False
+
+    def test_prohibition_not_legal_during_summon_declaration(self, library):
+        """End-to-end: Prohibition is filtered OUT of legal_actions during
+        a summon declaration window (its OPPONENT_PLAYS_MAGIC condition
+        doesn't match AFTER_SUMMON_DECLARATION).
+        """
+        from grid_tactics.enums import ReactContext
+        prohibition_id = library.get_numeric_id("prohibition")
+        rat_id = library.get_numeric_id("rat")
+        originator = ReactEntry(
+            player_idx=0, card_index=-1, card_numeric_id=rat_id,
+            target_pos=(1, 2),
+            is_originator=True, origin_kind="summon_declaration",
+        )
+        state = self._make_react_state(
+            library,
+            react_context=ReactContext.AFTER_SUMMON_DECLARATION,
+            react_stack=(originator,),
+            p2_hand=(prohibition_id,),
+        )
+        actions = legal_actions(state, library)
+        # Only PASS — Prohibition is not legal here
+        assert len(actions) == 1
+        assert actions[0].action_type == ActionType.PASS
+
+    # ---------- ANY_ACTION universality ----------
+
+    def test_any_action_matches_every_context(self, library):
+        """ANY_ACTION is legal in every react_context (including None)."""
+        from grid_tactics.enums import ReactCondition, ReactContext
+        from grid_tactics.legal_actions import _check_react_condition
+        for ctx in (
+            None,
+            ReactContext.AFTER_ACTION,
+            ReactContext.AFTER_SUMMON_DECLARATION,
+            ReactContext.AFTER_SUMMON_EFFECT,
+            ReactContext.AFTER_START_TRIGGER,
+            ReactContext.AFTER_DEATH_EFFECT,
+            ReactContext.BEFORE_END_OF_TURN,
+        ):
+            state = self._make_react_state(library, react_context=ctx)
+            assert _check_react_condition(
+                ReactCondition.ANY_ACTION, state, library
+            ) is True, f"ANY_ACTION should match ctx={ctx}"
+
+    def test_opponent_plays_minion_matches_summon_declaration(self, library):
+        """Back-compat: legacy OPPONENT_PLAYS_MINION still fires during
+        summon declaration (acts as an alias for OPPONENT_SUMMONS_MINION).
+        """
+        from grid_tactics.enums import ReactCondition, ReactContext
+        from grid_tactics.legal_actions import _check_react_condition
+        state = self._make_react_state(
+            library,
+            react_context=ReactContext.AFTER_SUMMON_DECLARATION,
+        )
+        assert _check_react_condition(
+            ReactCondition.OPPONENT_PLAYS_MINION, state, library
+        ) is True
+
+
+# ---------------------------------------------------------------------------
 # Soundness: all returned actions can be resolved without error
 # ---------------------------------------------------------------------------
 
