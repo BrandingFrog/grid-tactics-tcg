@@ -10,6 +10,21 @@
   },
   "tests": [
     {
+      "id": "react-chain-three-deep",
+      "title": "14.7-09: 3-deep react chain — full conveyor + LIFO resolution",
+      "instructions": "GOAL: walk a 3-card react chain end-to-end so you can see the push direction (each new card glides RIGHT→LEFT, the previous one slides off-screen-LEFT) and the LIFO resolution after 👍 (each top card glides LEFT→RIGHT while the one below it returns from off-screen-LEFT to LEFT, until the original Acidic Rain resolves last and fades).\n\nSetup state: P1 has Acidic Rain (5 mana) + Prohibition (4 mana) + 9 mana. P2 has Prohibition (4 mana) + 4 mana. P2 has a Red Diodebot on the board for the burn outcome check.\n\n1. Confirm Controlling = P1. Click Acidic Rain in P1's bottom hand, click again to confirm. Acidic Rain flies into the RIGHT slot then glides over to LEFT, with the placeholder on RIGHT.\n2. Toggle Controlling → P2 (right sidebar). Click Prohibition in P2's TOP hand, click again to confirm. Prohibition lands on RIGHT, then the conveyor pushes Acidic Rain off-screen-LEFT and Prohibition glides into LEFT. Placeholder returns on RIGHT.\n3. Toggle Controlling → P1. Click Prohibition in P1's bottom hand, click again to confirm. Same conveyor — the previous Prohibition slides off-screen-LEFT, P1's Prohibition lands in LEFT.\n4. Toggle Controlling → P2. P2 has no react left so the window auto-drains.\n5. Watch the resolution sequence in the centre.",
+      "expected": "After the auto-drain (~0.5s), 👍 appears in the RIGHT slot. Then the LIFO resolution plays:\n- Beat 1: P1's Prohibition glides LEFT→RIGHT, P2's Prohibition returns from off-screen-LEFT to LEFT. Brief side-by-side beat showing P1's prohibition negating P2's prohibition. P1's prohibition fades.\n- Beat 2: P2's Prohibition glides LEFT→RIGHT, Acidic Rain returns from off-screen-LEFT to LEFT. Side-by-side beat. P2's Prohibition fades.\n- Beat 3: Acidic Rain alone in LEFT — no card behind it to fill, so no glide. Just holds with 👍 on RIGHT, then fades in place.\n- Whole overlay fades out, then the TURN banner blooms (deferred). The Red Diodebot is BURNING (🔥 badge) — P2's Prohibition was negated by P1's, so Acidic Rain resolved.\n- Final card destinations: Acidic Rain + P1's Prohibition in P1's grave; P2's Prohibition in P2's grave.",
+      "setup": [
+        {"op": "reset"},
+        {"op": "set_player", "player_idx": 0, "field": "current_mana", "value": 9},
+        {"op": "set_player", "player_idx": 1, "field": "current_mana", "value": 4},
+        {"op": "add_to_hand", "player_idx": 0, "card_id": "acidic_rain"},
+        {"op": "add_to_hand", "player_idx": 0, "card_id": "prohibition"},
+        {"op": "add_to_hand", "player_idx": 1, "card_id": "prohibition"},
+        {"op": "place", "player_idx": 1, "card_id": "red_diodebot", "row": 3, "col": 2}
+      ]
+    },
+    {
       "id": "turn-banner-stacks-on-flip",
       "title": "14.7-09: TURN X / PLAYER X banner stacks on turn flip",
       "instructions": "GOAL: see the centred turn banner when the turn flips from P1 to P2.\n\n1. Click the Common Rat in your bottom hand.\n2. Click any green-tinted tile in the bottom two rows of the board to deploy it.\n3. Wait ~1 second. The opponent has no react cards, so the react window auto-closes and the turn flips to P2.",
