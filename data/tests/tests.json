@@ -1,174 +1,766 @@
 {
-    "description": "UAT test scenarios. Each test applies its `setup` op list to a fresh sandbox session, then the user plays through the `instructions` and reports Pass/Fail/Skip + an optional comment. Results append to data/tests/results.jsonl on the server.",
-    "ops": {
-        "reset": "Reset sandbox state (empty board, empty hands, fresh player stats).",
-        "set_player": "{player_idx, field, value} — set a player field (current_mana, max_mana, hp).",
-        "add_to_hand": "{player_idx, card_id} — add a card to the player's hand.",
-        "add_to_zone": "{player_idx, card_id, zone} — add to hand/deck/grave/exhaust.",
-        "place": "{player_idx, card_id, row, col} — deploy a minion directly onto the board.",
-        "set_active": "{player_idx} — set whose turn it is."
-    },
-    "tests": [
+  "description": "UAT test scenarios. Each test applies its `setup` op list to a fresh sandbox session, then the user plays through the `instructions` and reports Pass/Fail/Skip + an optional comment. Results append to data/tests/results.jsonl on the server.",
+  "ops": {
+    "reset": "Reset sandbox state (empty board, empty hands, fresh player stats).",
+    "set_player": "{player_idx, field, value} — set a player field (current_mana, max_mana, hp).",
+    "add_to_hand": "{player_idx, card_id} — add a card to the player's hand.",
+    "add_to_zone": "{player_idx, card_id, zone} — add to hand/deck/grave/exhaust.",
+    "place": "{player_idx, card_id, row, col} — deploy a minion directly onto the board.",
+    "set_active": "{player_idx} — set whose turn it is."
+  },
+  "tests": [
+    {
+      "id": "turn-banner-stacks-on-flip",
+      "title": "14.7-09: TURN X / PLAYER X banner stacks on turn flip",
+      "instructions": "1. Observe the initial state. A TURN 1 / PLAYER 1 banner may fade on load (that's fine).\n2. Controlling P1, click Giant Rat in hand and deploy it to any row-4 tile.\n3. Pass through the react window (opponent Skip).\n4. When the turn flips to P2, watch the center of the screen.",
+      "expected": "A banner animates in at center-screen reading 'TURN 2' on top and 'PLAYER 2' on a second line BELOW it (stacked, NOT side-by-side). The banner scales up, holds ~1s, then fades out completely within ~2s. No lingering text. Banner does NOT block clicks (you can interact with the UI through it).",
+      "setup": [
         {
-            "id": "prohibition-react-chain",
-            "title": "React chain — Prohibition vs Prohibition, 3 deep",
-            "instructions": "Both players have plenty of mana and three Prohibitions each. You'll drive both sides via the 'Controlling' toggle in the sandbox sidebar.\n\n1. Controlling P1, click Acidic Rain in P1's hand and confirm the cast (2nd click).\n2. The spell stage shows [Acidic Rain] ▶ [?]. Toggle Controlling → P2.\n3. Click Prohibition in P2's hand. The stage should push Acidic Rain LEFT off-screen and slide Prohibition into the centre with a fresh [?] slot.\n4. Toggle Controlling → P1. Click Prohibition in P1's hand. Another slide.\n5. Toggle Controlling → P2. Click Prohibition in P2's hand. Another slide.\n6. Toggle Controlling → P1. No Prohibition left — click the Skip/Pass button in the react window to close the stack.",
-            "expected": "The spell stage animates a slide-left / slide-in-right each time a react is added. The '?' resets between reacts. Once the stack resolves (LIFO): the topmost Prohibition negates the second, the second negates the first, the first negates Acidic Rain. No minion ends up burning, all 4 cards (Acidic Rain + 3 Prohibitions) land in the Grave piles (Acidic Rain + P1's 2 Prohibitions in P1 grave, P2's 1 Prohibition in P2 grave). No HP damage popup — the spell was negated.",
-            "setup": [
-                {"op": "reset"},
-                {"op": "set_player", "player_idx": 0, "field": "current_mana", "value": 20},
-                {"op": "set_player", "player_idx": 0, "field": "max_mana", "value": 20},
-                {"op": "set_player", "player_idx": 1, "field": "current_mana", "value": 20},
-                {"op": "set_player", "player_idx": 1, "field": "max_mana", "value": 20},
-                {"op": "add_to_hand", "player_idx": 0, "card_id": "acidic_rain"},
-                {"op": "add_to_hand", "player_idx": 0, "card_id": "prohibition"},
-                {"op": "add_to_hand", "player_idx": 1, "card_id": "prohibition"},
-                {"op": "add_to_hand", "player_idx": 1, "card_id": "prohibition"},
-                {"op": "place", "player_idx": 1, "card_id": "red_diodebot", "row": 1, "col": 2},
-                {"op": "set_active", "player_idx": 0}
-            ]
+          "op": "reset"
         },
         {
-            "id": "sacrifice-transcend-animation",
-            "title": "Sacrifice — jumper leaps, shatters mid-arc (default visual)",
-            "instructions": "1. P1's Common Rat is pre-placed on row 4 — ready to jump off.\n2. Click the Rat to select it.\n3. Click the Sacrifice action button.",
-            "expected": "Beat 1: white-purple flash erupts on the tile. Beat 2: the pixel-art jumper silhouette (purple outline, white glow) leaps forward toward P2's HP. Beat 3: mid-arc the silhouette explodes into 8 hexagonal purple shards that fly outward spinning and fade. HP damage popup fires after. A+C combined — this is the default.",
-            "client_hints": {"sacrifice_animation": "shatter"},
-            "setup": [
-                {"op": "reset"},
-                {"op": "set_player", "player_idx": 0, "field": "current_mana", "value": 10},
-                {"op": "set_player", "player_idx": 0, "field": "max_mana", "value": 10},
-                {"op": "place", "player_idx": 0, "card_id": "rat", "row": 4, "col": 2},
-                {"op": "set_active", "player_idx": 0}
-            ]
+          "op": "set_player",
+          "player_idx": 0,
+          "field": "current_mana",
+          "value": 9
         },
         {
-            "id": "acidic-rain-burns-metal-and-robots",
-            "title": "Acidic Rain burns all Metal/Robot/Machine minions — and nothing else",
-            "instructions": "1. Click Acidic Rain in P1's hand.\n2. Click any valid play indicator to cast it (it's 5 mana; P1 has 20).",
-            "expected": "All three Diodebots, the RGB Lasercannon, and the Sparkbot on P2's side should light up as BURNING (look for the fire glow/border). The Common Rat on P2 must NOT be burning.",
-            "setup": [
-                {"op": "reset"},
-                {"op": "set_player", "player_idx": 0, "field": "current_mana", "value": 20},
-                {"op": "set_player", "player_idx": 0, "field": "max_mana", "value": 20},
-                {"op": "add_to_hand", "player_idx": 0, "card_id": "acidic_rain"},
-                {"op": "place", "player_idx": 1, "card_id": "red_diodebot", "row": 1, "col": 0},
-                {"op": "place", "player_idx": 1, "card_id": "blue_diodebot", "row": 1, "col": 1},
-                {"op": "place", "player_idx": 1, "card_id": "green_diodebot", "row": 1, "col": 2},
-                {"op": "place", "player_idx": 1, "card_id": "rgb_lasercannon", "row": 1, "col": 3},
-                {"op": "place", "player_idx": 1, "card_id": "rat", "row": 1, "col": 4},
-                {"op": "place", "player_idx": 1, "card_id": "surgefed_sparkbot", "row": 0, "col": 2},
-                {"op": "set_active", "player_idx": 0}
-            ]
+          "op": "set_player",
+          "player_idx": 0,
+          "field": "max_mana",
+          "value": 9
         },
         {
-            "id": "dm-number-shown-in-purple",
-            "title": "Live Dark Matter count in card text",
-            "instructions": "1. Hover (or click) Dark Matter Barrage in P1's hand.\n2. Read the rules line.",
-            "expected": "The line should read 'Deal 5 + 9 (Dark Matter) damage to all enemies' (approximately) with the number 9 glowing in PURPLE. Each of P1's three Mages has 3 Dark Matter stacks, summing to 9.",
-            "setup": [
-                {"op": "reset"},
-                {"op": "set_player", "player_idx": 0, "field": "current_mana", "value": 10},
-                {"op": "set_player", "player_idx": 0, "field": "max_mana", "value": 10},
-                {"op": "place", "player_idx": 0, "card_id": "gargoyle_sorceress", "row": 3, "col": 2, "dark_matter": 3},
-                {"op": "place", "player_idx": 0, "card_id": "shadow_blaster", "row": 3, "col": 1, "dark_matter": 3},
-                {"op": "place", "player_idx": 0, "card_id": "shadow_blaster", "row": 3, "col": 3, "dark_matter": 3},
-                {"op": "add_to_hand", "player_idx": 0, "card_id": "dark_matter_barrage"},
-                {"op": "set_active", "player_idx": 0}
-            ]
+          "op": "set_player",
+          "player_idx": 1,
+          "field": "current_mana",
+          "value": 5
         },
         {
-            "id": "card-flies-to-grave-on-cast",
-            "title": "Magic cast animation — card flies from hand to grave",
-            "instructions": "1. Play Dark Matter Stash from P1's hand (5 mana).\n2. Watch the card as it leaves the hand.",
-            "expected": "The Dark Matter Stash card should visibly fly from its hand slot upward and land on the P1 Grave pile (bottom-right pile buttons), shrinking and fading as it goes. It should NOT just disappear instantly.",
-            "setup": [
-                {"op": "reset"},
-                {"op": "set_player", "player_idx": 0, "field": "current_mana", "value": 20},
-                {"op": "set_player", "player_idx": 0, "field": "max_mana", "value": 20},
-                {"op": "place", "player_idx": 0, "card_id": "gargoyle_sorceress", "row": 3, "col": 2},
-                {"op": "add_to_hand", "player_idx": 0, "card_id": "dark_matter_stash"},
-                {"op": "set_active", "player_idx": 0}
-            ]
+          "op": "set_player",
+          "player_idx": 1,
+          "field": "max_mana",
+          "value": 5
         },
         {
-            "id": "spell-stage-center-visual",
-            "title": "Spell cast center stage — magic card appears in centre with ▶ ? slot",
-            "instructions": "1. Play Dark Matter Stash from P1's hand (5 mana).\n2. Watch the center of the screen immediately after.",
-            "expected": "A giant Dark Matter Stash appears in the middle of the screen with a cyan ▶ arrow and a '?' slot to its right. After roughly 1 second the '?' flips to a green 👍 (thumbs-up) and the whole overlay fades out.",
-            "setup": [
-                {"op": "reset"},
-                {"op": "set_player", "player_idx": 0, "field": "current_mana", "value": 20},
-                {"op": "set_player", "player_idx": 0, "field": "max_mana", "value": 20},
-                {"op": "place", "player_idx": 0, "card_id": "gargoyle_sorceress", "row": 3, "col": 2},
-                {"op": "add_to_hand", "player_idx": 0, "card_id": "dark_matter_stash"},
-                {"op": "set_active", "player_idx": 0}
-            ]
-        },
-        {
-            "id": "feed-the-shadow-destroy-ally",
-            "title": "Feed the Shadow — magic spell with destroy-ally cost actually casts",
-            "instructions": "1. P1 has 2 mana, a Common Rat at (3,2), and Feed the Shadow in hand.\n2. Click Feed the Shadow (with only one legal target the cast auto-resolves).",
-            "expected": "The card casts without an 'Illegal action' error. Your Common Rat at (3,2) is destroyed. The enemy Rat takes damage equal to the destroyed Rat's attack (10). Your Gargoyle Sorceress (Dark Mage) on the board gains +1 Dark Matter.",
-            "setup": [
-                {"op": "reset"},
-                {"op": "set_player", "player_idx": 0, "field": "current_mana", "value": 2},
-                {"op": "set_player", "player_idx": 0, "field": "max_mana", "value": 2},
-                {"op": "place", "player_idx": 0, "card_id": "rat", "row": 3, "col": 2},
-                {"op": "place", "player_idx": 0, "card_id": "gargoyle_sorceress", "row": 4, "col": 2},
-                {"op": "place", "player_idx": 1, "card_id": "rat", "row": 1, "col": 2},
-                {"op": "add_to_hand", "player_idx": 0, "card_id": "feed_the_shadow"},
-                {"op": "set_active", "player_idx": 0}
-            ]
-        },
-        {
-            "id": "gargoyle-sorceress-multi-discard",
-            "title": "Gargoyle Sorceress — player picks BOTH discard cards",
-            "instructions": "1. Click Gargoyle Sorceress in P1's hand.\n2. Pick any empty back-two-row tile to deploy.\n3. The picker modal should appear showing ALL 3 other hand cards.\n4. Click the first card you want to exhaust. Modal stays open; the card becomes dimmed with a ✓.\n5. Click a second card. As soon as you hit the required count (2), Gargoyle deploys and both cards go to the Exhaust pile.",
-            "expected": "The picker modal does NOT submit after just one click. It waits for 2 picks (progress shows '1 / 2 picked' then '2 / 2 picked'). Clicking an already-picked card un-picks it. After the second pick the Gargoyle Sorceress appears on the chosen tile and exactly the 2 cards you picked land in P1's Exhaust pile.",
-            "setup": [
-                {"op": "reset"},
-                {"op": "set_player", "player_idx": 0, "field": "current_mana", "value": 10},
-                {"op": "set_player", "player_idx": 0, "field": "max_mana", "value": 10},
-                {"op": "add_to_hand", "player_idx": 0, "card_id": "gargoyle_sorceress"},
-                {"op": "add_to_hand", "player_idx": 0, "card_id": "rat"},
-                {"op": "add_to_hand", "player_idx": 0, "card_id": "acidic_rain"},
-                {"op": "add_to_hand", "player_idx": 0, "card_id": "flame_wyrm"},
-                {"op": "set_active", "player_idx": 0}
-            ]
-        },
-        {
-            "id": "modals-share-one-style",
-            "title": "All pickers share the same visual style (tutor is the reference)",
-            "instructions": "1. Play 'To The Ratmobile!' from P1's hand (3 mana; tutors 2 Rats from deck). Observe the tutor modal — note its chrome (cyan border, dark header bar with title, card grid, close button).\n2. Click Reset in the test panel.\n3. Play Gargoyle Sorceress from P1's hand (5 mana) — it needs to discard 2 cards. Observe the discard picker modal.",
-            "expected": "The discard picker modal uses the SAME visual chrome as the tutor modal — cyan border, dark header bar with title text, card grid body, consistent spacing. The words 'sacrifice' should NOT appear anywhere; this is a DISCARD (cards go to Exhaust). Title should read 'Pick 2 cards to Discard'.",
-            "setup": [
-                {"op": "reset"},
-                {"op": "set_player", "player_idx": 0, "field": "current_mana", "value": 10},
-                {"op": "set_player", "player_idx": 0, "field": "max_mana", "value": 10},
-                {"op": "add_to_hand", "player_idx": 0, "card_id": "to_the_ratmobile"},
-                {"op": "add_to_hand", "player_idx": 0, "card_id": "gargoyle_sorceress"},
-                {"op": "add_to_hand", "player_idx": 0, "card_id": "rat"},
-                {"op": "add_to_hand", "player_idx": 0, "card_id": "flame_wyrm"},
-                {"op": "add_to_zone", "player_idx": 0, "card_id": "rat", "zone": "deck_top"},
-                {"op": "add_to_zone", "player_idx": 0, "card_id": "rat", "zone": "deck_top"},
-                {"op": "add_to_zone", "player_idx": 0, "card_id": "rat", "zone": "deck_top"},
-                {"op": "set_active", "player_idx": 0}
-            ]
-        },
-        {
-            "id": "matter-possessed-hp-cost",
-            "title": "Matter Possessed — Cost: Deal 25🤍 to own face",
-            "instructions": "1. Hover Matter Possessed in P1's hand and confirm the cost line reads 'Cost: Deal 25🤍 to own face'.\n2. P1 HP is 30 and mana is 1.\n3. Play Matter Possessed onto any empty tile in P1's back two rows.",
-            "expected": "P1's HP drops from 30 to 5 (dealt 25 to face). A 25/25 Dark Mage minion appears on the chosen tile. Mana drops from 1 to 0.",
-            "setup": [
-                {"op": "reset"},
-                {"op": "set_player", "player_idx": 0, "field": "current_mana", "value": 1},
-                {"op": "set_player", "player_idx": 0, "field": "max_mana", "value": 1},
-                {"op": "set_player", "player_idx": 0, "field": "hp", "value": 30},
-                {"op": "add_to_hand", "player_idx": 0, "card_id": "matter_possessed"},
-                {"op": "set_active", "player_idx": 0}
-            ]
+          "op": "add_to_hand",
+          "player_idx": 0,
+          "card_id": "giant_rat"
         }
-    ]
+      ]
+    },
+    {
+      "id": "start-of-turn-trigger-blip",
+      "title": "14.7-09: Fallen Paladin Start: heal animates source→center→target blip",
+      "instructions": "Fallen Paladin is deployed for P1. P1 is at 20 HP (hurt). Paladin has Start: heal 2 HP to owner.\n\n1. Controlling P1, click Pass to end the action phase.\n2. Let both react windows close (Skip).\n3. P2's turn starts (TURN 2 banner). Controlling P2, Pass.\n4. Let react windows close (Skip). Turn flips back to P1.\n5. Watch the board and center of the screen when the TURN 3 banner fires.",
+      "expected": "On P1's turn start (TURN 3): Fallen Paladin's source tile pulses yellow, a ⏰ glyph blooms at center-screen, then P1's face/HP target pulses and a +2🤍 heal popup floats. P1's HP goes from 20 to 22. No errors in console.",
+      "setup": [
+        {
+          "op": "reset"
+        },
+        {
+          "op": "set_player",
+          "player_idx": 0,
+          "field": "current_mana",
+          "value": 9
+        },
+        {
+          "op": "set_player",
+          "player_idx": 0,
+          "field": "max_mana",
+          "value": 9
+        },
+        {
+          "op": "set_player",
+          "player_idx": 0,
+          "field": "hp",
+          "value": 20
+        },
+        {
+          "op": "set_player",
+          "player_idx": 1,
+          "field": "current_mana",
+          "value": 5
+        },
+        {
+          "op": "set_player",
+          "player_idx": 1,
+          "field": "max_mana",
+          "value": 5
+        },
+        {
+          "op": "place",
+          "player_idx": 0,
+          "card_id": "fallen_paladin",
+          "row": 4,
+          "col": 2
+        }
+      ]
+    },
+    {
+      "id": "end-of-turn-trigger-blip",
+      "title": "14.7-09: Emberplague Rat End: burn-aura blip fires on turn end",
+      "instructions": "Emberplague Rat is on P1's board at (3,2). A P2 Giant Rat is adjacent at (2,2). Emberplague's End: applies burning to adjacent enemies.\n\n1. Controlling P1, click Pass to end the action phase.\n2. Watch the board just before the turn flips to P2.\n3. Let the react window close.",
+      "expected": "As P1's End-of-Turn phase resolves: Emberplague's source tile pulses, a ⏳ glyph blooms at center, and the adjacent Giant Rat's tile pulses with the burning effect. The Giant Rat now shows a 🔥 burn badge. No errors.",
+      "setup": [
+        {
+          "op": "reset"
+        },
+        {
+          "op": "set_player",
+          "player_idx": 0,
+          "field": "current_mana",
+          "value": 9
+        },
+        {
+          "op": "set_player",
+          "player_idx": 0,
+          "field": "max_mana",
+          "value": 9
+        },
+        {
+          "op": "set_player",
+          "player_idx": 1,
+          "field": "current_mana",
+          "value": 5
+        },
+        {
+          "op": "set_player",
+          "player_idx": 1,
+          "field": "max_mana",
+          "value": 5
+        },
+        {
+          "op": "place",
+          "player_idx": 0,
+          "card_id": "emberplague_rat",
+          "row": 3,
+          "col": 2
+        },
+        {
+          "op": "place",
+          "player_idx": 1,
+          "card_id": "giant_rat",
+          "row": 2,
+          "col": 2
+        }
+      ]
+    },
+    {
+      "id": "priority-modal-two-start-triggers",
+      "title": "14.7-09: Priority modal opens when 2+ same-player triggers fire",
+      "instructions": "Two Fallen Paladins are on P1's board. P1 is hurt (20 HP). When P1's turn starts, BOTH Paladins have Start: heal triggers simultaneously — the turn player picks order via a modal.\n\n1. Controlling P1, click Pass.\n2. Let react windows close. Controlling P2, Pass again.\n3. Let react windows close. On P1's next turn start (TURN 3), watch for a modal with two card faces.\n4. Click one Paladin card in the modal. That trigger fires (blip + heal). Then the modal shows the remaining one.\n5. Click it. Second trigger fires.",
+      "expected": "Priority modal opens at turn 3 start with TWO full-art Fallen Paladin cards (same style as tutor modal). After clicking the first, its blip fires and P1 heals +2🤍. Then the modal shows the second; click and second blip + heal fires. P1's final HP is 24. No modal hangs.",
+      "setup": [
+        {
+          "op": "reset"
+        },
+        {
+          "op": "set_player",
+          "player_idx": 0,
+          "field": "current_mana",
+          "value": 9
+        },
+        {
+          "op": "set_player",
+          "player_idx": 0,
+          "field": "max_mana",
+          "value": 9
+        },
+        {
+          "op": "set_player",
+          "player_idx": 0,
+          "field": "hp",
+          "value": 20
+        },
+        {
+          "op": "set_player",
+          "player_idx": 1,
+          "field": "current_mana",
+          "value": 5
+        },
+        {
+          "op": "set_player",
+          "player_idx": 1,
+          "field": "max_mana",
+          "value": 5
+        },
+        {
+          "op": "place",
+          "player_idx": 0,
+          "card_id": "fallen_paladin",
+          "row": 4,
+          "col": 1
+        },
+        {
+          "op": "place",
+          "player_idx": 0,
+          "card_id": "fallen_paladin",
+          "row": 4,
+          "col": 3
+        }
+      ]
+    },
+    {
+      "id": "spell-stage-closes-with-thumbs-up",
+      "title": "14.7-09: Spell-stage fades with 👍 after react chain fully resolves",
+      "instructions": "Regression test — the spell-stage animation should close cleanly in sandbox (used to hang open).\n\n1. Controlling P1, click Acidic Rain, confirm cast. Stage shows [Acidic Rain] ▶ [?].\n2. Controlling P2, Skip/Pass the react window.\n3. Watch the spell stage.",
+      "expected": "Stage resolves: Acidic Rain animates out, the RIGHT slot shows 👍, then the whole stage fades away within ~1s. Metal/Robot minions on board (if any) become burning. Stage does NOT hang open with '?' still visible.",
+      "setup": [
+        {
+          "op": "reset"
+        },
+        {
+          "op": "set_player",
+          "player_idx": 0,
+          "field": "current_mana",
+          "value": 9
+        },
+        {
+          "op": "set_player",
+          "player_idx": 0,
+          "field": "max_mana",
+          "value": 9
+        },
+        {
+          "op": "set_player",
+          "player_idx": 1,
+          "field": "current_mana",
+          "value": 5
+        },
+        {
+          "op": "set_player",
+          "player_idx": 1,
+          "field": "max_mana",
+          "value": 5
+        },
+        {
+          "op": "add_to_hand",
+          "player_idx": 0,
+          "card_id": "acidic_rain"
+        },
+        {
+          "op": "place",
+          "player_idx": 1,
+          "card_id": "red_diodebot",
+          "row": 1,
+          "col": 2
+        }
+      ]
+    },
+    {
+      "id": "prohibition-react-chain",
+      "title": "React chain — Prohibition vs Prohibition, 3 deep",
+      "instructions": "Both players have plenty of mana and three Prohibitions each. You'll drive both sides via the 'Controlling' toggle in the sandbox sidebar.\n\n1. Controlling P1, click Acidic Rain in P1's hand and confirm the cast (2nd click).\n2. The spell stage shows [Acidic Rain] ▶ [?]. Toggle Controlling → P2.\n3. Click Prohibition in P2's hand. The stage should push Acidic Rain LEFT off-screen and slide Prohibition into the centre with a fresh [?] slot.\n4. Toggle Controlling → P1. Click Prohibition in P1's hand. Another slide.\n5. Toggle Controlling → P2. Click Prohibition in P2's hand. Another slide.\n6. Toggle Controlling → P1. No Prohibition left — click the Skip/Pass button in the react window to close the stack.",
+      "expected": "The spell stage animates a slide-left / slide-in-right each time a react is added. The '?' resets between reacts. Once the stack resolves (LIFO): the topmost Prohibition negates the second, the second negates the first, the first negates Acidic Rain. No minion ends up burning, all 4 cards (Acidic Rain + 3 Prohibitions) land in the Grave piles (Acidic Rain + P1's 2 Prohibitions in P1 grave, P2's 1 Prohibition in P2 grave). No HP damage popup — the spell was negated.",
+      "setup": [
+        {
+          "op": "reset"
+        },
+        {
+          "op": "set_player",
+          "player_idx": 0,
+          "field": "current_mana",
+          "value": 20
+        },
+        {
+          "op": "set_player",
+          "player_idx": 0,
+          "field": "max_mana",
+          "value": 20
+        },
+        {
+          "op": "set_player",
+          "player_idx": 1,
+          "field": "current_mana",
+          "value": 20
+        },
+        {
+          "op": "set_player",
+          "player_idx": 1,
+          "field": "max_mana",
+          "value": 20
+        },
+        {
+          "op": "add_to_hand",
+          "player_idx": 0,
+          "card_id": "acidic_rain"
+        },
+        {
+          "op": "add_to_hand",
+          "player_idx": 0,
+          "card_id": "prohibition"
+        },
+        {
+          "op": "add_to_hand",
+          "player_idx": 1,
+          "card_id": "prohibition"
+        },
+        {
+          "op": "add_to_hand",
+          "player_idx": 1,
+          "card_id": "prohibition"
+        },
+        {
+          "op": "place",
+          "player_idx": 1,
+          "card_id": "red_diodebot",
+          "row": 1,
+          "col": 2
+        },
+        {
+          "op": "set_active",
+          "player_idx": 0
+        }
+      ]
+    },
+    {
+      "id": "sacrifice-transcend-animation",
+      "title": "Sacrifice — jumper leaps, shatters mid-arc (default visual)",
+      "instructions": "1. P1's Common Rat is pre-placed on row 4 — ready to jump off.\n2. Click the Rat to select it.\n3. Click the Sacrifice action button.",
+      "expected": "Beat 1: white-purple flash erupts on the tile. Beat 2: the pixel-art jumper silhouette (purple outline, white glow) leaps forward toward P2's HP. Beat 3: mid-arc the silhouette explodes into 8 hexagonal purple shards that fly outward spinning and fade. HP damage popup fires after. A+C combined — this is the default.",
+      "client_hints": {
+        "sacrifice_animation": "shatter"
+      },
+      "setup": [
+        {
+          "op": "reset"
+        },
+        {
+          "op": "set_player",
+          "player_idx": 0,
+          "field": "current_mana",
+          "value": 10
+        },
+        {
+          "op": "set_player",
+          "player_idx": 0,
+          "field": "max_mana",
+          "value": 10
+        },
+        {
+          "op": "place",
+          "player_idx": 0,
+          "card_id": "rat",
+          "row": 4,
+          "col": 2
+        },
+        {
+          "op": "set_active",
+          "player_idx": 0
+        }
+      ]
+    },
+    {
+      "id": "acidic-rain-burns-metal-and-robots",
+      "title": "Acidic Rain burns all Metal/Robot/Machine minions — and nothing else",
+      "instructions": "1. Click Acidic Rain in P1's hand.\n2. Click any valid play indicator to cast it (it's 5 mana; P1 has 20).",
+      "expected": "All three Diodebots, the RGB Lasercannon, and the Sparkbot on P2's side should light up as BURNING (look for the fire glow/border). The Common Rat on P2 must NOT be burning.",
+      "setup": [
+        {
+          "op": "reset"
+        },
+        {
+          "op": "set_player",
+          "player_idx": 0,
+          "field": "current_mana",
+          "value": 20
+        },
+        {
+          "op": "set_player",
+          "player_idx": 0,
+          "field": "max_mana",
+          "value": 20
+        },
+        {
+          "op": "add_to_hand",
+          "player_idx": 0,
+          "card_id": "acidic_rain"
+        },
+        {
+          "op": "place",
+          "player_idx": 1,
+          "card_id": "red_diodebot",
+          "row": 1,
+          "col": 0
+        },
+        {
+          "op": "place",
+          "player_idx": 1,
+          "card_id": "blue_diodebot",
+          "row": 1,
+          "col": 1
+        },
+        {
+          "op": "place",
+          "player_idx": 1,
+          "card_id": "green_diodebot",
+          "row": 1,
+          "col": 2
+        },
+        {
+          "op": "place",
+          "player_idx": 1,
+          "card_id": "rgb_lasercannon",
+          "row": 1,
+          "col": 3
+        },
+        {
+          "op": "place",
+          "player_idx": 1,
+          "card_id": "rat",
+          "row": 1,
+          "col": 4
+        },
+        {
+          "op": "place",
+          "player_idx": 1,
+          "card_id": "surgefed_sparkbot",
+          "row": 0,
+          "col": 2
+        },
+        {
+          "op": "set_active",
+          "player_idx": 0
+        }
+      ]
+    },
+    {
+      "id": "dm-number-shown-in-purple",
+      "title": "Live Dark Matter count in card text",
+      "instructions": "1. Hover (or click) Dark Matter Barrage in P1's hand.\n2. Read the rules line.",
+      "expected": "The line should read 'Deal 5 + 9 (Dark Matter) damage to all enemies' (approximately) with the number 9 glowing in PURPLE. Each of P1's three Mages has 3 Dark Matter stacks, summing to 9.",
+      "setup": [
+        {
+          "op": "reset"
+        },
+        {
+          "op": "set_player",
+          "player_idx": 0,
+          "field": "current_mana",
+          "value": 10
+        },
+        {
+          "op": "set_player",
+          "player_idx": 0,
+          "field": "max_mana",
+          "value": 10
+        },
+        {
+          "op": "place",
+          "player_idx": 0,
+          "card_id": "gargoyle_sorceress",
+          "row": 3,
+          "col": 2,
+          "dark_matter": 3
+        },
+        {
+          "op": "place",
+          "player_idx": 0,
+          "card_id": "shadow_blaster",
+          "row": 3,
+          "col": 1,
+          "dark_matter": 3
+        },
+        {
+          "op": "place",
+          "player_idx": 0,
+          "card_id": "shadow_blaster",
+          "row": 3,
+          "col": 3,
+          "dark_matter": 3
+        },
+        {
+          "op": "add_to_hand",
+          "player_idx": 0,
+          "card_id": "dark_matter_barrage"
+        },
+        {
+          "op": "set_active",
+          "player_idx": 0
+        }
+      ]
+    },
+    {
+      "id": "card-flies-to-grave-on-cast",
+      "title": "Magic cast animation — card flies from hand to grave",
+      "instructions": "1. Play Dark Matter Stash from P1's hand (5 mana).\n2. Watch the card as it leaves the hand.",
+      "expected": "The Dark Matter Stash card should visibly fly from its hand slot upward and land on the P1 Grave pile (bottom-right pile buttons), shrinking and fading as it goes. It should NOT just disappear instantly.",
+      "setup": [
+        {
+          "op": "reset"
+        },
+        {
+          "op": "set_player",
+          "player_idx": 0,
+          "field": "current_mana",
+          "value": 20
+        },
+        {
+          "op": "set_player",
+          "player_idx": 0,
+          "field": "max_mana",
+          "value": 20
+        },
+        {
+          "op": "place",
+          "player_idx": 0,
+          "card_id": "gargoyle_sorceress",
+          "row": 3,
+          "col": 2
+        },
+        {
+          "op": "add_to_hand",
+          "player_idx": 0,
+          "card_id": "dark_matter_stash"
+        },
+        {
+          "op": "set_active",
+          "player_idx": 0
+        }
+      ]
+    },
+    {
+      "id": "spell-stage-center-visual",
+      "title": "Spell cast center stage — magic card appears in centre with ▶ ? slot",
+      "instructions": "1. Play Dark Matter Stash from P1's hand (5 mana).\n2. Watch the center of the screen immediately after.",
+      "expected": "A giant Dark Matter Stash appears in the middle of the screen with a cyan ▶ arrow and a '?' slot to its right. After roughly 1 second the '?' flips to a green 👍 (thumbs-up) and the whole overlay fades out.",
+      "setup": [
+        {
+          "op": "reset"
+        },
+        {
+          "op": "set_player",
+          "player_idx": 0,
+          "field": "current_mana",
+          "value": 20
+        },
+        {
+          "op": "set_player",
+          "player_idx": 0,
+          "field": "max_mana",
+          "value": 20
+        },
+        {
+          "op": "place",
+          "player_idx": 0,
+          "card_id": "gargoyle_sorceress",
+          "row": 3,
+          "col": 2
+        },
+        {
+          "op": "add_to_hand",
+          "player_idx": 0,
+          "card_id": "dark_matter_stash"
+        },
+        {
+          "op": "set_active",
+          "player_idx": 0
+        }
+      ]
+    },
+    {
+      "id": "feed-the-shadow-destroy-ally",
+      "title": "Feed the Shadow — magic spell with destroy-ally cost actually casts",
+      "instructions": "1. P1 has 2 mana, a Common Rat at (3,2), and Feed the Shadow in hand.\n2. Click Feed the Shadow (with only one legal target the cast auto-resolves).",
+      "expected": "The card casts without an 'Illegal action' error. Your Common Rat at (3,2) is destroyed. The enemy Rat takes damage equal to the destroyed Rat's attack (10). Your Gargoyle Sorceress (Dark Mage) on the board gains +1 Dark Matter.",
+      "setup": [
+        {
+          "op": "reset"
+        },
+        {
+          "op": "set_player",
+          "player_idx": 0,
+          "field": "current_mana",
+          "value": 2
+        },
+        {
+          "op": "set_player",
+          "player_idx": 0,
+          "field": "max_mana",
+          "value": 2
+        },
+        {
+          "op": "place",
+          "player_idx": 0,
+          "card_id": "rat",
+          "row": 3,
+          "col": 2
+        },
+        {
+          "op": "place",
+          "player_idx": 0,
+          "card_id": "gargoyle_sorceress",
+          "row": 4,
+          "col": 2
+        },
+        {
+          "op": "place",
+          "player_idx": 1,
+          "card_id": "rat",
+          "row": 1,
+          "col": 2
+        },
+        {
+          "op": "add_to_hand",
+          "player_idx": 0,
+          "card_id": "feed_the_shadow"
+        },
+        {
+          "op": "set_active",
+          "player_idx": 0
+        }
+      ]
+    },
+    {
+      "id": "gargoyle-sorceress-multi-discard",
+      "title": "Gargoyle Sorceress — player picks BOTH discard cards",
+      "instructions": "1. Click Gargoyle Sorceress in P1's hand.\n2. Pick any empty back-two-row tile to deploy.\n3. The picker modal should appear showing ALL 3 other hand cards.\n4. Click the first card you want to exhaust. Modal stays open; the card becomes dimmed with a ✓.\n5. Click a second card. As soon as you hit the required count (2), Gargoyle deploys and both cards go to the Exhaust pile.",
+      "expected": "The picker modal does NOT submit after just one click. It waits for 2 picks (progress shows '1 / 2 picked' then '2 / 2 picked'). Clicking an already-picked card un-picks it. After the second pick the Gargoyle Sorceress appears on the chosen tile and exactly the 2 cards you picked land in P1's Exhaust pile.",
+      "setup": [
+        {
+          "op": "reset"
+        },
+        {
+          "op": "set_player",
+          "player_idx": 0,
+          "field": "current_mana",
+          "value": 10
+        },
+        {
+          "op": "set_player",
+          "player_idx": 0,
+          "field": "max_mana",
+          "value": 10
+        },
+        {
+          "op": "add_to_hand",
+          "player_idx": 0,
+          "card_id": "gargoyle_sorceress"
+        },
+        {
+          "op": "add_to_hand",
+          "player_idx": 0,
+          "card_id": "rat"
+        },
+        {
+          "op": "add_to_hand",
+          "player_idx": 0,
+          "card_id": "acidic_rain"
+        },
+        {
+          "op": "add_to_hand",
+          "player_idx": 0,
+          "card_id": "flame_wyrm"
+        },
+        {
+          "op": "set_active",
+          "player_idx": 0
+        }
+      ]
+    },
+    {
+      "id": "modals-share-one-style",
+      "title": "All pickers share the same visual style (tutor is the reference)",
+      "instructions": "1. Play 'To The Ratmobile!' from P1's hand (3 mana; tutors 2 Rats from deck). Observe the tutor modal — note its chrome (cyan border, dark header bar with title, card grid, close button).\n2. Click Reset in the test panel.\n3. Play Gargoyle Sorceress from P1's hand (5 mana) — it needs to discard 2 cards. Observe the discard picker modal.",
+      "expected": "The discard picker modal uses the SAME visual chrome as the tutor modal — cyan border, dark header bar with title text, card grid body, consistent spacing. The words 'sacrifice' should NOT appear anywhere; this is a DISCARD (cards go to Exhaust). Title should read 'Pick 2 cards to Discard'.",
+      "setup": [
+        {
+          "op": "reset"
+        },
+        {
+          "op": "set_player",
+          "player_idx": 0,
+          "field": "current_mana",
+          "value": 10
+        },
+        {
+          "op": "set_player",
+          "player_idx": 0,
+          "field": "max_mana",
+          "value": 10
+        },
+        {
+          "op": "add_to_hand",
+          "player_idx": 0,
+          "card_id": "to_the_ratmobile"
+        },
+        {
+          "op": "add_to_hand",
+          "player_idx": 0,
+          "card_id": "gargoyle_sorceress"
+        },
+        {
+          "op": "add_to_hand",
+          "player_idx": 0,
+          "card_id": "rat"
+        },
+        {
+          "op": "add_to_hand",
+          "player_idx": 0,
+          "card_id": "flame_wyrm"
+        },
+        {
+          "op": "add_to_zone",
+          "player_idx": 0,
+          "card_id": "rat",
+          "zone": "deck_top"
+        },
+        {
+          "op": "add_to_zone",
+          "player_idx": 0,
+          "card_id": "rat",
+          "zone": "deck_top"
+        },
+        {
+          "op": "add_to_zone",
+          "player_idx": 0,
+          "card_id": "rat",
+          "zone": "deck_top"
+        },
+        {
+          "op": "set_active",
+          "player_idx": 0
+        }
+      ]
+    },
+    {
+      "id": "matter-possessed-hp-cost",
+      "title": "Matter Possessed — Cost: Deal 25🤍 to own face",
+      "instructions": "1. Hover Matter Possessed in P1's hand and confirm the cost line reads 'Cost: Deal 25🤍 to own face'.\n2. P1 HP is 30 and mana is 1.\n3. Play Matter Possessed onto any empty tile in P1's back two rows.",
+      "expected": "P1's HP drops from 30 to 5 (dealt 25 to face). A 25/25 Dark Mage minion appears on the chosen tile. Mana drops from 1 to 0.",
+      "setup": [
+        {
+          "op": "reset"
+        },
+        {
+          "op": "set_player",
+          "player_idx": 0,
+          "field": "current_mana",
+          "value": 1
+        },
+        {
+          "op": "set_player",
+          "player_idx": 0,
+          "field": "max_mana",
+          "value": 1
+        },
+        {
+          "op": "set_player",
+          "player_idx": 0,
+          "field": "hp",
+          "value": 30
+        },
+        {
+          "op": "add_to_hand",
+          "player_idx": 0,
+          "card_id": "matter_possessed"
+        },
+        {
+          "op": "set_active",
+          "player_idx": 0
+        }
+      ]
+    }
+  ]
 }

@@ -3378,13 +3378,16 @@ function _playSacPortal(job, done) {
 // the animation; this function just drops a DOM node and schedules its
 // removal after the animation finishes. Safe to call concurrently with
 // the AnimationQueue; the banner never gates game state.
+var _lastBannerTurnKey = null;
 function _showTurnBanner(turnNumber, activePlayerIdx) {
     try {
-        // Remove any prior banner (covers rapid turn flips in sandbox).
-        // Class is `.turn-transition-banner` (NOT `.turn-banner`, which is
-        // already claimed by the HUD flex row at game.css ~1116 — the
-        // double-declaration caused TURN X / PLAYER X to render side-by-side
-        // instead of stacked). See 14.7-09-SUMMARY.md Issue C.
+        // Dedupe: don't re-fire for the same turn (covers repeated
+        // sandbox_state emits for turn=1 on initial load).
+        var key = turnNumber + ':' + activePlayerIdx;
+        if (_lastBannerTurnKey === key) return;
+        _lastBannerTurnKey = key;
+
+        // Remove any prior banner (covers rapid turn flips).
         var prior = document.querySelector('.turn-transition-banner');
         if (prior && prior.parentNode) prior.parentNode.removeChild(prior);
 
@@ -3396,12 +3399,18 @@ function _showTurnBanner(turnNumber, activePlayerIdx) {
         banner.innerHTML =
             '<div class="turn-transition-banner-line1">TURN ' + turnNumber + '</div>' +
             '<div class="turn-transition-banner-line2">' + playerLabel + '</div>';
-        document.body.appendChild(banner);
-        // CSS animation is 1.5s; remove slightly after so the fade-out
-        // completes without the node being yanked mid-animation.
-        setTimeout(function () {
+        // Defense-in-depth: remove on animationend (primary) + setTimeout
+        // fallback (in case the browser drops the animationend event, e.g.
+        // backgrounded tab).
+        var removed = false;
+        var remove = function () {
+            if (removed) return;
+            removed = true;
             if (banner.parentNode) banner.parentNode.removeChild(banner);
-        }, 1800);
+        };
+        banner.addEventListener('animationend', remove);
+        document.body.appendChild(banner);
+        setTimeout(remove, 2000);
     } catch (e) { /* defensive */ }
 }
 
