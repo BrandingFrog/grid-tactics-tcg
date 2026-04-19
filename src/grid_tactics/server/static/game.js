@@ -2874,6 +2874,33 @@ function _applyStateFrameImmediate(frame, legal, prevState) {
             spectatorGodMode = frame.spectator_god_mode;
         }
     }
+
+    // Phase 14.7-09: Turn banner — fire when turn_number advances (or on
+    // initial join when prev is absent). Non-blocking: banner is a pure CSS
+    // overlay that fades out on its own, never gates the AnimationQueue.
+    try {
+        var prevTurn = prevState && typeof prevState.turn_number === 'number'
+            ? prevState.turn_number : 0;
+        var nextTurn = frame && typeof frame.turn_number === 'number'
+            ? frame.turn_number : 0;
+        if (nextTurn > 0 && nextTurn > prevTurn) {
+            _showTurnBanner(nextTurn, frame.active_player_idx);
+        }
+    } catch (e) { /* defensive — banner is purely visual */ }
+
+    // Phase 14.7-09: trigger-blip animation for Start/End/Death triggers.
+    // The engine sets state.last_trigger_blip on exactly one frame (cleared
+    // by resolve_action on the next call). We fire a fire-and-forget
+    // animation here — the AnimationQueue is NOT involved because the blip
+    // is a CSS-only overlay and state progression must continue regardless.
+    try {
+        var newBlip = frame && frame.last_trigger_blip;
+        var prevBlip = prevState && prevState.last_trigger_blip;
+        if (newBlip && newBlip !== prevBlip) {
+            _fireTriggerBlipAnimation(newBlip);
+        }
+    } catch (e) { /* defensive — blip is purely visual */ }
+
     logStateDiff(prevState, gameState);
     renderGame();
 }
@@ -3343,6 +3370,110 @@ function _playSacPortal(job, done) {
 // the RIGHT slot ready for the next react. When the chain resolves we
 // replay every pushed card LIFO (top-down) into the LEFT slot with a
 // "resolving" sigil in the RIGHT, then fade.
+// =============================================
+// Phase 14.7-09: Turn banner + trigger blip animations
+// =============================================
+
+// TURN X / PLAYER X banner — non-blocking overlay. CSS keyframes drive
+// the animation; this function just drops a DOM node and schedules its
+// removal after the animation finishes. Safe to call concurrently with
+// the AnimationQueue; the banner never gates game state.
+function _showTurnBanner(turnNumber, activePlayerIdx) {
+    try {
+        // Remove any prior banner (covers rapid turn flips in sandbox).
+        var prior = document.querySelector('.turn-banner');
+        if (prior && prior.parentNode) prior.parentNode.removeChild(prior);
+
+        var banner = document.createElement('div');
+        banner.className = 'turn-banner';
+        banner.setAttribute('data-turn', String(turnNumber));
+        banner.setAttribute('data-player', String(activePlayerIdx));
+        var playerLabel = 'PLAYER ' + ((activePlayerIdx | 0) + 1);
+        banner.innerHTML =
+            '<div class="turn-banner-line1">TURN ' + turnNumber + '</div>' +
+            '<div class="turn-banner-line2">' + playerLabel + '</div>';
+        document.body.appendChild(banner);
+        // CSS animation is 1.5s; remove slightly after so the fade-out
+        // completes without the node being yanked mid-animation.
+        setTimeout(function () {
+            if (banner.parentNode) banner.parentNode.removeChild(banner);
+        }, 1800);
+    } catch (e) { /* defensive */ }
+}
+
+// Trigger blip — source tile pulse → center icon → (optional) target tile
+// pulse. Used for Start/End-of-turn and Death triggers where the source is
+// a board minion (not a hand card). Reuses showFloatingPopup + existing
+// tile-highlight patterns from Phase 14.3-07.
+//
+// blip shape: {
+//   trigger_kind: "start_of_turn" | "end_of_turn" | "on_death" | "on_summon_effect",
+//   source_minion_id: int | null,
+//   source_position: [row, col],
+//   target_position: [row, col] | null,
+//   effect_kind: string  // lowercase EffectType.name (e.g. "heal", "damage", "apply_burning")
+// }
+function _triggerBlipIcon(blip) {
+    var kind = blip && blip.trigger_kind;
+    var effect = blip && blip.effect_kind;
+    // Trigger-kind drives the primary glyph; effect_kind is a subtle hint.
+    if (kind === 'on_death') return '💀';
+    if (kind === 'start_of_turn') return '⏰';
+    if (kind === 'end_of_turn') return '⏳';
+    if (effect === 'heal') return '💚';
+    if (effect === 'damage') return '💥';
+    if (effect === 'apply_burning') return '🔥';
+    return '✨';
+}
+
+function _tileElForPosition(pos) {
+    if (!pos || pos.length < 2) return null;
+    return document.querySelector(
+        '.board-cell[data-row="' + pos[0] + '"][data-col="' + pos[1] + '"]'
+    );
+}
+
+function _fireTriggerBlipAnimation(blip) {
+    if (!blip) return;
+    try {
+        // 1) Pulse the source tile (if still on the board).
+        var srcTile = _tileElForPosition(blip.source_position);
+        if (srcTile) {
+            srcTile.classList.remove('anim-trigger-source');
+            // Force reflow so re-adding the class restarts the animation.
+            void srcTile.offsetWidth;
+            srcTile.classList.add('anim-trigger-source');
+            setTimeout(function () {
+                if (srcTile) srcTile.classList.remove('anim-trigger-source');
+            }, 600);
+        }
+
+        // 2) Center-screen icon, ~800ms.
+        var icon = document.createElement('div');
+        icon.className = 'trigger-blip-center-icon';
+        icon.textContent = _triggerBlipIcon(blip);
+        document.body.appendChild(icon);
+        setTimeout(function () {
+            if (icon.parentNode) icon.parentNode.removeChild(icon);
+        }, 900);
+
+        // 3) Pulse the target tile slightly later (if any) so the beat is
+        //    source → center → target.
+        if (blip.target_position) {
+            setTimeout(function () {
+                var tgtTile = _tileElForPosition(blip.target_position);
+                if (!tgtTile) return;
+                tgtTile.classList.remove('anim-trigger-target');
+                void tgtTile.offsetWidth;
+                tgtTile.classList.add('anim-trigger-target');
+                setTimeout(function () {
+                    if (tgtTile) tgtTile.classList.remove('anim-trigger-target');
+                }, 600);
+            }, 350);
+        }
+    } catch (e) { /* defensive — blip must never throw */ }
+}
+
 var _spellStage = {
     chain: [],              // numeric ids, oldest first
     pendingShiftTimer: null,
@@ -3376,7 +3507,23 @@ function _spellStageCardHtml(numericId) {
 // In sandbox both hands are mounted so we use #sandbox-hand-p<idx>.
 // In live game the opponent's hand is the back row; the own hand is
 // the front. Falls back to the far-right edge if nothing found.
-function _spellStageSourceRect(playerIdx) {
+//
+// Phase 14.7-09: a second form — _spellStageSourceRect({row, col}) —
+// anchors to a board tile for trigger-driven windows where the source
+// is a minion on the board (Start/End/Death triggers, summon effects).
+function _spellStageSourceRect(playerIdxOrPos) {
+    // Board-tile source (Phase 14.7-09).
+    if (playerIdxOrPos && typeof playerIdxOrPos === 'object'
+        && playerIdxOrPos.row != null && playerIdxOrPos.col != null) {
+        var tileEl = document.querySelector(
+            '.board-cell[data-row="' + playerIdxOrPos.row
+            + '"][data-col="' + playerIdxOrPos.col + '"]'
+        );
+        if (tileEl) return tileEl.getBoundingClientRect();
+        return { left: window.innerWidth / 2, top: window.innerHeight / 2, width: 1, height: 1 };
+    }
+
+    var playerIdx = playerIdxOrPos;
     if (playerIdx != null) {
         if (sandboxMode) {
             var el = document.getElementById('sandbox-hand-p' + playerIdx);

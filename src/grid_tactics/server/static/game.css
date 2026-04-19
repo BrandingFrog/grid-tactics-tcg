@@ -307,6 +307,89 @@
   0%   { transform: translate3d(308px, 0, 0); }
   100% { transform: translate3d(0, 0, 0); }
 }
+
+/* Phase 14.7-09: Turn banner overlay.
+   Fires on turn_number advance. Non-blocking — pure CSS keyframe that
+   fades out on its own; DOM node removed by _showTurnBanner's setTimeout.
+   z-index sits above the spell-stage (200) but below modals (~1100) so
+   react/tutor pickers can still open atop it. */
+.turn-banner {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 1000;
+  text-align: center;
+  color: #fff;
+  font-family: 'Luckiest Guy', 'Impact', sans-serif;
+  letter-spacing: 0.08em;
+  text-shadow:
+    0 0 24px rgba(0, 212, 255, 0.9),
+    0 0 8px rgba(255, 255, 255, 0.7),
+    0 4px 12px rgba(0, 0, 0, 0.9);
+  pointer-events: none;
+  animation: turn-banner-in 1500ms ease-out forwards;
+  will-change: transform, opacity;
+}
+.turn-banner-line1 {
+  font-size: 5em;
+  line-height: 1.05;
+}
+.turn-banner-line2 {
+  font-size: 3.2em;
+  line-height: 1.1;
+  margin-top: 8px;
+  color: #9ae6ff;
+}
+@keyframes turn-banner-in {
+  0%   { opacity: 0; transform: translate(-50%, -50%) scale(0.4); }
+  18%  { opacity: 1; transform: translate(-50%, -50%) scale(1.12); }
+  32%  { transform: translate(-50%, -50%) scale(1); }
+  80%  { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  100% { opacity: 0; transform: translate(-50%, -50%) scale(0.95); }
+}
+
+/* Phase 14.7-09: Trigger blip animations (Start/End/Death triggers).
+   Source tile pulses yellow, a center icon blooms, then (optionally)
+   the target tile pulses red. Mirrors Phase 14.3-07 floating-popup
+   style so the visual language stays consistent. */
+.anim-trigger-source {
+  animation: trigger-source-pulse 600ms ease-out;
+}
+.anim-trigger-target {
+  animation: trigger-target-pulse 600ms ease-out;
+}
+@keyframes trigger-source-pulse {
+  0%   { box-shadow: 0 0 0 rgba(255, 221, 64, 0); }
+  40%  { box-shadow: 0 0 28px 12px rgba(255, 221, 64, 0.9); }
+  100% { box-shadow: 0 0 0 rgba(255, 221, 64, 0); }
+}
+@keyframes trigger-target-pulse {
+  0%   { box-shadow: 0 0 0 rgba(255, 90, 90, 0); }
+  40%  { box-shadow: 0 0 28px 12px rgba(255, 90, 90, 0.9); }
+  100% { box-shadow: 0 0 0 rgba(255, 90, 90, 0); }
+}
+.trigger-blip-center-icon {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 5em;
+  z-index: 950;  /* below turn-banner (1000), above spell-stage (200) */
+  pointer-events: none;
+  text-shadow:
+    0 0 24px rgba(255, 255, 255, 0.8),
+    0 0 12px rgba(0, 212, 255, 0.6),
+    0 4px 10px rgba(0, 0, 0, 0.8);
+  animation: trigger-blip-in 900ms ease-out forwards;
+  will-change: transform, opacity;
+}
+@keyframes trigger-blip-in {
+  0%   { opacity: 0; transform: translate(-50%, -50%) scale(0.4); }
+  25%  { opacity: 1; transform: translate(-50%, -50%) scale(1.25); }
+  55%  { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  100% { opacity: 0; transform: translate(-50%, -50%) scale(0.9); }
+}
 .tests-summary {
   padding: 12px 16px;
   background: rgba(0, 0, 0, 0.25);
