@@ -426,22 +426,36 @@ def _resolve_trigger_and_open_react_window(
 
     Steps:
       1. Look up the card_def + effect by (source_card_numeric_id, effect_idx).
-      2. Resolve the effect via resolve_effect, using captured_position as
-         the source (SELF_OWNER / position-relative targeting works even
-         if the source minion has moved/died — true fizzle in 14.7-06).
-      3. Clean up any newly-dead minions and check game over.
-      4. Pop the resolved trigger from the appropriate queue.
-      5. Open a REACT window tagged with the trigger_kind's ReactContext.
+      2. For ``trigger_kind == "on_death"`` effects that need a click-target
+         modal (DESTROY/SINGLE_TARGET, PROMOTE with 2+ candidates), pop the
+         trigger and hand off to the existing ``pending_death_target`` modal
+         machinery. The DEATH_TARGET_PICK handler in action_resolver will
+         resume the drain (chain-reaction cleanup + AFTER_DEATH_EFFECT
+         react window) after the owner picks.
+      3. Otherwise resolve the effect via resolve_effect, using
+         captured_position as the source (SELF_OWNER / position-relative
+         targeting works even if the source minion has moved/died — true
+         fizzle in 14.7-06).
+      4. Clean up any newly-dead minions and check game over.
+      5. Pop the resolved trigger from the appropriate queue.
+      6. Open a REACT window tagged with the trigger_kind's ReactContext.
          The window's react_return_phase is preserved from the prior
          state.react_return_phase so the phase-dispatch block in
          resolve_react_stack returns to the correct phase when both
          queues finally empty.
 
     Returns state with phase=REACT (or game-over / unchanged if the
-    effect ended the game).
+    effect ended the game, or pending_death_target set if a click-target
+    modal is open).
     """
-    from grid_tactics.effect_resolver import resolve_effect
+    from grid_tactics.effect_resolver import (
+        resolve_effect,
+        _death_effect_needs_modal,
+        _count_promote_candidates,
+    )
+    from grid_tactics import action_resolver as _ar
     from grid_tactics.action_resolver import _cleanup_dead_minions, _check_game_over
+    from grid_tactics.game_state import PendingDeathTarget
 
     card_def = library.get_by_id(trigger.source_card_numeric_id)
     if trigger.effect_idx < 0 or trigger.effect_idx >= len(card_def.effects):
@@ -461,6 +475,157 @@ def _resolve_trigger_and_open_react_window(
     effect = card_def.effects[trigger.effect_idx]
     caster_owner = PlayerSide.PLAYER_1 if trigger.owner_idx == 0 else PlayerSide.PLAYER_2
 
+    # Phase 14.7-05b: Death-effect click-target modal dispatch.
+    # DESTROY/SINGLE_TARGET (Lasercannon) and PROMOTE/SELF_OWNER with 2+
+    # candidates (Giant Rat when multiple Rats exist) need the owner to
+    # pick a target. Pop the trigger, open the modal, and return — the
+    # DEATH_TARGET_PICK handler in action_resolver resumes the flow.
+    if (
+        trigger.trigger_kind == "on_death"
+        and trigger.source_minion_id is not None
+    ):
+        # DESTROY/SINGLE_TARGET: open modal if any enemy minion is alive.
+        if _death_effect_needs_modal(effect):
+            has_target = any(
+                m.owner != caster_owner and m.is_alive for m in state.minions
+            )
+            if has_target:
+                target = PendingDeathTarget(
+                    card_numeric_id=trigger.source_card_numeric_id,
+                    owner_idx=trigger.owner_idx,
+                    dying_instance_id=trigger.source_minion_id,
+                    effect_idx=trigger.effect_idx,
+                    filter="enemy_minion",
+                )
+                # Pop the trigger BEFORE setting the modal so the resume
+                # path doesn't double-process this entry.
+                if is_turn_queue:
+                    state = replace(
+                        state,
+                        pending_trigger_queue_turn=state.pending_trigger_queue_turn[1:],
+                        pending_death_target=target,
+                    )
+                else:
+                    state = replace(
+                        state,
+                        pending_trigger_queue_other=state.pending_trigger_queue_other[1:],
+                        pending_death_target=target,
+                    )
+                return state
+            # No valid target → silent no-op, fall through to pop + open
+            # the AFTER_DEATH_EFFECT react window (no effect resolved).
+            if is_turn_queue:
+                state = replace(
+                    state,
+                    pending_trigger_queue_turn=state.pending_trigger_queue_turn[1:],
+                )
+            else:
+                state = replace(
+                    state,
+                    pending_trigger_queue_other=state.pending_trigger_queue_other[1:],
+                )
+            rc = ReactContext.AFTER_DEATH_EFFECT
+            default_return = state.react_return_phase or TurnPhase.ACTION
+            new_return_phase = state.react_return_phase or default_return
+            return replace(
+                state,
+                phase=TurnPhase.REACT,
+                react_player_idx=1 - state.active_player_idx,
+                react_context=rc,
+                react_return_phase=new_return_phase,
+                react_stack=(),
+            )
+
+        # PROMOTE with 2+ candidates also opens the modal.
+        if effect.effect_type == EffectType.PROMOTE:
+            candidate_count = _count_promote_candidates(
+                state,
+                trigger.source_card_numeric_id,
+                caster_owner,
+                library,
+            )
+            if candidate_count >= 2:
+                target = PendingDeathTarget(
+                    card_numeric_id=trigger.source_card_numeric_id,
+                    owner_idx=trigger.owner_idx,
+                    dying_instance_id=trigger.source_minion_id,
+                    effect_idx=trigger.effect_idx,
+                    filter="friendly_promote",
+                )
+                if is_turn_queue:
+                    state = replace(
+                        state,
+                        pending_trigger_queue_turn=state.pending_trigger_queue_turn[1:],
+                        pending_death_target=target,
+                    )
+                else:
+                    state = replace(
+                        state,
+                        pending_trigger_queue_other=state.pending_trigger_queue_other[1:],
+                        pending_death_target=target,
+                    )
+                return state
+            # 0 or 1 candidate → auto-resolve inline.
+            from grid_tactics.effect_resolver import _apply_promote_on_death
+            state = _apply_promote_on_death(
+                state,
+                trigger.source_card_numeric_id,
+                caster_owner,
+                library,
+            )
+            # Enqueue-only cleanup: chain-reaction deaths from the
+            # promote (rare) enqueue without starting a nested drain.
+            # The drain-recheck hook in resolve_react_stack continues
+            # the drain after the window we open below closes.
+            _ar._cleanup_skip_drain = True
+            try:
+                state = _cleanup_dead_minions(state, library)
+            finally:
+                _ar._cleanup_skip_drain = False
+            state = _check_game_over(state)
+            if state.is_game_over:
+                return state
+            # If chain-cleanup opened a picker modal or death-target
+            # modal, defer — the flow will resume after those clear.
+            if (
+                state.pending_death_target is not None
+                or state.pending_trigger_picker_idx is not None
+            ):
+                # Pop our entry before deferring.
+                if is_turn_queue:
+                    state = replace(
+                        state,
+                        pending_trigger_queue_turn=state.pending_trigger_queue_turn[1:],
+                    )
+                else:
+                    state = replace(
+                        state,
+                        pending_trigger_queue_other=state.pending_trigger_queue_other[1:],
+                    )
+                return state
+            # Pop + open AFTER_DEATH_EFFECT react window.
+            if is_turn_queue:
+                state = replace(
+                    state,
+                    pending_trigger_queue_turn=state.pending_trigger_queue_turn[1:],
+                )
+            else:
+                state = replace(
+                    state,
+                    pending_trigger_queue_other=state.pending_trigger_queue_other[1:],
+                )
+            rc = ReactContext.AFTER_DEATH_EFFECT
+            default_return = state.react_return_phase or TurnPhase.ACTION
+            new_return_phase = state.react_return_phase or default_return
+            return replace(
+                state,
+                phase=TurnPhase.REACT,
+                react_player_idx=1 - state.active_player_idx,
+                react_context=rc,
+                react_return_phase=new_return_phase,
+                react_stack=(),
+            )
+
     # Resolve the effect. 14.7-06 will add a fizzle check here (re-validate
     # that the source minion is still alive and the captured_position is
     # still valid).
@@ -468,9 +633,37 @@ def _resolve_trigger_and_open_react_window(
         state, effect, trigger.captured_position, caster_owner, library,
         trigger.target_pos,
     )
-    state = _cleanup_dead_minions(state, library)
+    # Enqueue-only cleanup: chain-reaction deaths from this resolution
+    # enqueue PendingTriggers WITHOUT triggering a nested drain, so the
+    # outer resolver pops its entry first. The drain-recheck hook in
+    # resolve_react_stack takes over once the AFTER_DEATH_EFFECT window
+    # we open below closes.
+    _ar._cleanup_skip_drain = True
+    try:
+        state = _cleanup_dead_minions(state, library)
+    finally:
+        _ar._cleanup_skip_drain = False
     state = _check_game_over(state)
     if state.is_game_over:
+        return state
+
+    # Chain-cleanup may have opened its own modal / picker — defer.
+    if (
+        state.pending_death_target is not None
+        or state.pending_trigger_picker_idx is not None
+    ):
+        # Pop our resolved entry before deferring so drain-recheck picks
+        # up cleanly.
+        if is_turn_queue:
+            state = replace(
+                state,
+                pending_trigger_queue_turn=state.pending_trigger_queue_turn[1:],
+            )
+        else:
+            state = replace(
+                state,
+                pending_trigger_queue_other=state.pending_trigger_queue_other[1:],
+            )
         return state
 
     # Pop the resolved trigger from the appropriate queue.
@@ -1223,8 +1416,14 @@ def resolve_react_stack(
                             entry.target_pos,
                         )
 
-    # Clean up dead minions after react resolution
+    # Clean up dead minions after react resolution.
+    # Phase 14.7-05b: snapshot the state IDENTITY before cleanup so we
+    # can detect whether cleanup+drain actually opened a NEW death-
+    # trigger react window (a truly no-op cleanup returns the same
+    # object, so identity-equality distinguishes "cleanup did nothing"
+    # from "cleanup replaced state with a fresh death-trigger window").
     from grid_tactics.action_resolver import _cleanup_dead_minions, _check_game_over
+    _pre_cleanup_state = state
     state = _cleanup_dead_minions(state, library)
 
     # Win/draw detection after react resolution (Phase 4)
@@ -1243,6 +1442,27 @@ def resolve_react_stack(
     # driven by resolve_action's pending_death_target gate; once drained,
     # it re-enters the turn-advance tail inline (see action_resolver.py).
     if state.pending_death_target is not None:
+        return state
+
+    # Phase 14.7-05b: If cleanup opened the trigger-picker modal (the
+    # dying minion's owner has 2+ simultaneous on_death effects to
+    # order), defer. The TRIGGER_PICK / DECLINE_TRIGGER handlers in
+    # action_resolver resume the drain.
+    if state.pending_trigger_picker_idx is not None:
+        return state
+
+    # Phase 14.7-05b: If cleanup mutated state into a FRESH
+    # AFTER_DEATH_EFFECT react window (identity mismatch with pre-cleanup
+    # state AND post-cleanup context is AFTER_DEATH_EFFECT), respect
+    # it — don't fall through to the dispatch below which would advance
+    # turn prematurely. The post-death react window's close re-enters
+    # resolve_react_stack, where the drain-recheck hook continues the
+    # queue drain.
+    if (
+        state is not _pre_cleanup_state
+        and state.phase == TurnPhase.REACT
+        and state.react_context == ReactContext.AFTER_DEATH_EFFECT
+    ):
         return state
 
     # Phase 14.7-04: compound-window hand-off. If a summon_declaration

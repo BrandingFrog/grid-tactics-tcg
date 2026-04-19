@@ -847,7 +847,11 @@ def apply_death_target_pick(
             target_pos=target_pos,
         )
 
-    # Advance the head of the pending queue past this effect.
+    # Phase 14.7-05b: pending_death_queue (PendingDeathWork) is no longer
+    # populated by _cleanup_dead_minions — on_death effects route through
+    # the PendingTrigger priority queue. The PendingDeathWork next-effect
+    # advance is therefore a no-op in the common case, but preserved as a
+    # defensive guard for any legacy in-flight queue entries.
     queue = list(state.pending_death_queue)
     if queue:
         head = queue[0]

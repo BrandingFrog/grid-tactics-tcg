@@ -944,10 +944,55 @@ class TestDeathKeywordPromote:
         assert back_after.card_numeric_id == rat_nid
 
 
+def _drain_all_death_triggers(state, lib):
+    """Test helper: drive the priority-queue drain to completion.
+
+    Phase 14.7-05b: _cleanup_dead_minions enqueues on_death PendingTriggers
+    into pending_trigger_queue_turn / pending_trigger_queue_other and
+    opens a REACT window after each individual trigger resolves. To
+    observe the end-state (all triggers resolved, all chain reactions
+    settled), we simulate PASS-PASS for each opened react window —
+    resolve_react_stack's drain-recheck hook continues the drain.
+
+    Handles trigger-picker modals by picking queue index 0 (the
+    turn-player-first order is preserved by _apply_trigger_pick's
+    move-to-front logic). Bounded to avoid infinite loops.
+    """
+    from grid_tactics.action_resolver import resolve_action
+    from grid_tactics.actions import Action
+    from grid_tactics.enums import ActionType, TurnPhase
+
+    safety = 0
+    while safety < 64:
+        safety += 1
+        if state.is_game_over:
+            return state
+        if state.pending_trigger_picker_idx is not None:
+            state = resolve_action(
+                state,
+                Action(action_type=ActionType.TRIGGER_PICK, card_index=0),
+                lib,
+            )
+            continue
+        if state.pending_death_target is not None:
+            # Not auto-drainable without a target choice — caller must
+            # drive DEATH_TARGET_PICK. Return as-is.
+            return state
+        if state.phase == TurnPhase.REACT:
+            # Drain the react window via PASS.
+            state = resolve_action(
+                state, Action(action_type=ActionType.PASS), lib,
+            )
+            continue
+        # No pending work.
+        return state
+    return state
+
+
 class TestDeathKeywordOrdering:
-    """Active-player-first death ordering: when minions from both sides die
-    in the same cleanup pass, the active player's on_death effects fire
-    first (within each side, instance_id ascending = play order)."""
+    """Turn-player-first death ordering (Phase 14.7-05b): when minions
+    from both sides die in the same cleanup pass, the turn player's
+    on_death effects fire first (spec §7.2 priority queue)."""
 
     def test_active_player_deaths_fire_before_opponent(self):
         from grid_tactics.action_resolver import _cleanup_dead_minions
@@ -982,7 +1027,9 @@ class TestDeathKeywordOrdering:
             minions=[p1_dying, p2_dying, p2_bystander, p1_bystander],
             active_player_idx=1,  # P2 active
         )
-        new_state = _cleanup_dead_minions(state, lib)
+        state = _cleanup_dead_minions(state, lib)
+        # Phase 14.7-05b: drain each opened react window + picker modal.
+        new_state = _drain_all_death_triggers(state, lib)
 
         # Both bystanders took 1 damage from their opposing dying minion.
         assert new_state.get_minion(2).current_health == 4  # P2 bystander
@@ -990,8 +1037,9 @@ class TestDeathKeywordOrdering:
         # Both dying minions removed.
         assert new_state.get_minion(0) is None
         assert new_state.get_minion(1) is None
-        # Queue is empty post-drain.
-        assert new_state.pending_death_queue == ()
+        # Priority queues fully drained.
+        assert new_state.pending_trigger_queue_turn == ()
+        assert new_state.pending_trigger_queue_other == ()
         assert new_state.pending_death_target is None
 
     def test_ordering_tiebreak_by_instance_id(self):
@@ -1002,10 +1050,10 @@ class TestDeathKeywordOrdering:
         melee_nid = lib.get_numeric_id("test_melee")
 
         # Two P1 dying minions with different instance_ids; P1 is active.
-        # Both fire DAMAGE ALL_ENEMIES 1 in order. Verify instance_id
-        # ordering by observing that the bystander takes the full 2
-        # damage (both effects resolved, order doesn't affect final
-        # value here but confirms both were processed).
+        # Both fire DAMAGE ALL_ENEMIES 1 via the priority queue with the
+        # trigger picker modal (2 entries on P1's side). _drain_all opens
+        # the modal + picks index 0 twice. Final bystander takes 2 damage
+        # regardless of pick order (both effects resolve).
         dying_a = MinionInstance(
             instance_id=5, card_numeric_id=damage_nid,
             owner=PlayerSide.PLAYER_1, position=(1, 0), current_health=0,
@@ -1022,7 +1070,8 @@ class TestDeathKeywordOrdering:
             minions=[dying_a, dying_b, bystander],
             active_player_idx=0,
         )
-        new_state = _cleanup_dead_minions(state, lib)
+        state = _cleanup_dead_minions(state, lib)
+        new_state = _drain_all_death_triggers(state, lib)
 
         # Bystander took 2 damage (one per dying minion's on_death).
         assert new_state.get_minion(1).current_health == 3
@@ -1030,8 +1079,9 @@ class TestDeathKeywordOrdering:
 
 class TestDeathKeywordChainReaction:
     """Chain-reaction death cleanup: an on_death effect that kills another
-    minion causes that minion's on_death to fire in the same cleanup call.
-    Previously the Python engine was one-pass and leaked chain deaths."""
+    minion enqueues that minion's on_death into the priority queue.
+    After Phase 14.7-05b the chain entry fires on the next drain pass
+    (after the original trigger's react window closes)."""
 
     def test_chain_death_damage_kills_another_minion_with_on_death(self):
         from grid_tactics.action_resolver import _cleanup_dead_minions
@@ -1042,8 +1092,8 @@ class TestDeathKeywordChainReaction:
 
         # P1 dying with DAMAGE ALL_ENEMIES 1. A P2 minion with
         # DAMAGE ALL_ENEMIES on_death has 1 hp — will be killed by the
-        # chain. Its on_death should then fire in the same cleanup pass
-        # and damage a P1 bystander.
+        # chain. Its on_death should enqueue and fire on the next
+        # drain pass, damaging a P1 bystander.
         p1_dying = MinionInstance(
             instance_id=0, card_numeric_id=damage_nid,
             owner=PlayerSide.PLAYER_1, position=(1, 0), current_health=0,
@@ -1060,14 +1110,16 @@ class TestDeathKeywordChainReaction:
             minions=[p1_dying, p2_chain, p1_bystander],
             active_player_idx=0,
         )
-        new_state = _cleanup_dead_minions(state, lib)
+        state = _cleanup_dead_minions(state, lib)
+        new_state = _drain_all_death_triggers(state, lib)
 
         # Chain resolved: p2_chain killed by p1_dying's effect, then its
         # own on_death damaged p1_bystander (5 - 1 = 4).
         assert new_state.get_minion(0) is None
         assert new_state.get_minion(1) is None
         assert new_state.get_minion(2).current_health == 4
-        assert new_state.pending_death_queue == ()
+        assert new_state.pending_trigger_queue_turn == ()
+        assert new_state.pending_trigger_queue_other == ()
 
 
 class TestDeathKeywordLasercannonModal:
@@ -1206,6 +1258,232 @@ class TestDeathKeywordLasercannonModal:
         for a in la:
             assert a.action_type == ActionType.DEATH_TARGET_PICK
             assert a.target_pos in ((3, 0), (3, 4))
+
+
+# ---------------------------------------------------------------------------
+# Phase 14.7-05b: Death-trigger priority queue tests
+#
+# Verifies the _cleanup_dead_minions refactor: dead minions' ON_DEATH
+# effects now enqueue into pending_trigger_queue_turn /
+# pending_trigger_queue_other (spec §7.2 priority queue) instead of
+# resolving inline via the legacy (active_first, instance_id) sort.
+# ---------------------------------------------------------------------------
+
+
+class TestDeathTriggerPriorityQueue:
+    """Phase 14.7-05b: death-trigger priority queue integration.
+
+    These tests exercise the NEW mechanism (PendingTrigger enqueue +
+    drain) that replaces the legacy PendingDeathWork inline-resolve
+    path. They complement the pre-existing TestDeathKeyword* classes
+    (updated in-place to match new semantics via
+    _drain_all_death_triggers).
+    """
+
+    def test_single_death_auto_resolves(self):
+        """One dying minion with one ON_DEATH effect: auto-resolve via
+        the turn queue (queue_turn has exactly 1 entry → no picker
+        modal; _resolve_trigger_and_open_react_window auto-resolves and
+        opens the AFTER_DEATH_EFFECT window)."""
+        from grid_tactics.action_resolver import _cleanup_dead_minions
+
+        lib = _make_death_test_library()
+        damage_nid = lib.get_numeric_id("test_die_damage_all")
+        melee_nid = lib.get_numeric_id("test_melee")
+
+        dying = MinionInstance(
+            instance_id=0, card_numeric_id=damage_nid,
+            owner=PlayerSide.PLAYER_1, position=(1, 0), current_health=0,
+        )
+        enemy = MinionInstance(
+            instance_id=1, card_numeric_id=melee_nid,
+            owner=PlayerSide.PLAYER_2, position=(3, 3), current_health=5,
+        )
+        state = _make_state(minions=[dying, enemy], active_player_idx=0)
+        new_state = _cleanup_dead_minions(state, lib)
+
+        # Auto-resolved: enemy damaged, queue empty, picker NOT set.
+        assert new_state.get_minion(1).current_health == 4
+        assert new_state.pending_trigger_queue_turn == ()
+        assert new_state.pending_trigger_queue_other == ()
+        assert new_state.pending_trigger_picker_idx is None
+        # Cleanup opened an AFTER_DEATH_EFFECT react window.
+        from grid_tactics.enums import TurnPhase as _TP, ReactContext as _RC
+        assert new_state.phase == _TP.REACT
+        assert new_state.react_context == _RC.AFTER_DEATH_EFFECT
+
+    def test_two_simultaneous_turn_player_deaths_open_picker(self):
+        """Two dying minions, both on P1 (turn player): the priority
+        queue holds 2 entries on the turn side → modal picker opens for
+        P1 (pending_trigger_picker_idx == active_player_idx)."""
+        from grid_tactics.action_resolver import _cleanup_dead_minions
+
+        lib = _make_death_test_library()
+        damage_nid = lib.get_numeric_id("test_die_damage_all")
+        melee_nid = lib.get_numeric_id("test_melee")
+
+        dying_a = MinionInstance(
+            instance_id=0, card_numeric_id=damage_nid,
+            owner=PlayerSide.PLAYER_1, position=(1, 0), current_health=0,
+        )
+        dying_b = MinionInstance(
+            instance_id=1, card_numeric_id=damage_nid,
+            owner=PlayerSide.PLAYER_1, position=(2, 0), current_health=0,
+        )
+        enemy = MinionInstance(
+            instance_id=2, card_numeric_id=melee_nid,
+            owner=PlayerSide.PLAYER_2, position=(3, 3), current_health=5,
+        )
+        state = _make_state(
+            minions=[dying_a, dying_b, enemy], active_player_idx=0,
+        )
+        new_state = _cleanup_dead_minions(state, lib)
+
+        # Picker opens for P1 (turn player).
+        assert new_state.pending_trigger_picker_idx == 0
+        assert len(new_state.pending_trigger_queue_turn) == 2
+        assert new_state.pending_trigger_queue_other == ()
+
+    def test_turn_player_deaths_resolve_first_with_single_each_side(self):
+        """P1 (turn) + P2 each have ONE dying minion. Both queues have
+        one entry, no picker. Drain order: turn queue first → other
+        queue second. Observable: both bystanders damaged after full
+        drain (each side's dying minion hit the opposing bystander)."""
+        from grid_tactics.action_resolver import _cleanup_dead_minions
+
+        lib = _make_death_test_library()
+        damage_nid = lib.get_numeric_id("test_die_damage_all")
+        melee_nid = lib.get_numeric_id("test_melee")
+
+        p1_dying = MinionInstance(
+            instance_id=0, card_numeric_id=damage_nid,
+            owner=PlayerSide.PLAYER_1, position=(1, 0), current_health=0,
+        )
+        p2_dying = MinionInstance(
+            instance_id=1, card_numeric_id=damage_nid,
+            owner=PlayerSide.PLAYER_2, position=(3, 0), current_health=0,
+        )
+        p1_bystander = MinionInstance(
+            instance_id=2, card_numeric_id=melee_nid,
+            owner=PlayerSide.PLAYER_1, position=(0, 4), current_health=5,
+        )
+        p2_bystander = MinionInstance(
+            instance_id=3, card_numeric_id=melee_nid,
+            owner=PlayerSide.PLAYER_2, position=(4, 4), current_health=5,
+        )
+        state = _make_state(
+            minions=[p1_dying, p2_dying, p1_bystander, p2_bystander],
+            active_player_idx=0,
+        )
+        state = _cleanup_dead_minions(state, lib)
+        # Drive drain to completion.
+        final = _drain_all_death_triggers(state, lib)
+
+        # Both bystanders took damage from the opposing dying minion.
+        assert final.get_minion(2).current_health == 4  # P1 bystander
+        assert final.get_minion(3).current_health == 4  # P2 bystander
+        # Queues fully drained.
+        assert final.pending_trigger_queue_turn == ()
+        assert final.pending_trigger_queue_other == ()
+
+    def test_death_with_pending_death_target_modal_integrates(self):
+        """DESTROY/SINGLE_TARGET on_death (Lasercannon-like) + priority
+        queue: when such a trigger auto-resolves from queue_turn, it
+        opens the effect-level pending_death_target modal (preserving
+        the pre-14.7-05 UX). After the user picks, the flow resumes
+        through the cleanup+drain+react-window chain."""
+        from grid_tactics.action_resolver import resolve_action
+
+        lib = _make_death_test_library()
+        destroy_nid = lib.get_numeric_id("test_die_destroy")
+        melee_nid = lib.get_numeric_id("test_melee")
+
+        # P1 attacks and both die: P1's attacker dies (simple melee,
+        # no on_death) + P2's destroy-on-death defender dies.
+        attacker = MinionInstance(
+            instance_id=0, card_numeric_id=melee_nid,
+            owner=PlayerSide.PLAYER_1, position=(1, 0), current_health=5,
+        )
+        defender = MinionInstance(
+            instance_id=1, card_numeric_id=destroy_nid,
+            owner=PlayerSide.PLAYER_2, position=(2, 0), current_health=1,
+        )
+        target_enemy = MinionInstance(
+            instance_id=2, card_numeric_id=melee_nid,
+            owner=PlayerSide.PLAYER_1, position=(4, 2), current_health=5,
+        )
+        state = _make_state(
+            minions=[attacker, defender, target_enemy],
+            active_player_idx=0,
+        )
+        # P1 attacks defender → defender dies. defender's ON_DEATH
+        # DESTROY/SINGLE_TARGET opens the pending_death_target modal
+        # for P2 (defender's owner).
+        action = Action(action_type=ActionType.ATTACK, minion_id=0, target_id=1)
+        mid_state = resolve_action(state, action, lib)
+
+        assert mid_state.pending_death_target is not None
+        assert mid_state.pending_death_target.owner_idx == 1  # P2
+        # Priority queue popped this entry already (the modal opened
+        # INSTEAD of the react window).
+        assert mid_state.pending_trigger_queue_turn == ()
+        assert mid_state.pending_trigger_queue_other == ()
+
+        # P2 picks target_enemy at (4, 2).
+        pick = Action(
+            action_type=ActionType.DEATH_TARGET_PICK,
+            target_pos=(4, 2),
+        )
+        final = resolve_action(mid_state, pick, lib)
+
+        # target_enemy destroyed by the modal effect.
+        assert final.get_minion(2) is None
+        # pending_death_target cleared, queues drained, and
+        # AFTER_DEATH_EFFECT react window is open.
+        assert final.pending_death_target is None
+        from grid_tactics.enums import TurnPhase as _TP, ReactContext as _RC
+        assert final.phase == _TP.REACT
+        assert final.react_context == _RC.AFTER_DEATH_EFFECT
+
+    def test_chain_reaction_death_preserves_turn_first_ordering(self):
+        """Chain-reaction: P1 (turn) has a damage-on-death minion dying.
+        P2's chain-victim has 1 HP + its own on_death. After P1's
+        effect resolves, the P2 victim dies and its trigger enqueues
+        into pending_trigger_queue_other. Drain-recheck (on window
+        close) continues with the P2 chain trigger — P2's effect
+        damages the P1 bystander."""
+        from grid_tactics.action_resolver import _cleanup_dead_minions
+
+        lib = _make_death_test_library()
+        damage_nid = lib.get_numeric_id("test_die_damage_all")
+        melee_nid = lib.get_numeric_id("test_melee")
+
+        p1_dying = MinionInstance(
+            instance_id=0, card_numeric_id=damage_nid,
+            owner=PlayerSide.PLAYER_1, position=(1, 0), current_health=0,
+        )
+        p2_chain = MinionInstance(
+            instance_id=1, card_numeric_id=damage_nid,
+            owner=PlayerSide.PLAYER_2, position=(3, 0), current_health=1,
+        )
+        p1_bystander = MinionInstance(
+            instance_id=2, card_numeric_id=melee_nid,
+            owner=PlayerSide.PLAYER_1, position=(0, 4), current_health=5,
+        )
+        state = _make_state(
+            minions=[p1_dying, p2_chain, p1_bystander],
+            active_player_idx=0,
+        )
+        state = _cleanup_dead_minions(state, lib)
+        final = _drain_all_death_triggers(state, lib)
+
+        # Chain resolved: p2_chain died from p1_dying's effect, then
+        # its own on_death damaged p1_bystander (5 → 4).
+        assert final.get_minion(0) is None  # p1_dying removed
+        assert final.get_minion(1) is None  # p2_chain removed
+        assert final.get_minion(2).current_health == 4  # p1_bystander
+        assert final.pending_trigger_queue_turn == ()
+        assert final.pending_trigger_queue_other == ()
 
 
 # ---------------------------------------------------------------------------
