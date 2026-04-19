@@ -535,6 +535,11 @@ def _resolve_trigger_and_open_react_window(
                 react_context=rc,
                 react_return_phase=new_return_phase,
                 react_stack=(),
+                # Phase 14.7-09: no effect actually resolved (no valid
+                # target), but the AFTER_DEATH_EFFECT window still opens
+                # for react-condition matching. Emit a blip so the client
+                # can pulse the source tile + show the death glyph.
+                last_trigger_blip=_build_trigger_blip_payload(trigger, effect),
             )
 
         # PROMOTE with 2+ candidates also opens the modal.
@@ -625,6 +630,8 @@ def _resolve_trigger_and_open_react_window(
                 react_context=rc,
                 react_return_phase=new_return_phase,
                 react_stack=(),
+                # Phase 14.7-09: PROMOTE auto-resolve blip.
+                last_trigger_blip=_build_trigger_blip_payload(trigger, effect),
             )
 
     # Phase 14.7-06: Fizzle check.
@@ -731,6 +738,13 @@ def _resolve_trigger_and_open_react_window(
     # START_OF_TURN). Otherwise use the trigger-kind default.
     new_return_phase = state.react_return_phase or default_return
 
+    # Phase 14.7-09: Trigger-blip animation payload. Written on the same
+    # frame as the REACT-window open; cleared by resolve_action on the
+    # next frame (transient lifecycle). Client consumes via
+    # _fireTriggerBlipAnimation — source-tile pulse → center icon →
+    # optional target-tile pulse.
+    blip_payload = _build_trigger_blip_payload(trigger, effect)
+
     return replace(
         state,
         phase=TurnPhase.REACT,
@@ -740,7 +754,34 @@ def _resolve_trigger_and_open_react_window(
         # Ensure react_stack is empty for the new window (the drain pops
         # from the queues, not from the react stack).
         react_stack=(),
+        last_trigger_blip=blip_payload,
     )
+
+
+def _build_trigger_blip_payload(trigger: PendingTrigger, effect) -> dict:
+    """Construct the Phase 14.7-09 trigger-blip payload.
+
+    Carries enough info for the client to animate source-tile pulse +
+    center glyph + optional target-tile pulse. Schema must match the
+    shape consumed by ``_fireTriggerBlipAnimation`` in game.js. Kept
+    pure (no state access) so it's trivially testable and round-trips
+    through ``GameState.to_dict`` / ``from_dict`` without loss.
+    """
+    effect_kind = getattr(effect.effect_type, "name", str(effect.effect_type)).lower()
+    target_pos_list = (
+        [int(trigger.target_pos[0]), int(trigger.target_pos[1])]
+        if trigger.target_pos is not None else None
+    )
+    return {
+        "trigger_kind": trigger.trigger_kind,
+        "source_minion_id": trigger.source_minion_id,
+        "source_position": [
+            int(trigger.captured_position[0]),
+            int(trigger.captured_position[1]),
+        ],
+        "target_position": target_pos_list,
+        "effect_kind": effect_kind,
+    }
 
 
 # ---------------------------------------------------------------------------

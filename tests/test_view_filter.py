@@ -550,3 +550,52 @@ class TestEnrichPendingTriggerForViewer:
         assert filtered["pending_trigger_picker_idx"] is None
         assert filtered["pending_trigger_picker_options"] == []
         assert filtered["pending_trigger_queue_length"] == 0
+
+
+# ---------------------------------------------------------------------------
+# Phase 14.7-09: last_trigger_blip flows through filter_state_for_player
+# ---------------------------------------------------------------------------
+
+
+class TestLastTriggerBlipPassthroughPhase1479:
+    """Phase 14.7-09: last_trigger_blip is public info (not asymmetric).
+
+    The blip payload is a visual hint for the animation layer; both players
+    see the same trigger fire regardless of whose queue it was on. The
+    field flows through filter_state_for_player raw (deep-copied, not
+    hidden). This mirrors how pending_trigger_queue_{turn,other} entries
+    are visible to both players via enrich_pending_trigger_for_viewer —
+    but last_trigger_blip doesn't even need an enrich helper because the
+    raw dict passthrough is sufficient.
+    """
+
+    def test_blip_preserved_for_both_viewers(self):
+        """Populated blip in the state dict survives filtering for both players."""
+        state_dict = _make_state_dict()
+        blip = {
+            "trigger_kind": "start_of_turn",
+            "source_minion_id": 0,
+            "source_position": [1, 2],
+            "target_position": [3, 4],
+            "effect_kind": "heal",
+        }
+        state_dict["last_trigger_blip"] = blip
+
+        for viewer_idx in (0, 1):
+            filtered = filter_state_for_player(state_dict, viewer_idx)
+            assert filtered["last_trigger_blip"] == blip, (
+                f"viewer {viewer_idx} should see the blip payload"
+            )
+            # Deep-copy guarantee: mutating the filtered dict must not
+            # affect the original (catches a regression where filter_state
+            # switched to a shallow copy).
+            filtered["last_trigger_blip"]["effect_kind"] = "mutated"
+            assert state_dict["last_trigger_blip"]["effect_kind"] == "heal"
+
+    def test_blip_none_passthrough(self):
+        """None blip in the state dict round-trips as None for both viewers."""
+        state_dict = _make_state_dict()
+        state_dict["last_trigger_blip"] = None
+        for viewer_idx in (0, 1):
+            filtered = filter_state_for_player(state_dict, viewer_idx)
+            assert filtered["last_trigger_blip"] is None

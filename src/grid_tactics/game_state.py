@@ -220,6 +220,26 @@ class GameState:
     pending_trigger_queue_other: tuple = ()   # tuple[PendingTrigger, ...]
     pending_trigger_picker_idx: Optional[int] = None
 
+    # Phase 14.7-09: Trigger-blip animation payload (TRANSIENT).
+    # Written by ``_resolve_trigger_and_open_react_window`` (react_stack.py)
+    # when a Start/End/Death/Summon-effect trigger opens its react window,
+    # so the client (game.js ``_fireTriggerBlipAnimation``) can animate a
+    # source-tile pulse + center icon + (optional) target-tile pulse.
+    #
+    # Lifecycle: non-None only on the frame IMMEDIATELY FOLLOWING a trigger
+    # resolution. ``resolve_action`` (action_resolver.py) clears this field
+    # to None at the TOP of every new call so the client never sees a stale
+    # blip on a later frame. See test_last_trigger_blip_cleared_on_next_frame.
+    #
+    # Shape: Optional[dict] with keys:
+    #   trigger_kind: "start_of_turn" | "end_of_turn" | "on_death"
+    #                 | "on_summon_effect"
+    #   source_minion_id: Optional[int]
+    #   source_position: list[int]  (len 2, [row, col])
+    #   target_position: Optional[list[int]]  (len 2, [row, col])
+    #   effect_kind: str  (lowercase EffectType.name, e.g. "heal", "damage")
+    last_trigger_blip: Optional[dict] = None
+
     @property
     def active_player(self) -> Player:
         """Return the currently active player."""
@@ -399,6 +419,8 @@ class GameState:
                 for t in self.pending_trigger_queue_other
             ],
             "pending_trigger_picker_idx": self.pending_trigger_picker_idx,
+            # Phase 14.7-09: transient trigger-blip payload (see field docstring)
+            "last_trigger_blip": self.last_trigger_blip,
         }
 
         # Serialize pending_action if present
@@ -571,4 +593,6 @@ class GameState:
             pending_trigger_queue_turn=pending_trigger_queue_turn,
             pending_trigger_queue_other=pending_trigger_queue_other,
             pending_trigger_picker_idx=d.get("pending_trigger_picker_idx"),
+            # Phase 14.7-09: transient trigger-blip payload (dict passthrough)
+            last_trigger_blip=d.get("last_trigger_blip"),
         )

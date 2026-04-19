@@ -560,3 +560,89 @@ class TestSerializationPhase14_7_05:
         assert restored.pending_trigger_queue_turn == ()
         assert restored.pending_trigger_queue_other == ()
         assert restored.pending_trigger_picker_idx is None
+
+
+class TestSerializationPhase14_7_09:
+    """Phase 14.7-09: last_trigger_blip round-trip + transient lifecycle."""
+
+    def test_last_trigger_blip_defaults_none(self):
+        """Fresh game has last_trigger_blip=None."""
+        state, _ = GameState.new_game(42, DECK_P1, DECK_P2)
+        assert state.last_trigger_blip is None
+
+    def test_last_trigger_blip_roundtrip(self):
+        """A populated blip round-trips to_dict -> JSON -> from_dict."""
+        state, _ = GameState.new_game(42, DECK_P1, DECK_P2)
+        blip = {
+            "trigger_kind": "start_of_turn",
+            "source_minion_id": 0,
+            "source_position": [1, 2],
+            "target_position": [3, 4],
+            "effect_kind": "heal",
+        }
+        state = dataclasses.replace(state, last_trigger_blip=blip)
+
+        d = state.to_dict()
+        # JSON-serializable (no tuples / enums in the blip)
+        json_str = json.dumps(d)
+        assert isinstance(json_str, str)
+        # Round through a JSON encode/decode to prove wire-safety
+        restored = GameState.from_dict(json.loads(json_str))
+        assert restored.last_trigger_blip == blip
+
+    def test_last_trigger_blip_roundtrip_none(self):
+        """None round-trips as None (not omitted / not empty dict)."""
+        state, _ = GameState.new_game(42, DECK_P1, DECK_P2)
+        assert state.last_trigger_blip is None
+        restored = GameState.from_dict(json.loads(json.dumps(state.to_dict())))
+        assert restored.last_trigger_blip is None
+
+    def test_last_trigger_blip_roundtrip_no_target(self):
+        """Blip with target_position=None round-trips unchanged."""
+        state, _ = GameState.new_game(42, DECK_P1, DECK_P2)
+        blip = {
+            "trigger_kind": "end_of_turn",
+            "source_minion_id": 7,
+            "source_position": [0, 0],
+            "target_position": None,
+            "effect_kind": "damage",
+        }
+        state = dataclasses.replace(state, last_trigger_blip=blip)
+        restored = GameState.from_dict(json.loads(json.dumps(state.to_dict())))
+        assert restored.last_trigger_blip == blip
+
+    def test_from_dict_backward_compatible_missing_key(self):
+        """Old dicts without last_trigger_blip reconstruct with None default."""
+        state, _ = GameState.new_game(42, DECK_P1, DECK_P2)
+        d = state.to_dict()
+        d.pop("last_trigger_blip", None)
+        restored = GameState.from_dict(d)
+        assert restored.last_trigger_blip is None
+
+    def test_last_trigger_blip_cleared_on_next_frame(self):
+        """Warning 6 lifecycle: resolve_action clears last_trigger_blip.
+
+        Given a state with a blip payload, the next resolve_action call must
+        produce a state where last_trigger_blip is None. This guards against
+        the client replaying a stale blip on a later frame.
+        """
+        from pathlib import Path
+        from grid_tactics.card_library import CardLibrary
+        from grid_tactics.action_resolver import resolve_action
+
+        library = CardLibrary.from_directory(Path("data/cards"))
+        state, _ = GameState.new_game(42, DECK_P1, DECK_P2)
+        # Seed a blip directly on the state (simulating the post-trigger frame).
+        blip = {
+            "trigger_kind": "start_of_turn",
+            "source_minion_id": 0,
+            "source_position": [1, 2],
+            "target_position": None,
+            "effect_kind": "heal",
+        }
+        state = dataclasses.replace(state, last_trigger_blip=blip)
+        assert state.last_trigger_blip is not None
+
+        # Any resolve_action call must clear it — PASS is the simplest.
+        next_state = resolve_action(state, pass_action(), library)
+        assert next_state.last_trigger_blip is None

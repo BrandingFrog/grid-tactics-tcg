@@ -1636,6 +1636,16 @@ def resolve_action(
     Raises:
         ValueError: If the action is invalid (wrong phase, illegal action, etc.).
     """
+    # Phase 14.7-09: Clear the transient trigger-blip payload at the TOP of
+    # every resolve_action call. last_trigger_blip is non-None only on the
+    # frame IMMEDIATELY FOLLOWING a trigger resolution (written by
+    # _resolve_trigger_and_open_react_window in react_stack.py); the client
+    # consumes it in applyStateFrame and then the next action must clear it
+    # so later frames don't replay a stale blip. See
+    # test_last_trigger_blip_cleared_on_next_frame.
+    if state.last_trigger_blip is not None:
+        state = replace(state, last_trigger_blip=None)
+
     # Pending death-target gate (phase-agnostic): while a death-triggered
     # modal is open, the ONLY legal action is DEATH_TARGET_PICK from the
     # dying minion's owner. This gate must run BEFORE the REACT-phase
