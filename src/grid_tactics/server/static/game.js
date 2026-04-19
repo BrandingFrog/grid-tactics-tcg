@@ -1571,12 +1571,14 @@ function hideCardTooltip() {
 // =============================================
 // Game Tooltip (hand cards + board minions) — same renderer, no related.
 // =============================================
-function showGameTooltip(numericId, anchorEl) {
+function showGameTooltip(numericId, anchorEl, minion) {
     var tooltipId = sandboxMode ? 'sandbox-tooltip' : 'game-tooltip';
     var hintId = sandboxMode ? 'sandbox-tooltip-hint' : 'game-tooltip-hint';
-    populateTooltip(document.getElementById(tooltipId), numericId, { showRelated: false });
+    var tooltipEl = document.getElementById(tooltipId);
+    populateTooltip(tooltipEl, numericId, { showRelated: false });
     var hint = document.getElementById(hintId);
     if (hint) hint.style.display = 'none';
+    _renderMinionStatusPanels(tooltipEl, minion);
 }
 
 function hideGameTooltip() {
@@ -1586,6 +1588,85 @@ function hideGameTooltip() {
     if (tooltip) tooltip.style.display = 'none';
     var hint = document.getElementById(hintId);
     if (hint) hint.style.display = '';
+    _renderMinionStatusPanels(tooltip, null);
+}
+
+// Hearthstone-style stacked status panels rendered as siblings under
+// the main card tooltip. Surfaces live minion buffs/debuffs/statuses so
+// hovering a board minion shows what's actually applied to THIS instance,
+// not just the printed card text.
+function _renderMinionStatusPanels(tooltipEl, minion) {
+    if (!tooltipEl || !tooltipEl.parentNode) return;
+    var sidebar = tooltipEl.parentNode;
+    var stack = sidebar.querySelector('.tooltip-status-stack');
+    if (!stack) {
+        stack = document.createElement('div');
+        stack.className = 'tooltip-status-stack';
+        // Insert right after the main tooltip so it stacks vertically.
+        tooltipEl.insertAdjacentElement('afterend', stack);
+    }
+    stack.innerHTML = '';
+    if (!minion) {
+        stack.style.display = 'none';
+        return;
+    }
+    var panels = [];
+    var atk = minion.attack_bonus | 0;
+    if (atk !== 0) {
+        panels.push({
+            icon: '🗡️',
+            name: (atk > 0 ? '+' : '') + atk + ' Attack',
+            desc: atk > 0
+                ? 'Buffed: deals ' + atk + ' more damage on attack.'
+                : 'Debuffed: deals ' + Math.abs(atk) + ' less damage on attack.',
+            tone: atk > 0 ? 'buff' : 'debuff',
+        });
+    }
+    var hpBonus = minion.max_health_bonus | 0;
+    if (hpBonus !== 0) {
+        panels.push({
+            icon: '🤍',
+            name: (hpBonus > 0 ? '+' : '') + hpBonus + ' Max Health',
+            desc: hpBonus > 0
+                ? 'Buffed: cap raised by ' + hpBonus + ' (heals can fill it).'
+                : 'Debuffed: cap lowered by ' + Math.abs(hpBonus) + '.',
+            tone: hpBonus > 0 ? 'buff' : 'debuff',
+        });
+    }
+    if (minion.is_burning) {
+        panels.push({
+            icon: '🔥',
+            name: 'Burning',
+            desc: 'Takes 5 🤍 damage at the start of its owner\'s turn.',
+            tone: 'debuff',
+        });
+    }
+    var dm = minion.dark_matter_stacks | 0;
+    if (dm > 0) {
+        panels.push({
+            icon: '🌑',
+            name: 'Dark Matter ×' + dm,
+            desc: 'Stacks consumed by Dark Mage spells (e.g. Dark Matter Barrage).',
+            tone: 'aura',
+        });
+    }
+    if (panels.length === 0) {
+        stack.style.display = 'none';
+        return;
+    }
+    stack.style.display = '';
+    for (var p = 0; p < panels.length; p++) {
+        var panel = panels[p];
+        var el = document.createElement('div');
+        el.className = 'tooltip-status-panel tooltip-status-' + panel.tone;
+        el.innerHTML =
+            '<div class="tooltip-status-icon">' + panel.icon + '</div>' +
+            '<div class="tooltip-status-body">' +
+              '<div class="tooltip-status-name">' + panel.name + '</div>' +
+              '<div class="tooltip-status-desc">' + panel.desc + '</div>' +
+            '</div>';
+        stack.appendChild(el);
+    }
 }
 
 // Pin a hand card's full preview in the left tooltip sidebar on click.
@@ -6574,7 +6655,7 @@ function renderBoard(opts) {
                 cell.innerHTML = renderBoardMinion(minion);
                 // Hover tooltip for board minions
                 (function(m) {
-                    cell.addEventListener('mouseenter', function() { showGameTooltip(m.card_numeric_id, this); });
+                    cell.addEventListener('mouseenter', function() { showGameTooltip(m.card_numeric_id, this, m); });
                     cell.addEventListener('mouseleave', function() { hideGameTooltip(); });
                 })(minion);
             }
