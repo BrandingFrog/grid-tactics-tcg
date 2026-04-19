@@ -2965,7 +2965,7 @@ function _applyStateFrameImmediate(frame, legal, prevState) {
         var nextTurn = frame && typeof frame.turn_number === 'number'
             ? frame.turn_number : 0;
         if (nextTurn > 0 && nextTurn > prevTurn) {
-            _showTurnBanner(nextTurn, frame.active_player_idx);
+            _showTurnBannerOrDefer(nextTurn, frame.active_player_idx);
         }
     } catch (e) { /* defensive — banner is purely visual */ }
 
@@ -3460,6 +3460,27 @@ function _playSacPortal(job, done) {
 // removal after the animation finishes. Safe to call concurrently with
 // the AnimationQueue; the banner never gates game state.
 var _lastBannerTurnKey = null;
+var _pendingTurnBanner = null;  // { turnNumber, activePlayerIdx } when deferred behind the react window
+
+// Fire the turn banner, OR defer it until the spell stage finishes if it
+// is currently animating. Without this the TURN/PLAYER banner blooms on
+// top of the still-resolving react window, with both visuals competing
+// for attention. Deferred banners are flushed by _hideSpellStage.
+function _showTurnBannerOrDefer(turnNumber, activePlayerIdx) {
+    var stage = document.getElementById('spell-stage');
+    var stageActive = stage && !stage.hidden && (
+        _spellStage.chain.length > 0 ||
+        _spellStage.leftCardEl ||
+        _spellStage.rightCardEl ||
+        _spellStage.resolving
+    );
+    if (stageActive) {
+        _pendingTurnBanner = { turnNumber: turnNumber, activePlayerIdx: activePlayerIdx };
+        return;
+    }
+    _showTurnBanner(turnNumber, activePlayerIdx);
+}
+
 function _showTurnBanner(turnNumber, activePlayerIdx) {
     try {
         // Dedupe: don't re-fire for the same turn (covers repeated
@@ -3889,6 +3910,16 @@ function _hideSpellStage() {
         _spellStage.leftCardEl = null;
         _spellStage.rightCardEl = null;
         _spellStage.resolving = false;
+        // Flush any turn banner that was deferred while the stage was up.
+        // Small extra delay so the stage's exit fade fully completes before
+        // the banner blooms — clean visual handoff, not a crossfade.
+        if (_pendingTurnBanner) {
+            var pending = _pendingTurnBanner;
+            _pendingTurnBanner = null;
+            setTimeout(function() {
+                _showTurnBanner(pending.turnNumber, pending.activePlayerIdx);
+            }, 200);
+        }
     }, 360);
 }
 
@@ -7346,7 +7377,7 @@ function setupSandboxSocketHandlers() {
             // Only fire on a real turn FLIP — skip the initial socket state
             // emit (where _prevTurn is 0) and skip rewinds.
             if (_prevTurn > 0 && _nextTurn > _prevTurn) {
-                _showTurnBanner(_nextTurn, payload.state.active_player_idx);
+                _showTurnBannerOrDefer(_nextTurn, payload.state.active_player_idx);
             }
         } catch (e) { /* defensive — banner is purely visual */ }
         try {
