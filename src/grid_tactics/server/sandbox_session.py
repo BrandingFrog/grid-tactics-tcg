@@ -34,6 +34,7 @@ import threading
 from collections import deque
 from dataclasses import replace
 from pathlib import Path
+from typing import Callable, Optional
 
 from grid_tactics.actions import Action, pass_action
 from grid_tactics.action_resolver import resolve_action
@@ -177,7 +178,11 @@ class SandboxSession:
             new_players = (self._state.players[0], new_player)
         self._state = replace(self._state, players=new_players)
 
-    def apply_action(self, action: Action) -> None:
+    def apply_action(
+        self,
+        action: Action,
+        on_frame: Optional[Callable[[], None]] = None,
+    ) -> None:
         """Validate via ``legal_actions``, apply via ``resolve_action``.
 
         Raises ``ValueError("Illegal action")`` if the action is not present
@@ -196,6 +201,15 @@ class SandboxSession:
         until we're back in ACTION (or a pending gate). Legal react branches
         (opponent has a react card they can actually play) are preserved so
         the user can still exercise them.
+
+        Phase 14.7-09 (Issue A fix): ``on_frame`` is an optional callback
+        fired AFTER each ``resolve_action`` call — i.e. once for the user
+        action and once per drained PASS. This lets the sandbox event
+        handler emit one ``sandbox_state`` frame per intermediate state so
+        the client can see transient signals (``last_trigger_blip``, REACT
+        phase entries / exits) that would otherwise be overwritten by the
+        drain loop. When ``None`` (legacy call sites / tests), only the
+        final state is visible — matching the pre-Issue-A behavior.
         """
         valid = legal_actions(self._state, self.library)
         if action not in valid:
@@ -208,6 +222,8 @@ class SandboxSession:
         self._last_prev_state = self._state
         self._last_action = action
         self._state = resolve_action(self._state, action, self.library)
+        if on_frame is not None:
+            on_frame()
         # Drain trivial react windows — empty hand / no reactive cards means
         # the only legal action is PASS. Bounded by an attempt counter so a
         # pathological engine state can never spin forever.
@@ -220,7 +236,16 @@ class SandboxSession:
             only = react_legals[0]
             if only.action_type != ActionType.PASS:
                 break
+            # Update prev/action so each drained frame's enrich_last_action
+            # sees the CURRENT prev_state (the just-emitted frame) paired
+            # with a PASS action — no animation, no attacker_pos, just a
+            # transparent state delta that carries last_trigger_blip and
+            # phase transitions through to the client.
+            self._last_prev_state = self._state
+            self._last_action = pass_action()
             self._state = resolve_action(self._state, pass_action(), self.library)
+            if on_frame is not None:
+                on_frame()
 
         # Auto-follow active player: after each action, sync the sandbox
         # view to whoever's turn it is so the user always controls the

@@ -838,9 +838,23 @@ def register_events(room_manager: RoomManager) -> None:
         except (ValueError, KeyError, TypeError) as e:
             emit("error", {"msg": f"Invalid action: {e}"})
             return
+        # Phase 14.7-09 (Issue A fix): emit one sandbox_state frame per
+        # intermediate state produced by apply_action — including each
+        # drained PASS during trivial react windows. Without this, the
+        # auto-drain collapses the user action + drain into a single
+        # frame, which CLOBBERS transient signals like last_trigger_blip
+        # (resolve_action clears it at the top of every call) and phase=REACT
+        # entries that the client needs to close the spell-stage overlay.
+        # The client's sandbox_state handler is idempotent + animation-
+        # queue based, so replaying frames composes cleanly.
+        captured_sid = request.sid
+
+        def _emit_frame():
+            _emit_sandbox_state(sandbox, captured_sid)
+
         with sandbox.lock:
             try:
-                sandbox.apply_action(action)
+                sandbox.apply_action(action, on_frame=_emit_frame)
             except ValueError as e:
                 emit("error", {"msg": str(e)})
                 return
@@ -850,7 +864,10 @@ def register_events(room_manager: RoomManager) -> None:
                 traceback.print_exc()
                 emit("error", {"msg": f"Server error: {e}"})
                 return
-        _emit_sandbox_state(sandbox, request.sid)
+        # apply_action already emitted the final frame via on_frame, so no
+        # trailing _emit_sandbox_state call is needed here. If apply_action
+        # early-returned before any on_frame fire (should not happen post-
+        # validation), the state is unchanged and the client already has it.
 
     @socketio.on("sandbox_add_card_to_zone")
     def handle_sandbox_add_card_to_zone(data):
