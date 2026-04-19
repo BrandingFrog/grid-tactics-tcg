@@ -62,13 +62,27 @@
     },
     {
       "id": "spell-stage-closes-with-thumbs-up",
-      "title": "14.7-09: React window fades with 👍 after react drains",
-      "instructions": "GOAL (regression): the react-window overlay must close cleanly in sandbox (it used to hang open with the placeholder still visible).\n\nSetup state: P1 has Acidic Rain (5 mana) in hand and 5 mana available. P2 has a Red Diodebot on the board.\n\n1. Click Acidic Rain in P1's bottom hand. The card highlights with a glow (confirm-armed mode).\n2. Click Acidic Rain a SECOND time to confirm the cast.\n3. The react window appears in the centre: a giant Acidic Rain card slides in from the left, with a cyan ▶ arrow and a placeholder (⚡) on the right. The opponent has no react cards so the window auto-drains.\n4. Watch the react window close.",
-      "expected": "After the auto-drain (~1s): the Acidic Rain card slides off to the right (it's a magic spell — discards to the grave), the placeholder flips to a green 👍, and the whole overlay fades within ~1s. The Red Diodebot on the board becomes burning (🔥 badge). The overlay does NOT hang open with a placeholder still visible.",
+      "title": "14.7-09: Single-card react window: 👍 then lateral glide",
+      "instructions": "GOAL: confirm the react-window resolution for a 1-card chain — 👍 appears, then the card glides from LEFT slot laterally into the RIGHT slot (replacing the 👍), then fades.\n\nSetup state: P1 has Acidic Rain (5 mana) in hand and 5 mana available. P2 has a Red Diodebot on the board.\n\n1. Click Acidic Rain in P1's bottom hand (confirm-armed glow appears).\n2. Click Acidic Rain a SECOND time to confirm the cast.\n3. The react window appears in the centre: Acidic Rain flies into the RIGHT slot, then glides over to the LEFT slot with a placeholder on the RIGHT. The opponent has no react cards so the window auto-drains.\n4. Watch the resolution.",
+      "expected": "After the auto-drain (~0.5s): a green 👍 appears in the RIGHT slot. About half a second later, the Acidic Rain card glides laterally from the LEFT slot to the RIGHT slot (replacing the 👍 — it does NOT fly off-screen). It then fades in place and the whole overlay fades out. Red Diodebot on the board becomes burning (🔥 badge). The card never slides off to the right edge.",
       "setup": [
         {"op": "reset"},
         {"op": "set_player", "player_idx": 0, "field": "current_mana", "value": 5},
         {"op": "add_to_hand", "player_idx": 0, "card_id": "acidic_rain"},
+        {"op": "place", "player_idx": 1, "card_id": "red_diodebot", "row": 3, "col": 2}
+      ]
+    },
+    {
+      "id": "react-window-two-card-resolve-backwards",
+      "title": "14.7-09: Two-card react chain resolves backwards with off-screen return",
+      "instructions": "GOAL: confirm the multi-card resolution flow — the top of the stack glides LEFT→RIGHT while the card below it returns from off-screen-LEFT to the LEFT slot, showing 'right card resolves against left card'.\n\nSetup state: P1 has Acidic Rain (5 mana) and 5 mana. P2 has Prohibition (4 mana, react: negates an opponent's magic) and 4 mana, plus a Red Diodebot on the board.\n\n1. Confirm Controlling = P1. Click Acidic Rain in P1's bottom hand, then click it again to confirm the cast.\n2. Acidic Rain enters the RIGHT slot and glides over to the LEFT, with a placeholder on the RIGHT. The window is open, waiting for P2's react.\n3. Toggle Controlling → P2 (right sidebar). Click Prohibition in P2's TOP hand, click again to confirm.\n4. Prohibition enters the RIGHT slot, then the conveyor pushes: Acidic Rain slides off-screen to the LEFT and Prohibition glides over to the LEFT slot. RIGHT shows the placeholder again.\n5. Toggle Controlling → P1. P1 has no react, so the window auto-drains.\n6. Watch the resolution sequence in the centre.",
+      "expected": "After the auto-drain (~0.5s): a green 👍 appears in the RIGHT slot, marking the chain finished. Then:\n- Beat 1 (~0.5s in): Prohibition glides laterally from LEFT to RIGHT (replacing the 👍). At the SAME TIME, Acidic Rain returns from off-screen-LEFT into the LEFT slot. You briefly see Prohibition (right) and Acidic Rain (left) side-by-side — Prohibition is resolving against Acidic Rain.\n- Beat 2: Prohibition fades.\n- Beat 3: Acidic Rain glides laterally LEFT→RIGHT (alone now, no card returns from off-screen). Then fades.\n- The whole overlay fades out within ~3s of the auto-drain. Red Diodebot is NOT burning (Prohibition negated the spell). Acidic Rain ends up in P1's grave; Prohibition ends up in P2's grave.",
+      "setup": [
+        {"op": "reset"},
+        {"op": "set_player", "player_idx": 0, "field": "current_mana", "value": 5},
+        {"op": "set_player", "player_idx": 1, "field": "current_mana", "value": 4},
+        {"op": "add_to_hand", "player_idx": 0, "card_id": "acidic_rain"},
+        {"op": "add_to_hand", "player_idx": 1, "card_id": "prohibition"},
         {"op": "place", "player_idx": 1, "card_id": "red_diodebot", "row": 3, "col": 2}
       ]
     },
