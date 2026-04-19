@@ -1348,3 +1348,248 @@ class TestDeathTriggerPriorityQueueIntegration:
         assert state.get_minion(1) is None  # Rat A (Giant Rat)
         # Game should not be crashed or game over (neither player at 0 HP).
         assert not state.is_game_over
+
+
+class TestFizzleRulePhase14_7_06Integration:
+    """Phase 14.7-06 spec §7.3: effects fizzle silently when target
+    no longer valid at resolution time. Integration tests drive the
+    fizzle branch end-to-end through the trigger queue + react window.
+    """
+
+    def test_rgb_destroy_eliminates_only_promote_target_giant_rat_fizzles(self, library):
+        """Spec §7.4 fizzle variant — RGB Lasercannon's DESTROY eats the
+        ONLY valid promote target before Giant Rat's PROMOTE resolves.
+
+        Setup (similar to 14.7-05b's flow but with exactly one promote
+        candidate):
+          - P1 has RGB Lasercannon at (1, 2) with 1 HP.
+          - P2 has Giant Rat A at (2, 2) with 1 HP.
+          - P2 has a single plain Rat at (3, 0) — this is RGB's destroy
+            target AND the only candidate Giant Rat A could promote.
+
+        Expected flow:
+          1. P1 attacks Giant Rat A with RGB. Both die.
+          2. Turn queue drains first: RGB's DESTROY opens modal for P1.
+          3. P1 picks the plain Rat at (3, 0). Rat destroyed.
+          4. AFTER_DEATH_EFFECT window opens. PASS-PASS closes.
+          5. Drain-recheck: Giant Rat's PROMOTE in other queue.
+          6. PROMOTE sees 0 candidates → `_apply_promote_on_death`
+             silently no-ops. An AFTER_DEATH_EFFECT window still opens
+             for the non-fizzled trigger-resolve path (PROMOTE is
+             handled in the ordering-level modal branch; 0-candidate
+             path goes through inline promote which is already a
+             silent no-op in the existing codebase).
+
+        Assertions (proving PROMOTE fizzled):
+          - No minion on the board has been promoted to a Giant Rat.
+          - No error was raised.
+          - Queues fully drained.
+          - The board contains no minions (RGB + Giant Rat A both dead,
+            the single promote-target Rat destroyed by RGB).
+
+        This test proves the §7.4 "fizzle branch" — the strategic
+        preempt where the turn player destroys the enemy's future
+        trigger target before that trigger fires.
+        """
+        rat_nid = library.get_numeric_id("rat")
+        giant_rat_nid = library.get_numeric_id("giant_rat")
+        rgb_nid = library.get_numeric_id("rgb_lasercannon")
+
+        rgb = MinionInstance(
+            instance_id=0, card_numeric_id=rgb_nid,
+            owner=PlayerSide.PLAYER_1, position=(1, 2), current_health=1,
+        )
+        rat_a = MinionInstance(
+            instance_id=1, card_numeric_id=giant_rat_nid,
+            owner=PlayerSide.PLAYER_2, position=(2, 2), current_health=1,
+        )
+        # The single Rat — serves as both RGB's destroy target AND the
+        # only promote candidate for Giant Rat A. P1 eating it with
+        # turn-priority kills the future PROMOTE.
+        lone_rat = MinionInstance(
+            instance_id=2, card_numeric_id=rat_nid,
+            owner=PlayerSide.PLAYER_2, position=(3, 0), current_health=5,
+        )
+
+        state = _make_state(
+            minions=[rgb, rat_a, lone_rat],
+            active_player_idx=0,
+        )
+
+        # Step 1: P1 attacks rat_a with RGB. Both die simultaneously.
+        state = resolve_action(
+            state, attack_action(minion_id=0, target_id=1), library,
+        )
+
+        # Step 2-3: RGB's DESTROY modal opens for P1. Giant Rat's
+        # PROMOTE queued on the "other" side.
+        assert state.pending_death_target is not None
+        assert state.pending_death_target.owner_idx == 0
+        assert len(state.pending_trigger_queue_other) == 1
+        assert state.pending_trigger_queue_other[0].trigger_kind == "on_death"
+
+        # Step 4: P1 picks the lone Rat. It's destroyed by RGB's effect.
+        from grid_tactics.actions import Action
+        state = resolve_action(
+            state,
+            Action(action_type=ActionType.DEATH_TARGET_PICK, target_pos=(3, 0)),
+            library,
+        )
+
+        # Lone Rat destroyed.
+        assert state.get_minion(2) is None
+        # AFTER_DEATH_EFFECT window for RGB now open.
+        assert state.phase == TurnPhase.REACT
+        # Giant Rat's PROMOTE still queued.
+        assert len(state.pending_trigger_queue_other) == 1
+
+        # Step 5: PASS closes the RGB window. drain-recheck picks up
+        # Giant Rat's PROMOTE entry — but there are ZERO promote
+        # candidates (the only Rat was just destroyed), so PROMOTE
+        # silently fizzles.
+        state = resolve_action(state, pass_action(), library)
+
+        # PROMOTE fizzled (0 candidates → `_apply_promote_on_death`
+        # no-op). No new Giant Rat appeared.
+        giant_rats_on_board = [
+            m for m in state.minions
+            if m.card_numeric_id == giant_rat_nid and m.is_alive
+        ]
+        assert giant_rats_on_board == [], (
+            f"Expected 0 live Giant Rats after PROMOTE fizzle, found "
+            f"{len(giant_rats_on_board)}"
+        )
+
+        # Drive through any lingering REACT windows.
+        safety = 0
+        while state.phase == TurnPhase.REACT and safety < 10:
+            state = resolve_action(state, pass_action(), library)
+            safety += 1
+        assert safety < 10, "PASS loop did not terminate"
+
+        # All queues drained.
+        assert state.pending_trigger_queue_turn == ()
+        assert state.pending_trigger_queue_other == ()
+        assert state.pending_death_target is None
+
+        # Board empty (all three minions gone).
+        assert state.get_minion(0) is None  # RGB
+        assert state.get_minion(1) is None  # Giant Rat A
+        assert state.get_minion(2) is None  # Lone Rat (destroyed by RGB)
+        # Game did not crash / go into error state.
+        assert not state.is_game_over
+
+    def test_end_of_turn_adjacent_aura_fizzles_when_source_died_mid_drain(self, library):
+        """Mid-drain source death → that source's remaining triggers fizzle.
+
+        This scenario exercises the fizzle-on-source-death branch of
+        `_validate_target_at_resolve_time` for a non-on_death trigger
+        (end_of_turn ADJACENT damage). We construct a state where two
+        simultaneous end-of-turn ADJACENT damage triggers fire against
+        each other — resolving the first one kills the second source,
+        which then fizzles instead of damaging its neighbor.
+
+        Uses a synthetic in-memory CardLibrary with an ADJACENT-damage
+        minion so no card-data churn is required.
+        """
+        from grid_tactics.card_library import CardLibrary
+        from grid_tactics.cards import CardDefinition, EffectDefinition
+        from grid_tactics.enums import (
+            CardType, EffectType, TargetType, TriggerType,
+        )
+        from grid_tactics.react_stack import (
+            drain_pending_trigger_queue,
+            enter_end_of_turn,
+        )
+
+        # "Stinger" minion: on_end_of_turn deals 10 damage to all adjacent
+        # enemies. Base HP 5 so a sibling stinger at range 1 kills it in
+        # one hit (if the sibling's trigger resolves first).
+        stinger = CardDefinition(
+            card_id="test_stinger",
+            name="Stinger",
+            card_type=CardType.MINION,
+            mana_cost=2,
+            attack=1,
+            health=5,
+            attack_range=0,
+            effects=(
+                EffectDefinition(
+                    effect_type=EffectType.DAMAGE,
+                    trigger=TriggerType.ON_END_OF_TURN,
+                    target=TargetType.ADJACENT,
+                    amount=10,
+                ),
+            ),
+        )
+        lib = CardLibrary({"test_stinger": stinger})
+        stinger_nid = lib.get_numeric_id("test_stinger")
+
+        # P1 has two stingers adjacent to each other. Both are at full
+        # HP (5). The end-of-turn drain picks one, resolves → the OTHER
+        # stinger takes 10 damage and dies. The second (dead) stinger's
+        # queued trigger fizzles via source-liveness check.
+        stinger_a = MinionInstance(
+            instance_id=0, card_numeric_id=stinger_nid,
+            owner=PlayerSide.PLAYER_1, position=(2, 2), current_health=5,
+        )
+        stinger_b = MinionInstance(
+            instance_id=1, card_numeric_id=stinger_nid,
+            owner=PlayerSide.PLAYER_1, position=(2, 3), current_health=5,
+        )
+        # A neighbor that would take damage IF stinger_b's trigger
+        # resolves (at (2, 4) — adjacent to stinger_b at (2, 3)).
+        # If stinger_b is killed first, this neighbor should NOT take
+        # damage (fizzle proof).
+        bystander = MinionInstance(
+            instance_id=2, card_numeric_id=stinger_nid,
+            owner=PlayerSide.PLAYER_2, position=(2, 4), current_health=5,
+        )
+
+        state = _make_state(
+            minions=[stinger_a, stinger_b, bystander],
+            active_player_idx=0,
+            phase=TurnPhase.END_OF_TURN,
+        )
+
+        # Drive the end-of-turn triggers. Two siblings owned by the
+        # active player → picker modal opens for P1.
+        state = enter_end_of_turn(state, lib)
+
+        # Picker modal is open — the turn player (P1) must pick which
+        # stinger's trigger to resolve first. Both are owner_idx=0, so
+        # both go into the turn queue.
+        assert state.pending_trigger_picker_idx == 0
+        assert len(state.pending_trigger_queue_turn) == 2
+
+        # P1 picks entry 0 (stinger_a's trigger) to resolve first.
+        from grid_tactics.actions import trigger_pick_action
+        state = resolve_action(state, trigger_pick_action(queue_idx=0), lib)
+
+        # stinger_a's ADJACENT damage hit stinger_b (and the bystander
+        # isn't adjacent to stinger_a, so only stinger_b took damage).
+        # stinger_b is now at 5 - 10 = -5 HP → cleanup marked it for
+        # removal. The cleanup ran inside the resolver before the
+        # react window opened.
+
+        # REACT window opens for stinger_a's BEFORE_END_OF_TURN trigger.
+        # PASS through.
+        safety = 0
+        while state.phase == TurnPhase.REACT and safety < 5:
+            state = resolve_action(state, pass_action(), lib)
+            safety += 1
+
+        # After drain-recheck, stinger_b's pending trigger should have
+        # been attempted — and fizzled because stinger_b is now dead.
+        # Proof: bystander (adjacent to stinger_b) still has 5 HP.
+        assert state.get_minion(2) is not None
+        assert state.get_minion(2).current_health == 5, (
+            "Bystander took damage — stinger_b's trigger did NOT fizzle "
+            "despite its source dying mid-drain"
+        )
+
+        # Queues fully drained.
+        assert state.pending_trigger_queue_turn == ()
+        assert state.pending_trigger_queue_other == ()
+        # No error, no game-over.
+        assert not state.is_game_over

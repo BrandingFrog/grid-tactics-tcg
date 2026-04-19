@@ -1626,3 +1626,322 @@ class TestPhase14_7_05_TriggerQueue:
         picks = [a for a in actions if a.action_type == ActionType.TRIGGER_PICK]
         assert len(picks) == 2
         assert {p.card_index for p in picks} == {0, 1}
+
+
+# ---------------------------------------------------------------------------
+# Phase 14.7-06: fizzle-at-resolve-time for pending triggers
+# ---------------------------------------------------------------------------
+
+
+class TestPhase14_7_06_TriggerFizzle:
+    """Phase 14.7-06: A queued trigger whose target/source is no longer
+    valid at resolution time fizzles silently — no error, NO react
+    window opened (spec §7.3 + §7.5 step 3: no dead-air prompt for
+    a no-op effect).
+
+    These tests exercise the ``_resolve_trigger_and_open_react_window``
+    fizzle branch by constructing a state where a PendingTrigger refers
+    to a stale source (for non-on_death kinds) or a missing target (for
+    SINGLE_TARGET kinds).
+    """
+
+    def _build_minimal_state_with_queue(
+        self, library, queue_turn=(), queue_other=(), minions=(),
+    ):
+        """Build a GameState at phase=END_OF_TURN with pre-populated queues.
+
+        Used to drive drain_pending_trigger_queue directly without
+        going through the enter_{start,end}_of_turn entry points
+        (which would re-compute the queue from scratch).
+        """
+        board = Board.empty()
+        for m in minions:
+            board = board.place(m.position[0], m.position[1], m.instance_id)
+        p1 = Player(
+            side=PlayerSide.PLAYER_1, hp=STARTING_HP,
+            current_mana=3, max_mana=3, hand=(), deck=(), grave=(),
+        )
+        p2 = Player(
+            side=PlayerSide.PLAYER_2, hp=STARTING_HP,
+            current_mana=3, max_mana=3, hand=(), deck=(), grave=(),
+        )
+        next_id = max((m.instance_id for m in minions), default=-1) + 1
+        return GameState(
+            board=board, players=(p1, p2),
+            active_player_idx=0,
+            phase=TurnPhase.END_OF_TURN,
+            turn_number=3,
+            seed=42,
+            minions=tuple(minions),
+            next_minion_id=next_id,
+            pending_trigger_queue_turn=queue_turn,
+            pending_trigger_queue_other=queue_other,
+        )
+
+    def test_fizzle_on_dead_source_skips_react_window(self, library):
+        """End-of-turn trigger whose source minion has died mid-drain
+        must fizzle SILENTLY: state stays in END_OF_TURN (no REACT
+        window opens), queue drains to empty, no error.
+        """
+        from grid_tactics.game_state import PendingTrigger
+        from grid_tactics.react_stack import drain_pending_trigger_queue
+
+        # Find a card with an ON_END_OF_TURN trigger. Dark Matter
+        # Battery has on_end_of_turn damage to opponent.
+        # We'll use a synthetic card instead so the test doesn't depend
+        # on card-data churn.
+        from grid_tactics.cards import CardDefinition, EffectDefinition
+        from grid_tactics.enums import CardType, EffectType, TargetType, TriggerType
+
+        synthetic = CardDefinition(
+            card_id="test_end_adj_aura",
+            name="End Adj Aura",
+            card_type=CardType.MINION,
+            mana_cost=2,
+            attack=1,
+            health=3,
+            attack_range=0,
+            effects=(
+                EffectDefinition(
+                    effect_type=EffectType.DAMAGE,
+                    trigger=TriggerType.ON_END_OF_TURN,
+                    target=TargetType.ADJACENT,
+                    amount=3,
+                ),
+            ),
+        )
+        lib = CardLibrary({"test_end_adj_aura": synthetic})
+
+        # Neighbor that would take damage if the effect resolved.
+        # Source minion is ABSENT from state.minions (already cleaned up
+        # or never placed) — fizzle via source-liveness check.
+        neighbor = MinionInstance(
+            instance_id=1, card_numeric_id=0, owner=PlayerSide.PLAYER_2,
+            position=(2, 3), current_health=5,
+        )
+        # Source at instance_id=99 — NOT in state, simulates a dead
+        # minion whose trigger was enqueued before it was cleaned up.
+        trigger = PendingTrigger(
+            trigger_kind="end_of_turn",
+            source_minion_id=99,
+            source_card_numeric_id=0,
+            effect_idx=0,
+            owner_idx=0,
+            captured_position=(2, 2),
+            target_pos=None,
+        )
+        state = self._build_minimal_state_with_queue(
+            lib, queue_turn=(trigger,), minions=[neighbor],
+        )
+
+        # Drain the queue — the trigger should fizzle silently.
+        result = drain_pending_trigger_queue(state, lib)
+
+        # Queue fully drained.
+        assert result.pending_trigger_queue_turn == ()
+        assert result.pending_trigger_queue_other == ()
+        # NO react window opened — stayed in END_OF_TURN (no REACT phase).
+        # (drain_pending_trigger_queue on an empty queue returns state
+        # unchanged; since the trigger fizzled and popped, we should be
+        # in the same END_OF_TURN phase as we started.)
+        assert result.phase != TurnPhase.REACT, (
+            f"Expected fizzle to skip REACT window, got phase={result.phase}"
+        )
+        # Neighbor HP unchanged.
+        assert result.get_minion(1).current_health == 5
+
+    def test_fizzle_on_missing_target_silent(self, library):
+        """End-of-turn SINGLE_TARGET trigger whose target_pos is empty
+        must fizzle silently — no REACT window, no state change.
+        """
+        from grid_tactics.cards import CardDefinition, EffectDefinition
+        from grid_tactics.enums import CardType, EffectType, TargetType, TriggerType
+        from grid_tactics.game_state import PendingTrigger
+        from grid_tactics.react_stack import drain_pending_trigger_queue
+
+        synthetic = CardDefinition(
+            card_id="test_end_single",
+            name="End Single Target",
+            card_type=CardType.MINION,
+            mana_cost=2,
+            attack=1,
+            health=3,
+            attack_range=0,
+            effects=(
+                EffectDefinition(
+                    effect_type=EffectType.DAMAGE,
+                    trigger=TriggerType.ON_END_OF_TURN,
+                    target=TargetType.SINGLE_TARGET,
+                    amount=5,
+                ),
+            ),
+        )
+        lib = CardLibrary({"test_end_single": synthetic})
+
+        # Source still alive.
+        source = MinionInstance(
+            instance_id=0, card_numeric_id=0, owner=PlayerSide.PLAYER_1,
+            position=(1, 1), current_health=3,
+        )
+        # Target captured at (3, 3) — but no minion is there.
+        trigger = PendingTrigger(
+            trigger_kind="end_of_turn",
+            source_minion_id=0,
+            source_card_numeric_id=0,
+            effect_idx=0,
+            owner_idx=0,
+            captured_position=(1, 1),
+            target_pos=(3, 3),
+        )
+        state = self._build_minimal_state_with_queue(
+            lib, queue_turn=(trigger,), minions=[source],
+        )
+
+        result = drain_pending_trigger_queue(state, lib)
+
+        # Queue drained, no react window, source unchanged.
+        assert result.pending_trigger_queue_turn == ()
+        assert result.phase != TurnPhase.REACT
+        assert result.get_minion(0).current_health == 3
+
+    def test_fizzle_pops_trigger_and_advances_to_next_queue_entry(self, library):
+        """Multi-entry queue: if entry 1 fizzles, entry 2 still resolves
+        and opens its react window. Fizzle must not block the drain.
+        """
+        from grid_tactics.cards import CardDefinition, EffectDefinition
+        from grid_tactics.enums import (
+            CardType, EffectType, ReactContext, TargetType, TriggerType,
+        )
+        from grid_tactics.game_state import PendingTrigger
+        from grid_tactics.react_stack import drain_pending_trigger_queue
+
+        # Card A: ON_END_OF_TURN + DAMAGE + SINGLE_TARGET — will fizzle.
+        # Card B: ON_END_OF_TURN + DAMAGE + OPPONENT_PLAYER — will resolve.
+        card_a = CardDefinition(
+            card_id="test_a",
+            name="Card A",
+            card_type=CardType.MINION,
+            mana_cost=2,
+            attack=1,
+            health=3,
+            attack_range=0,
+            effects=(
+                EffectDefinition(
+                    effect_type=EffectType.DAMAGE,
+                    trigger=TriggerType.ON_END_OF_TURN,
+                    target=TargetType.SINGLE_TARGET,
+                    amount=5,
+                ),
+            ),
+        )
+        card_b = CardDefinition(
+            card_id="test_b",
+            name="Card B",
+            card_type=CardType.MINION,
+            mana_cost=2,
+            attack=1,
+            health=3,
+            attack_range=0,
+            effects=(
+                EffectDefinition(
+                    effect_type=EffectType.DAMAGE,
+                    trigger=TriggerType.ON_END_OF_TURN,
+                    target=TargetType.OPPONENT_PLAYER,
+                    amount=7,
+                ),
+            ),
+        )
+        lib = CardLibrary({"test_a": card_a, "test_b": card_b})
+
+        source_a = MinionInstance(
+            instance_id=0, card_numeric_id=0, owner=PlayerSide.PLAYER_1,
+            position=(1, 1), current_health=3,
+        )
+        source_b = MinionInstance(
+            instance_id=1, card_numeric_id=1, owner=PlayerSide.PLAYER_2,
+            position=(2, 2), current_health=3,
+        )
+
+        # Queue order: Card A first (fizzles), Card B second (resolves).
+        # Both belong to P1 (turn player, owner_idx=0).
+        # 2 entries → modal picker would open; use the picker flow to
+        # resolve entry 0 first, then entry 1 via drain-recheck.
+        # For simplicity: put Card A alone in turn queue and Card B in
+        # other queue so we exercise the turn→other progression.
+        trigger_a = PendingTrigger(
+            trigger_kind="end_of_turn",
+            source_minion_id=0,
+            source_card_numeric_id=0,
+            effect_idx=0,
+            owner_idx=0,
+            captured_position=(1, 1),
+            target_pos=(4, 4),  # empty cell → fizzle
+        )
+        trigger_b = PendingTrigger(
+            trigger_kind="end_of_turn",
+            source_minion_id=1,
+            source_card_numeric_id=1,
+            effect_idx=0,
+            owner_idx=1,
+            captured_position=(2, 2),
+            target_pos=None,
+        )
+        state = self._build_minimal_state_with_queue(
+            lib,
+            queue_turn=(trigger_a,),
+            queue_other=(trigger_b,),
+            minions=[source_a, source_b],
+        )
+
+        result = drain_pending_trigger_queue(state, lib)
+
+        # Turn queue drained via fizzle. Other queue's Card B auto-
+        # resolved and opened its BEFORE_END_OF_TURN react window.
+        assert result.pending_trigger_queue_turn == ()
+        assert result.pending_trigger_queue_other == ()
+        # Card B's effect landed: Card B's owner is P2 (owner_idx=1), so
+        # OPPONENT_PLAYER damages P1.
+        assert result.players[0].hp == STARTING_HP - 7
+        # Card B opened its react window.
+        assert result.phase == TurnPhase.REACT
+        assert result.react_context == ReactContext.BEFORE_END_OF_TURN
+
+    def test_fizzle_preserves_state_identity_through_resolve_effect(self, library):
+        """Regression: resolve_effect must return the EXACT state object
+        on fizzle so `_resolve_trigger_and_open_react_window` can detect
+        fizzle via `state is prev_state`.
+        """
+        from grid_tactics.cards import EffectDefinition
+        from grid_tactics.effect_resolver import resolve_effect
+        from grid_tactics.enums import EffectType, TargetType, TriggerType
+
+        board = Board.empty()
+        p1 = Player(
+            side=PlayerSide.PLAYER_1, hp=STARTING_HP,
+            current_mana=5, max_mana=5, hand=(), deck=(), grave=(),
+        )
+        p2 = Player(
+            side=PlayerSide.PLAYER_2, hp=STARTING_HP,
+            current_mana=5, max_mana=5, hand=(), deck=(), grave=(),
+        )
+        state = GameState(
+            board=board, players=(p1, p2),
+            active_player_idx=0,
+            phase=TurnPhase.ACTION, turn_number=3, seed=42,
+        )
+
+        # SINGLE_TARGET with missing target → fizzle.
+        effect = EffectDefinition(
+            effect_type=EffectType.DAMAGE,
+            trigger=TriggerType.ON_END_OF_TURN,
+            target=TargetType.SINGLE_TARGET,
+            amount=3,
+        )
+        result = resolve_effect(
+            state, effect, caster_pos=(0, 0),
+            caster_owner=PlayerSide.PLAYER_1, library=library,
+            target_pos=(4, 4),
+            source_minion_id=42,
+        )
+        # IDENTITY check — the fizzle return must be state unchanged.
+        assert result is state
