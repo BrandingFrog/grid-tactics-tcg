@@ -3652,7 +3652,37 @@ function _spellStageSourceRect(playerIdxOrPos) {
     return { left: window.innerWidth, top: window.innerHeight / 2, width: 1, height: 1 };
 }
 
+// Queue for sequential push processing. Without this, rapid-fire pushes
+// (sandbox test runs, or fast human chains) interrupt each other's fly-in
+// transitions because each _doShowSpellStage flushes the previous shift
+// mid-flight. Queueing lets each card complete its fly-in + hold + shift
+// before the next one starts. Resolution defers until the queue drains.
+var _spellStageQueue = [];
+var _spellStageBusy = false;
+var _spellStagePendingResolve = false;
+var SPELL_STAGE_PER_CARD_MS = 1500;  // 520ms fly-in + 1000ms hold beat ≈ shift starts
+
 function _showSpellStage(numericId, sourcePlayerIdx) {
+    _spellStageQueue.push({ nid: numericId, playerIdx: sourcePlayerIdx });
+    if (!_spellStageBusy) _processSpellStageQueue();
+}
+
+function _processSpellStageQueue() {
+    if (_spellStageQueue.length === 0) {
+        _spellStageBusy = false;
+        if (_spellStagePendingResolve) {
+            _spellStagePendingResolve = false;
+            _doSpellStageResolve();
+        }
+        return;
+    }
+    _spellStageBusy = true;
+    var next = _spellStageQueue.shift();
+    _doShowSpellStage(next.nid, next.playerIdx);
+    setTimeout(_processSpellStageQueue, SPELL_STAGE_PER_CARD_MS);
+}
+
+function _doShowSpellStage(numericId, sourcePlayerIdx) {
     var els = _spellStageEls();
     if (!els.root || !els.left || !els.right) return;
     var html = _spellStageCardHtml(numericId);
@@ -3665,7 +3695,9 @@ function _showSpellStage(numericId, sourcePlayerIdx) {
     }
 
     // If a shift is pending from the previous push, flush it now so the
-    // conveyor never holds two cards in the same slot.
+    // conveyor never holds two cards in the same slot. (Queueing usually
+    // means the previous shift fired naturally, but the flush is kept as
+    // a defensive belt-and-braces.)
     if (_spellStage.pendingShiftTimer) {
         clearTimeout(_spellStage.pendingShiftTimer);
         _spellStage.pendingShiftTimer = null;
@@ -3763,6 +3795,17 @@ function _performStageShift() {
 // reflects the final top-of-stack before we pop.
 function _spellStageOnReactClosed() {
     if (_spellStage.resolving) return;
+    // If pushes are still queued/animating, wait for them to drain before
+    // starting the LIFO resolution. Otherwise the resolve runs while the
+    // last card is still flying in.
+    if (_spellStageBusy || _spellStageQueue.length > 0) {
+        _spellStagePendingResolve = true;
+        return;
+    }
+    _doSpellStageResolve();
+}
+
+function _doSpellStageResolve() {
     if (_spellStage.pendingShiftTimer) {
         clearTimeout(_spellStage.pendingShiftTimer);
         _spellStage.pendingShiftTimer = null;
