@@ -63,6 +63,76 @@ def _find_minion_at_pos(
     return None
 
 
+def _validate_target_at_resolve_time(
+    state: GameState,
+    effect: EffectDefinition,
+    source_pos: Optional[tuple[int, int]],
+    source_minion_id: Optional[int],
+    target_pos: Optional[tuple[int, int]],
+) -> bool:
+    """Phase 14.7-06: Return True if the effect can still resolve (no fizzle).
+
+    Per spec §7.3, an effect fizzles SILENTLY when its target is no longer
+    valid at resolution time. This helper is the source of truth for
+    fizzle eligibility and is called from ``resolve_effect`` before the
+    TargetType dispatch.
+
+    Fizzle rules by TargetType:
+      - SINGLE_TARGET: fizzle if no alive minion exists at target_pos.
+        (A missing minion OR a dead-but-not-yet-cleaned-up minion both
+        fizzle — the effect captured a target that no longer exists.)
+      - ADJACENT: when source_minion_id is supplied, fizzle if that
+        minion is dead / missing. Adjacency is computed from the source
+        minion's current position; a dead source cannot project an aura.
+        Magic-card / aura callers (source_minion_id=None) rely on
+        source_pos and never fizzle here — area logic naturally no-ops
+        on empty neighbor sets.
+      - SELF_OWNER: when source_minion_id is supplied (the caster is a
+        minion), fizzle if the minion is dead / missing. Magic-card
+        casts with source_minion_id=None always pass — SELF_OWNER then
+        refers to the casting player, which is always valid.
+      - OPPONENT_PLAYER: never fizzles (the player is always "alive"
+        for targeting purposes until game over, which exits earlier).
+      - Area effects (ALL_ENEMIES, ALL_ALLIES, ALL_MINIONS): never
+        fizzle via this helper — their handlers recompute the target
+        list from state and silently no-op on empty sets.
+
+    Returns True if the effect can proceed to resolution, False if it
+    must fizzle (caller returns state unchanged).
+    """
+    tt = effect.target
+
+    if tt == TargetType.SINGLE_TARGET:
+        if target_pos is None:
+            # No target captured — the handler already no-ops on this.
+            # Return True so existing callers see the same identity
+            # (unchanged state) through the normal path, not a fizzle
+            # short-circuit. Either way produces a silent no-op.
+            return True
+        m = _find_minion_at_pos(state.minions, target_pos)
+        if m is None or m.current_health <= 0:
+            return False
+        return True
+
+    if tt == TargetType.ADJACENT:
+        if source_minion_id is not None:
+            src = state.get_minion(source_minion_id)
+            if src is None or src.current_health <= 0:
+                return False
+        return True
+
+    if tt == TargetType.SELF_OWNER:
+        if source_minion_id is not None:
+            src = state.get_minion(source_minion_id)
+            if src is None or src.current_health <= 0:
+                return False
+        return True
+
+    # OPPONENT_PLAYER / ALL_ENEMIES / ALL_ALLIES / ALL_MINIONS — never
+    # fizzle via this helper.
+    return True
+
+
 def _player_index_for_side(side: PlayerSide) -> int:
     """Return the player tuple index for a PlayerSide."""
     return int(side)
@@ -411,6 +481,8 @@ def resolve_effect(
     caster_owner: PlayerSide,
     library: CardLibrary,
     target_pos: Optional[tuple[int, int]] = None,
+    *,
+    source_minion_id: Optional[int] = None,
 ) -> GameState:
     """Resolve a single effect, returning a new GameState.
 
@@ -425,13 +497,28 @@ def resolve_effect(
         caster_owner: Which player owns the caster.
         library: CardLibrary for looking up base stats (heal caps).
         target_pos: Target position for SINGLE_TARGET effects.
+        source_minion_id: Phase 14.7-06 — when the effect source is a
+            minion (triggered effect from an on_death / start_of_turn /
+            end_of_turn / on_summon queue entry, or an activated ability),
+            pass the minion's instance_id so the fizzle gate can re-
+            validate source liveness. Leave None for magic casts and
+            react-card effects where the source is a player / card.
 
     Returns:
-        New GameState with effect applied.
+        New GameState with effect applied. Returns ``state`` unchanged
+        (identity-preserving) when the fizzle gate rejects the target.
 
     Raises:
         ValueError: If target_pos is None for SINGLE_TARGET effects.
     """
+    # Phase 14.7-06: Fizzle gate. An effect whose target is no longer
+    # valid at resolution time fizzles SILENTLY — return the incoming
+    # state unchanged (identity-preserving so callers can detect no-op
+    # via ``state is prev_state``).
+    if not _validate_target_at_resolve_time(
+        state, effect, caster_pos, source_minion_id, target_pos,
+    ):
+        return state
     # Scale amount if scale_with is set (e.g. "dark_matter" adds caster's DM stacks)
     # When the caster is a minion on the board, scale once using the caster's DM.
     # When the caster is a magic card (no minion at caster_pos), defer scaling to
@@ -566,8 +653,13 @@ def resolve_effects_for_trigger(
                 state, minion.card_numeric_id, minion.owner, library,
             )
         else:
+            # Phase 14.7-06: pass source_minion_id so the fizzle gate
+            # can re-validate source liveness for ADJACENT / SELF_OWNER
+            # effects. The minion instance passed in is always the
+            # source of the trigger.
             state = resolve_effect(
                 state, effect, minion.position, minion.owner, library, target_pos,
+                source_minion_id=minion.instance_id,
             )
     return state
 

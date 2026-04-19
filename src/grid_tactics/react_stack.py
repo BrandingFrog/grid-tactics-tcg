@@ -204,6 +204,7 @@ def _fire_passive_effects(
                 continue
             state = resolve_effect(
                 state, effect, m.position, m.owner, library, target_pos=None,
+                source_minion_id=m.instance_id,
             )
 
     state = _cleanup_dead_minions(state, library)
@@ -626,13 +627,44 @@ def _resolve_trigger_and_open_react_window(
                 react_stack=(),
             )
 
-    # Resolve the effect. 14.7-06 will add a fizzle check here (re-validate
-    # that the source minion is still alive and the captured_position is
-    # still valid).
+    # Phase 14.7-06: Fizzle check.
+    # Pass source_minion_id through ONLY for trigger kinds where the source
+    # is expected to still be alive at resolution time — start/end/on_summon.
+    # For on_death triggers, the source IS dead by definition (that's why
+    # the trigger fired); the fizzle gate for those kinds only validates
+    # the TARGET (SINGLE_TARGET target_pos must still be a live minion).
+    # Capture the pre-resolve state so the caller can detect a silent
+    # fizzle (state identity unchanged) and skip the react-window open.
+    if trigger.trigger_kind == "on_death":
+        fizzle_source_id: Optional[int] = None
+    else:
+        fizzle_source_id = trigger.source_minion_id
+    prev_state = state
     state = resolve_effect(
         state, effect, trigger.captured_position, caster_owner, library,
         trigger.target_pos,
+        source_minion_id=fizzle_source_id,
     )
+    fizzled = state is prev_state
+
+    # On fizzle, skip the react-window open and just pop the resolved
+    # trigger to advance the drain. No dead-air prompt for a no-op
+    # effect (spec §7.3 / §7.5 step 3).
+    if fizzled:
+        if is_turn_queue:
+            state = replace(
+                state,
+                pending_trigger_queue_turn=state.pending_trigger_queue_turn[1:],
+            )
+        else:
+            state = replace(
+                state,
+                pending_trigger_queue_other=state.pending_trigger_queue_other[1:],
+            )
+        # Continue the drain — next entry (if any) auto-resolves or opens
+        # the picker modal.
+        return drain_pending_trigger_queue(state, library)
+
     # Enqueue-only cleanup: chain-reaction deaths from this resolution
     # enqueue PendingTriggers WITHOUT triggering a nested drain, so the
     # outer resolver pops its entry first. The drain-recheck hook in
@@ -1139,8 +1171,14 @@ def resolve_summon_effect_originator(
         elif effect.effect_type == EffectType.REVIVE:
             state = _enter_pending_revive(state, card_def, caster_owner, library)
         else:
+            # Phase 14.7-06: pass source_minion_id so fizzle gate validates
+            # source liveness for ADJACENT / SELF_OWNER on_summon effects.
+            # A mid-chain effect (e.g. negate counter-react) that killed
+            # the just-landed minion should cause subsequent per-minion
+            # ON_SUMMON effects to fizzle silently.
             state = resolve_effect(
                 state, effect, source_pos, caster_owner, library, target_pos=None,
+                source_minion_id=entry.source_minion_id,
             )
     return state
 

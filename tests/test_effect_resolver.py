@@ -913,3 +913,403 @@ class TestPendingTutorResolution:
             resolve_action(
                 state, Action(action_type=ActionType.DECLINE_TUTOR), lib
             )
+
+
+# ---------------------------------------------------------------------------
+# Phase 14.7-06: Fizzle rule — targets re-validated at resolution time
+# ---------------------------------------------------------------------------
+
+
+class TestFizzleRulePhase14_7_06:
+    """Phase 14.7-06: _validate_target_at_resolve_time + resolve_effect
+    fizzle gate. An effect whose target is no longer valid at resolve
+    time must silently no-op (return state unchanged by identity, no
+    error, no partial resolution).
+
+    Covers all fizzlable TargetTypes + verifies non-fizzling cases
+    (OPPONENT_PLAYER, area effects, magic-card SELF_OWNER) pass through
+    untouched.
+    """
+
+    def test_single_target_fizzle_when_target_missing(self):
+        """SINGLE_TARGET → no minion at target_pos → silent no-op, state identity preserved."""
+        from grid_tactics.effect_resolver import resolve_effect
+
+        lib = _make_test_library()
+        state = _make_state_with_minions([])  # empty board
+        effect = EffectDefinition(
+            effect_type=EffectType.DAMAGE, trigger=TriggerType.ON_DEATH,
+            target=TargetType.SINGLE_TARGET, amount=5,
+        )
+        new_state = resolve_effect(
+            state, effect, caster_pos=(0, 0),
+            caster_owner=PlayerSide.PLAYER_1, library=lib,
+            target_pos=(3, 0),
+        )
+        # IDENTITY match — the fizzle gate must return the EXACT object.
+        assert new_state is state
+
+    def test_single_target_fizzle_when_target_dead(self):
+        """SINGLE_TARGET → minion at target_pos has current_health <= 0 → fizzle."""
+        from grid_tactics.effect_resolver import resolve_effect
+
+        lib = _make_test_library()
+        # Dead minion (current_health=0) still on the board but pending cleanup.
+        dead = MinionInstance(
+            instance_id=0, card_numeric_id=0, owner=PlayerSide.PLAYER_2,
+            position=(3, 0), current_health=0,
+        )
+        state = _make_state_with_minions([dead])
+        effect = EffectDefinition(
+            effect_type=EffectType.DESTROY, trigger=TriggerType.ON_DEATH,
+            target=TargetType.SINGLE_TARGET, amount=0,
+        )
+        new_state = resolve_effect(
+            state, effect, caster_pos=(0, 0),
+            caster_owner=PlayerSide.PLAYER_1, library=lib,
+            target_pos=(3, 0),
+        )
+        assert new_state is state  # silent no-op
+
+    def test_single_target_fizzle_preserves_board_and_minions(self):
+        """Regression: fizzle must not accidentally mutate any state."""
+        from grid_tactics.effect_resolver import resolve_effect
+
+        lib = _make_test_library()
+        alive = MinionInstance(
+            instance_id=0, card_numeric_id=0, owner=PlayerSide.PLAYER_1,
+            position=(0, 0), current_health=5,
+        )
+        state = _make_state_with_minions([alive])
+        effect = EffectDefinition(
+            effect_type=EffectType.DAMAGE, trigger=TriggerType.ON_PLAY,
+            target=TargetType.SINGLE_TARGET, amount=2,
+        )
+        # Target an empty cell — fizzles.
+        new_state = resolve_effect(
+            state, effect, caster_pos=(0, 0),
+            caster_owner=PlayerSide.PLAYER_2, library=lib,
+            target_pos=(4, 4),
+        )
+        assert new_state is state
+        # The alive minion is untouched.
+        assert new_state.get_minion(0).current_health == 5
+
+    def test_adjacent_fizzle_when_source_minion_dead(self):
+        """ADJACENT with source_minion_id pointing to a missing minion → fizzle.
+
+        An on_start_of_turn aura where the source minion died mid-drain
+        (a chain-reaction kill from an earlier sibling trigger).
+        """
+        from grid_tactics.effect_resolver import resolve_effect
+
+        lib = _make_test_library()
+        neighbor = MinionInstance(
+            instance_id=99, card_numeric_id=0, owner=PlayerSide.PLAYER_2,
+            position=(2, 2), current_health=5,
+        )
+        state = _make_state_with_minions([neighbor])
+        effect = EffectDefinition(
+            effect_type=EffectType.DAMAGE, trigger=TriggerType.ON_START_OF_TURN,
+            target=TargetType.ADJACENT, amount=3,
+        )
+        # source_minion_id=42 is NOT present in state.minions — dead/gone.
+        new_state = resolve_effect(
+            state, effect, caster_pos=(2, 1),
+            caster_owner=PlayerSide.PLAYER_1, library=lib,
+            source_minion_id=42,
+        )
+        assert new_state is state
+        # Neighbor is untouched.
+        assert new_state.get_minion(99).current_health == 5
+
+    def test_adjacent_fizzle_when_source_minion_zero_hp(self):
+        """ADJACENT with source minion at current_health=0 → fizzle.
+
+        The source is still in state.minions (not yet cleaned up) but
+        effectively dead. Treated same as missing.
+        """
+        from grid_tactics.effect_resolver import resolve_effect
+
+        lib = _make_test_library()
+        # Source at 0 HP (awaiting cleanup).
+        source = MinionInstance(
+            instance_id=0, card_numeric_id=0, owner=PlayerSide.PLAYER_1,
+            position=(2, 2), current_health=0,
+        )
+        neighbor = MinionInstance(
+            instance_id=1, card_numeric_id=0, owner=PlayerSide.PLAYER_2,
+            position=(2, 3), current_health=5,
+        )
+        state = _make_state_with_minions([source, neighbor])
+        effect = EffectDefinition(
+            effect_type=EffectType.DAMAGE, trigger=TriggerType.ON_END_OF_TURN,
+            target=TargetType.ADJACENT, amount=3,
+        )
+        new_state = resolve_effect(
+            state, effect, caster_pos=(2, 2),
+            caster_owner=PlayerSide.PLAYER_1, library=lib,
+            source_minion_id=0,
+        )
+        assert new_state is state
+        assert new_state.get_minion(1).current_health == 5
+
+    def test_adjacent_no_source_id_still_resolves(self):
+        """ADJACENT with source_minion_id=None (magic/aura path) → resolves.
+
+        Magic cards and auras don't have a source minion; they rely on
+        caster_pos and the handler's neighbor recompute. No fizzle.
+        """
+        from grid_tactics.effect_resolver import resolve_effect
+
+        lib = _make_test_library()
+        neighbor = MinionInstance(
+            instance_id=0, card_numeric_id=0, owner=PlayerSide.PLAYER_2,
+            position=(2, 3), current_health=5,
+        )
+        state = _make_state_with_minions([neighbor])
+        effect = EffectDefinition(
+            effect_type=EffectType.DAMAGE, trigger=TriggerType.ON_PLAY,
+            target=TargetType.ADJACENT, amount=3,
+        )
+        new_state = resolve_effect(
+            state, effect, caster_pos=(2, 2),
+            caster_owner=PlayerSide.PLAYER_1, library=lib,
+            source_minion_id=None,
+        )
+        # Not a fizzle — neighbor takes 3 damage.
+        assert new_state.get_minion(0).current_health == 2
+
+    def test_self_owner_fizzle_when_source_minion_dead(self):
+        """SELF_OWNER with source_minion_id of a dead/missing minion → fizzle.
+
+        For non-player SELF_OWNER effects (e.g. PASSIVE_HEAL on the
+        caster minion), if the minion died before the effect resolves,
+        skip silently.
+        """
+        from grid_tactics.effect_resolver import resolve_effect
+
+        lib = _make_test_library()
+        state = _make_state_with_minions([])
+        effect = EffectDefinition(
+            effect_type=EffectType.PASSIVE_HEAL, trigger=TriggerType.ON_START_OF_TURN,
+            target=TargetType.SELF_OWNER, amount=2,
+        )
+        new_state = resolve_effect(
+            state, effect, caster_pos=(0, 0),
+            caster_owner=PlayerSide.PLAYER_1, library=lib,
+            source_minion_id=42,  # not in state
+        )
+        assert new_state is state
+
+    def test_self_owner_valid_for_magic_source_minion_id_none(self):
+        """SELF_OWNER with source_minion_id=None (magic card path) → resolves.
+
+        The magic caster is the player, not a minion. DRAW / damage-self
+        / heal-self must work from a spell cast.
+        """
+        from grid_tactics.effect_resolver import resolve_effect
+
+        lib = _make_test_library()
+        state = _make_state_with_minions([], p1_hp=50)
+        effect = EffectDefinition(
+            effect_type=EffectType.HEAL, trigger=TriggerType.ON_PLAY,
+            target=TargetType.SELF_OWNER, amount=10,
+        )
+        new_state = resolve_effect(
+            state, effect, caster_pos=(0, 0),
+            caster_owner=PlayerSide.PLAYER_1, library=lib,
+            source_minion_id=None,
+        )
+        # Not a fizzle — player heals to 60.
+        assert new_state.players[0].hp == 60
+
+    def test_opponent_player_never_fizzles(self):
+        """OPPONENT_PLAYER effects always resolve (player is always 'alive')."""
+        from grid_tactics.effect_resolver import resolve_effect
+
+        lib = _make_test_library()
+        state = _make_state_with_minions([], p1_hp=STARTING_HP, p2_hp=STARTING_HP)
+        effect = EffectDefinition(
+            effect_type=EffectType.DAMAGE, trigger=TriggerType.ON_END_OF_TURN,
+            target=TargetType.OPPONENT_PLAYER, amount=5,
+        )
+        # Even with a stale source_minion_id, this must resolve.
+        new_state = resolve_effect(
+            state, effect, caster_pos=(0, 0),
+            caster_owner=PlayerSide.PLAYER_1, library=lib,
+            source_minion_id=999,  # stale
+        )
+        # Player 2 takes 5 damage.
+        assert new_state.players[1].hp == STARTING_HP - 5
+
+    def test_all_enemies_fizzle_naturally_on_empty_board(self):
+        """ALL_ENEMIES with no enemy minions → silent no-op (handler path).
+
+        This is existing behavior — the fizzle gate doesn't short-circuit
+        area effects. Verify the handler's empty-iteration path returns
+        state unchanged.
+        """
+        from grid_tactics.effect_resolver import resolve_effect
+
+        lib = _make_test_library()
+        friendly = MinionInstance(
+            instance_id=0, card_numeric_id=0, owner=PlayerSide.PLAYER_1,
+            position=(0, 0), current_health=5,
+        )
+        state = _make_state_with_minions([friendly])
+        effect = EffectDefinition(
+            effect_type=EffectType.DAMAGE, trigger=TriggerType.ON_DEATH,
+            target=TargetType.ALL_ENEMIES, amount=3,
+        )
+        new_state = resolve_effect(
+            state, effect, caster_pos=(0, 0),
+            caster_owner=PlayerSide.PLAYER_1, library=lib,
+        )
+        # The friendly minion is NOT an enemy — no damage, no state change.
+        assert new_state.get_minion(0).current_health == 5
+
+    def test_buff_attack_single_target_fizzle_when_target_dead(self):
+        """BUFF_ATTACK/SINGLE_TARGET with dead target → fizzle."""
+        from grid_tactics.effect_resolver import resolve_effect
+
+        lib = _make_test_library()
+        dead = MinionInstance(
+            instance_id=0, card_numeric_id=0, owner=PlayerSide.PLAYER_1,
+            position=(0, 0), current_health=0,
+        )
+        state = _make_state_with_minions([dead])
+        effect = EffectDefinition(
+            effect_type=EffectType.BUFF_ATTACK, trigger=TriggerType.ON_PLAY,
+            target=TargetType.SINGLE_TARGET, amount=3,
+        )
+        new_state = resolve_effect(
+            state, effect, caster_pos=(0, 0),
+            caster_owner=PlayerSide.PLAYER_1, library=lib,
+            target_pos=(0, 0),
+        )
+        assert new_state is state
+        # attack_bonus unchanged.
+        assert new_state.get_minion(0).attack_bonus == 0
+
+    def test_buff_health_single_target_fizzle_when_target_missing(self):
+        """BUFF_HEALTH/SINGLE_TARGET → no minion at target_pos → fizzle."""
+        from grid_tactics.effect_resolver import resolve_effect
+
+        lib = _make_test_library()
+        state = _make_state_with_minions([])
+        effect = EffectDefinition(
+            effect_type=EffectType.BUFF_HEALTH, trigger=TriggerType.ON_PLAY,
+            target=TargetType.SINGLE_TARGET, amount=3,
+        )
+        new_state = resolve_effect(
+            state, effect, caster_pos=(0, 0),
+            caster_owner=PlayerSide.PLAYER_1, library=lib,
+            target_pos=(2, 2),
+        )
+        assert new_state is state
+
+    def test_heal_single_target_fizzle_when_target_dead(self):
+        """HEAL/SINGLE_TARGET with dead target → fizzle (can't heal a corpse)."""
+        from grid_tactics.effect_resolver import resolve_effect
+
+        lib = _make_test_library()
+        dead = MinionInstance(
+            instance_id=0, card_numeric_id=0, owner=PlayerSide.PLAYER_1,
+            position=(0, 0), current_health=0,
+        )
+        state = _make_state_with_minions([dead])
+        effect = EffectDefinition(
+            effect_type=EffectType.HEAL, trigger=TriggerType.ON_PLAY,
+            target=TargetType.SINGLE_TARGET, amount=4,
+        )
+        new_state = resolve_effect(
+            state, effect, caster_pos=(1, 0),
+            caster_owner=PlayerSide.PLAYER_1, library=lib,
+            target_pos=(0, 0),
+        )
+        assert new_state is state
+
+    def test_burn_single_target_fizzle_when_target_missing(self):
+        """APPLY_BURNING/SINGLE_TARGET → no minion → fizzle."""
+        from grid_tactics.effect_resolver import resolve_effect
+
+        lib = _make_test_library()
+        state = _make_state_with_minions([])
+        effect = EffectDefinition(
+            effect_type=EffectType.APPLY_BURNING, trigger=TriggerType.ON_PLAY,
+            target=TargetType.SINGLE_TARGET, amount=0,
+        )
+        new_state = resolve_effect(
+            state, effect, caster_pos=(0, 0),
+            caster_owner=PlayerSide.PLAYER_1, library=lib,
+            target_pos=(4, 4),
+        )
+        assert new_state is state
+
+    def test_destroy_single_target_fizzle_when_target_missing(self):
+        """DESTROY/SINGLE_TARGET → no minion → fizzle (silent no-op, not error).
+
+        This is the direct §7.4 worked-example shape: RGB Laser Cannon's
+        on_death DESTROY targets an enemy that may have died between
+        enqueue and resolve.
+        """
+        from grid_tactics.effect_resolver import resolve_effect
+
+        lib = _make_test_library()
+        state = _make_state_with_minions([])
+        effect = EffectDefinition(
+            effect_type=EffectType.DESTROY, trigger=TriggerType.ON_DEATH,
+            target=TargetType.SINGLE_TARGET, amount=0,
+        )
+        new_state = resolve_effect(
+            state, effect, caster_pos=(0, 0),
+            caster_owner=PlayerSide.PLAYER_1, library=lib,
+            target_pos=(3, 3),
+        )
+        assert new_state is state
+
+    def test_resolve_effects_for_trigger_passes_source_minion_id(self):
+        """resolve_effects_for_trigger must pass minion.instance_id as source
+        so the fizzle gate works for start/end/on_summon triggered effects.
+        """
+        from grid_tactics.effect_resolver import resolve_effects_for_trigger
+
+        # Create a test library where one card has an ON_END_OF_TURN
+        # ADJACENT damage effect. If the source minion is "dead" (we'll
+        # use an instance with 0 HP), the fizzle gate should block the
+        # effect from resolving.
+        test_card = CardDefinition(
+            card_id="test_aura",
+            name="Test Aura",
+            card_type=CardType.MINION,
+            mana_cost=2,
+            attack=1,
+            health=3,
+            attack_range=0,
+            effects=(
+                EffectDefinition(
+                    effect_type=EffectType.DAMAGE,
+                    trigger=TriggerType.ON_END_OF_TURN,
+                    target=TargetType.ADJACENT,
+                    amount=3,
+                ),
+            ),
+        )
+        lib = CardLibrary({"test_aura": test_card})
+
+        # Source at 0 HP — fizzle should trigger.
+        source = MinionInstance(
+            instance_id=0, card_numeric_id=0, owner=PlayerSide.PLAYER_1,
+            position=(2, 2), current_health=0,
+        )
+        neighbor = MinionInstance(
+            instance_id=1, card_numeric_id=0, owner=PlayerSide.PLAYER_2,
+            position=(2, 3), current_health=5,
+        )
+        state = _make_state_with_minions([source, neighbor])
+        new_state = resolve_effects_for_trigger(
+            state, TriggerType.ON_END_OF_TURN, source, lib,
+        )
+        # Fizzle — neighbor HP unchanged.
+        assert new_state.get_minion(1).current_health == 5
