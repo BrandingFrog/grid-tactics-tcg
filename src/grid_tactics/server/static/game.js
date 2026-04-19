@@ -3695,7 +3695,11 @@ function _resolveSpellStageChain() {
             _spellStage.exitTimer = setTimeout(_hideSpellStage, 700);
             return;
         }
-        var html = _spellStageCardHtml(chain[i]);
+        var nid = chain[i];
+        var def = (cardDefs && cardDefs[nid]) ||
+                  (window.sandboxCardDefs && window.sandboxCardDefs[nid]);
+        var isMinion = def && def.card_type === 0;
+        var html = _spellStageCardHtml(nid);
         var wrap = document.createElement('div');
         wrap.className = 'spell-stage-card-inner slide-in-from-left';
         wrap.innerHTML = html;
@@ -3703,13 +3707,26 @@ function _resolveSpellStageChain() {
         els.right.classList.remove('has-card', 'confirmed');
         els.right.textContent = '⚡';
         setTimeout(function() {
-            wrap.classList.remove('slide-in-from-left');
-            wrap.classList.add('slide-off-right');
-            setTimeout(function() {
-                if (wrap.parentNode) wrap.parentNode.removeChild(wrap);
-                i -= 1;
-                step();
-            }, 420);
+            if (isMinion) {
+                // Minion is already on the board — no discard, so no
+                // slide-off-right. Fade out in place instead.
+                wrap.style.transition = 'opacity 300ms ease-out';
+                wrap.style.opacity = '0';
+                setTimeout(function() {
+                    if (wrap.parentNode) wrap.parentNode.removeChild(wrap);
+                    i -= 1;
+                    step();
+                }, 320);
+            } else {
+                // MAGIC / REACT — slide off right to convey discard to grave.
+                wrap.classList.remove('slide-in-from-left');
+                wrap.classList.add('slide-off-right');
+                setTimeout(function() {
+                    if (wrap.parentNode) wrap.parentNode.removeChild(wrap);
+                    i -= 1;
+                    step();
+                }, 420);
+            }
         }, 600);
     }
     step();
@@ -3759,19 +3776,15 @@ function _hideSpellStage() {
 function detectSpellCast(prev, next) {
     if (!next) return null;
 
-    // 1) New top of react_stack → that react was just played. Filter by
-    //    card_type so minion deploys (which also push an entry to open the
-    //    react window) don't ride the spell-stage conveyor.
+    // 1) New top of react_stack → that card was just played. Show it in
+    //    the react window so the opponent can see what to react to. Both
+    //    minion deploys and spell casts qualify.
     var prevStack = (prev && prev.react_stack) || [];
     var nextStack = (next && next.react_stack) || [];
     if (nextStack.length > prevStack.length) {
         var entry = nextStack[nextStack.length - 1];
         if (entry && entry.card_numeric_id != null) {
-            var entryDef = (cardDefs && cardDefs[entry.card_numeric_id]) ||
-                           (window.sandboxCardDefs && window.sandboxCardDefs[entry.card_numeric_id]);
-            if (entryDef && (entryDef.card_type === 1 || entryDef.card_type === 2)) {
-                return { nid: entry.card_numeric_id, playerIdx: entry.player_idx };
-            }
+            return { nid: entry.card_numeric_id, playerIdx: entry.player_idx };
         }
     }
 

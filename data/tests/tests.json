@@ -62,9 +62,9 @@
     },
     {
       "id": "spell-stage-closes-with-thumbs-up",
-      "title": "14.7-09: Spell-stage fades with 👍 after react drains",
-      "instructions": "GOAL (regression): the spell-stage animation must close cleanly in sandbox (it used to hang open with the placeholder still visible).\n\nSetup state: P1 has Acidic Rain (5 mana) in hand and 5 mana available. P2 has a Red Diodebot on the board.\n\n1. Click Acidic Rain in P1's bottom hand. The card highlights with a glow (confirm-armed mode).\n2. Click Acidic Rain a SECOND time to confirm the cast.\n3. A spell stage appears in the centre: a giant Acidic Rain card slides in from the left, with a cyan ▶ arrow and a placeholder (⚡) on the right. The opponent has no react cards so the react window auto-drains.\n4. Watch the spell stage close.",
-      "expected": "After the auto-drain (~1s): the Acidic Rain card slides off to the right, the placeholder flips to a green 👍 (thumbs-up), and the whole stage fades out within ~1s. The Red Diodebot on the board becomes burning (🔥 badge). The stage does NOT hang open with a placeholder still visible.",
+      "title": "14.7-09: React window fades with 👍 after react drains",
+      "instructions": "GOAL (regression): the react-window overlay must close cleanly in sandbox (it used to hang open with the placeholder still visible).\n\nSetup state: P1 has Acidic Rain (5 mana) in hand and 5 mana available. P2 has a Red Diodebot on the board.\n\n1. Click Acidic Rain in P1's bottom hand. The card highlights with a glow (confirm-armed mode).\n2. Click Acidic Rain a SECOND time to confirm the cast.\n3. The react window appears in the centre: a giant Acidic Rain card slides in from the left, with a cyan ▶ arrow and a placeholder (⚡) on the right. The opponent has no react cards so the window auto-drains.\n4. Watch the react window close.",
+      "expected": "After the auto-drain (~1s): the Acidic Rain card slides off to the right (it's a magic spell — discards to the grave), the placeholder flips to a green 👍, and the whole overlay fades within ~1s. The Red Diodebot on the board becomes burning (🔥 badge). The overlay does NOT hang open with a placeholder still visible.",
       "setup": [
         {"op": "reset"},
         {"op": "set_player", "player_idx": 0, "field": "current_mana", "value": 5},
