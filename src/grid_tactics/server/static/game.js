@@ -3759,13 +3759,19 @@ function _hideSpellStage() {
 function detectSpellCast(prev, next) {
     if (!next) return null;
 
-    // 1) New top of react_stack → that react was just played.
+    // 1) New top of react_stack → that react was just played. Filter by
+    //    card_type so minion deploys (which also push an entry to open the
+    //    react window) don't ride the spell-stage conveyor.
     var prevStack = (prev && prev.react_stack) || [];
     var nextStack = (next && next.react_stack) || [];
     if (nextStack.length > prevStack.length) {
         var entry = nextStack[nextStack.length - 1];
         if (entry && entry.card_numeric_id != null) {
-            return { nid: entry.card_numeric_id, playerIdx: entry.player_idx };
+            var entryDef = (cardDefs && cardDefs[entry.card_numeric_id]) ||
+                           (window.sandboxCardDefs && window.sandboxCardDefs[entry.card_numeric_id]);
+            if (entryDef && (entryDef.card_type === 1 || entryDef.card_type === 2)) {
+                return { nid: entry.card_numeric_id, playerIdx: entry.player_idx };
+            }
         }
     }
 
