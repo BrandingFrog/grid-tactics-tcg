@@ -3726,21 +3726,36 @@ function _resolveSpellStageStep(chain, i, els) {
         _spellStage.leftCardEl = leftWrap;
     }
 
+    var hasNext = i - 1 >= 0;
+
+    // Last card in the chain: nothing comes from off-screen-left to fill
+    // the LEFT slot, so the lateral glide has no purpose. Just hold the
+    // card briefly with 👍 visible, then fade in place.
+    if (!hasNext) {
+        setTimeout(function() {
+            leftWrap.style.transition = 'opacity 300ms ease-out';
+            leftWrap.style.opacity = '0';
+            setTimeout(function() {
+                if (leftWrap.parentNode) leftWrap.parentNode.removeChild(leftWrap);
+                _spellStage.leftCardEl = null;
+                _resolveSpellStageStep(chain, i - 1, els);
+            }, 320);
+        }, 600);
+        return;
+    }
+
+    // Mount the next card down coming in from off-screen-left, so when
+    // the current card finishes gliding we visually have "right card
+    // resolves against new left card".
+    var nextHtml = _spellStageCardHtml(chain[i - 1]);
+    var nextWrap = document.createElement('div');
+    nextWrap.className = 'spell-stage-card-inner slide-in-from-left';
+    nextWrap.innerHTML = nextHtml;
+    els.left.appendChild(nextWrap);
+
     // Clear 👍 so the gliding card has a clean RIGHT slot to land on.
     els.right.classList.remove('confirmed', 'has-card');
     els.right.textContent = '';
-
-    // Mount the next card down (if any) coming in from off-screen-left,
-    // so when the current card finishes gliding we visually have
-    // "right card resolves against new left card".
-    var nextWrap = null;
-    if (i - 1 >= 0) {
-        var nextHtml = _spellStageCardHtml(chain[i - 1]);
-        nextWrap = document.createElement('div');
-        nextWrap.className = 'spell-stage-card-inner slide-in-from-left';
-        nextWrap.innerHTML = nextHtml;
-        els.left.appendChild(nextWrap);
-    }
 
     // Glide the current LEFT card laterally to the RIGHT slot.
     leftWrap.classList.remove('glide-from-right', 'slide-in-from-left');
@@ -3752,7 +3767,6 @@ function _resolveSpellStageStep(chain, i, els) {
         leftWrap.style.opacity = '0';
         setTimeout(function() {
             if (leftWrap.parentNode) leftWrap.parentNode.removeChild(leftWrap);
-            // The slide-in card (if any) becomes the new "current LEFT".
             _spellStage.leftCardEl = nextWrap;
             _resolveSpellStageStep(chain, i - 1, els);
         }, 270);
