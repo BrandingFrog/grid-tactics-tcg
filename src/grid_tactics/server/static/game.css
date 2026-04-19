@@ -307,6 +307,17 @@
   0%   { transform: translate3d(308px, 0, 0); }
   100% { transform: translate3d(0, 0, 0); }
 }
+/* Resolution mirror of glide-from-right: the LEFT card slides laterally
+   into the RIGHT slot to convey "this card is now resolving against the
+   one below it in the stack." Same 308px offset; same easing. */
+.spell-stage-card-inner.glide-to-right {
+  animation: spell-card-glide-to-right 440ms cubic-bezier(0.2, 0.7, 0.3, 1) forwards;
+  transform: translate3d(0, 0, 0);
+}
+@keyframes spell-card-glide-to-right {
+  0%   { transform: translate3d(0, 0, 0); }
+  100% { transform: translate3d(308px, 0, 0); }
+}
 
 /* Phase 14.7-09: Turn banner overlay.
    Fires on turn_number advance. Non-blocking — pure CSS keyframe that

@@ -3674,62 +3674,89 @@ function _resolveSpellStageChain() {
     if (!els.root || els.root.hidden) return;
     _spellStage.resolving = true;
 
-    // Clear both slots — resolution will place each card fresh.
-    if (_spellStage.leftCardEl && _spellStage.leftCardEl.parentNode) {
-        _spellStage.leftCardEl.parentNode.removeChild(_spellStage.leftCardEl);
-    }
-    _spellStage.leftCardEl = null;
-    _spellStage.rightCardEl = null;
-    els.left.innerHTML = '';
-    els.right.textContent = '';
-    els.right.classList.remove('confirmed');
-
     var chain = _spellStage.chain.slice();
-    var i = chain.length - 1;  // top of stack resolves first (LIFO)
-
-    function step() {
-        if (i < 0) {
-            // All resolved — thumbs up then fade.
-            els.right.textContent = '👍';
-            els.right.classList.add('confirmed');
-            _spellStage.exitTimer = setTimeout(_hideSpellStage, 700);
-            return;
-        }
-        var nid = chain[i];
-        var def = (cardDefs && cardDefs[nid]) ||
-                  (window.sandboxCardDefs && window.sandboxCardDefs[nid]);
-        var isMinion = def && def.card_type === 0;
-        var html = _spellStageCardHtml(nid);
-        var wrap = document.createElement('div');
-        wrap.className = 'spell-stage-card-inner slide-in-from-left';
-        wrap.innerHTML = html;
-        els.left.appendChild(wrap);
-        els.right.classList.remove('has-card', 'confirmed');
-        els.right.textContent = '⚡';
-        setTimeout(function() {
-            if (isMinion) {
-                // Minion is already on the board — no discard, so no
-                // slide-off-right. Fade out in place instead.
-                wrap.style.transition = 'opacity 300ms ease-out';
-                wrap.style.opacity = '0';
-                setTimeout(function() {
-                    if (wrap.parentNode) wrap.parentNode.removeChild(wrap);
-                    i -= 1;
-                    step();
-                }, 320);
-            } else {
-                // MAGIC / REACT — slide off right to convey discard to grave.
-                wrap.classList.remove('slide-in-from-left');
-                wrap.classList.add('slide-off-right');
-                setTimeout(function() {
-                    if (wrap.parentNode) wrap.parentNode.removeChild(wrap);
-                    i -= 1;
-                    step();
-                }, 420);
-            }
-        }, 600);
+    if (chain.length === 0) {
+        _spellStage.exitTimer = setTimeout(_hideSpellStage, 200);
+        return;
     }
-    step();
+
+    // Step 1: mark the chain finished — 👍 in the RIGHT slot. The card
+    // currently in the LEFT slot (the top of the stack) stays put for
+    // now; it will glide rightward in step 2.
+    if (_spellStage.rightCardEl && _spellStage.rightCardEl.parentNode) {
+        _spellStage.rightCardEl.parentNode.removeChild(_spellStage.rightCardEl);
+    }
+    _spellStage.rightCardEl = null;
+    els.right.classList.remove('has-card');
+    els.right.textContent = '👍';
+    els.right.classList.add('confirmed');
+
+    // Step 2: after a short hold so the player can register 👍, run the
+    // LIFO resolution loop. Same animation for every card type — the
+    // react window is type-agnostic.
+    var i = chain.length - 1;
+    setTimeout(function() {
+        _resolveSpellStageStep(chain, i, els);
+    }, 500);
+}
+
+// One iteration of the resolve-backwards conveyor:
+//   - clear 👍 from RIGHT
+//   - the card currently in LEFT glides laterally to RIGHT (resolves
+//     against the card below it in the stack)
+//   - simultaneously, the next card down (i-1) slides in from off-screen-
+//     left to LEFT
+//   - after the glide + brief hold, the resolved card fades and we recurse
+function _resolveSpellStageStep(chain, i, els) {
+    if (i < 0) {
+        _spellStage.exitTimer = setTimeout(_hideSpellStage, 200);
+        return;
+    }
+
+    // Ensure a card is in the LEFT slot to glide. First iteration: it's
+    // there from the chain push. Subsequent iterations: from the previous
+    // step's slide-in-from-left.
+    var leftWrap = _spellStage.leftCardEl;
+    if (!leftWrap) {
+        var html = _spellStageCardHtml(chain[i]);
+        leftWrap = document.createElement('div');
+        leftWrap.className = 'spell-stage-card-inner';
+        leftWrap.innerHTML = html;
+        els.left.appendChild(leftWrap);
+        _spellStage.leftCardEl = leftWrap;
+    }
+
+    // Clear 👍 so the gliding card has a clean RIGHT slot to land on.
+    els.right.classList.remove('confirmed', 'has-card');
+    els.right.textContent = '';
+
+    // Mount the next card down (if any) coming in from off-screen-left,
+    // so when the current card finishes gliding we visually have
+    // "right card resolves against new left card".
+    var nextWrap = null;
+    if (i - 1 >= 0) {
+        var nextHtml = _spellStageCardHtml(chain[i - 1]);
+        nextWrap = document.createElement('div');
+        nextWrap.className = 'spell-stage-card-inner slide-in-from-left';
+        nextWrap.innerHTML = nextHtml;
+        els.left.appendChild(nextWrap);
+    }
+
+    // Glide the current LEFT card laterally to the RIGHT slot.
+    leftWrap.classList.remove('glide-from-right', 'slide-in-from-left');
+    leftWrap.classList.add('glide-to-right');
+
+    // After glide + hold, fade the resolved card and recurse.
+    setTimeout(function() {
+        leftWrap.style.transition = 'opacity 250ms ease-out';
+        leftWrap.style.opacity = '0';
+        setTimeout(function() {
+            if (leftWrap.parentNode) leftWrap.parentNode.removeChild(leftWrap);
+            // The slide-in card (if any) becomes the new "current LEFT".
+            _spellStage.leftCardEl = nextWrap;
+            _resolveSpellStageStep(chain, i - 1, els);
+        }, 270);
+    }, 600);
 }
 
 // True if the state just transitioned out of REACT phase into ACTION
