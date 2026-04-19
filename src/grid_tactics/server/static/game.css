@@ -312,8 +312,13 @@
    Fires on turn_number advance. Non-blocking — pure CSS keyframe that
    fades out on its own; DOM node removed by _showTurnBanner's setTimeout.
    z-index sits above the spell-stage (200) but below modals (~1100) so
-   react/tutor pickers can still open atop it. */
-.turn-banner {
+   react/tutor pickers can still open atop it.
+   NOTE: class is `.turn-transition-banner` (NOT `.turn-banner`) because
+   `.turn-banner` is already claimed at line ~1116 for the HUD flex row
+   — both rules applying to the same element caused the TURN X / PLAYER X
+   lines to render side-by-side (display:flex inherited) instead of stacked.
+   See .planning debug notes in 14.7-09-SUMMARY.md. */
+.turn-transition-banner {
   position: fixed;
   top: 50%;
   left: 50%;
@@ -328,20 +333,20 @@
     0 0 8px rgba(255, 255, 255, 0.7),
     0 4px 12px rgba(0, 0, 0, 0.9);
   pointer-events: none;
-  animation: turn-banner-in 1500ms ease-out forwards;
+  animation: turn-transition-banner-in 1500ms ease-out forwards;
   will-change: transform, opacity;
 }
-.turn-banner-line1 {
+.turn-transition-banner-line1 {
   font-size: 5em;
   line-height: 1.05;
 }
-.turn-banner-line2 {
+.turn-transition-banner-line2 {
   font-size: 3.2em;
   line-height: 1.1;
   margin-top: 8px;
   color: #9ae6ff;
 }
-@keyframes turn-banner-in {
+@keyframes turn-transition-banner-in {
   0%   { opacity: 0; transform: translate(-50%, -50%) scale(0.4); }
   18%  { opacity: 1; transform: translate(-50%, -50%) scale(1.12); }
   32%  { transform: translate(-50%, -50%) scale(1); }

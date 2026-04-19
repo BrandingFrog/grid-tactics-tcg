@@ -3381,17 +3381,21 @@ function _playSacPortal(job, done) {
 function _showTurnBanner(turnNumber, activePlayerIdx) {
     try {
         // Remove any prior banner (covers rapid turn flips in sandbox).
-        var prior = document.querySelector('.turn-banner');
+        // Class is `.turn-transition-banner` (NOT `.turn-banner`, which is
+        // already claimed by the HUD flex row at game.css ~1116 — the
+        // double-declaration caused TURN X / PLAYER X to render side-by-side
+        // instead of stacked). See 14.7-09-SUMMARY.md Issue C.
+        var prior = document.querySelector('.turn-transition-banner');
         if (prior && prior.parentNode) prior.parentNode.removeChild(prior);
 
         var banner = document.createElement('div');
-        banner.className = 'turn-banner';
+        banner.className = 'turn-transition-banner';
         banner.setAttribute('data-turn', String(turnNumber));
         banner.setAttribute('data-player', String(activePlayerIdx));
         var playerLabel = 'PLAYER ' + ((activePlayerIdx | 0) + 1);
         banner.innerHTML =
-            '<div class="turn-banner-line1">TURN ' + turnNumber + '</div>' +
-            '<div class="turn-banner-line2">' + playerLabel + '</div>';
+            '<div class="turn-transition-banner-line1">TURN ' + turnNumber + '</div>' +
+            '<div class="turn-transition-banner-line2">' + playerLabel + '</div>';
         document.body.appendChild(banner);
         // CSS animation is 1.5s; remove slightly after so the fade-out
         // completes without the node being yanked mid-animation.
@@ -7175,6 +7179,25 @@ function setupSandboxSocketHandlers() {
         var hpJobsSb = (sandboxMode && prevForFly)
             ? derivePlayerHpDeltaAnims(prevForFly, payload.state)
             : [];
+        // Phase 14.7-09 (Issue B fix): the sandbox path does NOT flow through
+        // applyStateFrame, so we must wire the turn banner + trigger blip
+        // here too. Mirror the logic from applyStateFrame ~line 2878.
+        try {
+            var _prevTurn = prevForFly && typeof prevForFly.turn_number === 'number'
+                ? prevForFly.turn_number : 0;
+            var _nextTurn = payload.state && typeof payload.state.turn_number === 'number'
+                ? payload.state.turn_number : 0;
+            if (_nextTurn > 0 && _nextTurn > _prevTurn) {
+                _showTurnBanner(_nextTurn, payload.state.active_player_idx);
+            }
+        } catch (e) { /* defensive — banner is purely visual */ }
+        try {
+            var _newBlip = payload.state && payload.state.last_trigger_blip;
+            var _prevBlip = prevForFly && prevForFly.last_trigger_blip;
+            if (_newBlip && _newBlip !== _prevBlip) {
+                _fireTriggerBlipAnimation(_newBlip);
+            }
+        } catch (e) { /* defensive — blip is purely visual */ }
         // Derive an action-keyed animation job (SACRIFICE / ATTACK / MOVE /
         // PLAY_CARD) from the `last_action` the server now enriches onto
         // sandbox_state (see server/events.py::_emit_sandbox_state). Without
