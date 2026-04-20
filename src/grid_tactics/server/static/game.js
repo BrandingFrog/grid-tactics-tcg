@@ -3844,6 +3844,23 @@ var _spellStage = {
     exitTimer: null,
 };
 
+// True while the spell-stage overlay is visually animating — i.e. cards
+// are flying in (queue busy), stacked on screen (chain non-empty), or
+// fading out (LIFO resolve). Used to GATE self-initiated action inputs
+// so the player cannot activate effects / move / attack / play non-react
+// cards while the spell-stage is still on screen, even if the server has
+// already transitioned the wire-state back to ACTION (sandbox auto-drain,
+// opponent auto-PASS, etc). PASS (action_type 4) and PLAY_REACT (5) are
+// NEVER gated — those are the only actions that can close the react
+// window server-side, so gating them would deadlock the game.
+function isSpellStageAnimating() {
+    if (_spellStageBusy) return true;
+    if (_spellStageQueue && _spellStageQueue.length > 0) return true;
+    if (_spellStage.resolving) return true;
+    if (_spellStage.chain && _spellStage.chain.length > 0) return true;
+    return false;
+}
+
 function _spellStageEls() {
     return {
         root: document.getElementById('spell-stage'),
@@ -4826,6 +4843,22 @@ function clearSelection() {
 
 function submitAction(actionData) {
     if (isSpectator) { console.warn('spectator cannot submit action'); return; }
+    // Spell-stage gate (bug: effect-usable-during-react-window). While the
+    // spell stage is still animating on-screen, block every self-initiated
+    // action EXCEPT the two that can legitimately close a react window:
+    //   PASS (4) — reacter confirms no response.
+    //   PLAY_REACT (5) — reacter plays a counter.
+    // This catches every submitAction call site (hand-card play, minion
+    // move/attack, activated ability, sacrifice, transform, draw, etc.)
+    // without having to guard each one individually. It is also a belt-
+    // and-suspenders defense: the individual click handlers ALSO gate on
+    // isSpellStageAnimating() so the click never even reaches this point
+    // when the stage is busy.
+    var _at = actionData && actionData.action_type;
+    if (typeof isSpellStageAnimating === 'function' && isSpellStageAnimating()
+            && _at !== 4 && _at !== 5) {
+        return;
+    }
     if (socket) {
         // === SANDBOX-EMIT-GATE-START ===
         if (sandboxMode) {
@@ -5118,6 +5151,13 @@ function canPlayCard(handIdx) {
 // game passes nothing; own hand is always myPlayerIdx.
 function onHandCardClick(handIdx, ownerIdx) {
     if (isSpectator) return;  // spectators cannot play cards
+    // Spell-stage gate: if a react window just closed and the stage is
+    // still animating, only PLAY_REACT clicks are allowed through (those
+    // still resolve against the live phase=REACT if we're somehow still
+    // in it). Play-card-for-normal-action clicks are dropped until the
+    // animation finishes. The authoritative gate is in submitAction; this
+    // early return just avoids arming/targeting UI that would never fire.
+    if (isSpellStageAnimating() && !isReactWindow()) return;
     // Phase 14 PLAY-02: react window has its own click semantics.
     // Sandbox: the clicked hand's owner must be the current reacting
     // player — otherwise the card_index matches the wrong side's legal
@@ -5243,6 +5283,12 @@ function onBoardCellClick(row, col) {
         }
     }
     if (isSpectator) return;  // spectators are read-only
+    // Spell-stage gate: block board interaction while the spell stage
+    // overlay is animating, so the user can't move / attack / target-pick
+    // an effect during the visible react-window animation. Death-target
+    // picks still pass through (that modal is orthogonal to the spell
+    // stage and must resolve independently).
+    if (isSpellStageAnimating() && interactionMode !== 'death_target_pick') return;
     // Board clicks are inert during react window EXCEPT when a death
     // target pick is pending — the modal routes through the cell click
     // handler and must not be blocked by react-window gating.
@@ -5412,6 +5458,10 @@ function onBoardCellClick(row, col) {
 // Handle clicking a board minion
 function onBoardMinionClick(minion) {
     if (isSpectator) return;  // spectators are read-only
+    // Spell-stage gate: same rationale as onBoardCellClick. Blocks the
+    // action-menu open + attack/target routing so a click on a minion
+    // during the spell-stage animation is inert (except death-target).
+    if (isSpellStageAnimating() && interactionMode !== 'death_target_pick') return;
     // Board clicks are inert during react window EXCEPT when a death
     // target pick is pending (see onBoardCellClick comment).
     if (isReactWindow() && interactionMode !== 'death_target_pick') return;
