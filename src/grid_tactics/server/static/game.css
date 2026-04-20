@@ -7905,15 +7905,21 @@ body {
   -webkit-text-stroke: 0 !important;
   text-shadow: 0 1px 0 rgba(0, 0, 0, 0.4);
 }
-/* Type bar colours — keep existing semantics but deepen so light text reads */
-.card-type-minion .card-type-badge {
+/* Type bar colours — keep existing semantics but deepen so light text reads.
+   Use direct child / first-child scoping so the parent type's colour
+   doesn't leak into nested .card-multi-half react badges. */
+.card-type-minion > .card-type-badge,
+.card-type-minion > .card-multi-wrapper > .card-multi-half:first-child .card-type-badge {
   background: linear-gradient(180deg, rgb(200, 155, 65), rgb(150, 110, 40)) !important;
 }
-.card-type-magic .card-type-badge {
+.card-type-magic > .card-type-badge,
+.card-type-magic > .card-multi-wrapper > .card-multi-half:first-child .card-type-badge {
   background: linear-gradient(180deg, rgb(40, 165, 140), rgb(22, 110, 95)) !important;
 }
-.card-type-react .card-type-badge {
-  background: linear-gradient(180deg, rgb(160, 40, 100), rgb(110, 22, 68)) !important;
+.card-type-react > .card-type-badge,
+.card-multi-half:last-child .card-type-badge,
+.card-react-bar {
+  background: linear-gradient(180deg, rgb(140, 70, 220), rgb(95, 40, 165)) !important;
 }
 
 /* --- Body text: Space Mono, readable sizes, generous clamp --- */
@@ -7999,8 +8005,8 @@ body {
 
 /* --- Multi (minion+react) body: distinct react panel --- */
 .card-multi-half:last-child {
-  background: rgba(160, 40, 100, 0.18) !important;
-  border: 1px solid rgba(160, 40, 100, 0.5) !important;
+  background: rgba(140, 70, 220, 0.18) !important;
+  border: 1px solid rgba(140, 70, 220, 0.55) !important;
   border-radius: 2px !important;
   clip-path: polygon(
     0 3px, 3px 0,
@@ -8008,9 +8014,6 @@ body {
     100% calc(100% - 3px), calc(100% - 3px) 100%,
     3px 100%, 0 calc(100% - 3px)
   );
-}
-.card-react-bar {
-  background: linear-gradient(180deg, rgb(160, 40, 100), rgb(110, 22, 68)) !important;
 }
 .react-mana-circle {
   font-family: 'Space Mono', monospace !important;
