@@ -2166,6 +2166,34 @@ function renderDeckSidebar() {
     });
 }
 
+// Drive the HUD readiness-cell meter in the Deck Builder Loadout panel.
+// Reads "N/M cards" from #deck-count (updated elsewhere as cards are
+// added/removed) and toggles .on on the first N of the 30 LED cells.
+// Sets a bucket class (.hud-readiness-low / .hud-readiness-mid /
+// .hud-readiness-ready) to drive the fill colour (red → amber → green).
+function _wireDeckReadinessMeter() {
+    var deckCountEl = document.getElementById('deck-count');
+    var meter = document.querySelector('.hud-readiness-cells');
+    if (!deckCountEl || !meter) return;
+    var cells = meter.querySelectorAll('span');
+    var update = function() {
+        var m = /(\d+)\s*\/\s*(\d+)/.exec(deckCountEl.textContent || '');
+        var filled = m ? parseInt(m[1], 10) : 0;
+        var total = m ? parseInt(m[2], 10) : 30;
+        var ratio = total > 0 ? (filled / total) : 0;
+        var target = Math.min(cells.length, Math.round(ratio * cells.length));
+        for (var i = 0; i < cells.length; i++) {
+            cells[i].classList.toggle('on', i < target);
+        }
+        meter.classList.toggle('hud-readiness-ready', filled >= total && total > 0);
+        meter.classList.toggle('hud-readiness-mid',   filled < total && ratio >= 0.5);
+        meter.classList.toggle('hud-readiness-low',   ratio < 0.5);
+    };
+    update();
+    var obs = new MutationObserver(update);
+    obs.observe(deckCountEl, { childList: true, characterData: true, subtree: true });
+}
+
 function setupDeckBuilderHandlers() {
     // Back to Lobby
     var btnBack = document.getElementById('btn-back-lobby');
@@ -2296,6 +2324,7 @@ document.addEventListener('DOMContentLoaded', function() {
     setupPileHandlers();
     _wireReactModeButtonsOnce();
     _wireFloatingSkipReactOnce();
+    _wireDeckReadinessMeter();
 });
 
 // =============================================

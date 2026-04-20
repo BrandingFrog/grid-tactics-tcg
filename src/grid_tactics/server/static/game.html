@@ -234,13 +234,37 @@
     </div>
   </div>
 
-  <!-- Screen: Deck Builder -->
+  <!-- Screen: Deck Builder — Loadout Armoury Console -->
   <div id="screen-deck-builder" class="screen">
-    <div class="deck-builder-layout">
+    <div class="deck-builder-layout hud-armoury">
+      <div class="hud-armoury-bg" aria-hidden="true"></div>
+      <div class="hud-armoury-scanlines" aria-hidden="true"></div>
+
+      <!-- Top strip: mission callsign + armoury meta -->
+      <div class="hud-armoury-header" aria-hidden="true">
+        <div class="hud-armoury-header-left">
+          <span class="hud-armoury-kbd">ARM</span>
+          <span class="hud-armoury-title">LOADOUT ARMOURY</span>
+          <span class="hud-armoury-sep">//</span>
+          <span class="hud-armoury-dim">module · bay 00 · ready for configuration</span>
+        </div>
+        <div class="hud-armoury-header-right">
+          <span class="hud-armoury-blink">●</span>
+          <span>SYSTEMS NOMINAL</span>
+        </div>
+      </div>
+
       <div class="deck-builder-body">
-        <!-- Card Tooltip Sidebar (left) -->
-        <div class="tooltip-sidebar" id="deck-tooltip-sidebar">
-          <div class="card-tooltip" id="card-tooltip" style="display:none;">
+
+        <!-- ================== LEFT: DOSSIER / INTEL ================== -->
+        <div class="tooltip-sidebar hud-armoury-panel hud-dossier" id="deck-tooltip-sidebar">
+          <div class="hud-panel-head hud-armoury-panel-head">
+            <span class="hud-panel-id">001</span>
+            <span class="hud-panel-title">DOSSIER</span>
+            <span class="hud-panel-dim">INTEL</span>
+          </div>
+
+          <div class="card-tooltip hud-dossier-card" id="card-tooltip" style="display:none;">
             <div class="tooltip-card tooltip-card-art"></div>
             <div class="tooltip-header tooltip-name"></div>
             <div class="tooltip-stats"></div>
@@ -248,26 +272,51 @@
             <div class="tooltip-section tooltip-related-label" style="display:none;">Related Cards</div>
             <div class="tooltip-related"></div>
           </div>
-          <div class="tooltip-sidebar-hint" id="deck-tooltip-hint">Hover a card to see details</div>
+
+          <div class="tooltip-sidebar-hint hud-dossier-empty" id="deck-tooltip-hint">
+            <div class="hud-radar hud-dossier-radar" aria-hidden="true">
+              <span></span><span></span><span></span>
+            </div>
+            <div class="hud-dossier-empty-head">— NO MODULE SELECTED —</div>
+            <div class="hud-dossier-empty-sub">Hover a card in the armoury to pull its dossier.</div>
+            <div class="hud-dossier-crosshair" aria-hidden="true">
+              <span></span><span></span><span></span><span></span>
+            </div>
+          </div>
         </div>
 
-        <!-- Card Browser (center) -->
-        <div class="card-browser">
-          <h3 class="section-heading">All Cards</h3>
-          <div class="card-browser-filters">
-            <input type="text" id="card-search" class="input" placeholder="Search cards..." style="flex:1;min-width:120px;">
-            <div class="filter-row">
-              <span class="filter-label">TYPE</span>
-              <div class="filter-btns" id="type-filters">
+        <!-- ================== CENTRE: ARMOURY / MODULE SELECT ================== -->
+        <div class="card-browser hud-armoury-panel hud-armoury-browser">
+          <div class="hud-panel-head hud-armoury-panel-head">
+            <span class="hud-panel-id">002</span>
+            <span class="hud-panel-title">ARMOURY</span>
+            <span class="hud-armoury-online">
+              <span class="hud-armoury-online-dot"></span>
+              <span>ONLINE</span>
+            </span>
+            <span class="hud-panel-dim">MODULE SELECT</span>
+          </div>
+
+          <!-- search bar + scan sweep bg -->
+          <div class="hud-armoury-search-wrap">
+            <span class="hud-armoury-search-icon" aria-hidden="true">⌕</span>
+            <input type="text" id="card-search" class="input hud-armoury-search" placeholder="search module name, keyword, tribe…">
+            <span class="hud-armoury-search-kbd" aria-hidden="true">QUERY</span>
+          </div>
+
+          <div class="card-browser-filters hud-armoury-filters">
+            <div class="filter-row hud-armoury-filter-row">
+              <span class="filter-label hud-armoury-filter-label">TYPE</span>
+              <div class="filter-btns hud-armoury-chips" id="type-filters">
                 <button class="filter-btn active" data-filter="all">All</button>
                 <button class="filter-btn" data-filter="minion" style="border-color:rgb(180,140,60);color:rgb(180,140,60);">Minion</button>
                 <button class="filter-btn" data-filter="magic" style="border-color:rgb(30,140,120);color:rgb(30,140,120);">Magic</button>
                 <button class="filter-btn" data-filter="react" style="border-color:rgb(160,40,100);color:rgb(160,40,100);">React</button>
               </div>
             </div>
-            <div class="filter-row">
-              <span class="filter-label">ELEMENT</span>
-              <div class="filter-btns" id="element-filters">
+            <div class="filter-row hud-armoury-filter-row">
+              <span class="filter-label hud-armoury-filter-label">ELEMENT</span>
+              <div class="filter-btns hud-armoury-chips" id="element-filters">
                 <button class="filter-btn active" data-filter="all">All</button>
                 <button class="filter-btn" data-filter="1" style="border-color:rgb(220,40,30);color:rgb(220,40,30);">Fire</button>
                 <button class="filter-btn" data-filter="5" style="border-color:rgb(130,50,180);color:rgb(130,50,180);">Dark</button>
@@ -277,15 +326,19 @@
                 <button class="filter-btn" data-filter="4" style="border-color:rgb(189,189,189);color:rgb(189,189,189);">Metal</button>
               </div>
             </div>
-            <div class="filter-row">
-              <span class="filter-label">SHOW</span>
-              <div class="filter-btns" id="deckable-filters">
-                <label class="filter-checkbox"><input type="checkbox" id="show-nondeckable"> Non-Deckable</label>
+            <div class="filter-row hud-armoury-filter-row">
+              <span class="filter-label hud-armoury-filter-label">SHOW</span>
+              <div class="filter-btns hud-armoury-chips" id="deckable-filters">
+                <label class="filter-checkbox hud-armoury-cbox">
+                  <input type="checkbox" id="show-nondeckable">
+                  <span class="hud-armoury-cbox-box" aria-hidden="true"></span>
+                  <span>Non-Deckable</span>
+                </label>
               </div>
             </div>
-            <div class="filter-row">
-              <span class="filter-label">KEYWORD</span>
-              <div class="filter-btns" id="keyword-filters">
+            <div class="filter-row hud-armoury-filter-row">
+              <span class="filter-label hud-armoury-filter-label">KEYWORD</span>
+              <div class="filter-btns hud-armoury-chips" id="keyword-filters">
                 <button class="filter-btn active" data-filter="all">All</button>
                 <button class="filter-btn" data-filter="tutor">Tutor</button>
                 <button class="filter-btn" data-filter="promote">Promote</button>
@@ -299,9 +352,9 @@
                 <button class="filter-btn" data-filter="passive">Passive</button>
               </div>
             </div>
-            <div class="filter-row">
-              <span class="filter-label">MANA</span>
-              <div class="filter-btns" id="mana-filters">
+            <div class="filter-row hud-armoury-filter-row">
+              <span class="filter-label hud-armoury-filter-label">MANA</span>
+              <div class="filter-btns hud-armoury-chips hud-armoury-chips-mana" id="mana-filters">
                 <button class="filter-btn active" data-filter="all">All</button>
                 <button class="filter-btn" data-filter="1">1</button>
                 <button class="filter-btn" data-filter="2">2</button>
@@ -311,54 +364,95 @@
               </div>
             </div>
           </div>
-          <div class="card-browser-grid" id="card-browser-grid">
+
+          <div class="card-browser-grid hud-armoury-grid" id="card-browser-grid">
             <!-- Cards rendered by JS as YGO-style cards with count badges -->
           </div>
         </div>
 
-        <!-- Deck Sidebar (right) -->
-        <div class="deck-sidebar">
+        <!-- ================== RIGHT: LOADOUT / MANIFEST ================== -->
+        <div class="deck-sidebar hud-armoury-panel hud-loadout">
+          <div class="hud-panel-head hud-armoury-panel-head">
+            <span class="hud-panel-id">003</span>
+            <span class="hud-panel-title">LOADOUT</span>
+            <span class="hud-panel-dim">MANIFEST</span>
+          </div>
+
           <!-- Deck name + save -->
-          <div class="deck-save-row">
-            <input type="text" id="deck-slot-name" class="input input-slot-name" placeholder="Deck Name" maxlength="20">
-            <button class="btn btn-primary btn-sm" id="btn-save-deck">Save</button>
+          <div class="deck-save-row hud-loadout-name">
+            <span class="hud-loadout-prefix" aria-hidden="true">CFG</span>
+            <input type="text" id="deck-slot-name" class="input input-slot-name hud-loadout-input" placeholder="designation…" maxlength="20">
+            <button class="btn btn-primary btn-sm hud-loadout-save" id="btn-save-deck">
+              <span class="hud-btn-chev">▸</span><span>SAVE</span>
+            </button>
           </div>
 
           <!-- Load slot -->
-          <div class="deck-load-row">
-            <select id="deck-load-select" class="input select select-sm" style="flex:1;">
-              <option value="">Load Slot...</option>
+          <div class="deck-load-row hud-loadout-load">
+            <span class="hud-loadout-prefix" aria-hidden="true">BAY</span>
+            <select id="deck-load-select" class="input select select-sm hud-loadout-select">
+              <option value="">— select cabinet —</option>
               <!-- 5 slots populated by JS -->
             </select>
-            <button class="btn btn-danger btn-sm" id="btn-delete-slot" title="Delete this slot">Del</button>
+            <button class="btn btn-danger btn-sm hud-loadout-del" id="btn-delete-slot" title="Purge this cabinet">✕</button>
           </div>
 
-          <!-- Validation -->
-          <div class="deck-validation" id="deck-validation">
-            <span class="deck-count" id="deck-count">0/30 cards</span>
-            <span class="deck-status" id="deck-status">Need 30 cards</span>
-          </div>
-
-          <!-- Card list -->
-          <div class="deck-list" id="deck-list">
-            <div class="deck-group" data-type="minion">
-              <h4 class="deck-group-title">Minions</h4>
-              <div class="deck-group-items" id="deck-minions"></div>
+          <!-- Readiness readout -->
+          <div class="hud-readiness-wrap">
+            <div class="deck-validation hud-readiness" id="deck-validation">
+              <div class="hud-readiness-meta">
+                <span class="hud-readiness-label">READINESS</span>
+                <span class="deck-status hud-readiness-status" id="deck-status">NEED 30</span>
+              </div>
+              <span class="deck-count hud-readiness-count" id="deck-count">0/30 cards</span>
             </div>
-            <div class="deck-group" data-type="magic">
-              <h4 class="deck-group-title">Magic</h4>
-              <div class="deck-group-items" id="deck-magic"></div>
-            </div>
-            <div class="deck-group" data-type="react">
-              <h4 class="deck-group-title">React</h4>
-              <div class="deck-group-items" id="deck-react"></div>
+            <div class="hud-readiness-cells" aria-hidden="true">
+              <!-- 30 segmented LED cells, CSS fills based on --deck-fill var set by JS observer -->
+              <span></span><span></span><span></span><span></span><span></span>
+              <span></span><span></span><span></span><span></span><span></span>
+              <span></span><span></span><span></span><span></span><span></span>
+              <span></span><span></span><span></span><span></span><span></span>
+              <span></span><span></span><span></span><span></span><span></span>
+              <span></span><span></span><span></span><span></span><span></span>
             </div>
           </div>
 
-          <!-- Share -->
-          <div class="deck-share-row">
-            <button class="btn btn-secondary btn-sm" id="btn-export-deck" title="Copy deck as a shareable code" style="flex:1;">Export</button>
-            <button class="btn btn-secondary btn-sm" id="btn-import-deck" title="Paste a deck code to load" style="flex:1;">Import</button>
+          <!-- Loadout bays -->
+          <div class="deck-list hud-loadout-bays" id="deck-list">
+            <div class="deck-group hud-bay hud-bay-minion" data-type="minion">
+              <h4 class="deck-group-title hud-bay-title">
+                <span class="hud-bay-id">M</span>
+                <span class="hud-bay-name">Minions</span>
+                <span class="hud-bay-sub" aria-hidden="true">ground force</span>
+              </h4>
+              <div class="deck-group-items hud-bay-items" id="deck-minions"></div>
+            </div>
+            <div class="deck-group hud-bay hud-bay-magic" data-type="magic">
+              <h4 class="deck-group-title hud-bay-title">
+                <span class="hud-bay-id">S</span>
+                <span class="hud-bay-name">Magic</span>
+                <span class="hud-bay-sub" aria-hidden="true">spell stock</span>
+              </h4>
+              <div class="deck-group-items hud-bay-items" id="deck-magic"></div>
+            </div>
+            <div class="deck-group hud-bay hud-bay-react" data-type="react">
+              <h4 class="deck-group-title hud-bay-title">
+                <span class="hud-bay-id">R</span>
+                <span class="hud-bay-name">React</span>
+                <span class="hud-bay-sub" aria-hidden="true">counter-stack</span>
+              </h4>
+              <div class="deck-group-items hud-bay-items" id="deck-react"></div>
+            </div>
+          </div>
+
+          <!-- Share row -->
+          <div class="deck-share-row hud-loadout-share">
+            <button class="btn btn-secondary btn-sm hud-loadout-share-btn" id="btn-export-deck" title="Copy loadout as a shareable code">
+              <span class="hud-btn-chev">⇪</span><span>EXPORT</span>
+            </button>
+            <button class="btn btn-secondary btn-sm hud-loadout-share-btn" id="btn-import-deck" title="Paste a loadout code to load">
+              <span class="hud-btn-chev">⇩</span><span>IMPORT</span>
+            </button>
           </div>
         </div>
       </div>

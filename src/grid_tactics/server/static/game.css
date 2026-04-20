@@ -5985,3 +5985,893 @@ body {
   .hud-nav .nav-btn.active::after { transform: scaleY(1); }
 }
 
+
+/* ============================================================
+   DECK BUILDER — "LOADOUT ARMOURY" redesign
+   Three-column HUD console: Dossier (left) / Armoury (centre) /
+   Loadout Manifest (right). Scoped to #screen-deck-builder so it
+   cannot leak into other screens. All old .card-browser /
+   .filter-btn / .deck-* rules still match — these override where
+   needed and add new HUD-specific styling alongside.
+   ============================================================ */
+
+#screen-deck-builder {
+  --hud-display: 'Michroma', 'Montserrat', sans-serif;
+  --hud-mono: 'Space Mono', 'JetBrains Mono', 'Courier New', monospace;
+  --hud-ink: #050913;
+  --hud-surface: #0a1423;
+  --hud-surface-2: #0e1a2e;
+  --hud-edge: rgba(0, 212, 255, 0.22);
+  --hud-edge-soft: rgba(0, 212, 255, 0.10);
+  --hud-grid: rgba(0, 212, 255, 0.05);
+  --hud-signal: #ffb347;
+  --hud-signal-red: #ff5c5c;
+  --hud-signal-green: #4caf50;
+}
+
+#screen-deck-builder .deck-builder-layout.hud-armoury {
+  position: relative;
+  max-width: 1600px;
+  margin: 0 auto;
+  padding: 14px 20px 20px;
+  height: calc(100vh - 54px);
+  color: #c8dbe8;
+  isolation: isolate;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  overflow: hidden;
+}
+
+/* Ambient grid + scanlines */
+.hud-armoury-bg {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: -1;
+  background-image:
+    linear-gradient(to right, var(--hud-grid) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--hud-grid) 1px, transparent 1px);
+  background-size: 48px 48px;
+  mask-image: radial-gradient(ellipse at 50% 40%, black 25%, transparent 90%);
+  -webkit-mask-image: radial-gradient(ellipse at 50% 40%, black 25%, transparent 90%);
+  animation: hud-grid-drift 48s linear infinite;
+}
+.hud-armoury-scanlines {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: -1;
+  background-image: repeating-linear-gradient(
+    180deg,
+    rgba(0, 212, 255, 0) 0,
+    rgba(0, 212, 255, 0) 3px,
+    rgba(0, 212, 255, 0.018) 3px,
+    rgba(0, 212, 255, 0.018) 4px
+  );
+}
+
+/* --- Top meta strip ---------------------------------------- */
+.hud-armoury-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 14px;
+  background: linear-gradient(180deg, rgba(0, 212, 255, 0.05), transparent);
+  border: 1px solid var(--hud-edge-soft);
+  border-radius: 0;
+  font-family: var(--hud-mono);
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: rgba(200, 219, 232, 0.55);
+  animation: hud-fade-in 400ms ease-out both;
+  flex-shrink: 0;
+  clip-path: polygon(
+    0 6px, 6px 0,
+    calc(100% - 6px) 0, 100% 6px,
+    100% calc(100% - 6px), calc(100% - 6px) 100%,
+    6px 100%, 0 calc(100% - 6px)
+  );
+}
+.hud-armoury-header-left,
+.hud-armoury-header-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.hud-armoury-kbd {
+  color: var(--cyan);
+  background: rgba(0, 212, 255, 0.1);
+  padding: 3px 7px;
+  border: 1px solid var(--hud-edge);
+  font-weight: 700;
+}
+.hud-armoury-title {
+  font-family: var(--hud-display);
+  font-size: 11px;
+  letter-spacing: 0.28em;
+  color: #e8f7ff;
+}
+.hud-armoury-sep { color: var(--hud-edge-soft); }
+.hud-armoury-dim { color: rgba(200, 219, 232, 0.4); text-transform: none; letter-spacing: 0.05em; }
+.hud-armoury-header-right {
+  color: var(--hud-signal-green);
+  font-weight: 700;
+}
+.hud-armoury-blink {
+  color: var(--hud-signal-green);
+  text-shadow: 0 0 6px var(--hud-signal-green);
+  animation: hud-armoury-blink 1.6s ease-in-out infinite;
+  font-size: 10px;
+}
+@keyframes hud-armoury-blink {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.35; }
+}
+
+/* --- Main 3-column grid ------------------------------------ */
+#screen-deck-builder .deck-builder-body {
+  display: grid;
+  grid-template-columns: 320px 1fr 340px;
+  gap: 12px;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  position: relative;
+}
+@media (max-width: 1100px) {
+  #screen-deck-builder .deck-builder-body {
+    grid-template-columns: 1fr 320px;
+  }
+  #screen-deck-builder .deck-builder-body > .hud-dossier { display: none; }
+}
+@media (max-width: 720px) {
+  #screen-deck-builder .deck-builder-body {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* --- Shared HUD panel chrome ------------------------------- */
+#screen-deck-builder .hud-armoury-panel {
+  position: relative;
+  background:
+    linear-gradient(155deg, rgba(0, 212, 255, 0.03), transparent 40%),
+    linear-gradient(180deg, var(--hud-surface-2), var(--hud-surface));
+  border: 1px solid var(--hud-edge);
+  border-radius: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+  animation: hud-panel-in 520ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  clip-path: polygon(
+    0 10px, 10px 0,
+    calc(100% - 10px) 0, 100% 10px,
+    100% calc(100% - 10px), calc(100% - 10px) 100%,
+    10px 100%, 0 calc(100% - 10px)
+  );
+}
+#screen-deck-builder .hud-armoury-panel::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 12px; right: 12px;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--cyan), transparent);
+  opacity: 0.5;
+  pointer-events: none;
+  z-index: 1;
+}
+#screen-deck-builder .hud-dossier { animation-delay: 40ms; }
+#screen-deck-builder .hud-armoury-browser { animation-delay: 100ms; }
+#screen-deck-builder .hud-loadout { animation-delay: 160ms; }
+
+/* Panel head */
+#screen-deck-builder .hud-armoury-panel-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 16px 12px;
+  margin-bottom: 0;
+  border-bottom: 1px dashed var(--hud-edge-soft);
+  font-family: var(--hud-mono);
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  flex-shrink: 0;
+}
+
+/* online-indicator pill for armoury head */
+.hud-armoury-online {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 8px;
+  border: 1px solid rgba(76, 175, 80, 0.5);
+  background: rgba(76, 175, 80, 0.08);
+  color: #a5e4a8;
+  font-family: var(--hud-mono);
+  font-size: 9px;
+  letter-spacing: 0.22em;
+}
+.hud-armoury-online-dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--hud-signal-green);
+  box-shadow: 0 0 6px var(--hud-signal-green);
+  animation: hud-armoury-blink 1.6s ease-in-out infinite;
+}
+
+/* --- LEFT: DOSSIER ---------------------------------------- */
+#screen-deck-builder .tooltip-sidebar.hud-dossier {
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--hud-edge) transparent;
+}
+#screen-deck-builder .tooltip-sidebar.hud-dossier::-webkit-scrollbar { width: 6px; }
+#screen-deck-builder .tooltip-sidebar.hud-dossier::-webkit-scrollbar-thumb { background: var(--hud-edge); }
+
+#screen-deck-builder .card-tooltip.hud-dossier-card {
+  padding: 16px;
+  border: none;
+  background: transparent;
+  border-radius: 0;
+}
+
+#screen-deck-builder .hud-dossier-empty {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  flex: 1;
+  min-height: 320px;
+  padding: 40px 20px;
+  background: rgba(0, 212, 255, 0.02);
+  margin: 12px;
+  border: 1px dashed var(--hud-edge-soft);
+  color: rgba(200, 219, 232, 0.5);
+  font-size: 13px;
+  text-align: center;
+}
+.hud-dossier-radar {
+  position: relative;
+  width: 88px;
+  height: 88px;
+  border-radius: 50%;
+  border: 1px solid var(--hud-edge);
+  background: radial-gradient(circle, rgba(0, 212, 255, 0.08), transparent 70%);
+}
+.hud-dossier-radar::before,
+.hud-dossier-radar::after {
+  content: '';
+  position: absolute;
+  inset: 50%;
+  border-radius: 50%;
+  border: 1px solid var(--hud-edge);
+  animation: hud-radar-ping 2.2s ease-out infinite;
+}
+.hud-dossier-radar::after { animation-delay: 1.1s; }
+.hud-dossier-radar span {
+  position: absolute;
+  top: 50%; left: 50%;
+  width: 46%;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--cyan));
+  transform-origin: left center;
+  animation: hud-radar-sweep 3.2s linear infinite;
+}
+.hud-dossier-radar span:nth-child(2) { animation-delay: -1s; opacity: 0.5; }
+.hud-dossier-radar span:nth-child(3) { animation-delay: -2s; opacity: 0.25; }
+
+.hud-dossier-empty-head {
+  font-family: var(--hud-display);
+  font-size: 12px;
+  letter-spacing: 0.24em;
+  color: rgba(0, 212, 255, 0.72);
+}
+.hud-dossier-empty-sub {
+  font-family: var(--hud-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.08em;
+  color: rgba(200, 219, 232, 0.4);
+  max-width: 220px;
+  line-height: 1.5;
+}
+.hud-dossier-crosshair {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.hud-dossier-crosshair span {
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  border: 1px solid var(--cyan);
+  opacity: 0.4;
+}
+.hud-dossier-crosshair span:nth-child(1) { top: 8px; left: 8px; border-right: 0; border-bottom: 0; }
+.hud-dossier-crosshair span:nth-child(2) { top: 8px; right: 8px; border-left: 0; border-bottom: 0; }
+.hud-dossier-crosshair span:nth-child(3) { bottom: 8px; left: 8px; border-right: 0; border-top: 0; }
+.hud-dossier-crosshair span:nth-child(4) { bottom: 8px; right: 8px; border-left: 0; border-top: 0; }
+
+/* --- CENTRE: ARMOURY / BROWSER ---------------------------- */
+#screen-deck-builder .card-browser.hud-armoury-browser {
+  padding: 0;
+  gap: 0;
+}
+
+.hud-armoury-search-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 16px;
+  margin: 0;
+  border-bottom: 1px dashed var(--hud-edge-soft);
+}
+.hud-armoury-search-wrap::after {
+  /* sweep animation on the search bar itself */
+  content: '';
+  position: absolute;
+  left: 0; right: 0; bottom: 0;
+  height: 1px;
+  background: linear-gradient(90deg,
+    transparent, rgba(0, 212, 255, 0.4) 45%, rgba(0, 212, 255, 0.7) 50%, rgba(0, 212, 255, 0.4) 55%, transparent);
+  transform: translateX(-100%);
+  animation: hud-sweep-pass 5s ease-in-out infinite;
+  pointer-events: none;
+}
+.hud-armoury-search-icon {
+  color: var(--cyan);
+  font-size: 18px;
+  text-shadow: 0 0 8px rgba(0, 212, 255, 0.6);
+  flex-shrink: 0;
+}
+#screen-deck-builder input.input.hud-armoury-search {
+  flex: 1;
+  background: var(--hud-ink);
+  border: 1px solid var(--hud-edge);
+  color: #e8f7ff;
+  font-family: var(--hud-mono);
+  font-size: 12.5px;
+  letter-spacing: 0.06em;
+  padding: 9px 12px;
+  border-radius: 0;
+  outline: none;
+  transition: border-color 150ms ease, box-shadow 150ms ease;
+}
+#screen-deck-builder input.input.hud-armoury-search::placeholder {
+  color: rgba(200, 219, 232, 0.28);
+  letter-spacing: 0.08em;
+}
+#screen-deck-builder input.input.hud-armoury-search:focus {
+  border-color: var(--cyan);
+  box-shadow: 0 0 0 1px var(--hud-edge), 0 0 16px rgba(0, 212, 255, 0.18);
+}
+.hud-armoury-search-kbd {
+  font-family: var(--hud-mono);
+  font-size: 9px;
+  letter-spacing: 0.22em;
+  color: rgba(0, 212, 255, 0.4);
+  border: 1px solid var(--hud-edge-soft);
+  padding: 3px 6px;
+  flex-shrink: 0;
+}
+
+/* --- Filter chips (TYPE / ELEMENT / etc.) ----------------- */
+#screen-deck-builder .card-browser-filters.hud-armoury-filters {
+  padding: 12px 16px;
+  gap: 8px;
+  margin-bottom: 0;
+  border-bottom: 1px dashed var(--hud-edge-soft);
+  flex-shrink: 0;
+  max-height: 40vh;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--hud-edge) transparent;
+}
+#screen-deck-builder .card-browser-filters.hud-armoury-filters::-webkit-scrollbar { width: 6px; }
+#screen-deck-builder .card-browser-filters.hud-armoury-filters::-webkit-scrollbar-thumb { background: var(--hud-edge); }
+
+#screen-deck-builder .filter-row.hud-armoury-filter-row {
+  display: grid;
+  grid-template-columns: 72px 1fr;
+  gap: 10px;
+  align-items: center;
+}
+#screen-deck-builder .filter-label.hud-armoury-filter-label {
+  font-family: var(--hud-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.2em;
+  color: rgba(200, 219, 232, 0.5);
+  text-transform: uppercase;
+  padding: 5px 8px;
+  background: rgba(0, 212, 255, 0.04);
+  border: 1px solid var(--hud-edge-soft);
+  text-align: center;
+}
+
+#screen-deck-builder .filter-btns.hud-armoury-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+/* The chip itself — keeps per-element inline border-color as accent. */
+#screen-deck-builder .hud-armoury-chips .filter-btn {
+  position: relative;
+  background: rgba(0, 212, 255, 0.02);
+  border: 1px solid var(--hud-edge-soft);
+  color: rgba(200, 219, 232, 0.55);
+  padding: 5px 11px;
+  border-radius: 0;
+  font-family: var(--hud-display);
+  font-size: 9.5px;
+  font-weight: 400;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: color 160ms ease, background 160ms ease, border-color 160ms ease;
+  overflow: hidden;
+  clip-path: polygon(
+    0 3px, 3px 0,
+    calc(100% - 3px) 0, 100% 3px,
+    100% calc(100% - 3px), calc(100% - 3px) 100%,
+    3px 100%, 0 calc(100% - 3px)
+  );
+}
+/* sweep across chip on hover */
+#screen-deck-builder .hud-armoury-chips .filter-btn::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, rgba(0, 212, 255, 0.18), transparent);
+  transform: translateX(-100%);
+  transition: transform 450ms ease;
+  pointer-events: none;
+}
+#screen-deck-builder .hud-armoury-chips .filter-btn:hover {
+  color: #e8f7ff;
+  background: rgba(0, 212, 255, 0.07);
+  border-color: var(--cyan);
+}
+#screen-deck-builder .hud-armoury-chips .filter-btn:hover::before {
+  transform: translateX(100%);
+}
+#screen-deck-builder .hud-armoury-chips .filter-btn.active {
+  color: #e8f7ff;
+  background: rgba(0, 212, 255, 0.14);
+  border-color: var(--cyan);
+  box-shadow: inset 0 -2px 0 0 var(--cyan);
+  font-weight: 700;
+  text-shadow: 0 0 6px rgba(0, 212, 255, 0.35);
+}
+/* Per-element-coloured chips: use the inline border-color as the accent
+   when active. Inline style sets color + border-color to the element's
+   rgb; we layer the HUD active treatment on top by using !important
+   sparingly so the inline-set colour still shows through on hover/active. */
+#screen-deck-builder .hud-armoury-chips .filter-btn[style*="border-color"].active {
+  background: color-mix(in srgb, currentColor 14%, transparent);
+  box-shadow: inset 0 -2px 0 0 currentColor;
+  text-shadow: 0 0 6px color-mix(in srgb, currentColor 60%, transparent);
+}
+#screen-deck-builder .hud-armoury-chips .filter-btn[style*="border-color"]:hover {
+  background: color-mix(in srgb, currentColor 9%, transparent);
+}
+
+/* Mana chip numbers: make single-digit numbers fixed-width */
+#screen-deck-builder .hud-armoury-chips-mana .filter-btn {
+  min-width: 38px;
+  text-align: center;
+}
+
+/* Custom HUD checkbox for "Non-Deckable" */
+.hud-armoury-cbox {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 11px;
+  border: 1px solid var(--hud-edge-soft);
+  background: rgba(0, 212, 255, 0.02);
+  font-family: var(--hud-display);
+  font-size: 9.5px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: rgba(200, 219, 232, 0.5);
+  cursor: pointer;
+  transition: border-color 160ms ease, background 160ms ease, color 160ms ease;
+}
+.hud-armoury-cbox:hover { border-color: var(--cyan); color: #e8f7ff; }
+.hud-armoury-cbox input { display: none; }
+.hud-armoury-cbox-box {
+  width: 12px;
+  height: 12px;
+  border: 1.5px solid var(--hud-edge);
+  position: relative;
+  transition: all 160ms ease;
+}
+.hud-armoury-cbox-box::after {
+  content: '';
+  position: absolute;
+  inset: 2px;
+  background: var(--cyan);
+  opacity: 0;
+  transform: scale(0.5);
+  transition: opacity 160ms ease, transform 160ms ease;
+}
+.hud-armoury-cbox input:checked ~ .hud-armoury-cbox-box {
+  border-color: var(--cyan);
+  box-shadow: 0 0 8px rgba(0, 212, 255, 0.5);
+}
+.hud-armoury-cbox input:checked ~ .hud-armoury-cbox-box::after {
+  opacity: 1; transform: scale(1);
+}
+
+/* --- The card grid -------------------------------------- */
+#screen-deck-builder .card-browser-grid.hud-armoury-grid {
+  flex: 1;
+  min-height: 0;
+  padding: 14px 14px 18px;
+  gap: 14px 10px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--hud-edge) transparent;
+}
+#screen-deck-builder .card-browser-grid.hud-armoury-grid::-webkit-scrollbar { width: 8px; }
+#screen-deck-builder .card-browser-grid.hud-armoury-grid::-webkit-scrollbar-thumb { background: var(--hud-edge); border-radius: 0; }
+
+/* hover hum on card browser items (JS renders .card-browser-item) */
+#screen-deck-builder .card-browser-item {
+  position: relative;
+  transition: transform 180ms cubic-bezier(0.2, 0.7, 0.2, 1), filter 180ms ease;
+}
+#screen-deck-builder .card-browser-item:hover {
+  transform: translateY(-3px);
+  filter: drop-shadow(0 0 12px rgba(0, 212, 255, 0.45));
+}
+
+/* --- RIGHT: LOADOUT MANIFEST ---------------------------- */
+#screen-deck-builder .deck-sidebar.hud-loadout {
+  padding: 0;
+  gap: 0;
+  background:
+    linear-gradient(155deg, rgba(0, 212, 255, 0.03), transparent 40%),
+    linear-gradient(180deg, var(--hud-surface-2), var(--hud-surface));
+}
+
+#screen-deck-builder .deck-sidebar.hud-loadout > .deck-save-row,
+#screen-deck-builder .deck-sidebar.hud-loadout > .deck-load-row {
+  padding: 10px 14px;
+  gap: 6px;
+  align-items: stretch;
+}
+#screen-deck-builder .deck-sidebar.hud-loadout > .deck-save-row {
+  border-bottom: 1px dashed var(--hud-edge-soft);
+  padding-top: 14px;
+}
+#screen-deck-builder .deck-sidebar.hud-loadout > .deck-load-row {
+  border-bottom: 1px dashed var(--hud-edge-soft);
+  padding-bottom: 14px;
+}
+
+.hud-loadout-prefix {
+  font-family: var(--hud-mono);
+  font-size: 9px;
+  letter-spacing: 0.22em;
+  color: rgba(0, 212, 255, 0.55);
+  padding: 0 8px;
+  border: 1px solid var(--hud-edge-soft);
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+#screen-deck-builder .input.hud-loadout-input,
+#screen-deck-builder select.hud-loadout-select {
+  background: var(--hud-ink);
+  border: 1px solid var(--hud-edge);
+  color: #e8f7ff;
+  font-family: var(--hud-mono);
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  padding: 8px 10px;
+  border-radius: 0;
+  outline: none;
+  transition: border-color 150ms ease, box-shadow 150ms ease;
+  flex: 1;
+  min-width: 0;
+}
+#screen-deck-builder .input.hud-loadout-input::placeholder {
+  color: rgba(200, 219, 232, 0.28);
+  letter-spacing: 0.12em;
+}
+#screen-deck-builder .input.hud-loadout-input:focus,
+#screen-deck-builder select.hud-loadout-select:focus {
+  border-color: var(--cyan);
+  box-shadow: 0 0 0 1px var(--hud-edge), 0 0 12px rgba(0, 212, 255, 0.18);
+}
+
+#screen-deck-builder .btn.hud-loadout-save,
+#screen-deck-builder .btn.hud-loadout-share-btn {
+  font-family: var(--hud-display);
+  font-size: 10px;
+  letter-spacing: 0.22em;
+  background: linear-gradient(180deg, rgba(0, 212, 255, 0.14), rgba(0, 212, 255, 0.02));
+  border: 1px solid var(--cyan);
+  color: #e8f7ff;
+  border-radius: 0;
+  padding: 8px 14px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: background 160ms ease, box-shadow 160ms ease, transform 120ms ease;
+  flex-shrink: 0;
+}
+#screen-deck-builder .btn.hud-loadout-save:hover,
+#screen-deck-builder .btn.hud-loadout-share-btn:hover {
+  background: linear-gradient(180deg, rgba(0, 212, 255, 0.28), rgba(0, 212, 255, 0.08));
+  box-shadow: 0 0 18px -4px rgba(0, 212, 255, 0.6);
+  transform: translateY(-1px);
+}
+
+#screen-deck-builder .btn.hud-loadout-del {
+  background: rgba(255, 92, 92, 0.06);
+  border: 1px solid rgba(255, 92, 92, 0.5);
+  color: #ffb0b0;
+  font-family: var(--hud-display);
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  border-radius: 0;
+  padding: 0 11px;
+  cursor: pointer;
+  min-width: 36px;
+  transition: all 140ms ease;
+  flex-shrink: 0;
+}
+#screen-deck-builder .btn.hud-loadout-del:hover {
+  background: rgba(255, 92, 92, 0.18);
+  border-color: var(--hud-signal-red);
+  box-shadow: 0 0 14px -4px rgba(255, 92, 92, 0.8);
+}
+
+/* Readiness meter */
+.hud-readiness-wrap {
+  padding: 14px 14px 12px;
+  border-bottom: 1px dashed var(--hud-edge-soft);
+  flex-shrink: 0;
+}
+#screen-deck-builder .deck-validation.hud-readiness {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 8px;
+  background: transparent;
+  padding: 0;
+  border-radius: 0;
+  margin-bottom: 10px;
+}
+.hud-readiness-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.hud-readiness-label {
+  font-family: var(--hud-mono);
+  font-size: 9px;
+  letter-spacing: 0.22em;
+  color: rgba(200, 219, 232, 0.45);
+  text-transform: uppercase;
+}
+#screen-deck-builder .deck-status.hud-readiness-status {
+  font-family: var(--hud-display);
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  color: var(--hud-signal);
+  text-transform: uppercase;
+  text-shadow: 0 0 6px rgba(255, 179, 71, 0.35);
+}
+#screen-deck-builder .deck-status.hud-readiness-status.valid {
+  color: var(--hud-signal-green);
+  text-shadow: 0 0 6px rgba(76, 175, 80, 0.4);
+}
+#screen-deck-builder .deck-status.hud-readiness-status.invalid {
+  color: var(--hud-signal-red);
+  text-shadow: 0 0 6px rgba(255, 92, 92, 0.4);
+}
+#screen-deck-builder .deck-count.hud-readiness-count {
+  font-family: var(--hud-mono);
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: #e8f7ff;
+  text-shadow: 0 0 8px rgba(0, 212, 255, 0.35);
+}
+#screen-deck-builder .deck-count.hud-readiness-count.valid {
+  color: var(--hud-signal-green);
+  text-shadow: 0 0 10px rgba(76, 175, 80, 0.5);
+}
+#screen-deck-builder .deck-count.hud-readiness-count.invalid {
+  color: var(--hud-signal-red);
+  text-shadow: 0 0 10px rgba(255, 92, 92, 0.5);
+}
+
+/* 30 segmented LED cells. Fill driven by --deck-fill (0-30). */
+.hud-readiness-cells {
+  --deck-fill: 0;
+  --deck-max: 30;
+  display: grid;
+  grid-template-columns: repeat(30, 1fr);
+  gap: 2px;
+  height: 14px;
+  padding: 2px;
+  border: 1px solid var(--hud-edge);
+  background: var(--hud-ink);
+}
+.hud-readiness-cells span {
+  background: rgba(0, 212, 255, 0.06);
+  transition: background 200ms ease, box-shadow 200ms ease;
+}
+/* Fill the first N cells where N = round(var(--deck-fill) * 30 / var(--deck-max)).
+   Because we can't compute that in CSS directly, JS sets --deck-fill-n
+   as the integer count of filled cells. Falls back to 0 if absent. */
+.hud-readiness-cells {
+  --deck-fill-n: 0;
+}
+.hud-readiness-cells span:nth-child(-n+0) { background: rgba(0, 212, 255, 0.06); }
+/* Active cells are styled via the [style*="--active"] hack — JS sets a
+   single CSS class that we scope to. Simpler: rely on counter-scoped
+   child rules below. Each cell gets active based on its index via JS. */
+.hud-readiness-cells span.on {
+  background: var(--cell-color, var(--cyan));
+  box-shadow: 0 0 6px var(--cell-glow, rgba(0, 212, 255, 0.6));
+}
+.hud-readiness-cells.hud-readiness-low  { --cell-color: var(--hud-signal-red);   --cell-glow: rgba(255, 92, 92, 0.55); }
+.hud-readiness-cells.hud-readiness-mid  { --cell-color: var(--hud-signal);       --cell-glow: rgba(255, 179, 71, 0.55); }
+.hud-readiness-cells.hud-readiness-ready { --cell-color: var(--hud-signal-green); --cell-glow: rgba(76, 175, 80, 0.65); }
+/* When at full 30/30, the whole bar gently pulses to celebrate */
+.hud-readiness-cells.hud-readiness-ready span.on {
+  animation: hud-readiness-pulse 1.8s ease-in-out infinite;
+}
+@keyframes hud-readiness-pulse {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.55; }
+}
+
+/* --- Loadout bays (deck list) ---------------------------- */
+#screen-deck-builder .deck-list.hud-loadout-bays {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px 14px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--hud-edge) transparent;
+}
+#screen-deck-builder .deck-list.hud-loadout-bays::-webkit-scrollbar { width: 6px; }
+#screen-deck-builder .deck-list.hud-loadout-bays::-webkit-scrollbar-thumb { background: var(--hud-edge); }
+
+#screen-deck-builder .deck-group.hud-bay {
+  margin-bottom: 14px;
+}
+
+#screen-deck-builder .deck-group-title.hud-bay-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0;
+  margin-bottom: 6px;
+  border-bottom: 1px solid var(--hud-edge-soft);
+  font-family: var(--hud-display);
+  font-size: 10px;
+  letter-spacing: 0.22em;
+  color: #e8f7ff;
+  text-transform: uppercase;
+}
+.hud-bay-id {
+  width: 20px; height: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--hud-edge);
+  background: rgba(0, 212, 255, 0.08);
+  color: var(--cyan);
+  font-family: var(--hud-mono);
+  font-size: 10px;
+  font-weight: 700;
+}
+.hud-bay-name { flex: 1; }
+.hud-bay-sub {
+  font-family: var(--hud-mono);
+  font-size: 8.5px;
+  letter-spacing: 0.14em;
+  color: rgba(200, 219, 232, 0.35);
+  text-transform: uppercase;
+}
+
+/* Per-bay tinted edge (not required — engine grouping does the work,
+   but a subtle accent helps readability at a glance). */
+.hud-bay-minion .hud-bay-id { color: rgb(180, 140, 60); border-color: rgba(180, 140, 60, 0.5); background: rgba(180, 140, 60, 0.08); }
+.hud-bay-magic  .hud-bay-id { color: rgb(30, 200, 160); border-color: rgba(30, 200, 160, 0.5); background: rgba(30, 200, 160, 0.08); }
+.hud-bay-react  .hud-bay-id { color: rgb(210, 70, 140); border-color: rgba(210, 70, 140, 0.5); background: rgba(210, 70, 140, 0.08); }
+
+/* Deck list items (rendered by JS as .deck-list-item) */
+#screen-deck-builder .deck-group-items.hud-bay-items {
+  gap: 3px;
+}
+#screen-deck-builder .deck-list-item {
+  background: var(--hud-ink);
+  border: 1px solid var(--hud-edge-soft);
+  border-radius: 0;
+  padding: 6px 10px;
+  font-family: var(--hud-mono);
+  font-size: 11.5px;
+  letter-spacing: 0.04em;
+  color: rgba(200, 219, 232, 0.9);
+  transition: background 140ms ease, border-color 140ms ease, transform 140ms ease;
+  position: relative;
+}
+#screen-deck-builder .deck-list-item::before {
+  content: '▸';
+  position: absolute;
+  left: -2px; top: 50%;
+  transform: translateY(-50%);
+  color: var(--cyan);
+  font-size: 10px;
+  opacity: 0;
+  transition: opacity 140ms ease, left 140ms ease;
+}
+#screen-deck-builder .deck-list-item:hover {
+  border-color: var(--cyan);
+  background: #061a2e;
+  transform: translateX(3px);
+}
+#screen-deck-builder .deck-list-item:hover::before {
+  opacity: 1;
+  left: -12px;
+}
+#screen-deck-builder .deck-list-item-count {
+  font-family: var(--hud-display);
+  font-size: 10.5px;
+  letter-spacing: 0.1em;
+  color: var(--cyan);
+  text-shadow: 0 0 6px rgba(0, 212, 255, 0.4);
+  padding: 1px 6px;
+  border: 1px solid var(--hud-edge);
+  background: rgba(0, 212, 255, 0.06);
+  margin-left: 8px;
+}
+
+/* --- Share row (bottom) --------------------------------- */
+#screen-deck-builder .deck-share-row.hud-loadout-share {
+  display: flex;
+  gap: 6px;
+  padding: 12px 14px;
+  border-top: 1px dashed var(--hud-edge-soft);
+  margin-top: 0;
+}
+#screen-deck-builder .hud-loadout-share .btn.hud-loadout-share-btn {
+  flex: 1;
+  justify-content: center;
+  padding: 10px 8px;
+}
+
+/* --- Responsive compacting ------------------------------ */
+@media (max-width: 1100px) {
+  #screen-deck-builder .deck-builder-body { grid-template-columns: 1fr 300px; }
+  .hud-armoury-header { font-size: 9px; }
+}
+@media (max-width: 720px) {
+  #screen-deck-builder .deck-builder-layout.hud-armoury { padding: 10px 10px 14px; height: auto; overflow: visible; }
+  #screen-deck-builder .deck-builder-body {
+    grid-template-columns: 1fr;
+    height: auto;
+    overflow: visible;
+  }
+  #screen-deck-builder .hud-armoury-panel { min-height: 280px; }
+  #screen-deck-builder .card-browser-grid.hud-armoury-grid { max-height: 60vh; }
+  .hud-armoury-header-right { display: none; }
+}
+
