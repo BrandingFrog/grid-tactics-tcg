@@ -112,30 +112,41 @@ function _setPhaseLeds(badgeEl, phase, reactReturnPhase) {
     }
 }
 
-// Briefly light the start/end LED in response to a trigger-blip event.
-// Lasts ~1.5s, then the indicator falls back to the live phase.
-function _flashPhaseLed(key) {
+// Briefly light the start/end LED. Defaults to 2200ms (matches a
+// trigger-blip animation length); callers can override for a shorter
+// "phase cycle" beat (~900ms) used on turn flips with no triggers.
+function _flashPhaseLed(key, durationMs) {
+    var ms = (durationMs == null) ? 2200 : durationMs;
     _phaseLedFlashKey = key;
     if (_phaseLedFlashTimer) { clearTimeout(_phaseLedFlashTimer); _phaseLedFlashTimer = null; }
-    // Re-render both badges immediately so the flash takes effect.
-    var live = document.getElementById('phase-badge');
-    var sb = document.getElementById('sandbox-phase-badge');
-    if (live && typeof gameState !== 'undefined' && gameState) {
-        _setPhaseLeds(live, gameState.phase, gameState.react_return_phase);
-    }
-    if (sb && typeof sandboxState !== 'undefined' && sandboxState) {
-        _setPhaseLeds(sb, sandboxState.phase, sandboxState.react_return_phase);
-    }
-    _phaseLedFlashTimer = setTimeout(function() {
-        _phaseLedFlashKey = null;
-        _phaseLedFlashTimer = null;
+    var renderAll = function() {
+        var live = document.getElementById('phase-badge');
+        var sb = document.getElementById('sandbox-phase-badge');
         if (live && typeof gameState !== 'undefined' && gameState) {
             _setPhaseLeds(live, gameState.phase, gameState.react_return_phase);
         }
         if (sb && typeof sandboxState !== 'undefined' && sandboxState) {
             _setPhaseLeds(sb, sandboxState.phase, sandboxState.react_return_phase);
         }
-    }, 2200);
+    };
+    renderAll();
+    _phaseLedFlashTimer = setTimeout(function() {
+        _phaseLedFlashKey = null;
+        _phaseLedFlashTimer = null;
+        renderAll();
+    }, ms);
+}
+
+// Run the END → START phase-cycle on a turn flip so the player visibly
+// sees those two phases pass before ACTION resumes. Independent of
+// trigger blips — fires even when neither player has start/end triggers.
+// If a trigger blip fires DURING this cycle it will refresh the matching
+// LED via _flashPhaseLed, naturally extending the visible window.
+function _cyclePhaseFlashOnTurnFlip() {
+    _flashPhaseLed('end', 900);
+    setTimeout(function() {
+        _flashPhaseLed('start', 900);
+    }, 900);
 }
 
 const EFFECT_TYPE_NAMES = [
@@ -3522,10 +3533,11 @@ function _playSacPortal(job, done) {
 var _lastBannerTurnKey = null;
 var _pendingTurnBanner = null;  // { turnNumber, activePlayerIdx } when deferred behind the react window
 
-// Fire the turn banner, OR defer it until the spell stage finishes if it
-// is currently animating. Without this the TURN/PLAYER banner blooms on
-// top of the still-resolving react window, with both visuals competing
-// for attention. Deferred banners are flushed by _hideSpellStage.
+// Fire the turn banner + END→START LED cycle, OR defer them until the
+// spell stage finishes if it is currently animating. Without this the
+// TURN/PLAYER banner and phase cycle would blooms on top of the still-
+// resolving react window, with multiple visuals competing for attention.
+// Deferred banners are flushed by _hideSpellStage.
 function _showTurnBannerOrDefer(turnNumber, activePlayerIdx) {
     var stage = document.getElementById('spell-stage');
     var stageActive = stage && !stage.hidden && (
@@ -3538,7 +3550,18 @@ function _showTurnBannerOrDefer(turnNumber, activePlayerIdx) {
         _pendingTurnBanner = { turnNumber: turnNumber, activePlayerIdx: activePlayerIdx };
         return;
     }
-    _showTurnBanner(turnNumber, activePlayerIdx);
+    _runTurnFlipVisuals(turnNumber, activePlayerIdx);
+}
+
+// END LED flashes (~900ms), banner blooms while START LED flashes
+// (parallel, ~900ms each), then ACTION takes over. The total beat is
+// ~1.8s so the user has time to read each phase change.
+function _runTurnFlipVisuals(turnNumber, activePlayerIdx) {
+    _flashPhaseLed('end', 900);
+    setTimeout(function() {
+        _showTurnBanner(turnNumber, activePlayerIdx);
+        _flashPhaseLed('start', 900);
+    }, 900);
 }
 
 function _showTurnBanner(turnNumber, activePlayerIdx) {
@@ -3960,7 +3983,7 @@ function _hideSpellStage() {
             var pending = _pendingTurnBanner;
             _pendingTurnBanner = null;
             setTimeout(function() {
-                _showTurnBanner(pending.turnNumber, pending.activePlayerIdx);
+                _runTurnFlipVisuals(pending.turnNumber, pending.activePlayerIdx);
             }, 200);
         }
     }, 360);
