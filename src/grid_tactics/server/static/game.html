@@ -259,6 +259,10 @@
               <div class="phase-led" data-phase="action"><span class="phase-led-dot"></span><span class="phase-led-label">ACTION</span></div>
               <div class="phase-led" data-phase="end"><span class="phase-led-dot"></span><span class="phase-led-label">END</span></div>
             </div>
+            <button class="react-mode-btn" id="react-mode-btn" data-mode="auto" title="React prompt: ON = always ask, AUTO = ask only when you can react, OFF = never ask">
+              <span class="react-mode-prefix">REACT</span>
+              <span class="react-mode-value">AUTO</span>
+            </button>
             <span class="turn-number" id="turn-number">Turn 1</span>
           </div>
           <div id="action-bar-slot" class="action-bar-slot"></div>
@@ -436,6 +440,10 @@
               <div class="phase-led" data-phase="action"><span class="phase-led-dot"></span><span class="phase-led-label">ACTION</span></div>
               <div class="phase-led" data-phase="end"><span class="phase-led-dot"></span><span class="phase-led-label">END</span></div>
             </div>
+            <button class="react-mode-btn" id="sandbox-react-mode-btn" data-mode="auto" title="React prompt: ON = always ask, AUTO = ask only when you can react, OFF = never ask">
+              <span class="react-mode-prefix">REACT</span>
+              <span class="react-mode-value">AUTO</span>
+            </button>
             <span class="turn-number" id="sandbox-turn-number">Turn 1</span>
           </div>
           <span class="sandbox-history-status" id="sandbox-history-status" style="margin-left:auto;">undo:0 redo:0</span>
@@ -604,6 +612,13 @@
   <!-- Spell cast center stage — shows a giant preview of the card being
        cast plus a waiting-for-react slot. Created/torn down by the
        spell-stage module in game.js. Starts hidden. -->
+  <!-- Floating Skip React button — shown whenever the active player can
+       PASS in REACT phase. Available in both live game + sandbox so the
+       user can dismiss the react window even in modes that don't auto-skip. -->
+  <button id="floating-skip-react-btn" class="floating-skip-react-btn" hidden>
+    Skip React
+  </button>
+
   <div id="spell-stage" class="spell-stage" hidden>
     <div class="spell-stage-stack" id="spell-stage-stack-left"></div>
     <div class="spell-stage-arrow">▶</div>

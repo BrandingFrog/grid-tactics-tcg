@@ -78,6 +78,73 @@ const PHASE_DISPLAY = {
     1: { label: 'REACT',  cssClass: 'phase-react',  bg: 'var(--yellow)' },
 };
 
+// React-prompt mode: 'on' | 'auto' | 'off'. Persisted to localStorage so
+// the choice survives reloads. The auto-skip in renderActionBar reads
+// _reactPromptMode() to decide whether to fire PASS automatically.
+var REACT_MODE_KEY = 'gridtactics.reactMode';
+var REACT_MODE_CYCLE = { 'on': 'auto', 'auto': 'off', 'off': 'on' };
+function _reactPromptMode() {
+    try {
+        var v = localStorage.getItem(REACT_MODE_KEY);
+        if (v === 'on' || v === 'auto' || v === 'off') return v;
+    } catch (e) { /* localStorage unavailable */ }
+    return 'auto';
+}
+function _setReactPromptMode(mode) {
+    try { localStorage.setItem(REACT_MODE_KEY, mode); } catch (e) { /* defensive */ }
+    _renderReactModeButtons();
+    // Re-render the action bar so the auto-skip reconsiders under the new mode.
+    if (typeof renderActionBar === 'function') {
+        try { renderActionBar(); } catch (e) { /* defensive */ }
+    }
+}
+function _renderReactModeButtons() {
+    var mode = _reactPromptMode();
+    ['react-mode-btn', 'sandbox-react-mode-btn'].forEach(function(id) {
+        var btn = document.getElementById(id);
+        if (!btn) return;
+        btn.dataset.mode = mode;
+        var val = btn.querySelector('.react-mode-value');
+        if (val) val.textContent = mode.toUpperCase();
+    });
+}
+function _wireReactModeButtonsOnce() {
+    if (window.__reactModeWired) return;
+    window.__reactModeWired = true;
+    ['react-mode-btn', 'sandbox-react-mode-btn'].forEach(function(id) {
+        var btn = document.getElementById(id);
+        if (!btn) return;
+        btn.addEventListener('click', function() {
+            var current = _reactPromptMode();
+            _setReactPromptMode(REACT_MODE_CYCLE[current] || 'auto');
+        });
+    });
+    _renderReactModeButtons();
+}
+
+// Floating Skip React button visibility — shown whenever the active player
+// is in REACT phase with PASS legal. Clicking submits PASS regardless of
+// current react-prompt mode.
+function _refreshFloatingSkipReact() {
+    var btn = document.getElementById('floating-skip-react-btn');
+    if (!btn) return;
+    var canSkip = (typeof gameState !== 'undefined' && gameState
+        && gameState.phase === 1
+        && Array.isArray(legalActions)
+        && legalActions.some(function(a) { return a.action_type === 4; }));
+    btn.hidden = !canSkip;
+}
+function _wireFloatingSkipReactOnce() {
+    if (window.__floatingSkipWired) return;
+    var btn = document.getElementById('floating-skip-react-btn');
+    if (!btn) return;
+    window.__floatingSkipWired = true;
+    btn.addEventListener('click', function() {
+        if (typeof submitAction === 'function') submitAction({ action_type: 4 });
+        btn.hidden = true;
+    });
+}
+
 // Phase LED indicator. Three LEDs (start / action / end) light up to
 // show the active turn phase. During a REACT window the underlying
 // turn phase pulses amber instead of glowing solid green — react is
@@ -2118,6 +2185,8 @@ document.addEventListener('DOMContentLoaded', function() {
     setupActivityTabs();
     setupGameHandlers();
     setupPileHandlers();
+    _wireReactModeButtonsOnce();
+    _wireFloatingSkipReactOnce();
 });
 
 // =============================================
@@ -6475,12 +6544,27 @@ function renderActionBar() {
         return;
     }
 
-    // Auto-skip empty react: when in REACT phase and the only legal action is PASS
-    // (no react cards in hand can react to this trigger), submit PASS automatically
-    if (gameState.phase === 1 && legalActions.length === 1
-            && legalActions[0].action_type === 4) {
-        submitAction({ action_type: 4 });
-        return;
+    // Always refresh the floating Skip React button visibility — it
+    // tracks phase + legalActions independent of which screen is shown.
+    _refreshFloatingSkipReact();
+
+    // Auto-skip behavior gated by the user's react-prompt mode (ON/AUTO/OFF):
+    //   OFF  — auto-skip ALWAYS, even if a react card is playable. Useful
+    //          when you trust the engine and want minimum interruptions.
+    //   AUTO — auto-skip ONLY when no react card is legal (current default).
+    //          Pauses for you when you actually have a viable react.
+    //   ON   — never auto-skip. Always require a manual click on the
+    //          floating Skip React button (or play a react card) to
+    //          close the window. YGO-style "always confirm".
+    if (gameState.phase === 1 && legalActions.some(function(a) { return a.action_type === 4; })) {
+        var mode = _reactPromptMode();
+        var onlyPass = legalActions.length === 1 && legalActions[0].action_type === 4;
+        if (mode === 'off' || (mode === 'auto' && onlyPass)) {
+            submitAction({ action_type: 4 });
+            return;
+        }
+        // mode === 'on' OR (mode === 'auto' && hasReactOption): fall through
+        // and let renderActionBar / floating button drive the manual click.
     }
 
     // Action bar: show Draw Card / Skip React button
@@ -7548,6 +7632,13 @@ function setupSandboxSocketHandlers() {
 
 function renderSandbox() {
     if (!sandboxState) return;
+    // renderActionBar's slot lookup (#hand-action-bar) is a no-op in
+    // sandbox HTML, but it ALSO drives the floating Skip React button
+    // visibility and the mode-aware auto-skip — both of which we want
+    // in sandbox too. Calling it here keeps that logic in one place.
+    if (typeof renderActionBar === 'function') {
+        try { renderActionBar(); } catch (e) { /* defensive */ }
+    }
 
     // Renderer reuse contract: call the SAME renderBoard / renderHand,
     // passing sandbox mount targets via opts. The sandbox state is RAW
