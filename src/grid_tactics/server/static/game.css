@@ -6875,3 +6875,854 @@ body {
   .hud-armoury-header-right { display: none; }
 }
 
+/* =====================================================================
+   GAME / SANDBOX / TESTS — TACTICAL COMMAND HUD
+   =====================================================================
+   Applies the same Michroma / Space Mono / cyan-on-near-black vocabulary
+   used by the lobby, navbar, and deck builder to:
+     - #screen-game    (live PvP)
+     - #screen-sandbox (dev god-view)
+     - #tests-overlay  (UAT runner)
+   All visual — no IDs/classes renamed. Engine bindings stay intact.
+   ===================================================================== */
+
+:root {
+  /* Keep these consistent with other HUD blocks. Local so deep merges
+     in older rules don't mutate them. */
+  --hud-g-display: 'Michroma', 'Montserrat', sans-serif;
+  --hud-g-mono: 'Space Mono', 'JetBrains Mono', monospace;
+  --hud-g-cyan: #00d4ff;
+  --hud-g-ink: #050913;
+  --hud-g-edge: rgba(0, 212, 255, 0.22);
+  --hud-g-edge-hot: rgba(0, 212, 255, 0.55);
+  --hud-g-dim: rgba(200, 219, 232, 0.6);
+}
+
+/* --- Room bar → mission telemetry strip ----------------------------- */
+#screen-game .room-bar,
+#screen-sandbox .room-bar {
+  background: linear-gradient(180deg, rgba(0, 212, 255, 0.05), rgba(0, 212, 255, 0.01)) !important;
+  border: 1px solid var(--hud-g-edge) !important;
+  border-radius: 0 !important;
+  clip-path: polygon(
+    0 6px, 6px 0,
+    calc(100% - 6px) 0, 100% 6px,
+    100% calc(100% - 6px), calc(100% - 6px) 100%,
+    6px 100%, 0 calc(100% - 6px)
+  );
+  position: relative;
+  padding: 6px 14px !important;
+}
+#screen-game .room-bar::before,
+#screen-sandbox .room-bar::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 14px; right: 14px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--hud-g-cyan), transparent);
+  opacity: 0.45;
+}
+
+#screen-game .room-bar-code,
+#screen-sandbox .room-bar-code {
+  font-family: var(--hud-g-display) !important;
+  font-size: 10px !important;
+  letter-spacing: 0.24em !important;
+  text-transform: uppercase;
+  color: var(--hud-g-cyan) !important;
+  background: none !important;
+  padding: 2px 0 !important;
+}
+
+#screen-game .turn-banner,
+#screen-sandbox .turn-banner {
+  font-family: var(--hud-g-display) !important;
+  letter-spacing: 0.18em !important;
+  font-size: 11px !important;
+  background: none !important;
+  border: none !important;
+  padding: 0 !important;
+}
+#screen-game .turn-text,
+#screen-sandbox .turn-text {
+  font-family: var(--hud-g-display) !important;
+  letter-spacing: 0.2em !important;
+}
+#screen-game .turn-number,
+#screen-sandbox .turn-number {
+  font-family: var(--hud-g-mono) !important;
+  font-size: 11px !important;
+  letter-spacing: 0.12em;
+  color: var(--hud-g-dim) !important;
+  text-transform: uppercase;
+}
+
+/* React-mode toggle → HUD pill */
+#screen-game .react-mode-btn,
+#screen-sandbox .react-mode-btn {
+  font-family: var(--hud-g-display) !important;
+  font-size: 9px !important;
+  letter-spacing: 0.22em !important;
+  text-transform: uppercase;
+  border: 1px solid var(--hud-g-edge) !important;
+  background: rgba(0, 212, 255, 0.04) !important;
+  color: var(--hud-g-cyan) !important;
+  border-radius: 0 !important;
+  padding: 4px 10px !important;
+  clip-path: polygon(
+    0 3px, 3px 0,
+    calc(100% - 3px) 0, 100% 3px,
+    100% calc(100% - 3px), calc(100% - 3px) 100%,
+    3px 100%, 0 calc(100% - 3px)
+  );
+}
+#screen-game .react-mode-btn:hover,
+#screen-sandbox .react-mode-btn:hover {
+  border-color: var(--hud-g-edge-hot) !important;
+  background: rgba(0, 212, 255, 0.12) !important;
+}
+
+/* Sandbox history status line */
+#screen-sandbox .sandbox-history-status {
+  font-family: var(--hud-g-mono) !important;
+  font-size: 10px !important;
+  letter-spacing: 0.1em;
+  color: var(--hud-g-dim) !important;
+  text-transform: uppercase;
+}
+
+/* --- Info bars → PILOT / TARGET telemetry panels ------------------- */
+#screen-game .info-bar,
+#screen-sandbox .info-bar {
+  background: rgba(10, 20, 35, 0.65) !important;
+  border: 1px solid var(--hud-g-edge) !important;
+  border-radius: 0 !important;
+  position: relative;
+  padding: 8px 14px !important;
+  clip-path: polygon(
+    0 5px, 5px 0,
+    calc(100% - 5px) 0, 100% 5px,
+    100% calc(100% - 5px), calc(100% - 5px) 100%,
+    5px 100%, 0 calc(100% - 5px)
+  );
+}
+#screen-game .info-bar.self-bar,
+#screen-sandbox .info-bar.self-bar {
+  /* warm rim for "you" */
+  box-shadow: inset 0 0 0 1px rgba(0, 212, 255, 0.08),
+              0 0 22px -14px rgba(0, 212, 255, 0.7);
+}
+#screen-game .info-bar.opp-bar,
+#screen-sandbox .info-bar.opp-bar {
+  /* cooler for opponent */
+  box-shadow: inset 0 0 0 1px rgba(255, 155, 123, 0.08),
+              0 0 22px -16px rgba(255, 155, 123, 0.45);
+}
+
+#screen-game .player-tag,
+#screen-sandbox .player-tag {
+  font-family: var(--hud-g-display) !important;
+  font-size: 10px !important;
+  letter-spacing: 0.22em !important;
+  text-transform: uppercase;
+  color: #e8f7ff !important;
+}
+#screen-game .opp-tag,
+#screen-sandbox .opp-tag { color: #ff9b7b !important; }
+
+#screen-game .stat-label,
+#screen-sandbox .stat-label {
+  font-family: var(--hud-g-display) !important;
+  font-size: 9px !important;
+  letter-spacing: 0.22em !important;
+  color: rgba(0, 212, 255, 0.7) !important;
+  text-transform: uppercase;
+}
+#screen-game .stat-value,
+#screen-sandbox .stat-value {
+  font-family: var(--hud-g-mono) !important;
+  font-size: 15px !important;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: #e8f7ff !important;
+}
+/* Keep existing warm/cool colour coding for HP values (already !important'd
+   earlier in the file) — they override our reset above. */
+
+/* Pile buttons — chamfered HUD chip */
+#screen-game .pile-btn,
+#screen-sandbox .pile-btn {
+  background: rgba(0, 212, 255, 0.04) !important;
+  border: 1px solid var(--hud-g-edge) !important;
+  border-radius: 0 !important;
+  clip-path: polygon(
+    0 3px, 3px 0,
+    calc(100% - 3px) 0, 100% 3px,
+    100% calc(100% - 3px), calc(100% - 3px) 100%,
+    3px 100%, 0 calc(100% - 3px)
+  );
+  transition: border-color 140ms ease, background 140ms ease;
+}
+#screen-game .pile-btn:hover,
+#screen-sandbox .pile-btn:hover {
+  border-color: var(--hud-g-edge-hot) !important;
+  background: rgba(0, 212, 255, 0.12) !important;
+}
+#screen-game .pile-count,
+#screen-sandbox .pile-count {
+  font-family: var(--hud-g-mono) !important;
+}
+
+/* --- Game sidebar (log / chat) → COMMS station ---------------------- */
+#screen-game .game-sidebar {
+  background: transparent !important;
+  gap: 10px;
+}
+#screen-game .sidebar-section,
+#screen-game #activity-panel {
+  background: rgba(10, 20, 35, 0.7) !important;
+  border: 1px solid var(--hud-g-edge) !important;
+  border-radius: 0 !important;
+  position: relative;
+  padding-top: 22px !important;
+  clip-path: polygon(
+    0 8px, 8px 0,
+    calc(100% - 8px) 0, 100% 8px,
+    100% calc(100% - 8px), calc(100% - 8px) 100%,
+    8px 100%, 0 calc(100% - 8px)
+  );
+}
+#screen-game #activity-panel::before {
+  content: 'STN-004 · COMMS';
+  position: absolute;
+  top: 6px; left: 14px;
+  font-family: var(--hud-g-display);
+  font-size: 9px;
+  letter-spacing: 0.24em;
+  color: var(--hud-g-cyan);
+  text-transform: uppercase;
+  opacity: 0.8;
+}
+
+#screen-game .activity-tabs {
+  border-bottom: 1px solid var(--hud-g-edge) !important;
+  padding: 0 10px !important;
+  gap: 2px !important;
+}
+#screen-game .activity-tab {
+  font-family: var(--hud-g-display) !important;
+  font-size: 10px !important;
+  letter-spacing: 0.18em !important;
+  text-transform: uppercase;
+  background: transparent !important;
+  border: none !important;
+  color: rgba(200, 219, 232, 0.55) !important;
+  padding: 8px 14px !important;
+  border-radius: 0 !important;
+  position: relative;
+}
+#screen-game .activity-tab:hover {
+  color: #e8f7ff !important;
+}
+#screen-game .activity-tab.active {
+  color: var(--hud-g-cyan) !important;
+  background: rgba(0, 212, 255, 0.05) !important;
+}
+#screen-game .activity-tab.active::after {
+  content: '';
+  position: absolute;
+  left: 8px; right: 8px; bottom: -1px;
+  height: 2px;
+  background: var(--hud-g-cyan);
+  box-shadow: 0 0 8px rgba(0, 212, 255, 0.55);
+}
+
+#screen-game .log-entries,
+#screen-game .chat-messages {
+  font-family: var(--hud-g-mono) !important;
+  font-size: 11.5px;
+  line-height: 1.55;
+}
+
+#screen-game .chat-input-row {
+  border-top: 1px dashed var(--hud-g-edge);
+  padding: 8px 10px !important;
+}
+#screen-game .chat-input {
+  background: var(--hud-g-ink) !important;
+  border: 1px solid var(--hud-g-edge) !important;
+  color: #e8f7ff !important;
+  font-family: var(--hud-g-mono) !important;
+  font-size: 12px;
+  padding: 6px 10px !important;
+  border-radius: 0 !important;
+}
+#screen-game .chat-input:focus {
+  border-color: var(--hud-g-edge-hot) !important;
+  outline: none !important;
+  box-shadow: 0 0 10px rgba(0, 212, 255, 0.25);
+}
+#screen-game .btn-chat-send {
+  font-family: var(--hud-g-display) !important;
+  font-size: 10px !important;
+  letter-spacing: 0.2em !important;
+  text-transform: uppercase;
+  border-radius: 0 !important;
+  padding: 6px 14px !important;
+}
+
+#screen-game #btn-leave {
+  font-family: var(--hud-g-display) !important;
+  font-size: 11px !important;
+  letter-spacing: 0.24em !important;
+  text-transform: uppercase;
+  background: rgba(255, 80, 80, 0.08) !important;
+  border: 1px solid rgba(255, 155, 123, 0.35) !important;
+  color: #ffb49a !important;
+  border-radius: 0 !important;
+  padding: 10px 14px !important;
+  clip-path: polygon(
+    0 5px, 5px 0,
+    calc(100% - 5px) 0, 100% 5px,
+    100% calc(100% - 5px), calc(100% - 5px) 100%,
+    5px 100%, 0 calc(100% - 5px)
+  );
+  transition: background 140ms ease, border-color 140ms ease;
+}
+#screen-game #btn-leave:hover {
+  background: rgba(255, 80, 80, 0.2) !important;
+  border-color: rgba(255, 155, 123, 0.7) !important;
+}
+
+/* Tooltip sidebar (game + sandbox) gets the HUD frame used in deck-builder DOSSIER */
+#screen-game .tooltip-sidebar,
+#screen-sandbox .tooltip-sidebar {
+  background: rgba(10, 20, 35, 0.6) !important;
+  border: 1px solid var(--hud-g-edge) !important;
+  border-radius: 0 !important;
+  padding-top: 22px !important;
+  position: relative;
+  clip-path: polygon(
+    0 8px, 8px 0,
+    calc(100% - 8px) 0, 100% 8px,
+    100% calc(100% - 8px), calc(100% - 8px) 100%,
+    8px 100%, 0 calc(100% - 8px)
+  );
+}
+#screen-game .tooltip-sidebar::before,
+#screen-sandbox .tooltip-sidebar::before {
+  content: 'STN-001 · DOSSIER';
+  position: absolute;
+  top: 6px; left: 14px;
+  font-family: var(--hud-g-display);
+  font-size: 9px;
+  letter-spacing: 0.24em;
+  color: var(--hud-g-cyan);
+  text-transform: uppercase;
+  opacity: 0.8;
+}
+#screen-game .tooltip-sidebar-hint,
+#screen-sandbox .tooltip-sidebar-hint {
+  font-family: var(--hud-g-mono) !important;
+  font-size: 10.5px !important;
+  letter-spacing: 0.06em;
+  color: rgba(200, 219, 232, 0.45) !important;
+}
+
+/* Hand action bar buttons (Draw / Skip / Decline) */
+#screen-game .hand-action-bar button,
+#screen-sandbox .hand-action-bar button {
+  font-family: var(--hud-g-display) !important;
+  font-size: 10px !important;
+  letter-spacing: 0.22em !important;
+  text-transform: uppercase;
+  border-radius: 0 !important;
+  clip-path: polygon(
+    0 4px, 4px 0,
+    calc(100% - 4px) 0, 100% 4px,
+    100% calc(100% - 4px), calc(100% - 4px) 100%,
+    4px 100%, 0 calc(100% - 4px)
+  );
+}
+
+/* Game-over modal → HUD result readout */
+#game-over-overlay .game-over-modal {
+  background: rgba(6, 12, 22, 0.96) !important;
+  border: 1px solid var(--hud-g-edge-hot) !important;
+  border-radius: 0 !important;
+  clip-path: polygon(
+    0 14px, 14px 0,
+    calc(100% - 14px) 0, 100% 14px,
+    100% calc(100% - 14px), calc(100% - 14px) 100%,
+    14px 100%, 0 calc(100% - 14px)
+  );
+  box-shadow: 0 0 80px -20px rgba(0, 212, 255, 0.55);
+}
+#game-over-overlay .game-over-result {
+  font-family: var(--hud-g-display) !important;
+  letter-spacing: 0.24em !important;
+  text-transform: uppercase;
+}
+#game-over-overlay .game-over-reason,
+#game-over-overlay .game-over-hp-label,
+#game-over-overlay .game-over-hp-value,
+#game-over-overlay .game-over-status {
+  font-family: var(--hud-g-mono) !important;
+}
+
+/* =====================================================================
+   SANDBOX CONTROL PANEL — Dev Ops Console
+   ===================================================================== */
+#screen-sandbox #sandbox-control-panel {
+  background: rgba(10, 20, 35, 0.7) !important;
+  border: 1px solid var(--hud-g-edge) !important;
+  border-radius: 0 !important;
+  padding: 22px 14px 14px !important;
+  position: relative;
+  clip-path: polygon(
+    0 8px, 8px 0,
+    calc(100% - 8px) 0, 100% 8px,
+    100% calc(100% - 8px), calc(100% - 8px) 100%,
+    8px 100%, 0 calc(100% - 8px)
+  );
+}
+#screen-sandbox #sandbox-control-panel::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 14px; right: 14px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--hud-g-cyan), transparent);
+  opacity: 0.5;
+}
+
+#screen-sandbox .sandbox-ctrl-title {
+  font-family: var(--hud-g-display) !important;
+  font-size: 11px !important;
+  letter-spacing: 0.3em !important;
+  color: var(--hud-g-cyan) !important;
+  text-transform: uppercase;
+  position: relative;
+  padding-left: 16px;
+  margin: 0 0 14px 0 !important;
+}
+#screen-sandbox .sandbox-ctrl-title::before {
+  content: '';
+  position: absolute;
+  left: 0; top: 3px;
+  width: 10px; height: 10px;
+  border: 2px solid var(--hud-g-cyan);
+  border-right: 0;
+  border-bottom: 0;
+  opacity: 0.85;
+  box-shadow: 0 0 6px rgba(0, 212, 255, 0.5);
+}
+/* Override the existing label to read as "DEV CONSOLE" */
+#screen-sandbox .sandbox-ctrl-title::after {
+  content: ' · DEV OPS';
+  font-size: 9px;
+  letter-spacing: 0.22em;
+  color: rgba(200, 219, 232, 0.45);
+}
+
+/* Numbered groups (001/002/003/004/005) — we can't append text from
+   CSS content without a counter, so use a group counter. */
+#screen-sandbox #sandbox-control-panel { counter-reset: sandstation; }
+#screen-sandbox .sandbox-ctrl-group {
+  counter-increment: sandstation;
+  background: rgba(0, 212, 255, 0.03);
+  border: 1px solid rgba(0, 212, 255, 0.12);
+  padding: 24px 12px 12px;
+  margin-bottom: 12px !important;
+  position: relative;
+  clip-path: polygon(
+    0 4px, 4px 0,
+    calc(100% - 4px) 0, 100% 4px,
+    100% calc(100% - 4px), calc(100% - 4px) 100%,
+    4px 100%, 0 calc(100% - 4px)
+  );
+}
+#screen-sandbox .sandbox-ctrl-group::before {
+  content: '00' counter(sandstation);
+  position: absolute;
+  top: 6px; left: 10px;
+  font-family: var(--hud-g-display);
+  font-size: 9px;
+  letter-spacing: 0.24em;
+  color: rgba(0, 212, 255, 0.65);
+}
+
+#screen-sandbox .sandbox-ctrl-subtitle {
+  font-family: var(--hud-g-display) !important;
+  font-size: 9px !important;
+  letter-spacing: 0.22em !important;
+  text-transform: uppercase;
+  color: #e8f7ff !important;
+  margin-bottom: 8px !important;
+  padding-left: 0 !important;
+}
+
+#screen-sandbox .sandbox-inline-label {
+  font-family: var(--hud-g-display) !important;
+  font-size: 8.5px !important;
+  letter-spacing: 0.2em !important;
+  text-transform: uppercase;
+  color: rgba(0, 212, 255, 0.6) !important;
+  margin-right: 8px;
+}
+
+/* Sandbox buttons → HUD lozenges */
+#screen-sandbox .sandbox-ctrl-group .btn,
+#screen-sandbox .sandbox-ctrl-group .btn-sm {
+  font-family: var(--hud-g-display) !important;
+  font-size: 9.5px !important;
+  letter-spacing: 0.16em !important;
+  text-transform: uppercase;
+  background: rgba(0, 212, 255, 0.05) !important;
+  border: 1px solid var(--hud-g-edge) !important;
+  color: var(--hud-g-cyan) !important;
+  border-radius: 0 !important;
+  padding: 6px 10px !important;
+  clip-path: polygon(
+    0 3px, 3px 0,
+    calc(100% - 3px) 0, 100% 3px,
+    100% calc(100% - 3px), calc(100% - 3px) 100%,
+    3px 100%, 0 calc(100% - 3px)
+  );
+  transition: border-color 140ms ease, background 140ms ease, color 140ms ease;
+}
+#screen-sandbox .sandbox-ctrl-group .btn:hover,
+#screen-sandbox .sandbox-ctrl-group .btn-sm:hover {
+  background: rgba(0, 212, 255, 0.15) !important;
+  border-color: var(--hud-g-edge-hot) !important;
+  color: #e8f7ff !important;
+}
+#screen-sandbox .sandbox-ctrl-group .btn.active,
+#screen-sandbox .sandbox-ctrl-group .btn-sm.active,
+#screen-sandbox .sandbox-ctrl-group .sandbox-target-btn.active,
+#screen-sandbox .sandbox-ctrl-group .sandbox-zone-btn.active,
+#screen-sandbox .sandbox-ctrl-group .sandbox-control-btn.active {
+  background: rgba(0, 212, 255, 0.25) !important;
+  border-color: var(--hud-g-cyan) !important;
+  color: #050913 !important;
+  box-shadow: 0 0 12px rgba(0, 212, 255, 0.45) inset, 0 0 8px rgba(0, 212, 255, 0.4);
+  font-weight: 700;
+}
+
+/* Sandbox search input */
+#screen-sandbox #sandbox-search {
+  background: var(--hud-g-ink) !important;
+  border: 1px solid var(--hud-g-edge) !important;
+  color: #e8f7ff !important;
+  font-family: var(--hud-g-mono) !important;
+  font-size: 12px;
+  padding: 7px 10px !important;
+  border-radius: 0 !important;
+  letter-spacing: 0.04em;
+}
+#screen-sandbox #sandbox-search:focus {
+  border-color: var(--hud-g-edge-hot) !important;
+  outline: none !important;
+  box-shadow: 0 0 10px rgba(0, 212, 255, 0.25);
+}
+#screen-sandbox .sandbox-search-results {
+  background: rgba(5, 9, 19, 0.98) !important;
+  border: 1px solid var(--hud-g-edge) !important;
+  font-family: var(--hud-g-mono);
+  font-size: 11.5px;
+}
+
+/* Cheat inputs → HUD field group */
+#screen-sandbox .sandbox-cheat-grid {
+  gap: 10px;
+}
+#screen-sandbox .sandbox-cheat-col {
+  background: rgba(0, 212, 255, 0.04);
+  border: 1px dashed rgba(0, 212, 255, 0.18);
+  padding: 8px 10px 10px;
+}
+#screen-sandbox .sandbox-cheat-col strong {
+  font-family: var(--hud-g-display) !important;
+  font-size: 9px !important;
+  letter-spacing: 0.24em !important;
+  text-transform: uppercase;
+  color: var(--hud-g-cyan) !important;
+  display: block;
+  margin-bottom: 6px;
+}
+#screen-sandbox .sandbox-cheat-col label {
+  font-family: var(--hud-g-display) !important;
+  font-size: 8.5px !important;
+  letter-spacing: 0.18em !important;
+  text-transform: uppercase;
+  color: rgba(200, 219, 232, 0.7) !important;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+#screen-sandbox .sandbox-cheat-input {
+  background: var(--hud-g-ink) !important;
+  border: 1px solid var(--hud-g-edge) !important;
+  color: #e8f7ff !important;
+  font-family: var(--hud-g-mono) !important;
+  font-size: 11.5px;
+  padding: 3px 6px !important;
+  border-radius: 0 !important;
+  width: 56px;
+  letter-spacing: 0.04em;
+}
+
+#screen-sandbox #sandbox-slot-name {
+  background: var(--hud-g-ink) !important;
+  border: 1px solid var(--hud-g-edge) !important;
+  color: #e8f7ff !important;
+  font-family: var(--hud-g-mono) !important;
+  font-size: 11.5px;
+  padding: 6px 8px !important;
+  border-radius: 0 !important;
+}
+
+#screen-sandbox .sandbox-slots-list {
+  font-family: var(--hud-g-mono) !important;
+  font-size: 11px;
+  color: rgba(200, 219, 232, 0.8);
+}
+
+/* Reset button gets a warm amber warning tint */
+#screen-sandbox #sandbox-reset-btn {
+  background: rgba(255, 155, 80, 0.08) !important;
+  border-color: rgba(255, 155, 80, 0.4) !important;
+  color: #ffb478 !important;
+}
+#screen-sandbox #sandbox-reset-btn:hover {
+  background: rgba(255, 155, 80, 0.22) !important;
+  border-color: rgba(255, 155, 80, 0.8) !important;
+  color: #fff !important;
+}
+
+/* =====================================================================
+   TESTS OVERLAY — UAT PROTOCOL RUNNER
+   ===================================================================== */
+#tests-overlay {
+  --tests-frame: rgba(10, 20, 35, 0.96);
+  font-family: var(--hud-g-mono);
+}
+#tests-overlay .tests-overlay-inner {
+  background: var(--tests-frame) !important;
+  border: 1px solid var(--hud-g-edge-hot) !important;
+  border-radius: 0 !important;
+  position: relative;
+  padding-top: 18px;
+  clip-path: polygon(
+    0 10px, 10px 0,
+    calc(100% - 10px) 0, 100% 10px,
+    100% calc(100% - 10px), calc(100% - 10px) 100%,
+    10px 100%, 0 calc(100% - 10px)
+  );
+  box-shadow: 0 0 50px -14px rgba(0, 212, 255, 0.5);
+}
+#tests-overlay .tests-overlay-inner::before {
+  content: 'PROTOCOL // UAT RUN';
+  position: absolute;
+  top: 4px; left: 14px;
+  font-family: var(--hud-g-display);
+  font-size: 8.5px;
+  letter-spacing: 0.3em;
+  color: var(--hud-g-cyan);
+  text-transform: uppercase;
+  opacity: 0.85;
+}
+#tests-overlay .tests-overlay-inner::after {
+  content: '';
+  position: absolute;
+  top: 0; left: 14px; right: 14px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--hud-g-cyan), transparent);
+  opacity: 0.5;
+}
+
+#tests-overlay .tests-overlay-header {
+  border-bottom: 1px dashed var(--hud-g-edge) !important;
+  padding: 10px 14px !important;
+  gap: 14px !important;
+}
+#tests-overlay .tests-progress {
+  font-family: var(--hud-g-display) !important;
+  font-size: 10px !important;
+  letter-spacing: 0.24em !important;
+  color: var(--hud-g-cyan) !important;
+  text-transform: uppercase;
+  background: rgba(0, 212, 255, 0.08) !important;
+  border: 1px solid var(--hud-g-edge) !important;
+  padding: 4px 10px !important;
+  border-radius: 0 !important;
+}
+#tests-overlay .tests-title {
+  font-family: var(--hud-g-display) !important;
+  font-size: 13px !important;
+  letter-spacing: 0.16em !important;
+  color: #e8f7ff !important;
+  text-transform: uppercase;
+  text-shadow: 0 0 10px rgba(0, 212, 255, 0.35);
+}
+#tests-overlay .tests-exit {
+  font-family: var(--hud-g-mono) !important;
+  background: rgba(0, 212, 255, 0.05) !important;
+  border: 1px solid var(--hud-g-edge) !important;
+  color: var(--hud-g-cyan) !important;
+  border-radius: 0 !important;
+  padding: 2px 8px !important;
+  transition: background 140ms ease, border-color 140ms ease;
+}
+#tests-overlay .tests-exit:hover {
+  background: rgba(0, 212, 255, 0.2) !important;
+  border-color: var(--hud-g-edge-hot) !important;
+}
+
+#tests-overlay .tests-section-label {
+  font-family: var(--hud-g-display) !important;
+  font-size: 9px !important;
+  letter-spacing: 0.26em !important;
+  text-transform: uppercase;
+  color: var(--hud-g-cyan) !important;
+  position: relative;
+  padding-left: 16px;
+}
+#tests-overlay .tests-section-label::before {
+  content: '▸';
+  position: absolute;
+  left: 0;
+  color: var(--hud-g-cyan);
+  text-shadow: 0 0 6px rgba(0, 212, 255, 0.5);
+}
+#tests-overlay .tests-instructions,
+#tests-overlay .tests-expected {
+  font-family: var(--hud-g-mono) !important;
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: #e2efff !important;
+  background: rgba(0, 212, 255, 0.03);
+  border-left: 2px solid var(--hud-g-edge);
+  padding: 8px 12px !important;
+}
+
+#tests-overlay .tests-comment {
+  background: var(--hud-g-ink) !important;
+  border: 1px solid var(--hud-g-edge) !important;
+  color: #e8f7ff !important;
+  font-family: var(--hud-g-mono) !important;
+  font-size: 12px;
+  padding: 8px 10px !important;
+  border-radius: 0 !important;
+  letter-spacing: 0.02em;
+}
+#tests-overlay .tests-comment:focus {
+  border-color: var(--hud-g-edge-hot) !important;
+  outline: none !important;
+  box-shadow: 0 0 10px rgba(0, 212, 255, 0.25);
+}
+
+#tests-overlay .tests-btn-row {
+  gap: 8px !important;
+}
+#tests-overlay .tests-btn {
+  font-family: var(--hud-g-display) !important;
+  font-size: 10px !important;
+  letter-spacing: 0.22em !important;
+  text-transform: uppercase;
+  border-radius: 0 !important;
+  padding: 10px 16px !important;
+  border: 1px solid var(--hud-g-edge) !important;
+  background: rgba(0, 212, 255, 0.04) !important;
+  color: var(--hud-g-cyan) !important;
+  clip-path: polygon(
+    0 5px, 5px 0,
+    calc(100% - 5px) 0, 100% 5px,
+    100% calc(100% - 5px), calc(100% - 5px) 100%,
+    5px 100%, 0 calc(100% - 5px)
+  );
+  transition: background 140ms ease, border-color 140ms ease, color 140ms ease;
+}
+#tests-overlay .tests-btn-pass {
+  background: rgba(80, 255, 180, 0.08) !important;
+  border-color: rgba(80, 255, 180, 0.4) !important;
+  color: #7bffcd !important;
+}
+#tests-overlay .tests-btn-pass:hover {
+  background: rgba(80, 255, 180, 0.25) !important;
+  border-color: rgba(80, 255, 180, 0.9) !important;
+  color: #fff !important;
+  box-shadow: 0 0 16px rgba(80, 255, 180, 0.4);
+}
+#tests-overlay .tests-btn-fail {
+  background: rgba(255, 80, 120, 0.08) !important;
+  border-color: rgba(255, 120, 140, 0.4) !important;
+  color: #ff9bb0 !important;
+}
+#tests-overlay .tests-btn-fail:hover {
+  background: rgba(255, 80, 120, 0.25) !important;
+  border-color: rgba(255, 120, 140, 0.9) !important;
+  color: #fff !important;
+  box-shadow: 0 0 16px rgba(255, 80, 120, 0.35);
+}
+#tests-overlay .tests-btn-skip:hover,
+#tests-overlay .tests-btn-reset:hover {
+  background: rgba(0, 212, 255, 0.2) !important;
+  border-color: var(--hud-g-edge-hot) !important;
+  color: #e8f7ff !important;
+}
+
+#tests-overlay .tests-summary {
+  font-family: var(--hud-g-mono) !important;
+  font-size: 12px;
+  line-height: 1.7;
+  background: rgba(0, 212, 255, 0.04);
+  border-top: 1px dashed var(--hud-g-edge);
+  padding: 12px 14px !important;
+  color: #e8f7ff !important;
+}
+
+/* =====================================================================
+   Pile modal (shared between game + sandbox)
+   ===================================================================== */
+#pileModal .pile-modal {
+  background: rgba(6, 12, 22, 0.96) !important;
+  border: 1px solid var(--hud-g-edge-hot) !important;
+  border-radius: 0 !important;
+  clip-path: polygon(
+    0 10px, 10px 0,
+    calc(100% - 10px) 0, 100% 10px,
+    100% calc(100% - 10px), calc(100% - 10px) 100%,
+    10px 100%, 0 calc(100% - 10px)
+  );
+  box-shadow: 0 0 60px -20px rgba(0, 212, 255, 0.6);
+}
+#pileModal .pile-modal-header {
+  border-bottom: 1px dashed var(--hud-g-edge) !important;
+  padding: 10px 14px !important;
+}
+#pileModal .pile-modal-title {
+  font-family: var(--hud-g-display) !important;
+  font-size: 11px !important;
+  letter-spacing: 0.24em !important;
+  color: var(--hud-g-cyan) !important;
+  text-transform: uppercase;
+}
+#pileModal .pile-modal-close {
+  font-family: var(--hud-g-mono) !important;
+  background: rgba(0, 212, 255, 0.05) !important;
+  border: 1px solid var(--hud-g-edge) !important;
+  color: var(--hud-g-cyan) !important;
+  border-radius: 0 !important;
+}
+
+/* =====================================================================
+   Responsive trims for game/sandbox/tests
+   ===================================================================== */
+@media (max-width: 900px) {
+  #tests-overlay .tests-progress { font-size: 9px !important; }
+  #tests-overlay .tests-title { font-size: 11px !important; }
+  #tests-overlay .tests-btn { font-size: 9px !important; padding: 8px 10px !important; }
+  #screen-sandbox .sandbox-ctrl-group { padding: 20px 10px 10px; }
+}
+
