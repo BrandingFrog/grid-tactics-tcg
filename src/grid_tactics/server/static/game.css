@@ -7726,3 +7726,423 @@ body {
   #screen-sandbox .sandbox-ctrl-group { padding: 20px 10px 10px; }
 }
 
+/* =====================================================================
+   CARD HUD REDESIGN — readability + text-fit pass
+   =====================================================================
+   Goal: bring the card chrome into the same Michroma / Space Mono
+   vocabulary as the rest of the app, improve legibility at every size,
+   and fit longer card bodies without truncating with ellipsis.
+
+   Strategy:
+   - Replace Inter with Space Mono on body / stats (monospace keeps
+     line length predictable → fewer awkward widow words).
+   - Card name in Michroma on top of a translucent HUD bar (no chunky
+     text-stroke — use text-shadow for separation from the art).
+   - Tighter padding, larger body font, 6-line clamp (was 5), generous
+     line-height for scanability. Long cards (Fallen Paladin, Matter
+     Possessed) should now fit without clipping.
+   - Subtle clip-path chamfer on the frame + a faint scan-line overlay
+     on the body panel so cards feel HUD-native, not sticker-like.
+   - Element left-edge stripe so you can read element at a glance in a
+     stacked hand fan.
+
+   All engine-bound classes are preserved unchanged — this block only
+   overrides visuals via selectors the JS never writes to.
+   ===================================================================== */
+
+.card-frame {
+  /* Keep the same dimensions; just re-skin the frame */
+  border: 1px solid rgba(0, 212, 255, 0.28) !important;
+  background:
+    linear-gradient(180deg, rgba(10, 20, 35, 0.55), rgba(5, 9, 19, 0.78)) !important;
+  border-radius: 4px !important;
+  clip-path: polygon(
+    0 6px, 6px 0,
+    calc(100% - 6px) 0, 100% 6px,
+    100% calc(100% - 6px), calc(100% - 6px) 100%,
+    6px 100%, 0 calc(100% - 6px)
+  );
+  box-shadow:
+    0 2px 0 rgba(0, 212, 255, 0.04) inset,
+    0 0 0 1px rgba(0, 0, 0, 0.4),
+    0 6px 14px -10px rgba(0, 0, 0, 0.8);
+}
+.card-frame:hover {
+  box-shadow:
+    0 0 0 1px rgba(0, 212, 255, 0.55) inset,
+    0 8px 24px rgba(0, 212, 255, 0.35),
+    0 0 22px -4px rgba(0, 212, 255, 0.45) !important;
+}
+
+/* Thin element-coloured stripe down the left edge — quick ident in
+   a stacked fan. Uses data from the attr classes that JS sets. */
+.card-frame::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 8px;
+  bottom: 8px;
+  width: 2px;
+  background: currentColor;
+  opacity: 0.55;
+  z-index: 3;
+  pointer-events: none;
+}
+/* Propagate element tint via CSS: each element sets `color` on the card
+   frame so the left stripe picks it up. We read from the attr-circle's
+   sibling .attr-* class which lives on .attr-circle, not .card-frame —
+   so we set color directly from attr-circle via :has() which is now
+   widely supported. Fallback: stripe stays cyan if :has is missing. */
+.card-frame { color: rgba(0, 212, 255, 0.85); }
+.card-frame:has(.attr-fire)    { color: rgb(220, 40, 30); }
+.card-frame:has(.attr-water)   { color: rgb(25, 118, 210); }
+.card-frame:has(.attr-wood)    { color: rgb(102, 187, 106); }
+.card-frame:has(.attr-earth)   { color: rgb(140, 100, 40); }
+.card-frame:has(.attr-metal)   { color: rgb(180, 180, 195); }
+.card-frame:has(.attr-dark)    { color: rgb(180, 90, 230); }
+.card-frame:has(.attr-light)   { color: rgb(240, 220, 40); }
+.card-frame:has(.attr-neutral) { color: rgb(200, 200, 200); }
+
+/* Faint horizontal scan-line overlay on body (below art) — sits at
+   z-index 0 so text (z>=2) stays on top. Barely visible but
+   distinguishes HUD surfaces from raw black. */
+.card-frame::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: repeating-linear-gradient(
+    0deg,
+    rgba(255, 255, 255, 0.02) 0,
+    rgba(255, 255, 255, 0.02) 1px,
+    transparent 1px,
+    transparent 3px
+  );
+  pointer-events: none;
+  z-index: 1;
+  mix-blend-mode: overlay;
+  opacity: 0.35;
+}
+
+/* --- Mana badge: keep blue but make it a HUD chip --- */
+.card-mana {
+  font-family: 'Space Mono', 'JetBrains Mono', monospace !important;
+  font-weight: 700 !important;
+  background: linear-gradient(180deg, #2a7fff, #1a4fc8) !important;
+  border: 1px solid rgba(255, 255, 255, 0.45) !important;
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.35),
+    0 0 10px rgba(30, 100, 220, 0.6);
+  letter-spacing: 0.02em;
+}
+
+/* --- Attribute circle: stronger ring, Michroma label --- */
+.attr-circle {
+  border: 1.5px solid rgba(255, 255, 255, 0.5) !important;
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.35),
+    0 0 8px rgba(0, 0, 0, 0.5) inset;
+}
+.attr-text, .attr-text-sm {
+  font-family: 'Michroma', sans-serif !important;
+  letter-spacing: 0.08em !important;
+  font-weight: 400 !important;
+  -webkit-text-stroke: 0.6px black !important;
+}
+
+/* --- Card name: Michroma on a crisp HUD bar --- */
+.card-name-overlay {
+  font-family: 'Michroma', 'Montserrat', sans-serif !important;
+  font-size: 11px !important;
+  font-weight: 400 !important;
+  letter-spacing: 0.06em !important;
+  text-transform: uppercase;
+  background: linear-gradient(
+    180deg,
+    rgba(5, 9, 19, 0.1) 0%,
+    rgba(5, 9, 19, 0.75) 35%,
+    rgba(5, 9, 19, 0.92) 100%
+  ) !important;
+  padding: 10px 8px 5px !important;
+  text-shadow:
+    0 1px 0 #000,
+    0 0 8px rgba(0, 0, 0, 0.85),
+    0 0 2px rgba(0, 0, 0, 1);
+  color: #e8f7ff !important;
+  -webkit-text-stroke: 0 !important;
+  letter-spacing: 0.08em !important;
+  line-height: 1.12 !important;
+  /* Allow 2-line wrap so longer names (Dark Matter Battery, Emberplague Rat,
+     Surgefed Sparkbot) don't truncate into "Emberplag…" */
+  white-space: normal !important;
+  -webkit-line-clamp: 2 !important;
+  display: -webkit-box !important;
+  -webkit-box-orient: vertical !important;
+  overflow: hidden !important;
+}
+
+/* Legacy fallback too — harmless if not in DOM */
+.card-name {
+  font-family: 'Michroma', 'Montserrat', sans-serif !important;
+  -webkit-text-stroke: 0 !important;
+  text-shadow:
+    0 1px 0 #000,
+    0 0 6px rgba(0, 0, 0, 0.7);
+  text-transform: uppercase;
+  letter-spacing: 0.06em !important;
+  font-weight: 400 !important;
+}
+
+/* --- Type badge: thinner, crisper, Michroma --- */
+.card-type-badge {
+  font-family: 'Michroma', sans-serif !important;
+  font-size: 8px !important;
+  font-weight: 400 !important;
+  letter-spacing: 0.22em !important;
+  padding: 3px 10px !important;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.5);
+  text-transform: uppercase;
+  -webkit-text-stroke: 0 !important;
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.4);
+}
+/* Type bar colours — keep existing semantics but deepen so light text reads */
+.card-type-minion .card-type-badge {
+  background: linear-gradient(180deg, rgb(200, 155, 65), rgb(150, 110, 40)) !important;
+}
+.card-type-magic .card-type-badge {
+  background: linear-gradient(180deg, rgb(40, 165, 140), rgb(22, 110, 95)) !important;
+}
+.card-type-react .card-type-badge {
+  background: linear-gradient(180deg, rgb(185, 50, 120), rgb(130, 32, 82)) !important;
+}
+
+/* --- Body text: Space Mono, readable sizes, generous clamp --- */
+.card-effect-full {
+  font-family: 'Space Mono', 'JetBrains Mono', monospace !important;
+  font-size: 10.5px !important;
+  line-height: 1.45 !important;
+  letter-spacing: 0 !important;
+  color: #e8f7ff !important;
+  padding: 6px 8px 4px !important;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+  /* Grow as many lines as fit instead of silent ellipsis; the hand-
+     card override below re-introduces a clamp because space is tight. */
+  display: block !important;
+  -webkit-line-clamp: unset !important;
+  -webkit-box-orient: unset !important;
+  text-overflow: clip !important;
+  overflow: hidden;
+  position: relative;
+  z-index: 2;
+}
+
+/* Auto-size modifier set by JS for long descriptions — bump clamp */
+.card-effect-autosize {
+  font-size: 9.5px !important;
+  line-height: 1.38 !important;
+  -webkit-line-clamp: 7 !important;
+  display: -webkit-box !important;
+  -webkit-box-orient: vertical !important;
+}
+
+/* --- Flavour: smaller, italic, dim — clear separation from rules --- */
+.card-flavour {
+  font-family: 'Space Mono', monospace !important;
+  font-size: 9px !important;
+  font-style: italic !important;
+  color: rgba(200, 219, 232, 0.55) !important;
+  line-height: 1.35 !important;
+  letter-spacing: 0 !important;
+  padding: 2px 8px 3px !important;
+  border-top: 1px dashed rgba(0, 212, 255, 0.12);
+  margin-top: 2px;
+  position: relative;
+  z-index: 2;
+  -webkit-line-clamp: 2 !important;
+  display: -webkit-box !important;
+  -webkit-box-orient: vertical !important;
+  overflow: hidden;
+}
+
+/* --- Bottom stat row: Michroma range label, Space Mono numerals --- */
+.card-bottom-section {
+  padding: 3px 8px 5px !important;
+  border-top: 1px solid rgba(0, 212, 255, 0.12);
+  background: linear-gradient(
+    180deg,
+    rgba(0, 212, 255, 0.02),
+    rgba(0, 212, 255, 0.06)
+  );
+  position: relative;
+  z-index: 2;
+}
+.card-stat-atk, .card-stat-hp {
+  font-family: 'Space Mono', monospace !important;
+  font-size: 14px !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.01em !important;
+}
+.card-stat-atk { color: #ff6b55 !important; text-shadow: 0 0 6px rgba(255, 80, 55, 0.45); }
+.card-stat-hp  { color: #7bffcd !important; text-shadow: 0 0 6px rgba(80, 255, 180, 0.45); }
+
+.card-bottom-range {
+  font-family: 'Michroma', sans-serif !important;
+  font-size: 7.5px !important;
+  font-weight: 400 !important;
+  letter-spacing: 0.22em !important;
+  color: rgba(0, 212, 255, 0.7) !important;
+  -webkit-text-stroke: 0 !important;
+  text-transform: uppercase;
+  line-height: 1;
+}
+
+/* --- Multi (minion+react) body: distinct react panel --- */
+.card-multi-half:last-child {
+  background: rgba(185, 50, 120, 0.18) !important;
+  border: 1px solid rgba(185, 50, 120, 0.5) !important;
+  border-radius: 2px !important;
+  clip-path: polygon(
+    0 3px, 3px 0,
+    calc(100% - 3px) 0, 100% 3px,
+    100% calc(100% - 3px), calc(100% - 3px) 100%,
+    3px 100%, 0 calc(100% - 3px)
+  );
+}
+.card-react-bar {
+  background: linear-gradient(180deg, rgb(185, 50, 120), rgb(130, 32, 82)) !important;
+}
+.react-mana-circle {
+  font-family: 'Space Mono', monospace !important;
+  background: linear-gradient(180deg, #2a7fff, #1a4fc8) !important;
+  border: 1px solid rgba(255, 255, 255, 0.45) !important;
+  box-shadow: 0 0 6px rgba(30, 100, 220, 0.5);
+  font-weight: 700 !important;
+}
+
+/* --- Hand-size specific overrides: keep smaller but raise FONT for
+   readability over the current 7px/6px values. Armoury grid stays at
+   the larger full-card sizes set above. --- */
+.card-frame-hand .card-name-overlay {
+  font-size: 9.5px !important;
+  padding: 6px 5px 3px !important;
+  letter-spacing: 0.05em !important;
+  -webkit-line-clamp: 2 !important;
+}
+.card-frame-hand .card-effect-full {
+  font-size: 8.5px !important;
+  line-height: 1.3 !important;
+  padding: 3px 5px !important;
+  -webkit-line-clamp: 5 !important;
+  display: -webkit-box !important;
+  -webkit-box-orient: vertical !important;
+}
+.card-frame-hand .card-flavour {
+  font-size: 7px !important;
+  padding: 0 5px 2px !important;
+  -webkit-line-clamp: 1 !important;
+}
+.card-frame-hand .card-type-badge {
+  font-size: 6.5px !important;
+  padding: 2px 5px !important;
+  letter-spacing: 0.18em !important;
+}
+.card-frame-hand .card-mana {
+  font-size: 10px !important;
+  width: 20px !important;
+  height: 20px !important;
+  line-height: 20px !important;
+}
+.card-frame-hand .attr-circle {
+  width: 18px !important;
+  height: 18px !important;
+}
+.card-frame-hand .attr-text {
+  font-size: 6px !important;
+  letter-spacing: 0.05em !important;
+}
+.card-frame-hand .card-stat-atk,
+.card-frame-hand .card-stat-hp {
+  font-size: 10.5px !important;
+}
+.card-frame-hand .card-bottom-section {
+  padding: 2px 5px 3px !important;
+}
+.card-frame-hand .card-bottom-range {
+  font-size: 6.5px !important;
+  letter-spacing: 0.18em !important;
+}
+
+/* Board-minion (rendered on grid cells) uses .card-frame without
+   -hand / -full modifier. Keep those at full-card sizing but tighten
+   for the 60-70px cell width. */
+.game-board .card-frame,
+#sandbox-board .card-frame {
+  width: auto !important;
+  min-width: 0;
+}
+.game-board .card-frame .card-name-overlay,
+#sandbox-board .card-frame .card-name-overlay {
+  font-size: 8.5px !important;
+  padding: 4px 4px 2px !important;
+  letter-spacing: 0.04em !important;
+}
+.game-board .card-frame .card-stat-atk,
+.game-board .card-frame .card-stat-hp,
+#sandbox-board .card-frame .card-stat-atk,
+#sandbox-board .card-frame .card-stat-hp {
+  font-size: 11px !important;
+}
+
+/* --- Tooltip card previews also benefit from the new type --- */
+.tooltip-header {
+  font-family: 'Michroma', 'Montserrat', sans-serif !important;
+  letter-spacing: 0.1em !important;
+  font-weight: 400 !important;
+  -webkit-text-stroke: 0 !important;
+  text-shadow: 0 0 10px rgba(0, 212, 255, 0.3);
+  color: #e8f7ff !important;
+  font-size: 16px !important;
+}
+.tooltip-stats, .tooltip-section {
+  font-family: 'Space Mono', monospace !important;
+  font-size: 11.5px !important;
+  line-height: 1.55 !important;
+}
+.tooltip-keyword-name, .tooltip-related-label {
+  font-family: 'Michroma', sans-serif !important;
+  font-weight: 400 !important;
+  letter-spacing: 0.18em !important;
+}
+.tooltip-related-name {
+  font-family: 'Michroma', sans-serif !important;
+  font-weight: 400 !important;
+  letter-spacing: 0.08em !important;
+  -webkit-text-stroke: 0 !important;
+  color: #e8f7ff !important;
+}
+.tooltip-related-stats, .tooltip-related-effect {
+  font-family: 'Space Mono', monospace !important;
+  font-size: 10px !important;
+}
+
+/* --- Selection / play-state rings pick up the new palette more cleanly --- */
+.card-frame-hand.card-playable {
+  box-shadow:
+    0 0 0 1px rgba(0, 212, 255, 0.6) inset,
+    0 0 16px rgba(0, 212, 255, 0.35) !important;
+}
+.card-frame-hand.card-selected-hand {
+  box-shadow:
+    0 0 0 2px rgba(0, 212, 255, 0.9) inset,
+    0 0 24px rgba(0, 212, 255, 0.55) !important;
+}
+
+/* Responsive trims: very narrow viewports drop the scan-line layer
+   (perf) and nudge body text down a notch. */
+@media (max-width: 720px) {
+  .card-frame::after { display: none; }
+  .card-effect-full { font-size: 10px !important; }
+  .card-frame-hand .card-effect-full { font-size: 8px !important; -webkit-line-clamp: 4 !important; }
+}
+
