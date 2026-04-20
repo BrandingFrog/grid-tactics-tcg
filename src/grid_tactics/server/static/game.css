@@ -186,32 +186,47 @@
   align-items: center;
   gap: 28px;
 }
-.spell-stage-card,
-.spell-stage-react {
+/* Each side of the react window is a STACK of cards belonging to ONE
+   player. LEFT stack = the player who started the chain. RIGHT stack =
+   the opposing player. Cards slam into their stack with a slight random
+   rotation so accumulated reacts read like a physical card pile.
+   The placeholder ? pulses over whichever stack is waiting for the next
+   react; it morphs to 👍 when the chain finishes. */
+.spell-stage-stack {
   width: 280px;
   aspect-ratio: 2 / 3;
+  position: relative;
+  z-index: 2;
+  /* Cards inside are absolutely positioned; the stack's bounding box
+     sets the size for layout. */
+}
+.spell-stage-stack-card {
+  position: absolute;
+  inset: 0;
   border-radius: 14px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6), 0 0 40px rgba(0, 212, 255, 0.25);
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6), 0 0 40px rgba(0, 212, 255, 0.25);
   will-change: transform, opacity;
-  position: relative;
-  z-index: 2;
+  transform-origin: center center;
+  /* rotation set inline via style.transform */
 }
-.spell-stage-card {
-  /* overflow: visible so the inner `.spell-stage-card-inner` can be
-     rendered OUTSIDE this slot's rect during the shift-glide animation
-     (it starts at `translate(+dx, 0)` sitting in the RIGHT slot's area
-     and glides back here). With `overflow: hidden` the glide was
-     partially clipped — user saw "card half-hidden under the UI".
-     See .planning/debug/resolved/spell-stage-lag-and-clip.md. */
-  overflow: visible;
-  transition: transform 350ms cubic-bezier(0.2, 0.7, 0.3, 1),
-              opacity 350ms ease;
+.spell-stage-stack-card .card-frame-full {
+  max-width: 100%;
+  height: 100%;
 }
-.spell-stage-card > * { width: 100%; height: 100%; }
-.spell-stage-card .card-frame-full { max-width: 100%; height: 100%; }
+/* Slam-in: card flies from source point (set inline transform initial)
+   to the stack with a brief over-scale punch on landing. */
+.spell-stage-stack-card.slam-in {
+  animation: spell-stack-slam 420ms cubic-bezier(0.25, 1.5, 0.5, 1) forwards;
+}
+@keyframes spell-stack-slam {
+  0%   { transform: var(--slam-from); opacity: 0; }
+  60%  { transform: var(--slam-mid); opacity: 1; }
+  100% { transform: var(--slam-to); opacity: 1; }
+}
+
 .spell-stage-arrow {
   font-size: 72px;
   color: var(--cyan);
@@ -221,20 +236,41 @@
   position: relative;
   z-index: 1;
 }
-.spell-stage-react {
-  background: rgba(20, 20, 40, 0.8);
+
+/* Placeholder ? overlay parented inside whichever stack is waiting for
+   the next react. Pulses each time a new card lands so the side that
+   now owes a response draws the eye. Becomes 👍 (.confirmed) when the
+   chain finishes and resolution begins. */
+.spell-stage-placeholder {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 14px;
   border: 3px dashed rgba(0, 212, 255, 0.5);
+  background: rgba(20, 20, 40, 0.55);
   color: var(--cyan);
   font-size: 140px;
   font-weight: 900;
   text-shadow: 0 0 20px rgba(0, 212, 255, 0.5);
-  transition: color 200ms ease, border-color 200ms ease,
-              background 200ms ease, transform 200ms ease;
+  pointer-events: none;
+  opacity: 0;
+  z-index: 100;  /* above stacked cards (cards start at z-index 10) */
+  transition: opacity 200ms ease, color 200ms ease, border-color 200ms ease, background 200ms ease;
+  transform-origin: center center;
 }
-.spell-stage-react.confirmed {
+.spell-stage-placeholder.visible { opacity: 1; }
+.spell-stage-placeholder.pulse { animation: spell-placeholder-pulse 700ms ease-in-out 2; }
+@keyframes spell-placeholder-pulse {
+  0%   { opacity: 1; transform: scale(1); }
+  50%  { opacity: 0.55; transform: scale(1.12); }
+  100% { opacity: 1; transform: scale(1); }
+}
+.spell-stage-placeholder.confirmed {
   color: var(--green);
   border-color: rgba(76, 175, 80, 0.7);
-  background: rgba(30, 60, 30, 0.8);
+  background: rgba(30, 60, 30, 0.55);
   text-shadow: 0 0 20px rgba(76, 175, 80, 0.6);
   animation: spell-thumbs-pop 350ms ease-out;
 }
@@ -242,6 +278,16 @@
   0% { transform: scale(0.6); }
   60% { transform: scale(1.15); }
   100% { transform: scale(1); }
+}
+
+/* Resolution pop: top card pulses then fades out as it resolves. */
+.spell-stage-stack-card.resolve-pop {
+  animation: spell-stack-resolve 500ms ease-out forwards;
+}
+@keyframes spell-stack-resolve {
+  0%   { opacity: 1; }
+  30%  { opacity: 1; filter: brightness(1.6) drop-shadow(0 0 24px rgba(0, 212, 255, 0.9)); }
+  100% { opacity: 0; filter: brightness(1); }
 }
 .spell-stage.exit {
   transition: opacity 350ms ease;

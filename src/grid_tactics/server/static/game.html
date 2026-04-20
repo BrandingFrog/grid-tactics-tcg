@@ -597,9 +597,10 @@
        cast plus a waiting-for-react slot. Created/torn down by the
        spell-stage module in game.js. Starts hidden. -->
   <div id="spell-stage" class="spell-stage" hidden>
-    <div class="spell-stage-card" id="spell-stage-card"></div>
+    <div class="spell-stage-stack" id="spell-stage-stack-left"></div>
     <div class="spell-stage-arrow">▶</div>
-    <div class="spell-stage-react" id="spell-stage-react">?</div>
+    <div class="spell-stage-stack" id="spell-stage-stack-right"></div>
+    <div class="spell-stage-placeholder" id="spell-stage-placeholder">?</div>
   </div>
 
   <!-- Tests screen: empty placeholder. The tests flow piggybacks on the

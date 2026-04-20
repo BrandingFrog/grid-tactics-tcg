@@ -3470,9 +3470,9 @@ function _showTurnBannerOrDefer(turnNumber, activePlayerIdx) {
     var stage = document.getElementById('spell-stage');
     var stageActive = stage && !stage.hidden && (
         _spellStage.chain.length > 0 ||
-        _spellStage.leftCardEl ||
-        _spellStage.rightCardEl ||
-        _spellStage.resolving
+        _spellStage.resolving ||
+        _spellStageBusy ||
+        _spellStageQueue.length > 0
     );
     if (stageActive) {
         _pendingTurnBanner = { turnNumber: turnNumber, activePlayerIdx: activePlayerIdx };
@@ -3589,11 +3589,12 @@ function _fireTriggerBlipAnimation(blip) {
     } catch (e) { /* defensive — blip must never throw */ }
 }
 
+// Stack-based react-window state. LEFT stack = original caster's pile;
+// RIGHT stack = opponent's pile. Each chain entry tracks who played the
+// card so we know which pile it lives on.
 var _spellStage = {
-    chain: [],              // numeric ids, oldest first
-    pendingShiftTimer: null,
-    rightCardEl: null,
-    leftCardEl: null,
+    chain: [],         // [{ nid, playerIdx, el, side }, ...] oldest first
+    casterIdx: null,   // chain[0].playerIdx, cached on first push
     resolving: false,
     exitTimer: null,
 };
@@ -3601,8 +3602,9 @@ var _spellStage = {
 function _spellStageEls() {
     return {
         root: document.getElementById('spell-stage'),
-        left: document.getElementById('spell-stage-card'),
-        right: document.getElementById('spell-stage-react'),
+        left: document.getElementById('spell-stage-stack-left'),
+        right: document.getElementById('spell-stage-stack-right'),
+        placeholder: document.getElementById('spell-stage-placeholder'),
     };
 }
 
@@ -3682,6 +3684,9 @@ function _processSpellStageQueue() {
     setTimeout(_processSpellStageQueue, SPELL_STAGE_PER_CARD_MS);
 }
 
+// Slam a card onto its owner's stack with a small random rotation.
+// The first card defines the caster — their cards always land on LEFT;
+// the opponent's reacts always land on RIGHT.
 function _doShowSpellStage(numericId, sourcePlayerIdx) {
     var els = _spellStageEls();
     if (!els.root || !els.left || !els.right) return;
@@ -3694,110 +3699,83 @@ function _doShowSpellStage(numericId, sourcePlayerIdx) {
         _spellStage.exitTimer = null;
     }
 
-    // If a shift is pending from the previous push, flush it now so the
-    // conveyor never holds two cards in the same slot. (Queueing usually
-    // means the previous shift fired naturally, but the flush is kept as
-    // a defensive belt-and-braces.)
-    if (_spellStage.pendingShiftTimer) {
-        clearTimeout(_spellStage.pendingShiftTimer);
-        _spellStage.pendingShiftTimer = null;
-        _performStageShift();
-    }
+    var isFirstCard = _spellStage.chain.length === 0;
+    if (isFirstCard) _spellStage.casterIdx = sourcePlayerIdx;
 
-    _spellStage.chain.push(numericId);
+    var goesToLeft = (sourcePlayerIdx === _spellStage.casterIdx);
+    var stack = goesToLeft ? els.left : els.right;
+    var otherStack = goesToLeft ? els.right : els.left;
+
     els.root.hidden = false;
     els.root.classList.remove('exit');
     els.root.classList.remove('enter');
     void els.root.offsetWidth;
     els.root.classList.add('enter');
 
-    // Create the card in the RIGHT slot. Pre-position it over the source
-    // hand via an initial transform, then transition to identity so it
-    // flies from hand → slot over the entire UI.
-    els.right.textContent = '';
-    els.right.classList.remove('confirmed');
-    els.right.classList.add('has-card');
-    var wrap = document.createElement('div');
-    wrap.className = 'spell-stage-card-inner';
-    wrap.innerHTML = html;
-    els.right.appendChild(wrap);
-    _spellStage.rightCardEl = wrap;
+    // Build the card with a small random rotation + offset so accumulated
+    // cards read like a physical pile, not a perfectly-stacked deck.
+    var rotation = (Math.random() * 10 - 5).toFixed(2);  // -5..+5 deg
+    // Per-card offset within the stack: each card on top sits a few px
+    // down and a touch off-center, alternating side, so underlying cards
+    // peek out of the pile.
+    var stackDepth = 0;
+    for (var ci = 0; ci < _spellStage.chain.length; ci++) {
+        if (_spellStage.chain[ci].side === (goesToLeft ? 'left' : 'right')) stackDepth++;
+    }
+    // Base of the stack centers cleanly; subsequent cards drift slightly.
+    var offX = stackDepth === 0 ? 0 : ((Math.random() * 20 - 10) | 0);   // -10..+10 px
+    var offY = stackDepth === 0 ? 0 : stackDepth * 8 + ((Math.random() * 6 - 3) | 0);  // grow downward
+    var card = document.createElement('div');
+    card.className = 'spell-stage-stack-card';
+    card.innerHTML = html;
+    // Layer: each new card on top.
+    card.style.zIndex = String(10 + _spellStage.chain.length);
 
-    // Measure after mount so getBoundingClientRect is accurate.
-    var slot = els.right.getBoundingClientRect();
+    // Slam-in: pre-position over the source hand at small scale, then
+    // animate to the stack with an over-scale punch on landing.
+    var stackRect = stack.getBoundingClientRect();
     var src = _spellStageSourceRect(sourcePlayerIdx);
-    var dx = (src.left + src.width / 2) - (slot.left + slot.width / 2);
-    var dy = (src.top + src.height / 2) - (slot.top + slot.height / 2);
-    wrap.style.transform = 'translate(' + dx + 'px,' + dy + 'px) scale(0.45)';
-    wrap.style.opacity = '0';
-    // Force a reflow BEFORE attaching the transition so the browser commits
-    // the initial transform + opacity as the baseline. Without this the two
-    // writes (initial + final below) collapse into a single style recalc and
-    // the transition has no start value to interpolate from — the card snaps
-    // to the slot with no visible flight. `void offsetWidth` is the classic
-    // "re-trigger CSS transition" flush; `getComputedStyle` does NOT flush in
-    // this scenario (verified empirically via Playwright on v0.11.31).
-    void wrap.offsetWidth;
-    wrap.style.transition = 'transform 520ms cubic-bezier(0.2, 0.7, 0.3, 1), opacity 260ms ease-out';
-    // Two rAFs guarantee the initial values commit before the transition.
-    requestAnimationFrame(function() { requestAnimationFrame(function() {
-        wrap.style.transform = 'translate(0, 0) scale(1)';
-        wrap.style.opacity = '1';
-    }); });
+    var dx = (src.left + src.width / 2) - (stackRect.left + stackRect.width / 2);
+    var dy = (src.top + src.height / 2) - (stackRect.top + stackRect.height / 2);
+    var restTransform = 'translate(' + offX + 'px, ' + offY + 'px) rotate(' + rotation + 'deg)';
+    card.style.setProperty('--slam-from', 'translate(' + dx + 'px, ' + dy + 'px) scale(0.4) rotate(0deg)');
+    card.style.setProperty('--slam-mid', restTransform.replace('rotate(', 'scale(1.06) rotate('));
+    card.style.setProperty('--slam-to', restTransform);
+    card.classList.add('slam-in');
+    stack.appendChild(card);
 
-    // 1s beat so the viewer reads the card, then shift into the LEFT slot.
-    _spellStage.pendingShiftTimer = setTimeout(function() {
-        _spellStage.pendingShiftTimer = null;
-        _performStageShift();
-    }, 1000);
+    _spellStage.chain.push({
+        nid: numericId,
+        playerIdx: sourcePlayerIdx,
+        el: card,
+        side: goesToLeft ? 'left' : 'right',
+    });
+
+    // Move the placeholder to the OTHER stack (the one now waiting to
+    // react) and pulse it. Skip on first card too — opponent owes a
+    // react to the original cast.
+    _movePlaceholderTo(otherStack, els);
 }
 
-// Shift (no DOM reparenting — source of the earlier glitches):
-// - OLD left card slides off-screen LEFT and is removed.
-// - RIGHT card is removed; a fresh card for the same nid is mounted
-//   into the LEFT slot with a slide-in-from-right animation so it
-//   visually "moves" across the gap.
-// - "?" returns to the RIGHT slot waiting for the next react.
-function _performStageShift() {
-    var els = _spellStageEls();
-    var nid = _spellStage.chain[_spellStage.chain.length - 1];
-
-    if (_spellStage.leftCardEl) {
-        var old = _spellStage.leftCardEl;
-        old.style.transition = 'transform 420ms cubic-bezier(0.5, 0, 0.8, 0.3), opacity 420ms ease-in';
-        old.style.transform = 'translate(-70vw, 0) rotate(-10deg)';
-        old.style.opacity = '0';
-        setTimeout(function() { if (old.parentNode) old.parentNode.removeChild(old); }, 460);
-        _spellStage.leftCardEl = null;
+// Re-parent the placeholder into the given stack and pulse it. Resets
+// its 'confirmed' state (👍 is only set when chain finishes).
+function _movePlaceholderTo(stackEl, els) {
+    var ph = els.placeholder;
+    if (!ph || !stackEl) return;
+    ph.classList.remove('confirmed', 'pulse');
+    ph.textContent = '?';
+    if (ph.parentNode !== stackEl) {
+        stackEl.appendChild(ph);
     }
-    if (_spellStage.rightCardEl) {
-        var right = _spellStage.rightCardEl;
-        if (right.parentNode) right.parentNode.removeChild(right);
-        _spellStage.rightCardEl = null;
-    }
-    if (nid != null) {
-        var html = _spellStageCardHtml(nid);
-        if (html) {
-            var leftWrap = document.createElement('div');
-            leftWrap.className = 'spell-stage-card-inner glide-from-right';
-            leftWrap.innerHTML = html;
-            els.left.appendChild(leftWrap);
-            _spellStage.leftCardEl = leftWrap;
-        }
-    }
-    els.right.classList.remove('has-card');
-    els.right.textContent = '?';
-    els.right.classList.remove('confirmed');
+    // Force pulse to re-trigger.
+    ph.classList.add('visible');
+    void ph.offsetWidth;
+    ph.classList.add('pulse');
 }
 
-// The react window closed — run the LIFO resolution sequence. If the
-// auto-shift timer is still pending, flush it first so the LEFT slot
-// reflects the final top-of-stack before we pop.
 function _spellStageOnReactClosed() {
     if (_spellStage.resolving) return;
-    // If pushes are still queued/animating, wait for them to drain before
-    // starting the LIFO resolution. Otherwise the resolve runs while the
-    // last card is still flying in.
+    // Wait for any pending pushes to fully animate before resolving.
     if (_spellStageBusy || _spellStageQueue.length > 0) {
         _spellStagePendingResolve = true;
         return;
@@ -3806,15 +3784,6 @@ function _spellStageOnReactClosed() {
 }
 
 function _doSpellStageResolve() {
-    if (_spellStage.pendingShiftTimer) {
-        clearTimeout(_spellStage.pendingShiftTimer);
-        _spellStage.pendingShiftTimer = null;
-        _performStageShift();
-    }
-    _resolveSpellStageChain();
-}
-
-function _resolveSpellStageChain() {
     var els = _spellStageEls();
     if (!els.root || els.root.hidden) return;
     _spellStage.resolving = true;
@@ -3825,97 +3794,49 @@ function _resolveSpellStageChain() {
         return;
     }
 
-    // Step 1: mark the chain finished — 👍 in the RIGHT slot. The card
-    // currently in the LEFT slot (the top of the stack) stays put for
-    // now; it will glide rightward in step 2.
-    if (_spellStage.rightCardEl && _spellStage.rightCardEl.parentNode) {
-        _spellStage.rightCardEl.parentNode.removeChild(_spellStage.rightCardEl);
+    // Show 👍 over whichever stack the placeholder is currently on (the
+    // side that was waiting for the next react). Then start LIFO pop.
+    var ph = els.placeholder;
+    if (ph) {
+        ph.textContent = '👍';
+        ph.classList.add('confirmed');
+        ph.classList.remove('pulse');
     }
-    _spellStage.rightCardEl = null;
-    els.right.classList.remove('has-card');
-    els.right.textContent = '👍';
-    els.right.classList.add('confirmed');
 
-    // Step 2: after a short hold so the player can register 👍, run the
-    // LIFO resolution loop. Same animation for every card type — the
-    // react window is type-agnostic.
     var i = chain.length - 1;
     setTimeout(function() {
         _resolveSpellStageStep(chain, i, els);
-    }, 500);
+    }, 700);
 }
 
-// One iteration of the resolve-backwards conveyor:
-//   - clear 👍 from RIGHT
-//   - the card currently in LEFT glides laterally to RIGHT (resolves
-//     against the card below it in the stack)
-//   - simultaneously, the next card down (i-1) slides in from off-screen-
-//     left to LEFT
-//   - after the glide + brief hold, the resolved card fades and we recurse
+// LIFO resolution: top card pulses + fades from its stack, then we
+// recurse onto the next-down card. No glide, no slot juggling — the
+// stacks are now a stable visual that just gets popped one card at a
+// time.
 function _resolveSpellStageStep(chain, i, els) {
     if (i < 0) {
-        _spellStage.exitTimer = setTimeout(_hideSpellStage, 200);
+        // Hide placeholder before fading the stage so 👍 doesn't outlive
+        // the cards.
+        if (els.placeholder) {
+            els.placeholder.classList.remove('visible', 'confirmed', 'pulse');
+        }
+        _spellStage.exitTimer = setTimeout(_hideSpellStage, 250);
         return;
     }
 
-    // Ensure a card is in the LEFT slot to glide. First iteration: it's
-    // there from the chain push. Subsequent iterations: from the previous
-    // step's slide-in-from-left.
-    var leftWrap = _spellStage.leftCardEl;
-    if (!leftWrap) {
-        var html = _spellStageCardHtml(chain[i]);
-        leftWrap = document.createElement('div');
-        leftWrap.className = 'spell-stage-card-inner';
-        leftWrap.innerHTML = html;
-        els.left.appendChild(leftWrap);
-        _spellStage.leftCardEl = leftWrap;
+    var entry = chain[i];
+    var card = entry && entry.el;
+    if (card) {
+        card.classList.remove('slam-in');
+        // Force reflow so resolve-pop animation re-applies cleanly.
+        void card.offsetWidth;
+        card.classList.add('resolve-pop');
     }
 
-    var hasNext = i - 1 >= 0;
-
-    // Last card in the chain: nothing comes from off-screen-left to fill
-    // the LEFT slot, so the lateral glide has no purpose. Just hold the
-    // card briefly with 👍 visible, then fade in place.
-    if (!hasNext) {
-        setTimeout(function() {
-            leftWrap.style.transition = 'opacity 300ms ease-out';
-            leftWrap.style.opacity = '0';
-            setTimeout(function() {
-                if (leftWrap.parentNode) leftWrap.parentNode.removeChild(leftWrap);
-                _spellStage.leftCardEl = null;
-                _resolveSpellStageStep(chain, i - 1, els);
-            }, 320);
-        }, 600);
-        return;
-    }
-
-    // Mount the next card down coming in from off-screen-left, so when
-    // the current card finishes gliding we visually have "right card
-    // resolves against new left card".
-    var nextHtml = _spellStageCardHtml(chain[i - 1]);
-    var nextWrap = document.createElement('div');
-    nextWrap.className = 'spell-stage-card-inner slide-in-from-left';
-    nextWrap.innerHTML = nextHtml;
-    els.left.appendChild(nextWrap);
-
-    // Clear 👍 so the gliding card has a clean RIGHT slot to land on.
-    els.right.classList.remove('confirmed', 'has-card');
-    els.right.textContent = '';
-
-    // Glide the current LEFT card laterally to the RIGHT slot.
-    leftWrap.classList.remove('glide-from-right', 'slide-in-from-left');
-    leftWrap.classList.add('glide-to-right');
-
-    // After glide + hold, fade the resolved card and recurse.
     setTimeout(function() {
-        leftWrap.style.transition = 'opacity 250ms ease-out';
-        leftWrap.style.opacity = '0';
-        setTimeout(function() {
-            if (leftWrap.parentNode) leftWrap.parentNode.removeChild(leftWrap);
-            _spellStage.leftCardEl = nextWrap;
-            _resolveSpellStageStep(chain, i - 1, els);
-        }, 270);
-    }, 600);
+        if (card && card.parentNode) card.parentNode.removeChild(card);
+        _resolveSpellStageStep(chain, i - 1, els);
+    }, 550);
 }
 
 // True if the state just transitioned out of REACT phase into ACTION
@@ -3930,7 +3851,6 @@ function detectReactWindowClose(prev, next) {
 }
 
 function _clearSpellStageTimers() {
-    if (_spellStage.pendingShiftTimer) { clearTimeout(_spellStage.pendingShiftTimer); _spellStage.pendingShiftTimer = null; }
     if (_spellStage.exitTimer) { clearTimeout(_spellStage.exitTimer); _spellStage.exitTimer = null; }
 }
 
@@ -3943,15 +3863,28 @@ function _hideSpellStage() {
         els.root.hidden = true;
         els.root.classList.remove('exit');
         els.root.classList.remove('enter');
-        if (els.left) els.left.innerHTML = '';
+        // Clear stack cards but keep the placeholder element (re-parent
+        // it back to the root for next session).
+        if (els.left) {
+            Array.from(els.left.querySelectorAll('.spell-stage-stack-card')).forEach(function(c) {
+                if (c.parentNode) c.parentNode.removeChild(c);
+            });
+        }
         if (els.right) {
-            els.right.innerHTML = '';
-            els.right.textContent = '?';
-            els.right.classList.remove('confirmed');
+            Array.from(els.right.querySelectorAll('.spell-stage-stack-card')).forEach(function(c) {
+                if (c.parentNode) c.parentNode.removeChild(c);
+            });
+        }
+        if (els.placeholder) {
+            els.placeholder.classList.remove('visible', 'pulse', 'confirmed');
+            els.placeholder.textContent = '?';
+            // Park it back on the root so it's not stuck inside an empty stack.
+            if (els.placeholder.parentNode !== els.root) {
+                els.root.appendChild(els.placeholder);
+            }
         }
         _spellStage.chain = [];
-        _spellStage.leftCardEl = null;
-        _spellStage.rightCardEl = null;
+        _spellStage.casterIdx = null;
         _spellStage.resolving = false;
         // Flush any turn banner that was deferred while the stage was up.
         // Small extra delay so the stage's exit fade fully completes before
