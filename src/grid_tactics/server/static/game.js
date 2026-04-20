@@ -78,6 +78,25 @@ const PHASE_DISPLAY = {
     1: { label: 'REACT',  cssClass: 'phase-react',  bg: 'var(--yellow)' },
 };
 
+// Phase LED indicator. Three LEDs (start / action / end) light up to
+// show the active turn phase. During a REACT window the underlying
+// turn phase pulses amber instead of glowing solid green — react is
+// nested inside whatever phase opened it (read from react_return_phase).
+function _setPhaseLeds(badgeEl, phase, reactReturnPhase) {
+    if (!badgeEl) return;
+    // Engine: 0=ACTION, 1=REACT, 2=START_OF_TURN, 3=END_OF_TURN.
+    var isReact = phase === 1;
+    var underlying = isReact ? (reactReturnPhase != null ? reactReturnPhase : 0) : phase;
+    var key = underlying === 2 ? 'start' : underlying === 3 ? 'end' : 'action';
+    var leds = badgeEl.querySelectorAll('.phase-led');
+    for (var i = 0; i < leds.length; i++) {
+        var led = leds[i];
+        var match = led.dataset.phase === key;
+        led.classList.toggle('active', match && !isReact);
+        led.classList.toggle('react', match && isReact);
+    }
+}
+
 const EFFECT_TYPE_NAMES = [
     'Damage', 'Heal', 'Buff ATK', 'Buff HP', 'Negate',
     'Deploy Self', 'Rally Forward', 'Promote', 'Tutor', 'Destroy'
@@ -6489,9 +6508,7 @@ function renderRoomBar() {
     // Phase badge
     var phaseBadge = document.getElementById('phase-badge');
     if (phaseBadge && gameState.phase !== undefined) {
-        var phaseInfo = PHASE_DISPLAY[gameState.phase] || PHASE_DISPLAY[0];
-        phaseBadge.textContent = phaseInfo.label;
-        phaseBadge.className = 'phase-badge ' + phaseInfo.cssClass;
+        _setPhaseLeds(phaseBadge, gameState.phase, gameState.react_return_phase);
     }
 
     // Turn number
@@ -7552,12 +7569,9 @@ function renderSandboxStats() {
 
     // Room bar
     setText('sandbox-active-label', 'Active: P' + ((sandboxState.active_player_idx || 0) + 1));
-    var phaseLabel = (sandboxState.phase === 1) ? 'REACT' : 'ACTION';
     var phaseEl = document.getElementById('sandbox-phase-badge');
     if (phaseEl) {
-        phaseEl.textContent = phaseLabel;
-        phaseEl.classList.toggle('phase-react', sandboxState.phase === 1);
-        phaseEl.classList.toggle('phase-action', sandboxState.phase !== 1);
+        _setPhaseLeds(phaseEl, sandboxState.phase, sandboxState.react_return_phase);
     }
     setText('sandbox-turn-number', 'Turn ' + sandboxState.turn_number);
 }

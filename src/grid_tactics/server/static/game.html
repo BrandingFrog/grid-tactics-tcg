@@ -254,7 +254,11 @@
             <span class="turn-text" id="turn-text">WAITING</span>
           </div>
           <div class="phase-badge-container">
-            <span class="phase-badge phase-action" id="phase-badge">ACTION</span>
+            <div class="phase-led-row" id="phase-badge">
+              <div class="phase-led" data-phase="start"><span class="phase-led-dot"></span><span class="phase-led-label">START</span></div>
+              <div class="phase-led" data-phase="action"><span class="phase-led-dot"></span><span class="phase-led-label">ACTION</span></div>
+              <div class="phase-led" data-phase="end"><span class="phase-led-dot"></span><span class="phase-led-label">END</span></div>
+            </div>
             <span class="turn-number" id="turn-number">Turn 1</span>
           </div>
           <div id="action-bar-slot" class="action-bar-slot"></div>
@@ -427,7 +431,11 @@
             <span class="turn-text" id="sandbox-active-label">Active: P1</span>
           </div>
           <div class="phase-badge-container">
-            <span class="phase-badge phase-action" id="sandbox-phase-badge">ACTION</span>
+            <div class="phase-led-row" id="sandbox-phase-badge">
+              <div class="phase-led" data-phase="start"><span class="phase-led-dot"></span><span class="phase-led-label">START</span></div>
+              <div class="phase-led" data-phase="action"><span class="phase-led-dot"></span><span class="phase-led-label">ACTION</span></div>
+              <div class="phase-led" data-phase="end"><span class="phase-led-dot"></span><span class="phase-led-label">END</span></div>
+            </div>
             <span class="turn-number" id="sandbox-turn-number">Turn 1</span>
           </div>
           <span class="sandbox-history-status" id="sandbox-history-status" style="margin-left:auto;">undo:0 redo:0</span>
