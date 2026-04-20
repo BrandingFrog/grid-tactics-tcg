@@ -611,20 +611,52 @@ function onRoomsList(data) {
     listEl.innerHTML = '';
     if (rooms.length === 0) {
         var empty = document.createElement('div');
-        empty.className = 'rooms-empty';
-        empty.textContent = 'No open rooms — create one, or paste a code below.';
+        empty.className = 'rooms-empty hud-rooms-empty';
+        empty.innerHTML =
+            '<div class="hud-radar" aria-hidden="true">' +
+              '<span></span><span></span><span></span>' +
+            '</div>' +
+            '<div class="hud-rooms-empty-head">— NO ACTIVE DEPLOYMENTS —</div>' +
+            '<div class="hud-rooms-empty-sub">Awaiting first operator. Host a sortie or paste a code →</div>';
         listEl.appendChild(empty);
         return;
     }
-    rooms.forEach(function(r) {
+    var nowSec = Date.now() / 1000;
+    rooms.forEach(function(r, idx) {
         var row = document.createElement('div');
-        row.className = 'rooms-row';
+        row.className = 'rooms-row hud-row';
+        // staggered reveal on fresh-list render
+        row.style.setProperty('--row-delay', (idx * 45) + 'ms');
         row.innerHTML =
-            '<span class="rooms-row-creator"></span>' +
-            '<span class="rooms-row-code"></span>' +
-            '<button class="btn btn-primary btn-sm rooms-row-join">Join</button>';
+            '<span class="hud-row-bracket hud-row-bracket-l" aria-hidden="true"></span>' +
+            '<span class="hud-row-bracket hud-row-bracket-r" aria-hidden="true"></span>' +
+            '<span class="hud-row-live" aria-hidden="true">' +
+              '<span class="hud-row-live-dot"></span>' +
+              '<span class="hud-row-live-label">LIVE</span>' +
+            '</span>' +
+            '<span class="hud-row-callsign">' +
+              '<span class="hud-row-callsign-label">CALLSIGN</span>' +
+              '<span class="rooms-row-creator"></span>' +
+            '</span>' +
+            '<span class="hud-row-code">' +
+              '<span class="hud-row-code-label">ROOM</span>' +
+              '<span class="rooms-row-code"></span>' +
+            '</span>' +
+            '<span class="hud-row-meta">' +
+              '<span class="hud-row-meta-label">OPEN</span>' +
+              '<span class="hud-row-meta-value"></span>' +
+            '</span>' +
+            '<button class="btn btn-primary btn-sm rooms-row-join hud-row-join">' +
+              '<span class="hud-btn-chev">⟶</span>' +
+              '<span>JOIN</span>' +
+            '</button>';
         row.querySelector('.rooms-row-creator').textContent = r.creator_name || '(anon)';
         row.querySelector('.rooms-row-code').textContent = r.code;
+        var age = Math.max(0, Math.floor(nowSec - (r.created_at || nowSec)));
+        var ageLabel = age < 60 ? (age + 's')
+                     : age < 3600 ? (Math.floor(age / 60) + 'm')
+                     : (Math.floor(age / 3600) + 'h');
+        row.querySelector('.hud-row-meta-value').textContent = ageLabel;
         row.querySelector('.rooms-row-join').addEventListener('click', function() {
             var name = (typeof getCurrentDisplayName === 'function') ? getCurrentDisplayName() : null;
             if (!name) {
