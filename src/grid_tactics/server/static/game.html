@@ -16,18 +16,25 @@
 </head>
 <body>
 
-  <!-- Header (matching dashboard pattern per D-01) -->
-  <header class="header">
-    <div class="logo">GRID TACTICS</div>
-    <nav class="nav">
+  <!-- Header — HUD system strip. Slim, dense, command-console vibe. -->
+  <header class="header hud-header">
+    <div class="logo hud-logo">
+      <span class="hud-logo-status" aria-hidden="true"></span>
+      <span class="hud-logo-text">GRID TACTICS</span>
+      <span class="hud-logo-sub">TCG · OPS</span>
+    </div>
+    <nav class="nav hud-nav">
       <button class="nav-btn active" data-screen="lobby">Duel</button>
       <button class="nav-btn" data-screen="deck-builder">Deck Builder</button>
       <button class="nav-btn" data-screen="sandbox">Sandbox</button>
       <button class="nav-btn" data-screen="tests">Tests</button>
-      <a class="nav-btn" href="https://mediawiki-production-7169.up.railway.app/wiki/Main_Page" target="_blank" style="text-decoration:none;">Wiki</a>
+      <a class="nav-btn hud-nav-ext" href="https://mediawiki-production-7169.up.railway.app/wiki/Main_Page" target="_blank">
+        <span>Wiki</span>
+        <span class="hud-nav-ext-arrow" aria-hidden="true">↗</span>
+      </a>
     </nav>
-    <div class="header-right">
-      <div id="patch-badge" class="patch-badge" aria-live="polite"></div>
+    <div class="header-right hud-header-right">
+      <div id="patch-badge" class="patch-badge hud-patch" aria-live="polite"></div>
     </div>
   </header>
 

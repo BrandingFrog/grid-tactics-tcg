@@ -5620,3 +5620,247 @@ body {
   .hud-corner { display: none; }
 }
 
+
+/* ============================================================
+   HEADER — HUD system strip
+   Slim command-console navbar. Sits above every screen. Uses the
+   same Michroma + Space Mono vocabulary as the lobby redesign.
+   Overrides the base .header / .logo / .nav-btn rules from above.
+   ============================================================ */
+
+.header.hud-header {
+  background:
+    linear-gradient(180deg, rgba(6, 12, 22, 0.98) 0%, rgba(4, 8, 16, 0.98) 100%);
+  border-bottom: 1px solid rgba(0, 212, 255, 0.22);
+  padding: 0 20px;
+  height: 54px;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  max-width: none;   /* full-bleed; lobby uses its own max-width inside */
+  width: 100%;
+  box-shadow: 0 2px 16px -8px rgba(0, 212, 255, 0.35);
+}
+/* Hairline at top of header — like a HUD status bar */
+.header.hud-header::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 1px;
+  background: linear-gradient(90deg,
+    transparent 0%,
+    rgba(0, 212, 255, 0.15) 8%,
+    rgba(0, 212, 255, 0.6) 50%,
+    rgba(0, 212, 255, 0.15) 92%,
+    transparent 100%);
+  pointer-events: none;
+}
+
+/* --- logo ---------------------------------------------------- */
+
+.hud-logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-right: 28px;
+  padding-right: 20px;
+  border-right: 1px solid rgba(0, 212, 255, 0.14);
+  height: 54px;
+  font-size: 14px;
+  letter-spacing: 0;
+}
+.hud-logo-status {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #4caf50;
+  box-shadow: 0 0 8px #4caf50, inset 0 0 2px rgba(255, 255, 255, 0.6);
+  animation: hud-header-pulse 2.4s ease-in-out infinite;
+  flex-shrink: 0;
+}
+@keyframes hud-header-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%      { opacity: 0.55; transform: scale(1.25); }
+}
+.hud-logo-text {
+  font-family: 'Michroma', sans-serif;
+  font-size: 13px;
+  letter-spacing: 0.18em;
+  color: #e8f7ff;
+  text-shadow: 0 0 10px rgba(0, 212, 255, 0.5);
+  white-space: nowrap;
+  line-height: 1;
+}
+.hud-logo-sub {
+  font-family: 'Space Mono', monospace;
+  font-size: 9px;
+  letter-spacing: 0.22em;
+  color: rgba(0, 212, 255, 0.55);
+  padding: 3px 6px;
+  border: 1px solid rgba(0, 212, 255, 0.25);
+  border-radius: 2px;
+  white-space: nowrap;
+  line-height: 1;
+}
+
+/* --- nav ----------------------------------------------------- */
+
+.hud-nav {
+  display: flex;
+  gap: 2px;
+  align-items: stretch;
+  flex: 1;
+  height: 54px;
+}
+.hud-nav .nav-btn {
+  position: relative;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  padding: 0 18px;
+  height: 54px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: rgba(200, 219, 232, 0.6);
+  font-family: 'Michroma', sans-serif;
+  font-size: 11px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  cursor: pointer;
+  font-weight: 400;
+  transition: color 160ms ease, background 160ms ease;
+  overflow: hidden;
+}
+
+/* Numbered prefix per button — treats nav like numbered stations. */
+.hud-nav .nav-btn::before {
+  font-family: 'Space Mono', monospace;
+  font-size: 9.5px;
+  letter-spacing: 0.1em;
+  color: rgba(0, 212, 255, 0.35);
+  margin-right: 6px;
+  transition: color 160ms ease;
+}
+.hud-nav .nav-btn:nth-child(1)::before { content: '01'; }
+.hud-nav .nav-btn:nth-child(2)::before { content: '02'; }
+.hud-nav .nav-btn:nth-child(3)::before { content: '03'; }
+.hud-nav .nav-btn:nth-child(4)::before { content: '04'; }
+.hud-nav .nav-btn:nth-child(5)::before { content: '05'; }
+
+/* Underline indicator bar (0 → full-width on hover/active) */
+.hud-nav .nav-btn::after {
+  content: '';
+  position: absolute;
+  left: 14px; right: 14px;
+  bottom: 0;
+  height: 2px;
+  background: var(--cyan);
+  box-shadow: 0 0 10px rgba(0, 212, 255, 0.7);
+  transform: scaleX(0);
+  transform-origin: center;
+  transition: transform 220ms cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+.hud-nav .nav-btn:hover {
+  color: #e8f7ff;
+  background: linear-gradient(180deg, rgba(0, 212, 255, 0.06), transparent);
+}
+.hud-nav .nav-btn:hover::before { color: rgba(0, 212, 255, 0.75); }
+.hud-nav .nav-btn:hover::after  { transform: scaleX(0.5); }
+
+.hud-nav .nav-btn.active {
+  color: #e8f7ff;
+  background: linear-gradient(180deg, rgba(0, 212, 255, 0.12), rgba(0, 212, 255, 0.02));
+  font-weight: 400;
+  text-shadow: 0 0 10px rgba(0, 212, 255, 0.45);
+}
+.hud-nav .nav-btn.active::before { color: var(--cyan); }
+.hud-nav .nav-btn.active::after  { transform: scaleX(1); }
+
+/* Locked state */
+.hud-nav .nav-btn.nav-btn-locked {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+.hud-nav .nav-btn.nav-btn-locked:hover {
+  color: rgba(200, 219, 232, 0.5);
+  background: transparent;
+}
+.hud-nav .nav-btn.nav-btn-locked:hover::after { transform: scaleX(0); }
+
+/* External link (Wiki) — slight accent + arrow */
+.hud-nav a.hud-nav-ext {
+  text-decoration: none;
+  color: rgba(200, 219, 232, 0.55);
+}
+.hud-nav-ext-arrow {
+  font-size: 11px;
+  color: rgba(0, 212, 255, 0.55);
+  transition: transform 200ms ease, color 200ms ease;
+}
+.hud-nav a.hud-nav-ext:hover .hud-nav-ext-arrow {
+  color: var(--cyan);
+  transform: translate(2px, -2px);
+}
+
+/* --- right side + patch badge -------------------------------- */
+
+.hud-header-right {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding-left: 20px;
+  border-left: 1px solid rgba(0, 212, 255, 0.14);
+  height: 54px;
+}
+
+.patch-badge.hud-patch {
+  font-family: 'Space Mono', monospace;
+  font-size: 10px;
+  line-height: 1.3;
+  letter-spacing: 0.08em;
+  text-align: right;
+  color: rgba(200, 219, 232, 0.55);
+  pointer-events: none;
+  position: relative;
+  padding-left: 14px;
+}
+/* Tiny sibling indicator dot (pre) + label treatment */
+.patch-badge.hud-patch::before {
+  content: 'REL';
+  position: absolute;
+  top: 50%;
+  left: 0;
+  transform: translateY(-50%);
+  font-size: 8.5px;
+  letter-spacing: 0.22em;
+  color: rgba(0, 212, 255, 0.4);
+  font-weight: 700;
+}
+.patch-badge.hud-patch .patch-version {
+  font-family: 'Space Mono', monospace;
+  font-weight: 700;
+  font-size: 11px;
+  color: var(--cyan);
+  letter-spacing: 0.12em;
+  text-shadow: 0 0 6px rgba(0, 212, 255, 0.4);
+}
+.patch-badge.hud-patch .patch-updated {
+  display: block;
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  color: rgba(200, 219, 232, 0.45);
+  opacity: 1;
+}
+
+/* --- responsive collapses ------------------------------------ */
+
+@media (max-width: 900px) {
+  .hud-logo-sub { display: none; }
+  .hud-logo { margin-right: 12px; padding-right: 12px; }
+  .hud-nav .nav-btn { padding: 0 10px; font-size: 10px; letter-spacing: 0.18em; }
+  .hud-nav .nav-btn::before { display: none; }
+  .hud-header-right { display: none; }
+}
+
