@@ -23,7 +23,15 @@
       <span class="hud-logo-text">GRID TACTICS</span>
       <span class="hud-logo-sub">TCG · OPS</span>
     </div>
-    <nav class="nav hud-nav">
+
+    <!-- Hamburger toggle — only shown on narrow viewports via CSS. -->
+    <button class="hud-nav-toggle" id="hud-nav-toggle" aria-label="Toggle navigation" aria-expanded="false">
+      <span class="hud-nav-toggle-bar"></span>
+      <span class="hud-nav-toggle-bar"></span>
+      <span class="hud-nav-toggle-bar"></span>
+    </button>
+
+    <nav class="nav hud-nav" id="hud-nav">
       <button class="nav-btn active" data-screen="lobby">Duel</button>
       <button class="nav-btn" data-screen="deck-builder">Deck Builder</button>
       <button class="nav-btn" data-screen="sandbox">Sandbox</button>

@@ -358,12 +358,35 @@ function setupNavHandlers() {
             if (isInActiveGame()) {
                 return;
             }
+            // Close the mobile hamburger menu (if open) on any tap.
+            document.querySelector('.hud-header')?.classList.remove('hud-nav-open');
+            var toggle = document.getElementById('hud-nav-toggle');
+            if (toggle) toggle.setAttribute('aria-expanded', 'false');
             var screenName = btn.dataset.screen;
             if (screenName) {
                 showScreen('screen-' + screenName);
             }
         });
     });
+
+    // Hamburger toggle for the mobile-width nav drawer.
+    var toggle = document.getElementById('hud-nav-toggle');
+    var header = document.querySelector('.hud-header');
+    if (toggle && header) {
+        toggle.addEventListener('click', function(e) {
+            e.stopPropagation();
+            var opened = header.classList.toggle('hud-nav-open');
+            toggle.setAttribute('aria-expanded', opened ? 'true' : 'false');
+        });
+        // Close the drawer on outside click so a second tap doesn't require
+        // the hamburger specifically.
+        document.addEventListener('click', function(e) {
+            if (!header.classList.contains('hud-nav-open')) return;
+            if (header.contains(e.target)) return;
+            header.classList.remove('hud-nav-open');
+            toggle.setAttribute('aria-expanded', 'false');
+        });
+    }
 }
 
 function isInActiveGame() {

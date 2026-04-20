@@ -5854,13 +5854,134 @@ body {
   opacity: 1;
 }
 
+/* --- hamburger toggle (hidden above 640px) ------------------- */
+
+.hud-nav-toggle {
+  display: none;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: 1px solid rgba(0, 212, 255, 0.25);
+  background: transparent;
+  cursor: pointer;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 5px;
+  margin-left: auto;
+  border-radius: 2px;
+  transition: border-color 160ms ease, background 160ms ease;
+}
+.hud-nav-toggle:hover {
+  border-color: var(--cyan);
+  background: rgba(0, 212, 255, 0.08);
+}
+.hud-nav-toggle-bar {
+  display: block;
+  width: 18px;
+  height: 2px;
+  background: var(--cyan);
+  box-shadow: 0 0 4px rgba(0, 212, 255, 0.6);
+  transition: transform 220ms cubic-bezier(0.2, 0.7, 0.2, 1),
+              opacity 220ms ease;
+}
+/* Hamburger → X when open */
+.hud-header.hud-nav-open .hud-nav-toggle-bar:nth-child(1) {
+  transform: translateY(7px) rotate(45deg);
+}
+.hud-header.hud-nav-open .hud-nav-toggle-bar:nth-child(2) { opacity: 0; }
+.hud-header.hud-nav-open .hud-nav-toggle-bar:nth-child(3) {
+  transform: translateY(-7px) rotate(-45deg);
+}
+
 /* --- responsive collapses ------------------------------------ */
 
+/* Tablet band: shrink button padding, drop patch badge + pill, hide
+   numeric prefixes. Still a single horizontal row. */
 @media (max-width: 900px) {
   .hud-logo-sub { display: none; }
   .hud-logo { margin-right: 12px; padding-right: 12px; }
   .hud-nav .nav-btn { padding: 0 10px; font-size: 10px; letter-spacing: 0.18em; }
   .hud-nav .nav-btn::before { display: none; }
   .hud-header-right { display: none; }
+}
+
+/* Phone band: swap to a hamburger + dropdown. The .hud-nav becomes a
+   fixed-position panel below the header that slides down when the
+   header has .hud-nav-open. Tabs stack vertically at full width.
+   Auto-closes on tab tap (wired in game.js). */
+@media (max-width: 640px) {
+  .header.hud-header {
+    padding: 0 14px;
+  }
+  .hud-logo {
+    border-right: 0;
+    padding-right: 0;
+    margin-right: 0;
+    flex: 1;
+    min-width: 0;
+  }
+  .hud-logo-text { font-size: 12px; letter-spacing: 0.12em; }
+  .hud-nav-toggle { display: flex; }
+
+  .hud-nav {
+    position: fixed;
+    top: 54px;
+    left: 0;
+    right: 0;
+    flex-direction: column;
+    gap: 0;
+    height: auto;
+    background:
+      linear-gradient(180deg, rgba(6, 12, 22, 0.98) 0%, rgba(4, 8, 16, 0.98) 100%);
+    border-bottom: 1px solid rgba(0, 212, 255, 0.22);
+    box-shadow: 0 12px 28px -10px rgba(0, 0, 0, 0.7),
+                0 0 24px -12px rgba(0, 212, 255, 0.35);
+    transform: translateY(-8px);
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transition: transform 220ms cubic-bezier(0.2, 0.7, 0.2, 1),
+                opacity 180ms ease,
+                visibility 0s linear 180ms;
+    z-index: 99;
+  }
+  .hud-header.hud-nav-open .hud-nav {
+    transform: translateY(0);
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+    transition: transform 220ms cubic-bezier(0.2, 0.7, 0.2, 1),
+                opacity 180ms ease,
+                visibility 0s linear 0s;
+  }
+  .hud-nav .nav-btn {
+    width: 100%;
+    height: 52px;
+    padding: 0 20px;
+    justify-content: flex-start;
+    border-bottom: 1px solid rgba(0, 212, 255, 0.08);
+    font-size: 12px;
+    letter-spacing: 0.22em;
+  }
+  .hud-nav .nav-btn:last-child { border-bottom: none; }
+  .hud-nav .nav-btn::before {
+    display: inline-block;
+    margin-right: 12px;
+  }
+  /* On mobile the underline indicator runs down the LEFT edge instead. */
+  .hud-nav .nav-btn::after {
+    left: 0;
+    right: auto;
+    top: 0;
+    bottom: 0;
+    width: 3px;
+    height: auto;
+    transform: scaleY(0);
+    transform-origin: center;
+    transition: transform 220ms cubic-bezier(0.2, 0.7, 0.2, 1);
+  }
+  .hud-nav .nav-btn:hover::after { transform: scaleY(0.5); }
+  .hud-nav .nav-btn.active::after { transform: scaleY(1); }
 }
 
