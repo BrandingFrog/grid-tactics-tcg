@@ -6744,7 +6744,24 @@ function renderActionBar() {
     //   ON   — never auto-skip. Always require a manual click on the
     //          floating Skip React button (or play a react card) to
     //          close the window. YGO-style "always confirm".
-    if (gameState.phase === 1 && legalActions.some(function(a) { return a.action_type === 4; })) {
+    //
+    // Sandbox NOTE: `SandboxSession.apply_action` already drains trivial
+    // PASS-only REACT windows server-side and emits one frame per
+    // intermediate state (commit 9c414f9). The intermediate frame the
+    // server emits mid-drain has `phase==REACT` and `legal==[PASS]`,
+    // which EXACTLY trips this auto-skip and causes the client to fire a
+    // bogus PASS. That PASS arrives at the server AFTER the drain has
+    // already advanced to ACTION phase, where PASS is routed to
+    // `_apply_pass` — inflicting FATIGUE_DAMAGE (5) on the active player
+    // AND flipping the turn a second time. Visible symptoms: phase-LED
+    // thrash (END/START cycle twice in ~1s), active-player ping-pong,
+    // phantom "-5 HP" popup. Sandbox is god-view with no pace-gated
+    // opponent — the auto-skip provides zero value here (the server
+    // already handles the drain) and actively breaks the per-frame
+    // signal contract. Skip it entirely in sandbox mode.
+    if (!sandboxMode
+            && gameState.phase === 1
+            && legalActions.some(function(a) { return a.action_type === 4; })) {
         var mode = _reactPromptMode();
         var onlyPass = legalActions.length === 1 && legalActions[0].action_type === 4;
         if (mode === 'off' || (mode === 'auto' && onlyPass)) {
