@@ -191,6 +191,484 @@ def push_font_css(site, dry_run: bool = False) -> str:
 
 
 # ---------------------------------------------------------------------------
+# HUD Theme CSS — Tactical Command aesthetic matching the game app
+# ---------------------------------------------------------------------------
+
+_HUD_FONTS_MARKER = "/* --- Grid Tactics HUD Fonts --- */"
+
+# @import rules MUST come before all other rules in the stylesheet or
+# browsers silently drop them — so this gets PREPENDED to Common.css by
+# push_hud_theme() before any selectors are defined.
+_HUD_FONTS_BLOCK = f"""{_HUD_FONTS_MARKER}
+@import url('https://fonts.googleapis.com/css2?family=Michroma&family=Space+Mono:wght@400;700&display=swap');
+"""
+
+_HUD_THEME_MARKER = "/* --- Grid Tactics HUD Theme --- */"
+
+_HUD_THEME_BLOCK = f"""{_HUD_THEME_MARKER}
+/* Wiki-wide Tactical HUD treatment — mirrors the aesthetic pushed to
+   the main app (lobby / deck-builder / navbar). Fonts: Michroma for
+   display/headings, Space Mono for telemetry & mono data. Cyan accents
+   (#00d4ff) on near-black surfaces. Targets the Citizen skin +
+   MediaWiki core + SMW. Font @imports live in a separate prepended
+   block so the browser actually honours them. */
+
+/* Scope most rules to body so they apply everywhere except inside the
+   card infobox (which has its own game-style font stack). */
+html, body {{
+  background: #050913 !important;
+  color: #c8dbe8;
+}}
+body {{
+  font-family: 'Space Mono', 'Inter', system-ui, sans-serif;
+  position: relative;
+}}
+
+/* Subtle grid-line overlay behind everything. Fades at the edges via
+   a radial mask so it never fights the content. */
+body::before {{
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background-image:
+    linear-gradient(to right, rgba(0, 212, 255, 0.05) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(0, 212, 255, 0.05) 1px, transparent 1px);
+  background-size: 64px 64px;
+  -webkit-mask-image: radial-gradient(ellipse at 50% 30%, black 20%, transparent 85%);
+          mask-image: radial-gradient(ellipse at 50% 30%, black 20%, transparent 85%);
+  opacity: 0.8;
+}}
+/* Keep content above the grid underlay */
+#mw-content, .citizen-body, #content, .mw-body {{ position: relative; z-index: 1; }}
+
+/* --- Typography -------------------------------------------------- */
+h1, h2, h3, h4, h5, h6,
+.mw-first-heading, .mw-page-title-main,
+.firstHeading, .mw-heading {{
+  font-family: 'Michroma', 'Montserrat', sans-serif !important;
+  letter-spacing: 0.08em !important;
+  color: #e8f7ff !important;
+  text-shadow: 0 0 12px rgba(0, 212, 255, 0.25);
+}}
+
+/* Page title: add a cyan edge-bar to either side like the lobby wordmark */
+.mw-page-title, .mw-page-title-main, .firstHeading, h1.mw-first-heading {{
+  position: relative;
+  padding-bottom: 10px;
+  letter-spacing: 0.14em !important;
+  font-size: clamp(28px, 3.4vw, 42px) !important;
+  line-height: 1.05 !important;
+}}
+.mw-page-title::after, h1.mw-first-heading::after {{
+  content: '';
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 120px;
+  height: 2px;
+  background: linear-gradient(90deg, #00d4ff, transparent);
+  box-shadow: 0 0 12px rgba(0, 212, 255, 0.55);
+}}
+
+/* Section headings (h2/h3) get a bracket accent + subtle bottom border */
+.mw-parser-output h2,
+.mw-parser-output h3,
+.mw-parser-output .mw-heading2,
+.mw-parser-output .mw-heading3 {{
+  position: relative;
+  padding: 8px 0 8px 24px !important;
+  margin-top: 28px !important;
+  border-bottom: 1px dashed rgba(0, 212, 255, 0.18) !important;
+  font-size: 20px !important;
+  letter-spacing: 0.1em !important;
+}}
+.mw-parser-output h2::before,
+.mw-parser-output .mw-heading2::before {{
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 14px;
+  width: 12px;
+  height: 12px;
+  border: 2px solid #00d4ff;
+  border-right: 0;
+  border-bottom: 0;
+  opacity: 0.75;
+  box-shadow: 0 0 6px rgba(0, 212, 255, 0.4);
+}}
+.mw-parser-output h3::before,
+.mw-parser-output .mw-heading3::before {{
+  content: '▸';
+  position: absolute;
+  left: 4px;
+  color: #00d4ff;
+  text-shadow: 0 0 6px rgba(0, 212, 255, 0.5);
+  font-size: 14px;
+  top: 11px;
+}}
+
+/* Tagline / "From Grid Tactics Wiki" subtitle under the page title */
+.page-header__sub, .mw-page-description, .citizen-tagline,
+.citizen-body .mw-body-header .mw-body-header-description {{
+  font-family: 'Space Mono', monospace !important;
+  font-size: 11px !important;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: rgba(0, 212, 255, 0.55) !important;
+}}
+
+/* --- Links ------------------------------------------------------- */
+a, a:visited {{
+  color: #00d4ff;
+  text-decoration: none;
+  transition: color 140ms ease, text-shadow 140ms ease;
+}}
+a:hover {{
+  color: #e8f7ff;
+  text-shadow: 0 0 6px rgba(0, 212, 255, 0.6);
+}}
+a.new, a.new:visited {{ color: #ff9b7b; }}  /* red links stay warm */
+
+/* --- Body content surfaces -------------------------------------- */
+.mw-body, #mw-content, #content, .citizen-page-container,
+.citizen-content-container {{
+  background: transparent !important;
+}}
+.mw-body-content p,
+.mw-parser-output p,
+.mw-parser-output li {{
+  line-height: 1.65;
+  color: #c8dbe8;
+  font-family: 'Inter', 'Space Mono', system-ui, sans-serif;
+}}
+.mw-parser-output ul, .mw-parser-output ol {{
+  padding-left: 22px;
+}}
+.mw-parser-output strong, .mw-parser-output b {{
+  color: #e8f7ff;
+}}
+
+/* --- Tables (generic wikitable + SMW results) ------------------- */
+table.wikitable,
+table.smwtable,
+table.smwtable-clean,
+.smw-table {{
+  background: rgba(10, 20, 35, 0.65) !important;
+  border: 1px solid rgba(0, 212, 255, 0.25) !important;
+  border-collapse: separate !important;
+  border-spacing: 0 !important;
+  color: #c8dbe8 !important;
+  font-family: 'Space Mono', monospace;
+  font-size: 12.5px;
+}}
+table.wikitable th,
+table.smwtable th,
+table.smwtable-clean th {{
+  background: linear-gradient(180deg, rgba(0, 212, 255, 0.12), rgba(0, 212, 255, 0.03)) !important;
+  color: #e8f7ff !important;
+  border-bottom: 1px solid rgba(0, 212, 255, 0.35) !important;
+  border-right: 1px solid rgba(0, 212, 255, 0.12) !important;
+  font-family: 'Michroma', sans-serif !important;
+  font-size: 10.5px !important;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  padding: 9px 12px !important;
+  text-align: left !important;
+}}
+table.wikitable td,
+table.smwtable td,
+table.smwtable-clean td {{
+  border: 1px solid rgba(0, 212, 255, 0.08) !important;
+  padding: 7px 12px !important;
+  background: transparent !important;
+}}
+table.wikitable tr:hover td,
+table.smwtable tr:hover td {{
+  background: rgba(0, 212, 255, 0.05) !important;
+}}
+table.wikitable tr:nth-child(even) td {{
+  background: rgba(0, 212, 255, 0.02) !important;
+}}
+
+/* --- Infobox (card pages and manual) ---------------------------- */
+.infobox, table.infobox {{
+  background: rgba(10, 20, 35, 0.85) !important;
+  border: 1px solid rgba(0, 212, 255, 0.35) !important;
+  border-radius: 0 !important;
+  box-shadow: 0 10px 28px -14px rgba(0, 0, 0, 0.7),
+              0 0 30px -14px rgba(0, 212, 255, 0.45);
+  position: relative;
+  /* Hexagonal-style chamfered corners (matches app panels) */
+  clip-path: polygon(
+    0 10px, 10px 0,
+    calc(100% - 10px) 0, 100% 10px,
+    100% calc(100% - 10px), calc(100% - 10px) 100%,
+    10px 100%, 0 calc(100% - 10px)
+  );
+}}
+.infobox::before {{
+  content: '';
+  position: absolute;
+  top: 0; left: 14px; right: 14px;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, #00d4ff, transparent);
+  opacity: 0.55;
+  z-index: 1;
+}}
+.infobox th,
+.infobox caption {{
+  color: #e8f7ff;
+  font-family: 'Michroma', sans-serif;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  font-size: 11px;
+  padding: 8px 12px;
+  background: rgba(0, 212, 255, 0.06);
+  border-bottom: 1px solid rgba(0, 212, 255, 0.18);
+}}
+.infobox td {{
+  color: #c8dbe8;
+  font-family: 'Space Mono', monospace;
+  font-size: 13px;
+  padding: 8px 12px;
+}}
+.infobox a {{ color: #00d4ff; }}
+
+/* --- Table of contents (core + Citizen) ------------------------- */
+.toc, .toccolours, .mw-toc, .toc-container,
+.citizen-toc, .citizen-toc__list,
+#toc, #toc > ul {{
+  background: rgba(10, 20, 35, 0.7) !important;
+  border: 1px solid rgba(0, 212, 255, 0.22) !important;
+  border-radius: 0 !important;
+  padding: 12px 14px !important;
+  font-family: 'Space Mono', monospace;
+}}
+.toctitle h2, .toc .toctitle,
+.citizen-toc__list-title {{
+  font-family: 'Michroma', sans-serif !important;
+  font-size: 10px !important;
+  letter-spacing: 0.24em !important;
+  color: rgba(0, 212, 255, 0.85) !important;
+  text-transform: uppercase !important;
+  border-bottom: 1px dashed rgba(0, 212, 255, 0.18);
+  padding-bottom: 6px;
+  margin-bottom: 8px !important;
+}}
+.toc ul, .citizen-toc ul {{ padding-left: 16px; }}
+.toc a, .citizen-toc a {{
+  color: rgba(200, 219, 232, 0.75);
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  line-height: 1.9;
+  transition: color 140ms ease, padding-left 140ms ease;
+}}
+.toc a:hover, .citizen-toc a:hover {{
+  color: #00d4ff;
+  padding-left: 3px;
+}}
+
+/* --- Citizen skin specifics ------------------------------------- */
+.citizen-drawer,
+.citizen-drawer__list,
+.citizen-sidebar,
+.citizen-page-sidebar {{
+  background: rgba(6, 12, 22, 0.92) !important;
+  border-right: 1px solid rgba(0, 212, 255, 0.14) !important;
+}}
+.citizen-drawer__item a,
+.citizen-sidebar a {{ color: rgba(200, 219, 232, 0.75); }}
+.citizen-drawer__item a:hover,
+.citizen-sidebar a:hover {{ color: #00d4ff; background: rgba(0, 212, 255, 0.05); }}
+
+/* Top page-tools row (View source / History / Discussion / ...) */
+.page-actions, .citizen-page-header__tools,
+.citizen-header, .mw-body-header {{
+  border-bottom: 1px dashed rgba(0, 212, 255, 0.12);
+}}
+
+/* Pill-style page action buttons */
+.citizen-menu__card a,
+.mw-portlet a.cdx-button,
+.page-actions a,
+.vector-menu-heading {{
+  font-family: 'Michroma', sans-serif !important;
+  font-size: 11px !important;
+  letter-spacing: 0.18em !important;
+  text-transform: uppercase;
+}}
+
+/* --- Footer ----------------------------------------------------- */
+.citizen-footer,
+#footer, .mw-footer,
+.footer {{
+  background:
+    linear-gradient(180deg, rgba(0, 212, 255, 0.04), transparent) !important;
+  border-top: 1px solid rgba(0, 212, 255, 0.18) !important;
+  color: rgba(200, 219, 232, 0.55) !important;
+  font-family: 'Space Mono', monospace;
+  font-size: 11px;
+  padding: 24px 24px 32px !important;
+  margin-top: 48px;
+}}
+.citizen-footer h3,
+.citizen-footer .citizen-footer__sitetitle,
+#footer strong, .mw-footer strong {{
+  font-family: 'Michroma', sans-serif !important;
+  color: #e8f7ff !important;
+  letter-spacing: 0.18em !important;
+}}
+.citizen-footer a, #footer a {{ color: #00d4ff; }}
+
+/* --- Code / pre / kbd ------------------------------------------- */
+code, pre, kbd, tt, samp {{
+  font-family: 'Space Mono', 'JetBrains Mono', monospace !important;
+  background: rgba(0, 212, 255, 0.06) !important;
+  color: #c8dbe8 !important;
+  border: 1px solid rgba(0, 212, 255, 0.18);
+  padding: 2px 6px;
+  border-radius: 0;
+}}
+pre {{
+  padding: 12px 14px;
+  line-height: 1.5;
+}}
+
+/* --- Hero search bar (already pushed earlier) gets HUD frame ---- */
+.gt-hero-search {{
+  border: 1px solid rgba(0, 212, 255, 0.25) !important;
+  clip-path: polygon(
+    0 6px, 6px 0,
+    calc(100% - 6px) 0, 100% 6px,
+    100% calc(100% - 6px), calc(100% - 6px) 100%,
+    6px 100%, 0 calc(100% - 6px)
+  );
+}}
+.gt-hero-search input {{
+  font-family: 'Space Mono', monospace !important;
+  letter-spacing: 0.06em;
+}}
+.gt-hero-search button {{
+  font-family: 'Michroma', sans-serif !important;
+  letter-spacing: 0.22em !important;
+}}
+
+/* --- Selection highlight matches HUD palette -------------------- */
+::selection {{ background: rgba(0, 212, 255, 0.35); color: #e8f7ff; }}
+
+/* --- Edit-source textarea (when logged-in users edit) ----------- */
+textarea#wpTextbox1 {{
+  background: #050913 !important;
+  color: #c8dbe8 !important;
+  border: 1px solid rgba(0, 212, 255, 0.25) !important;
+  font-family: 'Space Mono', monospace !important;
+  font-size: 12.5px;
+  line-height: 1.55;
+  padding: 12px;
+}}
+
+/* --- Responsive trims ------------------------------------------- */
+@media (max-width: 720px) {{
+  body::before {{ opacity: 0.5; }}
+  .mw-parser-output h2,
+  .mw-parser-output .mw-heading2 {{ font-size: 17px !important; padding-left: 18px !important; }}
+  table.wikitable, table.smwtable {{ font-size: 11px; }}
+}}
+"""
+
+
+def push_hud_theme(site, dry_run: bool = False) -> str:
+    """Push the HUD theme to MediaWiki:Common.css (idempotent).
+
+    Two payloads, two idempotency markers:
+    - HUD fonts block: PREPENDED so @import url(...Michroma...Space Mono)
+      sits before any selector rules. CSS spec requires @import first
+      or browsers silently drop them.
+    - HUD theme block: APPENDED; contains all the selector rules.
+
+    Applies the same Tactical Command aesthetic as the game app —
+    Michroma/Space Mono typography, cyan-on-near-black palette, HUD
+    panel chamfers, bracketed section headings, SMW-table re-skin.
+
+    Returns ``"unchanged"`` only if BOTH markers already present.
+    """
+    page = site.pages["MediaWiki:Common.css"]
+    current = page.text() if page.exists else ""
+
+    need_fonts = _HUD_FONTS_MARKER not in current
+    need_theme = _HUD_THEME_MARKER not in current
+
+    if not need_fonts and not need_theme:
+        print("  MediaWiki:Common.css: unchanged (HUD theme already present)")
+        return "unchanged"
+
+    new_text = current
+    if need_fonts:
+        new_text = _HUD_FONTS_BLOCK + "\n" + new_text
+    if need_theme:
+        new_text = (new_text.rstrip() + "\n\n" + _HUD_THEME_BLOCK) if new_text else _HUD_THEME_BLOCK
+
+    if dry_run:
+        which = []
+        if need_fonts: which.append("fonts")
+        if need_theme: which.append("theme")
+        print(f"  MediaWiki:Common.css: would-update (HUD {'+'.join(which)})")
+        return "would-update"
+
+    page.edit(new_text, summary="add HUD theme CSS (Tactical Command aesthetic)")
+    which = []
+    if need_fonts: which.append("fonts")
+    if need_theme: which.append("theme")
+    print(f"  MediaWiki:Common.css: updated (HUD {'+'.join(which)})")
+    return "updated"
+
+
+# ---------------------------------------------------------------------------
+# HUD Fonts JS — inject <link> tag directly (@import in ResourceLoader is dropped)
+# ---------------------------------------------------------------------------
+
+_HUD_FONTS_JS_MARKER = "/* --- Grid Tactics HUD Fonts Loader --- */"
+
+_HUD_FONTS_JS_BLOCK = f"""{_HUD_FONTS_JS_MARKER}
+(function gtHudFonts() {{
+  if (document.getElementById('gt-hud-fonts')) return;
+  var link = document.createElement('link');
+  link.id = 'gt-hud-fonts';
+  link.rel = 'stylesheet';
+  link.href = 'https://fonts.googleapis.com/css2?family=Michroma&family=Space+Mono:wght@400;700&display=swap';
+  document.head.appendChild(link);
+}})();
+"""
+
+
+def push_hud_fonts_js(site, dry_run: bool = False) -> str:
+    """Push a JS loader that injects the Google Fonts <link> directly.
+
+    MediaWiki ResourceLoader silently drops @import rules from the CSS
+    bundle regardless of their position — so we inject a <link> tag
+    via MediaWiki:Common.js instead. Idempotent by marker + DOM id.
+    """
+    page = site.pages["MediaWiki:Common.js"]
+    current = page.text() if page.exists else ""
+
+    if _HUD_FONTS_JS_MARKER in current:
+        print("  MediaWiki:Common.js: unchanged (HUD fonts loader already present)")
+        return "unchanged"
+
+    new_text = (current.rstrip() + "\n\n" + _HUD_FONTS_JS_BLOCK) if current.strip() else _HUD_FONTS_JS_BLOCK
+
+    if dry_run:
+        print("  MediaWiki:Common.js: would-update (HUD fonts loader)")
+        return "would-update"
+
+    page.edit(new_text, summary="add HUD fonts loader JS (Michroma + Space Mono via <link>)")
+    print("  MediaWiki:Common.js: updated (HUD fonts loader)")
+    return "updated"
+
+
+# ---------------------------------------------------------------------------
 # Mobile CSS
 # ---------------------------------------------------------------------------
 

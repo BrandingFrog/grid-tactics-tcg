@@ -496,6 +496,8 @@ def main(argv: list[str] | None = None) -> int:
             push_dark_search_css,
             push_font_css,
             push_hero_search,
+            push_hud_fonts_js,
+            push_hud_theme,
             push_mobile_css,
             upload_favicon,
             upload_logo,
@@ -515,6 +517,12 @@ def main(argv: list[str] | None = None) -> int:
         print("\n=== Dark Search CSS ===")
         push_dark_search_css(site, dry_run=args.dry_run)
 
+        print("\n=== HUD Theme CSS ===")
+        hud_status = push_hud_theme(site, dry_run=args.dry_run)
+
+        print("\n=== HUD Fonts Loader JS ===")
+        hud_fonts_status = push_hud_fonts_js(site, dry_run=args.dry_run)
+
         print("\n=== Mobile CSS ===")
         css_status = push_mobile_css(site, dry_run=args.dry_run)
 
@@ -530,9 +538,9 @@ def main(argv: list[str] | None = None) -> int:
         print("\n=== Hero Search Bar ===")
         hero_status = push_hero_search(site, dry_run=args.dry_run)
 
-        print(f"\nPolish complete: CSS={css_status}, Logo={logo_status}, "
-              f"Favicon={fav_status}, Config={config_status}, "
-              f"HeroSearch={hero_status}")
+        print(f"\nPolish complete: HUD={hud_status}, HUDFonts={hud_fonts_status}, "
+              f"CSS={css_status}, Logo={logo_status}, Favicon={fav_status}, "
+              f"Config={config_status}, HeroSearch={hero_status}")
         return 0
 
     # --verify-search
