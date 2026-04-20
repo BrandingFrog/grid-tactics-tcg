@@ -1288,9 +1288,25 @@ body {
   animation: phase-led-pulse 1.2s ease-in-out infinite;
 }
 .phase-led.react .phase-led-label { color: #ffb74d; }
+/* Flash for transient START_OF_TURN / END_OF_TURN trigger windows.
+   Bright cyan with a strong pulse so it pops against the dim panel —
+   the trigger blip is otherwise the only signal that those phases ran. */
+.phase-led.flash .phase-led-dot {
+  background: #00d4ff;
+  box-shadow: 0 0 12px rgba(0, 212, 255, 1), 0 0 20px rgba(0, 212, 255, 0.7);
+  animation: phase-led-flash 700ms ease-in-out infinite;
+}
+.phase-led.flash .phase-led-label {
+  color: #00d4ff;
+  text-shadow: 0 0 6px rgba(0, 212, 255, 0.8);
+}
 @keyframes phase-led-pulse {
   0%, 100% { opacity: 1; }
   50%      { opacity: 0.4; }
+}
+@keyframes phase-led-flash {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%      { opacity: 0.55; transform: scale(1.5); }
 }
 
 .turn-number {

@@ -82,19 +82,60 @@ const PHASE_DISPLAY = {
 // show the active turn phase. During a REACT window the underlying
 // turn phase pulses amber instead of glowing solid green — react is
 // nested inside whatever phase opened it (read from react_return_phase).
+//
+// START_OF_TURN and END_OF_TURN are transient engine phases that the
+// client almost never sees as stable states (the engine flips through
+// them while resolving triggers). To surface them, the trigger-blip
+// dispatch path also calls _flashPhaseLed('start' | 'end') so the
+// matching LED briefly pulses while a start/end trigger animates.
+var _phaseLedFlashKey = null;
+var _phaseLedFlashTimer = null;
+
 function _setPhaseLeds(badgeEl, phase, reactReturnPhase) {
     if (!badgeEl) return;
     // Engine: 0=ACTION, 1=REACT, 2=START_OF_TURN, 3=END_OF_TURN.
     var isReact = phase === 1;
     var underlying = isReact ? (reactReturnPhase != null ? reactReturnPhase : 0) : phase;
     var key = underlying === 2 ? 'start' : underlying === 3 ? 'end' : 'action';
+    // A flashing key (set by _flashPhaseLed) overrides whatever phase
+    // says, so a fired start-of-turn trigger lights START even though
+    // phase has already cycled back to ACTION on the wire.
+    var flashing = !!_phaseLedFlashKey;
+    if (flashing) key = _phaseLedFlashKey;
     var leds = badgeEl.querySelectorAll('.phase-led');
     for (var i = 0; i < leds.length; i++) {
         var led = leds[i];
         var match = led.dataset.phase === key;
-        led.classList.toggle('active', match && !isReact);
-        led.classList.toggle('react', match && isReact);
+        led.classList.toggle('flash', match && flashing);
+        led.classList.toggle('active', match && !flashing && !isReact);
+        led.classList.toggle('react', match && !flashing && isReact);
     }
+}
+
+// Briefly light the start/end LED in response to a trigger-blip event.
+// Lasts ~1.5s, then the indicator falls back to the live phase.
+function _flashPhaseLed(key) {
+    _phaseLedFlashKey = key;
+    if (_phaseLedFlashTimer) { clearTimeout(_phaseLedFlashTimer); _phaseLedFlashTimer = null; }
+    // Re-render both badges immediately so the flash takes effect.
+    var live = document.getElementById('phase-badge');
+    var sb = document.getElementById('sandbox-phase-badge');
+    if (live && typeof gameState !== 'undefined' && gameState) {
+        _setPhaseLeds(live, gameState.phase, gameState.react_return_phase);
+    }
+    if (sb && typeof sandboxState !== 'undefined' && sandboxState) {
+        _setPhaseLeds(sb, sandboxState.phase, sandboxState.react_return_phase);
+    }
+    _phaseLedFlashTimer = setTimeout(function() {
+        _phaseLedFlashKey = null;
+        _phaseLedFlashTimer = null;
+        if (live && typeof gameState !== 'undefined' && gameState) {
+            _setPhaseLeds(live, gameState.phase, gameState.react_return_phase);
+        }
+        if (sb && typeof sandboxState !== 'undefined' && sandboxState) {
+            _setPhaseLeds(sb, sandboxState.phase, sandboxState.react_return_phase);
+        }
+    }, 2200);
 }
 
 const EFFECT_TYPE_NAMES = [
@@ -3570,6 +3611,13 @@ function _tileElForPosition(pos) {
 function _fireTriggerBlipAnimation(blip) {
     if (!blip) return;
     try {
+        // 0) Flash the matching phase LED so the indicator surfaces
+        //    START_OF_TURN / END_OF_TURN even though the wire-state
+        //    phase has already cycled back to ACTION by then.
+        var kind = blip.trigger_kind;
+        if (kind === 'start_of_turn') _flashPhaseLed('start');
+        else if (kind === 'end_of_turn') _flashPhaseLed('end');
+
         // 1) Pulse the source tile (if still on the board).
         var srcTile = _tileElForPosition(blip.source_position);
         if (srcTile) {
