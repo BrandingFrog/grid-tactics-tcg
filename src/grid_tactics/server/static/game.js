@@ -407,6 +407,7 @@ function initSocket() {
     // Register all event handlers
     socket.on('room_created', onRoomCreated);
     socket.on('room_joined', onRoomJoined);
+    socket.on('rooms_list', onRoomsList);
     socket.on('player_joined', onPlayerJoined);
     socket.on('player_ready', onPlayerReady);
     socket.on('game_start', onGameStart);
@@ -600,6 +601,43 @@ var NUDGES = {
 // =============================================
 // Section 5: Lobby Event Handlers
 // =============================================
+
+// Render the public open-rooms list. Fired on connect, on manual refresh,
+// and pushed by the server whenever a room is created or fills up.
+function onRoomsList(data) {
+    var listEl = document.getElementById('rooms-list');
+    if (!listEl) return;
+    var rooms = (data && Array.isArray(data.rooms)) ? data.rooms : [];
+    listEl.innerHTML = '';
+    if (rooms.length === 0) {
+        var empty = document.createElement('div');
+        empty.className = 'rooms-empty';
+        empty.textContent = 'No open rooms — create one, or paste a code below.';
+        listEl.appendChild(empty);
+        return;
+    }
+    rooms.forEach(function(r) {
+        var row = document.createElement('div');
+        row.className = 'rooms-row';
+        row.innerHTML =
+            '<span class="rooms-row-creator"></span>' +
+            '<span class="rooms-row-code"></span>' +
+            '<button class="btn btn-primary btn-sm rooms-row-join">Join</button>';
+        row.querySelector('.rooms-row-creator').textContent = r.creator_name || '(anon)';
+        row.querySelector('.rooms-row-code').textContent = r.code;
+        row.querySelector('.rooms-row-join').addEventListener('click', function() {
+            var name = (typeof getCurrentDisplayName === 'function') ? getCurrentDisplayName() : null;
+            if (!name) {
+                showLobbyStatus('Please enter a display name.', 'error');
+                return;
+            }
+            myName = name;
+            saveDisplayName(name);
+            socket.emit('join_room', { display_name: name, room_code: r.code });
+        });
+        listEl.appendChild(row);
+    });
+}
 
 function onRoomCreated(data) {
     sessionToken = data.session_token;
@@ -832,6 +870,22 @@ function setupLobbyHandlers() {
         codeInput.addEventListener('input', function() {
             codeInput.value = codeInput.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6);
         });
+    }
+
+    // Refresh open-rooms list button (manual refresh; server also pushes
+    // rooms_list on any state change so this is mainly for confidence).
+    var btnRefreshRooms = document.getElementById('btn-refresh-rooms');
+    if (btnRefreshRooms) {
+        btnRefreshRooms.addEventListener('click', function() {
+            socket.emit('list_rooms');
+        });
+    }
+
+    // Ask for the initial list so the panel isn't empty on first render.
+    if (socket && socket.connected) {
+        socket.emit('list_rooms');
+    } else if (socket) {
+        socket.on('connect', function() { socket.emit('list_rooms'); });
     }
 
     // Ready button

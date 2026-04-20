@@ -751,6 +751,54 @@ body {
   flex-shrink: 0;
 }
 
+/* Open rooms lobby list */
+.lobby-rooms-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+.rooms-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 240px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+.rooms-row {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.rooms-row-creator {
+  font-weight: 600;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.rooms-row-code {
+  font-family: 'Courier New', monospace;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+  font-size: 0.9em;
+}
+.rooms-empty {
+  padding: 12px;
+  text-align: center;
+  color: var(--muted);
+  font-style: italic;
+  background: rgba(10, 14, 22, 0.5);
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+}
+
 /* Room Panel */
 .room-panel {
   background: var(--card);

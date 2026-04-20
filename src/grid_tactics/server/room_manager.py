@@ -12,6 +12,7 @@ Spectator storage choice (Phase 14.4-01):
 import secrets
 import string
 import threading
+import time
 import uuid
 from dataclasses import dataclass, field
 
@@ -50,6 +51,7 @@ class WaitingRoom:
     code: str
     creator: PlayerSlot
     joiner: PlayerSlot | None = None
+    created_at: float = field(default_factory=time.time)
     lock: threading.Lock = field(default_factory=threading.Lock)
 
 
@@ -262,6 +264,26 @@ class RoomManager:
     def get_room(self, room_code: str) -> WaitingRoom | None:
         """Get waiting room by room code."""
         return self._rooms.get(room_code)
+
+    def list_open_rooms(self) -> list[dict]:
+        """Return a snapshot of WaitingRooms that still have an empty
+        joiner slot — shown in the public lobby so players can click to
+        join without needing a code. Full rooms and in-game sessions
+        are excluded.
+        """
+        with self._lock:
+            snapshot = [
+                {
+                    "code": room.code,
+                    "creator_name": room.creator.name,
+                    "created_at": room.created_at,
+                }
+                for room in self._rooms.values()
+                if room.joiner is None
+            ]
+        # Newest first so freshly-opened rooms are obvious.
+        snapshot.sort(key=lambda r: r["created_at"], reverse=True)
+        return snapshot
 
     # ------------------------------------------------------------------
     # Spectator API (Phase 14.4-01)

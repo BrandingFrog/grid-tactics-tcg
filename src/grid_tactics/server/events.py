@@ -349,6 +349,17 @@ def register_events(room_manager: RoomManager) -> None:
     global _room_manager
     _room_manager = room_manager
 
+    def _broadcast_rooms_list() -> None:
+        """Push the current open-rooms list to every connected client.
+        Called after any room state change that might add/remove a row:
+        create_room, join_room fills a slot, etc.
+        """
+        socketio.emit("rooms_list", {"rooms": _room_manager.list_open_rooms()})
+
+    @socketio.on("list_rooms")
+    def handle_list_rooms(_data=None):
+        emit("rooms_list", {"rooms": _room_manager.list_open_rooms()})
+
     @socketio.on("create_room")
     def handle_create_room(data):
         display_name = data.get("display_name", "").strip() if data else ""
@@ -361,6 +372,7 @@ def register_events(room_manager: RoomManager) -> None:
             "room_code": code,
             "session_token": token,
         })
+        _broadcast_rooms_list()
 
     @socketio.on("join_room")
     def handle_join_room(data):
@@ -392,6 +404,7 @@ def register_events(room_manager: RoomManager) -> None:
         })
         # Notify creator
         emit("player_joined", {"display_name": display_name}, to=room.creator.sid)
+        _broadcast_rooms_list()
 
     @socketio.on("ready")
     def handle_ready(data):

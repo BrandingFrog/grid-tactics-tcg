@@ -55,9 +55,20 @@
         <button class="btn btn-primary full-width" id="btn-create-room">Create Room</button>
       </div>
 
-      <!-- Join Room -->
+      <!-- Open rooms lobby: pick a waiting room instead of typing a code. -->
+      <div class="lobby-section lobby-rooms">
+        <div class="lobby-rooms-header">
+          <span class="label">Open Rooms</span>
+          <button class="btn btn-secondary btn-sm" id="btn-refresh-rooms" title="Refresh the list">↻ Refresh</button>
+        </div>
+        <div class="rooms-list" id="rooms-list">
+          <div class="rooms-empty">No open rooms — create one, or paste a code below.</div>
+        </div>
+      </div>
+
+      <!-- Join Room (by code — for private/shared-code joins) -->
       <div class="lobby-section lobby-join">
-        <label class="label" for="input-room-code">Room Code</label>
+        <label class="label" for="input-room-code">Room Code (optional)</label>
         <div class="join-row">
           <input type="text" id="input-room-code" class="input input-code" placeholder="XXXXXX" maxlength="6">
           <button class="btn btn-secondary" id="btn-join-room">Join Room</button>
