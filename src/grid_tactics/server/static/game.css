@@ -7913,7 +7913,7 @@ body {
   background: linear-gradient(180deg, rgb(40, 165, 140), rgb(22, 110, 95)) !important;
 }
 .card-type-react .card-type-badge {
-  background: linear-gradient(180deg, rgb(185, 50, 120), rgb(130, 32, 82)) !important;
+  background: linear-gradient(180deg, rgb(160, 40, 100), rgb(110, 22, 68)) !important;
 }
 
 /* --- Body text: Space Mono, readable sizes, generous clamp --- */
@@ -7999,8 +7999,8 @@ body {
 
 /* --- Multi (minion+react) body: distinct react panel --- */
 .card-multi-half:last-child {
-  background: rgba(185, 50, 120, 0.18) !important;
-  border: 1px solid rgba(185, 50, 120, 0.5) !important;
+  background: rgba(160, 40, 100, 0.18) !important;
+  border: 1px solid rgba(160, 40, 100, 0.5) !important;
   border-radius: 2px !important;
   clip-path: polygon(
     0 3px, 3px 0,
@@ -8010,7 +8010,7 @@ body {
   );
 }
 .card-react-bar {
-  background: linear-gradient(180deg, rgb(185, 50, 120), rgb(130, 32, 82)) !important;
+  background: linear-gradient(180deg, rgb(160, 40, 100), rgb(110, 22, 68)) !important;
 }
 .react-mana-circle {
   font-family: 'Space Mono', monospace !important;
