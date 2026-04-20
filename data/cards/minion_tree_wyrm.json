@@ -1,0 +1,43 @@
+{
+    "card_id": "tree_wyrm",
+    "stable_id": 51,
+    "name": "Tree Wyrm",
+    "card_type": "minion",
+    "mana_cost": 5,
+    "attack": 33,
+    "health": 33,
+    "range": 0,
+    "element": "wood",
+    "tribe": "Wyrm",
+    "tutor_target": "tree_wyrm",
+    "effects": [
+        {
+            "type": "draw",
+            "trigger": "on_summon",
+            "target": "self_owner",
+            "amount": 1
+        }
+    ],
+    "react_condition": "opponent_ends_turn",
+    "react_mana_cost": 0,
+    "react_effect": {
+        "type": "tutor",
+        "trigger": "on_play",
+        "target": "self_owner",
+        "amount": 2
+    },
+    "tips": [
+        "5 mana for a 33🗡️/33🤍 body that draws a card on Summon — same chassis as Flame Wyrm. The free react tutor on top is what makes it a chain piece.",
+        "When the opponent ends their turn, you may discard Tree Wyrm from hand for 0 mana to tutor up to 2 more Tree Wyrms from your deck. Net: -1 card spent on the react, +2 cards drawn = +1 hand size and your deck thinned of Wyrms.",
+        "The react has no body — you trade THIS Tree Wyrm to load your hand with future Tree Wyrms. Plan to hard-cast the ones you tutor.",
+        "Plays around board wipes: the react fires on opponent's end-of-turn, so you can hold a Tree Wyrm reactively and refill after they sweep.",
+        "Hard-casting a Tree Wyrm with a card draw on Summon snowballs nicely — by mid-game you can have 2-3 Wyrms in hand from a single tutor."
+    ],
+    "rulings": [
+        "Normal play: 5 mana to deploy as a 33/33 minion. Triggers Summon: Draw 1 (own deck).",
+        "React play: 0 mana, only when the opponent ends their turn (react_condition=opponent_ends_turn). Tree Wyrm goes to your graveyard from hand and you tutor up to 2 Tree Wyrms from your deck to hand.",
+        "tutor_target='tree_wyrm' — only Tree Wyrm itself qualifies. If your deck has no Tree Wyrms, the react resolves with 0 picks (no refund of the discarded card).",
+        "If your deck has only 1 Tree Wyrm, the picker caps at 1 pick.",
+        "Summon: Draw fires once per deploy, not on the react play (the react runs the react_effect only — no Summon triggers, no body deployed)."
+    ]
+}
