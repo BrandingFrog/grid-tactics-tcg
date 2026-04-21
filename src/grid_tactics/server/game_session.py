@@ -27,6 +27,14 @@ class GameSession:
         self.player_sids = player_sids
         self.player_decks = player_decks  # original decks for rematch
         self.rematch_requested = [False, False]  # per-player rematch flag
+        # Phase 14.8-03b (M3): monotonic event seq for this session.
+        # Each EventStream(next_seq=session.next_event_seq) per resolve_action
+        # call seeds from this counter; afterward stream.next_seq is written
+        # back. Survives the lifetime of the session so client-side
+        # lastSeenSeq dedup (plan 04b) has a stable monotone reference.
+        # Reset to 0 on rematch (RoomManager.request_rematch builds a fresh
+        # GameSession, which re-runs __init__ → counter starts at 0 again).
+        self.next_event_seq: int = 0
         self.lock = threading.Lock()
 
     def get_player_idx(self, token: str) -> int | None:

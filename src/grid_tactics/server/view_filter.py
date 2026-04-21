@@ -509,6 +509,142 @@ def enrich_pending_conjure_deploy(
     filtered_dict["pending_conjure_deploy_positions"] = positions
 
 
+def filter_engine_events_for_viewer(
+    events,
+    viewer_idx: int,
+    *,
+    god_mode: bool = False,
+):
+    """Phase 14.8-03b: per-viewer EngineEvent filter.
+
+    Mirrors the per-state filtering already done by
+    ``filter_state_for_player`` / ``enrich_pending_*_for_viewer`` but
+    applied per-event so the new ``engine_events`` socket payload only
+    leaks information the viewer is allowed to see.
+
+    Filtering rules:
+      - ``EVT_CARD_DRAWN``: if the draw owner is the opponent and
+        ``god_mode`` is False, replace ``card_numeric_id`` /
+        ``card_id`` with ``None`` (the count is still visible —
+        opponent's hand-size delta is public). Sandbox cheat-driven
+        ``add_card_to_zone`` that looks like a draw uses the same
+        rule because the wire format is uniform.
+      - ``EVT_CARD_DISCARDED``: face-up info per Phase 14.5 — full
+        card identity is public for both players. NO filtering.
+      - ``EVT_PENDING_MODAL_OPENED``: if the modal owner (``owner_idx``
+        / ``picker_idx`` / ``player_idx`` in payload) is the opponent
+        and not god_mode, replace ``options`` with ``{"option_count":
+        N}`` so the opponent sees "thinking" without seeing the
+        choices. Mirror of ``enrich_pending_tutor_for_viewer``.
+      - ``EVT_TRIGGER_BLIP``: visible to all (the trigger fired on
+        the public board). NO filtering.
+      - All other events: visible to all (board, hp, mana,
+        attacks, deaths, summons, react windows, phase changes, turn
+        flips, fizzles, game-over — all public per the GameState
+        view-filter contract).
+
+    The function returns a NEW list — input events are never mutated.
+    Per the dataclass-frozen invariant on EngineEvent, filtered events
+    that need redaction are reconstructed via ``EngineEvent`` with
+    redacted payloads.
+
+    god_mode (sandbox / spectator-god): bypasses ALL redaction and
+    returns the input list unchanged (no copy needed since the
+    EngineEvent is frozen). Mirrors ``filter_state_for_spectator``'s
+    god_mode shortcut.
+
+    Args:
+        events: Iterable of ``EngineEvent`` instances.
+        viewer_idx: 0 or 1 — which player is viewing.
+        god_mode: If True, no filtering is applied.
+
+    Returns:
+        A new list of ``EngineEvent`` instances with opponent-private
+        fields redacted. When ``god_mode=True``, returns ``list(events)``.
+    """
+    # Lazy import keeps view_filter free of engine_events module
+    # dependency at module-load time (and avoids a circular-import
+    # risk if engine_events ever grows server-side helpers).
+    from grid_tactics.engine_events import (
+        EVT_CARD_DRAWN,
+        EVT_PENDING_MODAL_OPENED,
+        EngineEvent,
+    )
+
+    if god_mode:
+        return list(events)
+
+    out: list = []
+    for ev in events:
+        # Card draw: redact card identity for the opponent.
+        if ev.type == EVT_CARD_DRAWN:
+            owner = ev.payload.get("player_idx")
+            if owner is None:
+                # Some emitters use "owner" / "owner_idx" key — be
+                # lenient (conservative: redact if we can't tell).
+                owner = ev.payload.get("owner_idx", ev.payload.get("owner"))
+            if owner is not None and int(owner) != viewer_idx:
+                redacted = dict(ev.payload)
+                # Strip every card-identity key the engine might have
+                # written into the payload — be exhaustive so a
+                # forgotten key never leaks identity.
+                for k in (
+                    "card_numeric_id", "card_id", "stable_id", "name",
+                ):
+                    if k in redacted:
+                        redacted[k] = None
+                out.append(EngineEvent(
+                    type=ev.type,
+                    contract_source=ev.contract_source,
+                    seq=ev.seq,
+                    payload=redacted,
+                    animation_duration_ms=ev.animation_duration_ms,
+                    triggered_by_seq=ev.triggered_by_seq,
+                    requires_decision=ev.requires_decision,
+                ))
+                continue
+
+        # Pending modal opened: redact options for the opponent.
+        if ev.type == EVT_PENDING_MODAL_OPENED:
+            # Owner key varies by modal kind: tutor → owner_idx,
+            # trigger picker → picker_idx, death pick → owner_idx,
+            # conjure deploy → player_idx, revive → player_idx.
+            owner = (
+                ev.payload.get("owner_idx")
+                or ev.payload.get("picker_idx")
+                or ev.payload.get("player_idx")
+            )
+            # Conservative: if owner_idx is unset, withhold options
+            # from BOTH viewers (force the producer to set owner_idx
+            # explicitly). The pending_modal_resolved event will still
+            # fire so the client doesn't deadlock.
+            if owner is None or int(owner) != viewer_idx:
+                redacted = dict(ev.payload)
+                opts = redacted.get("options")
+                if isinstance(opts, list):
+                    redacted["options"] = None
+                    redacted["option_count"] = len(opts)
+                else:
+                    redacted["options"] = None
+                    redacted["option_count"] = 0
+                out.append(EngineEvent(
+                    type=ev.type,
+                    contract_source=ev.contract_source,
+                    seq=ev.seq,
+                    payload=redacted,
+                    animation_duration_ms=ev.animation_duration_ms,
+                    triggered_by_seq=ev.triggered_by_seq,
+                    requires_decision=ev.requires_decision,
+                ))
+                continue
+
+        # Default: pass-through unchanged (frozen dataclass — safe to
+        # share the reference).
+        out.append(ev)
+
+    return out
+
+
 def filter_state_for_spectator(
     state_dict: dict, god_mode: bool, perspective_idx: int = 0
 ) -> dict:

@@ -41,6 +41,16 @@ from grid_tactics.action_resolver import resolve_action
 from grid_tactics.board import Board
 from grid_tactics.card_library import CardLibrary
 from grid_tactics.cards import CardType
+from grid_tactics.engine_events import (
+    EVT_CARD_DISCARDED,
+    EVT_CARD_DRAWN,
+    EVT_MANA_CHANGE,
+    EVT_MINION_SUMMONED,
+    EVT_PHASE_CHANGED,
+    EVT_PLAYER_HP_CHANGE,
+    EngineEvent,
+    EventStream,
+)
 from grid_tactics.enums import ActionType, PlayerSide, TurnPhase
 from grid_tactics.game_state import GameState
 from grid_tactics.legal_actions import legal_actions
@@ -92,6 +102,13 @@ class SandboxSession:
         # move animations the same way real multiplayer does.
         self._last_prev_state: GameState | None = None
         self._last_action: Action | None = None
+        # Phase 14.8-03b (M3): monotonic event seq for this sandbox
+        # session. Each EventStream constructed by apply_action /
+        # apply_sandbox_edit seeds from this counter and writes
+        # stream.next_seq back when finished. Reset to 0 on reset() and
+        # on load_dict() so loaded saves start fresh from the client's
+        # POV. See SUMMARY for the contract.
+        self._next_event_seq: int = 0
 
     # ------------------------------------------------------------------
     # Empty starting state (does NOT call GameState.new_game)
@@ -182,8 +199,15 @@ class SandboxSession:
         self,
         action: Action,
         on_frame: Optional[Callable[[], None]] = None,
-    ) -> None:
+    ) -> list[EngineEvent]:
         """Validate via ``legal_actions``, apply via ``resolve_action``.
+
+        Returns the list of EngineEvents emitted across the entire call
+        (the user action plus every drained auto-PASS). The server
+        ``sandbox_apply_action`` handler fans these out via the new
+        ``engine_events`` Socket.IO message; the legacy snapshot
+        (``sandbox_state``) is still emitted alongside for back-compat
+        with pre-04a clients.
 
         Raises ``ValueError("Illegal action")`` if the action is not present
         in the current legal-actions tuple.
@@ -202,14 +226,24 @@ class SandboxSession:
         (opponent has a react card they can actually play) are preserved so
         the user can still exercise them.
 
-        Phase 14.7-09 (Issue A fix): ``on_frame`` is an optional callback
-        fired AFTER each ``resolve_action`` call — i.e. once for the user
-        action and once per drained PASS. This lets the sandbox event
-        handler emit one ``sandbox_state`` frame per intermediate state so
-        the client can see transient signals (``last_trigger_blip``, REACT
-        phase entries / exits) that would otherwise be overwritten by the
-        drain loop. When ``None`` (legacy call sites / tests), only the
-        final state is visible — matching the pre-Issue-A behavior.
+        Phase 14.8-03b (M3 + decommission per-frame hack): a single
+        ``EventStream`` is constructed for the whole call, seeded from
+        ``self._next_event_seq``. Both the user action and every drained
+        PASS thread the same stream into ``resolve_action``, so the
+        client receives ONE ``engine_events`` payload per call rather
+        than one per intermediate frame. This eliminates the per-frame
+        re-emit hack from commit 9c414f9 while still preserving pacing —
+        the client uses ``animation_duration_ms`` on each event as its
+        timing source instead of socket-frame cadence. After the call
+        returns, ``stream.next_seq`` is written back to
+        ``self._next_event_seq`` so the next call's seq numbers continue
+        monotonically.
+
+        ``on_frame`` is preserved as a back-compat shim for any caller
+        that still uses the legacy per-frame emit pattern (most notably
+        existing tests that may rely on intermediate-state visibility).
+        New callers should pass ``None`` and consume the returned event
+        list instead.
         """
         valid = legal_actions(self._state, self.library)
         if action not in valid:
@@ -221,7 +255,14 @@ class SandboxSession:
         # which passes prev_state + resolved_action into enrich_last_action).
         self._last_prev_state = self._state
         self._last_action = action
-        self._state = resolve_action(self._state, action, self.library)
+        # Phase 14.8-03b (M3): one EventStream per apply_action call,
+        # seeded from the persistent counter, threaded through every
+        # resolve_action including drained PASSes. Stream.next_seq is
+        # written back at end so subsequent calls keep monotonic seq.
+        stream = EventStream(next_seq=self._next_event_seq)
+        self._state = resolve_action(
+            self._state, action, self.library, event_collector=stream,
+        )
         if on_frame is not None:
             on_frame()
         # Drain trivial react windows — empty hand / no reactive cards means
@@ -243,7 +284,9 @@ class SandboxSession:
             # phase transitions through to the client.
             self._last_prev_state = self._state
             self._last_action = pass_action()
-            self._state = resolve_action(self._state, pass_action(), self.library)
+            self._state = resolve_action(
+                self._state, pass_action(), self.library, event_collector=stream,
+            )
             if on_frame is not None:
                 on_frame()
 
@@ -251,6 +294,11 @@ class SandboxSession:
         # view to whoever's turn it is so the user always controls the
         # active player without needing to manually toggle.
         self._active_view_idx = self._state.active_player_idx
+        # M3: persist the new seq counter back to the session so the
+        # next apply_action / apply_sandbox_edit picks up where we left
+        # off. Plan 04b's client-side lastSeenSeq dedup depends on this.
+        self._next_event_seq = stream.next_seq
+        return list(stream.events)
 
     # ------------------------------------------------------------------
     # Zone editing (DEV-02 / DEV-03)
@@ -477,6 +525,10 @@ class SandboxSession:
         self._push_undo()
         self._state = self._empty_state()
         self._active_view_idx = 0
+        # M3: a fresh empty state means the client should treat this as
+        # a brand-new session — reset the monotonic event seq counter so
+        # subsequent edits start at seq 0 again.
+        self._next_event_seq = 0
 
     # ------------------------------------------------------------------
     # Serialization (delegates entirely to GameState)
@@ -496,9 +548,232 @@ class SandboxSession:
         self._redo.clear()
         self._last_prev_state = None
         self._last_action = None
+        # M3: load is a hard state replacement — reset seq so the
+        # downstream client renders the loaded snapshot from scratch.
+        self._next_event_seq = 0
 
     def legal_actions(self) -> tuple:
         return legal_actions(self._state, self.library)
+
+    # ------------------------------------------------------------------
+    # Sandbox edit event emission (Phase 14.8-03b)
+    # ------------------------------------------------------------------
+
+    def apply_sandbox_edit(self, verb: str, payload: dict) -> list[EngineEvent]:
+        """Apply a sandbox-only edit and emit events for it.
+
+        Per orchestrator decision #5: sandbox cheats / undo / redo /
+        set_active / save / load / add_card_to_zone / move_card_between_zones
+        all flow through the same EventStream pipeline as engine actions.
+        Each event carries ``contract_source=f"sandbox:{verb}"`` — the
+        ``sandbox:`` prefix bypasses phase-contract assertions per
+        plan 14.8-01 but the wire format stays uniform so the client
+        uses ONE rendering pipeline.
+
+        ``verb`` is the canonical action verb (e.g. ``cheat_mana``,
+        ``cheat_hp``, ``set_active``, ``undo``, ``redo``, ``reset``,
+        ``add_card_to_zone``, ``move_card_between_zones``,
+        ``place_on_board``, ``import_deck``, ``load``, ``load_slot``).
+        ``payload`` carries verb-specific fields (player_idx, value,
+        zone, etc.). Each verb maps to one or more event types; verbs
+        without a natural per-field event (e.g. ``undo``, ``load``)
+        emit a single ``phase_changed`` event tagged with the sandbox
+        source so the client can drive a generic "state replaced" hook.
+
+        Returns the list of EngineEvents emitted. Mutates state via the
+        existing primitive helpers (no duplicate logic).
+        """
+        stream = EventStream(next_seq=self._next_event_seq)
+        source = f"sandbox:{verb}"
+
+        # Capture pre-edit snapshot so cheat verbs can compute deltas.
+        prev_state = self._state
+
+        if verb == "cheat_mana":
+            player_idx = int(payload["player_idx"])
+            field = str(payload.get("field", "current_mana"))
+            value = int(payload["value"])
+            self.set_player_field(player_idx, field, value)
+            new_value = getattr(self._state.players[player_idx], field)
+            stream.collect(
+                EVT_MANA_CHANGE,
+                source,
+                {
+                    "player_idx": player_idx,
+                    "field": field,
+                    "prev": int(getattr(prev_state.players[player_idx], field)),
+                    "new": int(new_value),
+                },
+            )
+        elif verb == "cheat_hp":
+            player_idx = int(payload["player_idx"])
+            value = int(payload["value"])
+            self.set_player_field(player_idx, "hp", value)
+            stream.collect(
+                EVT_PLAYER_HP_CHANGE,
+                source,
+                {
+                    "player_idx": player_idx,
+                    "prev": int(prev_state.players[player_idx].hp),
+                    "new": int(self._state.players[player_idx].hp),
+                },
+            )
+        elif verb == "set_active":
+            player_idx = int(payload["player_idx"])
+            self.set_active_player(player_idx)
+            stream.collect(
+                EVT_PHASE_CHANGED,
+                source,
+                {
+                    "active_player_idx": player_idx,
+                    "phase": int(self._state.phase),
+                },
+            )
+        elif verb == "add_card_to_zone":
+            player_idx = int(payload["player_idx"])
+            card_numeric_id = int(payload["card_numeric_id"])
+            zone = str(payload["zone"])
+            self.add_card_to_zone(player_idx, card_numeric_id, zone)
+            # Map zone → event type. hand → CARD_DRAWN-shaped (it's a
+            # gain), graveyard → CARD_DISCARDED-shaped, others → DRAWN
+            # (closest semantic for "card appears in zone").
+            evt_type = (
+                EVT_CARD_DISCARDED if zone == "graveyard" else EVT_CARD_DRAWN
+            )
+            stream.collect(
+                evt_type,
+                source,
+                {
+                    "player_idx": player_idx,
+                    "card_numeric_id": card_numeric_id,
+                    "zone": zone,
+                },
+            )
+        elif verb == "move_card_between_zones":
+            player_idx = int(payload["player_idx"])
+            card_numeric_id = int(payload["card_numeric_id"])
+            src_zone = str(payload["src_zone"])
+            dst_zone = str(payload["dst_zone"])
+            self.move_card_between_zones(
+                player_idx, card_numeric_id, src_zone, dst_zone,
+            )
+            stream.collect(
+                EVT_CARD_DISCARDED if dst_zone == "graveyard" else EVT_CARD_DRAWN,
+                source,
+                {
+                    "player_idx": player_idx,
+                    "card_numeric_id": card_numeric_id,
+                    "src_zone": src_zone,
+                    "dst_zone": dst_zone,
+                },
+            )
+        elif verb == "place_on_board":
+            player_idx = int(payload["player_idx"])
+            card_numeric_id = int(payload["card_numeric_id"])
+            row = int(payload["row"])
+            col = int(payload["col"])
+            self.place_on_board(player_idx, card_numeric_id, row, col)
+            # The just-placed minion is the last entry in the tuple.
+            placed = self._state.minions[-1] if self._state.minions else None
+            stream.collect(
+                EVT_MINION_SUMMONED,
+                source,
+                {
+                    "player_idx": player_idx,
+                    "card_numeric_id": card_numeric_id,
+                    "instance_id": int(placed.instance_id) if placed else None,
+                    "position": [row, col],
+                },
+            )
+        elif verb == "import_deck":
+            player_idx = int(payload["player_idx"])
+            deck = list(payload["deck_card_ids"])
+            self.import_deck(player_idx, deck)
+            stream.collect(
+                EVT_PHASE_CHANGED,
+                source,
+                {
+                    "player_idx": player_idx,
+                    "deck_size": len(deck),
+                },
+            )
+        elif verb == "undo":
+            self.undo()
+            stream.collect(
+                EVT_PHASE_CHANGED,
+                source,
+                {"phase": int(self._state.phase), "verb": "undo"},
+            )
+        elif verb == "redo":
+            self.redo()
+            stream.collect(
+                EVT_PHASE_CHANGED,
+                source,
+                {"phase": int(self._state.phase), "verb": "redo"},
+            )
+        elif verb == "reset":
+            self.reset()
+            stream.collect(
+                EVT_PHASE_CHANGED,
+                source,
+                {"phase": int(self._state.phase), "verb": "reset"},
+            )
+        elif verb == "load":
+            self.load_dict(payload["payload"])
+            stream.collect(
+                EVT_PHASE_CHANGED,
+                source,
+                {"phase": int(self._state.phase), "verb": "load"},
+            )
+        elif verb == "load_slot":
+            self.load_from_slot(str(payload["slot_name"]))
+            stream.collect(
+                EVT_PHASE_CHANGED,
+                source,
+                {
+                    "phase": int(self._state.phase),
+                    "verb": "load_slot",
+                    "slot_name": str(payload["slot_name"]),
+                },
+            )
+        elif verb == "save_slot":
+            self.save_to_slot(str(payload["slot_name"]))
+            # save is a side-effect-only verb (writes a file); still
+            # emit one event so the client gets a uniform pipeline.
+            stream.collect(
+                EVT_PHASE_CHANGED,
+                source,
+                {
+                    "phase": int(self._state.phase),
+                    "verb": "save_slot",
+                    "slot_name": str(payload["slot_name"]),
+                },
+            )
+        elif verb == "set_player_field":
+            # Generic cheat-field verb — covers set_player_field handler
+            # which can target any of (current_mana, max_mana, hp).
+            player_idx = int(payload["player_idx"])
+            field = str(payload["field"])
+            value = int(payload["value"])
+            self.set_player_field(player_idx, field, value)
+            evt_type = EVT_PLAYER_HP_CHANGE if field == "hp" else EVT_MANA_CHANGE
+            stream.collect(
+                evt_type,
+                source,
+                {
+                    "player_idx": player_idx,
+                    "field": field,
+                    "prev": int(getattr(prev_state.players[player_idx], field)),
+                    "new": int(getattr(self._state.players[player_idx], field)),
+                },
+            )
+        else:
+            raise ValueError(f"Unknown sandbox edit verb: {verb!r}")
+
+        # Persist seq counter back so subsequent edits / actions stay
+        # monotonic. Even single-event edits advance the counter.
+        self._next_event_seq = stream.next_seq
+        return list(stream.events)
 
     # ------------------------------------------------------------------
     # Server save slots (DEV-08)
