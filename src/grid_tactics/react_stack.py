@@ -29,6 +29,7 @@ from grid_tactics.enums import (
 )
 from grid_tactics.game_state import GameState, PendingTrigger
 from grid_tactics.minion import BURN_DAMAGE, MinionInstance
+from grid_tactics.phase_contracts import assert_phase_contract
 from grid_tactics.types import AUTO_DRAW_ENABLED, MAX_REACT_STACK_DEPTH
 
 
@@ -113,6 +114,7 @@ def tick_status_effects(state: GameState, library: CardLibrary) -> GameState:
       the existing death-cleanup path used by combat.
     - Order: Iterate minions in (row, col) order for determinism.
     """
+    assert_phase_contract(state, "status:burn")
     from dataclasses import replace as _replace
 
     active_side = state.players[state.active_player_idx].side
@@ -177,6 +179,11 @@ def _fire_passive_effects(
     Newly-dead minions (e.g. from a damaging passive) are routed through
     the standard cleanup path.
     """
+    # Phase 14.8-01: defensive tag. trigger:passive is intentionally NOT in
+    # PHASE_CONTRACTS — this function is LEGACY (no card uses PASSIVE) and
+    # will be deleted in plan 14.8-05. In strict mode, calling this would
+    # surface as unknown_source — which is the correct signal.
+    assert_phase_contract(state, "trigger:passive")
     from grid_tactics.effect_resolver import resolve_effect
     from grid_tactics.action_resolver import (
         _check_game_over, _cleanup_dead_minions,
@@ -205,6 +212,7 @@ def _fire_passive_effects(
             state = resolve_effect(
                 state, effect, m.position, m.owner, library, target_pos=None,
                 source_minion_id=m.instance_id,
+                contract_source="trigger:passive",
             )
 
     state = _cleanup_dead_minions(state, library)
@@ -260,6 +268,7 @@ def _enqueue_turn_phase_triggers(
     start/end-of-turn triggers. An enemy minion's Start: trigger fires
     at ITS owner's next turn start — spec §7.1.
     """
+    assert_phase_contract(state, "system:enqueue_triggers")
     active_side = state.players[state.active_player_idx].side
 
     turn_triggers: list[PendingTrigger] = []
@@ -326,6 +335,7 @@ def fire_start_of_turn_triggers(
     Fizzle (14.7-06) is not yet implemented — captured_position preserves
     SELF_OWNER targeting even if the source minion has since moved/died.
     """
+    assert_phase_contract(state, "trigger:on_start_of_turn")
     state = _enqueue_turn_phase_triggers(
         state, library, TriggerType.ON_START_OF_TURN, "start_of_turn",
     )
@@ -346,6 +356,7 @@ def fire_end_of_turn_triggers(
     trigger_kind="end_of_turn" which drives ReactContext.BEFORE_END_OF_TURN
     on the per-resolution react window.
     """
+    assert_phase_contract(state, "trigger:on_end_of_turn")
     state = _enqueue_turn_phase_triggers(
         state, library, TriggerType.ON_END_OF_TURN, "end_of_turn",
     )
@@ -385,6 +396,7 @@ def drain_pending_trigger_queue(
     is a no-op — we wait for TRIGGER_PICK / DECLINE_TRIGGER to make
     progress.
     """
+    assert_phase_contract(state, "system:drain_triggers")
     # If picker modal is already open, do not auto-advance — wait for
     # TRIGGER_PICK / DECLINE_TRIGGER from the picker owner.
     if state.pending_trigger_picker_idx is not None:
@@ -449,6 +461,10 @@ def _resolve_trigger_and_open_react_window(
     effect ended the game, or pending_death_target set if a click-target
     modal is open).
     """
+    # Phase 14.8-01: derive contract_source from the trigger_kind string
+    # (e.g. "on_death" → "trigger:on_death").
+    _trigger_source = f"trigger:{trigger.trigger_kind}"
+    assert_phase_contract(state, _trigger_source)
     from grid_tactics.effect_resolver import (
         resolve_effect,
         _death_effect_needs_modal,
@@ -651,6 +667,7 @@ def _resolve_trigger_and_open_react_window(
         state, effect, trigger.captured_position, caster_owner, library,
         trigger.target_pos,
         source_minion_id=fizzle_source_id,
+        contract_source=_trigger_source,
     )
     fizzled = state is prev_state
 
@@ -845,6 +862,7 @@ def _close_end_of_turn_and_flip(
     the outgoing player — only the pending_death_target resume path in
     action_resolver.py did. Centralizing here fixes that gap silently.
     """
+    assert_phase_contract(state, "system:turn_flip")
     # Flip discard tracking for the outgoing player BEFORE the
     # active-player flip.
     old_active_idx = state.active_player_idx
@@ -906,6 +924,7 @@ def enter_start_of_turn(
     extend the opening condition to account for opponent react cards
     that match OPPONENT_START_OF_TURN even when no triggers fire.
     """
+    assert_phase_contract(state, "system:enter_start_of_turn")
     # 1. Transition to START_OF_TURN phase (even if we shortcut later).
     state = replace(state, phase=TurnPhase.START_OF_TURN)
 
@@ -951,6 +970,7 @@ def enter_end_of_turn(
     the opening condition to account for opponent react cards that
     match OPPONENT_END_OF_TURN even when no triggers fire.
     """
+    assert_phase_contract(state, "system:enter_end_of_turn")
     # 1. Transition to END_OF_TURN phase (even if we shortcut later).
     state = replace(state, phase=TurnPhase.END_OF_TURN)
 
@@ -987,6 +1007,7 @@ def close_start_react_and_enter_action(
     Clears react bookkeeping and sets phase=ACTION. No turn flip — the
     turn player still owns their ACTION phase.
     """
+    assert_phase_contract(state, "system:close_react_window")
     return replace(
         state,
         phase=TurnPhase.ACTION,
@@ -1006,6 +1027,7 @@ def close_end_react_and_advance_turn(
     Clears react bookkeeping, runs the end-of-turn tail for the current
     active player, and enters the NEW active player's START_OF_TURN.
     """
+    assert_phase_contract(state, "system:close_react_window")
     state = replace(
         state,
         react_stack=(),
@@ -1106,6 +1128,16 @@ def resolve_summon_declaration_originator(
     a minion there during the react chain), the summon fizzles silently.
     Proper spec §7 fizzle rule lands in 14.7-06.
     """
+    # Phase 14.8-01: Window A resolves during REACT (the originator was
+    # pushed from action:play_card and is now being drained from the
+    # react stack). Tag with action:play_card to match the action that
+    # initiated the chain — the resolve happens at REACT phase, but the
+    # contract source identifies the AUTHORIZING action. (The phase
+    # check still gates: action:play_card allows ACTION; this resolve
+    # runs at REACT, which means in strict mode the assertion would
+    # surface — see plan 14.8-02 for the disposition. For the
+    # foundation plan with mode=off, no behavior change.)
+    assert_phase_contract(state, "action:play_card")
     from grid_tactics.minion import MinionInstance
 
     card_def = library.get_by_id(entry.card_numeric_id)
@@ -1188,6 +1220,7 @@ def resolve_summon_effect_originator(
     edge — e.g. an on-summon aura killed it) the effect still fires from
     a sentinel (0, 0) position. True fizzle logic lands in 14.7-06.
     """
+    assert_phase_contract(state, "trigger:on_summon")
     from grid_tactics.effect_resolver import resolve_effect, _enter_pending_tutor
     from grid_tactics.action_resolver import _enter_pending_revive
 
@@ -1220,6 +1253,7 @@ def resolve_summon_effect_originator(
             state = resolve_effect(
                 state, effect, source_pos, caster_owner, library, target_pos=None,
                 source_minion_id=entry.source_minion_id,
+                contract_source="trigger:on_summon",
             )
     return state
 
@@ -1250,9 +1284,11 @@ def handle_react_action(
         ValueError: If the action is invalid during REACT phase.
     """
     if action.action_type == ActionType.PASS:
+        assert_phase_contract(state, "action:pass_react")
         return resolve_react_stack(state, library)
 
     if action.action_type == ActionType.PLAY_REACT:
+        assert_phase_contract(state, "action:play_react")
         return _play_react(state, action, library)
 
     raise ValueError(
@@ -1271,6 +1307,7 @@ def _play_react(
       - Sufficient mana (mana_cost for React, react_mana_cost for multi-purpose)
       - Stack depth < MAX_REACT_STACK_DEPTH
     """
+    assert_phase_contract(state, "action:play_react")
     # Validate stack depth
     if len(state.react_stack) >= MAX_REACT_STACK_DEPTH:
         raise ValueError(
@@ -1351,6 +1388,7 @@ def resolve_react_stack(
       - Advance turn (flip active player, increment turn_number)
       - Regenerate mana for the new active player
     """
+    assert_phase_contract(state, "action:pass_react")
     from grid_tactics.effect_resolver import resolve_effect
 
     # Snapshot the pre-resolution stack so the 14.7-04 compound-window
@@ -1409,6 +1447,7 @@ def resolve_react_stack(
                 else:
                     state = resolve_effect(
                         state, resolved_effect, (0, 0), caster_owner, library, tp,
+                        contract_source="trigger:on_play",
                     )
             continue  # originator handled; skip the card_type dispatch below
 
@@ -1439,6 +1478,7 @@ def resolve_react_stack(
                         state = resolve_effect(
                             state, effect, (0, 0), caster_owner, library,
                             entry.target_pos,
+                            contract_source="trigger:on_play",
                         )
             else:
                 # Normal react -- resolve all ON_PLAY effects
@@ -1447,6 +1487,7 @@ def resolve_react_stack(
                         state = resolve_effect(
                             state, effect, (0, 0), caster_owner, library,
                             entry.target_pos,
+                            contract_source="trigger:on_play",
                         )
         elif card_def.is_multi_purpose:
             # Resolve the react_effect only for multi-purpose cards
@@ -1476,6 +1517,7 @@ def resolve_react_stack(
                     state = resolve_effect(
                         state, card_def.react_effect, (0, 0), caster_owner, library,
                         entry.target_pos,
+                        contract_source="trigger:on_play",
                     )
         elif (card_def.card_type == CardType.MAGIC
               and card_def.react_condition is not None):
@@ -1486,6 +1528,7 @@ def resolve_react_stack(
                 state = resolve_effect(
                     state, card_def.react_effect, (0, 0), caster_owner, library,
                     entry.target_pos,
+                    contract_source="trigger:on_play",
                 )
             else:
                 for effect in card_def.effects:
@@ -1493,6 +1536,7 @@ def resolve_react_stack(
                         state = resolve_effect(
                             state, effect, (0, 0), caster_owner, library,
                             entry.target_pos,
+                            contract_source="trigger:on_play",
                         )
 
     # Clean up dead minions after react resolution.

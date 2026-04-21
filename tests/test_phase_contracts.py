@@ -295,3 +295,105 @@ def test_get_enforcement_mode_caches(monkeypatch):
     # After reset, new value takes effect.
     phase_contracts._reset_mode_cache()
     assert get_enforcement_mode() == "strict"
+
+
+# ---------------------------------------------------------------------------
+# Integration tests (Task 2): tagging is benign at mode=off and structured
+# logging in mode=shadow doesn't break engine behavior.
+# ---------------------------------------------------------------------------
+
+
+def test_strict_mode_off_in_default_test_environment(monkeypatch):
+    """Sanity: CI / test env doesn't accidentally enable strict.
+
+    This catches the case where CONTRACT_ENFORCEMENT_MODE leaked into the
+    pytest environment via a developer's shell. With mode=strict on by
+    default, the entire 500+ test suite would break en masse — far too
+    blunt a signal. This test ensures pytest sessions start at mode=off.
+    """
+    monkeypatch.delenv("CONTRACT_ENFORCEMENT_MODE", raising=False)
+    phase_contracts._reset_mode_cache()
+    assert get_enforcement_mode() == "off"
+
+
+def _build_minimal_game(library):
+    """Helper: build a fresh GameState with two trivial decks for integration
+    tests. Deck contents don't matter for the contract assertions; we just
+    need a state in ACTION phase that resolve_action can process."""
+    from grid_tactics.game_state import GameState
+    # Use any 7 cards (deck_size doesn't matter for these tests).
+    all_card_ids = sorted(
+        library.get_numeric_id(c.card_id) for c in library.all_cards
+    )
+    deck = tuple(all_card_ids[:7])
+    state, _rng = GameState.new_game(seed=42, deck_p1=deck, deck_p2=deck)
+    return state
+
+
+def test_resolve_action_does_not_fire_assertions_in_off_mode(monkeypatch, caplog):
+    """A real action through resolve_action emits NO contract warnings
+    at mode=off (the foundation plan's invariant)."""
+    monkeypatch.delenv("CONTRACT_ENFORCEMENT_MODE", raising=False)
+    phase_contracts._reset_mode_cache()
+    from grid_tactics.action_resolver import resolve_action
+    from grid_tactics.actions import pass_action
+    from grid_tactics.card_library import CardLibrary
+    from pathlib import Path
+    library = CardLibrary.from_directory(Path("data/cards"))
+    state = _build_minimal_game(library)
+
+    with caplog.at_level(logging.WARNING, logger="grid_tactics.phase_contracts"):
+        try:
+            resolve_action(state, pass_action(), library)
+        except ValueError:
+            # Some action legality issues are unrelated to contracts.
+            pass
+
+    contract_warnings = [
+        r for r in caplog.records
+        if r.name == "grid_tactics.phase_contracts"
+    ]
+    assert not contract_warnings, (
+        f"Expected no contract warnings at mode=off, got: "
+        f"{[r.getMessage() for r in contract_warnings]}"
+    )
+
+
+def test_shadow_mode_logs_violations_but_does_not_break_resolve_action(
+    monkeypatch, caplog,
+):
+    """Shadow mode logs WARNING for any violation but does NOT raise.
+
+    Runs a few resolve_action calls under shadow mode. The engine's
+    behavior must be IDENTICAL to mode=off (no exceptions, no state
+    corruption). Any structured warnings emitted include the
+    ``source=`` field so plan 14.8-02's invariant test can parse them.
+    """
+    monkeypatch.setenv("CONTRACT_ENFORCEMENT_MODE", "shadow")
+    phase_contracts._reset_mode_cache()
+    assert get_enforcement_mode() == "shadow"
+
+    from grid_tactics.action_resolver import resolve_action
+    from grid_tactics.actions import pass_action
+    from grid_tactics.card_library import CardLibrary
+    from pathlib import Path
+    library = CardLibrary.from_directory(Path("data/cards"))
+    state = _build_minimal_game(library)
+
+    with caplog.at_level(logging.WARNING, logger="grid_tactics.phase_contracts"):
+        try:
+            new_state = resolve_action(state, pass_action(), library)
+            assert new_state is not None
+        except ValueError:
+            # Domain-legality issue, not a contract assertion.
+            pass
+
+    contract_warnings = [
+        r for r in caplog.records
+        if r.name == "grid_tactics.phase_contracts"
+    ]
+    for warn in contract_warnings:
+        msg = warn.getMessage()
+        assert "source=" in msg, (
+            f"Shadow-mode warning missing source= field: {msg}"
+        )

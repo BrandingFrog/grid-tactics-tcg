@@ -35,6 +35,7 @@ from grid_tactics.enums import (
 )
 from grid_tactics.game_state import GameState
 from grid_tactics.minion import MinionInstance
+from grid_tactics.phase_contracts import assert_phase_contract
 from grid_tactics.player import Player
 from grid_tactics.types import BACK_ROW_P1, BACK_ROW_P2, GRID_ROWS, PLAYER_1_ROWS, PLAYER_2_ROWS
 
@@ -126,6 +127,7 @@ def _apply_pass(state: GameState) -> GameState:
     Fatigue counts are stored in GameState.fatigue_counts (per-player tuple)
     instead of a module-level dict, ensuring concurrent game safety.
     """
+    assert_phase_contract(state, "action:pass_action")
     active_idx = state.active_player_idx
     player = state.players[active_idx]
     counts = list(state.fatigue_counts)
@@ -140,6 +142,7 @@ def _apply_draw(state: GameState) -> GameState:
 
     Raises ValueError if the active player's deck is empty.
     """
+    assert_phase_contract(state, "action:draw")
     player = state.players[state.active_player_idx]
     if not player.deck:
         raise ValueError("Cannot draw from empty deck")
@@ -156,6 +159,7 @@ def _apply_move(state: GameState, action: Action, library: CardLibrary = None) -
       - Target position is forward-only in the same column (lane-locked)
       - Target cell is empty
     """
+    assert_phase_contract(state, "action:move")
     active_side = _get_active_side(state)
 
     # Find the minion
@@ -236,6 +240,7 @@ def _apply_move(state: GameState, action: Action, library: CardLibrary = None) -
     if library is not None:
         state = resolve_effects_for_trigger(
             state, TriggerType.ON_MOVE, new_minion, library,
+            contract_source="trigger:on_move",
         )
 
     # Phase 14.1 / 14.7-08: For melee (range=0) minions, if there is at least
@@ -276,6 +281,7 @@ def _apply_play_card(
       - Deployment zone (D-08: melee any friendly row, D-09: ranged back row only)
       - React cards cannot be played during ACTION phase
     """
+    assert_phase_contract(state, "action:play_card")
     active_idx = state.active_player_idx
     player = state.players[active_idx]
     active_side = player.side
@@ -369,6 +375,7 @@ def _apply_play_card(
                 for eff in discard_effects:
                     tmp_state = resolve_effect(
                         tmp_state, eff, (0, 0), active_side, library,
+                        contract_source="trigger:on_discard",
                     )
                 # Pull updated state back (effects may have changed minions)
                 state = tmp_state
@@ -420,6 +427,7 @@ def _deploy_minion(
     discard/HP cost BEFORE invoking _deploy_minion, so the summon_declaration
     originator only needs to remember the deployment position + card.
     """
+    assert_phase_contract(state, "action:play_card")
     deploy_pos = action.position
     if deploy_pos is None:
         raise ValueError("Minion deployment requires a position")
@@ -538,6 +546,7 @@ def _apply_revive_place(
     decrements pending_revive_remaining. If remaining hits 0 or no more
     grave copies, clears the pending state.
     """
+    assert_phase_contract(state, "action:revive_place")
     player_idx = state.pending_revive_player_idx
     card_id = state.pending_revive_card_id
     remaining = state.pending_revive_remaining
@@ -631,6 +640,7 @@ def _apply_trigger_pick(
     other-queue (picker_idx == other_idx) — the is_turn_queue flag is
     derived from the picker's identity.
     """
+    assert_phase_contract(state, "action:trigger_pick")
     from grid_tactics.react_stack import _resolve_trigger_and_open_react_window
 
     picker = state.pending_trigger_picker_idx
@@ -686,6 +696,7 @@ def _apply_decline_trigger(
     lethal). Spec §7.3 grants the owner this option — the fizzled
     effects simply don't happen.
     """
+    assert_phase_contract(state, "action:decline_trigger")
     from grid_tactics.react_stack import drain_pending_trigger_queue
 
     picker = state.pending_trigger_picker_idx
@@ -736,6 +747,7 @@ def _cast_magic(
     by the caller (_apply_play_card), so the card_index on the originator
     is -1 to signal "no hand reference".
     """
+    assert_phase_contract(state, "action:play_card")
     # Destroy-ally cost: remove a friendly minion from the board before
     # effects resolve. Distinct from the board-crossing SACRIFICE action.
     # Captures destroyed_attack / destroyed_dm for scale_with effects at
@@ -814,6 +826,7 @@ def _apply_sacrifice(
       4. Add minion's card to owner's grave
       5. Deal effective attack as damage to opponent
     """
+    assert_phase_contract(state, "action:sacrifice")
     active_side = _get_active_side(state)
 
     # Find the minion
@@ -901,6 +914,7 @@ def _apply_transform(
       - Resets current_health to the new form's max HP
       - Resets attack_bonus to 0
     """
+    assert_phase_contract(state, "action:transform")
     active_side = _get_active_side(state)
     active_idx = state.active_player_idx
 
@@ -978,6 +992,7 @@ def _apply_activate_ability(
         one to add to hand. If the deck has zero matches, the conjure is
         skipped silently and control returns directly to the react flow.
     """
+    assert_phase_contract(state, "action:activate_ability")
     active_idx = state.active_player_idx
     active_side = _get_active_side(state)
     player = state.players[active_idx]
@@ -1076,6 +1091,7 @@ def _apply_activate_ability(
         state = resolve_effect(
             state, buff_effect, minion.position, active_side, library,
             target_pos=target_pos,
+            contract_source="action:activate_ability",
         )
     else:
         raise ValueError(f"Unsupported activated_ability effect_type '{ability.effect_type}'")
@@ -1181,6 +1197,7 @@ def _apply_attack(
     After damage: triggers ON_ATTACK for attacker, ON_DAMAGED for both (if damaged).
     Dead minion cleanup happens in resolve_action after this returns.
     """
+    assert_phase_contract(state, "action:attack")
     active_side = _get_active_side(state)
 
     # Find attacker and defender
@@ -1255,6 +1272,7 @@ def _apply_attack(
         state = resolve_effects_for_trigger(
             state, TriggerType.ON_ATTACK, updated_attacker, library,
             target_pos=defender.position,
+            contract_source="trigger:on_attack",
         )
 
     # Trigger ON_DAMAGED for both if they took damage
@@ -1263,12 +1281,14 @@ def _apply_attack(
         if updated_attacker is not None:
             state = resolve_effects_for_trigger(
                 state, TriggerType.ON_DAMAGED, updated_attacker, library,
+                contract_source="trigger:on_damaged",
             )
     if attacker_effective > 0:
         updated_defender = state.get_minion(defender.instance_id)
         if updated_defender is not None:
             state = resolve_effects_for_trigger(
                 state, TriggerType.ON_DAMAGED, updated_defender, library,
+                contract_source="trigger:on_damaged",
             )
 
     return state
@@ -1308,6 +1328,7 @@ def _enqueue_dead_minions_and_cleanup_zones(
       - players: grave updated (tokens still vanish silently per 14.5)
       - pending_death_queue: extended with new work entries in order
     """
+    assert_phase_contract(state, "system:cleanup_dead_minions")
     from grid_tactics.game_state import PendingDeathWork
 
     dead_minions = [m for m in state.minions if not m.is_alive]
@@ -1471,6 +1492,7 @@ def _cleanup_dead_minions(
     call, this function is a no-op — we wait for DEATH_TARGET_PICK.
     Same for ``pending_trigger_picker_idx``.
     """
+    assert_phase_contract(state, "system:cleanup_dead_minions")
     # If a single-target modal is still pending, don't touch the queues —
     # wait for the caller to submit DEATH_TARGET_PICK.
     if state.pending_death_target is not None:
@@ -1588,6 +1610,7 @@ def _check_game_over(state: GameState) -> GameState:
     - P2 dead: P1 wins
     - Neither dead: no change
     """
+    assert_phase_contract(state, "system:check_game_over")
     p1_alive = state.players[0].is_alive
     p2_alive = state.players[1].is_alive
 
@@ -1705,6 +1728,7 @@ def resolve_action(
         if action.action_type == ActionType.REVIVE_PLACE:
             return _apply_revive_place(state, action, library)
         elif action.action_type == ActionType.DECLINE_REVIVE:
+            assert_phase_contract(state, "action:decline_revive")
             return replace(
                 state,
                 pending_revive_player_idx=None,
@@ -1767,6 +1791,7 @@ def resolve_action(
         deployer_idx = state.pending_conjure_deploy_player_idx
         deployer_side = state.players[deployer_idx].side
         if action.action_type == ActionType.CONJURE_DEPLOY:
+            assert_phase_contract(state, "action:conjure_deploy")
             target_pos = action.position
             if target_pos is None:
                 raise ValueError("CONJURE_DEPLOY requires a position")
@@ -1797,6 +1822,7 @@ def resolve_action(
                 pending_conjure_deploy_player_idx=None,
             )
         elif action.action_type == ActionType.DECLINE_CONJURE:
+            assert_phase_contract(state, "action:decline_conjure")
             # Decline deployment — card goes to hand instead
             card_numeric_id = state.pending_conjure_deploy_card
             deployer = state.players[deployer_idx]
@@ -1859,6 +1885,7 @@ def resolve_action(
         )
         is_conjure = state.pending_tutor_is_conjure
         if action.action_type == ActionType.TUTOR_SELECT:
+            assert_phase_contract(state, "action:tutor_select")
             match_idx = action.card_index  # reuse card_index payload
             if match_idx is None or match_idx < 0 or match_idx >= len(state.pending_tutor_matches):
                 raise ValueError(
@@ -1947,6 +1974,7 @@ def resolve_action(
                         # TUTOR_SELECT / DECLINE_TUTOR.
                         return state
         elif action.action_type == ActionType.DECLINE_TUTOR:
+            assert_phase_contract(state, "action:decline_tutor")
             state = replace(
                 state,
                 pending_tutor_player_idx=None,
@@ -1999,6 +2027,7 @@ def resolve_action(
         if action.action_type == ActionType.REVIVE_PLACE:
             return _apply_revive_place(state, action, library)
         elif action.action_type == ActionType.DECLINE_REVIVE:
+            assert_phase_contract(state, "action:decline_revive")
             return replace(
                 state,
                 pending_revive_player_idx=None,
@@ -2032,6 +2061,7 @@ def resolve_action(
             state = _apply_attack(state, action, library)
             state = replace(state, pending_post_move_attacker_id=None)
         elif is_decline:
+            assert_phase_contract(state, "action:decline_post_move_attack")
             state = replace(state, pending_post_move_attacker_id=None)
         else:
             raise ValueError(

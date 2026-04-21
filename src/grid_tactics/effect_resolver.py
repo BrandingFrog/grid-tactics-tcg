@@ -20,6 +20,7 @@ from grid_tactics.cards import CardDefinition, EffectDefinition
 from grid_tactics.enums import EffectType, Element, PlayerSide, TargetType, TriggerType
 from grid_tactics.game_state import GameState, PendingDeathTarget
 from grid_tactics.minion import MinionInstance
+from grid_tactics.phase_contracts import assert_phase_contract
 from grid_tactics.player import Player
 from grid_tactics.types import STARTING_HP
 
@@ -165,16 +166,27 @@ def _check_placement_condition(
 
 
 def _apply_damage_to_minion(
-    state: GameState, minion: MinionInstance, amount: int,
+    state: GameState,
+    minion: MinionInstance,
+    amount: int,
+    *,
+    contract_source: Optional[str] = None,
 ) -> GameState:
     """Apply damage to a minion, reducing current_health."""
+    if contract_source is not None:
+        assert_phase_contract(state, contract_source)
     new_minion = replace(minion, current_health=minion.current_health - amount)
     new_minions = _replace_minion(state.minions, minion.instance_id, new_minion)
     return replace(state, minions=new_minions)
 
 
 def _apply_heal_to_minion(
-    state: GameState, minion: MinionInstance, amount: int, library: CardLibrary,
+    state: GameState,
+    minion: MinionInstance,
+    amount: int,
+    library: CardLibrary,
+    *,
+    contract_source: Optional[str] = None,
 ) -> GameState:
     """Apply heal to a minion, capped at effective max HP.
 
@@ -182,6 +194,8 @@ def _apply_heal_to_minion(
     flat max-HP buffs (e.g. Ratchanter's conjure_rat_and_buff) raise the
     heal ceiling too.
     """
+    if contract_source is not None:
+        assert_phase_contract(state, contract_source)
     card_def = library.get_by_id(minion.card_numeric_id)
     effective_max = card_def.health + minion.max_health_bonus
     new_health = min(minion.current_health + amount, effective_max)
@@ -191,18 +205,30 @@ def _apply_heal_to_minion(
 
 
 def _apply_buff_attack_to_minion(
-    state: GameState, minion: MinionInstance, amount: int,
+    state: GameState,
+    minion: MinionInstance,
+    amount: int,
+    *,
+    contract_source: Optional[str] = None,
 ) -> GameState:
     """Increase a minion's attack_bonus."""
+    if contract_source is not None:
+        assert_phase_contract(state, contract_source)
     new_minion = replace(minion, attack_bonus=minion.attack_bonus + amount)
     new_minions = _replace_minion(state.minions, minion.instance_id, new_minion)
     return replace(state, minions=new_minions)
 
 
 def _apply_buff_health_to_minion(
-    state: GameState, minion: MinionInstance, amount: int,
+    state: GameState,
+    minion: MinionInstance,
+    amount: int,
+    *,
+    contract_source: Optional[str] = None,
 ) -> GameState:
     """Increase a minion's current_health (no cap -- buff_health can exceed base)."""
+    if contract_source is not None:
+        assert_phase_contract(state, contract_source)
     new_minion = replace(minion, current_health=minion.current_health + amount)
     new_minions = _replace_minion(state.minions, minion.instance_id, new_minion)
     return replace(state, minions=new_minions)
@@ -213,6 +239,8 @@ def _apply_effect_to_minion(
     effect: EffectDefinition,
     minion: MinionInstance,
     library: CardLibrary,
+    *,
+    contract_source: Optional[str] = None,
 ) -> GameState:
     """Apply an effect to a single minion based on effect_type.
 
@@ -224,6 +252,8 @@ def _apply_effect_to_minion(
     ``resolve_effects_for_trigger``; it transforms a friendly minion
     rather than mutating the dying one, so it doesn't fit this helper.
     """
+    if contract_source is not None:
+        assert_phase_contract(state, contract_source)
     if effect.effect_type == EffectType.DAMAGE:
         return _apply_damage_to_minion(state, minion, effect.amount)
     elif effect.effect_type == EffectType.HEAL:
@@ -270,8 +300,12 @@ def _apply_effect_to_player(
     state: GameState,
     effect: EffectDefinition,
     player_idx: int,
+    *,
+    contract_source: Optional[str] = None,
 ) -> GameState:
     """Apply an effect to a player (DAMAGE or HEAL only)."""
+    if contract_source is not None:
+        assert_phase_contract(state, contract_source)
     player = state.players[player_idx]
     if effect.effect_type == EffectType.DAMAGE:
         new_player = player.take_damage(effect.amount)
@@ -406,6 +440,10 @@ def _enter_pending_tutor(
     Mutex: asserts no concurrent pending_post_move_attacker_id (defense in
     depth -- tutor only fires from on_play, not from MOVE).
     """
+    # Phase 14.8-01: _enter_pending_tutor inherits its caller's contract
+    # (on_play from action:play_card path; on_death-fired tutor would
+    # inherit trigger:on_death). The caller has already asserted; this
+    # function does not re-tag because it has no fixed source.
     if not card_def.tutor_target:
         return state
 
@@ -483,6 +521,7 @@ def resolve_effect(
     target_pos: Optional[tuple[int, int]] = None,
     *,
     source_minion_id: Optional[int] = None,
+    contract_source: Optional[str] = None,
 ) -> GameState:
     """Resolve a single effect, returning a new GameState.
 
@@ -503,6 +542,13 @@ def resolve_effect(
             pass the minion's instance_id so the fizzle gate can re-
             validate source liveness. Leave None for magic casts and
             react-card effects where the source is a player / card.
+        contract_source: Phase 14.8-01 — the "<category>:<name>" string
+            identifying which contract authorized this resolution
+            (e.g. "trigger:on_play", "trigger:on_death",
+            "action:play_react"). When supplied, the engine asserts the
+            contract is legal in state.phase. Default None preserves
+            back-compat at mode=off; the invariant test in plan 14.8-02
+            will surface any caller that didn't pass a source.
 
     Returns:
         New GameState with effect applied. Returns ``state`` unchanged
@@ -511,6 +557,8 @@ def resolve_effect(
     Raises:
         ValueError: If target_pos is None for SINGLE_TARGET effects.
     """
+    if contract_source is not None:
+        assert_phase_contract(state, contract_source)
     # Phase 14.7-06: Fizzle gate. An effect whose target is no longer
     # valid at resolution time fizzles SILENTLY — return the incoming
     # state unchanged (identity-preserving so callers can detect no-op
@@ -617,6 +665,8 @@ def resolve_effects_for_trigger(
     minion: MinionInstance,
     library: CardLibrary,
     target_pos: Optional[tuple[int, int]] = None,
+    *,
+    contract_source: Optional[str] = None,
 ) -> GameState:
     """Resolve all effects on a minion's card that match the given trigger.
 
@@ -628,10 +678,18 @@ def resolve_effects_for_trigger(
         minion: The minion whose card effects to check.
         library: CardLibrary for card definition lookup.
         target_pos: Optional target position for SINGLE_TARGET effects.
+        contract_source: Phase 14.8-01 — when supplied, asserts the
+            contract is legal in state.phase. When None, defaults to
+            ``f"trigger:{trigger.name.lower()}"`` (the canonical source
+            for trigger-driven resolution) so callers that don't pass an
+            explicit override still get tagged.
 
     Returns:
         New GameState with all matching effects applied in order.
     """
+    if contract_source is None:
+        contract_source = f"trigger:{trigger.name.lower()}"
+    assert_phase_contract(state, contract_source)
     card_def = library.get_by_id(minion.card_numeric_id)
     matching_effects = [e for e in card_def.effects if e.trigger == trigger]
 
@@ -645,7 +703,10 @@ def resolve_effects_for_trigger(
                 amount=max(1, effect.amount or 1),
             )
         elif effect.effect_type == EffectType.CONJURE:
-            state = _resolve_conjure(state, card_def, minion.owner, library)
+            state = _resolve_conjure(
+                state, card_def, minion.owner, library,
+                contract_source=contract_source,
+            )
         elif effect.effect_type == EffectType.RALLY_FORWARD:
             state = _apply_rally_forward(state, minion)
         elif effect.effect_type == EffectType.PROMOTE:
@@ -660,6 +721,7 @@ def resolve_effects_for_trigger(
             state = resolve_effect(
                 state, effect, minion.position, minion.owner, library, target_pos,
                 source_minion_id=minion.instance_id,
+                contract_source=contract_source,
             )
     return state
 
@@ -753,6 +815,7 @@ def resolve_death_effects_or_enter_modal(
         "a modal was opened at that index; resume there after the pick
         resolves".
     """
+    assert_phase_contract(state, "trigger:on_death")
     try:
         card_def = library.get_by_id(card_numeric_id)
     except KeyError:
@@ -829,7 +892,10 @@ def resolve_death_effects_or_enter_modal(
                 amount=max(1, effect.amount or 1),
             )
         elif effect.effect_type == EffectType.CONJURE:
-            state = _resolve_conjure(state, card_def, owner, library)
+            state = _resolve_conjure(
+                state, card_def, owner, library,
+                contract_source="trigger:on_death",
+            )
         elif effect.effect_type == EffectType.RALLY_FORWARD:
             # RALLY_FORWARD on death would need a mover reference; no live
             # card uses it, but keep the dispatch symmetric with
@@ -838,6 +904,7 @@ def resolve_death_effects_or_enter_modal(
         else:
             state = resolve_effect(
                 state, effect, position, owner, library, target_pos=None,
+                contract_source="trigger:on_death",
             )
 
     return state, -1
@@ -862,6 +929,7 @@ def apply_death_target_pick(
     if the picked position doesn't contain a valid target, or if the
     effect_idx is stale.
     """
+    assert_phase_contract(state, "action:death_target_pick")
     target = state.pending_death_target
     if target is None:
         raise ValueError("DEATH_TARGET_PICK submitted with no pending_death_target")
@@ -937,6 +1005,7 @@ def apply_death_target_pick(
             caster_owner=PlayerSide(target.owner_idx),
             library=library,
             target_pos=target_pos,
+            contract_source="action:death_target_pick",
         )
 
     # Phase 14.7-05b: pending_death_queue (PendingDeathWork) is no longer
@@ -1076,12 +1145,16 @@ def _resolve_conjure(
     card_def: CardDefinition,
     caster_owner: PlayerSide,
     library: CardLibrary,
+    *,
+    contract_source: Optional[str] = None,
 ) -> GameState:
     """Conjure: add a copy of summon_token_target card to the caster's hand.
 
     Unlike tutor (which searches the deck), conjure creates a card from outside
     the deck. Used by Ratchanter and similar 'summoner' minions.
     """
+    if contract_source is not None:
+        assert_phase_contract(state, contract_source)
     if not card_def.summon_token_target:
         return state
     try:
