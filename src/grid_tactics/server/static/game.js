@@ -4029,49 +4029,31 @@ function onGameStart(data) {
     renderGame();
 }
 
-// Phase 14.8-04b: onStateUpdate is now a pure snapshot-cache commit.
-// Every animation (summon, move, attack, draw, card fly, HP popup,
-// spell stage, turn banner, trigger blip, etc.) is owned by the
-// eventQueue's slot handlers. onStateUpdate only applies the authoritative
-// state frame so the board renders correctly on reconnect / initial-
-// join / post-reset and so spectator god-mode flags stay in sync.
-//
-// The prev→next derive-* helpers (deriveAnimationJob, deriveCardFlyJobs,
-// deriveDrawJobs, derivePlayerHpDeltaAnims, detectSpellCast,
-// detectReactWindowClose, detectSpellStageClose) are marked DEAD CODE
-// below — plan 14.8-05 deletes them together with state_update /
-// sandbox_state Socket.IO subscriptions.
+// Phase 14.8-05: onStateUpdate is a snapshot-cache commit ONLY for the
+// initial frame (game_start + reconnect). Post-action state_update emits
+// were DELETED server-side in this plan; the subscription here is retained
+// defensively for backward compat with any pre-04b client or reconnection
+// flow that might still emit a snapshot. DOM commits for ongoing play
+// flow exclusively through the eventQueue's slot handlers — summon,
+// move, attack, draw, card fly, HP popup, spell stage, turn banner,
+// trigger blip, etc. The seven prev→next derive-* helpers
+// (deriveAnimationJob, deriveCardFlyJobs, deriveDrawJobs,
+// derivePlayerHpDeltaAnims, detectSpellCast, detectReactWindowClose,
+// detectSpellStageClose) were deleted at the same time — they're
+// referenced only in historical comments below.
 function onStateUpdate(data) {
     var next = data.state;
     var nextLegal = data.legal_actions;
     applyStateFrame(next, nextLegal);
 }
 
-// DEAD CODE post-14.8-04b — plan 14.8-05 will delete
-// Diff player HP across a state update and enqueue a floating damage
-// popup over each player whose HP dropped. Replaced by
-// playPlayerHpChange slot handler (plan 04a). Retained as reference
-// until plan 05 deletes the snapshot path entirely.
-function derivePlayerHpDeltaAnims(prev, next) {
-    var jobs = [];
-    if (!prev || !next || !prev.players || !next.players) return jobs;
-    for (var i = 0; i < 2; i++) {
-        var prevP = prev.players[i];
-        var nextP = next.players[i];
-        if (!prevP || !nextP) continue;
-        if (typeof prevP.hp !== 'number' || typeof nextP.hp !== 'number') continue;
-        var delta = nextP.hp - prevP.hp;
-        if (delta < 0) {
-            jobs.push({
-                type: 'hp_damage_popup',
-                playerIdx: i,
-                delta: delta,
-                stateApplied: true,
-            });
-        }
-    }
-    return jobs;
-}
+// Phase 14.8-05: derivePlayerHpDeltaAnims DELETED. Replaced by the
+// playPlayerHpChange slot handler (plan 14.8-04a) which fires from
+// EVT_PLAYER_HP_CHANGE on the engine event stream — no snapshot diff
+// needed. The playHpDamagePopup job helper below is retained because
+// playPlayerHpChange creates its damage popup element inline; the
+// function name is preserved for compatibility with any sandbox-time
+// test harnesses that wire it up directly.
 
 function _hpStatElementId(playerIdx) {
     if (sandboxMode) return 'sandbox-p' + playerIdx + '-hp';
@@ -4105,8 +4087,8 @@ function playHpDamagePopup(job, done) {
 // ============================================================
 // Sacrifice transcend animation: the minion morphs into a purple-
 // outlined jumper silhouette, leaps toward the enemy HP display, and
-// fades out. The HP damage popup fires in parallel via the normal
-// derivePlayerHpDeltaAnims pipeline.
+// fades out. The HP damage popup fires in parallel via the
+// playPlayerHpChange event-queue slot handler (post Phase 14.8-05).
 // ============================================================
 var SACRIFICE_JUMPER_SVG = (
     '<svg xmlns="http://www.w3.org/2000/svg" viewBox="-50 -20 300 290" width="100%" height="100%">'
@@ -4795,32 +4777,11 @@ function _resolveSpellStageStep(chain, i, els) {
     }, 550);
 }
 
-// DEAD CODE post-14.8-04b — plan 14.8-05 will delete
-// True if the state just transitioned out of REACT phase into ACTION
-// with an empty react stack — meaning the pending spell chain resolved.
-// Replaced by playReactWindowClosed slot handler. Retained as reference
-// until plan 05 deletes the snapshot path entirely.
-function detectReactWindowClose(prev, next) {
-    if (!prev || !next) return false;
-    var prevStack = prev.react_stack || [];
-    var nextStack = next.react_stack || [];
-    var wasReactOrHadStack = prev.phase === 1 || prevStack.length > 0;
-    var nowCalm = next.phase !== 1 && nextStack.length === 0;
-    return wasReactOrHadStack && nowCalm;
-}
-
-// DEAD CODE post-14.8-04b — plan 14.8-05 will delete
-// Phase 14.7-09 (paladin-heal-during-rat-react fix): stage-close detector
-// keyed on the react_stack alone. Replaced by playReactWindowClosed slot
-// handler which observes the engine's EVT_REACT_WINDOW_CLOSED event
-// directly rather than diffing snapshot react_stack. Retained as
-// reference until plan 05 deletes the snapshot path entirely.
-function detectSpellStageClose(prev, next) {
-    if (!prev || !next) return false;
-    var prevStack = prev.react_stack || [];
-    var nextStack = next.react_stack || [];
-    return prevStack.length > 0 && nextStack.length === 0;
-}
+// Phase 14.8-05: detectReactWindowClose and detectSpellStageClose were
+// DELETED. Both functions diffed snapshot state to infer spell-chain
+// resolution; both are superseded by the playReactWindowClosed slot
+// handler which consumes EVT_REACT_WINDOW_CLOSED directly from the
+// engine event stream.
 
 function _clearSpellStageTimers() {
     if (_spellStage.exitTimer) { clearTimeout(_spellStage.exitTimer); _spellStage.exitTimer = null; }
@@ -4872,160 +4833,16 @@ function _hideSpellStage() {
     }, 360);
 }
 
-// DEAD CODE post-14.8-04b — plan 14.8-05 will delete
-// Detect spell-cast events from a prev→next state transition. Fires the
-// stage for any new magic/react card that just entered grave or the top
-// of the react_stack. Replaced by playReactWindowOpened (spell stage
-// push) + playCardPlayed (grave transition). Retained as reference
-// until plan 05 deletes the snapshot path entirely.
-function detectSpellCast(prev, next) {
-    if (!next) return null;
+// Phase 14.8-05: detectSpellCast DELETED. Replaced by the cooperating
+// pair of playCardPlayed + playReactWindowOpened slot handlers — the
+// former stashes the originator in slotState.lastOriginator, the latter
+// consumes it to slam the card onto the spell-stage LEFT slot.
 
-    // 1) New top of react_stack → that card was just played. Show it in
-    //    the react window so the opponent can see what to react to. Both
-    //    minion deploys and spell casts qualify.
-    var prevStack = (prev && prev.react_stack) || [];
-    var nextStack = (next && next.react_stack) || [];
-    if (nextStack.length > prevStack.length) {
-        var entry = nextStack[nextStack.length - 1];
-        if (entry && entry.card_numeric_id != null) {
-            return { nid: entry.card_numeric_id, playerIdx: entry.player_idx };
-        }
-    }
-
-    // 2) Otherwise, compare graves for a newly-landed MAGIC/REACT card.
-    if (prev && next.players) {
-        for (var i = 0; i < next.players.length; i++) {
-            var prevG = (prev.players && prev.players[i] && prev.players[i].grave) || [];
-            var nextG = (next.players[i] && next.players[i].grave) || [];
-            if (nextG.length <= prevG.length) continue;
-            var prevCnt = {};
-            for (var p = 0; p < prevG.length; p++) prevCnt[prevG[p]] = (prevCnt[prevG[p]] || 0) + 1;
-            for (var q = 0; q < nextG.length; q++) {
-                var gid = nextG[q];
-                if (prevCnt[gid] > 0) { prevCnt[gid] -= 1; continue; }
-                var def = (cardDefs && cardDefs[gid]) ||
-                          (window.sandboxCardDefs && window.sandboxCardDefs[gid]);
-                if (def && (def.card_type === 1 || def.card_type === 2)) {
-                    return { nid: gid, playerIdx: i };
-                }
-            }
-        }
-    }
-    return null;
-}
-
-// DEAD CODE post-14.8-04b — plan 14.8-05 will delete
-// Diff hand → grave / exhaust transitions and emit card_fly jobs.
-// Source hand-slot rects are captured at derive time (pre-apply) so the
-// ghost starts exactly where the real card was sitting when it left.
-// Replaced by playCardDiscarded / playCardPlayed slot handlers (plan
-// 04a). Retained as reference until plan 05 deletes the snapshot path
-// entirely.
-function deriveCardFlyJobs(prev, next) {
-    if (!prev || !next) return [];
-    var indices = [];
-    if (sandboxMode) indices = [0, 1];
-    else if (myPlayerIdx != null) indices = [myPlayerIdx];
-    var out = [];
-    for (var k = 0; k < indices.length; k++) {
-        out = out.concat(_deriveFlyForPlayer(prev, next, indices[k]));
-    }
-    return out;
-}
-
-function _deriveFlyForPlayer(prev, next, playerIdx) {
-    var jobs = [];
-    var prevP = prev.players && prev.players[playerIdx];
-    var nextP = next.players && next.players[playerIdx];
-    if (!prevP || !nextP) return jobs;
-    var prevHand = prevP.hand || [];
-    var nextHand = nextP.hand || [];
-    if (!Array.isArray(prevHand) || !Array.isArray(nextHand)) return jobs;
-
-    var nextCount = {};
-    for (var ni = 0; ni < nextHand.length; ni++) {
-        var nid2 = nextHand[ni];
-        nextCount[nid2] = (nextCount[nid2] || 0) + 1;
-    }
-    var removed = [];
-    for (var pi = 0; pi < prevHand.length; pi++) {
-        var id = prevHand[pi];
-        if ((nextCount[id] || 0) > 0) {
-            nextCount[id] -= 1;
-        } else {
-            removed.push({ nid: id, slotIdx: pi });
-        }
-    }
-    if (removed.length === 0) return jobs;
-
-    var graveDelta = _multisetDelta(prevP.grave, nextP.grave);
-    var exhaustDelta = _multisetDelta(prevP.exhaust, nextP.exhaust);
-
-    // Hand container differs between live game and sandbox (which shows
-    // both hands in distinct divs). The "own" zone identifier also depends
-    // on whose hand we're tracking, so the ghost flies to the correct pile.
-    var handEl;
-    var ownerTag;  // zone suffix for pile lookup
-    if (sandboxMode) {
-        handEl = document.getElementById('sandbox-hand-p' + playerIdx);
-        // Sandbox UIs map playerIdx 0 → pileBtnOwnX, 1 → pileBtnOppX so the
-        // ghost lands on the right-side pile button pair (when P1 is
-        // the fixed perspective) — matches renderSandbox layout.
-        ownerTag = (playerIdx === 0) ? 'own' : 'opp';
-    } else {
-        handEl = document.getElementById(
-            playerIdx === myPlayerIdx ? 'hand-container' : 'oppHandRow'
-        );
-        ownerTag = (playerIdx === myPlayerIdx) ? 'own' : 'opp';
-    }
-
-    for (var r = 0; r < removed.length; r++) {
-        var rem = removed[r];
-        var toZone = null;
-        if ((exhaustDelta[rem.nid] || 0) > 0) {
-            toZone = 'exhaust_' + ownerTag;
-            exhaustDelta[rem.nid] -= 1;
-        } else if ((graveDelta[rem.nid] || 0) > 0) {
-            toZone = 'grave_' + ownerTag;
-            graveDelta[rem.nid] -= 1;
-        }
-        if (!toZone) continue;  // went to board; summon animation handles it
-
-        var slot = handEl
-            ? handEl.querySelector('.card-frame-hand[data-hand-idx="' + rem.slotIdx + '"]')
-            : null;
-        var rect = slot ? slot.getBoundingClientRect() : null;
-        jobs.push({
-            type: 'card_fly',
-            cardNumericId: rem.nid,
-            fromRect: rect ? {
-                left: rect.left, top: rect.top,
-                width: rect.width, height: rect.height,
-            } : null,
-            toZone: toZone,
-            stateApplied: true,
-        });
-    }
-    return jobs;
-}
-
-function _multisetDelta(prevList, nextList) {
-    var d = {};
-    if (prevList) {
-        for (var i = 0; i < prevList.length; i++) {
-            var id = prevList[i];
-            d[id] = (d[id] || 0) - 1;
-        }
-    }
-    if (nextList) {
-        for (var j = 0; j < nextList.length; j++) {
-            var jd = nextList[j];
-            d[jd] = (d[jd] || 0) + 1;
-        }
-    }
-    return d;
-}
+// Phase 14.8-05: deriveCardFlyJobs, _deriveFlyForPlayer, and the
+// _multisetDelta helper DELETED. Replaced by playCardDiscarded and
+// playCardPlayed slot handlers (plan 14.8-04a). playCardFlyAnimation
+// and _zoneButton below are RETAINED — the card-fly ghost primitive
+// is still used by the summon animation path.
 
 function _zoneButton(zone) {
     // In sandbox, each player's piles have their own DOM ids (P1 bottom,
@@ -5094,137 +4911,11 @@ function playCardFlyAnimation(job, done) {
     setTimeout(finish, 750);
 }
 
-// DEAD CODE post-14.8-04b — plan 14.8-05 will delete
-// Diff hands (own identity, opponent count) between prev and next and
-// produce one draw_own job per newly-added own card and one draw_opp job
-// per increment of the opponent's hand size. Replaced by playCardDrawn
-// slot handler (plan 04a). Retained as reference until plan 05 deletes
-// the snapshot path entirely.
-function deriveDrawJobs(prev, next) {
-    var jobs = [];
-    if (myPlayerIdx == null || !prev || !next) return jobs;
-    var oppIdx = 1 - myPlayerIdx;
-
-    var prevMe = prev.players && prev.players[myPlayerIdx];
-    var nextMe = next.players && next.players[myPlayerIdx];
-    if (prevMe && nextMe && Array.isArray(prevMe.hand) && Array.isArray(nextMe.hand)) {
-        // Multiset subtract: count prev, then walk next and pick anything
-        // that isn't cancelled by a prev occurrence. Remaining next entries
-        // are newly-added cards (possibly with duplicates).
-        var prevCounts = {};
-        for (var pi = 0; pi < prevMe.hand.length; pi++) {
-            var pid = prevMe.hand[pi];
-            prevCounts[pid] = (prevCounts[pid] || 0) + 1;
-        }
-        for (var ni = 0; ni < nextMe.hand.length; ni++) {
-            var nid = nextMe.hand[ni];
-            if (prevCounts[nid] > 0) {
-                prevCounts[nid] -= 1;
-            } else {
-                jobs.push({
-                    type: 'draw_own',
-                    cardNumericId: nid,
-                    fromPos: 'deck',
-                    toSlotIndex: ni,
-                });
-            }
-        }
-    }
-
-    // Opponent: count-only (hidden info). Prefer hand_count, fall back to
-    // hand.length (spectator god mode). Negative deltas (discards) → skip.
-    var prevOpp = prev.players && prev.players[oppIdx];
-    var nextOpp = next.players && next.players[oppIdx];
-    function oppCount(p) {
-        if (!p) return 0;
-        if (typeof p.hand_count === 'number') return p.hand_count;
-        if (Array.isArray(p.hand)) return p.hand.length;
-        return 0;
-    }
-    var delta = oppCount(nextOpp) - oppCount(prevOpp);
-    for (var k = 0; k < delta; k++) {
-        jobs.push({ type: 'draw_opp' });
-    }
-
-    return jobs;
-}
-
-// DEAD CODE post-14.8-04b — plan 14.8-05 will delete
-// Derive an animation job from a prev->next state diff. Replaced by
-// playMinionSummoned / playMinionMoved / playAttackResolved /
-// playSacrificeTranscend slot handlers (plan 04a). Retained as
-// reference until plan 05 deletes the snapshot path entirely.
-function deriveAnimationJob(prev, next) {
-    // Phase 14.3-04: Prefer next.last_action (authoritative server payload)
-    // for ATTACK so we get attacker_pos, target_pos, damage, and killed
-    // directly without diffing minion lists. Falls through to the legacy
-    // pending_action diff for summon/move and any frame missing last_action.
-    var la = next && next.last_action;
-    if (la && la.type === 'SACRIFICE') {
-        return { type: 'sacrifice_transcend', payload: {
-            pos: la.attacker_pos || null,
-        } };
-    }
-    if (la && la.type === 'ATTACK') {
-        return { type: 'attack', payload: {
-            attackerPos: la.attacker_pos || null,
-            targetPos: la.target_pos || null,
-            damage: la.damage,
-            killed: !!la.killed,
-        } };
-    }
-    // Phase 14.3-03: Prefer last_action for MOVE too. attacker_pos = pre-action
-    // source, target_pos = destination (per enrich_last_action schema).
-    if (la && la.type === 'MOVE') {
-        return { type: 'move', payload: {
-            from: la.attacker_pos || null,
-            to: la.target_pos || null,
-        } };
-    }
-
-    var pa = next && next.pending_action;
-    if (!pa) return { type: 'noop', payload: {} };
-
-    var t = pa.action_type;
-    // ActionType: 0=PLAY_CARD, 1=MOVE, 2=ATTACK
-    if (t === 0) {
-        // Only minion deploys get a summon animation; magic/tutor -> noop.
-        // Wave 2 emits pos + card_id (numeric_id). card_id is informational
-        // for now; the destination tile in next.minions carries authoritative
-        // identity for renderBoardMinion.
-        if (pa.position) {
-            // Confirm a minion actually appeared at pa.position in next that
-            // wasn't there in prev — guards against magic-with-position cards.
-            var pkey = pa.position[0] + ',' + pa.position[1];
-            var prevHas = (prev.minions || []).some(function(m) {
-                return m.position && (m.position[0] + ',' + m.position[1]) === pkey;
-            });
-            var nextMinion = (next.minions || []).find(function(m) {
-                return m.position && (m.position[0] + ',' + m.position[1]) === pkey;
-            });
-            if (!prevHas && nextMinion) {
-                return { type: 'summon', payload: {
-                    pos: pa.position,
-                    card_id: nextMinion.card_numeric_id,
-                } };
-            }
-        }
-        return { type: 'noop', payload: {} };
-    }
-    if (t === 1) {
-        return { type: 'move', payload: {
-            from: pa.source_position || null,
-            to: pa.target_position || pa.position || null,
-        } };
-    }
-    if (t === 2) {
-        return { type: 'attack', payload: {
-            attackerPos: pa.source_position || null,
-            targetPos: pa.target_position || pa.position || null,
-        } };
-    }
-    return { type: 'noop', payload: {} };
-}
+// Phase 14.8-05: deriveDrawJobs and deriveAnimationJob DELETED. Replaced
+// by the playCardDrawn + playMinionSummoned + playMinionMoved +
+// playAttackResolved + playSacrificeTranscend slot handlers (plan 14.8-04a).
+// The eventQueue pipeline consumes engine events directly — no snapshot
+// diff needed.
 
 // Game log helpers
 function clearGameLog() {

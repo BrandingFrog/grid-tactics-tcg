@@ -280,8 +280,9 @@ class SandboxSession:
             # Update prev/action so each drained frame's enrich_last_action
             # sees the CURRENT prev_state (the just-emitted frame) paired
             # with a PASS action — no animation, no attacker_pos, just a
-            # transparent state delta that carries last_trigger_blip and
-            # phase transitions through to the client.
+            # transparent state delta. Phase 14.8-05: trigger-blip transitions
+            # now flow through EVT_TRIGGER_BLIP in the event stream, not a
+            # transient state field.
             self._last_prev_state = self._state
             self._last_action = pass_action()
             self._state = resolve_action(

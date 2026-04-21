@@ -52,14 +52,14 @@ Requirements for online PvP dueling milestone. Each maps to roadmap phases.
 
 ### Phase Contract Enforcement (Phase 14.8)
 
-- [ ] **CONTRACT-01**: Every state-mutating engine call declares a contract_source from one of four categories (trigger / status / action / system); sandbox edits use a fifth category (sandbox) that bypasses phase enforcement but still flows through the event stream
-- [ ] **CONTRACT-02**: A central phase-contract table maps each contract source to its allowed TurnPhase set (frozenset, never wildcard); ON_DEATH and ON_PLAY enumerate their phases explicitly
-- [ ] **CONTRACT-03**: Pending-state-bound actions (tutor_select, death_target_pick, revive_place, trigger_pick, conjure_deploy, decline variants, post_move_attack decline) gate on pending field set FIRST, then fall back to phase check
-- [ ] **CONTRACT-04**: Engine raises OutOfPhaseError on contract violation in strict mode; server catches it, emits error event to client, leaves state unchanged (soft failure — never crashes the session)
-- [ ] **CONTRACT-05**: A pytest invariant test loads every card JSON and every effect site, simulates every legal trigger in every phase, and proves the engine never silently mutates state out of phase
-- [ ] **CONTRACT-06**: The wire format is an ordered stream of events {type, contract_source, payload, animation_duration_ms, seq, ...} replacing the post-resolution snapshot diff; sandbox AND live PvP emit through the same serializer; events have monotonic seq numbers per session for future reconnect
-- [ ] **CONTRACT-07**: Client has a single eventQueue (slot-based) replacing _sandboxFrameQueue, _pendingPostStageFrame, _pendingTriggerBlip, _pendingTurnBanner; DOM only reflects events that have been played through their slot
-- [ ] **CONTRACT-08**: Enforcement mode is controlled by env var CONTRACT_ENFORCEMENT_MODE with values off | shadow | strict; CI runs strict; the 500+ existing pytest tests pass under strict by phase close
+- [x] **CONTRACT-01**: Every state-mutating engine call declares a contract_source from one of four categories (trigger / status / action / system); sandbox edits use a fifth category (sandbox) that bypasses phase enforcement but still flows through the event stream — delivered 14.8-01
+- [x] **CONTRACT-02**: A central phase-contract table maps each contract source to its allowed TurnPhase set (frozenset, never wildcard); ON_DEATH and ON_PLAY enumerate their phases explicitly — delivered 14.8-01
+- [x] **CONTRACT-03**: Pending-state-bound actions (tutor_select, death_target_pick, revive_place, trigger_pick, conjure_deploy, decline variants, post_move_attack decline) gate on pending field set FIRST, then fall back to phase check — delivered 14.8-01
+- [x] **CONTRACT-04**: Engine raises OutOfPhaseError on contract violation in strict mode; server catches it, emits error event to client, leaves state unchanged (soft failure — never crashes the session) — delivered 14.8-05
+- [x] **CONTRACT-05**: A pytest invariant test loads every card JSON and every effect site, simulates every legal trigger in every phase, and proves the engine never silently mutates state out of phase — delivered 14.8-02
+- [x] **CONTRACT-06**: The wire format is an ordered stream of events {type, contract_source, payload, animation_duration_ms, seq, ...} replacing the post-resolution snapshot diff; sandbox AND live PvP emit through the same serializer; events have monotonic seq numbers per session for future reconnect — delivered 14.8-03a/03b
+- [x] **CONTRACT-07**: Client has a single eventQueue (slot-based) replacing _sandboxFrameQueue, _pendingPostStageFrame, _pendingTriggerBlip, _pendingTurnBanner; DOM only reflects events that have been played through their slot — delivered 14.8-04a/04b
+- [x] **CONTRACT-08**: Enforcement mode is controlled by env var CONTRACT_ENFORCEMENT_MODE with values off | shadow | strict; CI runs strict; the 500+ existing pytest tests pass under strict by phase close — delivered 14.8-05
 
 ## v1.0 Requirements (Completed)
 

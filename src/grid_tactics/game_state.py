@@ -189,18 +189,21 @@ class GameState:
     pending_conjure_deploy_player_idx: Optional[int] = None  # Which player is deploying
 
     # Pending death-effect machinery (supports modal click-target death
-    # triggers and chain-reaction death cleanup).
+    # triggers).
     #
-    # ``pending_death_queue`` is the list of dead minions whose on_death
-    # effects have not been fully resolved yet. It's processed front-to-back
-    # by ``_cleanup_dead_minions``. When an effect needs a click-target
-    # modal (e.g. Lasercannon DESTROY/SINGLE_TARGET on_death), processing
-    # halts and ``pending_death_target`` is set — the engine then waits
-    # for a DEATH_TARGET_PICK action from the dying minion's owner before
-    # continuing. While either field is non-empty, the regular react
-    # window / turn-advance is deferred in exactly the same way as the
-    # other pending_* states.
-    pending_death_queue: tuple = ()                          # tuple[PendingDeathWork, ...]
+    # Phase 14.8-05: ``pending_death_queue`` field DELETED. Since
+    # Phase 14.7-05b the priority-queue path (PendingTrigger with
+    # trigger_kind="on_death") has been the sole producer/consumer of
+    # on_death effects; the legacy PendingDeathWork queue became a
+    # defensive no-op and is now removed entirely alongside its callers
+    # (_enqueue_dead_minions_and_cleanup_zones, _drain_pending_death_queue).
+    # The PendingDeathWork dataclass itself is retained above for any
+    # stale imports but is unreferenced in engine code.
+    #
+    # ``pending_death_target`` still gates click-target modal effects
+    # (e.g. Lasercannon DESTROY/SINGLE_TARGET on_death) — while non-None,
+    # the regular react window / turn-advance is deferred until the
+    # owner submits DEATH_TARGET_PICK.
     pending_death_target: Optional["PendingDeathTarget"] = None
 
     # Phase 14.7-05: simultaneous-trigger priority queue + modal picker.
@@ -212,33 +215,16 @@ class GameState:
     # that owner so the UI opens a modal card-picker (reusing the tutor
     # modal — renderDeckBuilderCard). With exactly 1 entry the drain
     # helper auto-resolves without a modal.
-    #
-    # Death: triggers (14.7-05b) will migrate onto the same queues. Until
-    # then, pending_death_queue + pending_death_target remain the source
-    # of truth for on-death modal handling.
     pending_trigger_queue_turn: tuple = ()    # tuple[PendingTrigger, ...]
     pending_trigger_queue_other: tuple = ()   # tuple[PendingTrigger, ...]
     pending_trigger_picker_idx: Optional[int] = None
 
-    # Phase 14.7-09: Trigger-blip animation payload (TRANSIENT).
-    # Written by ``_resolve_trigger_and_open_react_window`` (react_stack.py)
-    # when a Start/End/Death/Summon-effect trigger opens its react window,
-    # so the client (game.js ``_fireTriggerBlipAnimation``) can animate a
-    # source-tile pulse + center icon + (optional) target-tile pulse.
-    #
-    # Lifecycle: non-None only on the frame IMMEDIATELY FOLLOWING a trigger
-    # resolution. ``resolve_action`` (action_resolver.py) clears this field
-    # to None at the TOP of every new call so the client never sees a stale
-    # blip on a later frame. See test_last_trigger_blip_cleared_on_next_frame.
-    #
-    # Shape: Optional[dict] with keys:
-    #   trigger_kind: "start_of_turn" | "end_of_turn" | "on_death"
-    #                 | "on_summon_effect"
-    #   source_minion_id: Optional[int]
-    #   source_position: list[int]  (len 2, [row, col])
-    #   target_position: Optional[list[int]]  (len 2, [row, col])
-    #   effect_kind: str  (lowercase EffectType.name, e.g. "heal", "damage")
-    last_trigger_blip: Optional[dict] = None
+    # Phase 14.8-05: ``last_trigger_blip`` DELETED. Plan 14.8-03a introduced
+    # EVT_TRIGGER_BLIP as a first-class EngineEvent in the event stream;
+    # plan 14.8-04b added playTriggerBlip as a client slot handler. The
+    # transient field was a legacy dual-write during the transition and
+    # has no remaining consumers. from_dict tolerates the missing key
+    # naturally (explicit named-arg construction, no **d splat).
 
     @property
     def active_player(self) -> Player:
@@ -419,8 +405,6 @@ class GameState:
                 for t in self.pending_trigger_queue_other
             ],
             "pending_trigger_picker_idx": self.pending_trigger_picker_idx,
-            # Phase 14.7-09: transient trigger-blip payload (see field docstring)
-            "last_trigger_blip": self.last_trigger_blip,
         }
 
         # Serialize pending_action if present
@@ -593,6 +577,8 @@ class GameState:
             pending_trigger_queue_turn=pending_trigger_queue_turn,
             pending_trigger_queue_other=pending_trigger_queue_other,
             pending_trigger_picker_idx=d.get("pending_trigger_picker_idx"),
-            # Phase 14.7-09: transient trigger-blip payload (dict passthrough)
-            last_trigger_blip=d.get("last_trigger_blip"),
+            # Phase 14.8-05: last_trigger_blip field deleted. Old saved
+            # state dicts carrying this key are tolerated — from_dict uses
+            # explicit named-arg construction, so unknown keys in ``d``
+            # are simply ignored (m3 verified).
         )

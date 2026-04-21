@@ -1034,19 +1034,13 @@ def apply_death_target_pick(
             contract_source="action:death_target_pick",
         )
 
-    # Phase 14.7-05b: pending_death_queue (PendingDeathWork) is no longer
-    # populated by _cleanup_dead_minions — on_death effects route through
-    # the PendingTrigger priority queue. The PendingDeathWork next-effect
-    # advance is therefore a no-op in the common case, but preserved as a
-    # defensive guard for any legacy in-flight queue entries.
-    queue = list(state.pending_death_queue)
-    if queue:
-        head = queue[0]
-        queue[0] = replace(head, next_effect_idx=target.effect_idx + 1)
+    # Phase 14.8-05: pending_death_queue field DELETED — on_death effects
+    # route exclusively through the PendingTrigger priority queue since
+    # 14.7-05b. The defensive queue-advance code here was a no-op guard
+    # for legacy in-flight queue entries that never materialized.
     state = replace(
         state,
         pending_death_target=None,
-        pending_death_queue=tuple(queue),
     )
     return state
 

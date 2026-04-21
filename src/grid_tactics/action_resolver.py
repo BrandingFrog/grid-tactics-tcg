@@ -1327,149 +1327,12 @@ _CHAIN_DEATH_SAFETY_LIMIT = 16
 _cleanup_skip_drain: bool = False
 
 
-def _enqueue_dead_minions_and_cleanup_zones(
-    state: GameState,
-) -> GameState:
-    """Collect all currently-dead minions, remove them from the board, add
-    deck-origin cards to their owner's grave, and append the dead minions
-    as ``PendingDeathWork`` entries to ``state.pending_death_queue`` in
-    the canonical death-resolution order.
-
-    Canonical order (locked): active player's deaths first, then opponent's.
-    Within each side, instance_id ascending = play order.
-
-    Returns a new state with:
-      - board: dead minions' cells cleared
-      - minions: dead minions removed
-      - players: grave updated (tokens still vanish silently per 14.5)
-      - pending_death_queue: extended with new work entries in order
-    """
-    assert_phase_contract(state, "system:cleanup_dead_minions")
-    from grid_tactics.game_state import PendingDeathWork
-
-    dead_minions = [m for m in state.minions if not m.is_alive]
-    if not dead_minions:
-        return state
-
-    # Remove dead from board
-    new_board = state.board
-    for m in dead_minions:
-        new_board = new_board.remove(m.position[0], m.position[1])
-
-    # Remove dead from minions tuple
-    dead_ids = {m.instance_id for m in dead_minions}
-    alive_minions = tuple(m for m in state.minions if m.instance_id not in dead_ids)
-
-    # Add dead minion cards to their owner's grave (Phase 14.5: tokens
-    # with from_deck=False vanish silently — no grave entry).
-    new_players = state.players
-    for m in dead_minions:
-        if not m.from_deck:
-            continue
-        player_idx = int(m.owner)
-        player = new_players[player_idx]
-        new_player = replace(player, grave=player.grave + (m.card_numeric_id,))
-        new_players = _replace_player(new_players, player_idx, new_player)
-
-    # Canonical sort: active player's deaths first, then by instance_id
-    # ascending (play order) within each side. Stable and deterministic.
-    active_side = state.players[state.active_player_idx].side
-    ordered = sorted(
-        dead_minions,
-        key=lambda m: (0 if m.owner == active_side else 1, m.instance_id),
-    )
-
-    # Build PendingDeathWork entries — snapshots of what the cleanup loop
-    # needs to resolve on_death effects even after the minion is gone.
-    new_work = tuple(
-        PendingDeathWork(
-            card_numeric_id=m.card_numeric_id,
-            owner=m.owner,
-            position=m.position,
-            instance_id=m.instance_id,
-            next_effect_idx=0,
-        )
-        for m in ordered
-    )
-
-    return replace(
-        state,
-        board=new_board,
-        minions=alive_minions,
-        players=new_players,
-        pending_death_queue=state.pending_death_queue + new_work,
-    )
-
-
-def _drain_pending_death_queue(
-    state: GameState, library: CardLibrary,
-) -> GameState:
-    """Process ``state.pending_death_queue`` front-to-back, firing on_death
-    effects in canonical order. Returns early if any effect opens a modal
-    (``pending_death_target`` becomes non-None) — the caller is responsible
-    for NOT advancing to the react window until the modal is resolved.
-
-    After the queue drains, re-scans for newly-dead minions (chain
-    reactions, e.g. Lasercannon's destroy killing another on_death
-    minion) and continues processing. Bounded by
-    ``_CHAIN_DEATH_SAFETY_LIMIT`` iterations.
-    """
-    from grid_tactics.effect_resolver import resolve_death_effects_or_enter_modal
-
-    safety = 0
-    while True:
-        safety += 1
-        if safety > _CHAIN_DEATH_SAFETY_LIMIT:
-            # Pathological loop: promote + on_death that creates another
-            # promote + ... — break and log. Should be impossible with
-            # current cards (unique constraint on promote).
-            import sys
-            print(
-                f"[WARN] _drain_pending_death_queue hit safety limit "
-                f"({_CHAIN_DEATH_SAFETY_LIMIT}); breaking",
-                file=sys.stderr,
-            )
-            break
-
-        # If a modal is already pending, stop — the caller/external driver
-        # must resolve it before we can continue.
-        if state.pending_death_target is not None:
-            return state
-
-        queue = state.pending_death_queue
-        if not queue:
-            # Queue empty — re-scan for any newly-dead minions produced by
-            # the most recent effects (chain reaction).
-            dead_now = [m for m in state.minions if not m.is_alive]
-            if not dead_now:
-                return state
-            state = _enqueue_dead_minions_and_cleanup_zones(state)
-            continue
-
-        head = queue[0]
-        state, next_idx = resolve_death_effects_or_enter_modal(
-            state,
-            card_numeric_id=head.card_numeric_id,
-            owner=head.owner,
-            position=head.position,
-            instance_id=head.instance_id,
-            library=library,
-            start_idx=head.next_effect_idx,
-        )
-
-        if next_idx >= 0:
-            # A modal was opened at effect index next_idx. Update the head
-            # so when the modal resolves, we resume at the right slot via
-            # apply_death_target_pick (which advances next_effect_idx by 1).
-            new_head = replace(head, next_effect_idx=next_idx)
-            new_queue = (new_head,) + tuple(queue[1:])
-            state = replace(state, pending_death_queue=new_queue)
-            return state
-
-        # Head fully drained — pop it and continue the loop to process
-        # either the next queued death or a re-scan for chain reactions.
-        new_queue = tuple(queue[1:])
-        state = replace(state, pending_death_queue=new_queue)
+# Phase 14.8-05: the legacy death-cleanup path
+# (_enqueue_dead_minions_and_cleanup_zones + _drain_pending_death_queue) was
+# DELETED. It was superseded by _cleanup_dead_minions in 14.7-05b which
+# routes on_death effects through the PendingTrigger priority queue. The
+# GameState.pending_death_queue field and PendingDeathWork dataclass were
+# also deleted at the same time — nothing consumes them anymore.
 
 
 def _cleanup_dead_minions(
@@ -1720,15 +1583,12 @@ def resolve_action(
     Raises:
         ValueError: If the action is invalid (wrong phase, illegal action, etc.).
     """
-    # Phase 14.7-09: Clear the transient trigger-blip payload at the TOP of
-    # every resolve_action call. last_trigger_blip is non-None only on the
-    # frame IMMEDIATELY FOLLOWING a trigger resolution (written by
-    # _resolve_trigger_and_open_react_window in react_stack.py); the client
-    # consumes it in applyStateFrame and then the next action must clear it
-    # so later frames don't replay a stale blip. See
-    # test_last_trigger_blip_cleared_on_next_frame.
-    if state.last_trigger_blip is not None:
-        state = replace(state, last_trigger_blip=None)
+    # Phase 14.8-05: the Phase 14.7-09 last_trigger_blip field DELETION was
+    # completed here — the per-frame clear-at-top-of-resolve_action logic
+    # is gone because the field itself is gone. Trigger blips now flow
+    # through EVT_TRIGGER_BLIP in the event stream (plan 14.8-03a), which
+    # the client's eventQueue plays through a dedicated slot handler
+    # (playTriggerBlip in game.js).
 
     # Pending death-target gate (phase-agnostic): while a death-triggered
     # modal is open, the ONLY legal action is DEATH_TARGET_PICK from the

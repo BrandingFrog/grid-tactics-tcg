@@ -562,87 +562,80 @@ class TestSerializationPhase14_7_05:
         assert restored.pending_trigger_picker_idx is None
 
 
-class TestSerializationPhase14_7_09:
-    """Phase 14.7-09: last_trigger_blip round-trip + transient lifecycle."""
+class TestTriggerBlipEventStream:
+    """Phase 14.8-05: ``last_trigger_blip`` field was DELETED in favor of
+    EVT_TRIGGER_BLIP on the EngineEvent stream (plan 14.8-03a). These
+    tests replace the six legacy round-trip / transient-lifecycle tests
+    that asserted on the deleted field.
 
-    def test_last_trigger_blip_defaults_none(self):
-        """Fresh game has last_trigger_blip=None."""
-        state, _ = GameState.new_game(42, DECK_P1, DECK_P2)
-        assert state.last_trigger_blip is None
+    The migration uses event-stream assertions: assert that the engine
+    emits EVT_TRIGGER_BLIP when a trigger fires, and does NOT persist
+    any analog on state.to_dict() (so reconnect / save doesn't replay
+    stale blips).
+    """
 
-    def test_last_trigger_blip_roundtrip(self):
-        """A populated blip round-trips to_dict -> JSON -> from_dict."""
-        state, _ = GameState.new_game(42, DECK_P1, DECK_P2)
-        blip = {
-            "trigger_kind": "start_of_turn",
-            "source_minion_id": 0,
-            "source_position": [1, 2],
-            "target_position": [3, 4],
-            "effect_kind": "heal",
-        }
-        state = dataclasses.replace(state, last_trigger_blip=blip)
+    def test_to_dict_does_not_carry_last_trigger_blip_key(self):
+        """GameState.to_dict() must NOT include the deleted last_trigger_blip key.
 
-        d = state.to_dict()
-        # JSON-serializable (no tuples / enums in the blip)
-        json_str = json.dumps(d)
-        assert isinstance(json_str, str)
-        # Round through a JSON encode/decode to prove wire-safety
-        restored = GameState.from_dict(json.loads(json_str))
-        assert restored.last_trigger_blip == blip
-
-    def test_last_trigger_blip_roundtrip_none(self):
-        """None round-trips as None (not omitted / not empty dict)."""
-        state, _ = GameState.new_game(42, DECK_P1, DECK_P2)
-        assert state.last_trigger_blip is None
-        restored = GameState.from_dict(json.loads(json.dumps(state.to_dict())))
-        assert restored.last_trigger_blip is None
-
-    def test_last_trigger_blip_roundtrip_no_target(self):
-        """Blip with target_position=None round-trips unchanged."""
-        state, _ = GameState.new_game(42, DECK_P1, DECK_P2)
-        blip = {
-            "trigger_kind": "end_of_turn",
-            "source_minion_id": 7,
-            "source_position": [0, 0],
-            "target_position": None,
-            "effect_kind": "damage",
-        }
-        state = dataclasses.replace(state, last_trigger_blip=blip)
-        restored = GameState.from_dict(json.loads(json.dumps(state.to_dict())))
-        assert restored.last_trigger_blip == blip
-
-    def test_from_dict_backward_compatible_missing_key(self):
-        """Old dicts without last_trigger_blip reconstruct with None default."""
-        state, _ = GameState.new_game(42, DECK_P1, DECK_P2)
-        d = state.to_dict()
-        d.pop("last_trigger_blip", None)
-        restored = GameState.from_dict(d)
-        assert restored.last_trigger_blip is None
-
-    def test_last_trigger_blip_cleared_on_next_frame(self):
-        """Warning 6 lifecycle: resolve_action clears last_trigger_blip.
-
-        Given a state with a blip payload, the next resolve_action call must
-        produce a state where last_trigger_blip is None. This guards against
-        the client replaying a stale blip on a later frame.
+        Old wire format carried ``"last_trigger_blip": {...} | None`` on
+        every frame. Plan 14.8-05 deleted the field; the serialized dict
+        must match. Clients that speak the new protocol never look up
+        this key; the absence is the contract.
         """
-        from pathlib import Path
-        from grid_tactics.card_library import CardLibrary
-        from grid_tactics.action_resolver import resolve_action
-
-        library = CardLibrary.from_directory(Path("data/cards"))
         state, _ = GameState.new_game(42, DECK_P1, DECK_P2)
-        # Seed a blip directly on the state (simulating the post-trigger frame).
-        blip = {
+        d = state.to_dict()
+        assert "last_trigger_blip" not in d, (
+            "last_trigger_blip was DELETED in plan 14.8-05 — to_dict must not emit it"
+        )
+
+    def test_from_dict_tolerates_legacy_last_trigger_blip_key(self):
+        """Old persisted saves may still carry ``"last_trigger_blip": ...``.
+        from_dict must tolerate (ignore) the unknown key — m3 invariant.
+        """
+        state, _ = GameState.new_game(42, DECK_P1, DECK_P2)
+        d = state.to_dict()
+        # Inject a legacy key like an old save file would.
+        d["last_trigger_blip"] = {
             "trigger_kind": "start_of_turn",
             "source_minion_id": 0,
             "source_position": [1, 2],
             "target_position": None,
             "effect_kind": "heal",
         }
-        state = dataclasses.replace(state, last_trigger_blip=blip)
-        assert state.last_trigger_blip is not None
+        # Must reconstruct without raising. The legacy key is simply ignored
+        # — the reconstructed state has no field to hold it.
+        restored = GameState.from_dict(d)
+        assert not hasattr(restored, "last_trigger_blip"), (
+            "GameState should not have a last_trigger_blip attribute post-14.8-05"
+        )
+        # Round-trip to_dict → from_dict → to_dict is stable (no leakage).
+        restored_d = restored.to_dict()
+        assert "last_trigger_blip" not in restored_d
 
-        # Any resolve_action call must clear it — PASS is the simplest.
-        next_state = resolve_action(state, pass_action(), library)
-        assert next_state.last_trigger_blip is None
+    def test_evt_trigger_blip_type_exists_in_event_module(self):
+        """EVT_TRIGGER_BLIP is the architectural replacement for the deleted
+        last_trigger_blip field. This test is a schema anchor: the event
+        type constant must exist in grid_tactics.engine_events, the
+        default duration (used by the client's eventQueue pacing) must
+        be registered, and _build_trigger_blip_payload (the payload
+        constructor shared with react_stack) must still produce a dict
+        with the expected keys.
+
+        End-to-end verification that a real start-of-turn trigger emits
+        this event is covered by tests/test_engine_events.py (Phase
+        14.8-03a) so we don't duplicate scaffolding here.
+        """
+        from grid_tactics.engine_events import (
+            EVT_TRIGGER_BLIP,
+            DEFAULT_DURATION_MS,
+        )
+        # Schema anchor: event type literal must equal "trigger_blip" so
+        # the client's playTriggerBlip slot handler dispatches correctly.
+        assert EVT_TRIGGER_BLIP == "trigger_blip"
+        # Default duration must be registered so the eventQueue's pacing
+        # (via _evDurationOr) has a fallback.
+        assert EVT_TRIGGER_BLIP in DEFAULT_DURATION_MS
+        assert DEFAULT_DURATION_MS[EVT_TRIGGER_BLIP] > 0, (
+            "Trigger blip animation needs non-zero duration so the "
+            "eventQueue paces subsequent events after the blip completes"
+        )

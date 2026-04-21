@@ -1178,7 +1178,8 @@ class TestDeathKeywordLasercannonModal:
         new_state = _cleanup_dead_minions(state, lib)
 
         assert new_state.pending_death_target is None
-        assert new_state.pending_death_queue == ()
+        # Phase 14.8-05: pending_death_queue field DELETED — assertion
+        # removed (the PendingTrigger priority queue is the sole path).
 
     def test_modal_pick_resolves_and_destroys_picked_enemy(self):
         from grid_tactics.action_resolver import resolve_action
@@ -1220,7 +1221,7 @@ class TestDeathKeywordLasercannonModal:
         assert final.get_minion(1) is None
         assert final.get_minion(2) is None
         assert final.pending_death_target is None
-        assert final.pending_death_queue == ()
+        # Phase 14.8-05: pending_death_queue field DELETED.
         # Phase transitioned to REACT after the modal drained.
         assert final.phase == TurnPhase.REACT
         assert final.react_player_idx == 1

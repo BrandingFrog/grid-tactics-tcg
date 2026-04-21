@@ -167,7 +167,9 @@ _ALL_PHASES = frozenset({_ACTION, _REACT, _START, _END})
 PHASE_CONTRACTS: dict[str, frozenset[TurnPhase]] = {
     # ------------------------------------------------------------------
     # Trigger-bound contracts (per research §"Trigger-bound contracts")
-    # 10 entries (PASSIVE intentionally excluded — see notes below)
+    # 10 entries. PASSIVE was DELETED from TriggerType in plan 14.8-05 —
+    # no contract entry exists for it; any re-introduction would fail at
+    # card-JSON load time (CardLoader._parse_enum).
     # ------------------------------------------------------------------
     # ON_PLAY fires in ACTION (cast originator) AND in REACT (deferred
     # magic resolves during react-stack LIFO drain) — orchestrator
@@ -202,11 +204,11 @@ PHASE_CONTRACTS: dict[str, frozenset[TurnPhase]] = {
     # tags `aura` doesn't trip the unknown-source path. Auras MUST NOT
     # call replace(state, ...); they are pure reads.
     "trigger:aura": _ALL_PHASES,
-    # NOTE: "trigger:passive" is intentionally NOT in this table. Per
-    # research §"Trigger-bound contracts" the PASSIVE TriggerType is
-    # slated for deletion in plan 14.8-05; seeding it here would make
-    # it load-bearing. Any caller that accidentally tags "trigger:passive"
-    # will hit the unknown_source branch — that's the correct behavior.
+    # NOTE: "trigger:passive" was never in this table and the PASSIVE
+    # TriggerType enum value itself was DELETED in plan 14.8-05. Any
+    # caller that accidentally tags "trigger:passive" hits the
+    # unknown_source branch of assert_phase_contract — loud failure in
+    # strict mode, warning in shadow mode.
     # ------------------------------------------------------------------
     # Status-bound contracts
     # ------------------------------------------------------------------
@@ -544,14 +546,14 @@ def assert_phase_contract(state, source: str) -> None:
 def expected_trigger_sources() -> set[str]:
     """Return the set of "trigger:<name>" sources the table SHOULD cover.
 
-    Skips PASSIVE per the deletion-pending note above; AURA is included
-    because we tag it for read-time documentation even though it never
-    mutates.
+    Phase 14.8-05: PASSIVE was deleted from TriggerType so the legacy
+    ``if t.name != "PASSIVE"`` filter is no longer needed. AURA is
+    still included because we tag it for read-time documentation even
+    though it never mutates.
     """
     return {
         f"trigger:{t.name.lower()}"
         for t in TriggerType
-        if t.name != "PASSIVE"
     }
 
 

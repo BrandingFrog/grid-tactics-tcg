@@ -219,10 +219,28 @@ class TestTriggerType:
             assert isinstance(member, IntEnum)
 
     def test_member_count(self) -> None:
-        # Append-only. 11 members: ON_PLAY, ON_DEATH, ON_ATTACK, ON_DAMAGED,
-        # ON_MOVE, PASSIVE, ON_DISCARD, AURA (original 8) + 14.7-03 adds
-        # ON_SUMMON, ON_START_OF_TURN, ON_END_OF_TURN.
-        assert len(TriggerType) == 11
+        # Phase 14.8-05: PASSIVE (=5) was DELETED. The enum is still
+        # append-only — value 5 is BURNED, not reused — so tensor-engine
+        # int encodings remain stable across the migration. Now 10 live
+        # members: ON_PLAY=0, ON_DEATH=1, ON_ATTACK=2, ON_DAMAGED=3,
+        # ON_MOVE=4, [5 burned], ON_DISCARD=6, AURA=7, ON_SUMMON=8,
+        # ON_START_OF_TURN=9, ON_END_OF_TURN=10.
+        assert len(TriggerType) == 10
+
+    def test_passive_deleted(self) -> None:
+        """Phase 14.8-05 regression guard: PASSIVE must NOT be a member.
+
+        The enum value 5 is BURNED — not reused — to preserve tensor-engine
+        encoding stability. CardLoader._parse_enum raises ValueError on
+        any card JSON that still carries ``"trigger": "passive"``.
+        """
+        assert "PASSIVE" not in TriggerType.__members__
+        # Bracket lookup raises KeyError on missing members.
+        with pytest.raises(KeyError):
+            TriggerType["PASSIVE"]
+        # Integer lookup of the BURNED value 5 raises ValueError.
+        with pytest.raises(ValueError):
+            TriggerType(5)
 
     def test_bracket_lookup(self) -> None:
         assert TriggerType["ON_PLAY"] is TriggerType.ON_PLAY
@@ -235,7 +253,9 @@ class TestTriggerType:
         assert TriggerType(8) is TriggerType.ON_SUMMON
         assert TriggerType(9) is TriggerType.ON_START_OF_TURN
         assert TriggerType(10) is TriggerType.ON_END_OF_TURN
-        # Existing values must not shift (append-only invariant)
+        # Existing values must not shift (append-only invariant). Values
+        # are append-only even across deletion — PASSIVE's 5 slot is
+        # burned, not reassigned.
         assert TriggerType.ON_PLAY == 0
         assert TriggerType.AURA == 7
 

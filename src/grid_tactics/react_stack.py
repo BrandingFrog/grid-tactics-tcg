@@ -196,61 +196,12 @@ def tick_status_effects(
     return state
 
 
-def _fire_passive_effects(
-    state: GameState, library: CardLibrary,
-) -> GameState:
-    """LEGACY: Fire PASSIVE-trigger effects on every minion on the board.
-
-    Phase 14.7-03: As of this plan, NO card JSONs carry trigger='passive'
-    (the 3 previously-passive minions — Fallen Paladin, Emberplague Rat,
-    Dark Matter Battery — were retagged to on_start_of_turn /
-    on_end_of_turn). This helper is kept for backward compat in case a
-    future card re-introduces PASSIVE, but it is no longer called from
-    the turn-advance tail. start/end triggers run through
-    ``fire_start_of_turn_triggers`` / ``fire_end_of_turn_triggers``.
-
-    Newly-dead minions (e.g. from a damaging passive) are routed through
-    the standard cleanup path.
-    """
-    # Phase 14.8-01: defensive tag. trigger:passive is intentionally NOT in
-    # PHASE_CONTRACTS — this function is LEGACY (no card uses PASSIVE) and
-    # will be deleted in plan 14.8-05. In strict mode, calling this would
-    # surface as unknown_source — which is the correct signal.
-    assert_phase_contract(state, "trigger:passive")
-    from grid_tactics.effect_resolver import resolve_effect
-    from grid_tactics.action_resolver import (
-        _check_game_over, _cleanup_dead_minions,
-    )
-
-    active_side = state.players[state.active_player_idx].side
-
-    ordered_ids = [
-        m.instance_id
-        for m in sorted(state.minions, key=lambda m: (m.position[0], m.position[1]))
-    ]
-    for inst_id in ordered_ids:
-        m = state.get_minion(inst_id)
-        if m is None:
-            continue  # died from a previous passive earlier in this pass
-        card_def = library.get_by_id(m.card_numeric_id)
-        for effect in card_def.effects:
-            if effect.trigger != TriggerType.PASSIVE:
-                continue
-            # Heal-aura semantics: PASSIVE_HEAL ticks once per full turn
-            # cycle, gated to the OWNER becoming active. Burn-aura
-            # (EffectType.BURN) still fires every turn flip so adjacent
-            # enemies get refreshed regardless of whose turn it is.
-            if effect.effect_type == EffectType.PASSIVE_HEAL and m.owner != active_side:
-                continue
-            state = resolve_effect(
-                state, effect, m.position, m.owner, library, target_pos=None,
-                source_minion_id=m.instance_id,
-                contract_source="trigger:passive",
-            )
-
-    state = _cleanup_dead_minions(state, library)
-    state = _check_game_over(state)
-    return state
+# Phase 14.8-05: _fire_passive_effects was DELETED. It was a no-op since
+# Phase 14.7-03 (no card JSON carried trigger='passive' after the three
+# ex-passive minions — Fallen Paladin, Emberplague Rat, Dark Matter Battery
+# — migrated to on_start_of_turn / on_end_of_turn). The invariant test
+# `test_no_card_uses_passive_trigger` in tests/test_phase_contract_invariants.py
+# guards against re-introducing PASSIVE triggers.
 
 
 # ---------------------------------------------------------------------------
@@ -633,6 +584,17 @@ def _resolve_trigger_and_open_react_window(
             rc = ReactContext.AFTER_DEATH_EFFECT
             default_return = state.react_return_phase or TurnPhase.ACTION
             new_return_phase = state.react_return_phase or default_return
+            # Phase 14.8-05: last_trigger_blip field DELETED — the blip
+            # payload now flows exclusively via EVT_TRIGGER_BLIP in the
+            # event stream (plan 14.8-03a). Emit one for the dead-air
+            # AFTER_DEATH_EFFECT window so the client still gets a blip
+            # cue even though no effect resolved.
+            if event_collector is not None:
+                event_collector.collect(
+                    EVT_TRIGGER_BLIP,
+                    _trigger_source,
+                    _build_trigger_blip_payload(trigger, effect),
+                )
             return replace(
                 state,
                 phase=TurnPhase.REACT,
@@ -640,11 +602,6 @@ def _resolve_trigger_and_open_react_window(
                 react_context=rc,
                 react_return_phase=new_return_phase,
                 react_stack=(),
-                # Phase 14.7-09: no effect actually resolved (no valid
-                # target), but the AFTER_DEATH_EFFECT window still opens
-                # for react-condition matching. Emit a blip so the client
-                # can pulse the source tile + show the death glyph.
-                last_trigger_blip=_build_trigger_blip_payload(trigger, effect),
             )
 
         # PROMOTE with 2+ candidates also opens the modal.
@@ -728,6 +685,14 @@ def _resolve_trigger_and_open_react_window(
             rc = ReactContext.AFTER_DEATH_EFFECT
             default_return = state.react_return_phase or TurnPhase.ACTION
             new_return_phase = state.react_return_phase or default_return
+            # Phase 14.8-05: last_trigger_blip field DELETED — emit the
+            # PROMOTE auto-resolve blip via EVT_TRIGGER_BLIP instead.
+            if event_collector is not None:
+                event_collector.collect(
+                    EVT_TRIGGER_BLIP,
+                    _trigger_source,
+                    _build_trigger_blip_payload(trigger, effect),
+                )
             return replace(
                 state,
                 phase=TurnPhase.REACT,
@@ -735,8 +700,6 @@ def _resolve_trigger_and_open_react_window(
                 react_context=rc,
                 react_return_phase=new_return_phase,
                 react_stack=(),
-                # Phase 14.7-09: PROMOTE auto-resolve blip.
-                last_trigger_blip=_build_trigger_blip_payload(trigger, effect),
             )
 
     # Phase 14.7-06: Fizzle check.
@@ -861,18 +824,19 @@ def _resolve_trigger_and_open_react_window(
     # START_OF_TURN). Otherwise use the trigger-kind default.
     new_return_phase = state.react_return_phase or default_return
 
-    # Phase 14.7-09: Trigger-blip animation payload. Written on the same
-    # frame as the REACT-window open; cleared by resolve_action on the
-    # next frame (transient lifecycle). Client consumes via
-    # _fireTriggerBlipAnimation — source-tile pulse → center icon →
-    # optional target-tile pulse.
+    # Phase 14.8-05: trigger-blip animation payload flows exclusively
+    # through EVT_TRIGGER_BLIP in the event stream — the legacy
+    # last_trigger_blip field was deleted. Client consumes via the
+    # playTriggerBlip slot handler (game.js) which drives the
+    # source-tile pulse → center icon → optional target-tile pulse
+    # animation via _fireTriggerBlipAnimation.
     blip_payload = _build_trigger_blip_payload(trigger, effect)
 
-    # Phase 14.8-03a: dual-write the blip as both a transient field
-    # (for legacy clients) AND an EVT_TRIGGER_BLIP event (for the
-    # plan-04a eventQueue). Plan 14.8-05 deletes the field write once
-    # all clients have switched. Also emit EVT_REACT_WINDOW_OPENED so
-    # the spell-stage / banner gets event-driven coverage.
+    # Emit EVT_TRIGGER_BLIP + EVT_REACT_WINDOW_OPENED so the client's
+    # eventQueue gets both the animation cue and the spell-stage open
+    # signal. The client's playReactWindowOpened (plan 14.8-05) consumes
+    # the preceding trigger_blip's originator to slam the source minion's
+    # card onto the spell stage LEFT slot.
     if event_collector is not None:
         event_collector.collect(
             EVT_TRIGGER_BLIP,
@@ -898,7 +862,6 @@ def _resolve_trigger_and_open_react_window(
         # Ensure react_stack is empty for the new window (the drain pops
         # from the queues, not from the react stack).
         react_stack=(),
-        last_trigger_blip=blip_payload,
     )
 
 
@@ -970,9 +933,10 @@ def _close_end_of_turn_and_flip(
 ) -> GameState:
     """Advance to the next player's turn (outgoing player's end-of-turn tail).
 
-    Phase 14.7-03: redistributed so that tick_status_effects and
-    _fire_passive_effects now run INSIDE ``enter_start_of_turn`` for the
-    newly-active player. This helper is now strictly the turn-flip tail:
+    Phase 14.7-03: redistributed so that tick_status_effects (and the
+    legacy _fire_passive_effects, now DELETED in Phase 14.8-05) now run
+    INSIDE ``enter_start_of_turn`` for the newly-active player. This
+    helper is now strictly the turn-flip tail:
     discard bookkeeping, flip active_player_idx / turn_number, regen,
     auto-draw. Phase is set to ACTION as a transient value — the chaining
     call in ``close_end_react_and_advance_turn`` (and ``enter_end_of_turn``

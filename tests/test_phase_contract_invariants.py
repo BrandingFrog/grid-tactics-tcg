@@ -209,19 +209,34 @@ class TestContractTableCoverage:
         )
 
     def test_no_card_uses_passive_trigger(self, library):
-        """PASSIVE was retagged in 14.7-03. Regression guard for plan 14.8-05's
-        deletion: any card that re-introduces ``trigger: passive`` must fail.
+        """PASSIVE was retagged in 14.7-03 and the enum value was DELETED in
+        plan 14.8-05. Regression guard: any attempt to re-introduce
+        ``trigger: passive`` must be caught.
+
+        Primary guard: CardLoader._parse_enum raises ValueError at load time
+        when a card JSON contains ``"trigger": "passive"`` (TriggerType.PASSIVE
+        no longer exists as an enum member). This test verifies the current
+        library has no such card by checking all loaded triggers against
+        the still-valid enum members — if a future PASSIVE re-add slips
+        past the enum gate somehow (e.g. via custom loader), this test
+        surfaces it.
         """
-        offenders: list[str] = []
+        valid_trigger_names = set(TriggerType.__members__.keys())
+        assert "PASSIVE" not in valid_trigger_names, (
+            "TriggerType.PASSIVE should be DELETED per plan 14.8-05. "
+            "Re-adding it without updating this test breaks the regression guard."
+        )
+        # Defensive: scan every loaded card's triggers. With PASSIVE removed
+        # from the enum, no EffectDefinition.trigger can compare-equal to a
+        # nonexistent PASSIVE value — so this loop is a future-proofing
+        # check against a re-add that somehow bypasses the enum.
         for card in library.all_cards:
             for effect in card.effects:
-                if effect.trigger == TriggerType.PASSIVE:
-                    offenders.append(card.card_id)
-                    break
-        assert not offenders, (
-            f"Cards still using TriggerType.PASSIVE (slated for deletion): "
-            f"{offenders}"
-        )
+                trig_name = getattr(effect.trigger, "name", str(effect.trigger))
+                assert trig_name != "PASSIVE", (
+                    f"Card {card.card_id!r} uses a PASSIVE trigger — "
+                    f"re-introduction was blocked in plan 14.8-05."
+                )
 
     def test_every_pending_action_has_pending_requirement(self):
         """PENDING_REQUIREMENTS must list every pending-bound action source.
@@ -315,8 +330,10 @@ class TestTriggerInvariants:
         all_violations: list[OutOfPhaseError] = []
         for card in library.all_cards:
             for effect in card.effects:
-                if effect.trigger == TriggerType.PASSIVE:
-                    continue  # PASSIVE intentionally absent from PHASE_CONTRACTS
+                # Phase 14.8-05: TriggerType.PASSIVE was DELETED. No card
+                # can still carry it (the enum value is gone + CardLoader
+                # raises on load). The test_no_card_uses_passive_trigger
+                # regression guard above covers any future re-add.
                 if effect.trigger == TriggerType.AURA:
                     continue  # AURA is read-time only — never fires via resolve
                 source = f"trigger:{effect.trigger.name.lower()}"

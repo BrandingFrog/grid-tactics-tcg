@@ -139,7 +139,12 @@ class TriggerType(IntEnum):
     ON_ATTACK = 2   # When the minion attacks
     ON_DAMAGED = 3  # When the minion takes damage
     ON_MOVE = 4     # When the minion moves
-    PASSIVE = 5     # Fires every turn (end of turn effects) - LEGACY, kept for backward compat until migration complete
+    # 5 was PASSIVE. DELETED in Phase 14.8-05 (was unused since 14.7-03 — all
+    # three ex-PASSIVE cards migrated to on_start_of_turn / on_end_of_turn).
+    # The invariant test `test_no_card_uses_passive_trigger` in
+    # tests/test_phase_contract_invariants.py guards against re-introduction.
+    # Value 5 is BURNED, not reused — TriggerType is append-only for numpy /
+    # tensor-engine encoding stability.
     ON_DISCARD = 6  # Fires when this card is discarded (sent from hand to exhaust pile)
     AURA = 7        # Always active while this minion is alive on the board
     # Phase 14.7-03: explicit turn-phase and summon triggers
