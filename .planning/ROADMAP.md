@@ -175,6 +175,8 @@ Plans:
 - [x] **Phase 14.4: Spectator Mode** - Lobby Spectate button + optional God Mode, server-side join_as_spectator + spectator fanout + action gating, dual-hand god view and P1-perspective non-god view (completed 2026-04-07)
 - [x] **Phase 14.5: Piles & Hand Visibility** - from_deck flag + exhaust pile, tensor parity, view_filter piles, uniform card renderer, symmetric pile buttons with modal, opponent face-down hand row, AnimationQueue-integrated draw animations (completed 2026-04-08)
 - [x] **Phase 14.6: Sandbox Mode (Dev Tooling)** - Single-tab manual game state editor reusing the live engine: search/add cards, toggle active player, play any action, undo/redo stack, save/load via to_dict/from_dict, shareable base64 codes for bug reports (completed 2026-04-11)
+- [ ] **Phase 14.7: Turn Structure Overhaul** - Implement `data/turn_structure_spec.md`: 3-phase turn (Start / Action / End), TURN X / PLAYER X banner, start-of-turn + end-of-turn react windows, compound react windows (Summon declaration + Summon: effect = two windows), LIFO stack with originator at bottom so magic effects defer until chain resolves, Prohibition can now negate the originator, react-condition matching, turn-player-first simultaneous-trigger priority with modal card-picker for multiple same-player triggers, fizzle-on-invalid-target rule. Uses the existing spell-stage center-screen react animation built in v0.11.32-35.
+- [ ] **Phase 14.8: Phase Contract Enforcement** - Make it impossible for the engine to mutate state out of phase, and impossible for the client to paint a state that hasn't been "played" through its animation slot. Every state mutation declares a contract source (trigger-bound / status-bound / action-bound / system-bound) and the engine asserts the contract at apply time. The wire format becomes an ordered event stream tagged with `contract_source`, replacing the current "post-resolution state snapshot". Client has one animation queue; events schedule into slots by contract; DOM only reflects events that have been played. Same path for sandbox AND live PvP. Pytest invariant tests scan every card + every effect site and prove the engine never emits an out-of-phase mutation.
 - [ ] **Phase 15: Resilience & Polish** - Reconnection handling, scrollable game log, and rematch flow
 
 ## Phase Details
@@ -319,6 +321,64 @@ Plans:
 - [x] 14.6-04-PLAN.md -- Playwright E2E smoke test + manual UAT + ROADMAP/STATE closeout
 **UI hint**: yes
 
+### Phase 14.7: Turn Structure Overhaul
+**Goal**: The game's turn loop implements the priority / phase / stack rules in `data/turn_structure_spec.md` end-to-end — a turn has three distinct phases (Start / Action / End) each with its own react window, compound actions open multiple react windows, magic spells defer their effects until the react chain resolves so Prohibition can negate them, simultaneous effects resolve turn-player-first with a modal card-picker for multiple same-player triggers, and effects whose target is invalid at resolution time fizzle silently.
+**Depends on**: Phase 14.6
+**Requirements**: TURN-01 through TURN-18 (18 requirements derived from `data/turn_structure_spec.md`; to be added to REQUIREMENTS.md in plan 14.7-10)
+**Success Criteria** (what must be TRUE):
+  1. Every turn opens with a 1.2-1.8s `TURN X / PLAYER X` banner overlay; turn flow works on top of it without blocking
+  2. Turn has three ordered phases (Start of Turn → Action → End of Turn); priority starts with the turn player in each phase
+  3. A react window opens at the end of Start of Turn, after every Action Phase action (including each melee sub-action and each compound sub-trigger), and before End of Turn ends
+  4. Magic cast: only costs (mana, HP, destroy-ally, discard) resolve on play. The spell's ON_PLAY effects sit at the bottom of the react stack (`cast_mode` originator) and resolve LAST after the chain closes; a Prohibition on top negates the originator and cancels the burn/damage/etc.
+  5. Melee minions take up to two actions per turn (move + attack) and each opens its own independent react window
+  6. A minion summon with a `Summon:` effect opens two react windows — one on declaration (negate the summon entirely) and one on the Summon: trigger (react to the effect only)
+  7. React cards only fire when their written condition matches the trigger event (no free interrupts)
+  8. When multiple effects trigger at the same game-state moment, the turn player's effects all resolve first; a modal card-picker lets a player order their own simultaneous effects one at a time
+  9. An effect whose target is no longer valid at resolution time (destroyed, moved off-target) fizzles cleanly — no error, no partial resolution
+  10. Visual: start-of-turn and end-of-turn triggered effects animate with a center-screen icon + source→effect→target blip, sequential when multiple queue
+  11. The existing spell-stage center-screen react animation (LEFT-slot card + arrow + RIGHT-slot `?` / `⚡` / `👍`) drives every react window, not just magic casts
+  12. Existing ~900 passing tests either continue to pass or are updated to match the new resolution timing; no silent regressions
+**Plans:** 10 plans
+Plans:
+- [ ] 14.7-01-PLAN.md -- Cast-mode originator + deferred magic ON_PLAY (fixes Acidic Rain / Prohibition bug standalone)
+- [ ] 14.7-02-PLAN.md -- 3-phase turn model (TurnPhase + ReactContext + react_return_phase)
+- [ ] 14.7-03-PLAN.md -- Start/End-of-turn triggered-effect pipeline + retag 9 card JSONs
+- [ ] 14.7-04-PLAN.md -- Compound react windows (Summon declaration + Summon: effect)
+- [ ] 14.7-05-PLAN.md -- Turn-player-first priority queue + same-player modal picker
+- [ ] 14.7-06-PLAN.md -- Fizzle rule (target-validity at resolve time)
+- [ ] 14.7-07-PLAN.md -- React-condition matching via ReactContext + 3 new conditions
+- [ ] 14.7-08-PLAN.md -- Melee two react windows (supersedes Phase 14.1 combined-window)
+- [ ] 14.7-09-PLAN.md -- UI: turn banner + spell-stage generalization + trigger blips
+- [ ] 14.7-10-PLAN.md -- Test migration (~40 tests) + TURN-* requirements + closeout
+**UI hint**: yes
+
+### Phase 14.8: Phase Contract Enforcement
+**Goal**: It is architecturally impossible for the engine to mutate state out of phase, and architecturally impossible for the client to paint a state that hasn't been "played" through its animation slot — verified by pytest invariants and visual ordering tests.
+**Depends on**: Phase 14.7
+**Requirements**: CONTRACT-01 through CONTRACT-08 (to be added to REQUIREMENTS.md in plan 14.8-01)
+**Success Criteria** (what must be TRUE):
+  1. Every state-mutating engine call declares a `contract_source` from one of four categories: trigger-bound (e.g. `trigger:on_end_of_turn`), status-bound (e.g. `status:burn`), action-bound (e.g. `action:play_card`), system-bound (e.g. `system:turn_flip`).
+  2. A central phase-contract table maps each contract source to its allowed phase(s); the engine asserts the contract at apply time and raises `OutOfPhaseError` (action rejected, state unchanged) on violation.
+  3. A pytest invariant test loads every card JSON and every effect site, simulates every legal trigger in every phase, and proves the engine never silently mutates state out of phase.
+  4. The wire format emitted by `events.py` is an ordered stream of events `{type, contract_source, payload, animation_duration_ms, ...}` instead of a post-resolution state snapshot; both sandbox and live PvP paths emit through the same serializer.
+  5. Client has a single `eventQueue` (replacing `_sandboxFrameQueue` and `_pendingPostStageFrame` ad-hoc gates); each inbound event is enqueued and only commits to DOM when its slot fires; DOM never reflects an event that hasn't been played.
+  6. The "Fallen Paladin End: heal blip" test sequence visibly plays as discrete beats: rat in spell-stage → stage closes → paladin pulses → HP ticks 30→32 → turn-2 banner. Same ordering for live PvP, not just sandbox.
+  7. The "spell-stage" gate, the "trigger-blip" gate, the "turn-banner" gate, and any future animation slot all queue through the same mechanism (one animation queue, not three).
+  8. The 500+ existing pytest tests continue to pass, plus the new invariant tests; visual UAT tests prove ordering for at least the 5 trickiest interaction chains (3-deep react chain, paladin heal-on-rat-deploy, double-paladin priority modal, ratchanter activated ability, multi-purpose Tree Wyrm react).
+**Plans:** 10 plans
+Plans:
+- [ ] 14.8-01-PLAN.md -- Foundation: PHASE_CONTRACTS table + OutOfPhaseError + assert_phase_contract; tag 30+ existing call sites; CONTRACT-01..08 added to REQUIREMENTS.md (default mode = off)
+- [ ] 14.8-02-PLAN.md -- Pytest invariant test scanning every card × every trigger × every phase × every action × every pending modal; iterate against shadow mode; flip conftest default to shadow
+- [ ] 14.8-03a-PLAN.md -- engine_events module (EngineEvent + EventStream + 19 event types) + emission threading through 4 engine files + tests/test_engine_events.py
+- [ ] 14.8-03b-PLAN.md -- Server-side: events.py emit, sandbox_session refactor, view_filter, test_event_serialization.py + next_event_seq on Session AND SandboxSession
+- [ ] 14.8-04a-PLAN.md -- eventQueue infrastructure + dispatcher + 10 simpler slot handlers (minion summoned/died/hp/moved, attack, draw, played, discarded, mana, player_hp)
+- [ ] 14.8-04b-PLAN.md -- 9 harder handlers (spell-stage chain, turn banner, trigger blip, pending modals × 2, fizzle, game_over, phase_changed, instant) + 4-gate deletion + dead-code markings
+- [ ] 14.8-04c-PLAN.md -- Visual UAT checkpoint (5 trickiest scenarios in sandbox + paladin-heal in live PvP)
+- [ ] 14.8-05-PLAN.md -- Flip enforcement to strict (CI) and shadow (prod default); soft OutOfPhaseError catch + structured error emit; delete last_trigger_blip / TriggerType.PASSIVE / dead-code helpers; tests migrated from snapshot-field to event-stream assertions
+- [ ] 14.8-06-PLAN.md -- 5 codified visual UAT scenarios in data/tests/tests.json; Playwright runner asserts event ordering + non-overlap; runs in sandbox + live PvP
+- [ ] 14.8-07-PLAN.md -- Closeout: REQUIREMENTS / ROADMAP / STATE updated; data/wire_format.md as living spec; VERSION bumped; CHANGELOG entry; pushed to master
+**UI hint**: yes
+
 ### Phase 15: Resilience & Polish
 **Goal**: The game handles real-world conditions -- disconnections recover gracefully, a game log tracks what happened, and players can rematch without creating a new room
 **Depends on**: Phase 14
@@ -357,4 +417,6 @@ Phases execute in numeric order: 11 -> 12 -> 13 -> 14 -> 15
 | 14.4 Spectator Mode | v1.1 | 5/5 | Complete | 2026-04-07 |
 | 14.5 Piles & Hand Visibility | v1.1 | 7/7 | Complete | 2026-04-08 |
 | 14.6 Sandbox Mode (Dev Tooling) | v1.1 | 4/4 | Complete | 2026-04-11 |
+| 14.7 Turn Structure Overhaul | v1.1 | 0/10 | Planned | - |
+| 14.8 Phase Contract Enforcement | v1.1 | 0/10 | Planned | - |
 | 15. Resilience & Polish | v1.1 | 0/TBD | Not started | - |
