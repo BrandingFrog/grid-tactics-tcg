@@ -318,12 +318,74 @@ PENDING_REQUIREMENTS: dict[str, str] = {
 # ---------------------------------------------------------------------------
 
 
+# Test-only capture target — when set, _log_violation appends to it AS WELL AS
+# emitting the warning. Used by tests/test_phase_contract_invariants.py to
+# inspect shadow-mode violations across full simulation runs.
+_capture_target: Optional["ViolationCapture"] = None
+
+
+class ViolationCapture:
+    """Context manager that captures phase-contract violations during shadow mode.
+
+    Usage:
+        with ViolationCapture() as cap:
+            resolve_action(state, some_action, library)
+        if cap.violations:
+            pytest.fail(format_violations(cap.violations))
+
+    Re-entrancy: stacked captures replace each other (only the innermost
+    captures violations); on exit, the previous target is restored. Tests
+    should not nest captures across test boundaries — use one capture per
+    scenario.
+    """
+
+    def __init__(self) -> None:
+        self.violations: list[OutOfPhaseError] = []
+        self._prev_target: Optional["ViolationCapture"] = None
+
+    def __enter__(self) -> "ViolationCapture":
+        global _capture_target
+        self._prev_target = _capture_target
+        _capture_target = self
+        return self
+
+    def __exit__(self, *_args) -> None:
+        global _capture_target
+        _capture_target = self._prev_target
+
+
+def format_violations(violations: list[OutOfPhaseError]) -> str:
+    """Group violations by (contract_source, phase) and produce a bullet list.
+
+    Used in pytest assertion messages so the diff shows ALL distinct
+    violations in one shot rather than just the first.
+    """
+    if not violations:
+        return "(none)"
+    groups: dict[tuple[str, str, Optional[str]], int] = {}
+    for v in violations:
+        key = (
+            v.contract_source,
+            v.phase.name if hasattr(v.phase, "name") else str(v.phase),
+            v.pending_required,
+        )
+        groups[key] = groups.get(key, 0) + 1
+    lines = [f"{len(violations)} total violation(s) across {len(groups)} unique pattern(s):"]
+    for (src, phase, pend), count in sorted(groups.items()):
+        suffix = f" (pending_required={pend})" if pend else ""
+        lines.append(f"  - [{count}x] source={src} phase={phase}{suffix}")
+    return "\n".join(lines)
+
+
 def _log_violation(err: OutOfPhaseError) -> None:
     """Structured WARNING log for shadow-mode violations.
 
     Includes contract_source, phase, allowed_phases, pending_required, and
     a truncated stack trace skipping pytest internals so the engine call
     site is the visible bottom frame.
+
+    If a ViolationCapture is active, ALSO appends the error to its violations
+    list — tests can iterate the full set of violations from a simulation run.
     """
     # Truncate stack to the engine frames (skip pytest/internal frames if
     # we can identify them by file path heuristic).
@@ -349,6 +411,8 @@ def _log_violation(err: OutOfPhaseError) -> None:
         err.unknown_source,
         stack_summary,
     )
+    if _capture_target is not None:
+        _capture_target.violations.append(err)
 
 
 def assert_phase_contract(state, source: str) -> None:
@@ -476,4 +540,6 @@ __all__ = [
     "_reset_mode_cache",
     "expected_trigger_sources",
     "expected_action_sources",
+    "ViolationCapture",
+    "format_violations",
 ]
