@@ -38,6 +38,7 @@ from grid_tactics.engine_events import (
     EVT_PENDING_MODAL_RESOLVED,
     EVT_PHASE_CHANGED,
     EVT_PLAYER_HP_CHANGE,
+    EVT_REACT_WINDOW_OPENED,
     EventStream,
 )
 from grid_tactics.enums import (
@@ -70,6 +71,45 @@ def _replace_player(
     if idx == 0:
         return (new_player, players[1])
     return (players[0], new_player)
+
+
+def _emit_after_action_react_window_opened(
+    state: GameState,
+    event_collector: Optional[EventStream],
+) -> None:
+    """Emit EVT_REACT_WINDOW_OPENED for an action-triggered react window.
+
+    Phase 14.8-05c fix: action_resolver.py's inline REACT transitions
+    (magic cast originator, summon declaration, post-move-attack, generic
+    after-action, conjure deploy, tutor resolve) all mutated state.phase
+    = REACT without emitting the event. The client's eventQueue needs
+    that event to open the spell stage, so without it the react window
+    is visually invisible — the paladin-heal scenario "worked" only
+    because react_stack.py emits on BEFORE_END_OF_TURN, but the Acidic
+    Rain 3-deep chain broke because no emission happens at all.
+
+    Call this right before returning a state whose phase is REACT due to
+    an ACTION-phase transition.
+    """
+    if event_collector is None:
+        return
+    if state.phase != TurnPhase.REACT:
+        return
+    ctx = state.react_context.name if state.react_context is not None else None
+    return_phase = (
+        state.react_return_phase.name
+        if state.react_return_phase is not None
+        else TurnPhase.ACTION.name
+    )
+    event_collector.collect(
+        EVT_REACT_WINDOW_OPENED,
+        "system:enter_react",
+        {
+            "react_context": ctx,
+            "react_player_idx": state.react_player_idx,
+            "return_phase": return_phase,
+        },
+    )
 
 
 def _replace_minion(
@@ -1790,6 +1830,7 @@ def resolve_action(
         if state.pending_trigger_picker_idx is not None:
             return state
         if state.phase == TurnPhase.REACT:
+            _emit_after_action_react_window_opened(state, event_collector)
             return state
         state = replace(
             state,
@@ -1799,6 +1840,7 @@ def resolve_action(
             react_context=ReactContext.AFTER_ACTION,
             react_return_phase=TurnPhase.ACTION,
         )
+        _emit_after_action_react_window_opened(state, event_collector)
         return state
 
     # Not in pending conjure deploy: CONJURE_DEPLOY / DECLINE_CONJURE are illegal
@@ -1938,6 +1980,7 @@ def resolve_action(
         if state.pending_trigger_picker_idx is not None:
             return state
         if state.phase == TurnPhase.REACT:
+            _emit_after_action_react_window_opened(state, event_collector)
             return state
         state = replace(
             state,
@@ -1947,6 +1990,7 @@ def resolve_action(
             react_context=ReactContext.AFTER_ACTION,
             react_return_phase=TurnPhase.ACTION,
         )
+        _emit_after_action_react_window_opened(state, event_collector)
         return state
 
     # Not in pending tutor: TUTOR_SELECT / DECLINE_TUTOR are illegal
@@ -2234,6 +2278,7 @@ def resolve_action(
             react_context=ReactContext.AFTER_ACTION,
             react_return_phase=TurnPhase.ACTION,
         )
+        _emit_after_action_react_window_opened(state, event_collector)
         return state
 
     # Phase 14.2: If PLAY_CARD on_play entered pending_tutor state, defer
@@ -2259,6 +2304,10 @@ def resolve_action(
     # that — only emit the generic AFTER_ACTION transition for actions
     # that didn't already arrange their own react window.
     if state.phase == TurnPhase.REACT:
+        # Phase 14.8-05c: the inline transition (magic cast / summon
+        # declaration) bypassed _handle_after_action's generic emit below,
+        # so emit here so the client's eventQueue opens the spell stage.
+        _emit_after_action_react_window_opened(state, event_collector)
         return state
 
     # Transition to REACT phase (D-13)
@@ -2272,5 +2321,6 @@ def resolve_action(
         react_context=ReactContext.AFTER_ACTION,
         react_return_phase=TurnPhase.ACTION,
     )
+    _emit_after_action_react_window_opened(state, event_collector)
 
     return state
