@@ -1,0 +1,45 @@
+{
+  "key_moments": {
+    "first_stage_visible_ms": 1974,
+    "first_stage_hidden_after_ms": 5368,
+    "first_dom_hp_32_ms": 4496,
+    "first_state_hp_32_ms": 4496,
+    "first_dom_turn_2_ms": null,
+    "first_state_turn_2_ms": 4441,
+    "first_state_active_p2_ms": 4441,
+    "first_banner_post_click_ms": 2192
+  },
+  "pass_conditions": [
+    {
+      "name": "HP stayed at 30 for first 1500ms",
+      "pass": true
+    },
+    {
+      "name": "HP transitioned to 32 at some point",
+      "pass": true
+    },
+    {
+      "name": "Turn transitioned to 2",
+      "pass": true
+    },
+    {
+      "name": "Active transitioned to P2 (1)",
+      "pass": true
+    },
+    {
+      "name": "HP=32 after spell stage opened",
+      "pass": true
+    },
+    {
+      "name": "HP=32 before spell stage closes",
+      "pass": true
+    },
+    {
+      "name": "No JS console errors (informational)",
+      "pass": true
+    }
+  ],
+  "console_errors": [],
+  "all_pass": true,
+  "timeline_samples_count": 160
+}
