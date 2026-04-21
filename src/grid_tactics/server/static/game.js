@@ -435,6 +435,11 @@ function initSocket() {
     socket.on('player_ready', onPlayerReady);
     socket.on('game_start', onGameStart);
     socket.on('state_update', onStateUpdate);
+    // Phase 14.8-04a: subscribe to the new engine_events stream from live PvP.
+    // Handler enqueues each event into the eventQueue; the legacy state_update
+    // path still applies state authoritatively in 04a (snapshot path is
+    // removed in plan 05).
+    socket.on('engine_events', onEngineEvents);
     socket.on('game_over', onGameOver);
     socket.on('error', onError);
     socket.on('card_defs', onCardDefs);
@@ -2453,6 +2458,199 @@ var animRunning = false;
 // Wave 3/4 (move/attack) will reuse this same registry.
 var animatingTiles = {};
 
+// ============================================================
+// Phase 14.8-04a: Unified Event Queue (replaces _sandboxFrameQueue,
+// _pendingPostStageFrame, _pendingTriggerBlip, _pendingTurnBanner —
+// all four deletions land in plan 04b once all 19 handlers are wired.)
+//
+// In plan 04a the eventQueue runs ALONGSIDE the legacy snapshot path
+// (state_update / sandbox_state). Snapshot still updates DOM; eventQueue
+// adds animations on top. Double-rendering for the 10 covered events is
+// the accepted tradeoff for a safe migration; plan 05 deletes the snapshot
+// path entirely.
+//
+// Wire format: server emits one `engine_events` Socket.IO frame per
+// resolve_action / apply_action / apply_sandbox_edit call. Payload shape
+// (from plan 14.8-03b):
+//   { events: [ EngineEvent.to_dict(), ... ],
+//     final_state: <snapshot, same as state_update.state>,
+//     legal_actions: [...],
+//     your_player_idx: int,
+//     is_spectator?: bool, is_sandbox?: bool }
+//
+// Each EngineEvent dict:
+//   { type, contract_source, seq, payload, animation_duration_ms,
+//     triggered_by_seq, requires_decision }
+//
+// Plan 04a implements 10 simpler slot handlers fully:
+//   minion_summoned, minion_died, minion_hp_change, minion_moved,
+//   attack_resolved, card_drawn, card_played, card_discarded,
+//   mana_change, player_hp_change
+// 9 harder handlers are stubbed (call done immediately) and finished
+// in plan 04b: react_window_opened, react_window_closed, phase_changed,
+// turn_flipped, trigger_blip, pending_modal_opened/resolved, fizzle,
+// game_over.
+// ============================================================
+
+var eventQueue = [];          // EngineEvent[]
+var eventRunning = false;     // a slot handler is currently animating
+var lastSeenSeq = -1;         // monotonic guard against re-delivery / out-of-order
+                              // Server's session.next_event_seq (plan 03b M3)
+                              // drives this; -1 sentinel = "no events seen yet";
+                              // reset to -1 on game_start / sandbox_state initial
+                              // emit / sandbox reset / sandbox load.
+var slotState = {
+    spellStageChain: [],      // LIFO stack of opened-but-not-closed react windows (used by 04b)
+    pendingModalKind: null,   // non-null while awaiting user input (used by 04b)
+    pendingModalDeadline: 0,  // safety timeout fallback (used by 04b)
+};
+
+function resetEventQueue() {
+    // Called on game_start, sandbox_state initial open, sandbox reset, sandbox load.
+    eventQueue.length = 0;
+    eventRunning = false;
+    lastSeenSeq = -1;
+    slotState.spellStageChain.length = 0;
+    slotState.pendingModalKind = null;
+    slotState.pendingModalDeadline = 0;
+}
+
+function onEngineEvents(payload) {
+    if (!payload || !Array.isArray(payload.events)) return;
+    payload.events.forEach(function(ev) {
+        if (typeof ev.seq !== 'number') return;
+        if (ev.seq <= lastSeenSeq) {
+            // Duplicate or out-of-order — skip
+            console.warn("Skipping out-of-order event seq=" + ev.seq + " (last=" + lastSeenSeq + ")");
+            return;
+        }
+        lastSeenSeq = ev.seq;
+        eventQueue.push(ev);
+    });
+    // Stash final_state for snapshot-fallback rendering (e.g. on reconnect).
+    // The snapshot path (state_update / sandbox_state) is still alive in 04a
+    // and applies state independently; this stash is for error recovery only.
+    if (payload.final_state) {
+        window.__lastFinalState = payload.final_state;
+        window.__lastLegalActions = payload.legal_actions || [];
+    }
+    drainEventQueue();
+}
+
+function drainEventQueue() {
+    if (eventRunning) return;
+    if (slotState.pendingModalKind !== null) {
+        // Modal is open — wait for user input or pending_modal_resolved event (04b).
+        return;
+    }
+    if (eventQueue.length === 0) return;
+    var ev = eventQueue.shift();
+    eventRunning = true;
+    try {
+        playEvent(ev, function onSlotDone() {
+            eventRunning = false;
+            try { commitEventToDom(ev); } catch (e) { /* defensive */ }
+            drainEventQueue();
+        });
+    } catch (err) {
+        console.error("playEvent failed for type=" + (ev && ev.type), err);
+        eventRunning = false;
+        drainEventQueue();
+    }
+}
+
+function commitEventToDom(ev) {
+    // Per-event DOM update hook. In plan 04a, the legacy snapshot path
+    // (state_update / sandbox_state) still applies state authoritatively,
+    // so this is a no-op for most events. The stub is preserved so plan 04b
+    // can patch in event-driven DOM mutations once snapshot path is removed.
+    //
+    // Note: for the 10 covered handlers, the visual side-effect already
+    // fired during playEvent. Snapshot path commits the underlying state
+    // a few ms later (state_update typically arrives in same socket batch
+    // as engine_events). Acceptable double-render per plan failure_handling.
+}
+
+function playEvent(ev, done) {
+    // Dispatcher — maps event type to slot handler. Each handler MUST call
+    // done() when its animation completes (or immediately for instant events).
+    // Plan 04a implements 10 handlers; plan 04b finishes the rest.
+    switch (ev.type) {
+        case "minion_summoned":          return playMinionSummoned(ev, done);
+        case "minion_died":              return playMinionDied(ev, done);
+        case "minion_hp_change":         return playMinionHpChange(ev, done);
+        case "minion_moved":             return playMinionMoved(ev, done);
+        case "attack_resolved":          return playAttackResolved(ev, done);
+        case "card_drawn":               return playCardDrawn(ev, done);
+        case "card_played":              return playCardPlayed(ev, done);
+        case "card_discarded":           return playCardDiscarded(ev, done);
+        case "mana_change":              return playInstant(ev, done);
+        case "player_hp_change":         return playPlayerHpChange(ev, done);
+        // STUBBED until plan 04b — call done immediately so the queue drains:
+        case "react_window_opened":      console.warn("[eventQueue] react_window_opened: stub — implemented in 04b"); return setTimeout(done, 0);
+        case "react_window_closed":      console.warn("[eventQueue] react_window_closed: stub — implemented in 04b"); return setTimeout(done, 0);
+        case "phase_changed":            console.warn("[eventQueue] phase_changed: stub — implemented in 04b"); return setTimeout(done, 0);
+        case "turn_flipped":             console.warn("[eventQueue] turn_flipped: stub — implemented in 04b"); return setTimeout(done, 0);
+        case "trigger_blip":             console.warn("[eventQueue] trigger_blip: stub — implemented in 04b"); return setTimeout(done, 0);
+        case "pending_modal_opened":     console.warn("[eventQueue] pending_modal_opened: stub — implemented in 04b"); return setTimeout(done, 0);
+        case "pending_modal_resolved":   console.warn("[eventQueue] pending_modal_resolved: stub — implemented in 04b"); return setTimeout(done, 0);
+        case "fizzle":                   console.warn("[eventQueue] fizzle: stub — implemented in 04b"); return setTimeout(done, 0);
+        case "game_over":                console.warn("[eventQueue] game_over: stub — implemented in 04b"); return setTimeout(done, 0);
+        default:
+            console.warn("[eventQueue] Unknown event type: " + ev.type);
+            return setTimeout(done, 0);
+    }
+}
+
+function playInstant(ev, done) {
+    // Zero-duration events (e.g. mana_change). Snapshot path commits the
+    // underlying state; this slot just yields immediately.
+    setTimeout(done, 0);
+}
+
+// ----- 10 simpler slot handlers (Task 2 implements; Task 1 stubs) -----
+// Each stubbed for Task 1 commit. Task 2 fills them in with real visuals.
+
+function playMinionSummoned(ev, done) {
+    // Stub — Task 2 implementation.
+    setTimeout(done, ev && ev.animation_duration_ms ? ev.animation_duration_ms : 0);
+}
+function playMinionDied(ev, done) {
+    setTimeout(done, ev && ev.animation_duration_ms ? ev.animation_duration_ms : 0);
+}
+function playMinionHpChange(ev, done) {
+    setTimeout(done, ev && ev.animation_duration_ms ? ev.animation_duration_ms : 0);
+}
+function playMinionMoved(ev, done) {
+    setTimeout(done, ev && ev.animation_duration_ms ? ev.animation_duration_ms : 0);
+}
+function playAttackResolved(ev, done) {
+    setTimeout(done, ev && ev.animation_duration_ms ? ev.animation_duration_ms : 0);
+}
+function playCardDrawn(ev, done) {
+    setTimeout(done, ev && ev.animation_duration_ms ? ev.animation_duration_ms : 0);
+}
+function playCardPlayed(ev, done) {
+    setTimeout(done, ev && ev.animation_duration_ms ? ev.animation_duration_ms : 0);
+}
+function playCardDiscarded(ev, done) {
+    setTimeout(done, ev && ev.animation_duration_ms ? ev.animation_duration_ms : 0);
+}
+function playPlayerHpChange(ev, done) {
+    setTimeout(done, ev && ev.animation_duration_ms ? ev.animation_duration_ms : 0);
+}
+
+// Debug hook (mirrors __animDebug). Plan 04b extends with spell-stage state.
+if (typeof window !== 'undefined') {
+    window.__eventQueueDebug = {
+        get queue() { return eventQueue; },
+        get running() { return eventRunning; },
+        get lastSeenSeq() { return lastSeenSeq; },
+        get slotState() { return slotState; },
+        reset: resetEventQueue,
+    };
+}
+
 function enqueueAnimation(job) {
     animQueue.push(job);
     runQueue();
@@ -3259,6 +3457,9 @@ if (typeof window !== 'undefined') {
 // =============================================
 
 function onGameStart(data) {
+    // Phase 14.8-04a: a fresh game means the engine event seq counter
+    // restarts at 0; reset lastSeenSeq so the first event isn't dropped.
+    if (typeof resetEventQueue === 'function') resetEventQueue();
     cardDefs = data.card_defs;
     allCardDefs = data.card_defs;
     gameState = data.state;
@@ -7869,6 +8070,9 @@ function sandboxActivate() {
     isSpectator = false;
     spectatorGodMode = true;
     animatingTiles = {};
+    // Phase 14.8-04a: a fresh sandbox session restarts the engine event
+    // seq counter at 0 (server SandboxSession._next_event_seq init / reset).
+    if (typeof resetEventQueue === 'function') resetEventQueue();
     // gameState / myPlayerIdx / legalActions get assigned by the
     // sandbox_state handler when payload arrives.
     initSandboxScreen();
@@ -7885,6 +8089,9 @@ function sandboxDeactivate() {
         animatingTiles = _sandboxPreSnapshot.animatingTiles;
         _sandboxPreSnapshot = null;
     }
+    // Phase 14.8-04a: clear any deferred events so they don't replay against
+    // the live PvP board on next activation.
+    if (typeof resetEventQueue === 'function') resetEventQueue();
 }
 
 // ============================================================
@@ -8390,6 +8597,9 @@ function setupSandboxToolbar() {
     var resetBtn = document.getElementById('sandbox-reset-btn');
     if (resetBtn) resetBtn.addEventListener('click', function() {
         if (confirm('Reset sandbox to empty? This will clear undo history.')) {
+            // Phase 14.8-04a: server's SandboxSession._next_event_seq resets
+            // to 0 on reset(); match that client-side.
+            if (typeof resetEventQueue === 'function') resetEventQueue();
             socket.emit('sandbox_reset');
         }
     });
@@ -8408,6 +8618,9 @@ function setupSandboxToolbar() {
             reader.onload = function(ev) {
                 try {
                     var payload = JSON.parse(ev.target.result);
+                    // Phase 14.8-04a: server's load_dict() resets
+                    // _next_event_seq to 0; match client-side.
+                    if (typeof resetEventQueue === 'function') resetEventQueue();
                     socket.emit('sandbox_load', { payload: payload });
                 } catch (err) {
                     alert('Invalid JSON file: ' + err.message);
@@ -8440,6 +8653,8 @@ function setupSandboxToolbar() {
         if (!code) return;
         try {
             var payload = sandboxDecodeShareCode(code.trim());
+            // Phase 14.8-04a: matches server's load_dict() seq reset.
+            if (typeof resetEventQueue === 'function') resetEventQueue();
             socket.emit('sandbox_load', { payload: payload });
         } catch (err) {
             alert('Invalid sandbox code: ' + err.message);
@@ -8746,6 +8961,8 @@ function renderSandboxSlotList(slots) {
         loadBtn.className = 'btn btn-sm sandbox-slot-load-btn';
         loadBtn.textContent = 'Load';
         loadBtn.addEventListener('click', function() {
+            // Phase 14.8-04a: server's load_dict resets _next_event_seq.
+            if (typeof resetEventQueue === 'function') resetEventQueue();
             socket.emit('sandbox_load_slot', { slot_name: name });
         });
         var deleteBtn = document.createElement('button');
