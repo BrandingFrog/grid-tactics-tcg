@@ -24,6 +24,22 @@ from grid_tactics.board import Board
 from grid_tactics.card_library import CardLibrary
 from grid_tactics.cards import CardDefinition
 from grid_tactics.effect_resolver import resolve_effects_for_trigger
+from grid_tactics.engine_events import (
+    EVT_ATTACK_RESOLVED,
+    EVT_CARD_DISCARDED,
+    EVT_CARD_DRAWN,
+    EVT_CARD_PLAYED,
+    EVT_GAME_OVER,
+    EVT_MANA_CHANGE,
+    EVT_MINION_DIED,
+    EVT_MINION_MOVED,
+    EVT_MINION_SUMMONED,
+    EVT_PENDING_MODAL_OPENED,
+    EVT_PENDING_MODAL_RESOLVED,
+    EVT_PHASE_CHANGED,
+    EVT_PLAYER_HP_CHANGE,
+    EventStream,
+)
 from grid_tactics.enums import (
     ActionType,
     CardType,
@@ -1457,7 +1473,10 @@ def _drain_pending_death_queue(
 
 
 def _cleanup_dead_minions(
-    state: GameState, library: CardLibrary,
+    state: GameState,
+    library: CardLibrary,
+    *,
+    event_collector: Optional[EventStream] = None,
 ) -> GameState:
     """Remove dead minions (health <= 0) and enqueue on_death effects into
     the turn-player-first priority queue (Phase 14.7-05b).
@@ -1575,6 +1594,22 @@ def _cleanup_dead_minions(
         players=new_players,
     )
 
+    # Phase 14.8-03a: emit one EVT_MINION_DIED per dead minion, in
+    # instance_id order so replay matches enqueue order.
+    if event_collector is not None:
+        for m in ordered:
+            event_collector.collect(
+                EVT_MINION_DIED,
+                "system:cleanup_dead_minions",
+                {
+                    "instance_id": m.instance_id,
+                    "card_numeric_id": m.card_numeric_id,
+                    "owner_idx": 0 if m.owner == PlayerSide.PLAYER_1 else 1,
+                    "position": list(m.position),
+                    "from_deck": m.from_deck,
+                },
+            )
+
     # 4. Merge new triggers into existing queues (append preserves any
     # in-flight start/end entries that were already queued).
     if not turn_triggers and not other_triggers:
@@ -1593,7 +1628,9 @@ def _cleanup_dead_minions(
     if _cleanup_skip_drain:
         return state
 
-    return drain_pending_trigger_queue(state, library)
+    return drain_pending_trigger_queue(
+        state, library, event_collector=event_collector,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -1601,7 +1638,11 @@ def _cleanup_dead_minions(
 # ---------------------------------------------------------------------------
 
 
-def _check_game_over(state: GameState) -> GameState:
+def _check_game_over(
+    state: GameState,
+    *,
+    event_collector: Optional[EventStream] = None,
+) -> GameState:
     """Check if the game is over (any player dead) and set winner/is_game_over.
 
     Called after dead minion cleanup and after react stack resolution.
@@ -1619,11 +1660,27 @@ def _check_game_over(state: GameState) -> GameState:
 
     if not p1_alive and not p2_alive:
         # Draw: both dead simultaneously
-        return replace(state, is_game_over=True, winner=None)
+        new_state = replace(state, is_game_over=True, winner=None)
+        winner = None
+        reason = "both_players_dead"
     elif not p1_alive:
-        return replace(state, is_game_over=True, winner=PlayerSide.PLAYER_2)
+        new_state = replace(state, is_game_over=True, winner=PlayerSide.PLAYER_2)
+        winner = 1
+        reason = "p1_hp_zero"
     else:
-        return replace(state, is_game_over=True, winner=PlayerSide.PLAYER_1)
+        new_state = replace(state, is_game_over=True, winner=PlayerSide.PLAYER_1)
+        winner = 0
+        reason = "p2_hp_zero"
+
+    # Phase 14.8-03a: emit EVT_GAME_OVER. Client-side modal handles
+    # its own timing (animation_duration_ms=0 by default).
+    if event_collector is not None:
+        event_collector.collect(
+            EVT_GAME_OVER,
+            "system:check_game_over",
+            {"winner": winner, "reason": reason},
+        )
+    return new_state
 
 
 # ---------------------------------------------------------------------------
@@ -1632,7 +1689,11 @@ def _check_game_over(state: GameState) -> GameState:
 
 
 def resolve_action(
-    state: GameState, action: Action, library: CardLibrary,
+    state: GameState,
+    action: Action,
+    library: CardLibrary,
+    *,
+    event_collector: Optional[EventStream] = None,
 ) -> GameState:
     """Validate and apply a single action, returning a new GameState.
 
@@ -1683,11 +1744,22 @@ def resolve_action(
             raise ValueError("DEATH_TARGET_PICK requires a target_pos")
         from grid_tactics.effect_resolver import apply_death_target_pick
         state = apply_death_target_pick(state, action.target_pos, library)
+        # Phase 14.8-03a: emit pending-modal resolved event for the
+        # death-target modal that was open before this action.
+        if event_collector is not None:
+            event_collector.collect(
+                EVT_PENDING_MODAL_RESOLVED,
+                "action:death_target_pick",
+                {
+                    "modal_kind": "death_target_pick",
+                    "picked_position": list(action.target_pos),
+                },
+            )
         # Phase 14.7-05b: chain-reaction deaths (the DESTROY may have
         # killed another minion with its own on_death effect) enqueue
         # via _cleanup_dead_minions into the priority queue.
-        state = _cleanup_dead_minions(state, library)
-        state = _check_game_over(state)
+        state = _cleanup_dead_minions(state, library, event_collector=event_collector)
+        state = _check_game_over(state, event_collector=event_collector)
         if state.is_game_over:
             return state
         # If ANOTHER modal is now pending (chain-reaction DESTROY), defer.
@@ -1767,7 +1839,9 @@ def resolve_action(
     # REACT phase: delegate to react handler
     if state.phase == TurnPhase.REACT:
         from grid_tactics.react_stack import handle_react_action
-        return handle_react_action(state, action, library)
+        return handle_react_action(
+            state, action, library, event_collector=event_collector,
+        )
 
     # Validate ACTION phase
     if state.phase != TurnPhase.ACTION:
@@ -2107,17 +2181,104 @@ def resolve_action(
     if action.action_type == ActionType.DECLINE_POST_MOVE_ATTACK:
         raise ValueError("DECLINE_POST_MOVE_ATTACK only legal in pending post-move state")
 
+    # Phase 14.8-03a: snapshot pre-action mana / hp / grave so we can
+    # emit MANA_CHANGE / PLAYER_HP_CHANGE / CARD_DISCARDED diffs after
+    # the handler runs. Cheap (tuple-of-ints + tuple-len).
+    _prev_mana = tuple(p.current_mana for p in state.players) if event_collector else None
+    _prev_hp = tuple(p.hp for p in state.players) if event_collector else None
+    _prev_grave_lens = tuple(len(p.grave) for p in state.players) if event_collector else None
+
     # Dispatch to action handler
     if action.action_type == ActionType.PASS:
         state = _apply_pass(state)
     elif action.action_type == ActionType.DRAW:
         state = _apply_draw(state)
+        # Phase 14.8-03a: emit EVT_CARD_DRAWN so the client can animate
+        # the deck → hand transition.
+        if event_collector is not None:
+            event_collector.collect(
+                EVT_CARD_DRAWN,
+                "action:draw",
+                {"player_idx": state.active_player_idx},
+            )
     elif action.action_type == ActionType.MOVE:
+        # Snapshot the moving minion's pre-position so we can emit a
+        # MINION_MOVED event with from/to coords.
+        _moved_minion_id = action.minion_id
+        _from_pos: Optional[tuple[int, int]] = None
+        if _moved_minion_id is not None:
+            _src = state.get_minion(_moved_minion_id)
+            if _src is not None:
+                _from_pos = _src.position
         state = _apply_move(state, action, library)
+        if event_collector is not None and _moved_minion_id is not None:
+            _dst = state.get_minion(_moved_minion_id)
+            event_collector.collect(
+                EVT_MINION_MOVED,
+                "action:move",
+                {
+                    "instance_id": _moved_minion_id,
+                    "from": list(_from_pos) if _from_pos else None,
+                    "to": list(_dst.position) if _dst else None,
+                    "owner_idx": state.active_player_idx,
+                },
+            )
     elif action.action_type == ActionType.PLAY_CARD:
+        # Emit EVT_CARD_PLAYED before dispatching so the event seq comes
+        # BEFORE any inner trigger / summon events the handler emits.
+        if event_collector is not None:
+            _player = state.players[state.active_player_idx]
+            _card_idx = action.card_index
+            _played_card_id: Optional[int] = None
+            if _card_idx is not None and 0 <= _card_idx < len(_player.hand):
+                _played_card_id = _player.hand[_card_idx]
+            event_collector.collect(
+                EVT_CARD_PLAYED,
+                "action:play_card",
+                {
+                    "card_numeric_id": _played_card_id,
+                    "card_index": _card_idx,
+                    "owner_idx": state.active_player_idx,
+                    "target_pos": list(action.target_pos) if action.target_pos else None,
+                    "position": list(action.position) if action.position else None,
+                },
+            )
         state = _apply_play_card(state, action, library)
     elif action.action_type == ActionType.ATTACK:
+        # Capture both combatants for ATTACK_RESOLVED payload.
+        _atk_id = action.minion_id
+        _def_id: Optional[int] = None
+        _atk_hp_before = 0
+        _def_hp_before = 0
+        if _atk_id is not None:
+            _src_atk = state.get_minion(_atk_id)
+            if _src_atk is not None:
+                _atk_hp_before = _src_atk.current_health
+        if action.target_pos is not None:
+            for _m in state.minions:
+                if _m.position == action.target_pos and _m.is_alive:
+                    _def_id = _m.instance_id
+                    _def_hp_before = _m.current_health
+                    break
         state = _apply_attack(state, action, library)
+        if event_collector is not None:
+            _atk_after = state.get_minion(_atk_id) if _atk_id is not None else None
+            _def_after = state.get_minion(_def_id) if _def_id is not None else None
+            event_collector.collect(
+                EVT_ATTACK_RESOLVED,
+                "action:attack",
+                {
+                    "attacker_id": _atk_id,
+                    "defender_id": _def_id,
+                    "target_pos": list(action.target_pos) if action.target_pos else None,
+                    "attacker_hp_before": _atk_hp_before,
+                    "attacker_hp_after": _atk_after.current_health if _atk_after else 0,
+                    "defender_hp_before": _def_hp_before,
+                    "defender_hp_after": _def_after.current_health if _def_after else 0,
+                    "attacker_killed": _atk_after is None or not _atk_after.is_alive,
+                    "defender_killed": _def_after is None or not _def_after.is_alive,
+                },
+            )
     elif action.action_type == ActionType.SACRIFICE:
         state = _apply_sacrifice(state, action, library)
     elif action.action_type == ActionType.TRANSFORM:
@@ -2127,15 +2288,59 @@ def resolve_action(
     else:
         raise ValueError(f"Unsupported action type for main phase: {action.action_type}")
 
+    # Phase 14.8-03a: emit mana / hp / discard diff events for any side
+    # that changed. CARD_DISCARDED fires once per card added to grave —
+    # covers magic-played-to-grave and discard-cost cards uniformly,
+    # without threading through every discard helper.
+    if event_collector is not None and _prev_mana is not None and _prev_hp is not None:
+        for _idx, (_pm, _ph) in enumerate(zip(_prev_mana, _prev_hp)):
+            _now_mana = state.players[_idx].current_mana
+            _now_hp = state.players[_idx].hp
+            if _now_mana != _pm:
+                event_collector.collect(
+                    EVT_MANA_CHANGE,
+                    f"action:{action.action_type.name.lower()}",
+                    {
+                        "player_idx": _idx,
+                        "prev": _pm,
+                        "new": _now_mana,
+                        "delta": _now_mana - _pm,
+                    },
+                )
+            if _now_hp != _ph:
+                event_collector.collect(
+                    EVT_PLAYER_HP_CHANGE,
+                    f"action:{action.action_type.name.lower()}",
+                    {
+                        "player_idx": _idx,
+                        "prev": _ph,
+                        "new": _now_hp,
+                        "delta": _now_hp - _ph,
+                    },
+                )
+        if _prev_grave_lens is not None:
+            for _idx, _prev_len in enumerate(_prev_grave_lens):
+                _now_grave = state.players[_idx].grave
+                _added = _now_grave[_prev_len:]
+                for _card_id in _added:
+                    event_collector.collect(
+                        EVT_CARD_DISCARDED,
+                        f"action:{action.action_type.name.lower()}",
+                        {
+                            "player_idx": _idx,
+                            "card_numeric_id": _card_id,
+                        },
+                    )
+
     # Record the pending_action BEFORE cleanup so that a death modal can
     # defer the react window without losing the triggering action.
     state = replace(state, pending_action=action)
 
     # Dead minion cleanup (D-02)
-    state = _cleanup_dead_minions(state, library)
+    state = _cleanup_dead_minions(state, library, event_collector=event_collector)
 
     # Win/draw detection (Phase 4) -- after cleanup, before react transition
-    state = _check_game_over(state)
+    state = _check_game_over(state, event_collector=event_collector)
     if state.is_game_over:
         return state
 

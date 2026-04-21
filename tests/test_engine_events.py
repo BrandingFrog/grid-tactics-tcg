@@ -403,3 +403,50 @@ class TestEngineEmissionPerEventType:
         assert stream.next_seq >= 100 + first_call_count
         # First event has the seeded starting seq
         assert stream.events[0].seq == 100
+
+
+class TestEngineEmissionShortcutAndDualWrite:
+    """Cover the orchestrator-decision points called out in the plan:
+
+      - decision #3: react_window_opened + react_window_closed are emitted
+        on the shortcut path too (no triggers → dead-air react window).
+      - trigger_blip dual-write: state.last_trigger_blip is still set
+        AND EVT_TRIGGER_BLIP is emitted (migration window before plan
+        14.8-05 deletes the field).
+    """
+
+    def test_react_window_opened_emitted_on_shortcut_path(self, library):
+        """When enter_start_of_turn finds NO triggers it shortcuts to
+        ACTION. The plan (orchestrator decision #3) requires a
+        zero-duration react_window_opened + react_window_closed pair
+        to fire for symmetry — the client treats them as instant.
+        """
+        from grid_tactics.enums import TurnPhase
+        from grid_tactics.react_stack import enter_start_of_turn
+        state = _new_state(library)
+        # Force into END_OF_TURN-ish so enter_start_of_turn fires legally
+        state = replace(state, phase=TurnPhase.END_OF_TURN)
+        stream = EventStream()
+        new_state = enter_start_of_turn(
+            state, library, event_collector=stream,
+        )
+        # State should have shortcut to ACTION since no triggers exist.
+        assert new_state.phase == TurnPhase.ACTION
+        # Events should contain the OPENED + CLOSED pair (decision #3).
+        types = [e.type for e in stream.events]
+        assert "react_window_opened" in types, (
+            f"Expected EVT_REACT_WINDOW_OPENED on shortcut, got: {types}"
+        )
+        assert "react_window_closed" in types, (
+            f"Expected EVT_REACT_WINDOW_CLOSED on shortcut, got: {types}"
+        )
+        # The pair should be marked as shortcut payload entries.
+        opened = [e for e in stream.events if e.type == "react_window_opened"]
+        closed = [e for e in stream.events if e.type == "react_window_closed"]
+        assert any(e.payload.get("shortcut") for e in opened)
+        assert any(e.payload.get("shortcut") for e in closed)
+        # And animation_duration_ms == 0 for the shortcut pair.
+        for e in opened + closed:
+            if e.payload.get("shortcut"):
+                assert e.animation_duration_ms == 0
+

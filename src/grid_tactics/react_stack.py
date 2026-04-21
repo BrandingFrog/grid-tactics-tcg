@@ -18,6 +18,16 @@ from typing import Optional
 
 from grid_tactics.actions import Action
 from grid_tactics.card_library import CardLibrary
+from grid_tactics.engine_events import (
+    EVT_FIZZLE,
+    EVT_MINION_HP_CHANGE,
+    EVT_PHASE_CHANGED,
+    EVT_REACT_WINDOW_CLOSED,
+    EVT_REACT_WINDOW_OPENED,
+    EVT_TRIGGER_BLIP,
+    EVT_TURN_FLIPPED,
+    EventStream,
+)
 from grid_tactics.enums import (
     ActionType,
     CardType,
@@ -96,7 +106,12 @@ def _replace_player(
     return (players[0], new_player)
 
 
-def tick_status_effects(state: GameState, library: CardLibrary) -> GameState:
+def tick_status_effects(
+    state: GameState,
+    library: CardLibrary,
+    *,
+    event_collector: Optional[EventStream] = None,
+) -> GameState:
     """Tick per-minion status effects at the start of the active player's turn.
 
     Boolean burn semantics (locked):
@@ -155,11 +170,28 @@ def tick_status_effects(state: GameState, library: CardLibrary) -> GameState:
     )
     state = _replace(state, minions=new_minions)
 
+    # Phase 14.8-03a: emit one EVT_MINION_HP_CHANGE per burn tick.
+    # contract_source matches the assert_phase_contract above.
+    if event_collector is not None:
+        for inst_id, new_minion in new_minions_by_id.items():
+            event_collector.collect(
+                EVT_MINION_HP_CHANGE,
+                "status:burn",
+                {
+                    "instance_id": inst_id,
+                    "new_hp": new_minion.current_health,
+                    "delta": -total_burn,
+                    "owner_idx": 0 if new_minion.owner == PlayerSide.PLAYER_1 else 1,
+                    "position": list(new_minion.position),
+                    "cause": "burn",
+                },
+            )
+
     # Route any newly-dead minions through the standard death-cleanup path
     # so on-death effects (and game-over checks) fire.
     from grid_tactics.action_resolver import _check_game_over, _cleanup_dead_minions
-    state = _cleanup_dead_minions(state, library)
-    state = _check_game_over(state)
+    state = _cleanup_dead_minions(state, library, event_collector=event_collector)
+    state = _check_game_over(state, event_collector=event_collector)
     return state
 
 
@@ -317,7 +349,10 @@ def _enqueue_turn_phase_triggers(
 
 
 def fire_start_of_turn_triggers(
-    state: GameState, library: CardLibrary,
+    state: GameState,
+    library: CardLibrary,
+    *,
+    event_collector: Optional[EventStream] = None,
 ) -> GameState:
     """Enqueue ON_START_OF_TURN triggers into the priority queue + drain.
 
@@ -344,11 +379,16 @@ def fire_start_of_turn_triggers(
         and not state.pending_trigger_queue_other
     ):
         return state
-    return drain_pending_trigger_queue(state, library)
+    return drain_pending_trigger_queue(
+        state, library, event_collector=event_collector,
+    )
 
 
 def fire_end_of_turn_triggers(
-    state: GameState, library: CardLibrary,
+    state: GameState,
+    library: CardLibrary,
+    *,
+    event_collector: Optional[EventStream] = None,
 ) -> GameState:
     """Enqueue ON_END_OF_TURN triggers into the priority queue + drain.
 
@@ -365,7 +405,9 @@ def fire_end_of_turn_triggers(
         and not state.pending_trigger_queue_other
     ):
         return state
-    return drain_pending_trigger_queue(state, library)
+    return drain_pending_trigger_queue(
+        state, library, event_collector=event_collector,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -374,7 +416,10 @@ def fire_end_of_turn_triggers(
 
 
 def drain_pending_trigger_queue(
-    state: GameState, library: CardLibrary,
+    state: GameState,
+    library: CardLibrary,
+    *,
+    event_collector: Optional[EventStream] = None,
 ) -> GameState:
     """Drain the pending-trigger queues in priority order.
 
@@ -413,16 +458,43 @@ def drain_pending_trigger_queue(
 
     # Turn queue drains first (priority).
     if len(turn_q) >= 2:
-        return replace(state, pending_trigger_picker_idx=active_idx)
+        # Phase 14.8-03a: trigger picker modal opens — gates eventQueue.
+        new_state = replace(state, pending_trigger_picker_idx=active_idx)
+        if event_collector is not None:
+            event_collector.collect(
+                EVT_PENDING_MODAL_OPENED,
+                "system:drain_triggers",
+                {
+                    "modal_kind": "trigger_pick",
+                    "owner_idx": active_idx,
+                    "options_count": len(turn_q),
+                },
+                requires_decision=True,
+            )
+        return new_state
     if len(turn_q) == 1:
         return _resolve_trigger_and_open_react_window(
             state, turn_q[0], is_turn_queue=True, library=library,
+            event_collector=event_collector,
         )
     if len(other_q) >= 2:
-        return replace(state, pending_trigger_picker_idx=other_idx)
+        new_state = replace(state, pending_trigger_picker_idx=other_idx)
+        if event_collector is not None:
+            event_collector.collect(
+                EVT_PENDING_MODAL_OPENED,
+                "system:drain_triggers",
+                {
+                    "modal_kind": "trigger_pick",
+                    "owner_idx": other_idx,
+                    "options_count": len(other_q),
+                },
+                requires_decision=True,
+            )
+        return new_state
     if len(other_q) == 1:
         return _resolve_trigger_and_open_react_window(
             state, other_q[0], is_turn_queue=False, library=library,
+            event_collector=event_collector,
         )
 
     # Both queues empty — drain complete, nothing to do.
@@ -434,6 +506,8 @@ def _resolve_trigger_and_open_react_window(
     trigger: PendingTrigger,
     is_turn_queue: bool,
     library: CardLibrary,
+    *,
+    event_collector: Optional[EventStream] = None,
 ) -> GameState:
     """Resolve one queued trigger and open a REACT window for it (spec §7.5 step 3).
 
@@ -682,6 +756,7 @@ def _resolve_trigger_and_open_react_window(
         trigger.target_pos,
         source_minion_id=fizzle_source_id,
         contract_source=_trigger_source,
+        event_collector=event_collector,
     )
     fizzled = state is prev_state
 
@@ -689,6 +764,20 @@ def _resolve_trigger_and_open_react_window(
     # trigger to advance the drain. No dead-air prompt for a no-op
     # effect (spec §7.3 / §7.5 step 3).
     if fizzled:
+        # Phase 14.8-03a: emit EVT_FIZZLE so the client can optionally
+        # show a puff or skip the visual entirely. contract_source is
+        # the original trigger source.
+        if event_collector is not None:
+            event_collector.collect(
+                EVT_FIZZLE,
+                _trigger_source,
+                {
+                    "trigger_kind": trigger.trigger_kind,
+                    "source_minion_id": trigger.source_minion_id,
+                    "source_card_numeric_id": trigger.source_card_numeric_id,
+                    "reason": "target_invalid_at_resolve_time",
+                },
+            )
         if is_turn_queue:
             state = replace(
                 state,
@@ -701,7 +790,9 @@ def _resolve_trigger_and_open_react_window(
             )
         # Continue the drain — next entry (if any) auto-resolves or opens
         # the picker modal.
-        return drain_pending_trigger_queue(state, library)
+        return drain_pending_trigger_queue(
+            state, library, event_collector=event_collector,
+        )
 
     # Enqueue-only cleanup: chain-reaction deaths from this resolution
     # enqueue PendingTriggers WITHOUT triggering a nested drain, so the
@@ -775,6 +866,27 @@ def _resolve_trigger_and_open_react_window(
     # _fireTriggerBlipAnimation — source-tile pulse → center icon →
     # optional target-tile pulse.
     blip_payload = _build_trigger_blip_payload(trigger, effect)
+
+    # Phase 14.8-03a: dual-write the blip as both a transient field
+    # (for legacy clients) AND an EVT_TRIGGER_BLIP event (for the
+    # plan-04a eventQueue). Plan 14.8-05 deletes the field write once
+    # all clients have switched. Also emit EVT_REACT_WINDOW_OPENED so
+    # the spell-stage / banner gets event-driven coverage.
+    if event_collector is not None:
+        event_collector.collect(
+            EVT_TRIGGER_BLIP,
+            _trigger_source,
+            blip_payload,
+        )
+        event_collector.collect(
+            EVT_REACT_WINDOW_OPENED,
+            "system:enter_react",
+            {
+                "react_context": rc.name if rc else None,
+                "react_player_idx": 1 - state.active_player_idx,
+                "return_phase": new_return_phase.name if new_return_phase else None,
+            },
+        )
 
     return replace(
         state,
@@ -850,7 +962,10 @@ def _build_trigger_blip_payload(trigger: PendingTrigger, effect) -> dict:
 
 
 def _close_end_of_turn_and_flip(
-    state: GameState, library: CardLibrary,
+    state: GameState,
+    library: CardLibrary,
+    *,
+    event_collector: Optional[EventStream] = None,
 ) -> GameState:
     """Advance to the next player's turn (outgoing player's end-of-turn tail).
 
@@ -894,12 +1009,27 @@ def _close_end_of_turn_and_flip(
     # Advance turn: flip active player, increment turn number, phase=ACTION.
     # (enter_start_of_turn will reset phase to START_OF_TURN when called.)
     new_active_idx = 1 - old_active_idx
+    prev_turn = state.turn_number
     state = replace(
         state,
         phase=TurnPhase.ACTION,
         active_player_idx=new_active_idx,
         turn_number=state.turn_number + 1,
     )
+
+    # Phase 14.8-03a: emit EVT_TURN_FLIPPED — drives the turn banner on
+    # the client (replaces the synthesized turn-number diff in
+    # applyStateFrame once plan 04a/b lands).
+    if event_collector is not None:
+        event_collector.collect(
+            EVT_TURN_FLIPPED,
+            "system:turn_flip",
+            {
+                "prev_turn": prev_turn,
+                "new_turn": state.turn_number,
+                "new_active_idx": new_active_idx,
+            },
+        )
 
     # Regenerate mana for the new active player at turn start.
     # Skip on turn 2: P2's first action must start at STARTING_MANA to
@@ -921,7 +1051,10 @@ def _close_end_of_turn_and_flip(
 
 
 def enter_start_of_turn(
-    state: GameState, library: CardLibrary,
+    state: GameState,
+    library: CardLibrary,
+    *,
+    event_collector: Optional[EventStream] = None,
 ) -> GameState:
     """Enter START_OF_TURN phase for ``state.active_player_idx``.
 
@@ -939,18 +1072,30 @@ def enter_start_of_turn(
     that match OPPONENT_START_OF_TURN even when no triggers fire.
     """
     assert_phase_contract(state, "system:enter_start_of_turn")
+    prev_phase = state.phase
     # 1. Transition to START_OF_TURN phase (even if we shortcut later).
     state = replace(state, phase=TurnPhase.START_OF_TURN)
+    if event_collector is not None:
+        event_collector.collect(
+            EVT_PHASE_CHANGED,
+            "system:enter_start_of_turn",
+            {
+                "prev": prev_phase.name if prev_phase else None,
+                "new": TurnPhase.START_OF_TURN.name,
+            },
+        )
 
     # 2. Tick burns for the active player's burning minions.
-    state = tick_status_effects(state, library)
+    state = tick_status_effects(state, library, event_collector=event_collector)
     if state.is_game_over:
         return state
 
     # 3. Fire ON_START_OF_TURN triggers (if any).
     had_triggers = _has_triggers_for(state, library, TriggerType.ON_START_OF_TURN)
     if had_triggers:
-        state = fire_start_of_turn_triggers(state, library)
+        state = fire_start_of_turn_triggers(
+            state, library, event_collector=event_collector,
+        )
         if state.is_game_over:
             return state
 
@@ -966,11 +1111,46 @@ def enter_start_of_turn(
         return state
 
     # No Start triggers → shortcut straight to ACTION.
+    # Phase 14.8-03a per orchestrator decision #3: emit
+    # EVT_REACT_WINDOW_OPENED + EVT_REACT_WINDOW_CLOSED on the shortcut
+    # path too for symmetry. Client (plan 04a/b) treats zero-duration
+    # shortcuts as instant.
+    if event_collector is not None:
+        event_collector.collect(
+            EVT_REACT_WINDOW_OPENED,
+            "system:enter_react",
+            {
+                "react_context": ReactContext.AFTER_START_TRIGGER.name,
+                "react_player_idx": 1 - state.active_player_idx,
+                "shortcut": True,
+            },
+            animation_duration_ms=0,
+        )
+        event_collector.collect(
+            EVT_REACT_WINDOW_CLOSED,
+            "system:close_react_window",
+            {
+                "return_phase": TurnPhase.ACTION.name,
+                "shortcut": True,
+            },
+            animation_duration_ms=0,
+        )
+        event_collector.collect(
+            EVT_PHASE_CHANGED,
+            "system:enter_start_of_turn",
+            {
+                "prev": TurnPhase.START_OF_TURN.name,
+                "new": TurnPhase.ACTION.name,
+            },
+        )
     return replace(state, phase=TurnPhase.ACTION)
 
 
 def enter_end_of_turn(
-    state: GameState, library: CardLibrary,
+    state: GameState,
+    library: CardLibrary,
+    *,
+    event_collector: Optional[EventStream] = None,
 ) -> GameState:
     """Enter END_OF_TURN phase for ``state.active_player_idx``.
 
@@ -985,13 +1165,25 @@ def enter_end_of_turn(
     match OPPONENT_END_OF_TURN even when no triggers fire.
     """
     assert_phase_contract(state, "system:enter_end_of_turn")
+    prev_phase = state.phase
     # 1. Transition to END_OF_TURN phase (even if we shortcut later).
     state = replace(state, phase=TurnPhase.END_OF_TURN)
+    if event_collector is not None:
+        event_collector.collect(
+            EVT_PHASE_CHANGED,
+            "system:enter_end_of_turn",
+            {
+                "prev": prev_phase.name if prev_phase else None,
+                "new": TurnPhase.END_OF_TURN.name,
+            },
+        )
 
     # 2. Fire ON_END_OF_TURN triggers (if any).
     had_triggers = _has_triggers_for(state, library, TriggerType.ON_END_OF_TURN)
     if had_triggers:
-        state = fire_end_of_turn_triggers(state, library)
+        state = fire_end_of_turn_triggers(
+            state, library, event_collector=event_collector,
+        )
         if state.is_game_over:
             return state
 
@@ -1007,14 +1199,43 @@ def enter_end_of_turn(
         return state
 
     # No End triggers → advance turn directly.
-    state = _close_end_of_turn_and_flip(state, library)
+    # Phase 14.8-03a per orchestrator decision #3: emit react_window_opened
+    # + react_window_closed for symmetry on the shortcut path too.
+    if event_collector is not None:
+        event_collector.collect(
+            EVT_REACT_WINDOW_OPENED,
+            "system:enter_react",
+            {
+                "react_context": ReactContext.BEFORE_END_OF_TURN.name,
+                "react_player_idx": 1 - state.active_player_idx,
+                "shortcut": True,
+            },
+            animation_duration_ms=0,
+        )
+        event_collector.collect(
+            EVT_REACT_WINDOW_CLOSED,
+            "system:close_react_window",
+            {
+                "return_phase": TurnPhase.END_OF_TURN.name,
+                "shortcut": True,
+            },
+            animation_duration_ms=0,
+        )
+    state = _close_end_of_turn_and_flip(
+        state, library, event_collector=event_collector,
+    )
     if state.is_game_over:
         return state
-    return enter_start_of_turn(state, library)
+    return enter_start_of_turn(
+        state, library, event_collector=event_collector,
+    )
 
 
 def close_start_react_and_enter_action(
-    state: GameState, library: CardLibrary,
+    state: GameState,
+    library: CardLibrary,
+    *,
+    event_collector: Optional[EventStream] = None,
 ) -> GameState:
     """After a START_OF_TURN react window PASS-PASSes, enter ACTION.
 
@@ -1022,6 +1243,18 @@ def close_start_react_and_enter_action(
     turn player still owns their ACTION phase.
     """
     assert_phase_contract(state, "system:close_react_window")
+    if event_collector is not None:
+        event_collector.collect(
+            EVT_REACT_WINDOW_CLOSED,
+            "system:close_react_window",
+            {"return_phase": TurnPhase.ACTION.name},
+        )
+        event_collector.collect(
+            EVT_PHASE_CHANGED,
+            "system:close_react_window",
+            {"prev": state.phase.name if state.phase else None,
+             "new": TurnPhase.ACTION.name},
+        )
     return replace(
         state,
         phase=TurnPhase.ACTION,
@@ -1034,7 +1267,10 @@ def close_start_react_and_enter_action(
 
 
 def close_end_react_and_advance_turn(
-    state: GameState, library: CardLibrary,
+    state: GameState,
+    library: CardLibrary,
+    *,
+    event_collector: Optional[EventStream] = None,
 ) -> GameState:
     """After an END_OF_TURN (or legacy after-action) react window PASS-PASSes, advance turn.
 
@@ -1042,6 +1278,12 @@ def close_end_react_and_advance_turn(
     active player, and enters the NEW active player's START_OF_TURN.
     """
     assert_phase_contract(state, "system:close_react_window")
+    if event_collector is not None:
+        event_collector.collect(
+            EVT_REACT_WINDOW_CLOSED,
+            "system:close_react_window",
+            {"return_phase": "turn_flip"},
+        )
     state = replace(
         state,
         react_stack=(),
@@ -1050,10 +1292,14 @@ def close_end_react_and_advance_turn(
         react_context=None,
         react_return_phase=None,
     )
-    state = _close_end_of_turn_and_flip(state, library)
+    state = _close_end_of_turn_and_flip(
+        state, library, event_collector=event_collector,
+    )
     if state.is_game_over:
         return state
-    return enter_start_of_turn(state, library)
+    return enter_start_of_turn(
+        state, library, event_collector=event_collector,
+    )
 
 
 def advance_to_next_turn(
@@ -1122,7 +1368,11 @@ def advance_to_next_turn(
 
 
 def resolve_summon_declaration_originator(
-    state: GameState, entry: ReactEntry, library: CardLibrary,
+    state: GameState,
+    entry: ReactEntry,
+    library: CardLibrary,
+    *,
+    event_collector: Optional[EventStream] = None,
 ) -> GameState:
     """Window A resolved WITHOUT negate → land the minion on the board.
 
@@ -1182,6 +1432,22 @@ def resolve_summon_declaration_originator(
         next_minion_id=state.next_minion_id + 1,
     )
 
+    # Phase 14.8-03a: emit EVT_MINION_SUMMONED — fired AFTER the minion
+    # actually lands (post Window A negate window). Plan-04a's animation
+    # path uses this for the deploy-from-hand → board-tile animation.
+    if event_collector is not None:
+        from grid_tactics.engine_events import EVT_MINION_SUMMONED
+        event_collector.collect(
+            EVT_MINION_SUMMONED,
+            "system:resolve_summon_declaration",
+            {
+                "instance_id": minion.instance_id,
+                "card_numeric_id": entry.card_numeric_id,
+                "owner_idx": entry.player_idx,
+                "position": list(pos),
+            },
+        )
+
     # Collect ON_SUMMON effects; if none, skip Window B entirely.
     on_summon_indices = [
         i for i, e in enumerate(card_def.effects)
@@ -1218,7 +1484,11 @@ def resolve_summon_declaration_originator(
 
 
 def resolve_summon_effect_originator(
-    state: GameState, entry: ReactEntry, library: CardLibrary,
+    state: GameState,
+    entry: ReactEntry,
+    library: CardLibrary,
+    *,
+    event_collector: Optional[EventStream] = None,
 ) -> GameState:
     """Window B resolved WITHOUT negate → fire the minion's ON_SUMMON effects.
 
@@ -1268,6 +1538,7 @@ def resolve_summon_effect_originator(
                 state, effect, source_pos, caster_owner, library, target_pos=None,
                 source_minion_id=entry.source_minion_id,
                 contract_source="trigger:on_summon",
+                event_collector=event_collector,
             )
     return state
 
@@ -1278,7 +1549,11 @@ def resolve_summon_effect_originator(
 
 
 def handle_react_action(
-    state: GameState, action: Action, library: CardLibrary,
+    state: GameState,
+    action: Action,
+    library: CardLibrary,
+    *,
+    event_collector: Optional[EventStream] = None,
 ) -> GameState:
     """Handle an action during the react window.
 
@@ -1299,11 +1574,15 @@ def handle_react_action(
     """
     if action.action_type == ActionType.PASS:
         assert_phase_contract(state, "action:pass_react")
-        return resolve_react_stack(state, library)
+        return resolve_react_stack(
+            state, library, event_collector=event_collector,
+        )
 
     if action.action_type == ActionType.PLAY_REACT:
         assert_phase_contract(state, "action:play_react")
-        return _play_react(state, action, library)
+        return _play_react(
+            state, action, library, event_collector=event_collector,
+        )
 
     raise ValueError(
         f"Invalid action type {action.action_type.name} during REACT phase. "
@@ -1312,7 +1591,11 @@ def handle_react_action(
 
 
 def _play_react(
-    state: GameState, action: Action, library: CardLibrary,
+    state: GameState,
+    action: Action,
+    library: CardLibrary,
+    *,
+    event_collector: Optional[EventStream] = None,
 ) -> GameState:
     """Process a PLAY_REACT action: validate, spend mana, push to stack, switch player.
 
@@ -1362,9 +1645,40 @@ def _play_react(
         )
 
     # Spend mana and discard card from hand to graveyard
+    prev_mana = player.current_mana
     new_player = player.spend_mana(mana_cost)
     new_player = new_player.discard_from_hand(card_numeric_id)
     new_players = _replace_player(state.players, react_idx, new_player)
+
+    # Phase 14.8-03a: import event constants lazily so we don't bloat module
+    # import time. The kwarg is opt-in so emission only fires for callers
+    # that supplied an event_collector.
+    if event_collector is not None:
+        from grid_tactics.engine_events import (
+            EVT_CARD_PLAYED, EVT_MANA_CHANGE,
+        )
+        event_collector.collect(
+            EVT_CARD_PLAYED,
+            "action:play_react",
+            {
+                "card_numeric_id": card_numeric_id,
+                "card_index": action.card_index,
+                "owner_idx": react_idx,
+                "target_pos": list(action.target_pos) if action.target_pos else None,
+                "is_react": True,
+            },
+        )
+        if mana_cost > 0:
+            event_collector.collect(
+                EVT_MANA_CHANGE,
+                "action:play_react",
+                {
+                    "player_idx": react_idx,
+                    "prev": prev_mana,
+                    "new": prev_mana - mana_cost,
+                    "delta": -mana_cost,
+                },
+            )
 
     # Create ReactEntry and push onto stack
     entry = ReactEntry(
@@ -1387,7 +1701,10 @@ def _play_react(
 
 
 def resolve_react_stack(
-    state: GameState, library: CardLibrary,
+    state: GameState,
+    library: CardLibrary,
+    *,
+    event_collector: Optional[EventStream] = None,
 ) -> GameState:
     """Resolve the react stack LIFO and advance the turn.
 
@@ -1469,11 +1786,15 @@ def resolve_react_stack(
         # (Window A: land the minion + maybe open Window B) and effect
         # (Window B: fire ON_SUMMON effects).
         if entry.is_originator and entry.origin_kind == "summon_declaration":
-            state = resolve_summon_declaration_originator(state, entry, library)
+            state = resolve_summon_declaration_originator(
+                state, entry, library, event_collector=event_collector,
+            )
             continue
 
         if entry.is_originator and entry.origin_kind == "summon_effect":
-            state = resolve_summon_effect_originator(state, entry, library)
+            state = resolve_summon_effect_originator(
+                state, entry, library, event_collector=event_collector,
+            )
             continue
 
         if card_def.card_type == CardType.REACT:
@@ -1561,10 +1882,10 @@ def resolve_react_stack(
     # from "cleanup replaced state with a fresh death-trigger window").
     from grid_tactics.action_resolver import _cleanup_dead_minions, _check_game_over
     _pre_cleanup_state = state
-    state = _cleanup_dead_minions(state, library)
+    state = _cleanup_dead_minions(state, library, event_collector=event_collector)
 
     # Win/draw detection after react resolution (Phase 4)
-    state = _check_game_over(state)
+    state = _check_game_over(state, event_collector=event_collector)
     if state.is_game_over:
         # Game is over -- clear react state but don't advance turn
         return replace(
@@ -1674,7 +1995,9 @@ def resolve_react_stack(
             # react_return_phase is preserved — the final-drain exit needs
             # to know where to transition when both queues finally empty.
         )
-        return drain_pending_trigger_queue(state, library)
+        return drain_pending_trigger_queue(
+            state, library, event_collector=event_collector,
+        )
 
     # Phase 14.7-02: Dispatch on ``react_return_phase`` — where did we
     # come from? Pre-14.7 callers didn't set this field so it's None,
@@ -1709,6 +2032,12 @@ def resolve_react_stack(
         # triggers (the majority today) enter_end_of_turn shortcuts so
         # behavior is byte-identical to the old flow.
         # First, clear the react bookkeeping for the closing window.
+        if event_collector is not None:
+            event_collector.collect(
+                EVT_REACT_WINDOW_CLOSED,
+                "system:close_react_window",
+                {"return_phase": "end_of_turn_transition"},
+            )
         state = replace(
             state,
             react_stack=(),
@@ -1717,13 +2046,21 @@ def resolve_react_stack(
             react_context=None,
             react_return_phase=None,
         )
-        return enter_end_of_turn(state, library)
+        return enter_end_of_turn(
+            state, library, event_collector=event_collector,
+        )
     elif return_phase == TurnPhase.START_OF_TURN:
         # 14.7-03: after a start-of-turn react window, enter ACTION.
-        return close_start_react_and_enter_action(state, library)
+        return close_start_react_and_enter_action(
+            state, library, event_collector=event_collector,
+        )
     elif return_phase == TurnPhase.END_OF_TURN:
         # 14.7-03: after an end-of-turn react window, advance turn.
-        return close_end_react_and_advance_turn(state, library)
+        return close_end_react_and_advance_turn(
+            state, library, event_collector=event_collector,
+        )
     else:
         # Shouldn't happen — default to turn advance for safety.
-        return close_end_react_and_advance_turn(state, library)
+        return close_end_react_and_advance_turn(
+            state, library, event_collector=event_collector,
+        )

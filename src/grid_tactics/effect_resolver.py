@@ -17,6 +17,11 @@ from typing import Optional
 from grid_tactics.board import Board
 from grid_tactics.card_library import CardLibrary
 from grid_tactics.cards import CardDefinition, EffectDefinition
+from grid_tactics.engine_events import (
+    EVT_PENDING_MODAL_OPENED,
+    EVT_PENDING_MODAL_RESOLVED,
+    EventStream,
+)
 from grid_tactics.enums import EffectType, Element, PlayerSide, TargetType, TriggerType
 from grid_tactics.game_state import GameState, PendingDeathTarget
 from grid_tactics.minion import MinionInstance
@@ -425,6 +430,8 @@ def _enter_pending_tutor(
     caster_owner: PlayerSide,
     library: CardLibrary,
     amount: int = 1,
+    *,
+    event_collector: Optional[EventStream] = None,
 ) -> GameState:
     """Phase 14.2: enter pending_tutor state.
 
@@ -471,12 +478,26 @@ def _enter_pending_tutor(
         return state
 
     remaining = max(1, min(amount, len(matches)))
-    return replace(
+    new_state = replace(
         state,
         pending_tutor_player_idx=player_idx,
         pending_tutor_matches=tuple(matches),
         pending_tutor_remaining=remaining,
     )
+    # Phase 14.8-03a: pending modal opened — client gates eventQueue.
+    if event_collector is not None:
+        event_collector.collect(
+            EVT_PENDING_MODAL_OPENED,
+            "trigger:on_play",
+            {
+                "modal_kind": "tutor_select",
+                "owner_idx": player_idx,
+                "options_count": len(matches),
+                "remaining": remaining,
+            },
+            requires_decision=True,
+        )
+    return new_state
 
 
 def _resolve_tutor(*args, **kwargs):
@@ -522,6 +543,7 @@ def resolve_effect(
     *,
     source_minion_id: Optional[int] = None,
     contract_source: Optional[str] = None,
+    event_collector: Optional[EventStream] = None,
 ) -> GameState:
     """Resolve a single effect, returning a new GameState.
 
@@ -667,6 +689,7 @@ def resolve_effects_for_trigger(
     target_pos: Optional[tuple[int, int]] = None,
     *,
     contract_source: Optional[str] = None,
+    event_collector: Optional[EventStream] = None,
 ) -> GameState:
     """Resolve all effects on a minion's card that match the given trigger.
 
@@ -701,11 +724,13 @@ def resolve_effects_for_trigger(
             state = _enter_pending_tutor(
                 state, card_def, minion.owner, library,
                 amount=max(1, effect.amount or 1),
+                event_collector=event_collector,
             )
         elif effect.effect_type == EffectType.CONJURE:
             state = _resolve_conjure(
                 state, card_def, minion.owner, library,
                 contract_source=contract_source,
+                event_collector=event_collector,
             )
         elif effect.effect_type == EffectType.RALLY_FORWARD:
             state = _apply_rally_forward(state, minion)
@@ -722,6 +747,7 @@ def resolve_effects_for_trigger(
                 state, effect, minion.position, minion.owner, library, target_pos,
                 source_minion_id=minion.instance_id,
                 contract_source=contract_source,
+                event_collector=event_collector,
             )
     return state
 
@@ -1147,6 +1173,7 @@ def _resolve_conjure(
     library: CardLibrary,
     *,
     contract_source: Optional[str] = None,
+    event_collector: Optional[EventStream] = None,
 ) -> GameState:
     """Conjure: add a copy of summon_token_target card to the caster's hand.
 
