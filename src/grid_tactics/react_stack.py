@@ -21,6 +21,7 @@ from grid_tactics.card_library import CardLibrary
 from grid_tactics.engine_events import (
     EVT_FIZZLE,
     EVT_MINION_HP_CHANGE,
+    EVT_PENDING_MODAL_OPENED,
     EVT_PHASE_CHANGED,
     EVT_REACT_WINDOW_CLOSED,
     EVT_REACT_WINDOW_OPENED,

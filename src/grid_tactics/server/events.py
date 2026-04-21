@@ -7,6 +7,7 @@ from flask_socketio import emit, join_room as sio_join_room
 
 from grid_tactics.actions import pass_action
 from grid_tactics.action_resolver import resolve_action
+from grid_tactics.engine_events import EventStream
 from grid_tactics.enums import TurnPhase
 from grid_tactics.legal_actions import legal_actions
 from grid_tactics.server.action_codec import reconstruct_action, serialize_action
@@ -20,6 +21,7 @@ from grid_tactics.server.view_filter import (
     enrich_pending_revive,
     enrich_pending_trigger_for_viewer,
     enrich_pending_tutor_for_viewer,
+    filter_engine_events_for_viewer,
     filter_state_for_player,
     filter_state_for_spectator,
 )
@@ -135,7 +137,13 @@ def _build_card_defs(library):
     return defs
 
 
-def _emit_state_to_players(session, state, prev_state=None, resolved_action=None):
+def _emit_state_to_players(
+    session,
+    state,
+    prev_state=None,
+    resolved_action=None,
+    events=None,
+):
     """Emit filtered state + legal actions to each player via their SID.
 
     Decision-maker gets the legal_actions list; opponent gets an empty list.
@@ -144,6 +152,14 @@ def _emit_state_to_players(session, state, prev_state=None, resolved_action=None
     If `prev_state` and `resolved_action` are provided, a `last_action` field
     (Phase 14.3-04) is enriched onto the serialized state so the client can
     drive attack animations + damage popups.
+
+    Phase 14.8-03b: when ``events`` (a list of EngineEvent) is provided,
+    ALSO emit a NEW ``engine_events`` socket message per viewer alongside
+    the existing ``state_update``. The new message carries the per-viewer
+    filtered event list, the same final-state snapshot for context, and
+    the same legal_actions list. Both messages fire during this
+    transitional phase; plan 14.8-05 drops ``state_update`` once all
+    clients consume ``engine_events``.
     """
     state_dict = state.to_dict()
     enrich_pending_post_move_attack(state, state_dict, session.library)
@@ -168,17 +184,37 @@ def _emit_state_to_players(session, state, prev_state=None, resolved_action=None
         enrich_pending_death_target(state, filtered, idx, session.library)
         enrich_pending_revive(state, filtered, idx, session.library)
         enrich_pending_trigger_for_viewer(state, filtered, idx, session.library)
+        legal_for_viewer = serialized_actions if idx == decision_idx else []
         emit("state_update", {
             "state": filtered,
-            "legal_actions": serialized_actions if idx == decision_idx else [],
+            "legal_actions": legal_for_viewer,
             "your_player_idx": idx,
         }, to=session.player_sids[idx])
+        # Phase 14.8-03b: also emit the new engine_events frame. Per-viewer
+        # filtering applied via filter_engine_events_for_viewer.
+        if events is not None:
+            filtered_events = filter_engine_events_for_viewer(events, idx)
+            emit("engine_events", {
+                "events": [ev.to_dict() for ev in filtered_events],
+                "final_state": filtered,
+                "legal_actions": legal_for_viewer,
+                "your_player_idx": idx,
+            }, to=session.player_sids[idx])
 
-    _fanout_state_to_spectators(session, state, state_dict, resolved_action)
+    _fanout_state_to_spectators(session, state, state_dict, resolved_action, events=events)
 
 
-def _fanout_state_to_spectators(session, state, base_state_dict, resolved_action, event_name="state_update"):
-    """Phase 14.4: emit filtered state to every spectator in the session's room."""
+def _fanout_state_to_spectators(
+    session, state, base_state_dict, resolved_action,
+    event_name="state_update", events=None,
+):
+    """Phase 14.4: emit filtered state to every spectator in the session's room.
+
+    Phase 14.8-03b: when ``events`` is provided AND ``event_name ==
+    "state_update"``, also emit a ``engine_events`` frame per spectator
+    using god_mode-aware filtering. God spectators see all events
+    unredacted; non-god spectators see the P1-perspective filter.
+    """
     if _room_manager is None:
         return
     room_code = _room_manager.get_room_code_by_token(session.player_tokens[0])
@@ -208,6 +244,19 @@ def _fanout_state_to_spectators(session, state, base_state_dict, resolved_action
                 "your_player_idx": 0,
                 "is_spectator": True,
             }, to=slot.sid)
+            if events is not None:
+                # God spectators bypass redaction; non-god uses P1
+                # perspective per Phase 14.4 contract.
+                spec_events = filter_engine_events_for_viewer(
+                    events, 0, god_mode=slot.god_mode,
+                )
+                emit("engine_events", {
+                    "events": [ev.to_dict() for ev in spec_events],
+                    "final_state": spec_state,
+                    "legal_actions": [],
+                    "your_player_idx": 0,
+                    "is_spectator": True,
+                }, to=slot.sid)
         elif event_name == "game_over":
             emit("game_over", {
                 "winner": int(state.winner) if state.winner is not None else None,
@@ -700,8 +749,18 @@ def register_events(room_manager: RoomManager) -> None:
                 return
 
             saved_state = session.state
+            # Phase 14.8-03b (M3): one EventStream per submit_action,
+            # seeded from session.next_event_seq. Threaded through every
+            # resolve_action / enter_*_of_turn helper inside the auto-
+            # advance loop so the entire chain emits into ONE seq-
+            # ordered stream. Persisted back to session.next_event_seq
+            # on success.
+            stream = EventStream(next_seq=session.next_event_seq)
             try:
-                session.state = resolve_action(session.state, action, session.library)
+                session.state = resolve_action(
+                    session.state, action, session.library,
+                    event_collector=stream,
+                )
 
                 # Auto-pass / auto-advance loop.
                 # Two reasons to stay in the loop:
@@ -735,12 +794,14 @@ def register_events(room_manager: RoomManager) -> None:
                     # over legal_actions (which returns () for them).
                     if session.state.phase == _TurnPhase.START_OF_TURN:
                         session.state = _enter_start_of_turn(
-                            session.state, session.library
+                            session.state, session.library,
+                            event_collector=stream,
                         )
                         continue
                     if session.state.phase == _TurnPhase.END_OF_TURN:
                         session.state = _enter_end_of_turn(
-                            session.state, session.library
+                            session.state, session.library,
+                            event_collector=stream,
                         )
                         continue
                     next_actions = legal_actions(session.state, session.library)
@@ -748,7 +809,8 @@ def register_events(room_manager: RoomManager) -> None:
                         break
                     # ACTION phase with no legal actions = fatigue bleed.
                     session.state = resolve_action(
-                        session.state, pass_action(), session.library
+                        session.state, pass_action(), session.library,
+                        event_collector=stream,
                     )
             except Exception as e:
                 # Safety net: roll back state and surface the error so a single
@@ -760,10 +822,19 @@ def register_events(room_manager: RoomManager) -> None:
                 emit("error", {"msg": f"Server error resolving action: {e}"})
                 return
 
+            # M3: persist seq counter back to the session so the next
+            # submit_action call's seq numbers continue monotonically.
+            session.next_event_seq = stream.next_seq
             new_state = session.state
+            collected_events = list(stream.events)
 
-        # Step j: Emit state to both players (with last_action enrichment)
-        _emit_state_to_players(session, new_state, prev_state=saved_state, resolved_action=action)
+        # Step j: Emit state to both players (with last_action enrichment).
+        # Phase 14.8-03b: also emit engine_events (per-viewer filtered).
+        _emit_state_to_players(
+            session, new_state,
+            prev_state=saved_state, resolved_action=action,
+            events=collected_events,
+        )
 
         # Step k: If game over, emit game_over
         if new_state.is_game_over:
@@ -779,7 +850,7 @@ def register_events(room_manager: RoomManager) -> None:
     # legal_actions/resolve_action and edits zones via dataclasses.replace),
     # and re-emits the full god-view state via _emit_sandbox_state.
 
-    def _emit_sandbox_state(sandbox, sid):
+    def _emit_sandbox_state(sandbox, sid, events=None):
         """Single source of truth for sandbox state emission. God view, no filter.
 
         Enriches pending_tutor / pending_death / pending_post_move_attack /
@@ -788,6 +859,13 @@ def register_events(room_manager: RoomManager) -> None:
         should pick, we enrich from THEIR POV so the UI shows full picker
         state (valid targets + banner) regardless of which player the user
         is currently viewing as.
+
+        Phase 14.8-03b: when ``events`` (a list of EngineEvent) is
+        provided, ALSO emit a NEW ``engine_events`` socket message
+        alongside the existing ``sandbox_state``. Sandbox is god-mode
+        so events are emitted unredacted (god_mode=True). Both messages
+        fire during the transitional phase; plan 14.8-04a switches the
+        sandbox client to consume engine_events as the primary signal.
         """
         state = sandbox.state
         state_dict = state.to_dict()
@@ -838,6 +916,23 @@ def register_events(room_manager: RoomManager) -> None:
             "undo_depth": sandbox.undo_depth,
             "redo_depth": sandbox.redo_depth,
         })
+        # Phase 14.8-03b: also emit engine_events frame (sandbox is
+        # god-mode so no per-viewer filtering is applied — both hands
+        # are face-up). Empty event list still emits so the client gets
+        # a uniform pipeline (e.g. zone-edit handlers that DO produce
+        # events but don't trigger this code path use _emit_sandbox_state
+        # via apply_sandbox_edit fanout, not through here).
+        if events is not None:
+            spec_events = filter_engine_events_for_viewer(
+                events, sandbox.active_view_idx, god_mode=True,
+            )
+            emit("engine_events", {
+                "events": [ev.to_dict() for ev in spec_events],
+                "final_state": state_dict,
+                "legal_actions": serialized,
+                "active_view_idx": sandbox.active_view_idx,
+                "is_sandbox": True,
+            })
 
     def _get_sandbox_or_error():
         sandbox = _room_manager.get_sandbox(request.sid)
@@ -862,23 +957,24 @@ def register_events(room_manager: RoomManager) -> None:
         except (ValueError, KeyError, TypeError) as e:
             emit("error", {"msg": f"Invalid action: {e}"})
             return
-        # Phase 14.7-09 (Issue A fix): emit one sandbox_state frame per
-        # intermediate state produced by apply_action — including each
-        # drained PASS during trivial react windows. Without this, the
-        # auto-drain collapses the user action + drain into a single
-        # frame, which CLOBBERS transient signals like last_trigger_blip
-        # (resolve_action clears it at the top of every call) and phase=REACT
-        # entries that the client needs to close the spell-stage overlay.
-        # The client's sandbox_state handler is idempotent + animation-
-        # queue based, so replaying frames composes cleanly.
-        captured_sid = request.sid
-
-        def _emit_frame():
-            _emit_sandbox_state(sandbox, captured_sid)
-
+        # Phase 14.8-03b: the per-frame on_frame hack from commit 9c414f9
+        # is REMOVED. apply_action now returns the full event list across
+        # the user action + every drained auto-PASS as a SINGLE
+        # EventStream — pacing comes from animation_duration_ms on each
+        # event, not from socket-frame cadence. The client's eventQueue
+        # (plan 04a) consumes the event list in seq order and drives
+        # spell-stage / blip / banner animations from the events.
+        # Old client (pre-04a) ignores 'engine_events' and continues
+        # rendering from sandbox_state — for that path we still emit
+        # sandbox_state ONCE at the end (collapsed-frame view, identical
+        # to pre-9c414f9 behavior). The transient-signal regressions that
+        # 9c414f9 worked around (last_trigger_blip clobber, REACT-phase
+        # entries / exits) are handled by the new event stream — those
+        # transitions emit dedicated events that the new client picks up
+        # without needing per-frame state replay.
         with sandbox.lock:
             try:
-                sandbox.apply_action(action, on_frame=_emit_frame)
+                events = sandbox.apply_action(action)
             except ValueError as e:
                 emit("error", {"msg": str(e)})
                 return
@@ -888,10 +984,10 @@ def register_events(room_manager: RoomManager) -> None:
                 traceback.print_exc()
                 emit("error", {"msg": f"Server error: {e}"})
                 return
-        # apply_action already emitted the final frame via on_frame, so no
-        # trailing _emit_sandbox_state call is needed here. If apply_action
-        # early-returned before any on_frame fire (should not happen post-
-        # validation), the state is unchanged and the client already has it.
+        # ONE sandbox_state + ONE engine_events emit per call regardless
+        # of how many auto-PASSes drained. This is the architectural
+        # improvement the per-frame hack was unable to deliver.
+        _emit_sandbox_state(sandbox, request.sid, events=events)
 
     @socketio.on("sandbox_add_card_to_zone")
     def handle_sandbox_add_card_to_zone(data):
@@ -907,11 +1003,15 @@ def register_events(room_manager: RoomManager) -> None:
             return
         with sandbox.lock:
             try:
-                sandbox.add_card_to_zone(player_idx, card_numeric_id, zone)
+                events = sandbox.apply_sandbox_edit("add_card_to_zone", {
+                    "player_idx": player_idx,
+                    "card_numeric_id": card_numeric_id,
+                    "zone": zone,
+                })
             except ValueError as e:
                 emit("error", {"msg": str(e)})
                 return
-        _emit_sandbox_state(sandbox, request.sid)
+        _emit_sandbox_state(sandbox, request.sid, events=events)
 
     @socketio.on("sandbox_place_on_board")
     def handle_sandbox_place_on_board(data):
@@ -928,11 +1028,16 @@ def register_events(room_manager: RoomManager) -> None:
             return
         with sandbox.lock:
             try:
-                sandbox.place_on_board(player_idx, card_numeric_id, row, col)
+                events = sandbox.apply_sandbox_edit("place_on_board", {
+                    "player_idx": player_idx,
+                    "card_numeric_id": card_numeric_id,
+                    "row": row,
+                    "col": col,
+                })
             except ValueError as e:
                 emit("error", {"msg": str(e)})
                 return
-        _emit_sandbox_state(sandbox, request.sid)
+        _emit_sandbox_state(sandbox, request.sid, events=events)
 
     @socketio.on("sandbox_move_card")
     def handle_sandbox_move_card(data):
@@ -949,11 +1054,16 @@ def register_events(room_manager: RoomManager) -> None:
             return
         with sandbox.lock:
             try:
-                sandbox.move_card_between_zones(player_idx, card_numeric_id, src_zone, dst_zone)
+                events = sandbox.apply_sandbox_edit("move_card_between_zones", {
+                    "player_idx": player_idx,
+                    "card_numeric_id": card_numeric_id,
+                    "src_zone": src_zone,
+                    "dst_zone": dst_zone,
+                })
             except ValueError as e:
                 emit("error", {"msg": str(e)})
                 return
-        _emit_sandbox_state(sandbox, request.sid)
+        _emit_sandbox_state(sandbox, request.sid, events=events)
 
     @socketio.on("sandbox_import_deck")
     def handle_sandbox_import_deck(data):
@@ -970,11 +1080,14 @@ def register_events(room_manager: RoomManager) -> None:
             return
         with sandbox.lock:
             try:
-                sandbox.import_deck(player_idx, deck)
+                events = sandbox.apply_sandbox_edit("import_deck", {
+                    "player_idx": player_idx,
+                    "deck_card_ids": deck,
+                })
             except ValueError as e:
                 emit("error", {"msg": str(e)})
                 return
-        _emit_sandbox_state(sandbox, request.sid)
+        _emit_sandbox_state(sandbox, request.sid, events=events)
 
     @socketio.on("sandbox_set_player_field")
     def handle_sandbox_set_player_field(data):
@@ -990,11 +1103,15 @@ def register_events(room_manager: RoomManager) -> None:
             return
         with sandbox.lock:
             try:
-                sandbox.set_player_field(player_idx, field, value)
+                events = sandbox.apply_sandbox_edit("set_player_field", {
+                    "player_idx": player_idx,
+                    "field": field,
+                    "value": value,
+                })
             except ValueError as e:
                 emit("error", {"msg": str(e)})
                 return
-        _emit_sandbox_state(sandbox, request.sid)
+        _emit_sandbox_state(sandbox, request.sid, events=events)
 
     @socketio.on("sandbox_set_active_player")
     def handle_sandbox_set_active_player(data):
@@ -1008,11 +1125,13 @@ def register_events(room_manager: RoomManager) -> None:
             return
         with sandbox.lock:
             try:
-                sandbox.set_active_player(player_idx)
+                events = sandbox.apply_sandbox_edit("set_active", {
+                    "player_idx": player_idx,
+                })
             except ValueError as e:
                 emit("error", {"msg": str(e)})
                 return
-        _emit_sandbox_state(sandbox, request.sid)
+        _emit_sandbox_state(sandbox, request.sid, events=events)
 
     @socketio.on("sandbox_undo")
     def handle_sandbox_undo(_data=None):
@@ -1020,8 +1139,8 @@ def register_events(room_manager: RoomManager) -> None:
         if sandbox is None:
             return
         with sandbox.lock:
-            sandbox.undo()
-        _emit_sandbox_state(sandbox, request.sid)
+            events = sandbox.apply_sandbox_edit("undo", {})
+        _emit_sandbox_state(sandbox, request.sid, events=events)
 
     @socketio.on("sandbox_redo")
     def handle_sandbox_redo(_data=None):
@@ -1029,8 +1148,8 @@ def register_events(room_manager: RoomManager) -> None:
         if sandbox is None:
             return
         with sandbox.lock:
-            sandbox.redo()
-        _emit_sandbox_state(sandbox, request.sid)
+            events = sandbox.apply_sandbox_edit("redo", {})
+        _emit_sandbox_state(sandbox, request.sid, events=events)
 
     @socketio.on("sandbox_reset")
     def handle_sandbox_reset(_data=None):
@@ -1038,8 +1157,8 @@ def register_events(room_manager: RoomManager) -> None:
         if sandbox is None:
             return
         with sandbox.lock:
-            sandbox.reset()
-        _emit_sandbox_state(sandbox, request.sid)
+            events = sandbox.apply_sandbox_edit("reset", {})
+        _emit_sandbox_state(sandbox, request.sid, events=events)
 
     @socketio.on("sandbox_save")
     def handle_sandbox_save(_data=None):

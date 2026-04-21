@@ -609,11 +609,13 @@ def filter_engine_events_for_viewer(
             # Owner key varies by modal kind: tutor → owner_idx,
             # trigger picker → picker_idx, death pick → owner_idx,
             # conjure deploy → player_idx, revive → player_idx.
-            owner = (
-                ev.payload.get("owner_idx")
-                or ev.payload.get("picker_idx")
-                or ev.payload.get("player_idx")
-            )
+            # Use explicit None checks (NOT `or`) because owner_idx=0
+            # is falsy in Python — `or` would skip P1 ownership.
+            owner = ev.payload.get("owner_idx")
+            if owner is None:
+                owner = ev.payload.get("picker_idx")
+            if owner is None:
+                owner = ev.payload.get("player_idx")
             # Conservative: if owner_idx is unset, withhold options
             # from BOTH viewers (force the producer to set owner_idx
             # explicitly). The pending_modal_resolved event will still
