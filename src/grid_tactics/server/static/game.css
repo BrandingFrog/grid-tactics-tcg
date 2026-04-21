@@ -452,6 +452,43 @@
   55%  { opacity: 1; transform: translate(-50%, -50%) scale(1); }
   100% { opacity: 0; transform: translate(-50%, -50%) scale(0.9); }
 }
+
+/* Phase 14.8-04b: Fizzle puff. Brief gray smoke poof at the source tile when
+   a trigger fizzles (target invalidated at resolve time per spec §7.3).
+   Matches trigger-blip styling (scale + fade, ~350ms) but uses a 💨 glyph
+   and gray-tone shadow so the visual reads as "nothing happened" instead of
+   "something resolved". */
+.fizzle-puff {
+  position: fixed;
+  pointer-events: none;
+  font-size: 3em;
+  z-index: 940;  /* one below trigger-blip-center-icon */
+  text-shadow:
+    0 0 18px rgba(180, 180, 180, 0.7),
+    0 0 8px rgba(120, 120, 120, 0.5),
+    0 2px 6px rgba(0, 0, 0, 0.7);
+  animation: fizzle-puff-in 350ms ease-out forwards;
+  will-change: transform, opacity;
+}
+@keyframes fizzle-puff-in {
+  0%   { opacity: 0; transform: translate(-50%, -50%) scale(0.5); }
+  30%  { opacity: 0.85; transform: translate(-50%, -55%) scale(1.05); }
+  100% { opacity: 0; transform: translate(-50%, -65%) scale(1.25); }
+}
+
+/* Phase 14.8-04b: pending-modal scrim. While slotState.pendingModalKind is
+   set, drainEventQueue holds — but we also want the user to see *something*
+   indicating "the queue is paused waiting on you". The actual modal already
+   blocks input via its own overlay; this thin tint is purely informational
+   so background animations look clearly suspended. */
+.event-queue-blocking {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background: rgba(0, 0, 0, 0.04);
+  z-index: 5;
+}
+
 .tests-summary {
   padding: 12px 16px;
   background: rgba(0, 0, 0, 0.25);

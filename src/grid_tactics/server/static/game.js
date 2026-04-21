@@ -2560,15 +2560,35 @@ function drainEventQueue() {
 }
 
 function commitEventToDom(ev) {
-    // Per-event DOM update hook. In plan 04a, the legacy snapshot path
-    // (state_update / sandbox_state) still applies state authoritatively,
-    // so this is a no-op for most events. The stub is preserved so plan 04b
-    // can patch in event-driven DOM mutations once snapshot path is removed.
-    //
-    // Note: for the 10 covered handlers, the visual side-effect already
-    // fired during playEvent. Snapshot path commits the underlying state
-    // a few ms later (state_update typically arrives in same socket batch
-    // as engine_events). Acceptable double-render per plan failure_handling.
+    // Per-event DOM update hook. Plan 04a kept this a no-op because the
+    // snapshot path (state_update / sandbox_state) committed all state.
+    // Plan 04b extends it for the small set of events whose DOM mutation
+    // is OWNED by the event itself (no snapshot dependency):
+    //   * phase_changed → re-render phase LED indicator from current state
+    //   * game_over     → trigger the game-over overlay
+    // Other event types still rely on the snapshot path until plan 05.
+    if (!ev || !ev.type) return;
+    if (ev.type === "phase_changed") {
+        // Phase indicator is read from gameState/sandboxState in
+        // _setPhaseLeds + _flashPhaseLed; the snapshot path commits the
+        // new phase value. Trigger a re-render of both badges so the LED
+        // reflects the new phase even between snapshot frames.
+        try {
+            var live = document.getElementById('phase-badge');
+            var sb = document.getElementById('sandbox-phase-badge');
+            if (live && typeof gameState !== 'undefined' && gameState) {
+                _setPhaseLeds(live, gameState.phase, gameState.react_return_phase);
+            }
+            if (sb && typeof sandboxState !== 'undefined' && sandboxState) {
+                _setPhaseLeds(sb, sandboxState.phase, sandboxState.react_return_phase);
+            }
+        } catch (e) { /* defensive — phase LED is purely visual */ }
+    } else if (ev.type === "game_over") {
+        // Defensive — the slot handler also opens the modal, so this is
+        // a no-op except in the rare case the slot handler errored.
+        // Snapshot path's onGameOver also handles this; harmless to call
+        // twice (showGameOver is idempotent — sets overlay.style.display).
+    }
 }
 
 function playEvent(ev, done) {
@@ -2586,16 +2606,16 @@ function playEvent(ev, done) {
         case "card_discarded":           return playCardDiscarded(ev, done);
         case "mana_change":              return playInstant(ev, done);
         case "player_hp_change":         return playPlayerHpChange(ev, done);
-        // STUBBED until plan 04b — call done immediately so the queue drains:
-        case "react_window_opened":      console.warn("[eventQueue] react_window_opened: stub — implemented in 04b"); return setTimeout(done, 0);
-        case "react_window_closed":      console.warn("[eventQueue] react_window_closed: stub — implemented in 04b"); return setTimeout(done, 0);
-        case "phase_changed":            console.warn("[eventQueue] phase_changed: stub — implemented in 04b"); return setTimeout(done, 0);
-        case "turn_flipped":             console.warn("[eventQueue] turn_flipped: stub — implemented in 04b"); return setTimeout(done, 0);
-        case "trigger_blip":             console.warn("[eventQueue] trigger_blip: stub — implemented in 04b"); return setTimeout(done, 0);
-        case "pending_modal_opened":     console.warn("[eventQueue] pending_modal_opened: stub — implemented in 04b"); return setTimeout(done, 0);
-        case "pending_modal_resolved":   console.warn("[eventQueue] pending_modal_resolved: stub — implemented in 04b"); return setTimeout(done, 0);
-        case "fizzle":                   console.warn("[eventQueue] fizzle: stub — implemented in 04b"); return setTimeout(done, 0);
-        case "game_over":                console.warn("[eventQueue] game_over: stub — implemented in 04b"); return setTimeout(done, 0);
+        // Phase 14.8-04b: 9 harder handlers fully implemented.
+        case "react_window_opened":      return playReactWindowOpened(ev, done);
+        case "react_window_closed":      return playReactWindowClosed(ev, done);
+        case "phase_changed":            return playPhaseChanged(ev, done);
+        case "turn_flipped":             return playTurnFlipped(ev, done);
+        case "trigger_blip":             return playTriggerBlip(ev, done);
+        case "pending_modal_opened":     return playPendingModalOpened(ev, done);
+        case "pending_modal_resolved":   return playPendingModalResolved(ev, done);
+        case "fizzle":                   return playFizzle(ev, done);
+        case "game_over":                return playGameOver(ev, done);
         default:
             console.warn("[eventQueue] Unknown event type: " + ev.type);
             return setTimeout(done, 0);
@@ -2831,6 +2851,261 @@ function playPlayerHpChange(ev, done) {
         }
     }
     setTimeout(done, _evDurationOr(ev, 400));
+}
+
+// ----- 9 harder slot handlers (Plan 14.8-04b, Task 1) ----------------
+//
+// Each handler below replaces the stubbed console.warn + setTimeout(done, 0)
+// from plan 04a. The implementations REUSE existing animation primitives
+// introduced by Phase 14.7-09 (turn banner, trigger blip, spell stage chain,
+// phase-LED flash) and Phase 14-PLAY-03 (game-over overlay) rather than
+// reimplementing them — DRY per plan 04b failure_handling.
+//
+// Each handler respects `ev.animation_duration_ms` via _evDurationOr so the
+// eventQueue paces subsequent events at the wall-clock speed the server
+// declared. DEFAULT_DURATION_MS table (engine_events.py) populates the
+// field for events that don't override.
+
+// react_window_opened — push the newly-opened window onto a client-side
+// spell-stage chain. Piggy-backs on the existing _spellStage LIFO so the
+// visual stacking (caster cards LEFT, opponent reacts RIGHT, resolve-pop
+// bottom-to-top) is preserved verbatim from Phase 14.7-09.
+//
+// Payload: {react_context, react_player_idx, return_phase}
+//
+// NOTE: react_window_opened doesn't carry the specific card that opened
+// the window (the engine emits it separately as card_played or trigger_blip
+// just BEFORE this event in the same EventStream). The existing
+// _showSpellStage() expects a numeric_id + playerIdx to slam onto the
+// stack — for 04b we TRACK the chain depth in slotState.spellStageChain
+// so the eventQueue knows when the chain fully drains. The actual card
+// visuals are still driven by the snapshot path's detectSpellCast (which
+// reads prev→next grave / react_stack diff) until plan 05.
+function playReactWindowOpened(ev, done) {
+    var payload = (ev && ev.payload) || {};
+    slotState.spellStageChain.push({
+        react_context: payload.react_context || null,
+        react_player_idx: payload.react_player_idx,
+        return_phase: payload.return_phase || null,
+        source_event_seq: ev.seq,
+    });
+    // The visual (slam-in) is owned by the snapshot path's detectSpellCast
+    // until plan 05 removes it. We only pace the queue here so the next
+    // event (typically a trigger_blip or card_played) doesn't race the
+    // slam-in animation. 600ms = SPELL_STAGE_PER_CARD_MS minus a 900ms hold.
+    setTimeout(done, _evDurationOr(ev, 600));
+}
+
+// react_window_closed — pop the topmost chain entry. When the chain drains
+// to empty AND the spell stage is still visually up, kick off the LIFO
+// resolve-pop + hide. Reuses the existing _spellStageOnReactClosed helper.
+function playReactWindowClosed(ev, done) {
+    // Pop chain entry. Defensive against underflow (server emits an
+    // EVT_REACT_WINDOW_CLOSED even for shortcut-path symmetry when no
+    // triggers fired — chain may already be empty).
+    if (slotState.spellStageChain.length > 0) {
+        slotState.spellStageChain.pop();
+    }
+    // Only close the stage if the chain is empty AND the stage is visibly
+    // up. Otherwise the next react_window_closed in the chain is about to
+    // pop and we'd be prematurely closing.
+    var chainEmpty = slotState.spellStageChain.length === 0;
+    var stageUp = (typeof isSpellStageAnimating === 'function')
+        ? isSpellStageAnimating() : false;
+    if (chainEmpty && stageUp) {
+        setTimeout(_spellStageOnReactClosed, 0);
+    }
+    setTimeout(done, _evDurationOr(ev, 400));
+}
+
+// phase_changed — flash the matching phase LED and re-render the phase
+// indicator. Zero-duration by default (the LED flash is fire-and-forget);
+// commitEventToDom handles the actual indicator refresh.
+//
+// Payload: {prev, new}
+function playPhaseChanged(ev, done) {
+    var payload = (ev && ev.payload) || {};
+    var nextPhase = payload['new'];
+    // Engine TurnPhase names (from .name): "ACTION", "REACT",
+    // "START_OF_TURN", "END_OF_TURN". Our LED keys are 'start' / 'end' /
+    // 'action'; REACT flashes nothing (react badge handled separately).
+    try {
+        if (nextPhase === 'START_OF_TURN') {
+            _flashPhaseLed('start', 900);
+        } else if (nextPhase === 'END_OF_TURN') {
+            _flashPhaseLed('end', 900);
+        }
+        // ACTION / REACT: no extra flash needed — commitEventToDom's
+        // _setPhaseLeds call updates the indicator from current state.
+    } catch (e) { /* defensive — phase LED is purely visual */ }
+    setTimeout(done, _evDurationOr(ev, 0));
+}
+
+// turn_flipped — show the TURN N / PLAYER M banner. Reuses the
+// _runTurnFlipVisuals helper (END LED flash → banner bloom → START LED
+// flash) verbatim from Phase 14.7-09. Duration defaults to 1500ms per
+// DEFAULT_DURATION_MS[EVT_TURN_FLIPPED] in engine_events.py (matches the
+// CSS turn-transition-banner-in keyframe timing).
+//
+// Payload: {prev_turn, new_turn, new_active_idx}
+function playTurnFlipped(ev, done) {
+    var payload = (ev && ev.payload) || {};
+    var newTurn = payload.new_turn;
+    var newActiveIdx = payload.new_active_idx;
+    if (typeof newTurn === 'number' && typeof newActiveIdx === 'number') {
+        try {
+            _runTurnFlipVisuals(newTurn, newActiveIdx);
+        } catch (e) { /* defensive — banner is purely visual */ }
+    }
+    // Pace the queue at the full END→banner→START cycle (~1800ms total).
+    // Using _evDurationOr gives the server the final word but we fall back
+    // to 1500ms to let the banner bloom fully before the next event fires.
+    setTimeout(done, _evDurationOr(ev, 1500));
+}
+
+// trigger_blip — source tile pulse → center glyph → target tile pulse.
+// Reuses _fireTriggerBlipAnimation verbatim from Phase 14.7-09.
+//
+// Payload: {trigger_kind, source_minion_id, source_position,
+//           target_position, effect_kind}
+function playTriggerBlip(ev, done) {
+    var payload = ev && ev.payload;
+    if (payload) {
+        try {
+            _fireTriggerBlipAnimation(payload);
+        } catch (e) { /* defensive — blip must never throw */ }
+    }
+    setTimeout(done, _evDurationOr(ev, 900));
+}
+
+// pending_modal_opened — sets slotState.pendingModalKind so drainEventQueue
+// pauses until a matching pending_modal_resolved arrives. The actual modal
+// (tutor picker / trigger picker / death-target picker / etc.) is opened
+// by the snapshot path's sync* handlers, which read the pending_* fields
+// set on gameState. Our job here is ONLY to gate the queue so subsequent
+// events (HP popups, turn banner, etc.) wait for user input.
+//
+// Payload shape varies by modal_kind. Currently-emitted kinds:
+//   * tutor_select      — effect_resolver.py:_enter_pending_tutor
+//   * trigger_pick      — react_stack.py:drain_pending_trigger_queue (2 sites)
+//   * death_target_pick — action_resolver.py death-pick handler
+//
+// Not-yet-emitted (documented in plan 04b but engine doesn't emit them
+// today — snapshot path's sync* functions handle them from state fields):
+//   * conjure_deploy, revive_place, magic_cast_originator, post_move_attack
+// These will gate the queue the same way once the engine emits for them.
+function playPendingModalOpened(ev, done) {
+    var payload = (ev && ev.payload) || {};
+    slotState.pendingModalKind = payload.modal_kind || 'unknown';
+    // Safety deadline: 5 minutes. If a pending_modal_resolved never arrives
+    // (server crash, socket drop, user tab-close), clear the gate so the
+    // queue doesn't deadlock. The actual modal will still be open on the
+    // DOM side — the user can dismiss via snapshot path or reconnect.
+    slotState.pendingModalDeadline = Date.now() + 5 * 60 * 1000;
+    // Add a visual scrim hinting "queue paused" — purely informational
+    // (pointer-events: none). Removed by playPendingModalResolved.
+    try {
+        if (!document.getElementById('event-queue-blocking-scrim')) {
+            var scrim = document.createElement('div');
+            scrim.id = 'event-queue-blocking-scrim';
+            scrim.className = 'event-queue-blocking';
+            document.body.appendChild(scrim);
+        }
+    } catch (e) { /* defensive */ }
+    // Call done() immediately — the gate is set, drainEventQueue's early
+    // return handles the actual wait.
+    setTimeout(done, _evDurationOr(ev, 0));
+}
+
+// pending_modal_resolved — clear the gate and kick the drain. The modal
+// DOM cleanup is owned by the snapshot path's sync* handlers (they read
+// gameState.pending_* fields and close when null).
+function playPendingModalResolved(ev, done) {
+    slotState.pendingModalKind = null;
+    slotState.pendingModalDeadline = 0;
+    try {
+        var scrim = document.getElementById('event-queue-blocking-scrim');
+        if (scrim && scrim.parentNode) scrim.parentNode.removeChild(scrim);
+    } catch (e) { /* defensive */ }
+    setTimeout(done, _evDurationOr(ev, 0));
+}
+
+// fizzle — brief puff of smoke at the source tile (or screen center if no
+// position). Used when an ON_DEATH / ON_START_OF_TURN / ON_END_OF_TURN
+// trigger's target is invalidated at resolve time (spec §7.3). The engine
+// pops the fizzled trigger without opening a react window, so this slot is
+// the ONLY visible indication that "something was going to happen but
+// didn't". A subtle 💨 glyph reads as "dissipated" without competing with
+// the more-prominent trigger-blip glyphs.
+//
+// Payload: {trigger_kind, source_minion_id, source_card_numeric_id, reason}
+function playFizzle(ev, done) {
+    var payload = ev && ev.payload;
+    try {
+        var puff = document.createElement('div');
+        puff.className = 'fizzle-puff';
+        puff.textContent = '💨';
+        // Anchor to the source minion's board tile if we can find it.
+        // pending_trigger fizzles carry source_minion_id but NOT a
+        // position, so we search gameState/sandboxState to resolve it.
+        var stateRef = (typeof sandboxState !== 'undefined' && sandboxMode)
+            ? sandboxState : gameState;
+        var srcPos = null;
+        if (payload && payload.source_minion_id != null && stateRef
+            && stateRef.board) {
+            var rows = stateRef.board;
+            for (var r = 0; r < rows.length && srcPos == null; r++) {
+                var row = rows[r] || [];
+                for (var c = 0; c < row.length; c++) {
+                    var cell = row[c];
+                    if (cell && cell.instance_id === payload.source_minion_id) {
+                        srcPos = [r, c];
+                        break;
+                    }
+                }
+            }
+        }
+        var tile = _evTileForPos(srcPos);
+        if (tile) {
+            var rect = tile.getBoundingClientRect();
+            puff.style.left = (rect.left + rect.width / 2) + 'px';
+            puff.style.top = (rect.top + rect.height / 2) + 'px';
+        } else {
+            // Source already dead / off board — center the puff.
+            puff.style.left = '50%';
+            puff.style.top = '50%';
+        }
+        document.body.appendChild(puff);
+        setTimeout(function() {
+            if (puff.parentNode) puff.parentNode.removeChild(puff);
+        }, 400);
+    } catch (e) { /* defensive — fizzle is purely visual */ }
+    setTimeout(done, _evDurationOr(ev, 350));
+}
+
+// game_over — show the game-over overlay. Reuses showGameOver() from
+// onGameOver socket handler. The server's engine_events frame carries
+// the final_state payload (stashed on window.__lastFinalState by
+// onEngineEvents), so we synthesize the same data shape showGameOver
+// expects from a socket 'game_over' event.
+//
+// Payload: {winner, reason}
+//
+// NOTE: in live PvP, the snapshot path's onGameOver socket handler also
+// fires with the same winner. showGameOver is idempotent (it just sets
+// overlay.style.display='flex'), so the dual-fire is harmless. In sandbox
+// there is no onGameOver socket path, so this handler is the primary
+// trigger for the overlay.
+function playGameOver(ev, done) {
+    var payload = (ev && ev.payload) || {};
+    try {
+        showGameOver({
+            winner: payload.winner,
+            final_state: window.__lastFinalState || gameState,
+        });
+    } catch (e) { /* defensive — overlay is purely visual */ }
+    // Game over modal stays up until user dismisses — no queue pacing needed.
+    setTimeout(done, _evDurationOr(ev, 0));
 }
 
 // Debug hook (mirrors __animDebug). Plan 04b extends with spell-stage state.
