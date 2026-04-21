@@ -2515,6 +2515,14 @@ var slotState = {
     lastOriginator: null,     // {numericId, playerIdx} or null
 };
 
+// Phase 14.8-05b: guard so the post-drain wholesale commit of
+// window.__lastFinalState fires AT MOST ONCE per onEngineEvents frame.
+// Reset to false when new events arrive; set to true after the queue drains
+// and the final_state snapshot is applied. Without this guard, the snapshot
+// would be re-applied every time drainEventQueue is called with an empty
+// queue (which happens on every modal open/close, etc.).
+var _drainFinalApplied = false;
+
 function resetEventQueue() {
     // Called on game_start, sandbox_state initial open, sandbox reset, sandbox load.
     eventQueue.length = 0;
@@ -2524,10 +2532,12 @@ function resetEventQueue() {
     slotState.pendingModalKind = null;
     slotState.pendingModalDeadline = 0;
     slotState.lastOriginator = null;
+    _drainFinalApplied = false;
 }
 
 function onEngineEvents(payload) {
     if (!payload || !Array.isArray(payload.events)) return;
+    var hadEvents = payload.events.length > 0;
     payload.events.forEach(function(ev) {
         if (typeof ev.seq !== 'number') return;
         if (ev.seq <= lastSeenSeq) {
@@ -2538,12 +2548,31 @@ function onEngineEvents(payload) {
         lastSeenSeq = ev.seq;
         eventQueue.push(ev);
     });
-    // Stash final_state for snapshot-fallback rendering (e.g. on reconnect).
-    // The snapshot path (state_update / sandbox_state) is still alive in 04a
-    // and applies state independently; this stash is for error recovery only.
+    // Phase 14.8-05b: stash final_state + arm the post-drain commit. The
+    // post-action state_update / sandbox_state wire format is gone (plan 05
+    // deleted it), so final_state is the authoritative post-chain snapshot.
+    // Each event's slot handler + commitEventToDom does its per-beat
+    // incremental work; when the queue drains fully, we apply final_state
+    // wholesale as a catch-all for anything the incremental path didn't
+    // cover (summons, deaths, card moves, hand/graveyard counts).
     if (payload.final_state) {
         window.__lastFinalState = payload.final_state;
         window.__lastLegalActions = payload.legal_actions || [];
+        // Also stash per-sandbox fields so the post-drain commit can
+        // preserve view_idx / undo / redo depths when we reassign state.
+        window.__lastSandboxMeta = {
+            active_view_idx: payload.active_view_idx,
+            undo_depth: payload.undo_depth,
+            redo_depth: payload.redo_depth,
+            is_sandbox: !!payload.is_sandbox,
+        };
+    }
+    // Arm the wholesale-apply guard so the next full drain commits
+    // final_state once. If this frame carried zero events (pure state
+    // snapshot via engine_events — rare post-05), we still want to commit
+    // it so the DOM reflects the new state.
+    if (hadEvents || payload.final_state) {
+        _drainFinalApplied = false;
     }
     drainEventQueue();
 }
@@ -2554,7 +2583,26 @@ function drainEventQueue() {
         // Modal is open — wait for user input or pending_modal_resolved event (04b).
         return;
     }
-    if (eventQueue.length === 0) return;
+    if (eventQueue.length === 0) {
+        // Phase 14.8-05b: queue fully drained — commit the wholesale
+        // final_state snapshot as catch-all for fields the per-event
+        // commitEventToDom didn't incrementally cover (hand/graveyard
+        // counts, new/dead minions, card_played hand removal, etc.). The
+        // _drainFinalApplied guard ensures this fires AT MOST ONCE per
+        // engine_events frame (reset on onEngineEvents). Without this,
+        // the paladin scenario regression happens: HP stays at 30 forever
+        // because the snapshot-path was deleted in plan 05 but no
+        // replacement state-commit path was wired up.
+        if (!_drainFinalApplied && window.__lastFinalState) {
+            _drainFinalApplied = true;
+            try {
+                _commitFinalStateSnapshot(window.__lastFinalState);
+            } catch (e) {
+                console.error("[eventQueue] _commitFinalStateSnapshot failed", e);
+            }
+        }
+        return;
+    }
     var ev = eventQueue.shift();
     eventRunning = true;
     try {
@@ -2570,36 +2618,263 @@ function drainEventQueue() {
     }
 }
 
-function commitEventToDom(ev) {
-    // Per-event DOM update hook. Plan 04a kept this a no-op because the
-    // snapshot path (state_update / sandbox_state) committed all state.
-    // Plan 04b extends it for the small set of events whose DOM mutation
-    // is OWNED by the event itself (no snapshot dependency):
-    //   * phase_changed → re-render phase LED indicator from current state
-    //   * game_over     → trigger the game-over overlay
-    // Other event types still rely on the snapshot path until plan 05.
-    if (!ev || !ev.type) return;
-    if (ev.type === "phase_changed") {
-        // Phase indicator is read from gameState/sandboxState in
-        // _setPhaseLeds + _flashPhaseLed; the snapshot path commits the
-        // new phase value. Trigger a re-render of both badges so the LED
-        // reflects the new phase even between snapshot frames.
+// Phase 14.8-05b: Wholesale commit of the authoritative post-chain state
+// snapshot stashed on window.__lastFinalState by onEngineEvents. Called
+// ONCE per engine_events frame after the eventQueue fully drains. Safe at
+// that point because all per-beat animations have already run — the final
+// state is what the DOM should match when everything is done. Catches
+// fields the per-event incremental commitEventToDom path didn't cover
+// (hand/graveyard counts, new/dead minions, pending-modal state).
+function _commitFinalStateSnapshot(finalState) {
+    if (!finalState) return;
+    if (sandboxMode) {
+        sandboxState = finalState;
+        // Sandbox is god-mode — gameState mirrors sandboxState when the
+        // sandbox tab is active. Keep them in lockstep.
+        gameState = finalState;
+        myPlayerIdx = 0;
+        if (window.__lastLegalActions) {
+            sandboxLegalActions = window.__lastLegalActions;
+            legalActions = window.__lastLegalActions;
+        }
+        // Restore sandbox meta (undo/redo depths, active_view_idx) so the
+        // toolbar buttons reflect the post-commit state.
+        var meta = window.__lastSandboxMeta;
+        if (meta) {
+            if (typeof meta.active_view_idx === 'number') {
+                sandboxActiveViewIdx = meta.active_view_idx;
+            }
+            if (typeof meta.undo_depth === 'number') {
+                sandboxUndoDepth = meta.undo_depth;
+            }
+            if (typeof meta.redo_depth === 'number') {
+                sandboxRedoDepth = meta.redo_depth;
+            }
+        }
+        // Autosave (mirrors the sandbox_state socket handler's behavior).
         try {
-            var live = document.getElementById('phase-badge');
-            var sb = document.getElementById('sandbox-phase-badge');
-            if (live && typeof gameState !== 'undefined' && gameState) {
-                _setPhaseLeds(live, gameState.phase, gameState.react_return_phase);
-            }
-            if (sb && typeof sandboxState !== 'undefined' && sandboxState) {
-                _setPhaseLeds(sb, sandboxState.phase, sandboxState.react_return_phase);
-            }
-        } catch (e) { /* defensive — phase LED is purely visual */ }
-    } else if (ev.type === "game_over") {
-        // Defensive — the slot handler also opens the modal, so this is
-        // a no-op except in the rare case the slot handler errored.
-        // Snapshot path's onGameOver also handles this; harmless to call
-        // twice (showGameOver is idempotent — sets overlay.style.display).
+            localStorage.setItem(SANDBOX_AUTOSAVE_KEY, JSON.stringify({
+                state: sandboxState,
+                active_view_idx: sandboxActiveViewIdx,
+            }));
+        } catch (e) { /* quota exceeded — ignore */ }
+        if (typeof renderSandboxToolbarState === 'function') {
+            try { renderSandboxToolbarState(); } catch (e) { /* defensive */ }
+        }
+        if (typeof renderSandbox === 'function') {
+            try { renderSandbox(); } catch (e) { /* defensive */ }
+        }
+    } else {
+        gameState = finalState;
+        if (window.__lastLegalActions) legalActions = window.__lastLegalActions;
+        if (typeof renderGame === 'function') {
+            try { renderGame(); } catch (e) { /* defensive */ }
+        }
     }
+}
+
+function commitEventToDom(ev) {
+    // Per-event state-commit + re-render hook. Plan 04a kept this a no-op
+    // because the snapshot path (state_update / sandbox_state) committed
+    // all state wholesale after every action. Plan 05 DELETED the snapshot
+    // path but left commitEventToDom still effectively a no-op for 17 of
+    // the 19 event types — so HP / turn / mana / phase / position changes
+    // never hit the DOM until the next FULL engine_events frame arrived.
+    //
+    // Plan 05b fix (hybrid):
+    //   * For events with clean payload deltas (hp/mana/turn/phase/move),
+    //     apply the incremental field update to the live state ref
+    //     (gameState + sandboxState) and trigger a targeted re-render so
+    //     the DOM reflects THIS event's outcome at its scheduled beat.
+    //   * For complex events (summon/die/card_*/attack/react_window_*),
+    //     NO per-event commit here — they're covered by the wholesale
+    //     _commitFinalStateSnapshot that fires ONCE when the queue drains.
+    //
+    // This preserves per-beat visibility for the paladin scenario (HP
+    // ticks 30→32 at the trigger_blip beat, turn flips 1→2 at the
+    // turn_flipped beat) while keeping complex-state-delta logic in ONE
+    // place (the wholesale post-drain commit).
+    if (!ev || !ev.type) return;
+
+    // Pick the live state ref. In sandbox mode, sandboxState IS gameState
+    // (assigned by the sandbox_state socket handler + _commitFinalStateSnapshot),
+    // but we update both defensively so any future decoupling still works.
+    var sbMode = (typeof sandboxMode !== 'undefined' && sandboxMode);
+    var live = sbMode ? sandboxState : gameState;
+    if (!live) {
+        // No state to commit into yet (pre-game_start / pre-sandbox_create).
+        return;
+    }
+
+    var payload = ev.payload || {};
+    var needsBoardRerender = false;
+    var needsStatsRerender = false;
+
+    switch (ev.type) {
+        case "minion_hp_change":
+            // Payload: {instance_id, new_hp, delta, owner_idx, position, cause}
+            if (_commitMinionHp(live, payload)) {
+                if (sbMode) {
+                    gameState = sandboxState;  // keep sandbox gameState alias in sync
+                }
+                needsBoardRerender = true;
+            }
+            break;
+
+        case "player_hp_change":
+            // Payload: {player_idx, prev, new, delta}
+            if (_commitPlayerField(live, payload.player_idx, 'hp', payload['new'])) {
+                if (sbMode) gameState = sandboxState;
+                needsStatsRerender = true;
+            }
+            break;
+
+        case "mana_change":
+            // Payload: {player_idx, prev, new, delta}
+            if (_commitPlayerField(live, payload.player_idx, 'current_mana', payload['new'])) {
+                if (sbMode) gameState = sandboxState;
+                needsStatsRerender = true;
+            }
+            break;
+
+        case "turn_flipped":
+            // Payload: {prev_turn, new_turn, new_active_idx}
+            if (typeof payload.new_turn === 'number') {
+                live.turn_number = payload.new_turn;
+            }
+            if (typeof payload.new_active_idx === 'number') {
+                live.active_player_idx = payload.new_active_idx;
+            }
+            if (sbMode) gameState = sandboxState;
+            needsStatsRerender = true;
+            break;
+
+        case "phase_changed":
+            // Payload: {prev, new} — phase names. gameState.phase is an int
+            // per game_state.to_dict (int(self.phase)). Both forms can land
+            // on live.phase; _setPhaseLeds accepts both. Commit whichever
+            // the payload carries so the indicator stays consistent with
+            // the event beat.
+            if (payload['new'] != null) {
+                live.phase = payload['new'];
+                if (sbMode) gameState = sandboxState;
+            }
+            try {
+                var liveBadge = document.getElementById('phase-badge');
+                var sbBadge = document.getElementById('sandbox-phase-badge');
+                if (liveBadge && gameState) {
+                    _setPhaseLeds(liveBadge, gameState.phase, gameState.react_return_phase);
+                }
+                if (sbBadge && sandboxState) {
+                    _setPhaseLeds(sbBadge, sandboxState.phase, sandboxState.react_return_phase);
+                }
+            } catch (e) { /* defensive — phase LED is purely visual */ }
+            break;
+
+        case "minion_moved":
+            // Payload: {instance_id, from, to, owner_idx}
+            if (_commitMinionPos(live, payload)) {
+                if (sbMode) gameState = sandboxState;
+                needsBoardRerender = true;
+            }
+            break;
+
+        // Complex events — no incremental commit here. The wholesale
+        // _commitFinalStateSnapshot that runs when the queue drains will
+        // pick up the authoritative post-chain state for these.
+        //   minion_summoned / minion_died / card_drawn / card_played /
+        //   card_discarded / attack_resolved / react_window_opened /
+        //   react_window_closed / trigger_blip / pending_modal_* /
+        //   fizzle / game_over
+        default:
+            break;
+    }
+
+    // Targeted re-render. Avoid applyStateFrame (which has burn-death
+    // detection + heal popups that would double-fire since the slot
+    // handlers already show popups). Board re-render is O(25) cells —
+    // negligible per event.
+    if (needsBoardRerender) {
+        if (sbMode) {
+            if (typeof renderSandbox === 'function') {
+                try { renderSandbox(); } catch (e) { /* defensive */ }
+            }
+        } else {
+            if (typeof renderBoard === 'function') {
+                try { renderBoard(); } catch (e) { /* defensive */ }
+            }
+        }
+    }
+    if (needsStatsRerender) {
+        if (sbMode) {
+            if (typeof renderSandboxStats === 'function') {
+                try { renderSandboxStats(); } catch (e) { /* defensive */ }
+            }
+            if (typeof renderRoomBar === 'function') {
+                try { renderRoomBar(); } catch (e) { /* defensive */ }
+            }
+        } else {
+            if (typeof renderRoomBar === 'function') {
+                try { renderRoomBar(); } catch (e) { /* defensive */ }
+            }
+            if (typeof renderSelfInfo === 'function') {
+                try { renderSelfInfo(); } catch (e) { /* defensive */ }
+            }
+            if (typeof renderOpponentInfo === 'function') {
+                try { renderOpponentInfo(); } catch (e) { /* defensive */ }
+            }
+        }
+    }
+}
+
+// Phase 14.8-05b helper: mutate-in-place minion current_health by
+// instance_id. Returns true if a minion was found + updated, false if no
+// matching minion (already dead / never summoned / stale event).
+function _commitMinionHp(state, payload) {
+    if (!state || !state.minions || !payload) return false;
+    var id = payload.instance_id;
+    var newHp = payload.new_hp;
+    if (id == null || typeof newHp !== 'number') return false;
+    for (var i = 0; i < state.minions.length; i++) {
+        var m = state.minions[i];
+        if (m && m.instance_id === id) {
+            m.current_health = newHp;
+            return true;
+        }
+    }
+    return false;
+}
+
+// Phase 14.8-05b helper: mutate-in-place minion position by instance_id.
+function _commitMinionPos(state, payload) {
+    if (!state || !state.minions || !payload || !payload.to) return false;
+    var id = payload.instance_id;
+    if (id == null) return false;
+    for (var i = 0; i < state.minions.length; i++) {
+        var m = state.minions[i];
+        if (m && m.instance_id === id) {
+            // Accept both [r,c] and {row, col} shapes from payload.to
+            if (Array.isArray(payload.to)) {
+                m.position = payload.to.slice();
+            } else if (payload.to.row != null && payload.to.col != null) {
+                m.position = [payload.to.row, payload.to.col];
+            } else {
+                return false;
+            }
+            return true;
+        }
+    }
+    return false;
+}
+
+// Phase 14.8-05b helper: mutate-in-place player field by idx.
+function _commitPlayerField(state, playerIdx, field, value) {
+    if (!state || !state.players) return false;
+    if (playerIdx == null || typeof value !== 'number') return false;
+    var p = state.players[playerIdx];
+    if (!p) return false;
+    p[field] = value;
+    return true;
 }
 
 function playEvent(ev, done) {
