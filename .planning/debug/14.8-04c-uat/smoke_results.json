@@ -1,0 +1,102 @@
+{
+  "smoke_start": "2026-04-21 10:31:48",
+  "has_socket_global": true,
+  "scenario_1": {
+    "description": "3-deep react chain (Acidic Rain + 3x Prohibition)",
+    "id": "prohibition-react-chain",
+    "loaded_title": "14.7-09: 3-DEEP REACT CHAIN \u2014 FULL CONVEYOR + LIFO RESOLUTION",
+    "state_check": {
+      "ok": true,
+      "minions": 1,
+      "p1_hand": 2,
+      "p2_hand": 1,
+      "dom_minions": 4,
+      "turn": 1,
+      "active": 0,
+      "phase": 0
+    },
+    "screenshot": ".planning\\debug\\14.8-04c-uat\\scenario-1-load.png",
+    "new_console_errors": 0,
+    "new_engine_events": 0,
+    "status": "LOADS_CLEAN"
+  },
+  "scenario_2": {
+    "description": "Paladin end-of-turn heal on rat deploy",
+    "id": "end-of-turn-trigger-blip-paladin",
+    "loaded_title": "14.7-09: FALLEN PALADIN END: HEAL BLIP FIRES ON TURN END",
+    "state_check": {
+      "ok": true,
+      "minions": 1,
+      "p1_hand": 1,
+      "p2_hand": 0,
+      "dom_minions": 2,
+      "turn": 1,
+      "active": 0,
+      "phase": 0
+    },
+    "screenshot": ".planning\\debug\\14.8-04c-uat\\scenario-2-load.png",
+    "new_console_errors": 0,
+    "new_engine_events": 0,
+    "status": "LOADS_CLEAN"
+  },
+  "scenario_3": {
+    "description": "Double-paladin priority modal",
+    "id": "priority-modal-two-end-triggers",
+    "loaded_title": "14.7-09: PRIORITY MODAL OPENS WHEN 2+ SAME-PLAYER TRIGGERS FIRE",
+    "state_check": {
+      "ok": true,
+      "minions": 2,
+      "p1_hand": 1,
+      "p2_hand": 0,
+      "dom_minions": 3,
+      "turn": 1,
+      "active": 0,
+      "phase": 0
+    },
+    "screenshot": ".planning\\debug\\14.8-04c-uat\\scenario-3-load.png",
+    "new_console_errors": 0,
+    "new_engine_events": 0,
+    "status": "LOADS_CLEAN"
+  },
+  "scenario_4": {
+    "description": "Ratchanter activated ability (tutor -> conjure_deploy chain)",
+    "id": "ratchanter-activated-ability-eventqueue",
+    "loaded_title": "14.8-04C: RATCHANTER ACTIVATED ABILITY \u2014 TUTOR \u2192 CONJURE_DEPLOY MODAL CHAIN",
+    "state_check": {
+      "ok": true,
+      "minions": 2,
+      "p1_hand": 0,
+      "p2_hand": 0,
+      "dom_minions": 2,
+      "turn": 1,
+      "active": 0,
+      "phase": 0
+    },
+    "screenshot": ".planning\\debug\\14.8-04c-uat\\scenario-4-load.png",
+    "new_console_errors": 0,
+    "new_engine_events": 0,
+    "status": "LOADS_CLEAN"
+  },
+  "scenario_5": {
+    "description": "Multi-purpose Tree Wyrm react",
+    "id": "tree-wyrm-react-eventqueue",
+    "loaded_title": "14.8-04C: TREE WYRM REACT ON OPPONENT END-OF-TURN \u2014 REACT WINDOW \u2192 TUTOR CHAIN",
+    "state_check": {
+      "ok": true,
+      "minions": 0,
+      "p1_hand": 1,
+      "p2_hand": 0,
+      "dom_minions": 1,
+      "turn": 1,
+      "active": 1,
+      "phase": 0
+    },
+    "screenshot": ".planning\\debug\\14.8-04c-uat\\scenario-5-load.png",
+    "new_console_errors": 0,
+    "new_engine_events": 0,
+    "status": "LOADS_CLEAN"
+  },
+  "total_engine_events_frames": 0,
+  "total_console_errors": 0,
+  "console_errors_sample": []
+}
