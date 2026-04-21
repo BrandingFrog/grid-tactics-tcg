@@ -4965,13 +4965,18 @@ body {
   color: rgba(200, 219, 232, 0.45);
 }
 .hud-callsign-saved-name {
-  flex: 1;
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-family: var(--hud-display);
   font-size: 15px;
   letter-spacing: 0.08em;
   color: #e8f7ff;
   text-shadow: 0 0 12px rgba(0, 212, 255, 0.35);
 }
+.hud-callsign-saved-row > .hud-btn { flex-shrink: 0; }
 
 /* --- buttons ------------------------------------------------- */
 
