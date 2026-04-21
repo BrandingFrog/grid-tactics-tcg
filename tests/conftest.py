@@ -4,25 +4,30 @@ import os
 import pytest
 
 # ---------------------------------------------------------------------------
-# Phase 14.8-02: Default CONTRACT_ENFORCEMENT_MODE to "shadow" for ALL test
+# Phase 14.8-05: Default CONTRACT_ENFORCEMENT_MODE to "strict" for ALL test
 # runs unless an individual test overrides via monkeypatch.setenv.
 #
-# Shadow mode logs PhaseContractViolation WARNINGs for any state-mutating
-# call site that fires its assertion in a disallowed TurnPhase, but does
-# NOT raise. The dedicated invariant test (test_phase_contract_invariants.py)
-# actively asserts zero violations across the full card library × every
-# action × every phase × every pending modal — so any new code path that
-# mistags is caught at PR time.
+# Strict mode RAISES OutOfPhaseError the instant a state-mutating call site
+# fires its assertion in a disallowed TurnPhase. Combined with the
+# dedicated invariant test (test_phase_contract_invariants.py) — which
+# exhaustively scans every card × every action × every phase × every
+# pending modal — we have BOTH runtime catch (strict) AND exhaustive
+# coverage (invariant test) gating every PR.
 #
-# Plan 14.8-05 will eventually flip this to "strict" — by which point all
-# call sites are correctly tagged and any violation raises immediately.
+# Plan 14.8-01/02 drove shadow-mode violations to zero; the strict flip
+# here enforces the guarantee at apply time.
 #
-# Individual tests can still opt into strict / off via the standard
+# Individual tests can still opt into shadow / off via the standard
 # monkeypatch.setenv pattern (see tests/test_phase_contracts.py for
 # examples). The env var is set BEFORE pytest collection so the cached
 # mode in phase_contracts.py picks it up on first import.
+#
+# NOTE: we use os.environ[...] = here instead of setdefault so running
+# pytest in a shell with CONTRACT_ENFORCEMENT_MODE already set (e.g.
+# shadow for a bisect session) will NOT override; still use setdefault
+# so the CI enforcement is opt-out rather than opt-in.
 # ---------------------------------------------------------------------------
-os.environ.setdefault("CONTRACT_ENFORCEMENT_MODE", "shadow")
+os.environ.setdefault("CONTRACT_ENFORCEMENT_MODE", "strict")
 
 from grid_tactics.enums import PlayerSide, TurnPhase
 

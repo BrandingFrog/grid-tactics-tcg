@@ -314,11 +314,15 @@ def test_per_viewer_filter_god_mode_returns_input_unchanged():
 
 
 def test_sandbox_apply_action_emits_engine_events(client):
-    """sandbox_apply_action: engine_events frame is emitted alongside sandbox_state.
+    """sandbox_apply_action: engine_events frame is the SOLE post-action emit.
 
-    Plan 14.8-03b: sandbox uses ONE EventStream per apply_action call.
-    The new wire frame carries the event list; sandbox_state is
-    preserved for back-compat with pre-04a clients.
+    Plan 14.8-05: the post-action sandbox_state emit is DELETED. DOM commits
+    flow exclusively through the client's eventQueue from the engine_events
+    frame. The engine_events payload still carries final_state as the
+    authoritative reconnect / error-recovery reference.
+
+    Plan 14.8-03b historical note (superseded): sandbox_state used to emit
+    alongside engine_events for pre-04a client compat.
     """
     client.emit("sandbox_create")
     _drain(client)
@@ -334,19 +338,22 @@ def test_sandbox_apply_action_emits_engine_events(client):
     received = _emit_and_drain(
         client, "sandbox_apply_action", serialize_action(pass_action()),
     )
-    # Both frames fire alongside each other.
+    # Plan 14.8-05: engine_events is the sole post-action emit.
     sandbox_state = _find(received, "sandbox_state")
     engine_events_frames = _find_all(received, "engine_events")
-    assert sandbox_state is not None, (
-        f"sandbox_state missing, got {[m['name'] for m in received]}"
+    assert sandbox_state is None, (
+        f"sandbox_state emit should be DELETED post-action (plan 14.8-05); "
+        f"got {[m['name'] for m in received]}"
     )
     assert len(engine_events_frames) >= 1, (
         f"engine_events missing, got {[m['name'] for m in received]}"
     )
-    # engine_events payload shape.
+    # engine_events payload shape — final_state is the authoritative
+    # snapshot for reconnect / error-recovery.
     payload = engine_events_frames[-1]
     assert "events" in payload
     assert isinstance(payload["events"], list)
+    assert "final_state" in payload
     assert payload.get("is_sandbox") is True
 
 
@@ -411,8 +418,10 @@ def test_sandbox_auto_drain_emits_events_once_at_end_not_per_frame(client):
     Pre-fix: the per-frame on_frame callback fired one sandbox_state
     per intermediate state (user action + each drained PASS), which
     bloated the wire and clobbered transient signals.
-    Post-fix: one EventStream collects across all intermediate calls,
-    one engine_events frame fires at the end.
+    Post-fix (plan 14.8-03b): one EventStream collects across all
+    intermediate calls, one engine_events frame fires at the end.
+    Plan 14.8-05: post-action sandbox_state DELETED — engine_events is
+    the sole post-action emit; sandbox_state is initial-frame only.
     """
     client.emit("sandbox_create")
     _drain(client)
@@ -425,14 +434,13 @@ def test_sandbox_auto_drain_emits_events_once_at_end_not_per_frame(client):
     )
     eng_frames = _find_all(received, "engine_events")
     sandbox_frames = _find_all(received, "sandbox_state")
-    # The architectural claim: ONE engine_events per apply_action call,
-    # not one per drained PASS. (Pre-fix: many sandbox_state emits.)
+    # ONE engine_events per apply_action call (unchanged invariant).
     assert len(eng_frames) == 1, (
         f"expected 1 engine_events emit per apply_action, got {len(eng_frames)}"
     )
-    # And exactly one sandbox_state emit (back-compat path).
-    assert len(sandbox_frames) == 1, (
-        f"expected 1 sandbox_state per apply_action, got {len(sandbox_frames)}"
+    # Plan 14.8-05: zero sandbox_state emits post-action.
+    assert len(sandbox_frames) == 0, (
+        f"expected 0 sandbox_state per apply_action (plan 14.8-05), got {len(sandbox_frames)}"
     )
 
 
@@ -465,26 +473,31 @@ def _submit_pass_from_active(alice, bob, rm, code):
     )
 
 
-def test_live_pvp_submit_action_emits_engine_events_alongside_state_update(app_and_rm):
-    """submit_action emits BOTH engine_events AND state_update during transition.
+def test_live_pvp_submit_action_emits_engine_events_only(app_and_rm):
+    """submit_action emits engine_events ONLY (post-action state_update DELETED).
 
-    Plan 14.8-05 drops state_update once all clients consume engine_events;
-    in 14.8-03b they coexist for back-compat.
+    Plan 14.8-05: state_update post-action emit was deleted. DOM commits
+    flow exclusively through the client's eventQueue from engine_events.
+    Both clients still receive the engine_events frame (acting-player
+    payload carries legal_actions; other-client payload carries an empty
+    legal_actions list).
     """
     app, rm = app_and_rm
     alice, bob, code = _start_pvp_game(app)
     acting, other, r_acting, r_other = _submit_pass_from_active(alice, bob, rm, code)
-    # The acting client always receives both frames.
-    assert _find(r_acting, "state_update") is not None, (
-        f"state_update missing on acting client, got {[m['name'] for m in r_acting]}"
+    # Plan 14.8-05: no state_update emit post-action.
+    assert _find(r_acting, "state_update") is None, (
+        f"state_update should be DELETED post-action (plan 14.8-05); "
+        f"got {[m['name'] for m in r_acting]}"
     )
     assert _find(r_acting, "engine_events") is not None, (
         f"engine_events missing on acting client, got {[m['name'] for m in r_acting]}"
     )
-    # The other client also receives both frames (it's the next decision-maker
-    # or just an observer of the state change).
-    assert _find(r_other, "state_update") is not None, (
-        f"state_update missing on other client, got {[m['name'] for m in r_other]}"
+    # The other client also receives engine_events (with filtered events +
+    # empty legal_actions if they're not the next decision-maker).
+    assert _find(r_other, "state_update") is None, (
+        f"state_update should be DELETED post-action (plan 14.8-05); "
+        f"got {[m['name'] for m in r_other]}"
     )
     assert _find(r_other, "engine_events") is not None, (
         f"engine_events missing on other client, got {[m['name'] for m in r_other]}"

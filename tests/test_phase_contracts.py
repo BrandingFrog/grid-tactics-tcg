@@ -153,8 +153,14 @@ def test_pending_requirements_cover_all_pending_actions():
 
 
 def test_off_mode_no_op(monkeypatch):
-    """Default mode is off — assertions are no-ops even for bogus sources."""
-    monkeypatch.delenv("CONTRACT_ENFORCEMENT_MODE", raising=False)
+    """Off mode — assertions are no-ops even for bogus sources.
+
+    Phase 14.8-05 flipped the MODULE default from 'off' to 'shadow', so
+    this test now explicitly sets the env var to 'off' to exercise the
+    no-op path. The behavior being verified (off = zero assertion side
+    effects) is unchanged.
+    """
+    monkeypatch.setenv("CONTRACT_ENFORCEMENT_MODE", "off")
     phase_contracts._reset_mode_cache()
     assert get_enforcement_mode() == "off"
     state = _StubState(phase=TurnPhase.START_OF_TURN)
@@ -272,12 +278,17 @@ def test_pending_precedence_for_decline_post_move_attack(monkeypatch):
     assert excinfo.value.pending_required == "pending_post_move_attacker_id"
 
 
-def test_invalid_mode_falls_back_to_off(monkeypatch, caplog):
-    """An invalid CONTRACT_ENFORCEMENT_MODE value falls back to off."""
+def test_invalid_mode_falls_back_to_shadow(monkeypatch, caplog):
+    """An invalid CONTRACT_ENFORCEMENT_MODE value falls back to shadow.
+
+    Phase 14.8-05 changed the fallback from 'off' to 'shadow' so a typo'd
+    env var still logs violations (safe default — observability without
+    rejection risk).
+    """
     monkeypatch.setenv("CONTRACT_ENFORCEMENT_MODE", "garbage_value")
     phase_contracts._reset_mode_cache()
     with caplog.at_level(logging.WARNING, logger="grid_tactics.phase_contracts"):
-        assert get_enforcement_mode() == "off"
+        assert get_enforcement_mode() == "shadow"
     assert any("Invalid CONTRACT_ENFORCEMENT_MODE" in r.getMessage() for r in caplog.records)
 
 
@@ -303,18 +314,18 @@ def test_get_enforcement_mode_caches(monkeypatch):
 # ---------------------------------------------------------------------------
 
 
-def test_module_default_mode_is_off_when_env_var_unset(monkeypatch):
-    """Sanity: when the env var is fully UNSET, the module default is "off".
+def test_module_default_mode_is_shadow_when_env_var_unset(monkeypatch):
+    """Sanity: when the env var is fully UNSET, the module default is "shadow".
 
-    Plan 14.8-02 changed conftest.py to default the env var to "shadow"
-    for the test session — but the underlying module-level default (when
-    no env var is set at all) must still be "off" to preserve back-compat
-    for any consumer that imports the module without the test fixture.
-    This test deletes the env var and verifies the off fallback still works.
+    Phase 14.8-05 flipped the module-level default from 'off' to 'shadow'
+    so production servers log violations without rejecting actions
+    (observability without rejection risk). CI explicitly sets the env
+    var to 'strict' via tests/conftest.py so out-of-phase mutations raise
+    immediately during testing.
     """
     monkeypatch.delenv("CONTRACT_ENFORCEMENT_MODE", raising=False)
     phase_contracts._reset_mode_cache()
-    assert get_enforcement_mode() == "off"
+    assert get_enforcement_mode() == "shadow"
 
 
 def _build_minimal_game(library):
@@ -333,8 +344,12 @@ def _build_minimal_game(library):
 
 def test_resolve_action_does_not_fire_assertions_in_off_mode(monkeypatch, caplog):
     """A real action through resolve_action emits NO contract warnings
-    at mode=off (the foundation plan's invariant)."""
-    monkeypatch.delenv("CONTRACT_ENFORCEMENT_MODE", raising=False)
+    at mode=off (the foundation plan's invariant).
+
+    Phase 14.8-05: explicitly set the env var to 'off' since the new
+    module default is 'shadow' (which WOULD emit warnings on any miss-tag).
+    """
+    monkeypatch.setenv("CONTRACT_ENFORCEMENT_MODE", "off")
     phase_contracts._reset_mode_cache()
     from grid_tactics.action_resolver import resolve_action
     from grid_tactics.actions import pass_action

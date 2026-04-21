@@ -2505,6 +2505,14 @@ var slotState = {
     spellStageChain: [],      // LIFO stack of opened-but-not-closed react windows (used by 04b)
     pendingModalKind: null,   // non-null while awaiting user input (used by 04b)
     pendingModalDeadline: 0,  // safety timeout fallback (used by 04b)
+    // Phase 14.8-05: cache the most recent "originator" (card_played or
+    // trigger_blip) so playReactWindowOpened can slam the originator onto
+    // the spell stage LEFT slot when its event fires. The engine emits the
+    // originator event JUST BEFORE react_window_opened on the same frame —
+    // we stash the card identity + player idx here and consume it when
+    // the window opens. Cleared after consumption so a stale originator
+    // never leaks into a later unrelated react window.
+    lastOriginator: null,     // {numericId, playerIdx} or null
 };
 
 function resetEventQueue() {
@@ -2515,6 +2523,7 @@ function resetEventQueue() {
     slotState.spellStageChain.length = 0;
     slotState.pendingModalKind = null;
     slotState.pendingModalDeadline = 0;
+    slotState.lastOriginator = null;
 }
 
 function onEngineEvents(payload) {
@@ -2807,7 +2816,21 @@ function playCardDrawn(ev, done) {
 function playCardPlayed(ev, done) {
     // Payload: {card_numeric_id, card_index, owner_idx, target_pos, position}
     // Visual is covered by spell stage in/out (react_window_opened/closed, 04b)
-    // for magic/react cards, and by minion_summoned for minions. 04a: instant.
+    // for magic/react cards, and by minion_summoned for minions.
+    // Phase 14.8-05: stash the originator so playReactWindowOpened (which
+    // the engine emits RIGHT AFTER this event in the same frame for
+    // action-triggered react windows) can slam the card onto the spell
+    // stage LEFT slot. See slotState.lastOriginator comment.
+    var payload = (ev && ev.payload) || {};
+    if (payload.card_numeric_id != null) {
+        slotState.lastOriginator = {
+            numericId: payload.card_numeric_id,
+            playerIdx: (payload.owner_idx != null
+                ? payload.owner_idx
+                : payload.player_idx),
+            source: 'card_played',
+        };
+    }
     setTimeout(done, _evDurationOr(ev, 0));
 }
 
@@ -2863,20 +2886,26 @@ function playPlayerHpChange(ev, done) {
 // field for events that don't override.
 
 // react_window_opened — push the newly-opened window onto a client-side
-// spell-stage chain. Piggy-backs on the existing _spellStage LIFO so the
-// visual stacking (caster cards LEFT, opponent reacts RIGHT, resolve-pop
-// bottom-to-top) is preserved verbatim from Phase 14.7-09.
+// spell-stage chain AND slam the originator card onto the stage LEFT slot.
+// Piggy-backs on the existing _spellStage LIFO so the visual stacking
+// (caster cards LEFT, opponent reacts RIGHT, resolve-pop bottom-to-top) is
+// preserved verbatim from Phase 14.7-09.
 //
-// Payload: {react_context, react_player_idx, return_phase}
+// Payload: {react_context, react_player_idx, return_phase, shortcut?}
 //
-// NOTE: react_window_opened doesn't carry the specific card that opened
-// the window (the engine emits it separately as card_played or trigger_blip
-// just BEFORE this event in the same EventStream). The existing
-// _showSpellStage() expects a numeric_id + playerIdx to slam onto the
-// stack — for 04b we TRACK the chain depth in slotState.spellStageChain
-// so the eventQueue knows when the chain fully drains. The actual card
-// visuals are still driven by the snapshot path's detectSpellCast (which
-// reads prev→next grave / react_stack diff) until plan 05.
+// The event doesn't carry the specific card that opened the window (the
+// engine emits it separately as card_played or trigger_blip just BEFORE
+// this event in the same EventStream). Phase 14.8-05 consumes the
+// slotState.lastOriginator stash populated by those preceding handlers —
+// a small piece of inter-handler coupling, but it keeps the engine's
+// event-shape work (plan 03a) unchanged while giving the client the
+// visual it needs.
+//
+// Shortcut-path (AFTER_START_TRIGGER with no triggers fired — plan 03b
+// orchestrator decision #3) emits a zero-duration react_window_opened +
+// react_window_closed pair with no preceding originator. We detect the
+// shortcut flag in the payload and skip the stage open entirely for
+// those — no originator to show, no visible react window needed.
 function playReactWindowOpened(ev, done) {
     var payload = (ev && ev.payload) || {};
     slotState.spellStageChain.push({
@@ -2885,11 +2914,42 @@ function playReactWindowOpened(ev, done) {
         return_phase: payload.return_phase || null,
         source_event_seq: ev.seq,
     });
-    // The visual (slam-in) is owned by the snapshot path's detectSpellCast
-    // until plan 05 removes it. We only pace the queue here so the next
-    // event (typically a trigger_blip or card_played) doesn't race the
-    // slam-in animation. 600ms = SPELL_STAGE_PER_CARD_MS minus a 900ms hold.
-    setTimeout(done, _evDurationOr(ev, 600));
+    // Zero-duration shortcut path: no originator, no visible stage. Pace
+    // the queue at 0ms and let the matching react_window_closed pop the
+    // chain entry immediately.
+    if (payload.shortcut) {
+        setTimeout(done, _evDurationOr(ev, 0));
+        return;
+    }
+    // Consume the stashed originator from the preceding card_played /
+    // trigger_blip and slam it onto the spell stage LEFT slot. If no
+    // originator is stashed (engine path that doesn't emit one, or out-
+    // of-order delivery somehow), log but continue — the chain tracker
+    // still increments so close_react_window pops the right entry.
+    var origin = slotState.lastOriginator;
+    slotState.lastOriginator = null;  // consume
+    if (origin && origin.numericId != null) {
+        try {
+            _showSpellStage(origin.numericId, origin.playerIdx);
+        } catch (e) {
+            // Defensive — a broken render must not crash the eventQueue.
+            console.warn('playReactWindowOpened: _showSpellStage threw', e);
+        }
+    } else {
+        // Debug hint — helpful when chasing "spell stage didn't show"
+        // regressions. Single-line console log (no scary warnings for
+        // expected shortcut-path gaps).
+        try {
+            console.debug(
+                '[eventQueue] react_window_opened with no stashed originator ' +
+                '(react_context=' + payload.react_context + ')'
+            );
+        } catch (_) { /* console.debug not defined */ }
+    }
+    // Pace so the slam-in (520ms fly + 1000ms hold per SPELL_STAGE_PER_CARD_MS)
+    // completes before the next event (typically a minion-HP or player-HP
+    // change) starts animating. 1500ms matches the stage-per-card beat.
+    setTimeout(done, _evDurationOr(ev, 1500));
 }
 
 // react_window_closed — pop the topmost chain entry. When the chain drains
@@ -2970,6 +3030,37 @@ function playTriggerBlip(ev, done) {
         try {
             _fireTriggerBlipAnimation(payload);
         } catch (e) { /* defensive — blip must never throw */ }
+        // Phase 14.8-05: stash the originator (the triggering minion's card)
+        // so playReactWindowOpened can slam the source minion's card onto
+        // the spell-stage LEFT slot for trigger-driven react windows
+        // (AFTER_START_TRIGGER / BEFORE_END_OF_TURN / AFTER_DEATH_EFFECT).
+        // The engine doesn't emit source_card_numeric_id in the blip today
+        // (only source_minion_id + source_position), so we look the card up
+        // from gameState.minions. Best-effort — if the minion already died,
+        // fall through without populating lastOriginator (the stage will
+        // open empty-LEFT which is visually tolerable for now).
+        try {
+            var liveState = (typeof sandboxMode !== 'undefined' && sandboxMode)
+                ? sandboxState : gameState;
+            var srcId = payload.source_minion_id;
+            var srcMinion = null;
+            if (srcId != null && liveState && liveState.minions) {
+                for (var mi = 0; mi < liveState.minions.length; mi++) {
+                    if (liveState.minions[mi] &&
+                        liveState.minions[mi].instance_id === srcId) {
+                        srcMinion = liveState.minions[mi];
+                        break;
+                    }
+                }
+            }
+            if (srcMinion && srcMinion.card_numeric_id != null) {
+                slotState.lastOriginator = {
+                    numericId: srcMinion.card_numeric_id,
+                    playerIdx: srcMinion.owner,
+                    source: 'trigger_blip',
+                };
+            }
+        } catch (e) { /* defensive */ }
     }
     setTimeout(done, _evDurationOr(ev, 900));
 }

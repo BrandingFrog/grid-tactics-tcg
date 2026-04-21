@@ -108,7 +108,12 @@ def test_spectate_room_event(alice, eve):
 
 
 def test_spectator_receives_state_update(alice, bob, eve):
-    """After a player submits an action, spectators receive a state_update frame."""
+    """After a player submits an action, spectators receive an engine_events frame.
+
+    Phase 14.8-05: post-action state_update emit DELETED — engine_events
+    is the sole post-action frame routed to spectators (still carrying
+    is_spectator=True and perspective-filtered state).
+    """
     code = _start_game(alice, bob)
     eve.emit(
         "spectate_room",
@@ -122,11 +127,11 @@ def test_spectator_receives_state_update(alice, bob, eve):
         r = client.get_received()
         if _first(r, "error") is None:
             break
-    # Eve should have seen at least one state_update.
+    # Eve should have seen at least one engine_events frame.
     r_eve = eve.get_received()
-    updates = _all(r_eve, "state_update")
+    updates = _all(r_eve, "engine_events")
     assert len(updates) >= 1, (
-        f"spectator received no state_update, got {[m['name'] for m in r_eve]}"
+        f"spectator received no engine_events, got {[m['name'] for m in r_eve]}"
     )
     payload = updates[0]["args"][0]
     assert payload.get("is_spectator") is True

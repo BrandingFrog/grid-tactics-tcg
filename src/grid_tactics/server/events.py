@@ -9,6 +9,7 @@ from grid_tactics.actions import pass_action
 from grid_tactics.action_resolver import resolve_action
 from grid_tactics.engine_events import EventStream
 from grid_tactics.enums import TurnPhase
+from grid_tactics.phase_contracts import OutOfPhaseError
 from grid_tactics.legal_actions import legal_actions
 from grid_tactics.server.action_codec import reconstruct_action, serialize_action
 from grid_tactics.server.app import socketio
@@ -185,13 +186,12 @@ def _emit_state_to_players(
         enrich_pending_revive(state, filtered, idx, session.library)
         enrich_pending_trigger_for_viewer(state, filtered, idx, session.library)
         legal_for_viewer = serialized_actions if idx == decision_idx else []
-        emit("state_update", {
-            "state": filtered,
-            "legal_actions": legal_for_viewer,
-            "your_player_idx": idx,
-        }, to=session.player_sids[idx])
-        # Phase 14.8-03b: also emit the new engine_events frame. Per-viewer
-        # filtering applied via filter_engine_events_for_viewer.
+        # Phase 14.8-05: the post-action ``state_update`` Socket.IO emit is
+        # DELETED. DOM commits flow exclusively through the ``engine_events``
+        # slot handlers on the client (plan 14.8-04b). The final_state field
+        # on the engine_events payload below still ships the authoritative
+        # state snapshot for error-recovery / reconnect parity (stashed to
+        # window.__lastFinalState on the client).
         if events is not None:
             filtered_events = filter_engine_events_for_viewer(events, idx)
             emit("engine_events", {
@@ -238,12 +238,10 @@ def _fanout_state_to_spectators(
             enrich_pending_revive(state, spec_state, 0, session.library)
             enrich_pending_trigger_for_viewer(state, spec_state, 0, session.library)
         if event_name == "state_update":
-            emit("state_update", {
-                "state": spec_state,
-                "legal_actions": [],
-                "your_player_idx": 0,
-                "is_spectator": True,
-            }, to=slot.sid)
+            # Phase 14.8-05: post-action ``state_update`` emit DELETED for
+            # spectators too. DOM commits flow via ``engine_events`` slot
+            # handlers; the final_state carried in the engine_events payload
+            # below remains authoritative for reconnect / error-recovery.
             if events is not None:
                 # God spectators bypass redaction; non-god uses P1
                 # perspective per Phase 14.4 contract.
@@ -748,7 +746,7 @@ def register_events(room_manager: RoomManager) -> None:
                 emit("error", {"msg": "Illegal action"})
                 return
 
-            saved_state = session.state
+            saved_state = session.state  # Phase 14.8-05 M4: snapshot before resolve for OutOfPhaseError rollback
             # Phase 14.8-03b (M3): one EventStream per submit_action,
             # seeded from session.next_event_seq. Threaded through every
             # resolve_action / enter_*_of_turn helper inside the auto-
@@ -812,6 +810,38 @@ def register_events(room_manager: RoomManager) -> None:
                         session.state, pass_action(), session.library,
                         event_collector=stream,
                     )
+            except OutOfPhaseError as e:
+                # Phase 14.8-05: strict-mode contract violation. Roll the
+                # session state back to the pre-resolve snapshot (M4), emit
+                # a structured `error` frame so the client can surface the
+                # violation, and continue serving — never crash the session
+                # (orchestrator decision #2: soft failure).
+                session.state = saved_state
+                import logging as _logging
+                _logging.getLogger("grid_tactics.server.events").error(
+                    "OutOfPhaseError in handle_submit_action: source=%s phase=%s "
+                    "allowed=%s pending_required=%s",
+                    e.contract_source,
+                    e.phase.name if e.phase else None,
+                    sorted(p.name for p in (e.allowed_phases or [])),
+                    e.pending_required,
+                )
+                emit("error", {
+                    "error_type": "phase_contract_violation",
+                    "contract_source": e.contract_source,
+                    "phase": e.phase.name if e.phase else None,
+                    "allowed_phases": [
+                        p.name for p in (e.allowed_phases or [])
+                    ],
+                    "pending_required": e.pending_required,
+                    "unknown_source": bool(getattr(e, "unknown_source", False)),
+                    "msg": (
+                        f"Action rejected: contract violation "
+                        f"({e.contract_source!r} not allowed in phase "
+                        f"{e.phase.name if e.phase else 'unknown'})."
+                    ),
+                })
+                return
             except Exception as e:
                 # Safety net: roll back state and surface the error so a single
                 # broken effect doesn't crash the server or leave a partial state
@@ -850,7 +880,7 @@ def register_events(room_manager: RoomManager) -> None:
     # legal_actions/resolve_action and edits zones via dataclasses.replace),
     # and re-emits the full god-view state via _emit_sandbox_state.
 
-    def _emit_sandbox_state(sandbox, sid, events=None):
+    def _emit_sandbox_state(sandbox, sid, events=None, is_initial=False):
         """Single source of truth for sandbox state emission. God view, no filter.
 
         Enriches pending_tutor / pending_death / pending_post_move_attack /
@@ -860,12 +890,20 @@ def register_events(room_manager: RoomManager) -> None:
         state (valid targets + banner) regardless of which player the user
         is currently viewing as.
 
-        Phase 14.8-03b: when ``events`` (a list of EngineEvent) is
-        provided, ALSO emit a NEW ``engine_events`` socket message
-        alongside the existing ``sandbox_state``. Sandbox is god-mode
-        so events are emitted unredacted (god_mode=True). Both messages
-        fire during the transitional phase; plan 14.8-04a switches the
-        sandbox client to consume engine_events as the primary signal.
+        Phase 14.8-05: the ``sandbox_state`` Socket.IO emit is now gated on
+        ``is_initial=True`` — only the first frame on sandbox create / load
+        / reset / slot-load emits the snapshot, so the client has something
+        to render before any events flow. Every subsequent mutation-driven
+        call (apply_action, apply_sandbox_edit, undo, redo, ...) emits ONLY
+        ``engine_events``; DOM commits flow through the client's eventQueue
+        slot handlers, not the snapshot path. The engine_events payload
+        still carries final_state as the authoritative reconnect / error-
+        recovery reference (stashed to window.__lastFinalState).
+
+        Phase 14.8-03b (superseded by 14.8-05): previously emitted both
+        sandbox_state AND engine_events on every call — the snapshot path
+        raced the eventQueue and DOM jumped to the post-drain state before
+        animations played. Gate removed that race.
         """
         state = sandbox.state
         state_dict = state.to_dict()
@@ -909,28 +947,37 @@ def register_events(room_manager: RoomManager) -> None:
         enrich_pending_trigger_for_viewer(state, state_dict, trigger_viewer, sandbox.library)
         actions = sandbox.legal_actions() if not sandbox.state.is_game_over else ()
         serialized = [serialize_action(a) for a in actions]
-        emit("sandbox_state", {
-            "state": state_dict,
-            "legal_actions": serialized,
-            "active_view_idx": sandbox.active_view_idx,
-            "undo_depth": sandbox.undo_depth,
-            "redo_depth": sandbox.redo_depth,
-        })
-        # Phase 14.8-03b: also emit engine_events frame (sandbox is
-        # god-mode so no per-viewer filtering is applied — both hands
-        # are face-up). Empty event list still emits so the client gets
-        # a uniform pipeline (e.g. zone-edit handlers that DO produce
-        # events but don't trigger this code path use _emit_sandbox_state
-        # via apply_sandbox_edit fanout, not through here).
-        if events is not None:
-            spec_events = filter_engine_events_for_viewer(
-                events, sandbox.active_view_idx, god_mode=True,
+        # Phase 14.8-05: sandbox_state emit is gated on is_initial. Initial
+        # frames (sandbox_create, sandbox_load, sandbox_reset, slot-load,
+        # test-scenario-load) need a snapshot so the client can render the
+        # board before any events flow. Subsequent mutation-driven calls
+        # emit engine_events ONLY; the client's eventQueue commits DOM.
+        if is_initial:
+            emit("sandbox_state", {
+                "state": state_dict,
+                "legal_actions": serialized,
+                "active_view_idx": sandbox.active_view_idx,
+                "undo_depth": sandbox.undo_depth,
+                "redo_depth": sandbox.redo_depth,
+            })
+        # engine_events frame (sandbox is god-mode so no per-viewer
+        # filtering is applied — both hands are face-up). Empty event list
+        # still emits so the client gets a uniform pipeline and final_state
+        # stays stashed for reconnect parity.
+        if events is not None or not is_initial:
+            spec_events = (
+                filter_engine_events_for_viewer(
+                    events, sandbox.active_view_idx, god_mode=True,
+                )
+                if events is not None else []
             )
             emit("engine_events", {
                 "events": [ev.to_dict() for ev in spec_events],
                 "final_state": state_dict,
                 "legal_actions": serialized,
                 "active_view_idx": sandbox.active_view_idx,
+                "undo_depth": sandbox.undo_depth,
+                "redo_depth": sandbox.redo_depth,
                 "is_sandbox": True,
             })
 
@@ -945,7 +992,9 @@ def register_events(room_manager: RoomManager) -> None:
     def handle_sandbox_create(_data=None):
         sandbox = _room_manager.create_sandbox(request.sid)
         emit("sandbox_card_defs", {"card_defs": _build_card_defs(sandbox.library)})
-        _emit_sandbox_state(sandbox, request.sid)
+        # Phase 14.8-05: initial snapshot emit (client has nothing to render
+        # until the first sandbox_state lands).
+        _emit_sandbox_state(sandbox, request.sid, is_initial=True)
 
     @socketio.on("sandbox_apply_action")
     def handle_sandbox_apply_action(data):
@@ -973,10 +1022,62 @@ def register_events(room_manager: RoomManager) -> None:
         # transitions emit dedicated events that the new client picks up
         # without needing per-frame state replay.
         with sandbox.lock:
+            # Phase 14.8-05 M4: snapshot the sandbox state before resolve so
+            # we can roll back on OutOfPhaseError. SandboxSession.apply_action
+            # calls _push_undo() before invoking resolve_action, so the undo
+            # stack has a recoverable frame even if the OutOfPhaseError branch
+            # never gets to finish the replace(). Explicit state snapshot
+            # here is belt-and-braces: we'll restore from it AND pop the
+            # polluting undo frame so the user's undo history stays clean.
+            saved_sandbox_state = sandbox._state
+            saved_last_prev = sandbox.last_prev_state
+            saved_last_action = sandbox.last_action
             try:
                 events = sandbox.apply_action(action)
             except ValueError as e:
                 emit("error", {"msg": str(e)})
+                return
+            except OutOfPhaseError as e:
+                # Phase 14.8-05: strict-mode contract violation in sandbox.
+                # Rollback: restore the pre-action state + clear the undo
+                # frame we pushed, then emit a structured error. Sandbox
+                # itself tags its own edits with "sandbox:" which BYPASSES
+                # enforcement — so this branch only fires for real engine
+                # actions (PLAY_CARD / MOVE / ATTACK / ...) submitted via
+                # sandbox_apply_action whose phase the engine refused.
+                sandbox._state = saved_sandbox_state
+                sandbox._last_prev_state = saved_last_prev
+                sandbox._last_action = saved_last_action
+                # Pop the polluting undo frame pushed by apply_action().
+                try:
+                    if sandbox._undo:
+                        sandbox._undo.pop()
+                except Exception:
+                    pass
+                import logging as _logging
+                _logging.getLogger("grid_tactics.server.events").error(
+                    "OutOfPhaseError in handle_sandbox_apply_action: "
+                    "source=%s phase=%s allowed=%s pending_required=%s",
+                    e.contract_source,
+                    e.phase.name if e.phase else None,
+                    sorted(p.name for p in (e.allowed_phases or [])),
+                    e.pending_required,
+                )
+                emit("error", {
+                    "error_type": "phase_contract_violation",
+                    "contract_source": e.contract_source,
+                    "phase": e.phase.name if e.phase else None,
+                    "allowed_phases": [
+                        p.name for p in (e.allowed_phases or [])
+                    ],
+                    "pending_required": e.pending_required,
+                    "unknown_source": bool(getattr(e, "unknown_source", False)),
+                    "msg": (
+                        f"Sandbox action rejected: contract violation "
+                        f"({e.contract_source!r} not allowed in phase "
+                        f"{e.phase.name if e.phase else 'unknown'})."
+                    ),
+                })
                 return
             except Exception as e:
                 import traceback
@@ -1011,7 +1112,10 @@ def register_events(room_manager: RoomManager) -> None:
             except ValueError as e:
                 emit("error", {"msg": str(e)})
                 return
-        _emit_sandbox_state(sandbox, request.sid, events=events)
+        # Phase 14.8-05: zone edits are user-controlled state mutations; treat
+        # as initial so the client snaps to the new state without waiting
+        # on an events-driven animation replay.
+        _emit_sandbox_state(sandbox, request.sid, events=events, is_initial=True)
 
     @socketio.on("sandbox_place_on_board")
     def handle_sandbox_place_on_board(data):
@@ -1037,7 +1141,7 @@ def register_events(room_manager: RoomManager) -> None:
             except ValueError as e:
                 emit("error", {"msg": str(e)})
                 return
-        _emit_sandbox_state(sandbox, request.sid, events=events)
+        _emit_sandbox_state(sandbox, request.sid, events=events, is_initial=True)
 
     @socketio.on("sandbox_move_card")
     def handle_sandbox_move_card(data):
@@ -1063,7 +1167,7 @@ def register_events(room_manager: RoomManager) -> None:
             except ValueError as e:
                 emit("error", {"msg": str(e)})
                 return
-        _emit_sandbox_state(sandbox, request.sid, events=events)
+        _emit_sandbox_state(sandbox, request.sid, events=events, is_initial=True)
 
     @socketio.on("sandbox_import_deck")
     def handle_sandbox_import_deck(data):
@@ -1087,7 +1191,7 @@ def register_events(room_manager: RoomManager) -> None:
             except ValueError as e:
                 emit("error", {"msg": str(e)})
                 return
-        _emit_sandbox_state(sandbox, request.sid, events=events)
+        _emit_sandbox_state(sandbox, request.sid, events=events, is_initial=True)
 
     @socketio.on("sandbox_set_player_field")
     def handle_sandbox_set_player_field(data):
@@ -1111,7 +1215,7 @@ def register_events(room_manager: RoomManager) -> None:
             except ValueError as e:
                 emit("error", {"msg": str(e)})
                 return
-        _emit_sandbox_state(sandbox, request.sid, events=events)
+        _emit_sandbox_state(sandbox, request.sid, events=events, is_initial=True)
 
     @socketio.on("sandbox_set_active_player")
     def handle_sandbox_set_active_player(data):
@@ -1131,7 +1235,7 @@ def register_events(room_manager: RoomManager) -> None:
             except ValueError as e:
                 emit("error", {"msg": str(e)})
                 return
-        _emit_sandbox_state(sandbox, request.sid, events=events)
+        _emit_sandbox_state(sandbox, request.sid, events=events, is_initial=True)
 
     @socketio.on("sandbox_undo")
     def handle_sandbox_undo(_data=None):
@@ -1140,7 +1244,11 @@ def register_events(room_manager: RoomManager) -> None:
             return
         with sandbox.lock:
             events = sandbox.apply_sandbox_edit("undo", {})
-        _emit_sandbox_state(sandbox, request.sid, events=events)
+        # Phase 14.8-05: undo/redo/reset are wholesale state replacements —
+        # treat as initial so the client re-renders the snapshot directly
+        # instead of waiting for the eventQueue (which has few/no events to
+        # drive a full board replay).
+        _emit_sandbox_state(sandbox, request.sid, events=events, is_initial=True)
 
     @socketio.on("sandbox_redo")
     def handle_sandbox_redo(_data=None):
@@ -1149,7 +1257,7 @@ def register_events(room_manager: RoomManager) -> None:
             return
         with sandbox.lock:
             events = sandbox.apply_sandbox_edit("redo", {})
-        _emit_sandbox_state(sandbox, request.sid, events=events)
+        _emit_sandbox_state(sandbox, request.sid, events=events, is_initial=True)
 
     @socketio.on("sandbox_reset")
     def handle_sandbox_reset(_data=None):
@@ -1158,7 +1266,7 @@ def register_events(room_manager: RoomManager) -> None:
             return
         with sandbox.lock:
             events = sandbox.apply_sandbox_edit("reset", {})
-        _emit_sandbox_state(sandbox, request.sid, events=events)
+        _emit_sandbox_state(sandbox, request.sid, events=events, is_initial=True)
 
     @socketio.on("sandbox_save")
     def handle_sandbox_save(_data=None):
@@ -1184,7 +1292,8 @@ def register_events(room_manager: RoomManager) -> None:
             except Exception as e:
                 emit("error", {"msg": f"Failed to load: {e}"})
                 return
-        _emit_sandbox_state(sandbox, request.sid)
+        # Phase 14.8-05: load is an initial frame (fresh state, no events to drain).
+        _emit_sandbox_state(sandbox, request.sid, is_initial=True)
 
     # ----- Server-side save slots (DEV-08) -------------------------------
 
@@ -1228,7 +1337,8 @@ def register_events(room_manager: RoomManager) -> None:
             except (ValueError, OSError) as e:
                 emit("error", {"msg": f"Failed to load slot: {e}"})
                 return
-        _emit_sandbox_state(sandbox, request.sid)
+        # Phase 14.8-05: slot-load is an initial frame (fresh state).
+        _emit_sandbox_state(sandbox, request.sid, is_initial=True)
 
     @socketio.on("sandbox_list_slots")
     def handle_sandbox_list_slots(_data=None):
@@ -1312,8 +1422,9 @@ def register_events(room_manager: RoomManager) -> None:
             except (ValueError, KeyError, TypeError) as e:
                 emit("error", {"msg": f"Test setup failed: {e}"})
                 return
-        # Push the new state to the client plus the test metadata.
-        _emit_sandbox_state(sandbox, request.sid)
+        # Phase 14.8-05: test-scenario load is an initial frame — push the
+        # full snapshot so the board renders before any subsequent actions.
+        _emit_sandbox_state(sandbox, request.sid, is_initial=True)
         emit("tests_scenario_loaded", {
             "id": test["id"],
             "title": test["title"],

@@ -138,7 +138,12 @@ class TestActionValidation:
     """VIEW-02: Server validates actions and rejects invalid ones."""
 
     def test_legal_action_accepted(self, app):
-        """Submitting a legal action produces a state_update (not error)."""
+        """Submitting a legal action produces an engine_events frame (not error).
+
+        Phase 14.8-05: state_update emit DELETED post-action. engine_events
+        is the sole post-action socket frame; its final_state field carries
+        the authoritative state snapshot.
+        """
         c1, c2, gs1, gs2 = _create_game(app)
         active_idx = gs1["state"]["active_player_idx"]
 
@@ -155,12 +160,12 @@ class TestActionValidation:
 
         active_client.emit("submit_action", action_data)
 
-        # Active client should get state_update
+        # Active client should get engine_events (the sole post-action emit).
         active_msgs = active_client.get_received()
-        update_events = [m for m in active_msgs if m["name"] == "state_update"]
+        update_events = [m for m in active_msgs if m["name"] == "engine_events"]
         error_events = [m for m in active_msgs if m["name"] == "error"]
         assert len(error_events) == 0, f"Should not get error: {error_events}"
-        assert len(update_events) >= 1, "Should receive state_update after legal action"
+        assert len(update_events) >= 1, "Should receive engine_events after legal action"
 
     def test_illegal_action_rejected(self, app):
         """Submitting an action NOT in legal_actions produces error."""
@@ -240,10 +245,14 @@ class TestActionValidation:
 
 
 class TestLegalActionsInUpdates:
-    """VIEW-03: state_update includes legal_actions for decision-maker."""
+    """VIEW-03: engine_events includes legal_actions for decision-maker.
+
+    Phase 14.8-05: post-action state_update emit DELETED; engine_events
+    carries the filtered state (as final_state) + legal_actions list.
+    """
 
     def test_state_update_has_legal_actions(self, app):
-        """state_update includes non-empty legal_actions for the decision-maker."""
+        """engine_events includes non-empty legal_actions for the decision-maker."""
         c1, c2, gs1, gs2 = _create_game(app)
         active_idx = gs1["state"]["active_player_idx"]
 
@@ -257,12 +266,12 @@ class TestLegalActionsInUpdates:
         # Submit first legal action
         active_client.emit("submit_action", actions_list[0])
 
-        # Both clients receive state_update
+        # Both clients receive engine_events (plan 14.8-05).
         active_msgs = active_client.get_received()
         passive_msgs = passive_client.get_received()
 
-        active_updates = [m for m in active_msgs if m["name"] == "state_update"]
-        passive_updates = [m for m in passive_msgs if m["name"] == "state_update"]
+        active_updates = [m for m in active_msgs if m["name"] == "engine_events"]
+        passive_updates = [m for m in passive_msgs if m["name"] == "engine_events"]
 
         assert len(active_updates) >= 1
         assert len(passive_updates) >= 1
@@ -272,7 +281,7 @@ class TestLegalActionsInUpdates:
         pu = passive_updates[0]["args"][0]
 
         # At least one should have non-empty legal_actions (unless game over)
-        if not au["state"].get("is_game_over", False):
+        if not au["final_state"].get("is_game_over", False):
             combined_actions = au["legal_actions"] + pu["legal_actions"]
             assert len(combined_actions) > 0, "Someone should have legal_actions"
 
@@ -295,8 +304,8 @@ class TestLegalActionsInUpdates:
         active_msgs = active_client.get_received()
         passive_msgs = passive_client.get_received()
 
-        active_updates = [m for m in active_msgs if m["name"] == "state_update"]
-        passive_updates = [m for m in passive_msgs if m["name"] == "state_update"]
+        active_updates = [m for m in active_msgs if m["name"] == "engine_events"]
+        passive_updates = [m for m in passive_msgs if m["name"] == "engine_events"]
 
         assert len(active_updates) >= 1
         assert len(passive_updates) >= 1
@@ -305,7 +314,7 @@ class TestLegalActionsInUpdates:
         pu = passive_updates[0]["args"][0]
 
         # Exactly one should be empty, one non-empty (unless game ended)
-        if not au["state"].get("is_game_over", False):
+        if not au["final_state"].get("is_game_over", False):
             # The non-decision-maker has empty legal_actions
             has_actions = [x for x in [au, pu] if len(x["legal_actions"]) > 0]
             no_actions = [x for x in [au, pu] if len(x["legal_actions"]) == 0]
@@ -319,10 +328,14 @@ class TestLegalActionsInUpdates:
 
 
 class TestBothReceiveUpdates:
-    """SERVER-03: Both players receive state_update after every action."""
+    """SERVER-03: Both players receive engine_events after every action.
+
+    Phase 14.8-05: post-action state_update emit DELETED — engine_events
+    is the sole post-action socket frame.
+    """
 
     def test_both_receive_state_update(self, app):
-        """After submit_action, BOTH clients receive state_update events."""
+        """After submit_action, BOTH clients receive engine_events frames."""
         c1, c2, gs1, gs2 = _create_game(app)
         active_idx = gs1["state"]["active_player_idx"]
 
@@ -338,11 +351,11 @@ class TestBothReceiveUpdates:
         active_msgs = active_client.get_received()
         passive_msgs = passive_client.get_received()
 
-        active_updates = [m for m in active_msgs if m["name"] == "state_update"]
-        passive_updates = [m for m in passive_msgs if m["name"] == "state_update"]
+        active_updates = [m for m in active_msgs if m["name"] == "engine_events"]
+        passive_updates = [m for m in passive_msgs if m["name"] == "engine_events"]
 
-        assert len(active_updates) >= 1, "Active player should receive state_update"
-        assert len(passive_updates) >= 1, "Passive player should receive state_update"
+        assert len(active_updates) >= 1, "Active player should receive engine_events"
+        assert len(passive_updates) >= 1, "Passive player should receive engine_events"
 
     def test_react_phase_opponent_gets_legal_actions(self, app):
         """After action, if react phase triggers, opponent gets legal_actions (at minimum PASS)."""
@@ -359,11 +372,11 @@ class TestBothReceiveUpdates:
         active_client.emit("submit_action", actions_list[0])
 
         passive_msgs = passive_client.get_received()
-        passive_updates = [m for m in passive_msgs if m["name"] == "state_update"]
+        passive_updates = [m for m in passive_msgs if m["name"] == "engine_events"]
 
         if len(passive_updates) >= 1:
             pu_data = passive_updates[0]["args"][0]
-            state = pu_data["state"]
+            state = pu_data["final_state"]
             # If we're in react phase and this player is the reactor, they should have actions
             if state.get("phase") == 1:  # TurnPhase.REACT
                 react_idx = state.get("react_player_idx")
@@ -373,7 +386,7 @@ class TestBothReceiveUpdates:
                     )
 
     def test_state_update_is_filtered(self, app):
-        """state_update contains filtered state (no opponent hand, no seed)."""
+        """engine_events final_state contains filtered state (no opponent hand, no seed)."""
         c1, c2, gs1, gs2 = _create_game(app)
         active_idx = gs1["state"]["active_player_idx"]
 
@@ -387,10 +400,10 @@ class TestBothReceiveUpdates:
         active_client.emit("submit_action", actions_list[0])
 
         msgs = active_client.get_received()
-        updates = [m for m in msgs if m["name"] == "state_update"]
+        updates = [m for m in msgs if m["name"] == "engine_events"]
         assert len(updates) >= 1
 
-        state = updates[0]["args"][0]["state"]
+        state = updates[0]["args"][0]["final_state"]
         my_idx = updates[0]["args"][0]["your_player_idx"]
         opp_idx = 1 - my_idx
 
@@ -433,13 +446,13 @@ class TestReactCardVisibility:
         active_msgs = active_client.get_received()
         passive_msgs = passive_client.get_received()
 
-        active_updates = [m for m in active_msgs if m["name"] == "state_update"]
-        passive_updates = [m for m in passive_msgs if m["name"] == "state_update"]
+        active_updates = [m for m in active_msgs if m["name"] == "engine_events"]
+        passive_updates = [m for m in passive_msgs if m["name"] == "engine_events"]
 
         if len(active_updates) >= 1 and len(passive_updates) >= 1:
             # Both should have the same grave data (graves are public info)
-            a_state = active_updates[0]["args"][0]["state"]
-            p_state = passive_updates[0]["args"][0]["state"]
+            a_state = active_updates[0]["args"][0]["final_state"]
+            p_state = passive_updates[0]["args"][0]["final_state"]
 
             # Graves should exist and be lists
             for idx in (0, 1):
@@ -458,7 +471,11 @@ def _play_to_completion(c1, c2, gs1, gs2, max_iterations=1500):
     """Play a game to completion, returning the game_over data for both clients.
 
     Each iteration: find who has legal_actions, submit the first one,
-    collect state_updates. Continue until game_over.
+    collect engine_events frames. Continue until game_over.
+
+    Phase 14.8-05: post-action state_update emit DELETED — engine_events is
+    the sole post-action frame; its top-level legal_actions field drives
+    the next submission.
 
     Returns (game_over_1, game_over_2) or raises AssertionError if stuck.
     """
@@ -494,7 +511,7 @@ def _play_to_completion(c1, c2, gs1, gs2, max_iterations=1500):
             msgs = clients[idx].get_received()
 
             for m in msgs:
-                if m["name"] == "state_update":
+                if m["name"] == "engine_events":
                     data = m["args"][0]
                     current_actions[idx] = data.get("legal_actions", [])
                 elif m["name"] == "game_over":
@@ -561,7 +578,7 @@ class TestCompleteGame:
         assert go2 is not None
 
     def test_complete_game_state_updates_throughout(self, app):
-        """During gameplay, every action produces state_updates for both players."""
+        """During gameplay, every action produces engine_events frames for both players."""
         c1, c2, gs1, gs2 = _create_game(app)
 
         clients = {gs1["your_player_idx"]: c1, gs2["your_player_idx"]: c2}
@@ -593,7 +610,7 @@ class TestCompleteGame:
             for idx in (0, 1):
                 msgs = clients[idx].get_received()
                 for m in msgs:
-                    if m["name"] == "state_update":
+                    if m["name"] == "engine_events":
                         got_update[idx] = True
                         data = m["args"][0]
                         current_actions[idx] = data.get("legal_actions", [])
@@ -607,7 +624,7 @@ class TestCompleteGame:
                 break
 
         assert actions_submitted > 0, "Should have submitted at least one action"
-        assert both_received_count > 0, "Both clients should receive state_updates"
+        assert both_received_count > 0, "Both clients should receive engine_events frames"
         # Every action should produce updates for both
         assert both_received_count == actions_submitted, (
             f"Expected {actions_submitted} rounds where both received updates, "

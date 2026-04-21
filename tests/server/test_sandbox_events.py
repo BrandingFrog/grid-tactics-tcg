@@ -271,6 +271,10 @@ def test_sandbox_apply_action_legal_draw(client) -> None:
     PASS is not automatically legal during ACTION phase (empty state has
     zero legal actions). The sandbox owner seeds a deck card then applies
     the first legal action the engine enumerates.
+
+    Phase 14.8-05: post-action sandbox_state emit DELETED — engine_events
+    is the sole post-action socket frame, and its top-level undo_depth /
+    redo_depth fields replace the sandbox_state wrapper for that metadata.
     """
     client.emit("sandbox_create")
     _drain(client)
@@ -286,9 +290,11 @@ def test_sandbox_apply_action_legal_draw(client) -> None:
     received = _emit_and_drain(client, "sandbox_apply_action", legal[0])
     err = _find(received, "error")
     assert err is None, f"unexpected error: {err}"
-    state_after = _find(received, "sandbox_state")
-    assert state_after is not None
-    assert state_after["undo_depth"] >= 1
+    # Plan 14.8-05: no sandbox_state post-action.
+    assert _find(received, "sandbox_state") is None
+    engine_events_after = _find(received, "engine_events")
+    assert engine_events_after is not None
+    assert engine_events_after["undo_depth"] >= 1
 
 
 def test_sandbox_apply_illegal_action_returns_error(client) -> None:

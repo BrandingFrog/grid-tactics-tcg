@@ -127,16 +127,22 @@ def get_enforcement_mode() -> str:
 
     Reads env var ``CONTRACT_ENFORCEMENT_MODE`` once and caches. Tests can
     flip via ``monkeypatch.setenv(...) + _reset_mode_cache()``.
+
+    Phase 14.8-05: default is now 'shadow' (was 'off'). Production server
+    logs violations without raising — observability without rejection risk.
+    CI explicitly sets CONTRACT_ENFORCEMENT_MODE=strict via tests/conftest.py
+    so test runs fail on any out-of-phase mutation. Set to 'off' explicitly
+    to disable entirely (e.g. for legacy debugging tools).
     """
     global _MODE_CACHE
     if _MODE_CACHE is not None:
         return _MODE_CACHE
-    raw = os.environ.get("CONTRACT_ENFORCEMENT_MODE", "off").strip().lower()
+    raw = os.environ.get("CONTRACT_ENFORCEMENT_MODE", "shadow").strip().lower()
     if raw not in _VALID_MODES:
         logger.warning(
-            "Invalid CONTRACT_ENFORCEMENT_MODE=%r — defaulting to 'off'", raw
+            "Invalid CONTRACT_ENFORCEMENT_MODE=%r — defaulting to 'shadow'", raw
         )
-        raw = "off"
+        raw = "shadow"
     _MODE_CACHE = raw
     return _MODE_CACHE
 
