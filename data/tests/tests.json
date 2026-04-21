@@ -612,6 +612,40 @@
           "player_idx": 0
         }
       ]
+    },
+    {
+      "id": "ratchanter-activated-ability-eventqueue",
+      "title": "14.8-04c: Ratchanter activated ability — tutor → conjure_deploy modal chain",
+      "instructions": "GOAL: verify the Ratchanter 'Conjure Common Rat' activated ability drives two sequential pending modals (pending_tutor → conjure_deploy) through the unified eventQueue without visual glitches.\n\nSetup state: P1 has a Ratchanter on row 1 col 2 and 3 mana (enough to cover the 2-mana activation). P1's deck contains 3 Common Rats (the tutor pool). P1 also has one existing Common Rat on row 2 col 1 so the buff step has a target. P1 is active.\n\n1. Click the Ratchanter minion tile to select it. The activated ability button ('Conjure Common Rat — 2 mana') should appear on the minion panel or context menu.\n2. Click the activate button. Expected sequence: the buff fires first (existing Rat on row 2 col 1 gets +1🗡️/+1🤍 — popup '+1/+1' or similar on its tile). Then a pending_tutor modal opens showing the 3 Rats from the deck — pick one.\n3. Pick the first Rat card in the tutor modal. The tutor modal closes; a conjure_deploy tile picker opens (green-highlighted friendly-zone tiles).\n4. Click any green friendly-zone tile. A new Common Rat appears there; mana drops to 1; turn stays with P1 (activated ability doesn't consume the action).",
+      "expected": "The two modals fire SEQUENTIALLY, each gating the event queue until resolved: tutor opens first; after the pick the tutor closes + conjure_deploy picker opens immediately; after the tile pick the Rat is deployed. No visual beats overlap — the buff popup on the existing Rat finishes BEFORE the tutor modal opens; the tutor closes cleanly before the deploy-tile picker appears; the new Rat summon animation plays AFTER the deploy tile click. The eventQueue scrim (very faint fixed overlay) may be visible while modals are open but does not block modal clicks. No console errors. IF this scenario appears to bypass the modal (Rat appears instantly without tile-picker) that is the engine-unwired conjure_deploy issue documented in 04b SUMMARY — mark it N/A and note the engine still emits pending_* state fields but not EVT_PENDING_MODAL_OPENED.",
+      "setup": [
+        {"op": "reset"},
+        {"op": "set_player", "player_idx": 0, "field": "current_mana", "value": 3},
+        {"op": "set_player", "player_idx": 0, "field": "max_mana", "value": 3},
+        {"op": "place", "player_idx": 0, "card_id": "ratchanter", "row": 1, "col": 2},
+        {"op": "place", "player_idx": 0, "card_id": "rat", "row": 2, "col": 1},
+        {"op": "add_to_zone", "player_idx": 0, "card_id": "rat", "zone": "deck_top"},
+        {"op": "add_to_zone", "player_idx": 0, "card_id": "rat", "zone": "deck_top"},
+        {"op": "add_to_zone", "player_idx": 0, "card_id": "rat", "zone": "deck_top"},
+        {"op": "set_active", "player_idx": 0}
+      ]
+    },
+    {
+      "id": "tree-wyrm-react-eventqueue",
+      "title": "14.8-04c: Tree Wyrm react on opponent end-of-turn — react window → tutor chain",
+      "instructions": "GOAL: verify the multi-purpose Tree Wyrm react (opponent_ends_turn condition, 1-mana discard for tutor) plays cleanly through the eventQueue — BEFORE_END_OF_TURN react window opens, P1 plays Tree Wyrm from hand as a react, spell stage shows it, tutor modal opens for up to 2 Tree Wyrms from deck, all beats discrete.\n\nSetup state: P1 has a Tree Wyrm in hand + 1 mana. P1's deck contains 2 additional Tree Wyrms (tutor targets). P2 is active and has just the auto-drawn card in hand (nothing to play — will immediately PASS).\n\n1. Confirm Controlling = P2 (right sidebar). Click the PASS button in P2's controls (or if PASS requires an action first, toggle via the sidebar cheat). This emits P2's turn-end signal — the engine opens BEFORE_END_OF_TURN react window targeted at P1.\n2. Toggle Controlling → P1. P1's hand should show Tree Wyrm highlighted as a legal react (cyan/teal border on react-face hover).\n3. Click Tree Wyrm in P1's hand. The react-confirm prompt appears. Click again to confirm.\n4. Spell stage opens showing Tree Wyrm (react face). P2 has no counter-react so the window auto-drains.\n5. React resolves: tutor modal opens offering up to 2 Tree Wyrms from P1's deck. Pick 1 or 2. Close the picker (or pick until exhausted).\n6. Turn flips to P1 (since P2's turn ended and their react window is now drained). TURN 3 / PLAYER 1 banner blooms.",
+      "expected": "All beats discrete in order: (a) P2 PASS → BEFORE_END_OF_TURN react window opens, (b) Tree Wyrm react-arm prompt → confirm, (c) Tree Wyrm animates into spell stage LEFT slot, (d) window auto-drains with 👍, (e) tutor modal opens for Tree Wyrm picks, (f) picks close the modal, (g) Tree Wyrm from P1's hand goes to P1's graveyard + picked Tree Wyrms go to P1's hand, (h) spell stage fades out, (i) turn flips to P1 with TURN banner, (j) no console errors. IF Tree Wyrm does not appear as a legal react on P2's end-of-turn (engine-unwired for opponent_ends_turn react_condition on the multi-purpose minion card type): mark N/A and note the card_loader behavior. Alternative fallback: play Tree Wyrm as a normal 5-mana minion to verify the Summon: Draw trigger + spell_stage + minion_summoned + card_drawn event sequence plays cleanly — also covers eventQueue pipeline for the minion face.",
+      "setup": [
+        {"op": "reset"},
+        {"op": "set_player", "player_idx": 0, "field": "current_mana", "value": 1},
+        {"op": "set_player", "player_idx": 0, "field": "max_mana", "value": 1},
+        {"op": "set_player", "player_idx": 1, "field": "current_mana", "value": 1},
+        {"op": "set_player", "player_idx": 1, "field": "max_mana", "value": 1},
+        {"op": "add_to_hand", "player_idx": 0, "card_id": "tree_wyrm"},
+        {"op": "add_to_zone", "player_idx": 0, "card_id": "tree_wyrm", "zone": "deck_top"},
+        {"op": "add_to_zone", "player_idx": 0, "card_id": "tree_wyrm", "zone": "deck_top"},
+        {"op": "set_active", "player_idx": 1}
+      ]
     }
   ]
 }
