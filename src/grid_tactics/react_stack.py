@@ -461,9 +461,23 @@ def _resolve_trigger_and_open_react_window(
     effect ended the game, or pending_death_target set if a click-target
     modal is open).
     """
-    # Phase 14.8-01: derive contract_source from the trigger_kind string
-    # (e.g. "on_death" → "trigger:on_death").
-    _trigger_source = f"trigger:{trigger.trigger_kind}"
+    # Phase 14.8-01/02: derive contract_source from the trigger_kind string.
+    # PendingTrigger.trigger_kind uses short labels ("start_of_turn",
+    # "end_of_turn") that map to the long-form TriggerType names used by
+    # PHASE_CONTRACTS keys ("on_start_of_turn", "on_end_of_turn"). The
+    # plan-01 short-form tag "trigger:end_of_turn" was a miss — corrected
+    # in plan 14.8-02 via this lookup so the contract source matches the
+    # PHASE_CONTRACTS key. on_death and on_summon_effect are already
+    # long-form so they pass through unchanged.
+    _TRIGGER_KIND_TO_SOURCE = {
+        "start_of_turn": "trigger:on_start_of_turn",
+        "end_of_turn": "trigger:on_end_of_turn",
+        "on_death": "trigger:on_death",
+        "on_summon_effect": "trigger:on_summon",
+    }
+    _trigger_source = _TRIGGER_KIND_TO_SOURCE.get(
+        trigger.trigger_kind, f"trigger:{trigger.trigger_kind}"
+    )
     assert_phase_contract(state, _trigger_source)
     from grid_tactics.effect_resolver import (
         resolve_effect,
@@ -1128,16 +1142,16 @@ def resolve_summon_declaration_originator(
     a minion there during the react chain), the summon fizzles silently.
     Proper spec §7 fizzle rule lands in 14.7-06.
     """
-    # Phase 14.8-01: Window A resolves during REACT (the originator was
-    # pushed from action:play_card and is now being drained from the
-    # react stack). Tag with action:play_card to match the action that
-    # initiated the chain — the resolve happens at REACT phase, but the
-    # contract source identifies the AUTHORIZING action. (The phase
-    # check still gates: action:play_card allows ACTION; this resolve
-    # runs at REACT, which means in strict mode the assertion would
-    # surface — see plan 14.8-02 for the disposition. For the
-    # foundation plan with mode=off, no behavior change.)
-    assert_phase_contract(state, "action:play_card")
+    # Phase 14.8-02 disposition (smoking-gun #1 from 14.8-01): Window A
+    # resolves during REACT (the originator was pushed from action:play_card
+    # and is now being drained from the react stack via LIFO). The
+    # initiating action:play_card contract was already satisfied at push
+    # time; the actual mutation here (landing the minion) is engine-driven
+    # by the drain step, so it gets a SYSTEM source. Re-tagged from
+    # action:play_card → system:resolve_summon_declaration to match the
+    # new PHASE_CONTRACTS entry that allows REACT (the only legal phase
+    # for a Window A resolution).
+    assert_phase_contract(state, "system:resolve_summon_declaration")
     from grid_tactics.minion import MinionInstance
 
     card_def = library.get_by_id(entry.card_numeric_id)

@@ -283,16 +283,15 @@ def _fire_trigger_for_card(state, card_def, effect, library):
             state2, instance_id = _put_minion_on_board(state, card_def, library)
             minion = state2.get_minion(instance_id)
             return resolve_effects_for_trigger(
-                state2, card_def, minion, trig, library,
+                state2, trig, minion, library,
                 contract_source=f"trigger:{trig.name.lower()}",
             )
         else:
-            # Magic / react cards firing as triggers: use a sentinel position.
-            from grid_tactics.enums import PlayerSide
-            return resolve_effects_for_trigger(
-                state, card_def, None, trig, library,
-                contract_source=f"trigger:{trig.name.lower()}",
-            )
+            # Magic / react cards firing as triggers: skip — the helper
+            # requires a minion source. ON_PLAY for magic cards fires
+            # through _cast_magic, which has its own contract gate
+            # exercised by TestActionInvariants.
+            return state
     # AURA / PASSIVE: no fire path; AURA is read-time only.
     return state
 

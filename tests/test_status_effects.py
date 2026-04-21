@@ -42,7 +42,7 @@ def _make_lib() -> CardLibrary:
     })
 
 
-def _make_state(minions, active_idx=0) -> GameState:
+def _make_state(minions, active_idx=0, phase=TurnPhase.ACTION) -> GameState:
     board = Board.empty()
     for m in minions:
         board = board.place(m.position[0], m.position[1], m.instance_id)
@@ -54,7 +54,7 @@ def _make_state(minions, active_idx=0) -> GameState:
         board=board,
         players=(p1, p2),
         active_player_idx=active_idx,
-        phase=TurnPhase.ACTION,
+        phase=phase,
         turn_number=1,
         seed=42,
         minions=tuple(minions),
@@ -118,7 +118,11 @@ def test_burn_ticks_only_on_owners_turn_and_persists():
         instance_id=0, card_numeric_id=0, owner=PlayerSide.PLAYER_1,
         position=(2, 2), current_health=20, is_burning=True,
     )
-    state = _make_state([m], active_idx=0)
+    # Plan 14.8-02: tick_status_effects asserts status:burn ⇒ START_OF_TURN.
+    # The function only ever runs at START_OF_TURN in production (from
+    # enter_start_of_turn). Use the proper phase here so the contract
+    # assertion is satisfied.
+    state = _make_state([m], active_idx=0, phase=TurnPhase.START_OF_TURN)
 
     s1 = tick_status_effects(state, lib)
     m1 = s1.get_minion(0)
@@ -140,6 +144,6 @@ def test_burn_lethal_kills_minion():
         instance_id=0, card_numeric_id=0, owner=PlayerSide.PLAYER_1,
         position=(2, 2), current_health=BURN_DAMAGE, is_burning=True,
     )
-    state = _make_state([m], active_idx=0)
+    state = _make_state([m], active_idx=0, phase=TurnPhase.START_OF_TURN)
     new_state = tick_status_effects(state, lib)
     assert new_state.get_minion(0) is None

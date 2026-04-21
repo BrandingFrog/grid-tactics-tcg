@@ -303,13 +303,14 @@ def test_get_enforcement_mode_caches(monkeypatch):
 # ---------------------------------------------------------------------------
 
 
-def test_strict_mode_off_in_default_test_environment(monkeypatch):
-    """Sanity: CI / test env doesn't accidentally enable strict.
+def test_module_default_mode_is_off_when_env_var_unset(monkeypatch):
+    """Sanity: when the env var is fully UNSET, the module default is "off".
 
-    This catches the case where CONTRACT_ENFORCEMENT_MODE leaked into the
-    pytest environment via a developer's shell. With mode=strict on by
-    default, the entire 500+ test suite would break en masse — far too
-    blunt a signal. This test ensures pytest sessions start at mode=off.
+    Plan 14.8-02 changed conftest.py to default the env var to "shadow"
+    for the test session — but the underlying module-level default (when
+    no env var is set at all) must still be "off" to preserve back-compat
+    for any consumer that imports the module without the test fixture.
+    This test deletes the env var and verifies the off fallback still works.
     """
     monkeypatch.delenv("CONTRACT_ENFORCEMENT_MODE", raising=False)
     phase_contracts._reset_mode_cache()

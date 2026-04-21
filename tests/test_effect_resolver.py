@@ -1308,6 +1308,14 @@ class TestFizzleRulePhase14_7_06:
             position=(2, 3), current_health=5,
         )
         state = _make_state_with_minions([source, neighbor])
+        # Plan 14.8-02: phase must be END_OF_TURN for trigger:on_end_of_turn
+        # contract to be satisfied (the helper resolve_effects_for_trigger
+        # asserts the phase contract for the firing trigger). The fizzle
+        # behavior under test is orthogonal to the phase — we just need
+        # the state in the legal phase for the trigger kind being fired.
+        from dataclasses import replace as _dc_replace
+        from grid_tactics.enums import TurnPhase as _TurnPhase
+        state = _dc_replace(state, phase=_TurnPhase.END_OF_TURN)
         new_state = resolve_effects_for_trigger(
             state, TriggerType.ON_END_OF_TURN, source, lib,
         )

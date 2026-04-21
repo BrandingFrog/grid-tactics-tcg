@@ -179,8 +179,18 @@ PHASE_CONTRACTS: dict[str, frozenset[TurnPhase]] = {
     "trigger:on_damaged": frozenset({_ACTION}),
     "trigger:on_move": frozenset({_ACTION}),
     "trigger:on_discard": frozenset({_ACTION}),
-    "trigger:on_start_of_turn": frozenset({_START}),
-    "trigger:on_end_of_turn": frozenset({_END}),
+    # ON_START_OF_TURN / ON_END_OF_TURN: primary firing happens in their
+    # natural phase (START_OF_TURN / END_OF_TURN). Plan 14.8-02 widening:
+    # REACT is also legal because when the simultaneous-trigger picker
+    # modal opens (2+ start/end triggers from same player), the engine
+    # transitions to REACT to surface the picker UI; the user-submitted
+    # TRIGGER_PICK action then resumes _resolve_trigger_and_open_react_window
+    # while phase=REACT. Without REACT in the allowed set, every
+    # picker-resumed trigger drain warns. The assertion still gates against
+    # ACTION (the trigger can never legitimately fire from main-phase
+    # action handling).
+    "trigger:on_start_of_turn": frozenset({_REACT, _START}),
+    "trigger:on_end_of_turn": frozenset({_REACT, _END}),
     # AURA is read-time only — never mutates per orchestrator decision
     # #7. We include the entry so any defensive code that accidentally
     # tags `aura` doesn't trip the unknown-source path. Auras MUST NOT
@@ -232,16 +242,31 @@ PHASE_CONTRACTS: dict[str, frozenset[TurnPhase]] = {
     # 10 entries
     # ------------------------------------------------------------------
     # Turn flip is the END→START boundary event — fires AT the
-    # transition, both adjacent phases legal.
-    "system:turn_flip": frozenset({_END, _START}),
-    # Called from turn flip OR from initial setup (which can be at any
-    # phase — the engine bootstraps in END_OF_TURN before the first
-    # flip).
-    "system:enter_start_of_turn": frozenset({_START, _END}),
+    # transition. Plan 14.8-02 widening: REACT is also legal because
+    # close_end_react_and_advance_turn clears the react bookkeeping
+    # (react_stack=(), react_player_idx=None, react_context=None) but
+    # does NOT reset state.phase before calling _close_end_of_turn_and_flip,
+    # so the flip helper sees state.phase=REACT on entry and immediately
+    # transitions to ACTION (then enter_start_of_turn flips to START_OF_TURN).
+    # Without REACT in the allowed set, every end-of-turn-via-react path
+    # surfaces as a violation.
+    "system:turn_flip": frozenset({_REACT, _END, _START}),
+    # Called from turn flip (which has just set phase=ACTION as a transient)
+    # OR from initial setup (which bootstraps in END_OF_TURN before the
+    # first flip). Plan 14.8-02 widening: ACTION is added because
+    # _close_end_of_turn_and_flip sets phase=ACTION as a transient before
+    # enter_start_of_turn is called (line 885 of react_stack.py); without
+    # ACTION the assertion fires on every turn flip.
+    "system:enter_start_of_turn": frozenset({_ACTION, _START, _END}),
     # Called from ACTION when the active player ends their turn (no
     # legal actions / passes), or from END_OF_TURN when re-entering
-    # after a react closes.
-    "system:enter_end_of_turn": frozenset({_ACTION, _END}),
+    # after a react closes. Plan 14.8-02 widening: REACT is added
+    # because resolve_react_stack tail dispatch (line 1706) calls
+    # enter_end_of_turn AFTER clearing the react bookkeeping but
+    # BEFORE the phase has been reset — at that moment state.phase
+    # is still REACT. This is the documented smoking-gun #2 from
+    # plan 14.8-01.
+    "system:enter_end_of_turn": frozenset({_ACTION, _REACT, _END}),
     # Any phase can enter a react window (action triggers it, start /
     # end triggers open windows after their drain).
     "system:enter_react": _ALL_PHASES,
@@ -258,6 +283,16 @@ PHASE_CONTRACTS: dict[str, frozenset[TurnPhase]] = {
     # the priority queue from any phase that can host a death).
     "system:enqueue_triggers": frozenset({_ACTION, _START, _END}),
     "system:drain_triggers": _ALL_PHASES,
+    # Plan 14.8-02: Summon compound-window resolvers (Window A → Window B
+    # per spec §4.2). resolve_summon_declaration_originator and
+    # resolve_summon_effect_originator are CALLED from inside
+    # resolve_react_stack's LIFO drain — the originator was pushed during
+    # the action:play_card resolution but its Window A / Window B
+    # resolution happens at REACT phase. Tagged with system: because the
+    # mutation is engine-driven (drain step) not action-driven; the
+    # initiating action's contract has already been satisfied at push
+    # time. This is documented smoking-gun #1 from plan 14.8-01.
+    "system:resolve_summon_declaration": frozenset({_REACT}),
 }
 
 # ---------------------------------------------------------------------------

@@ -1,6 +1,28 @@
 import importlib.util
+import os
 
 import pytest
+
+# ---------------------------------------------------------------------------
+# Phase 14.8-02: Default CONTRACT_ENFORCEMENT_MODE to "shadow" for ALL test
+# runs unless an individual test overrides via monkeypatch.setenv.
+#
+# Shadow mode logs PhaseContractViolation WARNINGs for any state-mutating
+# call site that fires its assertion in a disallowed TurnPhase, but does
+# NOT raise. The dedicated invariant test (test_phase_contract_invariants.py)
+# actively asserts zero violations across the full card library × every
+# action × every phase × every pending modal — so any new code path that
+# mistags is caught at PR time.
+#
+# Plan 14.8-05 will eventually flip this to "strict" — by which point all
+# call sites are correctly tagged and any violation raises immediately.
+#
+# Individual tests can still opt into strict / off via the standard
+# monkeypatch.setenv pattern (see tests/test_phase_contracts.py for
+# examples). The env var is set BEFORE pytest collection so the cached
+# mode in phase_contracts.py picks it up on first import.
+# ---------------------------------------------------------------------------
+os.environ.setdefault("CONTRACT_ENFORCEMENT_MODE", "shadow")
 
 from grid_tactics.enums import PlayerSide, TurnPhase
 
