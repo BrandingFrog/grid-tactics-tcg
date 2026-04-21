@@ -1657,12 +1657,43 @@ def _play_react(
     # Switch react_player_idx to other player (counter-react opportunity, D-05)
     new_react_player_idx = 1 - react_idx
 
-    return replace(
+    new_state = replace(
         state,
         players=new_players,
         react_stack=new_stack,
         react_player_idx=new_react_player_idx,
     )
+
+    # Phase 14.8-05c: emit a fresh EVT_REACT_WINDOW_OPENED for the
+    # counter-react window. Without this, the client's spell stage
+    # doesn't know a new react window opened for the OTHER player, so
+    # the 3-deep chain breaks at step 3: P2 plays Prohibition to
+    # counter Acidic Rain, the counter-react window opens for P1, but
+    # the client never hears about it and P1's Prohibition stays non-
+    # playable. react_player_idx DID flip server-side but the client
+    # only sees the stack grow — no new window event = no new UI state.
+    if event_collector is not None:
+        ctx = (
+            new_state.react_context.name
+            if new_state.react_context is not None
+            else None
+        )
+        return_phase = (
+            new_state.react_return_phase.name
+            if new_state.react_return_phase is not None
+            else TurnPhase.ACTION.name
+        )
+        event_collector.collect(
+            EVT_REACT_WINDOW_OPENED,
+            "system:enter_react",
+            {
+                "react_context": ctx,
+                "react_player_idx": new_react_player_idx,
+                "return_phase": return_phase,
+            },
+        )
+
+    return new_state
 
 
 def resolve_react_stack(
