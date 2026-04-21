@@ -2459,9 +2459,11 @@ var animRunning = false;
 var animatingTiles = {};
 
 // ============================================================
-// Phase 14.8-04a: Unified Event Queue (replaces _sandboxFrameQueue,
-// _pendingPostStageFrame, _pendingTriggerBlip, _pendingTurnBanner —
-// all four deletions land in plan 04b once all 19 handlers are wired.)
+// Phase 14.8-04a/04b: Unified Event Queue. The 4 ad-hoc defer/buffer
+// gates (sandbox frame queue, pending-post-stage frame, pending trigger
+// blip, pending turn banner) have been DELETED in plan 04b — every
+// animation + DOM mutation now flows through this queue's 19 slot
+// handlers.
 //
 // In plan 04a the eventQueue runs ALONGSIDE the legacy snapshot path
 // (state_update / sandbox_state). Snapshot still updates DOM; eventQueue
@@ -2630,18 +2632,12 @@ function playInstant(ev, done) {
 
 // ----- 10 simpler slot handlers (Task 2) ---------------------------
 //
-// IMPORTANT 04a posture: the legacy snapshot path (state_update /
-// sandbox_state → applyStateFrame → deriveAnimationJob) is still alive
-// and runs its OWN animations for these event types. Server emits
-// state_update FIRST and engine_events SECOND in the same socket flush,
-// so the snapshot applies state (and queues its animation job) BEFORE
-// the eventQueue handler fires. Event-driven jobs enqueued here APPEND
-// to the same animQueue and run SEQUENTIALLY — not in parallel. The
-// resulting "N+1 animations per action" posture is the accepted
-// tradeoff for a safe migration (plan failure_handling). Plan 04b
-// suppresses the snapshot-driven animations (via applyStateFrameSelective
-// or equivalent) so the event-driven ones become primary, and plan 05
-// deletes the snapshot path entirely.
+// Post-04b posture: the legacy snapshot path (state_update / sandbox_state
+// → applyStateFrame → derive-* helpers) is still alive but no longer drives
+// animations. The 4 ad-hoc gates that used to pace per-frame visuals have
+// been deleted; every animation now flows through the eventQueue. The
+// snapshot path remains as a pure state-cache for reconnect / initial-join
+// / error-recovery parity; plan 14.8-05 deletes it entirely.
 //
 // For event-driven jobs we pass `stateAfter = gameState` so the existing
 // playSummonAnimation/playMoveAnimation wrappers don't crash on an
@@ -3877,31 +3873,15 @@ function _applyStateFrameImmediate(frame, legal, prevState) {
         }
     }
 
-    // Phase 14.7-09: Turn banner — fire when turn_number advances (or on
-    // initial join when prev is absent). Non-blocking: banner is a pure CSS
-    // overlay that fades out on its own, never gates the AnimationQueue.
-    try {
-        var prevTurn = prevState && typeof prevState.turn_number === 'number'
-            ? prevState.turn_number : 0;
-        var nextTurn = frame && typeof frame.turn_number === 'number'
-            ? frame.turn_number : 0;
-        if (nextTurn > 0 && nextTurn > prevTurn) {
-            _showTurnBannerOrDefer(nextTurn, frame.active_player_idx);
-        }
-    } catch (e) { /* defensive — banner is purely visual */ }
-
-    // Phase 14.7-09: trigger-blip animation for Start/End/Death triggers.
-    // The engine sets state.last_trigger_blip on exactly one frame (cleared
-    // by resolve_action on the next call). We fire a fire-and-forget
-    // animation here — the AnimationQueue is NOT involved because the blip
-    // is a CSS-only overlay and state progression must continue regardless.
-    try {
-        var newBlip = frame && frame.last_trigger_blip;
-        var prevBlip = prevState && prevState.last_trigger_blip;
-        if (newBlip && newBlip !== prevBlip) {
-            _fireTriggerBlipAnimation(newBlip);
-        }
-    } catch (e) { /* defensive — blip is purely visual */ }
+    // Phase 14.8-04b: turn banner + trigger blip are now OWNED by the
+    // eventQueue (playTurnFlipped + playTriggerBlip). The engine emits
+    // EVT_TURN_FLIPPED / EVT_TRIGGER_BLIP events on the same socket frame
+    // as state_update; the eventQueue handlers fire the visuals at the
+    // server-declared animation_duration_ms pacing. The inline dispatch
+    // paths that used to fire here have been DELETED — the legacy
+    // last_trigger_blip field is still dual-written by the engine per
+    // plan 03a but is no longer read by the client (plan 14.8-05 deletes
+    // the field write).
 
     logStateDiff(prevState, gameState);
     renderGame();
@@ -3958,89 +3938,29 @@ function onGameStart(data) {
     renderGame();
 }
 
-// Phase 14.3: onStateUpdate no longer applies state directly. It diffs
-// prev vs next to derive an animation job, enqueues it, and lets the
-// AnimationQueue call applyStateFrame() when the animation completes.
-// Non-action frames (initial join, react open/close, lobby/meta frames)
-// bypass the queue and apply immediately so UIs stay responsive.
+// Phase 14.8-04b: onStateUpdate is now a pure snapshot-cache commit.
+// Every animation (summon, move, attack, draw, card fly, HP popup,
+// spell stage, turn banner, trigger blip, etc.) is owned by the
+// eventQueue's slot handlers. onStateUpdate only applies the authoritative
+// state frame so the board renders correctly on reconnect / initial-
+// join / post-reset and so spectator god-mode flags stay in sync.
+//
+// The prev→next derive-* helpers (deriveAnimationJob, deriveCardFlyJobs,
+// deriveDrawJobs, derivePlayerHpDeltaAnims, detectSpellCast,
+// detectReactWindowClose, detectSpellStageClose) are marked DEAD CODE
+// below — plan 14.8-05 deletes them together with state_update /
+// sandbox_state Socket.IO subscriptions.
 function onStateUpdate(data) {
     var next = data.state;
     var nextLegal = data.legal_actions;
-    var prev = gameState;
-
-    // First frame or no prior state: apply immediately, no animation.
-    if (!prev) {
-        applyStateFrame(next, nextLegal);
-        return;
-    }
-
-    // Derive a job from the prev->next diff.
-    var job = deriveAnimationJob(prev, next);
-
-    // Phase 14.5-06: detect hand-size increases (draws/tutors/conjures) and
-    // build pure-visual draw animation jobs. These run AFTER state is applied
-    // so their target DOM (hand slot / opp card-back) already exists.
-    var drawJobs = deriveDrawJobs(prev, next);
-
-    // Card-fly jobs (hand → grave / exhaust). Derived BEFORE apply so we can
-    // capture the live hand-slot rect of each outgoing card — after
-    // applyStateFrame runs, the slot is gone.
-    var flyJobs = deriveCardFlyJobs(prev, next);
-
-    // Spell-cast center stage. Detect before apply because we look at the
-    // grave/react_stack diff; trigger after a short tick so the new frame
-    // is on screen first.
-    var spellCast = detectSpellCast(prev, next);
-    if (spellCast != null) {
-        setTimeout(function() { _showSpellStage(spellCast.nid, spellCast.playerIdx); }, 0);
-    } else if (detectReactWindowClose(prev, next)) {
-        setTimeout(_spellStageOnReactClosed, 0);
-    }
-
-    var hpJobs = derivePlayerHpDeltaAnims(prev, next);
-
-    // Non-action transitions (noop with no meaningful diff) bypass the queue
-    // entirely. This keeps react-window open/close, tutor-modal open/close,
-    // turn-change banners, and passive state refreshes instantaneous.
-    if (!job || job.type === 'noop') {
-        applyStateFrame(next, nextLegal);
-        // State already applied; each draw job is pure-visual.
-        for (var fi = 0; fi < flyJobs.length; fi++) {
-            enqueueAnimation(flyJobs[fi]);
-        }
-        for (var hi = 0; hi < hpJobs.length; hi++) {
-            enqueueAnimation(hpJobs[hi]);
-        }
-        for (var i = 0; i < drawJobs.length; i++) {
-            var dj = drawJobs[i];
-            dj.stateApplied = true;
-            enqueueAnimation(dj);
-        }
-        return;
-    }
-
-    // Main action job runs first (applies state at its own rhythm). Draw
-    // jobs run after with state already applied by the main branch.
-    job.stateAfter = next;
-    job.legalActionsAfter = nextLegal;
-    enqueueAnimation(job);
-    for (var fj = 0; fj < flyJobs.length; fj++) {
-        enqueueAnimation(flyJobs[fj]);
-    }
-    for (var hj = 0; hj < hpJobs.length; hj++) {
-        enqueueAnimation(hpJobs[hj]);
-    }
-    for (var j = 0; j < drawJobs.length; j++) {
-        var dj2 = drawJobs[j];
-        dj2.stateApplied = true;
-        enqueueAnimation(dj2);
-    }
+    applyStateFrame(next, nextLegal);
 }
 
+// DEAD CODE post-14.8-04b — plan 14.8-05 will delete
 // Diff player HP across a state update and enqueue a floating damage
-// popup over each player whose HP dropped. Triggered for any cause
-// (hp_cost spells, fatigue, minion-attack-on-player, etc.) so every
-// life-total hit is visible.
+// popup over each player whose HP dropped. Replaced by
+// playPlayerHpChange slot handler (plan 04a). Retained as reference
+// until plan 05 deletes the snapshot path entirely.
 function derivePlayerHpDeltaAnims(prev, next) {
     var jobs = [];
     if (!prev || !next || !prev.players || !next.players) return jobs;
@@ -4383,390 +4303,17 @@ function _playSacPortal(job, done) {
 // the animation; this function just drops a DOM node and schedules its
 // removal after the animation finishes. Safe to call concurrently with
 // the AnimationQueue; the banner never gates game state.
-var _lastBannerTurnKey = null;
-var _pendingTurnBanner = null;  // { turnNumber, activePlayerIdx } when deferred behind the react window
-
-// Phase 14.7-09 (paladin-heal-during-rat-react fix): a trigger blip that
-// arrived in the SAME wire frame that closed the spell stage. The engine
-// collapses "react_stack drains → enter_end_of_turn → fire trigger → open
-// trigger react" into a single resolve_action call, so the closing-cards
-// frame and the trigger-blip frame are the same frame. To preserve the
-// user-expected ordering (close → blip), we defer the blip until the stage
-// has fully hidden and flush it from _hideSpellStage. Cleared by the flush.
-var _pendingTriggerBlip = null;
-
-// Phase 14.7-09 (paladin-heal-during-rat-react v2 fix): the ENTIRE state
-// commit (sandboxState write + renderSandbox call) of a frame that arrives
-// while the spell stage is currently visible is held here until the stage
-// hides. Without this, F2 (the post-drain frame for paladin heal) commits
-// the new HP=32 to the paladin tile WHILE the rat react stage is still up
-// (mid resolve-pop / mid exit-fade), so the user sees HP change ~2s before
-// the trigger-blip pulse ever fires. With the deferral, _hideSpellStage
-// commits the state THEN fires the blip — the user sees stage close →
-// pulse + glyph → HP click. Stored as { payload, newBlip, firedBanner,
-// flyJobs, hpJobsSb, actionJob }; cleared by _flushPendingPostStageFrame.
-var _pendingPostStageFrame = null;
-
-// === Sandbox frame queue (Phase 14.7-09 paladin-heal fix) ====================
-// Sandbox apply_action emits one sandbox_state per intermediate state during
-// trivial-react auto-drain (rat deploy → react open → react close →
-// end_of_turn → trigger fire → trigger react open/close → turn flip). With
-// async_mode="threading" all of these flush before the JS event loop yields,
-// so without buffering the browser only paints the LAST frame and the spell
-// stage replays the chain over the already-committed post-flip state.
 //
-// _sandboxFrameQueue holds inbound payloads in receive order. _drainSandboxFrameQueue
-// applies the head only when (a) Date.now() >= _sandboxNextApplyAt AND (b) the
-// spell stage isn't currently animating. Each frame application pushes
-// _sandboxNextApplyAt forward by the duration of the longest visual that
-// frame triggers; the next drain self-schedules via setTimeout if the
-// timestamp hasn't been reached yet. Single-frame paths (cheats / undo /
-// set_active / initial connect) hit the queue once with no held visuals
-// and drain immediately on the same tick — snappiness preserved.
-var _sandboxFrameQueue = [];
-var _sandboxNextApplyAt = 0;
-var _sandboxDrainTimer = null;
-
-// Visual durations used to budget _sandboxNextApplyAt. These are deliberately
-// SLIGHTLY SHORTER than the actual CSS animations so the next frame can start
-// its lead-in just as the previous one's hold beat ends (avoids dead air).
-var _SB_HOLD_SPELL_OPEN_MS = 1500;   // matches SPELL_STAGE_PER_CARD_MS (fly-in 520 + hold 1000)
-var _SB_HOLD_SPELL_CLOSE_MS = 1900;  // 700 wait + 550 per card + 250 + 360 hide ≈ 1860 for 1 card; round up
-var _SB_HOLD_TRIGGER_BLIP_MS = 1000; // 900ms blip + 100ms breath
-var _SB_HOLD_TURN_BANNER_MS = 1800;  // END LED 900 + banner-with-START LED 900
-
-function enqueueSandboxFrame(payload) {
-    _sandboxFrameQueue.push(payload);
-    _drainSandboxFrameQueue();
-}
-
-function _drainSandboxFrameQueue() {
-    if (_sandboxDrainTimer) {
-        clearTimeout(_sandboxDrainTimer);
-        _sandboxDrainTimer = null;
-    }
-    // Loop instead of recursing: pop and apply all frames whose visual
-    // hold has expired in this tick. We DO NOT gate on isSpellStageAnimating()
-    // — the timestamp already encodes the hold time for any visual the
-    // previous frame fired, and frames that CLOSE the stage MUST be allowed
-    // to apply while the stage is up (otherwise they'd never trigger
-    // _spellStageOnReactClosed).
-    while (_sandboxFrameQueue.length > 0) {
-        var now = Date.now();
-        var wait = _sandboxNextApplyAt - now;
-        if (wait > 0) {
-            _sandboxDrainTimer = setTimeout(_drainSandboxFrameQueue, wait);
-            return;
-        }
-        var payload = _sandboxFrameQueue.shift();
-        _applySandboxFrame(payload);
-        // _applySandboxFrame may push _sandboxNextApplyAt forward; the
-        // next loop iteration's wait check will catch that and schedule.
-    }
-}
-
-// Apply a single sandbox_state payload. Mirrors the legacy sandbox_state
-// handler body exactly EXCEPT it (a) routes the spell-stage-close detector
-// through detectSpellStageClose so trigger windows that share the REACT
-// phase still close the stage, (b) defers the trigger blip when it arrives
-// in the same frame as a stage close, and (c) updates _sandboxNextApplyAt
-// based on the visuals fired so the queue drain paces subsequent frames.
-function _applySandboxFrame(payload) {
-    // Capture previous state for card-fly derivation BEFORE we overwrite
-    // it. The fly derive function reads the live DOM (which still shows
-    // prev) to snapshot outgoing hand-slot rects; re-rendering with new
-    // state then removes those slots, so order matters.
-    var prevForFly = sandboxState;
-    var flyJobs = (sandboxMode && prevForFly)
-        ? deriveCardFlyJobs(prevForFly, payload.state)
-        : [];
-    var spellStageCast = (sandboxMode && prevForFly)
-        ? detectSpellCast(prevForFly, payload.state)
-        : null;
-    // Stage close: react_stack just emptied (regardless of phase). This is
-    // STRICTLY broader than detectReactWindowClose — see detectSpellStageClose
-    // doc comment. We only fire close when not also opening a new card on
-    // the same frame (cast wins the same-frame race; the close happens
-    // implicitly when the stage's chain drains during resolve).
-    var spellStageClose = (sandboxMode && prevForFly && spellStageCast == null)
-        ? detectSpellStageClose(prevForFly, payload.state)
-        : false;
-    var hpJobsSb = (sandboxMode && prevForFly)
-        ? derivePlayerHpDeltaAnims(prevForFly, payload.state)
-        : [];
-
-    // Detect trigger blip BEFORE we overwrite sandboxState so we know
-    // whether to fire immediately or defer behind a same-frame stage close.
-    var newBlip = null;
-    try {
-        var _newBlip = payload.state && payload.state.last_trigger_blip;
-        var _prevBlip = prevForFly && prevForFly.last_trigger_blip;
-        if (_newBlip && _newBlip !== _prevBlip) {
-            newBlip = _newBlip;
-        }
-    } catch (e) { /* defensive */ }
-
-    // Phase 14.7-09 (Issue B): detect a real turn FLIP. We don't FIRE the
-    // banner here yet — it fires after state commit (or, in the deferred-
-    // post-stage path, after _hideSpellStage flushes the deferred frame).
-    var firedBanner = false;
-    try {
-        var _prevTurn = prevForFly && typeof prevForFly.turn_number === 'number'
-            ? prevForFly.turn_number : 0;
-        var _nextTurn = payload.state && typeof payload.state.turn_number === 'number'
-            ? payload.state.turn_number : 0;
-        // Sandbox reset / undo / test reload rewinds turn_number — clear
-        // the banner dedupe key so a subsequent re-flip to the same
-        // (turn, player) pair shows the banner again.
-        if (_nextTurn < _prevTurn) {
-            _lastBannerTurnKey = null;
-        }
-        // Only fire on a real turn FLIP — skip the initial socket state
-        // emit (where _prevTurn is 0) and skip rewinds.
-        if (_prevTurn > 0 && _nextTurn > _prevTurn) {
-            firedBanner = true;
-        }
-    } catch (e) { /* defensive — banner is purely visual */ }
-
-    // Derive an action-keyed animation job (SACRIFICE / ATTACK / MOVE /
-    // PLAY_CARD) from the `last_action` the server now enriches onto
-    // sandbox_state (see server/events.py::_emit_sandbox_state). Without
-    // this dispatch, the sandbox silently drops action animations — most
-    // visibly the sacrifice transcend SVG jumper. `noop` results fall
-    // through to the immediate-render path below.
-    var actionJob = (sandboxMode && prevForFly)
-        ? deriveAnimationJob(prevForFly, payload.state)
-        : null;
-
-    // Phase 14.7-09 (paladin-heal-during-rat-react v2): post-stage deferral.
-    // If the spell stage is currently visible AND this frame either CLOSES
-    // it or carries a same-frame trigger BLIP, hold the entire state commit
-    // until the stage hides. We still kick off the close NOW so the chain's
-    // resolve animation starts, but the sandboxState write + renderSandbox
-    // + blip/banner all wait for _hideSpellStage to flush.
-    //
-    // Without this, F2 (the post-drain frame containing paladin HP=32 +
-    // last_trigger_blip) commits HP=32 to the paladin tile while the rat
-    // react stage is still up — user sees HP change ~2s before the blip
-    // ever fires.
-    //
-    // We deliberately DO NOT defer frames that arrive while the stage is up
-    // but are unrelated to it (no close, no blip) — e.g. a hand-cheat
-    // sandbox emit. Without that escape hatch, such frames would park
-    // forever (no close signal to wake _flushPendingPostStageFrame).
-    var stageIsUp = (typeof isSpellStageAnimating === 'function')
-        ? isSpellStageAnimating() : false;
-    var shouldDefer = stageIsUp
-        && spellStageCast == null
-        && (spellStageClose || newBlip);
-    if (shouldDefer) {
-        // Trigger close now if this frame closes the stage. The chain
-        // needs the close signal to start the resolve-pop sequence.
-        if (spellStageClose) {
-            setTimeout(_spellStageOnReactClosed, 0);
-        }
-        // Park the entire frame for _hideSpellStage to flush. We pass
-        // ALL the derived side-effect jobs through so the post-flush
-        // commit is identical to the immediate path below.
-        _pendingPostStageFrame = {
-            payload: payload,
-            newBlip: newBlip,
-            firedBanner: firedBanner,
-            flyJobs: flyJobs,
-            hpJobsSb: hpJobsSb,
-            actionJob: actionJob,
-            spellStageClose: spellStageClose,
-        };
-        // Budget the queue so the next frame waits for the close + blip
-        // chain. Mirrors the immediate path's hold logic but runs from
-        // a deferred apply, so the wall clock is t=now (when we deferred)
-        // and the chain finishes at t=now + close + blip + safety.
-        // Safety margin (200ms) prevents the next frame's banner from
-        // racing the tail of the blip animation — without it the banner
-        // can overlap the last ~60ms of the ⏳ glyph fade.
-        var _now = Date.now();
-        var _hold = _SB_HOLD_SPELL_CLOSE_MS;
-        if (newBlip) _hold += _SB_HOLD_TRIGGER_BLIP_MS + 200;
-        if (firedBanner) _hold = Math.max(_hold, _SB_HOLD_TURN_BANNER_MS);
-        _sandboxNextApplyAt = _now + _hold;
-        return;
-    }
-
-    sandboxState = payload.state;
-    sandboxLegalActions = payload.legal_actions || [];
-    sandboxActiveViewIdx = payload.active_view_idx || 0;
-    sandboxUndoDepth = payload.undo_depth || 0;
-    sandboxRedoDepth = payload.redo_depth || 0;
-    // Push sandbox state into the swapped globals so the renderers and
-    // the click handlers see it as "the current state".
-    // FIXED: myPlayerIdx stays 0 (P1 perspective) so the board never flips.
-    // sandboxActiveViewIdx only controls which player's actions we submit.
-    if (sandboxMode) {
-        gameState = sandboxState;
-        myPlayerIdx = 0;
-        legalActions = sandboxLegalActions;
-    }
-    // Plan 14.6-03: autosave + toolbar state sync
-    try {
-        localStorage.setItem(SANDBOX_AUTOSAVE_KEY, JSON.stringify({
-            state: sandboxState,
-            active_view_idx: sandboxActiveViewIdx,
-        }));
-    } catch (e) { /* quota exceeded -- ignore */ }
-    if (typeof renderSandboxToolbarState === 'function') renderSandboxToolbarState();
-    renderSandbox();
-
-    // Enqueue the action job FIRST (if any) so the board-level animation
-    // (e.g. sacrifice transcend, summon pop, attack swing) plays before
-    // subsidiary fly / hp-popup ghosts. In sandbox mode the state is
-    // already applied by the renderSandbox() call above, so set
-    // stateApplied=true to suppress the queue's post-anim applyStateFrame
-    // (which would otherwise re-render and double-apply).
-    if (actionJob && actionJob.type && actionJob.type !== 'noop') {
-        actionJob.stateApplied = true;
-        enqueueAnimation(actionJob);
-    }
-    // After the new frame is on screen, fire the fly ghosts — each one
-    // already captured its source rect from the now-stale DOM before
-    // renderSandbox() replaced it.
-    for (var _fi = 0; _fi < flyJobs.length; _fi++) {
-        enqueueAnimation(flyJobs[_fi]);
-    }
-    for (var _hi = 0; _hi < hpJobsSb.length; _hi++) {
-        enqueueAnimation(hpJobsSb[_hi]);
-    }
-
-    // Spell stage open / close. These run on the next tick so the new
-    // board frame is fully painted before the stage overlay grabs focus.
-    if (spellStageCast != null) {
-        setTimeout(function() { _showSpellStage(spellStageCast.nid, spellStageCast.playerIdx); }, 0);
-    } else if (spellStageClose) {
-        setTimeout(_spellStageOnReactClosed, 0);
-    }
-
-    // Turn banner. _showTurnBannerOrDefer self-defers behind the spell
-    // stage (via _pendingTurnBanner) when the stage is animating or about
-    // to open via spellStageCast above. When the stage is idle (and not
-    // about to open), the banner blooms immediately.
-    if (firedBanner) {
-        try { _showTurnBannerOrDefer(payload.state.turn_number, payload.state.active_player_idx); }
-        catch (e) { /* defensive — banner is purely visual */ }
-    }
-
-    // Trigger blip: if a stage close was just kicked off on the same frame,
-    // defer the blip until _hideSpellStage flushes it. Otherwise fire now.
-    if (newBlip) {
-        if (spellStageClose) {
-            _pendingTriggerBlip = newBlip;
-        } else {
-            try { _fireTriggerBlipAnimation(newBlip); }
-            catch (e) { /* defensive */ }
-        }
-    }
-
-    // Update the visual hold timer based on what visuals this frame fired.
-    // Order matters: pick the LONGEST hold so the next frame can't apply
-    // until the user has had time to read this one. spellStageClose
-    // dominates because it implicitly carries the deferred blip + banner.
-    var now = Date.now();
-    var nextAt = now;
-    if (spellStageCast != null) {
-        nextAt = Math.max(nextAt, now + _SB_HOLD_SPELL_OPEN_MS);
-    }
-    if (spellStageClose) {
-        // Close + (optional) deferred blip all chain off _hideSpellStage.
-        // Budget the close's wall time PLUS any deferred blip beat that
-        // runs after the stage hides — otherwise a turn-flip frame queued
-        // right behind would race the blip and the user would see the
-        // banner bloom before the paladin pulse / ⏳ glyph completes.
-        var closeHold = _SB_HOLD_SPELL_CLOSE_MS;
-        if (newBlip) closeHold += _SB_HOLD_TRIGGER_BLIP_MS;
-        nextAt = Math.max(nextAt, now + closeHold);
-    } else if (newBlip) {
-        nextAt = Math.max(nextAt, now + _SB_HOLD_TRIGGER_BLIP_MS);
-    }
-    if (firedBanner) {
-        nextAt = Math.max(nextAt, now + _SB_HOLD_TURN_BANNER_MS);
-    }
-    _sandboxNextApplyAt = nextAt;
-}
-
-// Phase 14.7-09 (paladin-heal-during-rat-react v2): commit a deferred
-// post-stage frame. Called by _hideSpellStage when the stage exit fade
-// completes. Mirrors the immediate state-commit path in _applySandboxFrame
-// EXACTLY, then returns the original parked entry so the caller knows
-// what blip / banner side effects to fire next.
-//
-// Returns the parked frame (with newBlip / firedBanner flags), or null
-// if there's nothing to flush. The caller must use the returned blip /
-// banner flags — clobbering _pendingTriggerBlip is intentional, the blip
-// is owned by the parked frame from this point on.
-function _flushPendingPostStageFrame() {
-    if (!_pendingPostStageFrame) return null;
-    var pending = _pendingPostStageFrame;
-    _pendingPostStageFrame = null;
-    var payload = pending.payload;
-
-    // Mirror the immediate-path state commit. Identical to the body of
-    // _applySandboxFrame from `sandboxState = payload.state` down through
-    // `renderSandbox()`. If you change that block, change this too.
-    sandboxState = payload.state;
-    sandboxLegalActions = payload.legal_actions || [];
-    sandboxActiveViewIdx = payload.active_view_idx || 0;
-    sandboxUndoDepth = payload.undo_depth || 0;
-    sandboxRedoDepth = payload.redo_depth || 0;
-    if (sandboxMode) {
-        gameState = sandboxState;
-        myPlayerIdx = 0;
-        legalActions = sandboxLegalActions;
-    }
-    try {
-        localStorage.setItem(SANDBOX_AUTOSAVE_KEY, JSON.stringify({
-            state: sandboxState,
-            active_view_idx: sandboxActiveViewIdx,
-        }));
-    } catch (e) { /* quota — ignore */ }
-    if (typeof renderSandboxToolbarState === 'function') renderSandboxToolbarState();
-    renderSandbox();
-
-    // Replay the deferred animation jobs. Same order as immediate path:
-    // action-keyed first, then card-fly ghosts, then HP-delta popups.
-    if (pending.actionJob && pending.actionJob.type && pending.actionJob.type !== 'noop') {
-        pending.actionJob.stateApplied = true;
-        enqueueAnimation(pending.actionJob);
-    }
-    for (var fi = 0; fi < pending.flyJobs.length; fi++) {
-        enqueueAnimation(pending.flyJobs[fi]);
-    }
-    for (var hi = 0; hi < pending.hpJobsSb.length; hi++) {
-        enqueueAnimation(pending.hpJobsSb[hi]);
-    }
-    return pending;
-}
-
-// Fire the turn banner + END→START LED cycle, OR defer them until the
-// spell stage finishes if it is currently animating. Without this the
-// TURN/PLAYER banner and phase cycle would blooms on top of the still-
-// resolving react window, with multiple visuals competing for attention.
-// Deferred banners are flushed by _hideSpellStage.
-function _showTurnBannerOrDefer(turnNumber, activePlayerIdx) {
-    var stage = document.getElementById('spell-stage');
-    var stageActive = stage && !stage.hidden && (
-        _spellStage.chain.length > 0 ||
-        _spellStage.resolving ||
-        _spellStageBusy ||
-        _spellStageQueue.length > 0
-    );
-    if (stageActive) {
-        _pendingTurnBanner = { turnNumber: turnNumber, activePlayerIdx: activePlayerIdx };
-        return;
-    }
-    _runTurnFlipVisuals(turnNumber, activePlayerIdx);
-}
-
-// END LED flashes (~900ms), banner blooms while START LED flashes
-// (parallel, ~900ms each), then ACTION takes over. The total beat is
-// ~1.8s so the user has time to read each phase change.
+// Phase 14.8-04b: the 4 ad-hoc defer/buffer gate families that used to
+// live in this region have been DELETED — same-turn dedupe, pending
+// banner, pending trigger blip, post-stage-frame deferral, and the
+// sandbox frame queue with its visual-duration budget table. Pacing
+// between banner, blip, and spell stage close is now handled by the
+// unified eventQueue's FIFO ordering: the engine emits react_window
+// close → trigger blip → turn flip in seq order, and each handler
+// calls done() only after its animation completes, so the user-
+// expected order falls out of queue discipline without any ad-hoc
+// deferral machinery.
 function _runTurnFlipVisuals(turnNumber, activePlayerIdx) {
     _flashPhaseLed('end', 900);
     setTimeout(function() {
@@ -4777,11 +4324,11 @@ function _runTurnFlipVisuals(turnNumber, activePlayerIdx) {
 
 function _showTurnBanner(turnNumber, activePlayerIdx) {
     try {
-        // Dedupe: don't re-fire for the same turn (covers repeated
-        // sandbox_state emits for turn=1 on initial load).
-        var key = turnNumber + ':' + activePlayerIdx;
-        if (_lastBannerTurnKey === key) return;
-        _lastBannerTurnKey = key;
+        // Plan 14.8-04b: the old same-turn-key dedupe guard has been
+        // DELETED. Dedupe is now handled by the eventQueue's lastSeenSeq —
+        // each EVT_TURN_FLIPPED event carries a unique seq, so a repeated
+        // sandbox_state emit for turn=1 on initial load can no longer
+        // trigger the banner twice.
 
         // Remove any prior banner (covers rapid turn flips).
         var prior = document.querySelector('.turn-transition-banner');
@@ -5157,8 +4704,11 @@ function _resolveSpellStageStep(chain, i, els) {
     }, 550);
 }
 
+// DEAD CODE post-14.8-04b — plan 14.8-05 will delete
 // True if the state just transitioned out of REACT phase into ACTION
 // with an empty react stack — meaning the pending spell chain resolved.
+// Replaced by playReactWindowClosed slot handler. Retained as reference
+// until plan 05 deletes the snapshot path entirely.
 function detectReactWindowClose(prev, next) {
     if (!prev || !next) return false;
     var prevStack = prev.react_stack || [];
@@ -5168,15 +4718,12 @@ function detectReactWindowClose(prev, next) {
     return wasReactOrHadStack && nowCalm;
 }
 
+// DEAD CODE post-14.8-04b — plan 14.8-05 will delete
 // Phase 14.7-09 (paladin-heal-during-rat-react fix): stage-close detector
-// keyed on the react_stack alone. The engine sometimes drains the after-
-// action react stack and immediately opens a NEW trigger react window
-// (with empty react_stack) in the same resolve_action call, so phase stays
-// REACT while the spell stage's content (the played card) is no longer
-// relevant. detectReactWindowClose returns false in that case because the
-// phase didn't change, so the spell stage would otherwise be left up while
-// the trigger blip + heal animate underneath. This detector closes the
-// stage purely on "react_stack just emptied", regardless of phase.
+// keyed on the react_stack alone. Replaced by playReactWindowClosed slot
+// handler which observes the engine's EVT_REACT_WINDOW_CLOSED event
+// directly rather than diffing snapshot react_stack. Retained as
+// reference until plan 05 deletes the snapshot path entirely.
 function detectSpellStageClose(prev, next) {
     if (!prev || !next) return false;
     var prevStack = prev.react_stack || [];
@@ -5221,74 +4768,25 @@ function _hideSpellStage() {
         _spellStage.casterIdx = null;
         _spellStage.resolving = false;
 
-        // Phase 14.7-09 v2 (paladin-heal-during-rat-react): flush a deferred
-        // post-stage frame BEFORE the blip — committing the new HP=32 to
-        // the paladin tile right before the pulse + glyph fires. This is
-        // what gives the user the visual sequence:
-        //   stage hides → HP=32 lands in DOM → 200ms breath → blip pulse
-        //   + ⏳ glyph (~900ms) → drain queue (turn-banner frame applies).
-        // Without this flush, the deferred frame would never commit and
-        // the board would visibly lag the engine state forever.
-        //
-        // The parked frame's newBlip / firedBanner flags WIN over any
-        // _pendingTriggerBlip / _pendingTurnBanner that were set by an
-        // earlier (immediate-path) apply — those globals were populated by
-        // a prior frame and are stale relative to what the parked frame
-        // wants to fire.
-        var pendingFrame = (typeof _flushPendingPostStageFrame === 'function')
-            ? _flushPendingPostStageFrame()
-            : null;
-        var pendingBlip = (pendingFrame && pendingFrame.newBlip)
-            ? pendingFrame.newBlip : _pendingTriggerBlip;
-        _pendingTriggerBlip = null;
-        var deferredBanner = (pendingFrame && pendingFrame.firedBanner)
-            ? { turnNumber: pendingFrame.payload.state.turn_number,
-                activePlayerIdx: pendingFrame.payload.state.active_player_idx }
-            : _pendingTurnBanner;
-        _pendingTurnBanner = null;
-
-        // Flush the trigger blip BEFORE the banner so the user-expected
-        // ordering (stage close → HP commit → blip → turn flip) holds.
-        // The 200ms breath lets the stage's exit fade settle before the
-        // tile pulse + center icon bloom over the now-bare board.
-        var hadPendingBlip = !!pendingBlip;
-        if (hadPendingBlip) {
-            var blipToFire = pendingBlip;
-            setTimeout(function() {
-                _fireTriggerBlipAnimation(blipToFire);
-                // After the blip animation finishes (~900ms), poke the
-                // sandbox frame queue so the next paced frame (e.g. turn
-                // flip) can land. Banner flush below is independent and
-                // already self-paces via its own setTimeout.
-                setTimeout(_drainSandboxFrameQueue, 1000);
-            }, 200);
-        }
-        // Flush any deferred turn banner. Small extra delay so the stage's
-        // exit fade fully completes before the banner blooms — clean
-        // visual handoff, not a crossfade. If a blip was also pending,
-        // push the banner further so the blip gets its full beat before
-        // the banner takes over.
-        if (deferredBanner) {
-            var bannerDelay = hadPendingBlip ? 1300 : 200;
-            var b = deferredBanner;
-            setTimeout(function() {
-                _runTurnFlipVisuals(b.turnNumber, b.activePlayerIdx);
-            }, bannerDelay);
-        }
-        // Phase 14.7-09 (paladin-heal-during-rat-react fix): the sandbox
-        // frame queue may have been waiting on this stage to finish. Poke
-        // the drain so the next paced frame can apply.
-        if (typeof _drainSandboxFrameQueue === 'function') {
-            // Small breath so any setTimeout(..., 0) callbacks queued by
-            // the spell stage hide cycle get a chance to run first.
-            setTimeout(_drainSandboxFrameQueue, hadPendingBlip ? 1300 : 0);
-        }
+        // Phase 14.8-04b: the old post-stage deferral logic has been
+        // DELETED. Previously _hideSpellStage would flush a parked sandbox
+        // frame, fire a deferred trigger blip, and run a deferred turn
+        // banner — all coordinated via ad-hoc buffer globals + the sandbox
+        // frame queue drain. That entire coordination is superseded by the
+        // eventQueue: the server emits react-window-close BEFORE trigger-
+        // blip BEFORE turn-flip in seq order, and each handler calls done()
+        // only after its animation completes, so the user-expected order
+        // (stage close → HP commit → blip → banner) falls out of FIFO queue
+        // discipline without any deferral machinery.
     }, 360);
 }
 
+// DEAD CODE post-14.8-04b — plan 14.8-05 will delete
 // Detect spell-cast events from a prev→next state transition. Fires the
 // stage for any new magic/react card that just entered grave or the top
-// of the react_stack. Returns { nid, playerIdx } (or null).
+// of the react_stack. Replaced by playReactWindowOpened (spell stage
+// push) + playCardPlayed (grave transition). Retained as reference
+// until plan 05 deletes the snapshot path entirely.
 function detectSpellCast(prev, next) {
     if (!next) return null;
 
@@ -5326,10 +4824,13 @@ function detectSpellCast(prev, next) {
     return null;
 }
 
+// DEAD CODE post-14.8-04b — plan 14.8-05 will delete
 // Diff hand → grave / exhaust transitions and emit card_fly jobs.
 // Source hand-slot rects are captured at derive time (pre-apply) so the
 // ghost starts exactly where the real card was sitting when it left.
-// In sandbox, both players' hands are visible, so we diff both.
+// Replaced by playCardDiscarded / playCardPlayed slot handlers (plan
+// 04a). Retained as reference until plan 05 deletes the snapshot path
+// entirely.
 function deriveCardFlyJobs(prev, next) {
     if (!prev || !next) return [];
     var indices = [];
@@ -5502,10 +5003,12 @@ function playCardFlyAnimation(job, done) {
     setTimeout(finish, 750);
 }
 
+// DEAD CODE post-14.8-04b — plan 14.8-05 will delete
 // Diff hands (own identity, opponent count) between prev and next and
 // produce one draw_own job per newly-added own card and one draw_opp job
-// per increment of the opponent's hand size. Multiset diff on own-side
-// so re-ordered hands with identical contents yield zero jobs.
+// per increment of the opponent's hand size. Replaced by playCardDrawn
+// slot handler (plan 04a). Retained as reference until plan 05 deletes
+// the snapshot path entirely.
 function deriveDrawJobs(prev, next) {
     var jobs = [];
     if (myPlayerIdx == null || !prev || !next) return jobs;
@@ -5555,10 +5058,11 @@ function deriveDrawJobs(prev, next) {
     return jobs;
 }
 
-// Derive an animation job from a prev->next state diff. Wave 1 is
-// deliberately conservative: it only tags summon/move/attack from
-// pending_action when present, and returns noop otherwise. Later waves
-// will sharpen the diff (damage numbers, kill detection, etc.).
+// DEAD CODE post-14.8-04b — plan 14.8-05 will delete
+// Derive an animation job from a prev->next state diff. Replaced by
+// playMinionSummoned / playMinionMoved / playAttackResolved /
+// playSacrificeTranscend slot handlers (plan 04a). Retained as
+// reference until plan 05 deletes the snapshot path entirely.
 function deriveAnimationJob(prev, next) {
     // Phase 14.3-04: Prefer next.last_action (authoritative server payload)
     // for ATTACK so we get attacker_pos, target_pos, damage, and killed
@@ -8774,24 +8278,41 @@ function setupSandboxSocketHandlers() {
     });
 
     // === SANDBOX-STATE-HANDLER-START ===
-    // Phase 14.7-09 (paladin-heal-during-rat-react fix): sandbox apply_action
-    // emits one sandbox_state per intermediate state. With async_mode=
-    // "threading" all six emits flush before the JS event loop yields, so
-    // the handler used to apply each frame synchronously and the browser
-    // only painted the last one — collapsing the visible chain into a
-    // single "post-resolved" snapshot followed by a 3.4s spell-stage
-    // playback that disagreed with the already-committed board state.
+    // Phase 14.8-04b: sandbox_state is now a pure snapshot commit — all
+    // pacing / deferral / per-frame visuals that used to live in the
+    // old sandbox frame queue + drainer + applier trio (Phase 14.7-09
+    // paladin-heal fix) have been migrated to the unified eventQueue.
+    // The engine emits a stream of EngineEvents alongside each
+    // sandbox_state frame; each event's own slot handler owns its
+    // animation + wall-clock pacing via animation_duration_ms.
     //
-    // Fix: buffer inbound payloads in _sandboxFrameQueue and apply them at
-    // the user-perceptible pace dictated by the visuals each frame triggers
-    // (spell-stage open/close, trigger blip, turn banner). _sandboxNextApplyAt
-    // is a Date.now() timestamp pushed forward each apply by the duration of
-    // the longest visual that frame fires; _drainSandboxFrameQueue waits
-    // for it before applying the next frame. Single-frame paths (cheats,
-    // undo, set_active) hit the queue once with a zero hold-until and apply
-    // immediately — snappiness preserved.
+    // This handler's ONLY job is to commit the snapshot to sandboxState so
+    // the renderers have something to draw. It's retained for reconnect /
+    // initial-join / error-recovery parity with live PvP's state_update
+    // — plan 14.8-05 deletes both once the eventQueue's commitEventToDom
+    // hook covers every DOM mutation the snapshot path used to handle.
     socket.on('sandbox_state', function(payload) {
-        enqueueSandboxFrame(payload);
+        if (!payload) return;
+        sandboxState = payload.state;
+        sandboxLegalActions = payload.legal_actions || [];
+        sandboxActiveViewIdx = payload.active_view_idx || 0;
+        sandboxUndoDepth = payload.undo_depth || 0;
+        sandboxRedoDepth = payload.redo_depth || 0;
+        if (sandboxMode) {
+            gameState = sandboxState;
+            myPlayerIdx = 0;
+            legalActions = sandboxLegalActions;
+        }
+        // Plan 14.6-03 autosave + toolbar state sync (retained — the
+        // eventQueue doesn't own these side-effects).
+        try {
+            localStorage.setItem(SANDBOX_AUTOSAVE_KEY, JSON.stringify({
+                state: sandboxState,
+                active_view_idx: sandboxActiveViewIdx,
+            }));
+        } catch (e) { /* quota exceeded — ignore */ }
+        if (typeof renderSandboxToolbarState === 'function') renderSandboxToolbarState();
+        renderSandbox();
     });
     // === SANDBOX-STATE-HANDLER-END ===
 
