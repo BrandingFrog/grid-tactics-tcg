@@ -4967,9 +4967,8 @@ body {
 .hud-callsign-saved-name {
   flex: 1 1 auto;
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
   white-space: nowrap;
+  overflow: hidden;
   font-family: var(--hud-display);
   font-size: 15px;
   letter-spacing: 0.08em;
