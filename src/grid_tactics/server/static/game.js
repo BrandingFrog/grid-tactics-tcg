@@ -2608,36 +2608,229 @@ function playInstant(ev, done) {
     setTimeout(done, 0);
 }
 
-// ----- 10 simpler slot handlers (Task 2 implements; Task 1 stubs) -----
-// Each stubbed for Task 1 commit. Task 2 fills them in with real visuals.
+// ----- 10 simpler slot handlers (Task 2) ---------------------------
+//
+// IMPORTANT 04a posture: the legacy snapshot path (state_update /
+// sandbox_state → applyStateFrame → deriveAnimationJob) is still alive
+// and runs its OWN animations for these event types. Server emits
+// state_update FIRST and engine_events SECOND in the same socket flush,
+// so the snapshot applies state (and queues its animation job) BEFORE
+// the eventQueue handler fires. Event-driven jobs enqueued here APPEND
+// to the same animQueue and run SEQUENTIALLY — not in parallel. The
+// resulting "N+1 animations per action" posture is the accepted
+// tradeoff for a safe migration (plan failure_handling). Plan 04b
+// suppresses the snapshot-driven animations (via applyStateFrameSelective
+// or equivalent) so the event-driven ones become primary, and plan 05
+// deletes the snapshot path entirely.
+//
+// For event-driven jobs we pass `stateAfter = gameState` so the existing
+// playSummonAnimation/playMoveAnimation wrappers don't crash on an
+// undefined frame. By that point gameState already holds the post-event
+// state (applied by the snapshot path), so applyStateFrame is an
+// idempotent noop diff + re-render.
+
+function _evDurationOr(ev, fallback) {
+    if (ev && typeof ev.animation_duration_ms === 'number' && ev.animation_duration_ms >= 0) {
+        return ev.animation_duration_ms;
+    }
+    return fallback;
+}
+
+function _evTileForPos(pos) {
+    if (!pos) return null;
+    return document.querySelector(
+        '.board-cell[data-row="' + pos[0] + '"][data-col="' + pos[1] + '"]'
+    );
+}
 
 function playMinionSummoned(ev, done) {
-    // Stub — Task 2 implementation.
-    setTimeout(done, ev && ev.animation_duration_ms ? ev.animation_duration_ms : 0);
+    // Payload: {instance_id, card_numeric_id, owner_idx, position}
+    var payload = ev && ev.payload;
+    if (!payload || !payload.position) { setTimeout(done, 0); return; }
+    // Enqueue into the existing AnimationQueue so the summon animation
+    // chains after any snapshot-driven animations. stateApplied=true so
+    // runQueue doesn't re-apply an undefined state after the animation.
+    // The inner playSummonAnimation ALSO calls applyStateFrame at START —
+    // we pass the current gameState (already post-event from snapshot
+    // path) so that call is an idempotent noop diff + re-render.
+    enqueueAnimation({
+        type: 'summon',
+        payload: {
+            pos: payload.position,
+            card_id: payload.card_numeric_id,
+        },
+        stateAfter: gameState,
+        legalActionsAfter: legalActions,
+        _fromEventQueue: true,
+    });
+    // Call done after the summon animation's wall-clock duration so the
+    // eventQueue paces subsequent events correctly. _evDurationOr reads
+    // animation_duration_ms (default 600ms for summon per engine_events.py).
+    setTimeout(done, _evDurationOr(ev, 600));
 }
+
 function playMinionDied(ev, done) {
-    setTimeout(done, ev && ev.animation_duration_ms ? ev.animation_duration_ms : 0);
+    // Payload: {instance_id, card_numeric_id, owner_idx, position, from_deck}
+    // Snapshot path's applyStateFrame burn-death detection already handles
+    // the cinder animation for burn deaths. For combat deaths the minion
+    // vanishes via the next render. 04a: zero-duration — visual is covered
+    // by trigger_blip (04b) + hp_popup (playMinionHpChange). Default
+    // duration in engine_events.py = 0 for this type.
+    setTimeout(done, _evDurationOr(ev, 0));
 }
+
 function playMinionHpChange(ev, done) {
-    setTimeout(done, ev && ev.animation_duration_ms ? ev.animation_duration_ms : 0);
+    // Payload: {instance_id, new_hp, delta, owner_idx, position, cause}
+    var payload = ev && ev.payload;
+    if (!payload) { setTimeout(done, 0); return; }
+    var tile = _evTileForPos(payload.position);
+    var delta = payload.delta;
+    if (tile && typeof delta === 'number' && delta !== 0) {
+        var text, variant;
+        if (delta > 0) {
+            text = '💚 +' + delta;
+            variant = 'heal';
+        } else if (payload.cause === 'burn') {
+            text = '🔥 ' + delta;  // already negative
+            variant = 'burn-tick';
+        } else {
+            text = '⚔️ ' + delta;
+            variant = 'combat-damage';
+        }
+        try { showFloatingPopup(tile, text, variant); } catch (e) { /* defensive */ }
+    }
+    setTimeout(done, _evDurationOr(ev, 400));
 }
+
 function playMinionMoved(ev, done) {
-    setTimeout(done, ev && ev.animation_duration_ms ? ev.animation_duration_ms : 0);
+    // Payload: {instance_id, from, to, owner_idx}
+    var payload = ev && ev.payload;
+    if (!payload || !payload.from || !payload.to) { setTimeout(done, 0); return; }
+    enqueueAnimation({
+        type: 'move',
+        payload: {
+            from: payload.from,
+            to: payload.to,
+        },
+        stateAfter: gameState,
+        legalActionsAfter: legalActions,
+        _fromEventQueue: true,
+    });
+    setTimeout(done, _evDurationOr(ev, 350));
 }
+
 function playAttackResolved(ev, done) {
-    setTimeout(done, ev && ev.animation_duration_ms ? ev.animation_duration_ms : 0);
+    // Payload: {attacker_id, defender_id, target_pos, attacker_hp_before/after,
+    //           defender_hp_before/after, attacker_killed, defender_killed}
+    var payload = ev && ev.payload;
+    if (!payload || !payload.target_pos) { setTimeout(done, 0); return; }
+    // Look up attacker's live position via gameState (snapshot already
+    // applied). If not found (already dead / off-board), skip the visual.
+    var attackerPos = null;
+    if (gameState && gameState.minions && payload.attacker_id != null) {
+        for (var i = 0; i < gameState.minions.length; i++) {
+            var m = gameState.minions[i];
+            if (m && m.instance_id === payload.attacker_id) {
+                attackerPos = m.position;
+                break;
+            }
+        }
+    }
+    // Fallback: read the DOM for any minion at target_pos (attacker usually
+    // visible pre-animation from snapshot path).
+    if (!attackerPos) {
+        setTimeout(done, _evDurationOr(ev, 500));
+        return;
+    }
+    var damage = (payload.defender_hp_before != null && payload.defender_hp_after != null)
+        ? Math.max(0, payload.defender_hp_before - payload.defender_hp_after)
+        : 0;
+    enqueueAnimation({
+        type: 'attack',
+        payload: {
+            attackerPos: attackerPos,
+            targetPos: payload.target_pos,
+            damage: damage,
+            killed: !!payload.defender_killed,
+        },
+        stateAfter: gameState,
+        legalActionsAfter: legalActions,
+        _fromEventQueue: true,
+    });
+    setTimeout(done, _evDurationOr(ev, 500));
 }
+
 function playCardDrawn(ev, done) {
-    setTimeout(done, ev && ev.animation_duration_ms ? ev.animation_duration_ms : 0);
+    // Payload: {player_idx} (plus optional card_numeric_id when viewer is the
+    // drawer per view_filter redaction).
+    var payload = ev && ev.payload;
+    if (!payload) { setTimeout(done, 0); return; }
+    var playerIdx = payload.player_idx;
+    var isOwn = sandboxMode
+        ? true  // sandbox sees both hands
+        : (playerIdx === myPlayerIdx);
+    if (isOwn && payload.card_numeric_id != null) {
+        enqueueAnimation({
+            type: 'draw_own',
+            cardNumericId: payload.card_numeric_id,
+            fromPos: 'deck',
+            toSlotIndex: -1,  // falls back to last hand child
+            stateApplied: true,
+            _fromEventQueue: true,
+        });
+    } else {
+        enqueueAnimation({
+            type: 'draw_opp',
+            stateApplied: true,
+            _fromEventQueue: true,
+        });
+    }
+    setTimeout(done, _evDurationOr(ev, 350));
 }
+
 function playCardPlayed(ev, done) {
-    setTimeout(done, ev && ev.animation_duration_ms ? ev.animation_duration_ms : 0);
+    // Payload: {card_numeric_id, card_index, owner_idx, target_pos, position}
+    // Visual is covered by spell stage in/out (react_window_opened/closed, 04b)
+    // for magic/react cards, and by minion_summoned for minions. 04a: instant.
+    setTimeout(done, _evDurationOr(ev, 0));
 }
+
 function playCardDiscarded(ev, done) {
-    setTimeout(done, ev && ev.animation_duration_ms ? ev.animation_duration_ms : 0);
+    // Payload: {player_idx, card_numeric_id}
+    // The existing deriveCardFlyJobs in the snapshot path builds a
+    // card-fly ghost from the hand slot rect BEFORE render replaces it.
+    // From event-driven data we no longer have the source hand slot
+    // (render already happened). 04a: zero-duration — snapshot path's
+    // derived job handles the visual; event just paces the queue.
+    setTimeout(done, _evDurationOr(ev, 0));
 }
+
 function playPlayerHpChange(ev, done) {
-    setTimeout(done, ev && ev.animation_duration_ms ? ev.animation_duration_ms : 0);
+    // Payload: {player_idx, prev, new, delta}
+    var payload = ev && ev.payload;
+    if (!payload || typeof payload.delta !== 'number') { setTimeout(done, 0); return; }
+    var delta = payload.delta;
+    // Only negatives get the damage popup (heals on player HP are rare and
+    // covered by green shield popup on the HP stat — snapshot path handles).
+    if (delta < 0) {
+        var el = document.getElementById(_hpStatElementId(payload.player_idx));
+        if (el) {
+            var rect = el.getBoundingClientRect();
+            var pop = document.createElement('div');
+            pop.className = 'damage-popup hp-damage-popup';
+            pop.style.position = 'fixed';
+            pop.style.left = (rect.left + rect.width / 2 - 20) + 'px';
+            pop.style.top = (rect.top - 8) + 'px';
+            pop.textContent = String(delta);
+            document.body.appendChild(pop);
+            el.classList.add('hp-flash');
+            setTimeout(function() {
+                if (pop.parentNode) pop.parentNode.removeChild(pop);
+                el.classList.remove('hp-flash');
+            }, 950);
+        }
+    }
+    setTimeout(done, _evDurationOr(ev, 400));
 }
 
 // Debug hook (mirrors __animDebug). Plan 04b extends with spell-stage state.
