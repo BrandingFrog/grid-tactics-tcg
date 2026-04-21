@@ -822,48 +822,19 @@ function setupLobbyHandlers() {
         showNameInputUI();
     }
 
-    // Save name button (when input is shown)
+    // Auto-save callsign as the user types. No explicit Save button; every
+    // keystroke persists to localStorage and updates `myName`. Empty input
+    // just clears the saved value and falls back to guest flow at join time.
+    var nameInputEl = document.getElementById('input-name');
     var btnSaveName = document.getElementById('btn-save-name');
-    if (btnSaveName) {
-        btnSaveName.addEventListener('click', function() {
-            var nameInput = document.getElementById('input-name');
-            var name = nameInput ? nameInput.value.trim() : '';
-            if (!name) {
-                showLobbyStatus('Please enter a display name.', 'error');
-                return;
-            }
+    if (btnSaveName) btnSaveName.style.display = 'none';
+    if (nameInputEl) {
+        nameInputEl.addEventListener('input', function() {
+            var name = nameInputEl.value.trim();
             myName = name;
             saveDisplayName(name);
-            showSavedNameUI(name);
             showLobbyStatus('', '');
         });
-    }
-
-    // Change name button
-    var btnChangeName = document.getElementById('btn-change-name');
-    if (btnChangeName) {
-        btnChangeName.addEventListener('click', function() {
-            var savedName = loadSavedName();
-            var nameInput = document.getElementById('input-name');
-            if (nameInput) nameInput.value = savedName;
-            showNameInputUI();
-        });
-    }
-
-    // Show Save button only when input is non-empty (auto-save on Enter too)
-    var nameInputEl = document.getElementById('input-name');
-    if (nameInputEl) {
-        var updateSaveBtn = function() {
-            if (btnSaveName) btnSaveName.style.display = nameInputEl.value.trim() ? '' : 'none';
-        };
-        nameInputEl.addEventListener('input', updateSaveBtn);
-        nameInputEl.addEventListener('keydown', function(e) {
-            if (e.key === 'Enter' && btnSaveName) {
-                e.preventDefault();
-                btnSaveName.click();
-            }
-        });
-        updateSaveBtn();
     }
 
     // Create Room
@@ -3755,6 +3726,18 @@ var _pendingTurnBanner = null;  // { turnNumber, activePlayerIdx } when deferred
 // has fully hidden and flush it from _hideSpellStage. Cleared by the flush.
 var _pendingTriggerBlip = null;
 
+// Phase 14.7-09 (paladin-heal-during-rat-react v2 fix): the ENTIRE state
+// commit (sandboxState write + renderSandbox call) of a frame that arrives
+// while the spell stage is currently visible is held here until the stage
+// hides. Without this, F2 (the post-drain frame for paladin heal) commits
+// the new HP=32 to the paladin tile WHILE the rat react stage is still up
+// (mid resolve-pop / mid exit-fade), so the user sees HP change ~2s before
+// the trigger-blip pulse ever fires. With the deferral, _hideSpellStage
+// commits the state THEN fires the blip — the user sees stage close →
+// pulse + glyph → HP click. Stored as { payload, newBlip, firedBanner,
+// flyJobs, hpJobsSb, actionJob }; cleared by _flushPendingPostStageFrame.
+var _pendingPostStageFrame = null;
+
 // === Sandbox frame queue (Phase 14.7-09 paladin-heal fix) ====================
 // Sandbox apply_action emits one sandbox_state per intermediate state during
 // trivial-react auto-drain (rat deploy → react open → react close →
@@ -3854,12 +3837,9 @@ function _applySandboxFrame(payload) {
         }
     } catch (e) { /* defensive */ }
 
-    // Phase 14.7-09 (Issue B): turn banner — fire on a real turn FLIP only.
-    // The banner has its own deferral logic (_showTurnBannerOrDefer) keyed
-    // off isSpellStageAnimating, which composes correctly with our queue:
-    // if this frame opens the stage, the banner self-defers and is flushed
-    // by _hideSpellStage; if the stage is already idle (e.g. trigger blip
-    // case), the banner blooms in parallel with the queue drain timer.
+    // Phase 14.7-09 (Issue B): detect a real turn FLIP. We don't FIRE the
+    // banner here yet — it fires after state commit (or, in the deferred-
+    // post-stage path, after _hideSpellStage flushes the deferred frame).
     var firedBanner = false;
     try {
         var _prevTurn = prevForFly && typeof prevForFly.turn_number === 'number'
@@ -3875,7 +3855,6 @@ function _applySandboxFrame(payload) {
         // Only fire on a real turn FLIP — skip the initial socket state
         // emit (where _prevTurn is 0) and skip rewinds.
         if (_prevTurn > 0 && _nextTurn > _prevTurn) {
-            _showTurnBannerOrDefer(_nextTurn, payload.state.active_player_idx);
             firedBanner = true;
         }
     } catch (e) { /* defensive — banner is purely visual */ }
@@ -3889,6 +3868,60 @@ function _applySandboxFrame(payload) {
     var actionJob = (sandboxMode && prevForFly)
         ? deriveAnimationJob(prevForFly, payload.state)
         : null;
+
+    // Phase 14.7-09 (paladin-heal-during-rat-react v2): post-stage deferral.
+    // If the spell stage is currently visible AND this frame either CLOSES
+    // it or carries a same-frame trigger BLIP, hold the entire state commit
+    // until the stage hides. We still kick off the close NOW so the chain's
+    // resolve animation starts, but the sandboxState write + renderSandbox
+    // + blip/banner all wait for _hideSpellStage to flush.
+    //
+    // Without this, F2 (the post-drain frame containing paladin HP=32 +
+    // last_trigger_blip) commits HP=32 to the paladin tile while the rat
+    // react stage is still up — user sees HP change ~2s before the blip
+    // ever fires.
+    //
+    // We deliberately DO NOT defer frames that arrive while the stage is up
+    // but are unrelated to it (no close, no blip) — e.g. a hand-cheat
+    // sandbox emit. Without that escape hatch, such frames would park
+    // forever (no close signal to wake _flushPendingPostStageFrame).
+    var stageIsUp = (typeof isSpellStageAnimating === 'function')
+        ? isSpellStageAnimating() : false;
+    var shouldDefer = stageIsUp
+        && spellStageCast == null
+        && (spellStageClose || newBlip);
+    if (shouldDefer) {
+        // Trigger close now if this frame closes the stage. The chain
+        // needs the close signal to start the resolve-pop sequence.
+        if (spellStageClose) {
+            setTimeout(_spellStageOnReactClosed, 0);
+        }
+        // Park the entire frame for _hideSpellStage to flush. We pass
+        // ALL the derived side-effect jobs through so the post-flush
+        // commit is identical to the immediate path below.
+        _pendingPostStageFrame = {
+            payload: payload,
+            newBlip: newBlip,
+            firedBanner: firedBanner,
+            flyJobs: flyJobs,
+            hpJobsSb: hpJobsSb,
+            actionJob: actionJob,
+            spellStageClose: spellStageClose,
+        };
+        // Budget the queue so the next frame waits for the close + blip
+        // chain. Mirrors the immediate path's hold logic but runs from
+        // a deferred apply, so the wall clock is t=now (when we deferred)
+        // and the chain finishes at t=now + close + blip + safety.
+        // Safety margin (200ms) prevents the next frame's banner from
+        // racing the tail of the blip animation — without it the banner
+        // can overlap the last ~60ms of the ⏳ glyph fade.
+        var _now = Date.now();
+        var _hold = _SB_HOLD_SPELL_CLOSE_MS;
+        if (newBlip) _hold += _SB_HOLD_TRIGGER_BLIP_MS + 200;
+        if (firedBanner) _hold = Math.max(_hold, _SB_HOLD_TURN_BANNER_MS);
+        _sandboxNextApplyAt = _now + _hold;
+        return;
+    }
 
     sandboxState = payload.state;
     sandboxLegalActions = payload.legal_actions || [];
@@ -3942,6 +3975,15 @@ function _applySandboxFrame(payload) {
         setTimeout(_spellStageOnReactClosed, 0);
     }
 
+    // Turn banner. _showTurnBannerOrDefer self-defers behind the spell
+    // stage (via _pendingTurnBanner) when the stage is animating or about
+    // to open via spellStageCast above. When the stage is idle (and not
+    // about to open), the banner blooms immediately.
+    if (firedBanner) {
+        try { _showTurnBannerOrDefer(payload.state.turn_number, payload.state.active_player_idx); }
+        catch (e) { /* defensive — banner is purely visual */ }
+    }
+
     // Trigger blip: if a stage close was just kicked off on the same frame,
     // defer the blip until _hideSpellStage flushes it. Otherwise fire now.
     if (newBlip) {
@@ -3978,6 +4020,59 @@ function _applySandboxFrame(payload) {
         nextAt = Math.max(nextAt, now + _SB_HOLD_TURN_BANNER_MS);
     }
     _sandboxNextApplyAt = nextAt;
+}
+
+// Phase 14.7-09 (paladin-heal-during-rat-react v2): commit a deferred
+// post-stage frame. Called by _hideSpellStage when the stage exit fade
+// completes. Mirrors the immediate state-commit path in _applySandboxFrame
+// EXACTLY, then returns the original parked entry so the caller knows
+// what blip / banner side effects to fire next.
+//
+// Returns the parked frame (with newBlip / firedBanner flags), or null
+// if there's nothing to flush. The caller must use the returned blip /
+// banner flags — clobbering _pendingTriggerBlip is intentional, the blip
+// is owned by the parked frame from this point on.
+function _flushPendingPostStageFrame() {
+    if (!_pendingPostStageFrame) return null;
+    var pending = _pendingPostStageFrame;
+    _pendingPostStageFrame = null;
+    var payload = pending.payload;
+
+    // Mirror the immediate-path state commit. Identical to the body of
+    // _applySandboxFrame from `sandboxState = payload.state` down through
+    // `renderSandbox()`. If you change that block, change this too.
+    sandboxState = payload.state;
+    sandboxLegalActions = payload.legal_actions || [];
+    sandboxActiveViewIdx = payload.active_view_idx || 0;
+    sandboxUndoDepth = payload.undo_depth || 0;
+    sandboxRedoDepth = payload.redo_depth || 0;
+    if (sandboxMode) {
+        gameState = sandboxState;
+        myPlayerIdx = 0;
+        legalActions = sandboxLegalActions;
+    }
+    try {
+        localStorage.setItem(SANDBOX_AUTOSAVE_KEY, JSON.stringify({
+            state: sandboxState,
+            active_view_idx: sandboxActiveViewIdx,
+        }));
+    } catch (e) { /* quota — ignore */ }
+    if (typeof renderSandboxToolbarState === 'function') renderSandboxToolbarState();
+    renderSandbox();
+
+    // Replay the deferred animation jobs. Same order as immediate path:
+    // action-keyed first, then card-fly ghosts, then HP-delta popups.
+    if (pending.actionJob && pending.actionJob.type && pending.actionJob.type !== 'noop') {
+        pending.actionJob.stateApplied = true;
+        enqueueAnimation(pending.actionJob);
+    }
+    for (var fi = 0; fi < pending.flyJobs.length; fi++) {
+        enqueueAnimation(pending.flyJobs[fi]);
+    }
+    for (var hi = 0; hi < pending.hpJobsSb.length; hi++) {
+        enqueueAnimation(pending.hpJobsSb[hi]);
+    }
+    return pending;
 }
 
 // Fire the turn banner + END→START LED cycle, OR defer them until the
@@ -4456,16 +4551,42 @@ function _hideSpellStage() {
         _spellStage.chain = [];
         _spellStage.casterIdx = null;
         _spellStage.resolving = false;
-        // Flush a deferred trigger blip BEFORE the banner so the user-
-        // expected ordering (stage close → blip → turn flip) holds.
+
+        // Phase 14.7-09 v2 (paladin-heal-during-rat-react): flush a deferred
+        // post-stage frame BEFORE the blip — committing the new HP=32 to
+        // the paladin tile right before the pulse + glyph fires. This is
+        // what gives the user the visual sequence:
+        //   stage hides → HP=32 lands in DOM → 200ms breath → blip pulse
+        //   + ⏳ glyph (~900ms) → drain queue (turn-banner frame applies).
+        // Without this flush, the deferred frame would never commit and
+        // the board would visibly lag the engine state forever.
+        //
+        // The parked frame's newBlip / firedBanner flags WIN over any
+        // _pendingTriggerBlip / _pendingTurnBanner that were set by an
+        // earlier (immediate-path) apply — those globals were populated by
+        // a prior frame and are stale relative to what the parked frame
+        // wants to fire.
+        var pendingFrame = (typeof _flushPendingPostStageFrame === 'function')
+            ? _flushPendingPostStageFrame()
+            : null;
+        var pendingBlip = (pendingFrame && pendingFrame.newBlip)
+            ? pendingFrame.newBlip : _pendingTriggerBlip;
+        _pendingTriggerBlip = null;
+        var deferredBanner = (pendingFrame && pendingFrame.firedBanner)
+            ? { turnNumber: pendingFrame.payload.state.turn_number,
+                activePlayerIdx: pendingFrame.payload.state.active_player_idx }
+            : _pendingTurnBanner;
+        _pendingTurnBanner = null;
+
+        // Flush the trigger blip BEFORE the banner so the user-expected
+        // ordering (stage close → HP commit → blip → turn flip) holds.
         // The 200ms breath lets the stage's exit fade settle before the
         // tile pulse + center icon bloom over the now-bare board.
-        var hadPendingBlip = !!_pendingTriggerBlip;
+        var hadPendingBlip = !!pendingBlip;
         if (hadPendingBlip) {
-            var pendingBlip = _pendingTriggerBlip;
-            _pendingTriggerBlip = null;
+            var blipToFire = pendingBlip;
             setTimeout(function() {
-                _fireTriggerBlipAnimation(pendingBlip);
+                _fireTriggerBlipAnimation(blipToFire);
                 // After the blip animation finishes (~900ms), poke the
                 // sandbox frame queue so the next paced frame (e.g. turn
                 // flip) can land. Banner flush below is independent and
@@ -4473,17 +4594,16 @@ function _hideSpellStage() {
                 setTimeout(_drainSandboxFrameQueue, 1000);
             }, 200);
         }
-        // Flush any turn banner that was deferred while the stage was up.
-        // Small extra delay so the stage's exit fade fully completes before
-        // the banner blooms — clean visual handoff, not a crossfade.
-        // If a blip was also pending, push the banner further so the blip
-        // gets its full beat before the banner takes over.
-        if (_pendingTurnBanner) {
-            var pending = _pendingTurnBanner;
-            _pendingTurnBanner = null;
+        // Flush any deferred turn banner. Small extra delay so the stage's
+        // exit fade fully completes before the banner blooms — clean
+        // visual handoff, not a crossfade. If a blip was also pending,
+        // push the banner further so the blip gets its full beat before
+        // the banner takes over.
+        if (deferredBanner) {
             var bannerDelay = hadPendingBlip ? 1300 : 200;
+            var b = deferredBanner;
             setTimeout(function() {
-                _runTurnFlipVisuals(pending.turnNumber, pending.activePlayerIdx);
+                _runTurnFlipVisuals(b.turnNumber, b.activePlayerIdx);
             }, bannerDelay);
         }
         // Phase 14.7-09 (paladin-heal-during-rat-react fix): the sandbox
