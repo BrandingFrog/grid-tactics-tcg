@@ -775,27 +775,18 @@ function saveDisplayName(name) {
 }
 
 function showSavedNameUI(name) {
+    // The saved/Change state was visually redundant with the input: we now
+    // always show the input section and just prefill it with the saved name.
+    // The Save button stays hidden until the user types something different
+    // (wired via the 'input' listener in setupLobbyHandlers).
     var inputSection = document.getElementById('name-input-section');
     var savedSection = document.getElementById('name-saved-section');
-    var display = document.getElementById('saved-name-display');
-    if (display) display.textContent = name;
-    if (inputSection) inputSection.style.display = 'none';
-    if (savedSection) savedSection.style.display = '';
-    _fitSavedNameToRow();
-}
-
-function _fitSavedNameToRow() {
-    var display = document.getElementById('saved-name-display');
-    if (!display) return;
-    requestAnimationFrame(function() {
-        var size = 15;
-        display.style.fontSize = size + 'px';
-        var guard = 20;
-        while (display.scrollWidth > display.clientWidth && size > 8 && guard-- > 0) {
-            size -= 1;
-            display.style.fontSize = size + 'px';
-        }
-    });
+    var nameInput = document.getElementById('input-name');
+    if (nameInput) nameInput.value = name;
+    if (inputSection) inputSection.style.display = '';
+    if (savedSection) savedSection.style.display = 'none';
+    var btnSaveName = document.getElementById('btn-save-name');
+    if (btnSaveName) btnSaveName.style.display = 'none';
 }
 
 function showNameInputUI() {
@@ -3802,26 +3793,24 @@ function _drainSandboxFrameQueue() {
         clearTimeout(_sandboxDrainTimer);
         _sandboxDrainTimer = null;
     }
-    if (_sandboxFrameQueue.length === 0) return;
-    // Gate: visual hold timer. If the previous apply pushed
-    // _sandboxNextApplyAt into the future, schedule a re-check at that
-    // time rather than busy-polling. We DO NOT gate on
-    // isSpellStageAnimating() — the timestamp already encodes the hold
-    // time for any visual the previous frame fired, and frames that
-    // CLOSE the stage MUST be allowed to apply while the stage is up
-    // (otherwise they'd never trigger _spellStageOnReactClosed).
-    var now = Date.now();
-    var wait = _sandboxNextApplyAt - now;
-    if (wait > 0) {
-        _sandboxDrainTimer = setTimeout(_drainSandboxFrameQueue, wait);
-        return;
+    // Loop instead of recursing: pop and apply all frames whose visual
+    // hold has expired in this tick. We DO NOT gate on isSpellStageAnimating()
+    // — the timestamp already encodes the hold time for any visual the
+    // previous frame fired, and frames that CLOSE the stage MUST be allowed
+    // to apply while the stage is up (otherwise they'd never trigger
+    // _spellStageOnReactClosed).
+    while (_sandboxFrameQueue.length > 0) {
+        var now = Date.now();
+        var wait = _sandboxNextApplyAt - now;
+        if (wait > 0) {
+            _sandboxDrainTimer = setTimeout(_drainSandboxFrameQueue, wait);
+            return;
+        }
+        var payload = _sandboxFrameQueue.shift();
+        _applySandboxFrame(payload);
+        // _applySandboxFrame may push _sandboxNextApplyAt forward; the
+        // next loop iteration's wait check will catch that and schedule.
     }
-    var payload = _sandboxFrameQueue.shift();
-    _applySandboxFrame(payload);
-    // After applying, attempt another drain. If the apply pushed
-    // _sandboxNextApplyAt forward, the recursive call will schedule a
-    // timer; otherwise it pops the next frame on the same tick.
-    _drainSandboxFrameQueue();
 }
 
 // Apply a single sandbox_state payload. Mirrors the legacy sandbox_state
@@ -3974,13 +3963,15 @@ function _applySandboxFrame(payload) {
         nextAt = Math.max(nextAt, now + _SB_HOLD_SPELL_OPEN_MS);
     }
     if (spellStageClose) {
-        // Close + deferred blip + (optional) deferred banner all chain off
-        // _hideSpellStage. Budget enough wall time for the close itself;
-        // _hideSpellStage's setTimeout(_drainSandboxFrameQueue, ...) will
-        // poke us when the deferred chain actually finishes.
-        nextAt = Math.max(nextAt, now + _SB_HOLD_SPELL_CLOSE_MS);
-    }
-    if (newBlip && !spellStageClose) {
+        // Close + (optional) deferred blip all chain off _hideSpellStage.
+        // Budget the close's wall time PLUS any deferred blip beat that
+        // runs after the stage hides — otherwise a turn-flip frame queued
+        // right behind would race the blip and the user would see the
+        // banner bloom before the paladin pulse / ⏳ glyph completes.
+        var closeHold = _SB_HOLD_SPELL_CLOSE_MS;
+        if (newBlip) closeHold += _SB_HOLD_TRIGGER_BLIP_MS;
+        nextAt = Math.max(nextAt, now + closeHold);
+    } else if (newBlip) {
         nextAt = Math.max(nextAt, now + _SB_HOLD_TRIGGER_BLIP_MS);
     }
     if (firedBanner) {
