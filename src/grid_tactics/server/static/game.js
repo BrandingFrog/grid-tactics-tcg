@@ -3130,9 +3130,37 @@ function playCardPlayed(ev, done) {
             var ownerIdx = payload.owner_idx != null
                 ? payload.owner_idx
                 : payload.player_idx;
+            // Step 0: hide the source card in the hand IMMEDIATELY so the
+            // user doesn't see a duplicate during the slam (the original
+            // sitting in the fan + the slam clone flying to the stage).
+            // We use visibility:hidden instead of display:none so the
+            // hand fan layout doesn't shift mid-slam — the gap stays
+            // until the deferred render collapses it cleanly.
+            try {
+                var srcContainerId = sandboxMode
+                    ? ('sandbox-hand-p' + ownerIdx)
+                    : (ownerIdx === myPlayerIdx ? 'hand-container' : 'oppHandRow');
+                var srcContainer = document.getElementById(srcContainerId);
+                if (srcContainer) {
+                    var srcCards = srcContainer.querySelectorAll('.card-frame[data-numeric-id="' + payload.card_numeric_id + '"]');
+                    if (srcCards.length > 0) {
+                        // Hide the FIRST matching card (multiple copies in
+                        // hand all match — picking the first is fine for
+                        // the visual; the deferred render fixes counts).
+                        srcCards[0].style.visibility = 'hidden';
+                    }
+                }
+            } catch (_) { /* defensive */ }
+            // Step 1: slam the card from hand to stage. Source rect is the
+            // hand container, so we MUST do this BEFORE re-rendering the
+            // hand — otherwise the rect of an empty hand makes the slam
+            // animation read like the card flies from nowhere.
             if (typeof _showSpellStage === 'function') {
                 _showSpellStage(payload.card_numeric_id, ownerIdx);
             }
+            // Step 2: legal actions + state refresh (cheap, no DOM
+            // disruption). The opposing player's counter-counter react
+            // card needs to highlight as react-playable.
             if (window.__lastLegalActions) {
                 legalActions = window.__lastLegalActions;
                 if (sandboxMode) { sandboxLegalActions = window.__lastLegalActions; }
@@ -3144,12 +3172,6 @@ function playCardPlayed(ev, done) {
                     if (typeof fs.phase === 'number') live.phase = fs.phase;
                     if (typeof fs.react_player_idx !== 'undefined') live.react_player_idx = fs.react_player_idx;
                     if (typeof fs.react_context !== 'undefined') live.react_context = fs.react_context;
-                    // Phase 14.8-05c: also pull players (mostly hands) so the
-                    // just-played react card disappears from hand DOM. The
-                    // wholesale final_state apply at drain-end would do this
-                    // eventually, but the user sees the card linger in their
-                    // hand for the entire chain duration without this. Players
-                    // are tuples server-side; final_state arrives as arrays.
                     if (Array.isArray(fs.players)) live.players = fs.players;
                     if (sandboxMode && gameState) {
                         gameState.phase = live.phase;
@@ -3159,16 +3181,23 @@ function playCardPlayed(ev, done) {
                     }
                 }
             }
-            // Re-render the hand so the just-played react card disappears.
-            // renderSandbox / renderGame is heavier than necessary (re-renders
-            // board too) but it's the canonical hand-rendering entry point;
-            // post-chain wholesale commit will re-run it anyway.
-            if (sandboxMode && typeof renderSandbox === 'function') {
-                renderSandbox();
-            } else if (!sandboxMode && typeof renderGame === 'function') {
-                renderGame();
-            }
-            if (typeof updateHandHighlights === 'function') updateHandHighlights();
+            // Step 3: defer the hand re-render until AFTER the slam-in
+            // animation completes (~520ms slam + brief settle = ~600ms).
+            // Re-rendering immediately would visually snap the hand
+            // mid-slam — the user sees the card fly out AND the
+            // remaining cards re-fan at the same instant which reads as
+            // a jarring shuffle. Deferring lets the slam land cleanly,
+            // then the hand collapses afterwards.
+            setTimeout(function() {
+                try {
+                    if (sandboxMode && typeof renderSandbox === 'function') {
+                        renderSandbox();
+                    } else if (!sandboxMode && typeof renderGame === 'function') {
+                        renderGame();
+                    }
+                    if (typeof updateHandHighlights === 'function') updateHandHighlights();
+                } catch (_) { /* defensive */ }
+            }, 600);
         } catch (e) { /* defensive */ }
     }
     setTimeout(done, _evDurationOr(ev, 0));
