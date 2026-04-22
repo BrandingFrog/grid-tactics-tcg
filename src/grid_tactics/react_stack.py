@@ -1152,40 +1152,36 @@ def enter_end_of_turn(
         if state.is_game_over:
             return state
 
-    # 3. Open react window if triggers fired; else shortcut to turn-advance.
-    if had_triggers:
-        state = replace(
-            state,
-            phase=TurnPhase.REACT,
-            react_player_idx=1 - state.active_player_idx,  # opponent reacts
-            react_context=ReactContext.BEFORE_END_OF_TURN,
-            react_return_phase=TurnPhase.END_OF_TURN,
-        )
-        return state
-
-    # No End triggers → advance turn directly.
-    # Phase 14.8-03a per orchestrator decision #3: emit react_window_opened
-    # + react_window_closed for symmetry on the shortcut path too.
+    # 3. Open the BEFORE_END_OF_TURN react window UNCONDITIONALLY.
+    # Phase 14.8-05c: previously this was gated on `had_triggers`, so if
+    # the active player had no end-of-turn triggers the window was
+    # skipped via shortcut. That ate the opponent's chance to react —
+    # cards like Tree Wyrm + Acidic Rain (react_condition =
+    # OPPONENT_ENDS_TURN) never got their window. Per spec: "all
+    # automatic effects go off first, and just before the end phase
+    # ends, the End of Turn React window appears" — the window is
+    # ALWAYS the closing beat of the end phase, regardless of whether
+    # the active player had triggers. Sandbox auto-drains the empty
+    # case (opponent has nothing to play) so the user only pauses on
+    # windows that actually matter.
+    state = replace(
+        state,
+        phase=TurnPhase.REACT,
+        react_player_idx=1 - state.active_player_idx,  # opponent reacts
+        react_context=ReactContext.BEFORE_END_OF_TURN,
+        react_return_phase=TurnPhase.END_OF_TURN,
+    )
     if event_collector is not None:
         event_collector.collect(
             EVT_REACT_WINDOW_OPENED,
             "system:enter_react",
             {
                 "react_context": ReactContext.BEFORE_END_OF_TURN.name,
-                "react_player_idx": 1 - state.active_player_idx,
-                "shortcut": True,
-            },
-            animation_duration_ms=0,
-        )
-        event_collector.collect(
-            EVT_REACT_WINDOW_CLOSED,
-            "system:close_react_window",
-            {
+                "react_player_idx": state.react_player_idx,
                 "return_phase": TurnPhase.END_OF_TURN.name,
-                "shortcut": True,
             },
-            animation_duration_ms=0,
         )
+    return state
     state = _close_end_of_turn_and_flip(
         state, library, event_collector=event_collector,
     )

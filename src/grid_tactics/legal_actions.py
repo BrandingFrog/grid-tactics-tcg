@@ -776,6 +776,19 @@ def _check_react_condition(
     if condition == ReactCondition.OPPONENT_END_OF_TURN:
         return ctx == ReactContext.BEFORE_END_OF_TURN
 
+    # Phase 14.8-05c: legacy OPPONENT_ENDS_TURN (added pre-3-phase-turn)
+    # used to fire on any opponent action (semantic: "every action ended
+    # the opponent's turn" because there was 1 action per turn). With
+    # the Start → Action → End structure, end-of-turn reacts must wait
+    # for the BEFORE_END_OF_TURN window so all automatic end-of-turn
+    # effects resolve first. Treat ENDS_TURN as a synonym of
+    # END_OF_TURN for the new semantic. Two cards use this condition:
+    # Acidic Rain (multi-purpose magic) and Tree Wyrm (multi-purpose
+    # minion); both should only fire at end-of-turn, not after every
+    # opponent action.
+    if condition == ReactCondition.OPPONENT_ENDS_TURN:
+        return ctx == ReactContext.BEFORE_END_OF_TURN
+
     # ---------------- Counter-react (react-on-react) ----------------
     # If a non-originator react sits on top of the stack, the player is
     # counter-reacting. OPPONENT_PLAYS_REACT matches in ANY context.
@@ -903,10 +916,12 @@ def _check_react_condition(
         # No non-originator react on stack means nothing to counter-react
         return False
 
-    # Grid Tactics is one-action-per-turn — every opponent action ends
-    # their turn, so OPPONENT_ENDS_TURN fires for any pending_action.
-    if condition == ReactCondition.OPPONENT_ENDS_TURN:
-        return True
+    # Phase 14.8-05c: OPPONENT_ENDS_TURN now gates on BEFORE_END_OF_TURN
+    # context (handled in the upper context-tagged section). Pre-3-phase
+    # behaviour was "always true on any opponent action"; with the new
+    # Start → Action → End structure that fires too eagerly. The check
+    # is in the context block above; if we got here, the context didn't
+    # match and the condition fails.
 
     # Element-based conditions against pending PLAY_CARD (pre-14.7 flow)
     _ELEM_CONDITIONS = {
