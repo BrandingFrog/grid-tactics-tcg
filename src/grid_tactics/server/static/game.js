@@ -2664,11 +2664,22 @@ function _commitFinalStateSnapshot(finalState) {
         if (typeof renderSandbox === 'function') {
             try { renderSandbox(); } catch (e) { /* defensive */ }
         }
+        // Phase 14.8-05c: renderSandbox replaces hand DOM nodes wholesale,
+        // which nukes any card-react-playable / card-playable classes that
+        // playReactWindowOpened (or the initial hand render) applied. Re-
+        // apply the playable-state classes now so clicks during the just-
+        // opened react window land on correctly-highlighted cards.
+        if (typeof updateHandHighlights === 'function') {
+            try { updateHandHighlights(); } catch (e) { /* defensive */ }
+        }
     } else {
         gameState = finalState;
         if (window.__lastLegalActions) legalActions = window.__lastLegalActions;
         if (typeof renderGame === 'function') {
             try { renderGame(); } catch (e) { /* defensive */ }
+        }
+        if (typeof updateHandHighlights === 'function') {
+            try { updateHandHighlights(); } catch (e) { /* defensive */ }
         }
     }
 }
@@ -3221,6 +3232,42 @@ function playReactWindowOpened(ev, done) {
             );
         } catch (_) { /* console.debug not defined */ }
     }
+    // Phase 14.8-05c: A react window just opened and the user is about to
+    // decide. If we wait for the full queue drain to apply the fresh
+    // final_state + legal_actions (plan 14.8-05b's post-drain commit),
+    // the user's click during the spell-stage animation sees STALE
+    // legalActions — e.g. the counter-react PLAY_REACT for their card is
+    // missing, so onHandCardClick's react branch finds no match and the
+    // click falls through. The spell-stage click-through then lands on
+    // the floating SKIP REACT button which fires a PASS, collapsing the
+    // chain. Re-sync legalActions + phase + react_player_idx on
+    // sandboxState / gameState NOW so clicks find the match.
+    try {
+        if (window.__lastLegalActions) {
+            legalActions = window.__lastLegalActions;
+            if (sandboxMode) { sandboxLegalActions = window.__lastLegalActions; }
+        }
+        var fs = window.__lastFinalState;
+        if (fs) {
+            var live = sandboxMode ? sandboxState : gameState;
+            if (live) {
+                // Only rewrite the fields that gate react-click eligibility.
+                // Full wholesale state apply stays on the post-drain path so
+                // minion renders don't flicker.
+                if (typeof fs.phase === 'number') live.phase = fs.phase;
+                if (typeof fs.react_player_idx !== 'undefined') live.react_player_idx = fs.react_player_idx;
+                if (typeof fs.react_context !== 'undefined') live.react_context = fs.react_context;
+                if (sandboxMode && gameState) {
+                    gameState.phase = live.phase;
+                    gameState.react_player_idx = live.react_player_idx;
+                    gameState.react_context = live.react_context;
+                }
+            }
+        }
+        // Re-render the hand so card-react-playable marks the correct
+        // cards. updateHandHighlights() reads legalActions + gameState.
+        if (typeof updateHandHighlights === 'function') updateHandHighlights();
+    } catch (e) { /* defensive */ }
     // Pace so the slam-in (520ms fly + 1000ms hold per SPELL_STAGE_PER_CARD_MS)
     // completes before the next event (typically a minion-HP or player-HP
     // change) starts animating. 1500ms matches the stage-per-card beat.
