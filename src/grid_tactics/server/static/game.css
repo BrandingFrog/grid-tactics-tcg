@@ -7723,6 +7723,80 @@ body {
   color: #e8f7ff !important;
 }
 
+/* Phase 14.8-05c: Table-of-contents jump panel.
+   Slides down beneath the header, lists every loaded test, click to
+   jump. HUD-styled to match the rest of the overlay. */
+#tests-overlay .tests-toc-panel {
+  background: rgba(5, 9, 19, 0.98) !important;
+  border-top: 1px solid var(--hud-g-edge);
+  border-bottom: 1px solid var(--hud-g-edge);
+  max-height: 50vh;
+  overflow-y: auto;
+  padding: 0;
+  position: relative;
+  z-index: 4;
+}
+#tests-overlay .tests-toc-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 14px;
+  border-bottom: 1px dashed var(--hud-g-edge);
+  font-family: var(--hud-g-display) !important;
+  font-size: 9px !important;
+  letter-spacing: 0.24em;
+  color: var(--hud-g-cyan);
+  text-transform: uppercase;
+  background: rgba(0, 212, 255, 0.04);
+}
+#tests-overlay .tests-toc-close {
+  background: rgba(0, 212, 255, 0.05) !important;
+  border: 1px solid var(--hud-g-edge) !important;
+  color: var(--hud-g-cyan) !important;
+  border-radius: 0 !important;
+  padding: 0 8px !important;
+  font-family: var(--hud-g-mono) !important;
+  cursor: pointer;
+}
+#tests-overlay .tests-toc-close:hover {
+  background: rgba(0, 212, 255, 0.2) !important;
+  border-color: var(--hud-g-edge-hot) !important;
+}
+#tests-overlay .tests-toc-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+#tests-overlay .tests-toc-item {
+  font-family: var(--hud-g-mono) !important;
+  font-size: 12px;
+  line-height: 1.4;
+  padding: 8px 14px;
+  border-bottom: 1px dashed rgba(0, 212, 255, 0.08);
+  color: rgba(200, 219, 232, 0.8);
+  cursor: pointer;
+  transition: background 100ms ease, color 100ms ease, border-color 100ms ease;
+}
+#tests-overlay .tests-toc-item:hover {
+  background: rgba(0, 212, 255, 0.08);
+  color: #e8f7ff;
+  border-bottom-color: var(--hud-g-edge);
+}
+#tests-overlay .tests-toc-item.is-current {
+  background: rgba(0, 212, 255, 0.15);
+  color: var(--hud-g-cyan);
+  font-weight: 700;
+  border-left: 3px solid var(--hud-g-cyan);
+  padding-left: 11px;
+}
+#tests-overlay .tests-toc-empty {
+  font-family: var(--hud-g-mono) !important;
+  font-size: 11px;
+  color: rgba(200, 219, 232, 0.5);
+  padding: 14px;
+  font-style: italic;
+}
+
 /* =====================================================================
    Pile modal (shared between game + sandbox)
    ===================================================================== */

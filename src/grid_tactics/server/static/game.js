@@ -8323,6 +8323,23 @@ function _wireTestsOnce() {
             minBtn.textContent = mini ? '▢' : '▁';
             minBtn.title = mini ? 'Expand' : 'Minimize';
         });
+        // Phase 14.8-05c: TOC button. Toggles the jump-to-test panel.
+        var tocBtn = document.getElementById('tests-toc');
+        if (tocBtn) tocBtn.addEventListener('click', function() {
+            var panel = document.getElementById('tests-toc-panel');
+            if (!panel) return;
+            if (panel.hidden) {
+                _renderTestsToc();
+                panel.hidden = false;
+            } else {
+                panel.hidden = true;
+            }
+        });
+        var tocClose = document.getElementById('tests-toc-close');
+        if (tocClose) tocClose.addEventListener('click', function() {
+            var panel = document.getElementById('tests-toc-panel');
+            if (panel) panel.hidden = true;
+        });
     }
     if (!_testsState.wiredHandlers && socket) {
         _testsState.wiredHandlers = true;
@@ -8370,6 +8387,36 @@ function _loadCurrentTest() {
     _setTestsInstructions('');
     _setTestsExpected('');
     socket.emit('tests_load', { id: t.id });
+}
+
+// Phase 14.8-05c: render the table-of-contents jump panel. Each row is
+// a clickable list item that loads its scenario directly. The currently-
+// active test gets a highlight so the user can see where they are in
+// the sequence.
+function _renderTestsToc() {
+    var list = document.getElementById('tests-toc-list');
+    if (!list) return;
+    list.innerHTML = '';
+    _testsState.list.forEach(function(t, i) {
+        var li = document.createElement('li');
+        li.className = 'tests-toc-item';
+        if (i === _testsState.index) li.classList.add('is-current');
+        li.textContent = (i + 1) + '. ' + (t.title || t.id);
+        li.addEventListener('click', function() {
+            _testsState.index = i;
+            _testsState.currentId = null;  // allow re-submit on the new test
+            _loadCurrentTest();
+            var panel = document.getElementById('tests-toc-panel');
+            if (panel) panel.hidden = true;
+        });
+        list.appendChild(li);
+    });
+    if (_testsState.list.length === 0) {
+        var empty = document.createElement('li');
+        empty.className = 'tests-toc-empty';
+        empty.textContent = 'No tests loaded.';
+        list.appendChild(empty);
+    }
 }
 
 function _submitTestResult(result) {

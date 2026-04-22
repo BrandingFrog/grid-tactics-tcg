@@ -873,8 +873,16 @@
       <div class="tests-overlay-header">
         <span class="tests-progress" id="tests-progress">Test 0 / 0</span>
         <span class="tests-title" id="tests-title">Loading…</span>
+        <button class="tests-exit" id="tests-toc" title="Table of contents">☰</button>
         <button class="tests-exit" id="tests-minimize" title="Minimize / expand">▁</button>
         <button class="tests-exit" id="tests-exit" title="Exit tests">×</button>
+      </div>
+      <div class="tests-toc-panel" id="tests-toc-panel" hidden>
+        <div class="tests-toc-header">
+          <span>Jump to test</span>
+          <button class="tests-toc-close" id="tests-toc-close" title="Close">×</button>
+        </div>
+        <ol class="tests-toc-list" id="tests-toc-list"></ol>
       </div>
       <div class="tests-overlay-body">
         <div class="tests-section">
