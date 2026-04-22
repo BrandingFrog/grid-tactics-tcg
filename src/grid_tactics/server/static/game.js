@@ -3144,12 +3144,29 @@ function playCardPlayed(ev, done) {
                     if (typeof fs.phase === 'number') live.phase = fs.phase;
                     if (typeof fs.react_player_idx !== 'undefined') live.react_player_idx = fs.react_player_idx;
                     if (typeof fs.react_context !== 'undefined') live.react_context = fs.react_context;
+                    // Phase 14.8-05c: also pull players (mostly hands) so the
+                    // just-played react card disappears from hand DOM. The
+                    // wholesale final_state apply at drain-end would do this
+                    // eventually, but the user sees the card linger in their
+                    // hand for the entire chain duration without this. Players
+                    // are tuples server-side; final_state arrives as arrays.
+                    if (Array.isArray(fs.players)) live.players = fs.players;
                     if (sandboxMode && gameState) {
                         gameState.phase = live.phase;
                         gameState.react_player_idx = live.react_player_idx;
                         gameState.react_context = live.react_context;
+                        gameState.players = live.players;
                     }
                 }
+            }
+            // Re-render the hand so the just-played react card disappears.
+            // renderSandbox / renderGame is heavier than necessary (re-renders
+            // board too) but it's the canonical hand-rendering entry point;
+            // post-chain wholesale commit will re-run it anyway.
+            if (sandboxMode && typeof renderSandbox === 'function') {
+                renderSandbox();
+            } else if (!sandboxMode && typeof renderGame === 'function') {
+                renderGame();
             }
             if (typeof updateHandHighlights === 'function') updateHandHighlights();
         } catch (e) { /* defensive */ }
