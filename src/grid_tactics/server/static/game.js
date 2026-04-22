@@ -3100,7 +3100,8 @@ function playCardDrawn(ev, done) {
 }
 
 function playCardPlayed(ev, done) {
-    // Payload: {card_numeric_id, card_index, owner_idx, target_pos, position}
+    // Payload: {card_numeric_id, card_index, owner_idx, target_pos, position,
+    //           is_react?}
     // Visual is covered by spell stage in/out (react_window_opened/closed, 04b)
     // for magic/react cards, and by minion_summoned for minions.
     // Phase 14.8-05: stash the originator so playReactWindowOpened (which
@@ -3116,6 +3117,42 @@ function playCardPlayed(ev, done) {
                 : payload.player_idx),
             source: 'card_played',
         };
+    }
+    // Phase 14.8-05c: counter-react chain extension. When is_react=true
+    // AND the spell stage is already up, slam the react card onto the
+    // stage's NEXT slot (the conveyor) without emitting a new window-
+    // opened event (which would create a phantom chain entry the engine
+    // never closes — LIFO resolves fire ONE react_window_closed for the
+    // whole window). Refresh legal actions + hand highlights so the
+    // opposing player's counter-counter react card becomes clickable.
+    if (payload.is_react && payload.card_numeric_id != null) {
+        try {
+            var ownerIdx = payload.owner_idx != null
+                ? payload.owner_idx
+                : payload.player_idx;
+            if (typeof _showSpellStage === 'function') {
+                _showSpellStage(payload.card_numeric_id, ownerIdx);
+            }
+            if (window.__lastLegalActions) {
+                legalActions = window.__lastLegalActions;
+                if (sandboxMode) { sandboxLegalActions = window.__lastLegalActions; }
+            }
+            var fs = window.__lastFinalState;
+            if (fs) {
+                var live = sandboxMode ? sandboxState : gameState;
+                if (live) {
+                    if (typeof fs.phase === 'number') live.phase = fs.phase;
+                    if (typeof fs.react_player_idx !== 'undefined') live.react_player_idx = fs.react_player_idx;
+                    if (typeof fs.react_context !== 'undefined') live.react_context = fs.react_context;
+                    if (sandboxMode && gameState) {
+                        gameState.phase = live.phase;
+                        gameState.react_player_idx = live.react_player_idx;
+                        gameState.react_context = live.react_context;
+                    }
+                }
+            }
+            if (typeof updateHandHighlights === 'function') updateHandHighlights();
+        } catch (e) { /* defensive */ }
     }
     setTimeout(done, _evDurationOr(ev, 0));
 }
