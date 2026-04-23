@@ -8366,6 +8366,16 @@ function _wireTestsOnce() {
             // Client hints — picks which animation variant a test wants.
             var hints = data.client_hints || {};
             window.__sacrificeVariant = hints.sacrifice_animation || null;
+            // Phase 14.8-05c: reset the eventQueue dedup cursor. The server
+            // resets SandboxSession._next_event_seq=0 when a fresh scenario
+            // loads (reset, skip, or TOC jump). Without flushing the
+            // client's lastSeenSeq, the new scenario's events arrive as
+            // seq=0..N and get rejected as "out-of-order" against the
+            // stale cursor (seq=19 etc from the previous run). Symptom
+            // observed: cards played but spell stage doesn't update,
+            // chains appear to "trigger twice" (residual half-applied
+            // state from the partial first pass overlaps with the new).
+            if (typeof resetEventQueue === 'function') resetEventQueue();
         });
         socket.on('tests_result_saved', function() {
             // Move to next test (or show summary when done).
