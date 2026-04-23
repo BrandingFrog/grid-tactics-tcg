@@ -3375,6 +3375,17 @@ function playReactWindowClosed(ev, done) {
         ? isSpellStageAnimating() : false;
     if (chainEmpty && stageUp) {
         setTimeout(_spellStageOnReactClosed, 0);
+        // Phase 14.8-05c: the LIFO resolve runs out-of-band via setTimeout
+        // chains in _doSpellStageResolve (700ms intro + 550ms per card +
+        // 250ms exit). Without waiting for it, the eventQueue races
+        // straight to turn_flipped and the banner blooms while cards are
+        // still popping off the stage — exactly the user-reported "turn 2
+        // happens during react window" symptom. Calculate the resolve
+        // duration from the live _spellStage.chain length and pace the
+        // queue to wait for it.
+        var resolveDur = 700 + (_spellStage.chain.length * 550) + 250;
+        setTimeout(done, Math.max(_evDurationOr(ev, 400), resolveDur));
+        return;
     }
     setTimeout(done, _evDurationOr(ev, 400));
 }
