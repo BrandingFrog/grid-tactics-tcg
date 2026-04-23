@@ -9407,20 +9407,32 @@ function renderSandboxToolbarState() {
         fab.hidden = activeScreenId() === null;
     }
 
+    // Captured at FAB-click time so it reflects the screen the user
+    // was looking at when they decided to report — not whatever it
+    // looks like 30 seconds later after they finish typing. Cleared
+    // after each submit attempt.
+    var pendingScreenshot = null;
+
     function openModal() {
         statusEl.textContent = '';
         statusEl.className = 'bug-modal-status';
         document.getElementById('bug-title').value = '';
         document.getElementById('bug-description').value = '';
-        modal.hidden = false;
-        setTimeout(function() {
-            var t = document.getElementById('bug-title');
-            if (t) t.focus();
-        }, 30);
-        // Lazy-load html2canvas so the 45 KB lib is only fetched when
-        // someone actually opens the reporter — most page loads pay
-        // nothing for it.
+        pendingScreenshot = null;
+        // Lazy-load html2canvas (45 KB CDN) on first open.
         ensureHtml2Canvas();
+        // Capture FIRST (modal is still hidden because openModal is
+        // the only path that shows it), THEN show the modal. ~150-300ms
+        // delay on first click while html2canvas downloads + runs;
+        // subsequent clicks are sub-100ms because the lib is cached.
+        captureScreenshot().then(function(b64) {
+            pendingScreenshot = b64;
+            modal.hidden = false;
+            setTimeout(function() {
+                var t = document.getElementById('bug-title');
+                if (t) t.focus();
+            }, 30);
+        });
     }
     function ensureHtml2Canvas() {
         if (window.html2canvas || window.__h2cLoading) return;
@@ -9435,35 +9447,41 @@ function renderSandboxToolbarState() {
         };
         document.head.appendChild(s);
     }
+    // Wait for html2canvas to finish loading from CDN — first FAB
+    // click hits an empty cache, but only the first one. Resolves
+    // either way after at most 3 s so a slow CDN can't block the
+    // modal opening forever.
+    function waitForH2C() {
+        if (window.html2canvas || window.__h2cFailed) return Promise.resolve();
+        return new Promise(function(resolve) {
+            var t0 = Date.now();
+            (function check() {
+                if (window.html2canvas || window.__h2cFailed || Date.now() - t0 > 3000) resolve();
+                else setTimeout(check, 50);
+            })();
+        });
+    }
+
     // Capture a viewport screenshot via html2canvas; returns a Promise
     // that resolves to a base64 PNG (no data: prefix) or null. Always
-    // resolves — never rejects — so submit() can attach if available
-    // and quietly skip if not.
+    // resolves — never rejects — so callers can attach if available
+    // and quietly skip if not. Caller is responsible for ensuring the
+    // bug modal is NOT visible when this runs (we capture document.body
+    // and the modal would otherwise appear in the result).
     function captureScreenshot() {
-        if (!window.html2canvas) return Promise.resolve(null);
-        // Hide our own modal during the capture so the screenshot shows
-        // the underlying screen, not the form. Restore even on error.
-        var prevHidden = modal.hidden;
-        modal.hidden = true;
-        return Promise.resolve()
-            .then(function() {
-                return window.html2canvas(document.body, {
-                    backgroundColor: '#050913',
-                    scale: 0.6,                // 0.6x viewport — keeps file under ~150 KB
-                    logging: false,
-                    useCORS: true,
-                    foreignObjectRendering: false,
-                });
-            })
-            .then(function(canvas) {
-                modal.hidden = prevHidden;
+        return waitForH2C().then(function() {
+            if (!window.html2canvas) return null;
+            return window.html2canvas(document.body, {
+                backgroundColor: '#050913',
+                scale: 0.6,                // 0.6x viewport — keeps file under ~150 KB
+                logging: false,
+                useCORS: true,
+                foreignObjectRendering: false,
+            }).then(function(canvas) {
                 var dataUrl = canvas.toDataURL('image/png');
                 return dataUrl.replace(/^data:image\/png;base64,/, '');
-            })
-            .catch(function() {
-                modal.hidden = prevHidden;
-                return null;
             });
+        }).catch(function() { return null; });
     }
     function closeModal() { if (modal) modal.hidden = true; }
 
@@ -9498,10 +9516,8 @@ function renderSandboxToolbarState() {
             return;
         }
         submitBtn.disabled = true;
-        statusEl.textContent = 'Capturing screen…';
-        statusEl.className = 'bug-modal-status';
-        captureScreenshot().then(function(screenshotB64) {
         statusEl.textContent = 'Sending…';
+        statusEl.className = 'bug-modal-status';
         var payload = {
             title: title,
             description: desc,
@@ -9513,13 +9529,13 @@ function renderSandboxToolbarState() {
             game_state: captureGameState(),
             events: recentEvents.slice(-MAX_RECENT),
             console: recentConsole.slice(-MAX_CONSOLE),
-            screenshot_png_b64: screenshotB64,
+            // Captured at FAB-click time, not now — see openModal.
+            screenshot_png_b64: pendingScreenshot,
         };
-        return fetch('/api/bug-report', {
+        fetch('/api/bug-report', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify(payload),
-        });
         }).then(function(r) {
             return r.json().then(function(j) { return {ok: r.ok, body: j}; });
         }).then(function(res) {

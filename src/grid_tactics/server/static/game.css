@@ -8318,6 +8318,8 @@ body {
 #bug-fab .bug-fab-label { line-height: 1; }
 
 .bug-modal { position: fixed; inset: 0; z-index: 9100; display: flex; align-items: center; justify-content: center; }
+.bug-modal[hidden] { display: none !important; }
+#bug-fab[hidden] { display: none !important; }
 .bug-modal-backdrop {
   position: absolute; inset: 0;
   background: rgba(2, 6, 14, 0.78);
