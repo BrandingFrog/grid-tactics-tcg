@@ -3001,6 +3001,22 @@ function playMinionSummoned(ev, done) {
     // The inner playSummonAnimation ALSO calls applyStateFrame at START —
     // we pass the current gameState (already post-event from snapshot
     // path) so that call is an idempotent noop diff + re-render.
+    //
+    // Phase 14.8 fix: the eventQueue's `done` MUST be paced by the actual
+    // animQueue completion of THIS job, not a fixed 600ms guess. The
+    // animQueue can have earlier jobs (card_fly, an in-flight attack)
+    // queued ahead of this summon — if we fire done() at 600ms while the
+    // summon is still waiting in the animQueue, the eventQueue races
+    // forward to turn_flipped / phase_changed and the user sees the turn
+    // banner bloom BEFORE the minion has appeared on the board. The
+    // summon then pops in 1-2s later, after the turn has already passed.
+    // Hard-cap the wait so a runaway animQueue never wedges the eventQueue.
+    var settled = false;
+    var settle = function() {
+        if (settled) return;
+        settled = true;
+        done();
+    };
     enqueueAnimation({
         type: 'summon',
         payload: {
@@ -3010,11 +3026,11 @@ function playMinionSummoned(ev, done) {
         stateAfter: gameState,
         legalActionsAfter: legalActions,
         _fromEventQueue: true,
+        onDone: settle,
     });
-    // Call done after the summon animation's wall-clock duration so the
-    // eventQueue paces subsequent events correctly. _evDurationOr reads
-    // animation_duration_ms (default 600ms for summon per engine_events.py).
-    setTimeout(done, _evDurationOr(ev, 600));
+    // Safety cap (3 s): if the animQueue gets wedged, never let one summon
+    // freeze the eventQueue forever.
+    setTimeout(settle, Math.max(_evDurationOr(ev, 600), 3000));
 }
 
 function playMinionDied(ev, done) {
@@ -3684,6 +3700,16 @@ function runQueue() {
             applyStateFrame(job.stateAfter, job.legalActionsAfter);
         }
         animRunning = false;
+        // Per-job completion callback (Phase 14.8): the eventQueue slot
+        // handlers (playMinionSummoned, playMinionMoved, etc.) need to
+        // wait for the actual visual to finish before pacing forward,
+        // otherwise downstream events (turn_flipped, phase_changed) play
+        // their visuals while this job is still queued behind earlier
+        // animations. Fire the callback BEFORE recursing so a chained
+        // job onDone can re-enter without contention.
+        if (typeof job.onDone === 'function') {
+            try { job.onDone(); } catch (e) { /* defensive */ }
+        }
         runQueue();
     });
 }
