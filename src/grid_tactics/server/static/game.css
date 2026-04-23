@@ -228,6 +228,15 @@
   clip-path: none !important;
   border-radius: 14px !important;
 }
+/* The card-frame's 14px border-radius eats into the React box (the
+   multi-half last-child) on multi-purpose cards (Acidic Rain, Tree
+   Wyrm, Sparkfed Surgebot) when the box's default 4px bottom margin
+   leaves it flush against the rounded corner. Bump the bottom margin
+   to clear the 14px radius with a comfortable cushion. Spell-stage-
+   scoped only — hand and tooltip cards stay tight. */
+.spell-stage-stack-card .card-multi-half:last-child {
+  margin-bottom: 10px;
+}
 /* Slam-in: card flies from source point (set inline transform initial)
    to the stack with a brief over-scale punch on landing. */
 .spell-stage-stack-card.slam-in {

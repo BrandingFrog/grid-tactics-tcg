@@ -1,8 +1,16 @@
 """Flask application factory with Socket.IO setup."""
+import mimetypes
 import os
 
 from flask import Flask, send_from_directory
 from flask_socketio import SocketIO
+
+# Python stdlib's mimetypes table doesn't include image/webp on every
+# platform; Flask falls back to application/octet-stream which
+# browsers still render correctly via magic-bytes sniffing but breaks
+# proper Content-Type headers / caching middleware. Register it once
+# at import time.
+mimetypes.add_type("image/webp", ".webp")
 
 socketio = SocketIO()
 
