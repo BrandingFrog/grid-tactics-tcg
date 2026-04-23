@@ -9328,7 +9328,6 @@ function renderSandboxToolbarState() {
 // the server forwards to Trello (see bug_report.py).
 // =============================================
 (function bugReporter() {
-    var BUG_SCREENS = ['screen-game', 'screen-sandbox'];  // tests overlay sits on sandbox
     var fab = null, modal = null, statusEl = null, severity = 'annoying';
     // Ring buffer of recent engine events for context.
     var recentEvents = [];
@@ -9388,22 +9387,30 @@ function renderSandboxToolbarState() {
             };
         });
 
-        // Toggle FAB visibility based on the active screen.
+        // Toggle FAB visibility based on the active screen. Watch for
+        // both .screen.active class flips and the tests-overlay hidden
+        // attribute toggling.
         updateFabVisibility();
         var observer = new MutationObserver(updateFabVisibility);
-        observer.observe(document.body, { subtree: true, attributes: true, attributeFilter: ['class'] });
+        observer.observe(document.body, { subtree: true, attributes: true, attributeFilter: ['class', 'hidden'] });
     }
 
     function activeScreenId() {
         var screens = document.querySelectorAll('.screen.active');
-        for (var i = 0; i < screens.length; i++) {
-            if (BUG_SCREENS.indexOf(screens[i].id) !== -1) return screens[i].id;
-        }
-        return null;
+        // Tests overlay sits on top of the sandbox screen; if it's
+        // showing, prefer that label so the bug card reflects what
+        // the user was actually doing.
+        var tests = document.getElementById('tests-overlay');
+        if (tests && !tests.hidden) return 'screen-tests';
+        return screens.length > 0 ? screens[screens.length - 1].id : null;
     }
 
     function updateFabVisibility() {
         if (!fab) return;
+        // Always show — every screen can have bugs worth reporting.
+        // We still hide if literally no screen is active (e.g.
+        // very early page load), to avoid a floating button on a
+        // blank page.
         fab.hidden = activeScreenId() === null;
     }
 
