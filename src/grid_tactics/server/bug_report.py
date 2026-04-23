@@ -32,6 +32,8 @@ readable and below Trello's 16K char limit.
 """
 from __future__ import annotations
 
+import base64
+import binascii
 import io
 import json
 import mimetypes
@@ -80,6 +82,9 @@ def register_bug_report(app: Flask) -> None:
             meta_lines.append(f"**Events captured:** {len(events)}")
         if payload.get("game_state"):
             meta_lines.append("**Game state:** attached as `state.json`")
+        screenshot_b64 = payload.get("screenshot_png_b64")
+        if screenshot_b64:
+            meta_lines.append("**Screenshot:** attached as `screenshot.png`")
 
         body = "## Description\n\n" + description[:4000] + "\n\n---\n\n" + "\n".join(meta_lines)
 
@@ -92,6 +97,14 @@ def register_bug_report(app: Flask) -> None:
             _attach_state(cfg, card["id"], payload)
         except _TrelloError:
             pass
+
+        if screenshot_b64:
+            try:
+                _attach_screenshot(cfg, card["id"], screenshot_b64)
+            except (_TrelloError, binascii.Error, ValueError):
+                # Screenshot is best-effort — never fail the whole report
+                # because the image upload broke.
+                pass
 
         return jsonify(ok=True, card_url=card.get("shortUrl") or card.get("url"))
 
@@ -156,6 +169,26 @@ def _attach_state(cfg: dict[str, str], card_id: str, payload: dict[str, Any]) ->
     )
     try:
         urllib.request.urlopen(req, timeout=15).read()
+    except (urllib.error.HTTPError, urllib.error.URLError) as e:
+        raise _TrelloError(str(e)) from e
+
+
+def _attach_screenshot(cfg: dict[str, str], card_id: str, b64: str) -> None:
+    blob = base64.b64decode(b64, validate=True)
+    boundary = "----grid-tactics-bug-" + uuid.uuid4().hex
+    body = _multipart(boundary, "screenshot.png", "image/png", blob)
+    url = (
+        f"{TRELLO_API}/cards/{card_id}/attachments"
+        f"?key={urllib.parse.quote(cfg['key'])}&token={urllib.parse.quote(cfg['token'])}"
+    )
+    req = urllib.request.Request(
+        url,
+        data=body,
+        method="POST",
+        headers={"Content-Type": f"multipart/form-data; boundary={boundary}"},
+    )
+    try:
+        urllib.request.urlopen(req, timeout=20).read()
     except (urllib.error.HTTPError, urllib.error.URLError) as e:
         raise _TrelloError(str(e)) from e
 

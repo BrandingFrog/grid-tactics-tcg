@@ -9417,6 +9417,53 @@ function renderSandboxToolbarState() {
             var t = document.getElementById('bug-title');
             if (t) t.focus();
         }, 30);
+        // Lazy-load html2canvas so the 45 KB lib is only fetched when
+        // someone actually opens the reporter — most page loads pay
+        // nothing for it.
+        ensureHtml2Canvas();
+    }
+    function ensureHtml2Canvas() {
+        if (window.html2canvas || window.__h2cLoading) return;
+        window.__h2cLoading = true;
+        var s = document.createElement('script');
+        s.src = 'https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js';
+        s.async = true;
+        s.onload = function() { window.__h2cLoading = false; };
+        s.onerror = function() {
+            window.__h2cLoading = false;
+            window.__h2cFailed = true;
+        };
+        document.head.appendChild(s);
+    }
+    // Capture a viewport screenshot via html2canvas; returns a Promise
+    // that resolves to a base64 PNG (no data: prefix) or null. Always
+    // resolves — never rejects — so submit() can attach if available
+    // and quietly skip if not.
+    function captureScreenshot() {
+        if (!window.html2canvas) return Promise.resolve(null);
+        // Hide our own modal during the capture so the screenshot shows
+        // the underlying screen, not the form. Restore even on error.
+        var prevHidden = modal.hidden;
+        modal.hidden = true;
+        return Promise.resolve()
+            .then(function() {
+                return window.html2canvas(document.body, {
+                    backgroundColor: '#050913',
+                    scale: 0.6,                // 0.6x viewport — keeps file under ~150 KB
+                    logging: false,
+                    useCORS: true,
+                    foreignObjectRendering: false,
+                });
+            })
+            .then(function(canvas) {
+                modal.hidden = prevHidden;
+                var dataUrl = canvas.toDataURL('image/png');
+                return dataUrl.replace(/^data:image\/png;base64,/, '');
+            })
+            .catch(function() {
+                modal.hidden = prevHidden;
+                return null;
+            });
     }
     function closeModal() { if (modal) modal.hidden = true; }
 
@@ -9451,8 +9498,10 @@ function renderSandboxToolbarState() {
             return;
         }
         submitBtn.disabled = true;
-        statusEl.textContent = 'Sending…';
+        statusEl.textContent = 'Capturing screen…';
         statusEl.className = 'bug-modal-status';
+        captureScreenshot().then(function(screenshotB64) {
+        statusEl.textContent = 'Sending…';
         var payload = {
             title: title,
             description: desc,
@@ -9464,11 +9513,13 @@ function renderSandboxToolbarState() {
             game_state: captureGameState(),
             events: recentEvents.slice(-MAX_RECENT),
             console: recentConsole.slice(-MAX_CONSOLE),
+            screenshot_png_b64: screenshotB64,
         };
-        fetch('/api/bug-report', {
+        return fetch('/api/bug-report', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify(payload),
+        });
         }).then(function(r) {
             return r.json().then(function(j) { return {ok: r.ok, body: j}; });
         }).then(function(res) {
