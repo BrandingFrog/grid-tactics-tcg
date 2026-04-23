@@ -216,6 +216,18 @@
   max-width: 100%;
   height: 100%;
 }
+/* Stage cards already have their own border-radius (14px) + glow box-
+   shadow on the OUTER .spell-stage-stack-card. The inner card-frame's
+   HUD clip-path chamfers (added in the card HUD redesign) compound
+   with the stage's own clip and slice the bottom of multi-purpose
+   cards — the inner REACT box on Acidic Rain / Tree Wyrm / Sparkfed
+   Surgebot sits flush at the card bottom, so the 6px bottom-corner
+   chamfer cuts into its border + last text line. Drop the chamfer
+   here so the stage card reads cleanly all the way to the bottom. */
+.spell-stage-stack-card .card-frame {
+  clip-path: none !important;
+  border-radius: 14px !important;
+}
 /* Slam-in: card flies from source point (set inline transform initial)
    to the stack with a brief over-scale punch on landing. */
 .spell-stage-stack-card.slam-in {
