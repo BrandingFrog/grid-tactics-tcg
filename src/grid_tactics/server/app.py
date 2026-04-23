@@ -5,6 +5,8 @@ import os
 from flask import Flask, send_from_directory
 from flask_socketio import SocketIO
 
+from grid_tactics.server.bug_report import register_bug_report
+
 # Python stdlib's mimetypes table doesn't include image/webp on every
 # platform; Flask falls back to application/octet-stream which
 # browsers still render correctly via magic-bytes sniffing but breaks
@@ -32,6 +34,8 @@ def create_app(testing: bool = False) -> Flask:
     @app.route("/")
     def index():
         return send_from_directory(static_dir, "game.html")
+
+    register_bug_report(app)
 
     socketio.init_app(
         app,

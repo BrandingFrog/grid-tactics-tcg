@@ -9318,3 +9318,183 @@ function renderSandboxToolbarState() {
 }
 
 // === SANDBOX-SECTION-END ===
+
+// =============================================
+// Bug reporter widget
+//
+// Shows a floating "🐞 Report a bug" button on Duel / Sandbox / Tests
+// screens. On submit, posts {title, description, severity, screen, url,
+// browser, version, game_state, events, console} to /api/bug-report;
+// the server forwards to Trello (see bug_report.py).
+// =============================================
+(function bugReporter() {
+    var BUG_SCREENS = ['screen-game', 'screen-sandbox'];  // tests overlay sits on sandbox
+    var fab = null, modal = null, statusEl = null, severity = 'annoying';
+    // Ring buffer of recent engine events for context.
+    var recentEvents = [];
+    var MAX_RECENT = 50;
+    // Mirror console errors/warnings so the report includes them.
+    var recentConsole = [];
+    var MAX_CONSOLE = 30;
+
+    function init() {
+        fab = document.getElementById('bug-fab');
+        modal = document.getElementById('bug-modal');
+        statusEl = document.getElementById('bug-modal-status');
+        if (!fab || !modal) return;
+
+        fab.addEventListener('click', openModal);
+        modal.querySelectorAll('[data-bug-close]').forEach(function(el) {
+            el.addEventListener('click', closeModal);
+        });
+        modal.querySelectorAll('.bug-sev').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                modal.querySelectorAll('.bug-sev').forEach(function(b) { b.classList.remove('is-active'); });
+                btn.classList.add('is-active');
+                severity = btn.getAttribute('data-sev') || 'annoying';
+            });
+        });
+        document.getElementById('bug-submit').addEventListener('click', submit);
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape' && !modal.hidden) closeModal();
+        });
+
+        // Hook engine_events so we can store the most recent batch.
+        try {
+            if (typeof socket !== 'undefined' && socket && typeof socket.on === 'function') {
+                socket.on('engine_events', function(payload) {
+                    var evs = (payload && payload.events) || [];
+                    for (var i = 0; i < evs.length; i++) {
+                        recentEvents.push(evs[i]);
+                        if (recentEvents.length > MAX_RECENT) recentEvents.shift();
+                    }
+                });
+            }
+        } catch (_) { /* defensive — bug reporter must never crash the game */ }
+
+        // Mirror console.error / console.warn (read-only — never block).
+        ['error', 'warn'].forEach(function(level) {
+            var orig = console[level];
+            console[level] = function() {
+                try {
+                    var msg = Array.prototype.map.call(arguments, function(a) {
+                        if (typeof a === 'string') return a;
+                        try { return JSON.stringify(a); } catch (_) { return String(a); }
+                    }).join(' ');
+                    recentConsole.push({level: level, t: Date.now(), msg: msg.slice(0, 500)});
+                    if (recentConsole.length > MAX_CONSOLE) recentConsole.shift();
+                } catch (_) {}
+                return orig.apply(console, arguments);
+            };
+        });
+
+        // Toggle FAB visibility based on the active screen.
+        updateFabVisibility();
+        var observer = new MutationObserver(updateFabVisibility);
+        observer.observe(document.body, { subtree: true, attributes: true, attributeFilter: ['class'] });
+    }
+
+    function activeScreenId() {
+        var screens = document.querySelectorAll('.screen.active');
+        for (var i = 0; i < screens.length; i++) {
+            if (BUG_SCREENS.indexOf(screens[i].id) !== -1) return screens[i].id;
+        }
+        return null;
+    }
+
+    function updateFabVisibility() {
+        if (!fab) return;
+        fab.hidden = activeScreenId() === null;
+    }
+
+    function openModal() {
+        statusEl.textContent = '';
+        statusEl.className = 'bug-modal-status';
+        document.getElementById('bug-title').value = '';
+        document.getElementById('bug-description').value = '';
+        modal.hidden = false;
+        setTimeout(function() {
+            var t = document.getElementById('bug-title');
+            if (t) t.focus();
+        }, 30);
+    }
+    function closeModal() { if (modal) modal.hidden = true; }
+
+    function captureGameState() {
+        // Prefer the most recent authoritative final state stashed by
+        // onEngineEvents; fall back to the live sandboxState/gameState.
+        if (window.__lastFinalState) return window.__lastFinalState;
+        if (typeof sandboxMode !== 'undefined' && sandboxMode
+                && typeof sandboxState !== 'undefined') return sandboxState;
+        if (typeof gameState !== 'undefined') return gameState;
+        return null;
+    }
+
+    function appVersion() {
+        var b = document.getElementById('patch-badge');
+        if (b) {
+            var v = b.querySelector('.patch-version');
+            if (v) return (v.textContent || '').replace(/^Patch\s+/, '').trim();
+        }
+        return '';
+    }
+
+    function submit() {
+        var titleEl = document.getElementById('bug-title');
+        var descEl = document.getElementById('bug-description');
+        var submitBtn = document.getElementById('bug-submit');
+        var title = (titleEl.value || '').trim();
+        var desc = (descEl.value || '').trim();
+        if (!title || !desc) {
+            statusEl.textContent = 'Title and description are required.';
+            statusEl.className = 'bug-modal-status is-error';
+            return;
+        }
+        submitBtn.disabled = true;
+        statusEl.textContent = 'Sending…';
+        statusEl.className = 'bug-modal-status';
+        var payload = {
+            title: title,
+            description: desc,
+            severity: severity,
+            screen: activeScreenId() || 'unknown',
+            url: location.href,
+            browser: navigator.userAgent,
+            version: appVersion(),
+            game_state: captureGameState(),
+            events: recentEvents.slice(-MAX_RECENT),
+            console: recentConsole.slice(-MAX_CONSOLE),
+        };
+        fetch('/api/bug-report', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(payload),
+        }).then(function(r) {
+            return r.json().then(function(j) { return {ok: r.ok, body: j}; });
+        }).then(function(res) {
+            submitBtn.disabled = false;
+            if (res.ok && res.body && res.body.ok) {
+                statusEl.className = 'bug-modal-status is-ok';
+                if (res.body.card_url) {
+                    statusEl.innerHTML = 'Reported. <a href="' + res.body.card_url + '" target="_blank" rel="noopener">View card ↗</a>';
+                } else {
+                    statusEl.textContent = 'Reported. Thanks!';
+                }
+                setTimeout(closeModal, 2200);
+            } else {
+                statusEl.className = 'bug-modal-status is-error';
+                statusEl.textContent = (res.body && res.body.error) || 'Failed to send.';
+            }
+        }).catch(function(err) {
+            submitBtn.disabled = false;
+            statusEl.className = 'bug-modal-status is-error';
+            statusEl.textContent = 'Network error: ' + err.message;
+        });
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', init, {once: true});
+    } else {
+        init();
+    }
+})();

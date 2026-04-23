@@ -907,5 +907,55 @@
     </div>
   </div>
 
+  <!-- Bug reporter widget — floating button + modal. Visibility is
+       toggled by JS based on which screen is active (Duel / Sandbox /
+       Tests only — hidden on Lobby & Deck Builder where there is no
+       game state worth reporting against). -->
+  <button id="bug-fab" type="button" hidden>
+    <span class="bug-fab-icon">🐞</span>
+    <span class="bug-fab-label">Report a bug</span>
+  </button>
+  <div id="bug-modal" class="bug-modal" hidden>
+    <div class="bug-modal-backdrop" data-bug-close></div>
+    <div class="bug-modal-panel" role="dialog" aria-modal="true" aria-labelledby="bug-modal-title">
+      <div class="bug-modal-corner bug-modal-corner-tl"></div>
+      <div class="bug-modal-corner bug-modal-corner-tr"></div>
+      <div class="bug-modal-corner bug-modal-corner-bl"></div>
+      <div class="bug-modal-corner bug-modal-corner-br"></div>
+      <div class="bug-modal-head">
+        <span class="bug-modal-tag">FLD-OPS · INCIDENT</span>
+        <h2 class="bug-modal-title" id="bug-modal-title">Report a bug</h2>
+        <button type="button" class="bug-modal-close" data-bug-close aria-label="Close">×</button>
+      </div>
+      <div class="bug-modal-body">
+        <label class="bug-field">
+          <span class="bug-field-label">Title</span>
+          <input id="bug-title" type="text" maxlength="200" placeholder="One-line summary…" />
+        </label>
+        <label class="bug-field">
+          <span class="bug-field-label">What happened?</span>
+          <textarea id="bug-description" rows="6" maxlength="4000"
+                    placeholder="What did you do? What did you expect? What actually happened?"></textarea>
+        </label>
+        <div class="bug-field">
+          <span class="bug-field-label">Severity</span>
+          <div class="bug-severity-row" role="radiogroup" aria-label="Severity">
+            <button type="button" class="bug-sev" data-sev="cosmetic">Cosmetic</button>
+            <button type="button" class="bug-sev is-active" data-sev="annoying">Annoying</button>
+            <button type="button" class="bug-sev" data-sev="broken">Broken</button>
+          </div>
+        </div>
+        <div class="bug-attach-line" id="bug-attach-line">
+          Game state &amp; recent events will be attached automatically.
+        </div>
+      </div>
+      <div class="bug-modal-foot">
+        <button type="button" class="bug-btn bug-btn-cancel" data-bug-close>Cancel</button>
+        <button type="button" class="bug-btn bug-btn-submit" id="bug-submit">Submit</button>
+      </div>
+      <div class="bug-modal-status" id="bug-modal-status"></div>
+    </div>
+  </div>
+
 </body>
 </html>

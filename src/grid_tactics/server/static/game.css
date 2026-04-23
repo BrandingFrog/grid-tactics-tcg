@@ -8285,3 +8285,135 @@ body {
   .card-frame-hand .card-effect-full { font-size: 8px !important; -webkit-line-clamp: 4 !important; }
 }
 
+/* ======================================================================
+   BUG REPORTER WIDGET — floating FAB + HUD-styled modal
+   ====================================================================== */
+#bug-fab {
+  position: fixed;
+  right: 18px;
+  bottom: 18px;
+  z-index: 9000;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 16px 9px 12px;
+  background: linear-gradient(135deg, rgba(0, 212, 255, 0.18), rgba(0, 212, 255, 0.06));
+  border: 1px solid rgba(0, 212, 255, 0.55);
+  color: var(--cyan, #00d4ff);
+  font-family: 'Michroma', 'Space Mono', monospace;
+  font-size: 11px;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  cursor: pointer;
+  clip-path: polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px);
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.55), 0 0 18px rgba(0, 212, 255, 0.18);
+  transition: background 180ms ease, box-shadow 180ms ease, transform 120ms ease;
+}
+#bug-fab:hover {
+  background: linear-gradient(135deg, rgba(0, 212, 255, 0.28), rgba(0, 212, 255, 0.10));
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.65), 0 0 26px rgba(0, 212, 255, 0.32);
+}
+#bug-fab:active { transform: translateY(1px); }
+#bug-fab .bug-fab-icon { font-size: 14px; line-height: 1; }
+#bug-fab .bug-fab-label { line-height: 1; }
+
+.bug-modal { position: fixed; inset: 0; z-index: 9100; display: flex; align-items: center; justify-content: center; }
+.bug-modal-backdrop {
+  position: absolute; inset: 0;
+  background: rgba(2, 6, 14, 0.78);
+  backdrop-filter: blur(2px);
+}
+.bug-modal-panel {
+  position: relative;
+  width: min(560px, 92vw);
+  max-height: 92vh;
+  overflow: auto;
+  background: linear-gradient(180deg, rgba(8, 14, 26, 0.98), rgba(5, 9, 19, 0.98));
+  border: 1px solid rgba(0, 212, 255, 0.45);
+  color: #cfe6ef;
+  font-family: 'Space Mono', monospace;
+  clip-path: polygon(14px 0, 100% 0, 100% calc(100% - 14px), calc(100% - 14px) 100%, 0 100%, 0 14px);
+  padding: 22px 24px 20px;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.7), 0 0 40px rgba(0, 212, 255, 0.18);
+}
+.bug-modal-corner {
+  position: absolute; width: 14px; height: 14px;
+  border: 1px solid rgba(0, 212, 255, 0.7);
+  pointer-events: none;
+}
+.bug-modal-corner-tl { top: 6px; left: 6px;  border-right: none; border-bottom: none; }
+.bug-modal-corner-tr { top: 6px; right: 6px; border-left: none;  border-bottom: none; }
+.bug-modal-corner-bl { bottom: 6px; left: 6px;  border-right: none; border-top: none; }
+.bug-modal-corner-br { bottom: 6px; right: 6px; border-left: none;  border-top: none; }
+
+.bug-modal-head { display: flex; flex-direction: column; gap: 4px; padding-bottom: 14px; border-bottom: 1px dashed rgba(0, 212, 255, 0.25); margin-bottom: 16px; position: relative; }
+.bug-modal-tag { color: rgba(0, 212, 255, 0.85); font-family: 'Michroma', 'Space Mono', monospace; font-size: 9px; letter-spacing: 2.5px; }
+.bug-modal-title { margin: 0; color: #fff; font-family: 'Michroma', 'Space Mono', monospace; font-size: 18px; letter-spacing: 1.5px; text-transform: uppercase; }
+.bug-modal-close { position: absolute; top: -2px; right: 0; width: 28px; height: 28px; background: transparent; border: 1px solid rgba(0, 212, 255, 0.4); color: var(--cyan, #00d4ff); font-size: 18px; line-height: 1; cursor: pointer; transition: background 120ms ease; }
+.bug-modal-close:hover { background: rgba(0, 212, 255, 0.12); }
+
+.bug-modal-body { display: flex; flex-direction: column; gap: 14px; }
+.bug-field { display: flex; flex-direction: column; gap: 6px; }
+.bug-field-label { font-family: 'Michroma', 'Space Mono', monospace; font-size: 9px; letter-spacing: 2px; color: rgba(0, 212, 255, 0.75); text-transform: uppercase; }
+.bug-field input, .bug-field textarea {
+  background: rgba(0, 0, 0, 0.45);
+  border: 1px solid rgba(0, 212, 255, 0.3);
+  color: #e6f4f8;
+  font-family: 'Space Mono', monospace;
+  font-size: 13px;
+  padding: 9px 11px;
+  outline: none;
+  transition: border-color 140ms ease, box-shadow 140ms ease;
+}
+.bug-field input:focus, .bug-field textarea:focus {
+  border-color: rgba(0, 212, 255, 0.75);
+  box-shadow: 0 0 0 2px rgba(0, 212, 255, 0.18);
+}
+.bug-field textarea { resize: vertical; min-height: 90px; line-height: 1.5; }
+
+.bug-severity-row { display: flex; gap: 8px; }
+.bug-sev {
+  flex: 1;
+  padding: 8px 10px;
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid rgba(0, 212, 255, 0.3);
+  color: rgba(207, 230, 239, 0.85);
+  font-family: 'Michroma', 'Space Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: background 120ms ease, color 120ms ease, border-color 120ms ease;
+}
+.bug-sev:hover { background: rgba(0, 212, 255, 0.10); }
+.bug-sev.is-active {
+  background: rgba(0, 212, 255, 0.20);
+  border-color: rgba(0, 212, 255, 0.85);
+  color: #fff;
+  box-shadow: inset 0 0 12px rgba(0, 212, 255, 0.2);
+}
+.bug-attach-line { font-size: 11px; color: rgba(207, 230, 239, 0.55); padding-top: 2px; }
+
+.bug-modal-foot { display: flex; justify-content: flex-end; gap: 10px; margin-top: 18px; padding-top: 14px; border-top: 1px dashed rgba(0, 212, 255, 0.2); }
+.bug-btn {
+  padding: 9px 18px;
+  background: transparent;
+  border: 1px solid rgba(0, 212, 255, 0.55);
+  color: var(--cyan, #00d4ff);
+  font-family: 'Michroma', 'Space Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: background 140ms ease, color 140ms ease;
+}
+.bug-btn:hover { background: rgba(0, 212, 255, 0.14); }
+.bug-btn-submit { background: rgba(0, 212, 255, 0.20); color: #fff; border-color: rgba(0, 212, 255, 0.85); }
+.bug-btn-submit:hover { background: rgba(0, 212, 255, 0.34); }
+.bug-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.bug-modal-status { margin-top: 12px; font-size: 12px; min-height: 18px; }
+.bug-modal-status.is-error { color: #ff7e7e; }
+.bug-modal-status.is-ok { color: #5fd58a; }
+.bug-modal-status a { color: inherit; text-decoration: underline; }
+
