@@ -1152,7 +1152,9 @@ def enter_end_of_turn(
         if state.is_game_over:
             return state
 
-    # 3. Open the BEFORE_END_OF_TURN react window UNCONDITIONALLY.
+    # 3. Open the BEFORE_END_OF_TURN react window if the trigger drain
+    # didn't already open one.
+    #
     # Phase 14.8-05c: previously this was gated on `had_triggers`, so if
     # the active player had no end-of-turn triggers the window was
     # skipped via shortcut. That ate the opponent's chance to react —
@@ -1164,6 +1166,33 @@ def enter_end_of_turn(
     # the active player had triggers. Sandbox auto-drains the empty
     # case (opponent has nothing to play) so the user only pauses on
     # windows that actually matter.
+    #
+    # Bug fix (2026-04-20, debug/turn-ends-during-react-window-v3.md):
+    # When triggers fire AND drain to a single resolved entry,
+    # _resolve_trigger_and_open_react_window already emits
+    # EVT_REACT_WINDOW_OPENED with react_context=BEFORE_END_OF_TURN
+    # (line 846, derived from trigger_kind="end_of_turn"). The previous
+    # version of this block then unconditionally emitted a SECOND
+    # EVT_REACT_WINDOW_OPENED for the same window, leaving the client's
+    # spellStageChain at length 1 forever (the engine fires only ONE
+    # EVT_REACT_WINDOW_CLOSED for the whole window when it ultimately
+    # closes). Net effect: turn_flipped's banner ran while the spell
+    # stage was still non-empty, and the spell stage never visually
+    # resolved. Now we only emit the unconditional open if the trigger
+    # drain DID NOT already transition us into REACT — which happens
+    # in two cases:
+    #   (a) had_triggers was False (no triggers to drain).
+    #   (b) had_triggers was True but the drain deferred (picker modal,
+    #       death-target modal, game over) — those return early without
+    #       emitting EVT_REACT_WINDOW_OPENED. We treat (b) the same as
+    #       no-window-yet and let the unconditional block open it.
+    if state.phase == TurnPhase.REACT and state.react_context == ReactContext.BEFORE_END_OF_TURN:
+        # Trigger drain already opened the window — reuse it. No re-emit,
+        # no state replace. The window's react_return_phase was set to
+        # END_OF_TURN by _resolve_trigger_and_open_react_window's
+        # default_return for end_of_turn kind (line 814).
+        return state
+
     state = replace(
         state,
         phase=TurnPhase.REACT,
@@ -1182,14 +1211,6 @@ def enter_end_of_turn(
             },
         )
     return state
-    state = _close_end_of_turn_and_flip(
-        state, library, event_collector=event_collector,
-    )
-    if state.is_game_over:
-        return state
-    return enter_start_of_turn(
-        state, library, event_collector=event_collector,
-    )
 
 
 def close_start_react_and_enter_action(
