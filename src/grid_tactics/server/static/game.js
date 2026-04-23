@@ -3158,6 +3158,13 @@ function playCardPlayed(ev, done) {
             if (typeof _showSpellStage === 'function') {
                 _showSpellStage(payload.card_numeric_id, ownerIdx);
             }
+            // Phase 14.8-05c: consume the originator we just stashed above
+            // so the matching playReactWindowOpened (engine emits one for
+            // every counter-react chain extension) doesn't re-slam the
+            // same card. Without this, the user sees the LAST react card
+            // briefly duplicated on its owner's stack right before the
+            // LIFO resolve.
+            slotState.lastOriginator = null;
             // Step 2: legal actions + state refresh (cheap, no DOM
             // disruption). The opposing player's counter-counter react
             // card needs to highlight as react-playable.
