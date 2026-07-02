@@ -453,6 +453,151 @@ def drain_pending_trigger_queue(
     return state
 
 
+def resume_after_trigger_drain(
+    state: GameState,
+    library: CardLibrary,
+    *,
+    event_collector: Optional[EventStream] = None,
+) -> GameState:
+    """Resume the deferred phase flow after a trigger drain exhausted.
+
+    Phase 14.8 bugfix (drain-exhaustion wedge): drain_pending_trigger_queue's
+    both-queues-empty exit returns state unchanged — it performs NO phase
+    transition. That is correct for callers that continue the flow
+    themselves (enter_start_of_turn / enter_end_of_turn / resolve_action's
+    post-action tail), but three call sites relied on the drain "making
+    progress" (opening a react window or modal) and returned its result
+    directly:
+
+      1. resolve_react_stack's drain-recheck hook — it has already TORN
+         DOWN the closing react window (react_player_idx=None) while
+         leaving phase=REACT. An exhausted drain (e.g. the last remaining
+         trigger fizzled) stranded the game in phase=REACT with
+         react_player_idx=None: legal_actions crashed with a TypeError
+         and live PvP soft-locked (reproduced at run_game(seed=42)).
+      2. _apply_decline_trigger — DECLINE_TRIGGER during an ACTION-phase
+         death drain cleared the queue and returned an ACTION-phase state
+         with NO react window, skipping the opponent's react and granting
+         the active player a free second action.
+      3. _apply_trigger_pick — same as (2) when the picked (final)
+         trigger fizzles.
+
+    This helper inspects the drained state: if the drain made progress
+    (window/modal open, queues non-empty, game over) it returns the state
+    unchanged. Otherwise it performs the phase transition the interrupted
+    flow still owes, dispatching on react_return_phase exactly like
+    resolve_react_stack's tail.
+    """
+    if state.is_game_over:
+        return state
+    # Drain still has queued work, or opened a picker/modal — progress
+    # was made; the normal resume paths take over from here.
+    if state.pending_trigger_queue_turn or state.pending_trigger_queue_other:
+        return state
+    if (
+        state.pending_trigger_picker_idx is not None
+        or state.pending_death_target is not None
+        or state.pending_tutor_player_idx is not None
+        or state.pending_revive_player_idx is not None
+        or state.pending_conjure_deploy_card is not None
+    ):
+        return state
+
+    if state.phase == TurnPhase.REACT:
+        if state.react_player_idx is not None:
+            # A live react window is open (either the drain opened a
+            # fresh one, or the picker was wrapped inside a still-open
+            # window whose PASS-PASS close performs the dispatch).
+            return state
+        # Wedge: the drain-recheck hook cleared react bookkeeping, then
+        # the drain exhausted without opening anything. Dispatch on the
+        # preserved react_return_phase exactly like resolve_react_stack's
+        # tail so the game is never stranded in phase=REACT with
+        # react_player_idx=None.
+        return_phase = state.react_return_phase or TurnPhase.ACTION
+        if return_phase == TurnPhase.START_OF_TURN:
+            return close_start_react_and_enter_action(
+                state, library, event_collector=event_collector,
+            )
+        if return_phase == TurnPhase.END_OF_TURN:
+            return close_end_react_and_advance_turn(
+                state, library, event_collector=event_collector,
+            )
+        # ACTION (legacy after-action path) — mirror resolve_react_stack's
+        # ACTION dispatch: honour a pending melee post-move sub-action,
+        # otherwise proceed to END_OF_TURN.
+        if state.pending_post_move_attacker_id is not None:
+            return replace(
+                state,
+                phase=TurnPhase.ACTION,
+                react_stack=(),
+                react_player_idx=None,
+                pending_action=None,
+                react_context=None,
+                react_return_phase=None,
+            )
+        if event_collector is not None:
+            event_collector.collect(
+                EVT_REACT_WINDOW_CLOSED,
+                "system:close_react_window",
+                {"return_phase": "end_of_turn_transition"},
+            )
+        state = replace(
+            state,
+            react_stack=(),
+            react_player_idx=None,
+            pending_action=None,
+            react_context=None,
+            react_return_phase=None,
+        )
+        return enter_end_of_turn(
+            state, library, event_collector=event_collector,
+        )
+
+    if state.phase == TurnPhase.ACTION:
+        if state.react_return_phase == TurnPhase.START_OF_TURN:
+            # Turn-start death drain (burn tick) exhausted — nothing
+            # resolved that the opponent could react to. Continue into
+            # the active player's ACTION phase.
+            return replace(state, react_return_phase=None)
+        # ACTION-phase death drain exhausted (DECLINE_TRIGGER, or the
+        # final picked trigger fizzled) — the original action's react
+        # window was deferred at resolve_action's picker gate. Open it
+        # now so the opponent gets their react and the turn advances
+        # normally instead of handing the active player a free second
+        # action.
+        state = replace(
+            state,
+            phase=TurnPhase.REACT,
+            react_player_idx=1 - state.active_player_idx,
+            react_context=ReactContext.AFTER_ACTION,
+            react_return_phase=state.react_return_phase or TurnPhase.ACTION,
+        )
+        if event_collector is not None:
+            from grid_tactics.action_resolver import (
+                _emit_after_action_react_window_opened,
+            )
+            _emit_after_action_react_window_opened(state, event_collector)
+        return state
+
+    if state.phase == TurnPhase.START_OF_TURN:
+        # Burn-death drain at turn start exhausted while still in the
+        # START_OF_TURN bookend — continue into the active player's
+        # ACTION phase (consistent with the pick path, which routes
+        # through close_start_react_and_enter_action).
+        return replace(
+            state,
+            phase=TurnPhase.ACTION,
+            react_stack=(),
+            react_player_idx=None,
+            pending_action=None,
+            react_context=None,
+            react_return_phase=None,
+        )
+
+    return state
+
+
 def _resolve_trigger_and_open_react_window(
     state: GameState,
     trigger: PendingTrigger,
@@ -1051,9 +1196,42 @@ def enter_start_of_turn(
         )
 
     # 2. Tick burns for the active player's burning minions.
+    #
+    # Phase 14.8 bugfix: a burn death can open an on_death react window
+    # or modal (death-target pick / trigger picker) mid-tick. Pre-set
+    # react_return_phase=START_OF_TURN so any window opened by that
+    # death pipeline dispatches back through
+    # close_start_react_and_enter_action (the active player keeps their
+    # ACTION phase) instead of the legacy ACTION -> END_OF_TURN default,
+    # which skipped the newly-active player's entire turn.
+    _return_phase_before_tick = state.react_return_phase
+    state = replace(state, react_return_phase=TurnPhase.START_OF_TURN)
     state = tick_status_effects(state, library, event_collector=event_collector)
     if state.is_game_over:
         return state
+
+    # Phase 14.8 bugfix: if the burn tick opened an interrupt, return it
+    # instead of clobbering it — previously this function fired start
+    # triggers on top of the open window or overwrote it via the
+    # no-trigger shortcut below (destroying the opponent's react window
+    # against the death effect).
+    if state.phase == TurnPhase.REACT:
+        # Burn death opened an on_death react window — hand control to it.
+        return state
+    if (
+        state.pending_death_target is not None
+        or state.pending_trigger_picker_idx is not None
+    ):
+        # Burn death opened a click-target modal / trigger picker. Hand
+        # off in ACTION phase (mirrors the pending-tutor hand-off in
+        # resolve_react_stack) so the server auto-advance loop serves
+        # the modal actions instead of spinning on START_OF_TURN. The
+        # preserved react_return_phase=START_OF_TURN routes the eventual
+        # window close back to the active player's ACTION phase.
+        return replace(state, phase=TurnPhase.ACTION)
+
+    # No interrupt — clear the temporary return-phase marker.
+    state = replace(state, react_return_phase=_return_phase_before_tick)
 
     # 3. Fire ON_START_OF_TURN triggers (if any).
     had_triggers = _has_triggers_for(state, library, TriggerType.ON_START_OF_TURN)
@@ -1626,6 +1804,73 @@ def _play_react(
             f"Insufficient mana: have {player.current_mana}, need {mana_cost}"
         )
 
+    # Phase 14.8 bugfix (resolver-level enforcement): mirror the
+    # legal_actions gates so direct resolve_action callers (tests, RL
+    # harness, sandbox edits, future endpoints) cannot play a react whose
+    # condition doesn't match the open window. Deferred import — legal
+    # actions imports action_resolver at module level, so a module-level
+    # import here would risk an import cycle.
+    from grid_tactics.legal_actions import (
+        _check_react_condition,
+        _valid_deploy_positions,
+    )
+
+    # 1. React condition must match the current react window. Pure REACT
+    #    cards REQUIRE a condition (a condition-less react card is never
+    #    playable — same as the enumerator's skip); multi-purpose cards
+    #    only check when they declare one.
+    if card_def.card_type == CardType.REACT:
+        if card_def.react_condition is None or not _check_react_condition(
+            card_def.react_condition, state, library,
+        ):
+            _cond_name = (
+                card_def.react_condition.name
+                if card_def.react_condition is not None else None
+            )
+            raise ValueError(
+                f"Card '{card_def.card_id}': react condition "
+                f"{_cond_name} is not met by the current react window."
+            )
+    elif card_def.react_condition is not None and not _check_react_condition(
+        card_def.react_condition, state, library,
+    ):
+        raise ValueError(
+            f"Card '{card_def.card_id}': react condition "
+            f"{card_def.react_condition.name} is not met by the current "
+            f"react window."
+        )
+
+    # 2. Sparkfed Surgebot's gate: react mode is only available while the
+    #    player controls NO live friendly minions (per the card ruling).
+    if card_def.react_requires_no_friendly_minions:
+        if any(
+            m.owner == player.side and m.current_health > 0
+            for m in state.minions
+        ):
+            raise ValueError(
+                f"Card '{card_def.card_id}': react requires no friendly "
+                f"minions on the board."
+            )
+
+    # 3. DEPLOY_SELF react: the landing cell must be a legal deploy cell
+    #    (empty + friendly rows for the card's range class), exactly like
+    #    the ACTION-phase deploy path validates in _deploy_minion.
+    if (card_def.react_effect is not None
+            and card_def.react_effect.effect_type == EffectType.DEPLOY_SELF):
+        if action.target_pos is None:
+            raise ValueError(
+                f"Card '{card_def.card_id}': DEPLOY_SELF react requires "
+                f"a target_pos."
+            )
+        if tuple(action.target_pos) not in _valid_deploy_positions(
+            state, card_def, player.side,
+        ):
+            raise ValueError(
+                f"Card '{card_def.card_id}': DEPLOY_SELF target "
+                f"{action.target_pos} is not a legal deploy cell "
+                f"(must be empty and in your deploy rows)."
+            )
+
     # Spend mana and discard card from hand to graveyard
     prev_mana = player.current_mana
     new_player = player.spend_mana(mana_cost)
@@ -1821,23 +2066,70 @@ def resolve_react_stack(
                     # DEPLOY_SELF: deploy this minion to the board at target_pos
                     if entry.target_pos is not None:
                         from grid_tactics.minion import MinionInstance
-                        new_minion = MinionInstance(
-                            instance_id=state.next_minion_id,
-                            card_numeric_id=entry.card_numeric_id,
-                            owner=state.players[entry.player_idx].side,
-                            position=entry.target_pos,
-                            current_health=card_def.health,
+                        from grid_tactics.legal_actions import (
+                            _valid_deploy_positions,
                         )
-                        new_board = state.board.place(
+                        # Phase 14.8 bugfix: validate the landing cell at
+                        # resolution time. _play_react validates on play,
+                        # but the board can change while the chain
+                        # resolves LIFO, and direct callers can push
+                        # entries without going through _play_react.
+                        # An occupied cell fizzles silently (spec §7.3 —
+                        # the captured target is no longer valid); a
+                        # deploy-zone violation raises (it can never
+                        # arise from a legally-played entry).
+                        owner_side = state.players[entry.player_idx].side
+                        tgt = tuple(entry.target_pos)
+                        if tgt in _valid_deploy_positions(
+                            state, card_def, owner_side,
+                        ):
+                            new_minion = MinionInstance(
+                                instance_id=state.next_minion_id,
+                                card_numeric_id=entry.card_numeric_id,
+                                owner=owner_side,
+                                position=entry.target_pos,
+                                current_health=card_def.health,
+                            )
+                            new_board = state.board.place(
+                                entry.target_pos[0], entry.target_pos[1],
+                                new_minion.instance_id,
+                            )
+                            state = replace(
+                                state,
+                                board=new_board,
+                                minions=state.minions + (new_minion,),
+                                next_minion_id=state.next_minion_id + 1,
+                            )
+                        elif state.board.get(
                             entry.target_pos[0], entry.target_pos[1],
-                            new_minion.instance_id,
-                        )
-                        state = replace(
-                            state,
-                            board=new_board,
-                            minions=state.minions + (new_minion,),
-                            next_minion_id=state.next_minion_id + 1,
-                        )
+                        ) is not None:
+                            # Cell got occupied during LIFO resolution —
+                            # the deploy fizzles silently.
+                            pass
+                        else:
+                            raise ValueError(
+                                f"Card '{card_def.card_id}': DEPLOY_SELF "
+                                f"target {entry.target_pos} is outside the "
+                                f"owner's deploy rows."
+                            )
+                elif card_def.react_effect.effect_type == EffectType.TUTOR:
+                    # Phase 14.8 bugfix: generic resolve_effect cannot
+                    # dispatch TUTOR (it silently no-ops in
+                    # _apply_effect_to_minion), so Tree Wyrm's react paid
+                    # 1 mana + the discarded card for NOTHING. Route
+                    # through the pending-tutor shim exactly like the
+                    # magic_cast originator branch above.
+                    from grid_tactics.effect_resolver import _enter_pending_tutor
+                    state = _enter_pending_tutor(
+                        state, card_def, caster_owner, library,
+                        amount=max(1, card_def.react_effect.amount or 1),
+                        event_collector=event_collector,
+                    )
+                elif card_def.react_effect.effect_type == EffectType.REVIVE:
+                    from grid_tactics.action_resolver import _enter_pending_revive
+                    state = _enter_pending_revive(
+                        state, card_def, caster_owner, library,
+                    )
                 else:
                     state = resolve_effect(
                         state, card_def.react_effect, (0, 0), caster_owner, library,
@@ -1850,11 +2142,27 @@ def resolve_react_stack(
             # only that (e.g. Acidic Rain's draw-a-card react). Otherwise fall
             # back to the card's ON_PLAY effects (e.g. Illicit Stones shares).
             if card_def.react_effect is not None:
-                state = resolve_effect(
-                    state, card_def.react_effect, (0, 0), caster_owner, library,
-                    entry.target_pos,
-                    contract_source="trigger:on_play",
-                )
+                # Phase 14.8 bugfix: TUTOR/REVIVE react effects need the
+                # pending-entry shims (same routing as the multi-purpose
+                # branch above) — resolve_effect cannot dispatch them.
+                if card_def.react_effect.effect_type == EffectType.TUTOR:
+                    from grid_tactics.effect_resolver import _enter_pending_tutor
+                    state = _enter_pending_tutor(
+                        state, card_def, caster_owner, library,
+                        amount=max(1, card_def.react_effect.amount or 1),
+                        event_collector=event_collector,
+                    )
+                elif card_def.react_effect.effect_type == EffectType.REVIVE:
+                    from grid_tactics.action_resolver import _enter_pending_revive
+                    state = _enter_pending_revive(
+                        state, card_def, caster_owner, library,
+                    )
+                else:
+                    state = resolve_effect(
+                        state, card_def.react_effect, (0, 0), caster_owner, library,
+                        entry.target_pos,
+                        contract_source="trigger:on_play",
+                    )
             else:
                 for effect in card_def.effects:
                     if effect.trigger == TriggerType.ON_PLAY:
@@ -1863,6 +2171,19 @@ def resolve_react_stack(
                             entry.target_pos,
                             contract_source="trigger:on_play",
                         )
+
+    # Phase 14.8 bugfix: the LIFO loop above has CONSUMED every entry on
+    # the stack. Clear it NOW — before cleanup and the early-return
+    # checks below — so an interrupt (death-target modal, trigger
+    # picker, fresh AFTER_DEATH_EFFECT window) can never hand back a
+    # window that still carries the consumed entries; re-resolving them
+    # on the next PASS applied every effect twice. Only clear when no
+    # helper replaced the stack mid-loop
+    # (resolve_summon_declaration_originator RESETS it to a fresh
+    # Window B originator — identity mismatch — which must survive to
+    # the compound-window check below).
+    if state.react_stack and state.react_stack is _pre_resolution_stack:
+        state = replace(state, react_stack=())
 
     # Clean up dead minions after react resolution.
     # Phase 14.7-05b: snapshot the state IDENTITY before cleanup so we
@@ -1943,6 +2264,13 @@ def resolve_react_stack(
         state.pending_tutor_player_idx is not None
         or state.pending_revive_player_idx is not None
     ):
+        # Phase 14.8 bugfix: react_return_phase is PRESERVED (not nulled)
+        # so a tutor fired from a react window that must return to
+        # START_OF_TURN / END_OF_TURN (e.g. Tree Wyrm's react on the
+        # BEFORE_END_OF_TURN window) resumes to the right phase after
+        # the modal clears — nulling it made the post-tutor resume fall
+        # into the legacy ACTION path, re-entering END_OF_TURN and
+        # double-firing end-of-turn triggers.
         return replace(
             state,
             phase=TurnPhase.ACTION,
@@ -1950,7 +2278,6 @@ def resolve_react_stack(
             react_player_idx=None,
             pending_action=None,
             react_context=None,
-            react_return_phase=None,
         )
 
     # Phase 14.7-05: Drain-recheck.
@@ -1985,7 +2312,15 @@ def resolve_react_stack(
             # react_return_phase is preserved — the final-drain exit needs
             # to know where to transition when both queues finally empty.
         )
-        return drain_pending_trigger_queue(
+        state = drain_pending_trigger_queue(
+            state, library, event_collector=event_collector,
+        )
+        # Phase 14.8 bugfix: if the drain exhausted WITHOUT opening a
+        # window/modal (e.g. the last remaining trigger fizzled), the
+        # state above is stranded in phase=REACT with
+        # react_player_idx=None — a permanent softlock. Fall through to
+        # the react_return_phase dispatch via the shared resume helper.
+        return resume_after_trigger_drain(
             state, library, event_collector=event_collector,
         )
 

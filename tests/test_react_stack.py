@@ -60,6 +60,7 @@ def react_state_empty_stack(library):
     counter_spell_id = library.get_numeric_id("prohibition")
     sparkbot_id = library.get_numeric_id("surgefed_sparkbot")
     rat_id = library.get_numeric_id("rat")
+    magic_id = library.get_numeric_id("matter_of_time")
 
     p1 = Player(
         side=PlayerSide.PLAYER_1,
@@ -68,7 +69,10 @@ def react_state_empty_stack(library):
         max_mana=5,
         hand=(counter_spell_id, rat_id),
         deck=(),
-        grave=(),
+        # The magic card P1 "just played" sits in the grave — the legacy
+        # OPPONENT_PLAYS_MAGIC condition check inspects grave[-1], and
+        # _play_react now enforces react conditions at resolver level.
+        grave=(magic_id,),
     )
     p2 = Player(
         side=PlayerSide.PLAYER_2,
@@ -1206,12 +1210,14 @@ class TestSummonCompoundWindows:
 
         # P1 deploys
         state = resolve_action(state, play_card_action(card_index=0, position=(1, 0)), library)
-        # P2 plays Prohibition on top of the summon_declaration originator.
-        # Prohibition's condition is OPPONENT_PLAYS_MAGIC, but during react-
-        # stack resolution the NEGATE flag targets the next LIFO entry
-        # regardless of condition (the condition gate is on PLAYABILITY, not
-        # on what NEGATE can cancel).
-        state = resolve_action(state, play_react_action(card_index=0), library)
+        # P2 counters with a NEGATE on top of the summon_declaration
+        # originator. NOTE: _play_react now enforces react conditions at
+        # resolver level, and Prohibition (OPPONENT_PLAYS_MAGIC) is NOT
+        # playable in a summon window per its own ruling — so push the
+        # entry directly to exercise the Window-A negate RESOLUTION
+        # semantics (what NEGATE cancels is independent of playability).
+        entry = ReactEntry(player_idx=1, card_index=0, card_numeric_id=prohibition_id)
+        state = replace(state, react_stack=state.react_stack + (entry,), react_player_idx=0)
         # P1 passes → resolve LIFO. Prohibition negates summon_declaration.
         state = resolve_action(state, pass_action(), library)
 
@@ -1221,6 +1227,13 @@ class TestSummonCompoundWindows:
 
         # Mana stayed SPENT (P1 paid 2 for Blue Diodebot, no refund on negate)
         assert state.players[0].current_mana == 5 - 2
+
+        # Drain the mandatory end-of-turn react window(s) (14.8-05c) so
+        # the turn can advance.
+        safety = 0
+        while state.phase == TurnPhase.REACT and safety < 5:
+            state = resolve_action(state, pass_action(), library)
+            safety += 1
 
         # Turn advanced (normal post-action flow)
         assert state.phase == TurnPhase.ACTION
@@ -1286,8 +1299,13 @@ class TestSummonCompoundWindows:
         state = resolve_action(state, play_card_action(card_index=0, position=(1, 0)), library)
         # P2 passes Window A → minion lands + Window B opens
         state = resolve_action(state, pass_action(), library)
-        # P2 plays Prohibition on Window B's summon_effect originator
-        state = resolve_action(state, play_react_action(card_index=0), library)
+        # P2 counters with a NEGATE on Window B's summon_effect originator.
+        # NOTE: _play_react now enforces react conditions at resolver level
+        # and Prohibition (OPPONENT_PLAYS_MAGIC) is NOT playable in a
+        # summon window — push the entry directly to exercise the
+        # Window-B negate RESOLUTION semantics.
+        entry = ReactEntry(player_idx=1, card_index=0, card_numeric_id=prohibition_id)
+        state = replace(state, react_stack=state.react_stack + (entry,), react_player_idx=0)
         # P1 passes → resolve LIFO. Prohibition negates summon_effect.
         state = resolve_action(state, pass_action(), library)
 

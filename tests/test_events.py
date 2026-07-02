@@ -218,6 +218,57 @@ def test_non_god_spectator_filtered(alice, bob, eve):
     assert p1.get("hand_count", 0) > 0
 
 
+def test_god_spectator_pending_tutor_enriched():
+    """Regression (Phase 14.8): god-mode spectator state must carry the
+    ENRICHED pending-tutor wire shape, not raw engine ints.
+
+    ``GameState.to_dict`` now serializes ``pending_tutor_matches`` as bare
+    deck-index ints and ``filter_state_for_spectator(god_mode=True)`` deep-
+    copies that raw dict with no redaction. Pre-fix, the spectator fanout ran
+    the enrich_pending_* helpers only for NON-god slots, so a god spectator's
+    client saw ``pending_tutor_player_idx`` non-null and opened the tutor
+    modal reading ``m.card_numeric_id`` off a raw int — a broken modal.
+    ``_enrich_pending_from_owner_pov`` must overwrite the raw keys with the
+    same ``{card_numeric_id, deck_idx, match_idx}`` shape the picker gets.
+    """
+    import dataclasses
+
+    from grid_tactics.game_state import GameState
+    from grid_tactics.server.events import _enrich_pending_from_owner_pov
+    from grid_tactics.server.view_filter import filter_state_for_spectator
+
+    library = CardLibrary.from_directory(Path("data/cards"))
+    deck = tuple(range(1, 41))
+    state, _rng = GameState.new_game(seed=7, deck_p1=deck, deck_p2=deck)
+    state = dataclasses.replace(
+        state,
+        pending_tutor_player_idx=0,
+        pending_tutor_matches=(0, 2),
+        pending_tutor_remaining=1,
+    )
+
+    raw = state.to_dict()
+    # Sanity: to_dict serializes matches in ENGINE format (bare ints).
+    assert raw["pending_tutor_matches"] == [0, 2]
+
+    spec_state = filter_state_for_spectator(raw, god_mode=True, perspective_idx=0)
+    _enrich_pending_from_owner_pov(state, spec_state, library)
+
+    assert spec_state["pending_tutor_player_idx"] == 0
+    assert spec_state["pending_tutor_match_count"] == 2
+    matches = spec_state["pending_tutor_matches"]
+    assert len(matches) == 2, f"expected 2 enriched matches, got {matches!r}"
+    deck_after = list(state.players[0].deck)
+    for match_idx, m in enumerate(matches):
+        assert isinstance(m, dict), f"raw int leaked to god spectator: {m!r}"
+        assert set(m) >= {"card_numeric_id", "deck_idx", "match_idx"}
+        assert m["match_idx"] == match_idx
+        assert m["card_numeric_id"] == int(deck_after[m["deck_idx"]])
+    # Full picker payload (not the opponent's redacted count-only view).
+    assert isinstance(spec_state["pending_tutor_total_copies_owned"], dict)
+    assert spec_state["pending_tutor_total_copies_owned"]
+
+
 def test_effect_serialization_reflects_all_fields():
     """Regression guard: every non-None EffectDefinition field must reach the client.
 

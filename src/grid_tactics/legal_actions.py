@@ -348,27 +348,32 @@ def _action_phase_actions(
                     if eff.effect_type == EffectType.LEAP:
                         leap_amount = max(leap_amount, eff.amount or 1)
                 if leap_amount > 0:
-                    # Walk past enemy blocker(s) up to leap_amount steps for MOVE
-                    landing_row = fwd_row + delta
-                    steps = 0
-                    while (
-                        0 <= landing_row < GRID_ROWS
-                        and steps < leap_amount
-                    ):
+                    # Walk forward over consecutive ENEMY blockers — at most
+                    # leap_amount of them — landing on the first empty tile.
+                    # Phase 14.8 bugfix: the old walk started PAST the first
+                    # blocker and took leap_amount ADDITIONAL steps, so it
+                    # enumerated jumps over leap_amount+1 enemies (3 tiles
+                    # for Rathopper) that _apply_move then rejected with
+                    # ValueError. Per the card ruling, jumping N enemies
+                    # lands N+1 tiles away with N capped at leap_amount.
+                    landing_row = fwd_row
+                    enemies_jumped = 0
+                    can_land = False
+                    while 0 <= landing_row < GRID_ROWS:
                         occupant = next(
                             (m for m in state.minions if m.position == (landing_row, col)),
                             None,
                         )
                         if occupant is None:
-                            break  # empty tile — land here
+                            can_land = True  # empty tile — land here
+                            break
                         if occupant.owner == player_side:
                             break  # ally — can't leap over
+                        enemies_jumped += 1
+                        if enemies_jumped > leap_amount:
+                            break  # too many enemies to clear
                         landing_row += delta
-                        steps += 1
-                    if (
-                        0 <= landing_row < GRID_ROWS
-                        and state.board.get(landing_row, col) is None
-                    ):
+                    if can_land and state.board.get(landing_row, col) is None:
                         actions.append(move_action(
                             minion_id=minion.instance_id,
                             position=(landing_row, col),
@@ -1030,6 +1035,16 @@ def _react_phase_actions(
             if card_def.react_condition is not None:
                 if not _check_react_condition(card_def.react_condition, state, library):
                     continue
+
+            # Surgefed Sparkbot's gate: react mode is only available while
+            # the react player controls NO live friendly minions. Mirrors
+            # the resolver-side check in react_stack._play_react so the
+            # enumerator never offers an action the resolver rejects.
+            if card_def.react_requires_no_friendly_minions and any(
+                m.owner == react_side and m.current_health > 0
+                for m in state.minions
+            ):
+                continue
 
             if react_player.current_mana >= card_def.react_mana_cost:
                 # DEPLOY_SELF: react deploys this minion to the board at discount

@@ -789,6 +789,24 @@ function onCardDefs(data) {
 function onError(data) {
     var msg = data && data.msg ? data.msg : 'An error occurred.';
     showLobbyStatus(msg, 'error');
+    // Phase 14.8 fix: the server now rejects invalid decks in handle_ready
+    // with an 'error' frame, but the ready-button click handler already
+    // disabled the button and set 'Waiting...' BEFORE emitting. Without a
+    // re-enable path here the player could never ready up again (short of
+    // a page refresh). Only restore while still on the lobby screen so
+    // in-game error frames don't touch lobby UI.
+    var lobbyScreen = document.getElementById('screen-lobby');
+    if (lobbyScreen && lobbyScreen.classList.contains('active')) {
+        var btnReady = document.getElementById('btn-ready');
+        if (btnReady && btnReady.disabled) {
+            btnReady.disabled = false;
+            if (btnReady.dataset && btnReady.dataset.readyLabelHtml) {
+                btnReady.innerHTML = btnReady.dataset.readyLabelHtml;
+            } else {
+                btnReady.textContent = 'Ready';
+            }
+        }
+    }
 }
 
 // =============================================
@@ -977,6 +995,11 @@ function setupLobbyHandlers() {
                     }
                     deckArray = getDeckAsArray(cleaned);
                 }
+            }
+            // Stash the original button markup once so onError can restore
+            // it verbatim if the server rejects the ready-up (invalid deck).
+            if (!btnReady.dataset.readyLabelHtml) {
+                btnReady.dataset.readyLabelHtml = btnReady.innerHTML;
             }
             socket.emit('ready', { deck: deckArray });
             btnReady.disabled = true;
@@ -2617,8 +2640,51 @@ function onEngineEvents(payload) {
 function drainEventQueue() {
     if (eventRunning) return;
     if (slotState.pendingModalKind !== null) {
-        // Modal is open — wait for user input or pending_modal_resolved event (04b).
-        return;
+        // Modal is open — wait for user input. Deadlock fix: the
+        // pending_modal_resolved event that clears this gate travels through
+        // THIS SAME queue, so a blanket early-return could never dequeue it
+        // and the client would freeze forever on the first tutor /
+        // trigger-pick / death-pick modal. Three-part recovery:
+        //   (1) enforce the safety deadline (was written but never read);
+        //   (2) if a pending_modal_resolved is anywhere in the queue, keep
+        //       draining — its handler clears the gate when it plays;
+        //   (3) otherwise commit the stashed final_state ONCE so the
+        //       pending_* fields reach gameState and the modal UI (the
+        //       syncPending*UI handlers in renderGame) can actually open,
+        //       then park until user input produces the resolved event.
+        var modalDeadlinePassed = slotState.pendingModalDeadline > 0
+            && Date.now() > slotState.pendingModalDeadline;
+        var resolvedQueued = false;
+        for (var qi = 0; qi < eventQueue.length; qi++) {
+            if (eventQueue[qi] && eventQueue[qi].type === 'pending_modal_resolved') {
+                resolvedQueued = true;
+                break;
+            }
+        }
+        if (modalDeadlinePassed) {
+            console.warn('[eventQueue] pending modal deadline passed — force-clearing gate');
+            slotState.pendingModalKind = null;
+            slotState.pendingModalDeadline = 0;
+            try {
+                var staleScrim = document.getElementById('event-queue-blocking-scrim');
+                if (staleScrim && staleScrim.parentNode) {
+                    staleScrim.parentNode.removeChild(staleScrim);
+                }
+            } catch (e) { /* defensive */ }
+            // Fall through to the normal drain below.
+        } else if (!resolvedQueued) {
+            if (!_drainFinalApplied && window.__lastFinalState) {
+                _drainFinalApplied = true;
+                try {
+                    _commitFinalStateSnapshot(window.__lastFinalState);
+                } catch (e) {
+                    console.error("[eventQueue] _commitFinalStateSnapshot failed", e);
+                }
+            }
+            return;
+        }
+        // resolvedQueued: fall through — keep draining so the queued
+        // pending_modal_resolved event can play and clear the gate.
     }
     if (eventQueue.length === 0) {
         // Phase 14.8-05b: queue fully drained — commit the wholesale
@@ -2719,6 +2785,42 @@ function _commitFinalStateSnapshot(finalState) {
             try { updateHandHighlights(); } catch (e) { /* defensive */ }
         }
     }
+
+    // Defensive recovery: reconcile leaked spell-stage chain entries.
+    // Some server paths close a react window WITHOUT emitting
+    // react_window_closed (tutor/revive hand-off, trigger drain-recheck,
+    // melee pending_post_move), so playReactWindowClosed never pops the
+    // matching entry. Each leak leaves slotState.spellStageChain /
+    // _spellStage.chain non-empty, which keeps isSpellStageAnimating()
+    // true FOREVER and gates all input (soft-lock). The authoritative
+    // final_state knows better: if the server shows no active react
+    // window (phase != REACT and react_stack empty), force-clear the
+    // chain tracker and kick the visual resolve instead of wedging.
+    try {
+        var fsPhase = finalState.phase;
+        var fsInReact = (fsPhase === 1) || (fsPhase === 'REACT');  // TurnPhase.REACT
+        var fsStackEmpty = !finalState.react_stack
+            || finalState.react_stack.length === 0;
+        if (!fsInReact && fsStackEmpty) {
+            if (slotState.spellStageChain.length > 0) {
+                console.warn('[eventQueue] clearing '
+                    + slotState.spellStageChain.length
+                    + ' leaked spell-stage chain entries '
+                    + '(server shows no open react window)');
+                slotState.spellStageChain.length = 0;
+            }
+            if (typeof _spellStage !== 'undefined' && _spellStage
+                && !_spellStage.resolving
+                && ((_spellStage.chain && _spellStage.chain.length > 0)
+                    || _spellStageBusy
+                    || (_spellStageQueue && _spellStageQueue.length > 0))) {
+                // Resolve (or defer-resolve, if slam-ins are still queued)
+                // the stranded visual stage so it can never gate input
+                // past this commit.
+                _spellStageOnReactClosed();
+            }
+        }
+    } catch (e) { /* defensive — recovery must never break the commit */ }
 }
 
 function commitEventToDom(ev) {
@@ -2798,13 +2900,16 @@ function commitEventToDom(ev) {
             break;
 
         case "phase_changed":
-            // Payload: {prev, new} — phase names. gameState.phase is an int
-            // per game_state.to_dict (int(self.phase)). Both forms can land
-            // on live.phase; _setPhaseLeds accepts both. Commit whichever
-            // the payload carries so the indicator stays consistent with
-            // the event beat.
-            if (payload['new'] != null) {
-                live.phase = payload['new'];
+            // Payload: {prev, new} — phase NAMES (TurnPhase.name strings,
+            // e.g. "ACTION"/"REACT"). gameState.phase is an INT per
+            // game_state.to_dict (int(self.phase)), and every phase
+            // comparison in the client is numeric (isReactWindow, skip-react
+            // button, sandbox hand-click guard, phase LEDs). Committing the
+            // raw string broke all of them until the frame drained —
+            // normalize to the wire int and skip the commit if unmapped.
+            var normalizedPhase = _normalizePhaseValue(payload['new']);
+            if (normalizedPhase !== null) {
+                live.phase = normalizedPhase;
                 if (sbMode) gameState = sandboxState;
             }
             try {
@@ -2915,6 +3020,24 @@ function _commitMinionPos(state, payload) {
     return false;
 }
 
+// EVT_PHASE_CHANGED payloads carry TurnPhase NAMES ("ACTION"/"REACT"/
+// "START_OF_TURN"/"END_OF_TURN") while gameState.phase is the wire INT
+// everywhere else (game_state.to_dict). Map name → int so numeric phase
+// comparisons never see a string. Returns null when unmappable.
+var _PHASE_NAME_TO_INT = {
+    ACTION: 0,
+    REACT: 1,
+    START_OF_TURN: 2,
+    END_OF_TURN: 3,
+};
+function _normalizePhaseValue(v) {
+    if (typeof v === 'number') return v;
+    if (typeof v === 'string' && _PHASE_NAME_TO_INT.hasOwnProperty(v)) {
+        return _PHASE_NAME_TO_INT[v];
+    }
+    return null;
+}
+
 // Phase 14.8-05b helper: mutate-in-place player field by idx.
 function _commitPlayerField(state, playerIdx, field, value) {
     if (!state || !state.players) return false;
@@ -2973,9 +3096,12 @@ function playInstant(ev, done) {
 //
 // For event-driven jobs we pass `stateAfter = gameState` so the existing
 // playSummonAnimation/playMoveAnimation wrappers don't crash on an
-// undefined frame. By that point gameState already holds the post-event
-// state (applied by the snapshot path), so applyStateFrame is an
-// idempotent noop diff + re-render.
+// undefined frame. NOTE (post-plan-05): the snapshot path that used to
+// pre-apply post-event state is GONE — handlers that need the DOM to show
+// this event's outcome during their animation must incrementally commit
+// it themselves (playMinionSummoned pushes the new minion, playCardDrawn
+// appends the drawn card, commitEventToDom covers hp/mana/phase/move).
+// The post-drain _commitFinalStateSnapshot remains the catch-all.
 
 function _evDurationOr(ev, fallback) {
     if (ev && typeof ev.animation_duration_ms === 'number' && ev.animation_duration_ms >= 0) {
@@ -2995,12 +3121,76 @@ function playMinionSummoned(ev, done) {
     // Payload: {instance_id, card_numeric_id, owner_idx, position}
     var payload = ev && ev.payload;
     if (!payload || !payload.position) { setTimeout(done, 0); return; }
+    // Phase 14.8 fix: the snapshot path that used to pre-apply the
+    // post-summon state was DELETED in plan 05, and commitEventToDom does
+    // no incremental commit for minion_summoned — so at animation time
+    // gameState is still PRE-summon and the scale-in used to play over an
+    // EMPTY cell, with the minion popping in seconds later at the
+    // post-drain commit. Incrementally commit the summoned minion into
+    // the live state NOW so playSummonAnimation's applyStateFrame renders
+    // the actual minion during its scale-in. Prefer the authoritative
+    // minion object from final_state (full stats); fall back to
+    // constructing one from the event payload + cardDefs.
+    try {
+        var live = (typeof sandboxMode !== 'undefined' && sandboxMode)
+            ? sandboxState : gameState;
+        if (live && live.minions && payload.instance_id != null) {
+            var alreadyPresent = false;
+            for (var mi = 0; mi < live.minions.length; mi++) {
+                if (live.minions[mi]
+                    && live.minions[mi].instance_id === payload.instance_id) {
+                    alreadyPresent = true;
+                    break;
+                }
+            }
+            if (!alreadyPresent) {
+                var newMinion = null;
+                var fs = window.__lastFinalState;
+                if (fs && fs.minions) {
+                    for (var fi = 0; fi < fs.minions.length; fi++) {
+                        if (fs.minions[fi]
+                            && fs.minions[fi].instance_id === payload.instance_id) {
+                            newMinion = JSON.parse(JSON.stringify(fs.minions[fi]));
+                            // The minion may have moved/changed later in the
+                            // chain — at THIS beat it stands where the event
+                            // says it was summoned.
+                            newMinion.position = payload.position.slice();
+                            break;
+                        }
+                    }
+                }
+                if (!newMinion && payload.card_numeric_id != null) {
+                    var def = cardDefs && cardDefs[payload.card_numeric_id];
+                    if (def) {
+                        newMinion = {
+                            instance_id: payload.instance_id,
+                            card_numeric_id: payload.card_numeric_id,
+                            owner: payload.owner_idx,
+                            position: payload.position.slice(),
+                            current_health: def.health,
+                            attack_bonus: 0,
+                            is_burning: false,
+                            dark_matter_stacks: 0,
+                            max_health_bonus: 0,
+                            from_deck: true,
+                        };
+                    }
+                }
+                if (newMinion) {
+                    live.minions.push(newMinion);
+                    if (typeof sandboxMode !== 'undefined' && sandboxMode) {
+                        gameState = sandboxState;  // keep sandbox alias in sync
+                    }
+                }
+            }
+        }
+    } catch (e) { /* defensive — worst case the summon pops in at drain end */ }
     // Enqueue into the existing AnimationQueue so the summon animation
     // chains after any snapshot-driven animations. stateApplied=true so
     // runQueue doesn't re-apply an undefined state after the animation.
     // The inner playSummonAnimation ALSO calls applyStateFrame at START —
-    // we pass the current gameState (already post-event from snapshot
-    // path) so that call is an idempotent noop diff + re-render.
+    // we pass the live gameState (post-event thanks to the incremental
+    // commit above) so that call renders the minion mid scale-in.
     //
     // Phase 14.8 fix: the eventQueue's `done` MUST be paced by the actual
     // animQueue completion of THIS job, not a fixed 600ms guess. The
@@ -3134,11 +3324,48 @@ function playCardDrawn(ev, done) {
         ? true  // sandbox sees both hands
         : (playerIdx === myPlayerIdx);
     if (isOwn && payload.card_numeric_id != null) {
+        // Phase 14.8 fix: under the post-plan-05 pipeline the hand DOM is
+        // only rebuilt by the post-drain final-state commit, so at
+        // animation time the "last hand child" fallback pointed at the
+        // last card of the PRE-draw hand — the fly-in hid an unrelated
+        // card for ~800ms and the actually-drawn card popped in seconds
+        // later with no animation. Incrementally append the drawn card to
+        // the live hand, re-render, and target the real new slot. The
+        // final_state hand length caps the append so paths that already
+        // synced players wholesale (counter-react chain refresh) never
+        // double-append.
+        var newSlotIdx = -1;
+        try {
+            var live = sandboxMode ? sandboxState : gameState;
+            var livePlayer = live && live.players && live.players[playerIdx];
+            if (livePlayer && Array.isArray(livePlayer.hand)) {
+                var fsHand = null;
+                var fs = window.__lastFinalState;
+                if (fs && fs.players && fs.players[playerIdx]
+                    && Array.isArray(fs.players[playerIdx].hand)) {
+                    fsHand = fs.players[playerIdx].hand;
+                }
+                if (fsHand === null || livePlayer.hand.length < fsHand.length) {
+                    livePlayer.hand.push(payload.card_numeric_id);
+                    newSlotIdx = livePlayer.hand.length - 1;
+                    if (sandboxMode) {
+                        gameState = sandboxState;  // keep sandbox alias in sync
+                        if (typeof renderSandbox === 'function') renderSandbox();
+                    } else if (playerIdx === myPlayerIdx
+                               && typeof renderHand === 'function') {
+                        renderHand();
+                    }
+                    if (typeof updateHandHighlights === 'function') {
+                        try { updateHandHighlights(); } catch (e) { /* defensive */ }
+                    }
+                }
+            }
+        } catch (e) { /* defensive — fall back to last-child targeting */ }
         enqueueAnimation({
             type: 'draw_own',
             cardNumericId: payload.card_numeric_id,
             fromPos: 'deck',
-            toSlotIndex: -1,  // falls back to last hand child
+            toSlotIndex: newSlotIdx,  // -1 falls back to last hand child
             stateApplied: true,
             _fromEventQueue: true,
         });
@@ -3440,10 +3667,19 @@ function playReactWindowClosed(ev, done) {
         // 250ms exit). Without waiting for it, the eventQueue races
         // straight to turn_flipped and the banner blooms while cards are
         // still popping off the stage — exactly the user-reported "turn 2
-        // happens during react window" symptom. Calculate the resolve
-        // duration from the live _spellStage.chain length and pace the
-        // queue to wait for it.
-        var resolveDur = 700 + (_spellStage.chain.length * 550) + 250;
+        // happens during react window" symptom.
+        //
+        // Phase 14.8 fix: the resolve may not START immediately —
+        // _spellStageOnReactClosed defers while slam-ins are still queued
+        // (_spellStageBusy / _spellStageQueue non-empty), and each queued
+        // slam takes SPELL_STAGE_PER_CARD_MS before the LIFO pop begins.
+        // Queued cards are also not yet in _spellStage.chain, so count
+        // them for the per-card pop as well; otherwise done() fires
+        // 1.5-3s early and the turn banner plays over the resolving stage.
+        var pendingIn = _spellStageQueue.length + (_spellStageBusy ? 1 : 0);
+        var totalCards = _spellStage.chain.length + _spellStageQueue.length;
+        var resolveDur = (pendingIn * SPELL_STAGE_PER_CARD_MS)
+            + 700 + (totalCards * 550) + 250;
         setTimeout(done, Math.max(_evDurationOr(ev, 400), resolveDur));
         return;
     }
@@ -3692,12 +3928,28 @@ function runQueue() {
     if (animQueue.length === 0) return;
     var job = animQueue.shift();
     animRunning = true;
-    playAnimation(job, function onAnimDone() {
+    // Phase 14.8 hardening: a synchronous throw inside any animation branch
+    // used to latch animRunning=true FOREVER — every later enqueueAnimation
+    // returned at the top guard and no visual ever played again for the
+    // rest of the session (and every playMinionSummoned stalled the
+    // eventQueue for its full safety cap). Mirror drainEventQueue's guard:
+    // on throw, finish the job (state apply + onDone + recurse) so the
+    // queue keeps flowing. The finished flag makes completion idempotent
+    // in case a branch throws AFTER scheduling its own done callback.
+    var jobFinished = false;
+    function finishJob() {
+        if (jobFinished) return;
+        jobFinished = true;
         // Apply the buffered state frame AFTER the animation completes,
         // unless the branch already applied it (e.g. summon applies up-front
         // so the minion is visible during scale-in and sets job.stateApplied).
         if (!job.stateApplied) {
-            applyStateFrame(job.stateAfter, job.legalActionsAfter);
+            try {
+                applyStateFrame(job.stateAfter, job.legalActionsAfter);
+            } catch (e) {
+                console.error('[animQueue] applyStateFrame failed for type='
+                    + (job && job.type), e);
+            }
         }
         animRunning = false;
         // Per-job completion callback (Phase 14.8): the eventQueue slot
@@ -3711,7 +3963,14 @@ function runQueue() {
             try { job.onDone(); } catch (e) { /* defensive */ }
         }
         runQueue();
-    });
+    }
+    try {
+        playAnimation(job, finishJob);
+    } catch (err) {
+        console.error('[animQueue] playAnimation threw for type='
+            + (job && job.type), err);
+        finishJob();
+    }
 }
 
 function playAnimation(job, done) {
@@ -4287,6 +4546,14 @@ function playSummonAnimation(job, done) {
     //    queue's default post-animation applyStateFrame.
     applyStateFrame(job.stateAfter, job.legalActionsAfter);
     job.stateApplied = true;
+    // Phase 14.8: applyStateFrame → renderGame only repaints the LIVE
+    // board; in sandbox mode the board lives in a different mount, so
+    // repaint it too or the summoned minion stays invisible until the
+    // post-drain commit.
+    if (typeof sandboxMode !== 'undefined' && sandboxMode
+        && typeof renderSandbox === 'function') {
+        try { renderSandbox(); } catch (e) { /* defensive */ }
+    }
 
     // 3. Shake the board container.
     var boardEl = document.getElementById('game-board');
@@ -4304,7 +4571,14 @@ function playSummonAnimation(job, done) {
     //    the board so the .anim-summon class falls off, and signal done.
     setTimeout(function() {
         delete animatingTiles[key];
-        try { renderBoard(); } catch (e) { /* defensive: never block done() */ }
+        try {
+            if (typeof sandboxMode !== 'undefined' && sandboxMode
+                && typeof renderSandbox === 'function') {
+                renderSandbox();
+            } else {
+                renderBoard();
+            }
+        } catch (e) { /* defensive: never block done() */ }
         done();
     }, 650);
 }
@@ -5752,8 +6026,19 @@ function submitAction(actionData) {
     // isSpellStageAnimating() so the click never even reaches this point
     // when the stage is busy.
     var _at = actionData && actionData.action_type;
+    // Phase 14.8 deadlock fix: pending-modal resolution actions must ALSO
+    // pass through. While a pending_* gate is set server-side they are the
+    // ONLY legal actions, so blocking them on the spell stage could never
+    // protect anything — it could only wedge the game at the modal
+    // (e.g. TUTOR_SELECT while a leaked spell-stage chain entry keeps
+    // isSpellStageAnimating() true).
+    //   9 TUTOR_SELECT, 10 DECLINE_TUTOR, 12 CONJURE_DEPLOY,
+    //   13 DECLINE_CONJURE, 14 DEATH_TARGET_PICK, 15 REVIVE_PLACE,
+    //   16 DECLINE_REVIVE, 17 TRIGGER_PICK, 18 DECLINE_TRIGGER
+    var _modalResolutionTypes = [9, 10, 12, 13, 14, 15, 16, 17, 18];
     if (typeof isSpellStageAnimating === 'function' && isSpellStageAnimating()
-            && _at !== 4 && _at !== 5) {
+            && _at !== 4 && _at !== 5
+            && _modalResolutionTypes.indexOf(_at) === -1) {
         return;
     }
     if (socket) {

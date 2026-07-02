@@ -215,15 +215,21 @@ class TestReactInteraction:
         assert state.turn_number == 2
 
     def test_multi_react_chain_lifo(self, library):
-        """P1 deploys minion -> P2 reacts with counter_spell (condition: opponent_plays_minion)
-        -> P1 counter-reacts with counter_spell (condition: opponent_plays_react, NEGATE)
-        -> P2 passes -> LIFO resolves: counter_spell negates counter_spell, minion undamaged."""
-        rat_id = library.get_numeric_id("rat")
-        counter_spell_id = library.get_numeric_id("prohibition")   # condition: opponent_plays_minion
-        counter_spell_id = library.get_numeric_id("prohibition")  # condition: opponent_plays_magic, NEGATE
+        """Prohibition cannot react to a MINION deploy (resolver-level check).
 
-        # P1 has rat to deploy and counter_spell for react
-        # P2 has counter_spell to react to the deploy
+        Prohibition's react_condition is OPPONENT_PLAYS_MAGIC and its own
+        ruling says it 'does not stop minion summons'. The resolver now
+        enforces react conditions in _play_react (they were previously
+        only checked by the legal_actions enumerator), so reacting to a
+        minion deploy with Prohibition raises ValueError.
+
+        (Legal multi-react LIFO chaining is covered by
+        test_react_negates_magic above and
+        test_react_stack.py::TestReactChaining::test_full_chain_lifo_resolution.)
+        """
+        rat_id = library.get_numeric_id("rat")
+        counter_spell_id = library.get_numeric_id("prohibition")  # condition: opponent_plays_magic
+
         p1_minion = MinionInstance(
             instance_id=0, card_numeric_id=rat_id,
             owner=PlayerSide.PLAYER_2, position=(3, 0), current_health=2,
@@ -232,7 +238,7 @@ class TestReactInteraction:
         state = _make_state(
             p1_hand=(rat_id, counter_spell_id),
             p2_hand=(counter_spell_id,),
-            minions=(p1_minion,),  # enemy minion for counter_spell to target
+            minions=(p1_minion,),
             p1_mana=5,
             p2_mana=5,
         )
@@ -242,33 +248,12 @@ class TestReactInteraction:
         assert state.phase == TurnPhase.REACT
         assert state.react_player_idx == 1  # P2 can react
 
-        # P2 plays counter_spell (condition: opponent_plays_minion -- met!)
-        # targeting the newly deployed minion at (1, 0)
-        state = resolve_action(state, play_react_action(card_index=0, target_pos=(1, 0)), library)
-        assert state.react_player_idx == 0  # P1 can counter-react
-
-        # P1 counter-reacts with counter_spell (condition: opponent_plays_magic --
-        # counter_spell is a react, and counter_spell checks for magic OR react on stack)
-        # counter_spell has NEGATE effect -- cancels counter_spell
-        state = resolve_action(state, play_react_action(card_index=0), library)
-        assert state.react_player_idx == 1  # P2 can counter
-
-        # P2 passes -> resolve LIFO
-        state = resolve_action(state, pass_action(), library)
-
-        # LIFO resolution:
-        # 1. counter_spell resolves: NEGATE -> cancels next entry (counter_spell)
-        # 2. counter_spell is negated -> skipped
-        # Result: minion at (1,0) is undamaged
-        deployed_minion = state.get_minion(1)  # instance_id=1 (newly deployed)
-        if deployed_minion is not None:
-            # Minion should be at full HP since counter_spell was negated
-            card_def = library.get_by_id(deployed_minion.card_numeric_id)
-            assert deployed_minion.current_health == card_def.health
-
-        assert state.phase == TurnPhase.ACTION
-        assert state.active_player_idx == 1
-        assert state.turn_number == 2
+        # P2 attempts Prohibition against a minion deploy -- condition
+        # OPPONENT_PLAYS_MAGIC is NOT met, resolver rejects it.
+        with pytest.raises(ValueError, match="react condition"):
+            resolve_action(
+                state, play_react_action(card_index=0, target_pos=(1, 0)), library,
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -567,48 +552,49 @@ class TestMultiPurposeMagicReactArm:
     """
 
     def test_acidic_rain_react_arm_draws_card_unchanged(self, library):
-        """P1 casts a magic (originator). P2 plays Acidic Rain AS a react.
-        P1 passes -> stack resolves LIFO. Acidic Rain's react_effect fires
-        first (P2 draws), then the originator resolves.
+        """P1 ends their turn; on the BEFORE_END_OF_TURN window P2 plays
+        Acidic Rain AS a react and its react_effect draws P2 a card when
+        the stack resolves.
 
-        We assert P2's react_effect fired (drew 1 card), NOT that the
-        originator produced any particular observable state. The point of
-        this test is that the react arm of a multi-purpose card is
-        unaffected by the deferred-magic-resolution refactor.
+        Phase 14.8-05c: OPPONENT_ENDS_TURN matches ONLY the
+        BEFORE_END_OF_TURN window (it used to fire after any opponent
+        action), and _play_react now enforces react conditions at
+        resolver level — so the react is staged on the end-of-turn
+        window. The point of this test is that the react arm of a
+        multi-purpose card fires its react_effect (draw) on resolve.
         """
-        # Use to_the_ratmobile as a neutral originator magic. It tutors a rat
-        # if P1's deck has one — we intentionally give P1 an EMPTY deck so
-        # tutor finds zero matches and skips pending_tutor entirely (amount=1
-        # tutor with 0 matches just no-ops out of _enter_pending_tutor).
-        ratmobile_id = library.get_numeric_id("to_the_ratmobile")
+        from grid_tactics.enums import ReactContext
+
         acidic_rain_id = library.get_numeric_id("acidic_rain")
         rat_id = library.get_numeric_id("rat")
 
         # P2 has Acidic Rain in hand + a deck slot to draw from
         state = _make_state(
-            p1_hand=(ratmobile_id,),
-            p1_mana=5,
-            p1_deck=(),  # empty deck — tutor will find no matches
             p2_hand=(acidic_rain_id,),
             p2_mana=6,
             p2_deck=(rat_id,),  # deck slot for the react-mode draw
         )
 
-        # 1. P1 casts to_the_ratmobile (magic, originator)
-        state = resolve_action(state, play_card_action(card_index=0), library)
+        # 1. P1 passes their action; drain any windows until the mandatory
+        # BEFORE_END_OF_TURN window opens for P2.
+        state = resolve_action(state, pass_action(), library)
+        safety = 0
+        while (state.phase == TurnPhase.REACT
+               and state.react_context != ReactContext.BEFORE_END_OF_TURN
+               and safety < 5):
+            state = resolve_action(state, pass_action(), library)
+            safety += 1
         assert state.phase == TurnPhase.REACT
+        assert state.react_context == ReactContext.BEFORE_END_OF_TURN
         assert state.react_player_idx == 1
-        assert len(state.react_stack) == 1
-        assert state.react_stack[0].is_originator is True
 
-        # 2. P2 plays Acidic Rain as a REACT (react_condition=opponent_ends_turn,
-        # matches any opponent action; react_mana_cost=2)
+        # 2. P2 plays Acidic Rain as a REACT (react_condition=
+        # opponent_ends_turn, react_mana_cost=2)
         p2_hand_count_before_react = len(state.players[1].hand)
         p2_deck_count_before_react = len(state.players[1].deck)
 
         state = resolve_action(state, play_react_action(card_index=0), library)
-        assert len(state.react_stack) == 2
-        react_entry = state.react_stack[1]
+        react_entry = state.react_stack[-1]
         # Played as a react — entry is NOT an originator; origin_kind is None.
         assert react_entry.is_originator is False
         assert react_entry.origin_kind is None
@@ -706,8 +692,21 @@ class TestSummonCompoundWindowsIntegration:
         state = resolve_action(
             state, play_card_action(card_index=0, position=(1, 0)), library,
         )
-        # P2 plays Prohibition on Window A
-        state = resolve_action(state, play_react_action(card_index=0), library)
+        # P2 counters with a NEGATE on Window A. NOTE: _play_react now
+        # enforces react conditions at resolver level and Prohibition
+        # (OPPONENT_PLAYS_MAGIC) is NOT playable in a summon window per
+        # its own ruling — push the entry directly (mirroring the
+        # mana-spend + discard _play_react performs) to exercise the
+        # Window-A negate RESOLUTION semantics.
+        from grid_tactics.react_stack import ReactEntry
+        p2 = state.players[1].spend_mana(4).discard_from_hand(prohibition_id)
+        entry = ReactEntry(player_idx=1, card_index=0, card_numeric_id=prohibition_id)
+        state = replace(
+            state,
+            players=(state.players[0], p2),
+            react_stack=state.react_stack + (entry,),
+            react_player_idx=0,
+        )
         # P1 passes → resolve LIFO: Prohibition negates summon_declaration
         state = resolve_action(state, pass_action(), library)
 
@@ -720,6 +719,13 @@ class TestSummonCompoundWindowsIntegration:
         # Mana stayed spent (2 for Blue Diodebot, 4 for Prohibition)
         assert state.players[0].current_mana == 5 - 2
         assert state.players[1].current_mana == 5 - 4
+
+        # Drain the mandatory end-of-turn react window(s) (14.8-05c).
+        safety = 0
+        while state.phase == TurnPhase.REACT and safety < 5:
+            state = resolve_action(state, pass_action(), library)
+            safety += 1
+
         # Turn advanced (after-action path)
         assert state.phase == TurnPhase.ACTION
         assert state.active_player_idx == 1
@@ -746,8 +752,19 @@ class TestSummonCompoundWindowsIntegration:
             state, play_card_action(card_index=0, position=(1, 0)), library,
         )
         state = resolve_action(state, pass_action(), library)
-        # P2 plays Prohibition on Window B
-        state = resolve_action(state, play_react_action(card_index=0), library)
+        # P2 counters with a NEGATE on Window B. NOTE: _play_react now
+        # enforces react conditions at resolver level and Prohibition is
+        # NOT playable in a summon window — push the entry directly
+        # (mirroring _play_react's mana-spend + discard).
+        from grid_tactics.react_stack import ReactEntry
+        p2 = state.players[1].spend_mana(4).discard_from_hand(prohibition_id)
+        entry = ReactEntry(player_idx=1, card_index=0, card_numeric_id=prohibition_id)
+        state = replace(
+            state,
+            players=(state.players[0], p2),
+            react_stack=state.react_stack + (entry,),
+            react_player_idx=0,
+        )
         # P1 passes → Prohibition negates summon_effect
         state = resolve_action(state, pass_action(), library)
 

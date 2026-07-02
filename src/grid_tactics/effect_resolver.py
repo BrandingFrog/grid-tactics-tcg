@@ -598,7 +598,24 @@ def resolve_effect(
     scaled_effect = effect
     _per_target_dm_scale = False
     if effect.scale_with == "dark_matter":
-        caster = _find_minion_at_pos(state.minions, caster_pos)
+        # Determine whether the effect source is GENUINELY a minion.
+        # Magic-cast / react-card / on-discard paths resolve with a
+        # sentinel caster_pos of (0, 0) — which is a real board cell
+        # (P1's back-row corner) — so a bare position lookup would
+        # mistake whatever minion happens to sit on (0, 0) for the
+        # caster and scale off ITS dark-matter stacks. Only trust:
+        #   1. source_minion_id (triggered effects thread it), or
+        #   2. the activated-ability contract, whose caster_pos is
+        #      always the activating minion's true position (the
+        #      resolver call site doesn't thread source_minion_id).
+        # Everything else takes the player-pool / per-target path.
+        caster = None
+        if source_minion_id is not None:
+            src = state.get_minion(source_minion_id)
+            if src is not None and src.current_health > 0:
+                caster = src
+        elif contract_source == "action:activate_ability":
+            caster = _find_minion_at_pos(state.minions, caster_pos)
         if caster is not None:
             dm = caster.dark_matter_stacks
             scaled_amount = effect.amount + dm

@@ -56,6 +56,7 @@ from grid_tactics.game_state import GameState
 from grid_tactics.legal_actions import legal_actions
 from grid_tactics.minion import MinionInstance
 from grid_tactics.player import Player
+from grid_tactics.server.event_reconcile import reconcile_react_window_events
 
 # ---------------------------------------------------------------------------
 # Module constants
@@ -260,6 +261,10 @@ class SandboxSession:
         # resolve_action including drained PASSes. Stream.next_seq is
         # written back at end so subsequent calls keep monotonic seq.
         stream = EventStream(next_seq=self._next_event_seq)
+        # Keep a dedicated pre-action snapshot for react-window event
+        # reconciliation — self._last_prev_state gets reassigned by the
+        # auto-drain loop below, so it can't serve as the chain anchor.
+        prev_state_for_reconcile = self._state
         self._state = resolve_action(
             self._state, action, self.library, event_collector=stream,
         )
@@ -290,6 +295,12 @@ class SandboxSession:
             )
             if on_frame is not None:
                 on_frame()
+
+        # Phase 14.8 fix (spell-stage chain leak): balance react-window
+        # OPENED/CLOSED events across the whole user-action + auto-drain
+        # chain so the client's spellStageChain never leaks entries when
+        # an engine path closes a window without emitting the close event.
+        reconcile_react_window_events(prev_state_for_reconcile, self._state, stream)
 
         # Auto-follow active player: after each action, sync the sandbox
         # view to whoever's turn it is so the user always controls the

@@ -13,6 +13,7 @@ from grid_tactics.phase_contracts import OutOfPhaseError
 from grid_tactics.legal_actions import legal_actions
 from grid_tactics.server.action_codec import reconstruct_action, serialize_action
 from grid_tactics.server.app import socketio
+from grid_tactics.server.event_reconcile import reconcile_react_window_events
 from grid_tactics.server.room_manager import RoomManager
 from grid_tactics.server.view_filter import (
     enrich_last_action,
@@ -138,6 +139,86 @@ def _build_card_defs(library):
     return defs
 
 
+def _decision_idx(state):
+    """Return the player index the server should accept actions from.
+
+    MUST mirror the pending-gate ordering at the top of ``legal_actions``
+    (legal_actions.py) — the decision-maker is whoever the engine is
+    waiting on, NOT simply the active/react player:
+
+      1. pending_death_target      -> the dying minion's owner picks
+      2. pending_trigger_picker    -> the picker orders simultaneous triggers
+      3. pending_revive            -> the reviving player places minions
+      4. pending_conjure_deploy    -> the deploying player picks a tile
+      5. pending_tutor             -> the tutoring player picks a card
+      6. phase == REACT            -> react_player_idx
+      7. otherwise                 -> active_player_idx
+
+    Phase 14.8 fix: routing previously checked only pending_death_target
+    and the REACT phase, so a pending_trigger_picker owned by the
+    non-react player had every TRIGGER_PICK rejected with "Not your turn"
+    while their legal-action list was emitted to the OPPONENT — a
+    guaranteed softlock (plus wrong-player agency) whenever one player
+    had 2+ simultaneous start/end-of-turn (or on-death) triggers.
+    """
+    if getattr(state, "pending_death_target", None) is not None:
+        return int(state.pending_death_target.owner_idx)
+    if state.pending_trigger_picker_idx is not None:
+        return int(state.pending_trigger_picker_idx)
+    if state.pending_revive_player_idx is not None:
+        return int(state.pending_revive_player_idx)
+    if (
+        state.pending_conjure_deploy_card is not None
+        and state.pending_conjure_deploy_player_idx is not None
+    ):
+        return int(state.pending_conjure_deploy_player_idx)
+    if state.pending_tutor_player_idx is not None:
+        return int(state.pending_tutor_player_idx)
+    if state.phase == TurnPhase.REACT:
+        return state.react_player_idx
+    return state.active_player_idx
+
+
+def _enrich_pending_from_owner_pov(state, state_dict, library):
+    """Enrich pending-modal fields from each pending gate's OWNER POV.
+
+    Used for god-mode spectator views (and mirroring the sandbox viewer):
+    ``filter_state_for_spectator(god_mode=True)`` deep-copies the RAW
+    ``GameState.to_dict()`` output, which serializes pending-modal gates in
+    engine format (e.g. ``pending_tutor_matches`` as bare deck-index ints)
+    — NOT the ``{card_numeric_id, deck_idx, match_idx}`` wire shape the
+    client modal code (syncPendingTutorUI et al.) expects. Running the same
+    enrich_* helpers the players get, with the pending owner as the viewer,
+    overwrites those raw keys with the full picker payload so god-mode
+    viewers render the same modal data as the picker.
+
+    Mutates ``state_dict`` in place.
+    """
+    tutor_viewer = (
+        state.pending_tutor_player_idx
+        if state.pending_tutor_player_idx is not None else 0
+    )
+    enrich_pending_tutor_for_viewer(state, state_dict, tutor_viewer, library)
+    conjure_viewer = (
+        state.pending_conjure_deploy_player_idx
+        if state.pending_conjure_deploy_player_idx is not None else 0
+    )
+    enrich_pending_conjure_deploy(state, state_dict, conjure_viewer, library)
+    death_target = getattr(state, "pending_death_target", None)
+    death_viewer = int(death_target.owner_idx) if death_target is not None else 0
+    enrich_pending_death_target(state, state_dict, death_viewer, library)
+    revive_viewer = (
+        state.pending_revive_player_idx
+        if state.pending_revive_player_idx is not None else 0
+    )
+    enrich_pending_revive(state, state_dict, revive_viewer, library)
+    trigger_viewer = (
+        state.pending_trigger_picker_idx
+        if state.pending_trigger_picker_idx is not None else 0
+    )
+    enrich_pending_trigger_for_viewer(state, state_dict, trigger_viewer, library)
+
+
 def _emit_state_to_players(
     session,
     state,
@@ -168,15 +249,11 @@ def _emit_state_to_players(
     actions = legal_actions(state, session.library) if not state.is_game_over else ()
     serialized_actions = [serialize_action(a) for a in actions]
 
-    # Determine decision-maker. Pending death-target overrides phase because
-    # a death modal routes control to the dying minion's owner (which may
-    # not be the active player nor the react player).
-    if getattr(state, "pending_death_target", None) is not None:
-        decision_idx = int(state.pending_death_target.owner_idx)
-    elif state.phase == TurnPhase.REACT:
-        decision_idx = state.react_player_idx
-    else:
-        decision_idx = state.active_player_idx
+    # Determine decision-maker via the shared helper that mirrors the
+    # pending-gate ordering in legal_actions (Phase 14.8 fix: previously
+    # only pending_death_target and REACT were checked, so trigger-picker /
+    # revive / conjure / tutor states routed to the wrong player).
+    decision_idx = _decision_idx(state)
 
     for idx in (0, 1):
         filtered = filter_state_for_player(state_dict, idx)
@@ -237,6 +314,13 @@ def _fanout_state_to_spectators(
             enrich_pending_death_target(state, spec_state, 0, session.library)
             enrich_pending_revive(state, spec_state, 0, session.library)
             enrich_pending_trigger_for_viewer(state, spec_state, 0, session.library)
+        else:
+            # Phase 14.8 fix: god-mode deep-copies the RAW to_dict output,
+            # which now carries pending-modal gates in engine format (raw
+            # deck-index ints). Overwrite them with the enriched wire shape
+            # from the pending owner's POV so god spectators render the
+            # same modal payload as the picker instead of a broken modal.
+            _enrich_pending_from_owner_pov(state, spec_state, session.library)
         if event_name == "state_update":
             # Phase 14.8-05: post-action ``state_update`` emit DELETED for
             # spectators too. DOM commits flow via ``engine_events`` slot
@@ -304,6 +388,10 @@ def _fanout_game_start_to_spectators(session, base_state_dict, card_defs):
             enrich_pending_death_target(session.state, spec_state, 0, session.library)
             enrich_pending_revive(session.state, spec_state, 0, session.library)
             enrich_pending_trigger_for_viewer(session.state, spec_state, 0, session.library)
+        else:
+            # Phase 14.8 fix: overwrite raw pending-modal gates with the
+            # enriched wire shape (see _enrich_pending_from_owner_pov).
+            _enrich_pending_from_owner_pov(session.state, spec_state, session.library)
         emit(
             "game_start",
             {
@@ -463,9 +551,34 @@ def register_events(room_manager: RoomManager) -> None:
         # Extract optional deck from payload before marking ready.
         # Server-side validation — rejects decks with non-deckable cards,
         # wrong size, too many copies, or unknown IDs.
+        #
+        # Phase 14.8 fix: a submitted deck that was not EXACTLY a 40-entry
+        # list previously skipped validation AND assignment silently — the
+        # player was marked ready and started the game on the preset deck
+        # with no feedback. Now any present-but-invalid deck aborts the
+        # ready-up with an explicit error. ``None`` still means "no custom
+        # deck" (the client sends {deck: null} when no slot is selected).
         deck_data = data.get("deck") if isinstance(data, dict) else None
-        if deck_data and isinstance(deck_data, list) and len(deck_data) == 40:
-            deck_tuple = tuple(int(x) for x in deck_data)
+        if deck_data is not None:
+            from grid_tactics.types import MIN_DECK_SIZE
+            if not isinstance(deck_data, list):
+                emit("error", {
+                    "msg": "Invalid deck: expected a list of card ids",
+                })
+                return
+            if len(deck_data) != MIN_DECK_SIZE:
+                emit("error", {
+                    "msg": (
+                        f"Invalid deck: must be exactly {MIN_DECK_SIZE} "
+                        f"cards (got {len(deck_data)})"
+                    ),
+                })
+                return
+            try:
+                deck_tuple = tuple(int(x) for x in deck_data)
+            except (TypeError, ValueError):
+                emit("error", {"msg": "Invalid deck: card ids must be integers"})
+                return
             errors = _room_manager._library.validate_deck(deck_tuple)
             if errors:
                 emit("error", {"msg": "Invalid deck: " + "; ".join(errors)})
@@ -560,6 +673,10 @@ def register_events(room_manager: RoomManager) -> None:
                 enrich_pending_death_target(session.state, spec_state, 0, session.library)
                 enrich_pending_revive(session.state, spec_state, 0, session.library)
                 enrich_pending_trigger_for_viewer(session.state, spec_state, 0, session.library)
+            else:
+                # Phase 14.8 fix: overwrite raw pending-modal gates with the
+                # enriched wire shape (see _enrich_pending_from_owner_pov).
+                _enrich_pending_from_owner_pov(session.state, spec_state, session.library)
             card_defs = _build_card_defs(session.library)
             emit("game_start", {
                 "your_player_idx": 0,
@@ -717,15 +834,11 @@ def register_events(room_manager: RoomManager) -> None:
             emit("error", {"msg": "Game is already over"})
             return
 
-        # Step f: Determine decision-maker. Pending death-target overrides
-        # phase because a death modal routes control to the dying minion's
-        # owner (which may not be the active player nor the react player).
-        if getattr(session.state, "pending_death_target", None) is not None:
-            decision_idx = int(session.state.pending_death_target.owner_idx)
-        elif session.state.phase == TurnPhase.REACT:
-            decision_idx = session.state.react_player_idx
-        else:
-            decision_idx = session.state.active_player_idx
+        # Step f: Determine decision-maker via the shared helper that
+        # mirrors legal_actions' pending-gate ordering (Phase 14.8 fix:
+        # pending_trigger_picker / revive / conjure / tutor states now
+        # route to the picker instead of the react/active player).
+        decision_idx = _decision_idx(session.state)
 
         # Step g: Check turn
         if player_idx != decision_idx:
@@ -851,6 +964,13 @@ def register_events(room_manager: RoomManager) -> None:
                 traceback.print_exc()
                 emit("error", {"msg": f"Server error resolving action: {e}"})
                 return
+
+            # Phase 14.8 fix (spell-stage chain leak): several engine paths
+            # close react windows without emitting react_window_closed
+            # (tutor/revive hand-off, drain-recheck reopen, melee
+            # pending_post_move). Balance the stream at the emission
+            # boundary so the client's spellStageChain never leaks entries.
+            reconcile_react_window_events(saved_state, session.state, stream)
 
             # M3: persist seq counter back to the session so the next
             # submit_action call's seq numbers continue monotonically.
@@ -1032,9 +1152,33 @@ def register_events(room_manager: RoomManager) -> None:
             saved_sandbox_state = sandbox._state
             saved_last_prev = sandbox.last_prev_state
             saved_last_action = sandbox.last_action
+            saved_undo_depth = sandbox.undo_depth
+
+            def _rollback_sandbox():
+                """Restore the pre-action snapshot after ANY resolve failure.
+
+                Phase 14.8 fix: previously only the OutOfPhaseError branch
+                rolled back, so a ValueError (or any engine exception)
+                raised mid-way through apply_action's auto-drain loop left
+                the server holding a partially-advanced state the client
+                never saw — every subsequent click then failed "Illegal
+                action" against an invisible board. Undo frames are popped
+                by depth-delta (not blindly) because a pre-validation
+                failure raises BEFORE apply_action pushes its frame.
+                """
+                sandbox._state = saved_sandbox_state
+                sandbox._last_prev_state = saved_last_prev
+                sandbox._last_action = saved_last_action
+                try:
+                    while sandbox.undo_depth > saved_undo_depth and sandbox._undo:
+                        sandbox._undo.pop()
+                except Exception:
+                    pass
+
             try:
                 events = sandbox.apply_action(action)
             except ValueError as e:
+                _rollback_sandbox()
                 emit("error", {"msg": str(e)})
                 return
             except OutOfPhaseError as e:
@@ -1045,15 +1189,7 @@ def register_events(room_manager: RoomManager) -> None:
                 # enforcement — so this branch only fires for real engine
                 # actions (PLAY_CARD / MOVE / ATTACK / ...) submitted via
                 # sandbox_apply_action whose phase the engine refused.
-                sandbox._state = saved_sandbox_state
-                sandbox._last_prev_state = saved_last_prev
-                sandbox._last_action = saved_last_action
-                # Pop the polluting undo frame pushed by apply_action().
-                try:
-                    if sandbox._undo:
-                        sandbox._undo.pop()
-                except Exception:
-                    pass
+                _rollback_sandbox()
                 import logging as _logging
                 _logging.getLogger("grid_tactics.server.events").error(
                     "OutOfPhaseError in handle_sandbox_apply_action: "
@@ -1080,6 +1216,9 @@ def register_events(room_manager: RoomManager) -> None:
                 })
                 return
             except Exception as e:
+                # Phase 14.8 fix: roll back here too — any engine exception
+                # mid-drain must not strand a partially-advanced state.
+                _rollback_sandbox()
                 import traceback
                 print(f"[ERROR] sandbox apply_action: {e}", flush=True)
                 traceback.print_exc()

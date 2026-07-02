@@ -171,6 +171,10 @@ class CardDefinition:
         - dict: ALL provided keys must match (AND). Allowed keys:
           {tribe, element, card_type}. Comparisons are case-insensitive
           string compares against the candidate's stringified attribute.
+          The tribe key matches against the space-split tribe WORD list
+          (like _is_rat_card / discard_cost tribe matching) so composite
+          tribes qualify: {"tribe": "Rat"} matches Ratchanter's
+          "Mage Rat" — per To The Ratmobile's ruling.
         """
         tt = self.tutor_target
         if tt is None:
@@ -180,7 +184,17 @@ class CardDefinition:
         if isinstance(tt, dict):
             for key, expected in tt.items():
                 if key == "tribe":
-                    actual = candidate.tribe
+                    # Composite tribes ("Mage Rat", "Archer Undead")
+                    # match on any whole word, consistent with every
+                    # other tribe-filtered system in the engine.
+                    if candidate.tribe is None:
+                        return False
+                    tribe_words = [
+                        w.lower() for w in str(candidate.tribe).split()
+                    ]
+                    if str(expected).lower() not in tribe_words:
+                        return False
+                    continue
                 elif key == "element":
                     actual = candidate.element.name if candidate.element is not None else None
                 elif key == "card_type":

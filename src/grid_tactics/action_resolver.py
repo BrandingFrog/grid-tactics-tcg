@@ -270,9 +270,27 @@ def _apply_move(state: GameState, action: Action, library: CardLibrary = None) -
         first_step_row = src_row + delta
         if state.board.get(first_step_row, src_col) is None:
             raise ValueError("LEAP only legal when the forward tile is blocked")
-        # Leap distance cap: 1 (the immediate blocker) + leap_amount additional
+        # Leap distance cap: jumping N enemies lands N+1 tiles away; the
+        # card ruling caps N at leap_amount (Rathopper: 1 enemy, 2 tiles).
         if abs(tgt_row - src_row) > 1 + leap_amount:
             raise ValueError("LEAP target row exceeds leap distance")
+        # Phase 14.8 bugfix: every jumped tile must hold a live ENEMY —
+        # per data/GLOSSARY.md Leap jumps over a blocking enemy to the
+        # next available tile and CANNOT leap allies. Previously only the
+        # first tile was checked (and not for ownership), so a
+        # hand-crafted action could leap an ally blocker or skip an
+        # unverified intermediate tile.
+        step_row = src_row + delta
+        while step_row != tgt_row:
+            occupant_id = state.board.get(step_row, src_col)
+            if occupant_id is None:
+                raise ValueError(
+                    "LEAP requires every jumped tile to be enemy-occupied"
+                )
+            occupant = state.get_minion(occupant_id)
+            if occupant is None or occupant.owner == active_side:
+                raise ValueError("LEAP cannot jump over ally minions")
+            step_row += delta
 
     # Check target cell is empty
     if state.board.get(target_pos[0], target_pos[1]) is not None:
@@ -328,6 +346,8 @@ def _has_any_attack_target(
 
 def _apply_play_card(
     state: GameState, action: Action, library: CardLibrary,
+    *,
+    event_collector: Optional[EventStream] = None,
 ) -> GameState:
     """Apply PLAY_CARD action. Deploys a minion or casts magic.
 
@@ -443,7 +463,10 @@ def _apply_play_card(
     if card_def.card_type == CardType.MINION:
         return _deploy_minion(state, action, card_def, card_numeric_id, active_side, library)
     elif card_def.card_type == CardType.MAGIC:
-        return _cast_magic(state, action, card_def, card_numeric_id, active_side, library)
+        return _cast_magic(
+            state, action, card_def, card_numeric_id, active_side, library,
+            event_collector=event_collector,
+        )
     else:
         raise ValueError(f"Cannot play card type {card_def.card_type.name} during ACTION phase")
 
@@ -680,6 +703,8 @@ def _apply_revive_place(
 
 def _apply_trigger_pick(
     state: GameState, pick_idx: int, library: CardLibrary,
+    *,
+    event_collector: Optional[EventStream] = None,
 ) -> GameState:
     """Pick one queued trigger (by queue index) and resolve it.
 
@@ -697,7 +722,10 @@ def _apply_trigger_pick(
     derived from the picker's identity.
     """
     assert_phase_contract(state, "action:trigger_pick")
-    from grid_tactics.react_stack import _resolve_trigger_and_open_react_window
+    from grid_tactics.react_stack import (
+        _resolve_trigger_and_open_react_window,
+        resume_after_trigger_drain,
+    )
 
     picker = state.pending_trigger_picker_idx
     if picker is None:
@@ -732,13 +760,24 @@ def _apply_trigger_pick(
     # modal if the queue still has 2+ entries after this resolution.
     state = replace(state, pending_trigger_picker_idx=None)
 
-    return _resolve_trigger_and_open_react_window(
+    state = _resolve_trigger_and_open_react_window(
         state, picked, is_turn_queue=is_turn_queue, library=library,
+        event_collector=event_collector,
+    )
+    # Phase 14.8 bugfix: if the picked (final) trigger fizzled and the
+    # drain exhausted without opening a window/modal, resume the phase
+    # flow the interrupted context still owes (see
+    # resume_after_trigger_drain) instead of returning a state with no
+    # react window / a wedged REACT phase.
+    return resume_after_trigger_drain(
+        state, library, event_collector=event_collector,
     )
 
 
 def _apply_decline_trigger(
     state: GameState, library: CardLibrary,
+    *,
+    event_collector: Optional[EventStream] = None,
 ) -> GameState:
     """Decline the remaining triggers in the picker owner's queue.
 
@@ -753,7 +792,10 @@ def _apply_decline_trigger(
     effects simply don't happen.
     """
     assert_phase_contract(state, "action:decline_trigger")
-    from grid_tactics.react_stack import drain_pending_trigger_queue
+    from grid_tactics.react_stack import (
+        drain_pending_trigger_queue,
+        resume_after_trigger_drain,
+    )
 
     picker = state.pending_trigger_picker_idx
     if picker is None:
@@ -776,7 +818,18 @@ def _apply_decline_trigger(
     # Re-enter drain — the other queue (if any) continues from where it
     # left off; otherwise we fall through to whatever phase transition
     # the prior react_return_phase encodes.
-    return drain_pending_trigger_queue(state, library)
+    state = drain_pending_trigger_queue(
+        state, library, event_collector=event_collector,
+    )
+    # Phase 14.8 bugfix: drain_pending_trigger_queue performs NO phase
+    # transition when both queues are empty — the comment above described
+    # dispatch logic that did not exist. Resume the interrupted flow
+    # (deferred after-action react window / react_return_phase dispatch)
+    # so DECLINE_TRIGGER can neither skip the opponent's react window nor
+    # strand the game in phase=REACT with react_player_idx=None.
+    return resume_after_trigger_drain(
+        state, library, event_collector=event_collector,
+    )
 
 
 def _cast_magic(
@@ -786,6 +839,8 @@ def _cast_magic(
     card_numeric_id: int,
     active_side: PlayerSide,
     library: CardLibrary,
+    *,
+    event_collector: Optional[EventStream] = None,
 ) -> GameState:
     """Cast a magic card (Phase 14.7-01 deferred resolution).
 
@@ -810,23 +865,56 @@ def _cast_magic(
     # originator resolution time.
     destroyed_attack = 0
     destroyed_dm = 0
-    if card_def.destroy_ally_cost and action.destroyed_minion_id is not None:
-        destroyed_minion = state.get_minion(action.destroyed_minion_id)
-        if destroyed_minion is not None and destroyed_minion.owner == active_side:
-            destroyed_def = library.get_by_id(destroyed_minion.card_numeric_id)
-            destroyed_attack = destroyed_def.attack + destroyed_minion.attack_bonus
-            destroyed_dm = destroyed_minion.dark_matter_stacks
-            # Remove from board
-            new_board = state.board.remove(destroyed_minion.position[0], destroyed_minion.position[1])
-            new_minions = tuple(m for m in state.minions if m.instance_id != destroyed_minion.instance_id)
-            # Add to grave if from_deck
-            active_idx = state.active_player_idx
-            new_players = state.players
-            if destroyed_minion.from_deck:
-                p = state.players[active_idx]
-                new_p = p.add_to_grave(destroyed_minion.card_numeric_id)
-                new_players = _replace_player(new_players, active_idx, new_p)
-            state = replace(state, board=new_board, minions=new_minions, players=new_players)
+    if card_def.destroy_ally_cost:
+        # Defense in depth (mirrors the mana re-check): the cost is
+        # mandatory — a missing/invalid destroyed_minion_id must not let
+        # the spell cast for free.
+        destroyed_minion = (
+            state.get_minion(action.destroyed_minion_id)
+            if action.destroyed_minion_id is not None
+            else None
+        )
+        if (
+            destroyed_minion is None
+            or destroyed_minion.owner != active_side
+            or not destroyed_minion.is_alive
+        ):
+            raise ValueError(
+                f"Card '{card_def.card_id}' requires destroying a friendly "
+                f"minion (destroy_ally_cost); destroyed_minion_id="
+                f"{action.destroyed_minion_id} is missing or invalid"
+            )
+        destroyed_def = library.get_by_id(destroyed_minion.card_numeric_id)
+        destroyed_attack = destroyed_def.attack + destroyed_minion.attack_bonus
+        destroyed_dm = destroyed_minion.dark_matter_stacks
+
+        # Phase 14.8 bugfix: route the destroyed ally through the STANDARD
+        # death pipeline instead of deleting it from the board directly.
+        # Direct deletion skipped the minion's ON_DEATH triggers (Giant
+        # Rat's promote, RGB Lasercannon's destroy) and never emitted
+        # EVT_MINION_DIED. Zero its health and run _cleanup_dead_minions
+        # in enqueue-only mode (_cleanup_skip_drain) so the on_death
+        # PendingTriggers queue up WITHOUT opening a react window here —
+        # the magic-cast originator pushed below must own the react
+        # stack. The drain-recheck hook in resolve_react_stack picks the
+        # queued triggers up after the cast's react window closes (the
+        # cost stands even if the cast itself is negated).
+        dying = replace(destroyed_minion, current_health=0)
+        state = replace(
+            state,
+            minions=_replace_minion(
+                state.minions, destroyed_minion.instance_id, dying,
+            ),
+        )
+        global _cleanup_skip_drain
+        _prev_skip = _cleanup_skip_drain
+        _cleanup_skip_drain = True
+        try:
+            state = _cleanup_dead_minions(
+                state, library, event_collector=event_collector,
+            )
+        finally:
+            _cleanup_skip_drain = _prev_skip
 
     # Build captured-effect payload from ON_PLAY effects. Each entry:
     # (effect_idx, target_pos_tuple_or_None, caster_owner_int). Using
@@ -1670,8 +1758,12 @@ def resolve_action(
         if state.pending_trigger_picker_idx is not None:
             return state
         # If drain auto-resolved a subsequent trigger and opened its own
-        # react window, respect it.
-        if state.phase == TurnPhase.REACT:
+        # react window, respect it. Phase 14.8 bugfix: only a LIVE window
+        # (react_player_idx set) counts — a drain-recheck that tore down
+        # its window before deferring to this modal leaves phase=REACT
+        # with react_player_idx=None, which must fall through to the
+        # fresh AFTER_DEATH_EFFECT window open below.
+        if state.phase == TurnPhase.REACT and state.react_player_idx is not None:
             return state
 
         # The death-effect we just resolved (via the modal pick) needs
@@ -1729,9 +1821,14 @@ def resolve_action(
                 raise ValueError(
                     "TRIGGER_PICK requires card_index (queue index)"
                 )
-            return _apply_trigger_pick(state, action.card_index, library)
+            return _apply_trigger_pick(
+                state, action.card_index, library,
+                event_collector=event_collector,
+            )
         if action.action_type == ActionType.DECLINE_TRIGGER:
-            return _apply_decline_trigger(state, library)
+            return _apply_decline_trigger(
+                state, library, event_collector=event_collector,
+            )
         raise ValueError(
             "Pending trigger picker: only TRIGGER_PICK or DECLINE_TRIGGER are legal"
         )
@@ -1987,8 +2084,13 @@ def resolve_action(
             phase=TurnPhase.REACT,
             react_player_idx=1 - state.active_player_idx,
             # Phase 14.7-02: after-action react window (tutor resolve).
+            # Phase 14.8 bugfix: preserve an in-flight react_return_phase
+            # (e.g. END_OF_TURN when the tutor was react-played on the
+            # BEFORE_END_OF_TURN window — Tree Wyrm) so the window close
+            # returns to the right phase instead of re-entering
+            # END_OF_TURN and double-firing end-of-turn triggers.
             react_context=ReactContext.AFTER_ACTION,
-            react_return_phase=TurnPhase.ACTION,
+            react_return_phase=state.react_return_phase or TurnPhase.ACTION,
         )
         _emit_after_action_react_window_opened(state, event_collector)
         return state
@@ -2047,9 +2149,11 @@ def resolve_action(
             )
 
         # Dead minion cleanup + game-over check.
+        # Phase 14.8 bugfix: thread event_collector through so trigger
+        # blips / HP changes / deaths on this path reach the client.
         state = replace(state, pending_action=action)
-        state = _cleanup_dead_minions(state, library)
-        state = _check_game_over(state)
+        state = _cleanup_dead_minions(state, library, event_collector=event_collector)
+        state = _check_game_over(state, event_collector=event_collector)
         if state.is_game_over:
             return state
         if state.pending_death_target is not None:
@@ -2064,9 +2168,14 @@ def resolve_action(
         # Phase 14.7-08: DECLINE means "no second action" → no second react
         # window. The post-move react window already opened (and closed)
         # around the move itself. Advance directly to END_OF_TURN.
+        # Phase 14.8 bugfix: pass event_collector — this path previously
+        # dropped it, so EVT_PHASE_CHANGED / EVT_REACT_WINDOW_OPENED for
+        # the end-of-turn window never reached the client.
         if is_decline:
             from grid_tactics.react_stack import enter_end_of_turn
-            return enter_end_of_turn(state, library)
+            return enter_end_of_turn(
+                state, library, event_collector=event_collector,
+            )
 
         # ATTACK sub-action resolved — open its own (second) react window.
         # This is the SECOND of the two react windows mandated by spec v2
@@ -2147,7 +2256,9 @@ def resolve_action(
                     "position": list(action.position) if action.position else None,
                 },
             )
-        state = _apply_play_card(state, action, library)
+        state = _apply_play_card(
+            state, action, library, event_collector=event_collector,
+        )
     elif action.action_type == ActionType.ATTACK:
         # Capture both combatants for ATTACK_RESOLVED payload.
         _atk_id = action.minion_id

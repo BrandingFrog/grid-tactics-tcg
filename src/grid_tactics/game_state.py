@@ -405,6 +405,33 @@ class GameState:
                 for t in self.pending_trigger_queue_other
             ],
             "pending_trigger_picker_idx": self.pending_trigger_picker_idx,
+            # Phase 14.8 fix: serialize EVERY pending-modal gate so sandbox
+            # save/load and server save slots round-trip in-flight modal
+            # state. Previously these silently reset to their defaults on
+            # load, dropping the decision point mid-modal — and
+            # pending_conjure_deploy_card lost the held card entirely
+            # (it was removed from the deck and existed only here).
+            "pending_post_move_attacker_id": self.pending_post_move_attacker_id,
+            "pending_tutor_player_idx": self.pending_tutor_player_idx,
+            "pending_tutor_matches": [int(i) for i in self.pending_tutor_matches],
+            "pending_tutor_is_conjure": bool(self.pending_tutor_is_conjure),
+            "pending_tutor_remaining": int(self.pending_tutor_remaining),
+            "pending_revive_player_idx": self.pending_revive_player_idx,
+            "pending_revive_card_id": self.pending_revive_card_id,
+            "pending_revive_remaining": int(self.pending_revive_remaining),
+            "pending_conjure_deploy_card": self.pending_conjure_deploy_card,
+            "pending_conjure_deploy_player_idx": self.pending_conjure_deploy_player_idx,
+            "pending_death_target": (
+                {
+                    "card_numeric_id": int(self.pending_death_target.card_numeric_id),
+                    "owner_idx": int(self.pending_death_target.owner_idx),
+                    "dying_instance_id": int(self.pending_death_target.dying_instance_id),
+                    "effect_idx": int(self.pending_death_target.effect_idx),
+                    "filter": self.pending_death_target.filter,
+                }
+                if self.pending_death_target is not None
+                else None
+            ),
         }
 
         # Serialize pending_action if present
@@ -557,6 +584,29 @@ class GameState:
             for t in d.get("pending_trigger_queue_other", [])
         )
 
+        # Phase 14.8 fix: restore pending-modal gates (absent from older
+        # save dicts -> defaults, matching pre-fix behavior for legacy
+        # files). pending_tutor_matches tolerates BOTH the raw int-index
+        # form written by to_dict AND the enriched per-viewer dict form
+        # ({deck_idx: ...}) in case a filtered state dict is round-tripped.
+        raw_tutor_matches = d.get("pending_tutor_matches") or ()
+        pending_tutor_matches = tuple(
+            int(m["deck_idx"]) if isinstance(m, dict) else int(m)
+            for m in raw_tutor_matches
+        )
+        pdt_raw = d.get("pending_death_target")
+        pending_death_target = (
+            PendingDeathTarget(
+                card_numeric_id=int(pdt_raw["card_numeric_id"]),
+                owner_idx=int(pdt_raw["owner_idx"]),
+                dying_instance_id=int(pdt_raw["dying_instance_id"]),
+                effect_idx=int(pdt_raw["effect_idx"]),
+                filter=pdt_raw.get("filter", "enemy_minion"),
+            )
+            if isinstance(pdt_raw, dict)
+            else None
+        )
+
         return cls(
             board=board,
             players=players,  # type: ignore[arg-type]
@@ -577,6 +627,18 @@ class GameState:
             pending_trigger_queue_turn=pending_trigger_queue_turn,
             pending_trigger_queue_other=pending_trigger_queue_other,
             pending_trigger_picker_idx=d.get("pending_trigger_picker_idx"),
+            # Phase 14.8 fix: pending-modal gates (see to_dict).
+            pending_post_move_attacker_id=d.get("pending_post_move_attacker_id"),
+            pending_tutor_player_idx=d.get("pending_tutor_player_idx"),
+            pending_tutor_matches=pending_tutor_matches,
+            pending_tutor_is_conjure=bool(d.get("pending_tutor_is_conjure", False)),
+            pending_tutor_remaining=int(d.get("pending_tutor_remaining") or 0),
+            pending_revive_player_idx=d.get("pending_revive_player_idx"),
+            pending_revive_card_id=d.get("pending_revive_card_id"),
+            pending_revive_remaining=int(d.get("pending_revive_remaining") or 0),
+            pending_conjure_deploy_card=d.get("pending_conjure_deploy_card"),
+            pending_conjure_deploy_player_idx=d.get("pending_conjure_deploy_player_idx"),
+            pending_death_target=pending_death_target,
             # Phase 14.8-05: last_trigger_blip field deleted. Old saved
             # state dicts carrying this key are tolerated — from_dict uses
             # explicit named-arg construction, so unknown keys in ``d``
