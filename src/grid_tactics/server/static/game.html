@@ -50,6 +50,18 @@
     </div>
   </header>
 
+  <!-- Aged-paper card edge: turbulence displacement that frays ONLY the card's
+       ::before paper layer (content stays crisp). Lives in the DOM so every
+       .card-frame-full.cf2 can reference filter:url(#card-deckle). -->
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+    <defs>
+      <filter id="card-deckle" x="-8%" y="-8%" width="116%" height="116%">
+        <feTurbulence type="fractalNoise" baseFrequency="0.012 0.018" numOctaves="4" seed="7" result="n"/>
+        <feDisplacementMap in="SourceGraphic" in2="n" scale="9" xChannelSelector="R" yChannelSelector="G"/>
+      </filter>
+    </defs>
+  </svg>
+
   <!-- Screen: Lobby — Tactical Command HUD -->
   <div id="screen-lobby" class="screen active">
     <div class="lobby2">
