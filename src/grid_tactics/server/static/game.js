@@ -874,6 +874,15 @@ function _renderHeroNow(host, def) {
         artEl.style.backgroundImage = 'url(' + _cardArtUrl(def.card_id, true) + ')';
         artEl.dataset.fullArt = '1';
     }
+    // Give each card a slightly different tilt + tiny nudge, like flipping
+    // through a physical stack. Centred on the base -6deg lean.
+    var card = host.querySelector('.card-frame-full');
+    if (card) {
+        var rot = (-6 + (Math.random() * 2 - 1) * 5).toFixed(2);   // ~ -11deg .. -1deg
+        var dx = ((Math.random() * 2 - 1) * 7).toFixed(1);
+        var dy = ((Math.random() * 2 - 1) * 7).toFixed(1);
+        card.style.transform = 'rotate(' + rot + 'deg) translate(' + dx + 'px, ' + dy + 'px)';
+    }
     host.style.opacity = '1';
 }
 function _showLobbyHeroCard(host, def, instant) {
