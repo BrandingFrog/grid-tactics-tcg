@@ -9095,6 +9095,29 @@ body {
   .card-frame-full.cf2.card-frame-hand { --cardw: clamp(52px, 15vh, 96px); }
 }
 
+/* --------------------------------------------------------------------------
+   DESKTOP / TABLET-LANDSCAPE counterpart of the mobile block above.
+   The redesign makes the left card-preview panel a PERMANENT column at every
+   width ("mobile-first, fluid-scale up" — one layout). But the pre-redesign
+   width breakpoints (`@media (max-width:1400px){ .tooltip-sidebar{display:none} }`)
+   hid it on taller desktop/tablet frames, so click-to-preview had nowhere to
+   render there. Re-show it for BOTH redesigned screens as a 3-column
+   [ preview | stage | right sidebar ] grid. Keeps the game log (#screen-game)
+   and the dev-ops controls (#screen-sandbox) in the right column.
+   Gated to tall landscape so it never overrides the short-landscape mobile
+   baseline (which stays 2-col, sidebar dropped) and never hits portrait.
+   -------------------------------------------------------------------------- */
+@media (orientation: landscape) and (min-height: 561px) {
+  body:has(#screen-game.active) .game-layout,
+  body:has(#screen-sandbox.active) .game-layout {
+    grid-template-columns: clamp(150px, 16vw, 240px) minmax(0, 1fr) 220px;
+  }
+  body:has(#screen-game.active) .game-layout > .tooltip-sidebar,
+  body:has(#screen-sandbox.active) .game-layout > .tooltip-sidebar {
+    display: flex !important;
+  }
+}
+
 
 /* ==========================================================================
    APPROVED IN-GAME DUEL LAYOUT (2026-07)
