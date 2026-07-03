@@ -4192,12 +4192,17 @@ body {
   z-index: 10;
 }
 
+/* Applied only to the tilted #game-board (playSummonAnimation, game.js).
+   The base board carries transform: rotateX(20deg); the shake keeps that
+   rotateX baked into every keyframe so the board never snaps FLAT mid-shake
+   (which would over-rotate the rotateX(-20deg) standees forward). The
+   translate rides OUTSIDE the tilt for a true screen-space jitter. */
 @keyframes grid-shake {
-  0%, 100% { transform: translate(0, 0); }
-  20% { transform: translate(-3px, 2px); }
-  40% { transform: translate(3px, -2px); }
-  60% { transform: translate(-2px, -2px); }
-  80% { transform: translate(2px, 1px); }
+  0%, 100% { transform: translate(0, 0) rotateX(20deg); }
+  20% { transform: translate(-3px, 2px) rotateX(20deg); }
+  40% { transform: translate(3px, -2px) rotateX(20deg); }
+  60% { transform: translate(-2px, -2px) rotateX(20deg); }
+  80% { transform: translate(2px, 1px) rotateX(20deg); }
 }
 .anim-grid-shake {
   animation: grid-shake 350ms ease-in-out;
@@ -4331,11 +4336,18 @@ body {
 .floating-popup.buff          { color: #30dfff; }
 .floating-popup.debuff        { color: #c060ff; }
 
+/* Popups live inside a .board-cell, which sits in the rotateX(20deg) board
+   under preserve-3d — so without help they render foreshortened ~20deg and
+   their rise drifts up the receding board plane. rotateX(-20deg) counter-
+   rotates each frame (matching the .board-standee billboard), standing the
+   number up to face the camera so the -72px rise travels screen-vertical.
+   popup-rise is used only by .floating-popup, which only ever appears in a
+   tilted board cell, so the counter-rotation is universally correct. */
 @keyframes popup-rise {
-  0%   { transform: translate(-50%, 0)    scale(0.6); opacity: 0; }
-  12%  { transform: translate(-50%, -8px) scale(1.15); opacity: 1; }
-  70%  { transform: translate(-50%, -48px) scale(1.0); opacity: 1; }
-  100% { transform: translate(-50%, -72px) scale(0.95); opacity: 0; }
+  0%   { transform: translate(-50%, 0)    scale(0.6)  rotateX(-20deg); opacity: 0; }
+  12%  { transform: translate(-50%, -8px) scale(1.15) rotateX(-20deg); opacity: 1; }
+  70%  { transform: translate(-50%, -48px) scale(1.0) rotateX(-20deg); opacity: 1; }
+  100% { transform: translate(-50%, -72px) scale(0.95) rotateX(-20deg); opacity: 0; }
 }
 
 /* Persistent status badges, rendered inside renderBoardMinion. */
