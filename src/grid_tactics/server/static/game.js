@@ -2212,12 +2212,10 @@ function renderCardFrame(c, opts) {
     var dimClass = opts.dim ? ' card-dimmed' : '';
     // cf2 = full-art frame marker; palette drives the element tint vars;
     // cf2-spell strips the minion stat rail for magic/react cards.
-    // Seeded worn crease: a stable hash of the card id picks one of 12 fold
-    // variants (.cf2-crease-N), so every copy of a card creases the same way
-    // but different cards fold differently — like a real worn deck.
-    var _cid = ((c && c.card_id) || '') + '', _seed = 0;
-    for (var _i = 0; _i < _cid.length; _i++) _seed = (_seed * 31 + _cid.charCodeAt(_i)) >>> 0;
-    var frameClasses = ' cf2 cf2-' + palette + (isMinion ? '' : ' cf2-spell') + ' cf2-crease-' + (_seed % 12);
+    // Deckle paper edge is the default (via .cf2::before). The seeded worn
+    // crease is OFF for now (user preference) — to re-enable, append
+    // ' cf2-crease-' + (hash(card_id) % 12); the 12 variants live in game.css.
+    var frameClasses = ' cf2 cf2-' + palette + (isMinion ? '' : ' cf2-spell');
     var dataAttrs = '';
     if (opts.handIndex != null) dataAttrs += ' data-hand-idx="' + opts.handIndex + '"';
     if (opts.numericId != null) dataAttrs += ' data-numeric-id="' + opts.numericId + '"';
