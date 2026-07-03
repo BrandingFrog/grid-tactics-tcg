@@ -9521,18 +9521,42 @@ body:has(#screen-lobby.active) .hud-header { display: none !important; }
 
 #screen-lobby { padding: 0 !important; }
 #screen-lobby .lobby2 {
+  /* Warm "aged parchment / candlelit table" theme — matches the retro-TCG
+     cards + Alegreya SC title (was a cold sci-fi HUD in blue/cyan). */
+  --parch:     #f2ead2;   /* card banner cream (titles) */
+  --parch-dim: #cbb98f;   /* readable body parchment */
+  --parch-mute:#9a865c;   /* muted labels */
+  --gold:      #e0a23c;   /* deep gold accent */
+  --gold-lt:   #ffd873;   /* bright gold */
+  --bronze:    #6b5730;   /* borders */
+  --bronze-dk: #3a2e18;   /* subtle borders */
+  --field:     #191207;   /* input / row fill */
+  --field-hi:  #221809;
+  --line:      #2c2113;   /* dividers */
+  --panel:     rgba(14, 10, 4, 0.55);
+
   display: grid;
   grid-template-columns: 46% 54%;
   min-height: 100vh;
-  color: #dfe7f4;
-  font-family: 'Chakra Petch', system-ui, sans-serif;
-  background: radial-gradient(120% 130% at 20% 0%, #14243f 0%, #0a1120 55%, #06090f 100%);
+  color: var(--parch-dim);
+  font-family: 'Alegreya', Georgia, serif;
+  position: relative;
+  background:
+    radial-gradient(120% 120% at 22% 4%, rgba(224, 162, 60, 0.17) 0%, transparent 46%),
+    radial-gradient(135% 130% at 82% 104%, rgba(120, 60, 130, 0.10) 0%, transparent 52%),
+    radial-gradient(150% 150% at 50% 38%, #251a0e 0%, #160f07 56%, #0b0805 100%);
   overflow: hidden;
 }
+/* Candlelit vignette so the corners sink into shadow like a card frame. */
+#screen-lobby .lobby2::before {
+  content: ''; position: absolute; inset: 0; z-index: 0; pointer-events: none;
+  background: radial-gradient(120% 120% at 40% 30%, transparent 55%, rgba(0, 0, 0, 0.5) 100%);
+}
+#screen-lobby .lobby2-brand,
+#screen-lobby .lobby2-play { position: relative; z-index: 1; }
 
 /* --- left: identity --- */
 #screen-lobby .lobby2-brand {
-  position: relative;
   padding: clamp(20px, 4vh, 46px) clamp(20px, 3vw, 42px);
   display: flex;
   flex-direction: column;
@@ -9540,14 +9564,15 @@ body:has(#screen-lobby.active) .hud-header { display: none !important; }
 #screen-lobby .lobby2-title {
   font-family: 'Alegreya SC', serif; font-weight: 800;
   font-size: clamp(38px, 7.5vw, 76px); line-height: 0.9;
-  color: #f2ead2; letter-spacing: 1px; text-shadow: 0 2px 12px #000;
+  color: var(--parch); letter-spacing: 1px;
+  text-shadow: 0 2px 14px #000, 0 0 30px rgba(224, 162, 60, 0.18);
 }
 #screen-lobby .lobby2-rule {
-  width: 64px; height: 3px; margin: 12px 0 10px;
-  background: linear-gradient(90deg, #e0a23c, transparent);
+  width: 72px; height: 3px; margin: 12px 0 10px;
+  background: linear-gradient(90deg, var(--gold), transparent);
 }
 #screen-lobby .lobby2-tag {
-  font-size: clamp(13px, 1.25vw, 16px); color: #8ea3c6;
+  font-size: clamp(13px, 1.25vw, 16px); color: var(--parch-mute);
   max-width: 330px; line-height: 1.45;
 }
 #screen-lobby .lobby2-nav {
@@ -9557,12 +9582,12 @@ body:has(#screen-lobby.active) .hud-header { display: none !important; }
 #screen-lobby .lobby2-nav a {
   display: inline-flex; align-items: center; gap: 10px; text-decoration: none;
   width: clamp(160px, 15vw, 210px);
-  font-weight: 600; font-size: 12.5px; letter-spacing: 1px; text-transform: uppercase;
-  color: #a7bde0; background: rgba(13, 26, 46, 0.8);
-  border: 1px solid #1e3454; border-left: 3px solid #3fd0ff; border-radius: 6px;
-  padding: 9px 16px; transition: background .15s, color .15s, border-color .15s;
+  font-family: 'Alegreya SC', serif; font-weight: 700; font-size: 15px; letter-spacing: 1px;
+  color: var(--parch-dim); background: rgba(30, 22, 10, 0.72);
+  border: 1px solid var(--bronze-dk); border-left: 3px solid var(--gold); border-radius: 6px;
+  padding: 8px 16px; transition: background .15s, color .15s, border-color .15s;
 }
-#screen-lobby .lobby2-nav a:hover { color: #eaf4ff; background: #14263f; border-left-color: #5fe0ff; }
+#screen-lobby .lobby2-nav a:hover { color: var(--parch); background: rgba(48, 36, 16, 0.9); border-left-color: var(--gold-lt); }
 #screen-lobby .lobby2-nav .ico { font-size: 15px; }
 #screen-lobby .lobby2-hero {
   position: absolute; right: clamp(-26px, 1.5vw, 30px);
@@ -9581,16 +9606,14 @@ body:has(#screen-lobby.active) .hud-header { display: none !important; }
   transition: transform 0.55s ease;
 }
 #screen-lobby .lobby2-hero img { width: 100%; display: block; }
-#screen-lobby .lobby2-foot { margin-top: auto; font-size: 11px; color: #4a5a7d; letter-spacing: .5px; z-index: 2; }
+#screen-lobby .lobby2-foot {
+  margin-top: auto; font-family: 'Alegreya SC', serif; font-size: 12px;
+  color: var(--parch-mute); letter-spacing: .5px; z-index: 2;
+}
 
-/* Short landscape (mobile baseline 844×390): the left column is only ~390px
-   tall, so a vertically-centred hero overlaps the tagline. Drop it to a
-   bottom-right peek instead — clears the tagline (top) and nav (bottom-left). */
+/* Short landscape (mobile baseline 844×390): bottom-anchor the hero small
+   enough to sit fully visible above the bottom edge. */
 @media (max-height: 560px) {
-  /* Short frame: centring would push the card up into the title/nav, so
-     bottom-anchor it small enough to sit FULLY visible above the bottom edge,
-     clearing the title (above) and the nav buttons (to its left). The inner
-     card keeps its JS tilt; the container carries no transform here. */
   #screen-lobby .lobby2-hero {
     bottom: 4px;
     width: clamp(140px, 19vw, 178px);
@@ -9602,93 +9625,95 @@ body:has(#screen-lobby.active) .hud-header { display: none !important; }
   padding: clamp(18px, 3vh, 38px) clamp(20px, 3vw, 44px);
   display: flex; flex-direction: column; gap: clamp(9px, 1.4vh, 15px);
   justify-content: center;
-  border-left: 1px solid #17243d; background: rgba(8, 13, 24, 0.67);
+  border-left: 1px solid var(--line); background: var(--panel);
 }
 #screen-lobby .lobby2-label {
-  display: block; font-size: 10px; letter-spacing: 1.5px; text-transform: uppercase;
-  color: #6f86a8; margin-bottom: 5px;
+  display: block; font-family: 'Alegreya SC', serif; font-size: 12px; font-weight: 700;
+  letter-spacing: 1.5px; color: var(--parch-mute); margin-bottom: 5px;
 }
 #screen-lobby .lobby2-input {
-  width: 100%; background: #0c1626; border: 1px solid #24395c; border-radius: 8px;
-  color: #eaf2ff; font-family: 'Chakra Petch', sans-serif; font-size: 15px;
-  padding: 10px 13px; outline: none;
+  width: 100%; background: var(--field); border: 1px solid var(--bronze); border-radius: 8px;
+  color: var(--parch); font-family: 'Alegreya', Georgia, serif; font-size: 16px;
+  padding: 9px 13px; outline: none;
 }
-#screen-lobby .lobby2-input:focus { border-color: #3fd0ff; box-shadow: 0 0 0 2px rgba(63, 208, 255, 0.2); }
-#screen-lobby .lobby2-input::placeholder { color: #4f6488; }
+#screen-lobby .lobby2-input:focus { border-color: var(--gold); box-shadow: 0 0 0 2px rgba(224, 162, 60, 0.22); }
+#screen-lobby .lobby2-input::placeholder { color: #6a5a3a; }
 #screen-lobby .lobby2-select { cursor: pointer; }
 #screen-lobby .lobby2-btn {
-  font-family: 'Chakra Petch', sans-serif; font-weight: 700; letter-spacing: 1.2px;
-  text-transform: uppercase; cursor: pointer; border: none;
+  font-family: 'Alegreya SC', serif; font-weight: 700; letter-spacing: 1px;
+  cursor: pointer; border: none;
   display: flex; align-items: center; justify-content: center; gap: 8px; border-radius: 8px;
 }
-#screen-lobby .lobby2-chev { font-size: 0.85em; }
+#screen-lobby .lobby2-chev { font-size: 0.8em; }
 #screen-lobby .lobby2-btn-play {
-  font-size: 15px; color: #0a1420; padding: 13px;
-  background: linear-gradient(180deg, #ffd873, #e0a23c);
-  box-shadow: 0 4px 14px -3px rgba(224, 162, 60, 0.53), inset 0 1px 0 rgba(255,255,255,.4);
+  font-size: 18px; color: #2a1c07; padding: 11px;
+  background: linear-gradient(180deg, var(--gold-lt), var(--gold));
+  box-shadow: 0 4px 16px -4px rgba(224, 162, 60, 0.6), inset 0 1px 0 rgba(255,255,255,.45);
+  text-shadow: 0 1px 0 rgba(255, 240, 200, 0.4);
 }
 #screen-lobby .lobby2-btn-play:hover { filter: brightness(1.06); }
 #screen-lobby .lobby2-or {
-  display: flex; align-items: center; gap: 10px;
-  color: #5b6f92; font-size: 10px; letter-spacing: 2px; text-transform: uppercase;
+  display: flex; align-items: center; gap: 10px; font-family: 'Alegreya SC', serif;
+  color: var(--parch-mute); font-size: 12px; letter-spacing: 1.5px;
 }
-#screen-lobby .lobby2-or::before, #screen-lobby .lobby2-or::after { content: ''; flex: 1; height: 1px; background: #1c2c48; }
+#screen-lobby .lobby2-or::before, #screen-lobby .lobby2-or::after { content: ''; flex: 1; height: 1px; background: var(--line); }
 #screen-lobby .lobby2-joinrow { display: flex; gap: 8px; }
 #screen-lobby .lobby2-joinrow .lobby2-code { flex: 1; text-transform: uppercase; letter-spacing: 3px; text-align: center; }
-#screen-lobby .lobby2-btn-join { font-size: 13px; color: #cdeaff; padding: 0 18px; background: #12324e; border: 1px solid #2f6f9e; }
-#screen-lobby .lobby2-btn-join:hover { background: #164066; }
-#screen-lobby .lobby2-btn-ghost { font-size: 12px; color: #8ea3c6; padding: 0 14px; background: #0b1524; border: 1px solid #24395c; }
-#screen-lobby .lobby2-btn-ghost:hover { color: #cfe0ff; border-color: #3a557f; }
+#screen-lobby .lobby2-btn-join { font-size: 15px; color: var(--parch); padding: 0 18px; background: #33260f; border: 1px solid var(--bronze); }
+#screen-lobby .lobby2-btn-join:hover { background: #45330f; border-color: var(--gold); }
+#screen-lobby .lobby2-btn-ghost { font-size: 14px; color: var(--parch-mute); padding: 0 14px; background: rgba(30, 22, 10, 0.6); border: 1px solid var(--bronze-dk); }
+#screen-lobby .lobby2-btn-ghost:hover { color: var(--parch-dim); border-color: var(--bronze); }
 #screen-lobby .lobby2-observe {
-  display: flex; align-items: center; gap: 8px; font-size: 11.5px; color: #7f93b6;
+  display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--parch-mute);
   cursor: pointer; user-select: none;
 }
-#screen-lobby .lobby2-observe input { accent-color: #3fd0ff; width: 14px; height: 14px; }
+#screen-lobby .lobby2-observe input { accent-color: var(--gold); width: 14px; height: 14px; }
 #screen-lobby .lobby2-games { margin-top: 2px; display: flex; flex-direction: column; min-height: 0; }
 #screen-lobby .lobby2-games-h {
-  display: flex; justify-content: space-between; align-items: center;
-  font-size: 10px; letter-spacing: 1.5px; text-transform: uppercase; color: #6f86a8; margin-bottom: 6px;
+  display: flex; justify-content: space-between; align-items: center; font-family: 'Alegreya SC', serif;
+  font-size: 12px; font-weight: 700; letter-spacing: 1.5px; color: var(--parch-mute); margin-bottom: 6px;
 }
 #screen-lobby .lobby2-games-h button {
-  background: none; border: none; color: #3fd0ff; font-size: 10px; cursor: pointer;
-  font-family: inherit; letter-spacing: 1px;
+  background: none; border: none; color: var(--gold); font-family: 'Alegreya SC', serif;
+  font-size: 12px; cursor: pointer; letter-spacing: 1px;
 }
 #screen-lobby .lobby2-rooms { display: flex; flex-direction: column; gap: 6px; overflow-y: auto; max-height: 34vh; }
-#screen-lobby .lobby2-rooms-empty { color: #3f507a; font-size: 12px; padding: 8px 2px; }
+#screen-lobby .lobby2-rooms-empty { color: var(--parch-mute); font-size: 14px; padding: 8px 2px; font-style: italic; }
 #screen-lobby .lobby2-room-row {
   display: flex; align-items: center; gap: 10px; padding: 8px 11px; border-radius: 7px;
-  background: #0b1524; border: 1px solid #182a44; font-size: 12.5px; cursor: pointer;
+  background: var(--field); border: 1px solid var(--bronze-dk); font-size: 15px; cursor: pointer;
   transition: background .12s, border-color .12s;
 }
-#screen-lobby .lobby2-room-row:hover { background: #0e1a2e; border-color: #2f6f9e; }
-#screen-lobby .lobby2-room-who { flex: 1; color: #dbe7f8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-#screen-lobby .lobby2-room-rcode { color: #7f92b6; letter-spacing: 1.5px; font-size: 11px; }
-#screen-lobby .lobby2-room-age { color: #4f648c; font-size: 10.5px; min-width: 26px; text-align: right; }
-#screen-lobby .lobby2-room-go { color: #8fe0b5; font-weight: 700; font-size: 11px; letter-spacing: 1px; }
+#screen-lobby .lobby2-room-row:hover { background: var(--field-hi); border-color: var(--bronze); }
+#screen-lobby .lobby2-room-who { flex: 1; color: var(--parch-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#screen-lobby .lobby2-room-rcode { color: var(--parch-mute); letter-spacing: 1.5px; font-size: 13px; font-family: 'Alegreya SC', serif; }
+#screen-lobby .lobby2-room-age { color: #7a6537; font-size: 12px; min-width: 26px; text-align: right; }
+#screen-lobby .lobby2-room-go { color: var(--gold); font-family: 'Alegreya SC', serif; font-weight: 700; font-size: 13px; letter-spacing: 1px; }
 
 /* --- waiting room (after create/join) --- */
 #screen-lobby .lobby2-room {
+  position: relative; z-index: 1;
   max-width: 560px; margin: clamp(24px, 6vh, 60px) auto 0; padding: 24px;
-  border: 1px solid #1e3454; border-radius: 12px; background: rgba(10, 19, 34, 0.93);
-  color: #dfe7f4; font-family: 'Chakra Petch', sans-serif;
+  border: 1px solid var(--bronze); border-radius: 12px; background: rgba(20, 14, 6, 0.94);
+  color: var(--parch-dim); font-family: 'Alegreya', Georgia, serif;
   display: flex; flex-direction: column; gap: 16px;
 }
 #screen-lobby .lobby2-room-head { display: flex; justify-content: space-between; align-items: flex-start; }
-#screen-lobby .lobby2-room-code { font-size: 26px; font-weight: 700; letter-spacing: 4px; color: #ffd873; }
-#screen-lobby .lobby2-room-tag { font-size: 12px; color: #8ea3c6; }
+#screen-lobby .lobby2-room-code { font-family: 'Alegreya SC', serif; font-size: 28px; font-weight: 800; letter-spacing: 4px; color: var(--gold-lt); }
+#screen-lobby .lobby2-room-tag { font-size: 14px; color: var(--parch-mute); font-style: italic; }
 #screen-lobby .lobby2-roster { display: flex; flex-direction: column; gap: 6px; }
 #screen-lobby .lobby2-status {
   position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%);
-  z-index: 40; font-size: 13px; padding: 8px 16px; border-radius: 8px;
-  background: rgba(10, 19, 34, 0.95); border: 1px solid #24395c; color: #dbe7f8;
+  z-index: 40; font-size: 15px; padding: 8px 16px; border-radius: 8px;
+  background: rgba(20, 14, 6, 0.96); border: 1px solid var(--bronze); color: var(--parch-dim);
   max-width: 90vw; text-align: center; pointer-events: none;
 }
 #screen-lobby .lobby2-status:empty { display: none; }
-#screen-lobby .lobby2-status.error { border-color: #b3405a; color: #ffbfcb; }
+#screen-lobby .lobby2-status.error { border-color: #a5502e; color: #f0b48a; }
 
 /* Portrait / very narrow: stack the two columns so nothing clips. */
 @media (max-width: 620px) {
   #screen-lobby .lobby2 { grid-template-columns: 1fr; min-height: auto; }
   #screen-lobby .lobby2-hero { display: none; }
-  #screen-lobby .lobby2-play { border-left: none; border-top: 1px solid #17243d; }
+  #screen-lobby .lobby2-play { border-left: none; border-top: 1px solid var(--line); }
 }
