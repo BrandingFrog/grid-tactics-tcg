@@ -1854,8 +1854,10 @@ body {
 .hand-container {
   display: flex;
   justify-content: center;
-  align-items: flex-end;
-  padding: 6px 4px 2px;
+  align-items: center;
+  /* Bottom padding leaves room for the flat-row cards' pulsing drop-shadow
+     halo so .game-main's overflow:hidden doesn't clip the glow's lower arc. */
+  padding: 6px 4px 10px;
   flex-shrink: 0;
   min-height: 120px;
   max-height: 200px;
@@ -8670,4 +8672,416 @@ body {
 .bug-modal-status.is-error { color: #ff7e7e; }
 .bug-modal-status.is-ok { color: #5fd58a; }
 .bug-modal-status a { color: inherit; text-decoration: underline; }
+
+/* ==========================================================================
+   FULL-ART CARD FRAME  (approved 2026-07-03 — locked reference)
+   Ported from card-frame-REFERENCE.html. Applies to every renderCardFrame()
+   output (they all carry .card-frame-full.cf2). First it NEUTRALISES the
+   cyan HUD skin the older block (~line 8141) stamps on .card-frame, then it
+   rebuilds the parchment full-art frame via the .cf2-* internals. Scoped so
+   board minions (.board-minion) and other .card-* consumers are untouched.
+   ========================================================================== */
+
+/* Element palettes — set on the root as .cf2-<element> (darker + chip shades). */
+.cf2-fire    { --el:#a8332a; --el-dark:#5e1c14; --el-chip:#8c2a20; }
+.cf2-dark    { --el:#5d3a8f; --el-dark:#33204f; --el-chip:#4b2d77; }
+.cf2-earth   { --el:#8a6d2f; --el-dark:#4f3d17; --el-chip:#71581f; }
+.cf2-water   { --el:#2b5f9e; --el-dark:#173a63; --el-chip:#234f86; }
+.cf2-metal   { --el:#5c5c60; --el-dark:#333336; --el-chip:#4a4a4e; }
+.cf2-wood    { --el:#4a7a2e; --el-dark:#2a4a17; --el-chip:#3c6424; }
+.cf2-light   { --el:#b09a34; --el-dark:#6e5e17; --el-chip:#96822a; }
+.cf2-neutral { --el:#6a6a6e; --el-dark:#3a3a3d; --el-chip:#555559; }
+
+.cf2 {
+  --parch:#e8dcbb; --parch2:#ded0a8; --ink:#241c10;
+  --magic:#4656b8; --magic-dark:#2b3576; --magic-tint:#dfe2f2;
+  --react:#c2731f; --react-dark:#7c4812; --react-tint:#f4e3c8;
+}
+
+/* --- neutralise the HUD skin so the parchment frame reads cleanly --- */
+.card-frame-full.cf2 {
+  /* THE query container. 1cqw = 1% of this element's width, so every internal
+     dimension below (declared in cqw) scales with whatever width the context
+     gives the card — hand thumbnail, deck tile, tooltip, spell-stage. */
+  container-type: inline-size;
+  border: none !important;
+  background: #171310 !important;
+  background-image:
+    radial-gradient(#221c15 1px, transparent 1px),
+    radial-gradient(#0d0a07 1px, transparent 1px) !important;
+  background-size: 5px 5px, 7px 7px !important;
+  /* percentage border-radius resolves against THIS element's own box (the card),
+     not the viewport — cqw on the query container itself resolves against an
+     ancestor container (none here) and would fall back to the viewport size.
+     The card is square (aspect-ratio 1/1) so 2.17% == 2.17% of the card width. */
+  border-radius: 2.17% !important;
+  clip-path: none !important;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.55) !important;
+  /* NO outer padding here: cqw on the container resolves against an ancestor
+     query container (none), so it would scale with the viewport and collapse
+     the card at small sizes. The dark gutter is instead a margin on .cf2-frame,
+     which IS a descendant of this container, so its cqw resolves against the
+     card width correctly. See .cf2 .cf2-frame below. */
+  overflow: hidden;
+  aspect-ratio: 1 / 1;
+  color: var(--ink);
+  font-family: 'Alegreya', Georgia, serif;
+}
+.card-frame-full.cf2::before,
+.card-frame-full.cf2::after { content: none !important; display: none !important; }
+.card-frame-full.cf2:hover { box-shadow: 0 8px 30px rgba(0, 0, 0, 0.6) !important; }
+
+/* Every context renders the card SQUARE (1:1) — the full-art design is 1:1.
+   The hand ROW layout is width-driven (negative margins scale off --cardw),
+   so a square card does not disturb it. */
+.card-frame-hand.cf2 { aspect-ratio: 1 / 1; }
+
+/* ==========================================================================
+   PROPORTIONAL INTERNALS — every dimension is a container-query unit so the
+   card renders identically at ANY width (hand ~60-116px, tooltip/deck ~220px,
+   spell-stage). Baseline: the locked 460px reference card (card-frame-REFERENCE
+   .html); each reference px X maps to (X / 460 * 100) cqw = X * 0.2174 cqw.
+   1cqw = 1% of .card-frame-full.cf2's width (the query container above).
+   Cosmetic-only px (box/text-shadow blur, grain) are intentionally left in px
+   as they never cause clipping. ========================================== */
+.cf2 .cf2-frame {
+  /* The outer parchment-to-edge gutter. Lives here (a descendant of the query
+     container) rather than as padding on the container, so this cqw resolves
+     against the card width — the container's own cqw would not. */
+  margin: 1.96cqw;
+  border: 0.65cqw solid var(--el-dark);
+  outline: 0.43cqw solid #0b0906;
+  border-radius: 1.3cqw;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--parch);
+  overflow: hidden;
+  position: relative;
+}
+
+/* full-art background layer — everything else floats above it (z-index 1). */
+.cf2 .cf2-artbg {
+  position: absolute; inset: 0; z-index: 0;
+  background-color: #0d0a07;
+  background-size: cover;
+  background-position: center 20%;
+}
+.cf2 .cf2-artbg::after {
+  content: ''; position: absolute; inset: 0;
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.34), transparent 26%);
+}
+
+/* ---------- header ---------- */
+.cf2 .cf2-head {
+  position: relative; z-index: 1;
+  display: flex; align-items: stretch; gap: 1.52cqw;
+  padding: 1.52cqw 1.52cqw 1.09cqw;
+}
+.cf2 .cf2-chip {
+  width: 11.3cqw; min-width: 11.3cqw; height: 11.3cqw;
+  background: var(--el-chip);
+  border: 0.65cqw solid #17110a;
+  outline: 0.43cqw solid var(--parch2);
+  border-radius: 1.09cqw;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  padding: 0.43cqw 0;
+  color: #f4ead0;
+  font-family: 'Alegreya SC', serif; font-weight: 800; font-size: 7.39cqw;
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.5);
+  box-shadow: inset 0 0 0 2px rgba(0, 0, 0, 0.25),
+              inset 0 2px 4px rgba(255, 255, 255, 0.12),
+              0 2px 7px rgba(0, 0, 0, 0.6);
+}
+.cf2 .cf2-chip-lbl {
+  font-family: 'Alegreya SC', serif; font-weight: 700; font-size: 2.07cqw;
+  letter-spacing: 0.22cqw; line-height: 1;
+}
+.cf2 .cf2-cnum {
+  font-family: 'Alegreya SC', serif; font-weight: 800; font-size: 6.52cqw; line-height: 0.9;
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.5);
+}
+.cf2 .cf2-eico { font-size: 4.35cqw; line-height: 0.9; margin-top: 1.09cqw; }
+
+.cf2 .cf2-namebox {
+  flex: 1; min-width: 0; text-align: center;
+  display: flex; flex-direction: column; justify-content: center;
+  padding: 0.43cqw 0.87cqw;
+  border: 0.43cqw solid var(--el-dark); border-radius: 0.87cqw;
+  background: rgba(240, 230, 200, 0.93);
+  box-shadow: inset 0 0 10px #c9b98d;
+}
+.cf2 .cf2-name {
+  font-family: 'Alegreya SC', serif; font-weight: 800;
+  font-size: 6.3cqw; letter-spacing: 0.22cqw; color: var(--ink); line-height: 1.02;
+}
+.cf2 .cf2-subtype { font-size: 3.15cqw; color: #4a3d24; font-weight: 700; letter-spacing: 0.11cqw; }
+.cf2 .cf2-d { color: var(--el); font-size: 2.39cqw; vertical-align: 0.22cqw; }
+
+/* ---------- static keyword tags ---------- */
+.cf2 .cf2-tags {
+  position: relative; z-index: 1;
+  display: flex; gap: 1.3cqw; justify-content: center; flex-wrap: wrap;
+  padding: 1.3cqw 0 0.43cqw;
+}
+.cf2 .cf2-tag {
+  font-family: 'Alegreya SC', serif; font-weight: 800; font-size: 2.61cqw; letter-spacing: 0.17cqw;
+  color: #f4ead0; background: var(--el-chip);
+  border: 0.43cqw solid #17110a; outline: 0.22cqw solid var(--parch2);
+  border-radius: 0.87cqw; padding: 0.43cqw 2.17cqw;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.55);
+}
+
+.cf2 .cf2-artspace { flex: 1; min-height: 15.2cqw; }
+
+/* ---------- body: floating effect boxes + optional stat rail ---------- */
+.cf2 .cf2-body {
+  position: relative; z-index: 1;
+  display: flex; align-items: flex-end; gap: 1.3cqw;
+  min-height: 0;
+  padding: 0 1.3cqw;
+}
+.cf2 .cf2-text {
+  flex: 1; min-width: 0;
+  color: var(--ink);
+  font-size: 3.37cqw; line-height: 1.3;
+  padding-bottom: 0.43cqw;
+}
+
+.cf2 .cf2-mode {
+  border-radius: 0.87cqw; padding: 1.09cqw 1.74cqw 1.3cqw; margin-bottom: 1.3cqw;
+  border: 0.43cqw solid; border-left-width: 1.3cqw;
+  box-shadow: 0 3px 9px rgba(0, 0, 0, 0.55);
+}
+.cf2 .cf2-mode.cf2-minion { background: rgba(242, 233, 206, 0.95); border-color: var(--el); }
+.cf2 .cf2-mode.cf2-magic  { background: var(--magic-tint); border-color: var(--magic); }
+.cf2 .cf2-mode.cf2-react  { background: var(--react-tint); border-color: var(--react); }
+.cf2 .cf2-modehead {
+  font-family: 'Alegreya SC', serif; font-weight: 800; font-size: 3.04cqw;
+  letter-spacing: 0.13cqw; display: block; margin-bottom: 0.22cqw;
+}
+.cf2 .cf2-mode.cf2-magic .cf2-modehead { color: var(--magic); }
+.cf2 .cf2-mode.cf2-react .cf2-modehead { color: var(--react-dark); }
+.cf2 .cf2-ability { margin-bottom: 1.09cqw; }
+.cf2 .cf2-ability:last-child { margin-bottom: 0; }
+.cf2 .cf2-bullet { color: var(--el); margin-right: 0.87cqw; font-size: 2.83cqw; }
+.cf2 .cf2-mode.cf2-magic .cf2-bullet { color: var(--magic); }
+.cf2 .cf2-mode.cf2-react .cf2-bullet { color: var(--react); }
+.cf2 .cf2-ability b { font-family: 'Alegreya SC', serif; font-weight: 800; letter-spacing: 0.09cqw; }
+.cf2 .cf2-flavor { font-style: italic; color: var(--ink); }
+
+.cf2 .cf2-ordiv {
+  text-align: center; font-family: 'Alegreya SC', serif; font-weight: 700;
+  color: #f0e4c4; font-size: 2.61cqw; letter-spacing: 0.65cqw; margin: 0.22cqw 0 1.09cqw;
+  display: flex; align-items: center; gap: 1.74cqw;
+  text-shadow: 0 1px 3px #000;
+}
+.cf2 .cf2-ordiv::before, .cf2 .cf2-ordiv::after {
+  content: ''; flex: 1; border-top: 0.33cqw solid rgba(255, 255, 255, 0.33);
+}
+
+/* floating stat chips (minions only) */
+.cf2 .cf2-rail {
+  display: flex; flex-direction: column; justify-content: flex-end; gap: 1.3cqw;
+  width: 18.7cqw; min-width: 18.7cqw;
+  padding-bottom: 0.43cqw;
+}
+.cf2 .cf2-stat {
+  background: var(--el-chip);
+  border: 0.65cqw solid #17110a; outline: 0.43cqw solid var(--parch2);
+  border-radius: 1.09cqw; text-align: center; color: #f4ead0;
+  padding: 0.87cqw 0.43cqw 1.3cqw;
+  box-shadow: inset 0 0 0 2px rgba(0, 0, 0, 0.25),
+              inset 0 2px 4px rgba(255, 255, 255, 0.12),
+              0 3px 9px rgba(0, 0, 0, 0.62);
+}
+.cf2 .cf2-stat-lbl { font-family: 'Alegreya SC', serif; font-weight: 700; font-size: 2.72cqw; letter-spacing: 0.22cqw; display: block; }
+.cf2 .cf2-stat-val { font-family: 'Alegreya SC', serif; font-weight: 800; font-size: 7.17cqw; line-height: 1; display: block; text-shadow: 0 1px 0 rgba(0, 0, 0, 0.5); }
+
+/* health / attack glyph spans (reference .hp/.atk — harmless if unused) */
+.cf2 .hp  { color: #c0392b; font-weight: 800; }
+.cf2 .atk { color: #b06a15; font-weight: 800; }
+
+/* ---------- footer (floats on the art, every card) ---------- */
+.cf2 .cf2-foot {
+  position: relative; z-index: 1;
+  display: flex; justify-content: space-between; gap: 1.3cqw;
+  padding: 0.43cqw 2.17cqw 1.09cqw;
+  color: #f0e6cc; font-size: 2.5cqw; letter-spacing: 0.09cqw;
+  font-family: 'Alegreya SC', serif; font-weight: 500;
+  text-shadow: 0 1px 3px #000, 0 0 6px rgba(0, 0, 0, 0.6);
+}
+
+/* ==========================================================================
+   HAND LAYOUT — flat overlapping row + state glows  (2026-07-03)
+   Replaces the old fan/arc (rotate + parabolic translateY). Cards stand
+   UPRIGHT in a straight, centred row that overlaps by AT MOST 45% (>=55%
+   of every card stays visible). Overlap starts light and ramps toward the
+   45% cap as the hand grows to 10, so the row never breaks its bounds.
+
+   Every hand card is .card-frame-full.cf2.card-frame-hand — this block's
+   selectors carry that full chain so they out-specify (and, where the old
+   fan used !important, match with !important + later source order) the
+   legacy fan rules above without editing them. --i (0-based index) and --n
+   (hand size) are still stamped per card by renderHand().
+   ========================================================================== */
+.card-frame-full.cf2.card-frame-hand {
+  /* Fluid thumbnail width — scales with viewport height so the whole hand
+     row shrinks to fit a short landscape frame and grows on desktop. */
+  --cardw: clamp(60px, 12vh, 116px);
+  /* Overlap fraction of the 45% cap: ~0.15 at a few cards, 1.0 (full 45%)
+     by 10 cards. clamp keeps it within [0.15, 1] so it never exceeds 45%. */
+  --ovl: clamp(0.15, calc((var(--n) - 3) / 7), 1);
+  width: var(--cardw) !important;
+  max-width: var(--cardw) !important;
+  /* Square like every other context — the full-art design is 1:1. Row overlap
+     below is width-driven, so squaring the card does not disturb the layout. */
+  aspect-ratio: 1 / 1;
+  /* First card (--i:0) keeps a 0 margin; each later card slides left over
+     its neighbour by at most 45% of a card width. */
+  margin-left: calc(var(--cardw) * -0.45 * var(--ovl) * min(1, var(--i)));
+  margin-top: 0;
+  transform: none !important;      /* kill the fan rotation + arc lift */
+  transform-origin: center center;
+  transition: filter 140ms ease, outline-color 120ms ease;
+  z-index: calc(var(--i) + 1);
+  position: relative;
+}
+/* First card never gets a negative margin (guards min() rounding). */
+.card-frame-full.cf2.card-frame-hand:first-child { margin-left: 0; }
+
+/* Neutralise every legacy fan transform (hover lift, sandbox top-hand,
+   playable/selected/react lifts) — flat row means no raise on any state. */
+.card-frame-full.cf2.card-frame-hand:hover,
+.card-frame-full.cf2.card-frame-hand.card-playable,
+.card-frame-full.cf2.card-frame-hand.card-playable:hover,
+.card-frame-full.cf2.card-frame-hand.card-react-playable,
+.card-frame-full.cf2.card-frame-hand.card-react-playable:hover,
+.card-frame-full.cf2.card-frame-hand.card-selected-hand,
+.card-frame-full.cf2.card-frame-hand.card-preview-pinned,
+.hand-container.sandbox-hand-top .card-frame-full.cf2.card-frame-hand,
+.hand-container.sandbox-hand-top .card-frame-full.cf2.card-frame-hand:hover,
+.hand-container.sandbox-hand-top .card-frame-full.cf2.card-frame-hand.card-playable:hover,
+.hand-container.sandbox-hand-top .card-frame-full.cf2.card-frame-hand.card-selected-hand,
+.hand-container.sandbox-hand-top .card-frame-full.cf2.card-frame-hand.card-react-playable:hover,
+.hand-container.sandbox-hand-top .card-frame-full.cf2.card-frame-hand.card-preview-pinned {
+  transform: none !important;
+}
+/* Lift focus/hover cards in STACKING order only (no translate) so their
+   full halo/outline reads above overlapping neighbours. */
+.card-frame-full.cf2.card-frame-hand:hover {
+  z-index: 90;
+}
+
+/* --- PLAYABLE GLOW (task 4) -----------------------------------------------
+   A pulsing halo OUTSIDE the card border. Implemented with animated
+   filter: drop-shadow() rather than box-shadow because the base frame sets
+   box-shadow with !important (which would beat a keyframed box-shadow), and
+   because drop-shadow rings the card's actual silhouette and is NOT clipped
+   by the frame's own overflow:hidden. No lift/raise. */
+@keyframes hand-halo-blue {
+  0%, 100% { filter: drop-shadow(0 0 3px rgba(64, 156, 255, 0.9))
+                     drop-shadow(0 0 6px rgba(64, 156, 255, 0.45)); }
+  50%      { filter: drop-shadow(0 0 8px rgba(80, 170, 255, 1))
+                     drop-shadow(0 0 17px rgba(64, 156, 255, 0.85)); }
+}
+@keyframes hand-halo-amber {
+  0%, 100% { filter: drop-shadow(0 0 3px rgba(255, 170, 45, 0.9))
+                     drop-shadow(0 0 6px rgba(255, 140, 20, 0.45)); }
+  50%      { filter: drop-shadow(0 0 9px rgba(255, 178, 60, 1))
+                     drop-shadow(0 0 19px rgba(255, 140, 20, 0.85)); }
+}
+/* Playable on YOUR turn → blue pulsing halo. */
+.card-frame-full.cf2.card-frame-hand.card-playable {
+  cursor: pointer;
+  animation: hand-halo-blue 1.4s ease-in-out infinite;
+  z-index: 40;
+}
+/* React-playable during an OPEN react window → amber pulsing halo. Nothing
+   else pulses on the opponent's turn (updateHandHighlights only stamps
+   .card-react-playable while a react window is open and the card qualifies). */
+.card-frame-full.cf2.card-frame-hand.card-react-playable {
+  cursor: pointer;
+  animation: hand-halo-amber 1.3s ease-in-out infinite;
+  z-index: 40;
+}
+
+/* --- SELECTED / PINNED (task 3) -------------------------------------------
+   Clicking a hand card marks it selected in the row (bright cyan ring) AND
+   pins its full preview into the left tooltip panel (wired in renderHand →
+   pinHandCardPreview). outline draws OUTSIDE the border box and is not
+   clipped, so the selection ring is always fully visible; a static cyan
+   drop-shadow reinforces it and overrides any lingering playable pulse. */
+.card-frame-full.cf2.card-frame-hand.card-selected-hand,
+.card-frame-full.cf2.card-frame-hand.card-preview-pinned {
+  cursor: pointer;
+  outline: 3px solid var(--cyan);
+  outline-offset: 2px;
+  border-radius: 10px;
+  filter: drop-shadow(0 0 9px rgba(0, 212, 255, 0.9));
+  animation: none !important;   /* selected card holds steady, no pulse */
+  z-index: 120 !important;
+}
+
+/* --- CONFIRM-ARMED (magic awaiting a second click to cast) ----------------
+   Kept meaningful in the flat row: amber ring + amber pulse + a small
+   scale so it clearly reads as "click again to cast" (no fan rotation). */
+.card-frame-full.cf2.card-frame-hand.card-confirm-armed {
+  cursor: pointer;
+  outline: 3px solid var(--yellow);
+  outline-offset: 2px;
+  border-radius: 10px;
+  transform: scale(1.05) !important;
+  animation: hand-halo-amber 1s ease-in-out infinite;
+  z-index: 130 !important;
+}
+
+/* ==========================================================================
+   MOBILE-FIRST LANDSCAPE FIT  (baseline 844x390, iPhone 14/15 landscape)
+   Fit board + avatars + hand with NO vertical scroll, then fluid-scale up.
+   Keyed on short landscape viewports so desktop/portrait are untouched.
+   Placed last so it wins the cascade over the width-based breakpoints that
+   otherwise hide the left preview and let .game-main scroll.
+   ========================================================================== */
+@media (orientation: landscape) and (max-height: 560px) {
+  .game-layout {
+    /* Narrow left preview column + main; drop the right log sidebar to give
+       the board its width back. No horizontal OR vertical scroll. The
+       persistent .hud-header is 54px tall (border-box) at every width, so
+       subtract exactly that to fill the remaining height with no overflow. */
+    grid-template-columns: clamp(116px, 20vw, 190px) minmax(0, 1fr) !important;
+    height: calc(100vh - 54px);
+    max-width: none;
+    overflow: hidden !important;
+    padding: 4px;
+    gap: 4px;
+  }
+  /* Re-show the left tooltip/preview panel (the width breakpoints hide it)
+     so click-to-preview has somewhere to render at the mobile baseline. */
+  .game-layout > .tooltip-sidebar { display: flex !important; }
+  .game-layout > .game-sidebar    { display: none !important; }
+
+  .game-main { gap: 2px; overflow: hidden !important; }
+
+  /* Compress the surrounding chrome; the board (flex:1) keeps the rest. */
+  .room-bar { padding: 2px 8px; gap: 8px; }
+  .info-bar { padding: 1px 8px; gap: 8px; }
+  .player-tag { font-size: 11px; }
+  .stat-label { font-size: 7px; }
+  .stat-value { font-size: 13px; }
+  .stat-group { gap: 12px; }
+  .how-to-play-hint { display: none !important; }
+  .opp-hand-row { min-height: 0; }
+
+  .board-container { padding: 2px; min-height: 0 !important; }
+  .game-board { max-height: none; gap: 4px; }
+  /* Avatars ride the board corners — shrink so they don't crowd the grid. */
+  .player-avatar { left: 2px; padding: 2px; gap: 1px; }
+  .avatar-disc { width: 30px; height: 30px; font-size: 13px; }
+
+  /* Flat hand row, sized to the short frame; still overlaps + glows. */
+  .hand-container { min-height: 0 !important; max-height: none; padding: 2px 4px 8px; }
+  .card-frame-full.cf2.card-frame-hand { --cardw: clamp(52px, 15vh, 96px); }
+}
 

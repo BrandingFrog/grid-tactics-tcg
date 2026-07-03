@@ -29,7 +29,8 @@ function _cardArtUrl(card_id, full) {
 // crisp art once it's actually being looked at.
 function _lazyUpgradeArt(rootEl, cardId) {
     if (!rootEl || !cardId) return;
-    var artEl = rootEl.querySelector('.card-art');
+    // Full-art frame uses .cf2-artbg; legacy/board fallbacks use .card-art.
+    var artEl = rootEl.querySelector('.cf2-artbg, .card-art');
     if (!artEl || artEl.dataset.fullArt === '1') return;
     var img = new Image();
     img.onload = function() {
@@ -103,6 +104,15 @@ const ELEMENT_MAP = {
     6: { name: 'Light', color: 'rgb(240,220,40)',   css: 'attr-light' },
 };
 const NEUTRAL_ELEMENT = { name: 'Neutral', color: 'rgb(128,128,128)', css: 'attr-neutral' };
+
+// Approved card-frame set label (footer). ONE shared constant — never
+// hardcode the set name per card (locked 2026-07-03 frame redesign).
+const SET_NAME = 'Core Beta WIP';
+// Element emoji for the header element chip, keyed by lowercase palette name.
+const EL_EMOJI = {
+    wood: '🌿', fire: '🔥', earth: '⛰️', water: '💧',
+    metal: '⚙️', dark: '🌑', light: '☀️', neutral: '◇',
+};
 
 const PHASE_DISPLAY = {
     0: { label: 'ACTION', cssClass: 'phase-action', bg: 'var(--cyan)' },
@@ -2047,6 +2057,62 @@ function fitHandCardEffects() {}
 //                          hand suppresses it to match original behavior)
 // }
 // =============================================
+// --- renderCardFrame helpers (2026-07 full-art frame redesign) -----------
+// Collector number NNN/033 derives from stable_id ranked 1..N across the set.
+// Memoised on first use; recomputed only while defs are still empty.
+var _cf2CollectorMap = null;
+var _cf2CollectorTotal = 33;
+function _cf2Collector(c) {
+    var defs = allCardDefs || cardDefs;
+    if ((!_cf2CollectorMap || _cf2CollectorTotal === 0) && defs) {
+        var ids = [];
+        for (var k in defs) {
+            if (defs[k] && defs[k].stable_id != null) ids.push(defs[k].stable_id);
+        }
+        if (ids.length) {
+            ids.sort(function(a, b) { return a - b; });
+            _cf2CollectorMap = {};
+            ids.forEach(function(sid, i) { _cf2CollectorMap[sid] = i + 1; });
+            _cf2CollectorTotal = ids.length;
+        }
+    }
+    var pad = function(n) { n = '' + n; while (n.length < 3) n = '0' + n; return n; };
+    var num = (c && c.stable_id != null && _cf2CollectorMap && _cf2CollectorMap[c.stable_id])
+        ? _cf2CollectorMap[c.stable_id] : null;
+    return (num != null ? pad(num) : '—') + '/' + pad(_cf2CollectorTotal || 33);
+}
+
+// Render one effect sentence as an ◆-bulleted (or plain) ability line, bolding
+// the leading keyword when the sentence is "Keyword: rest" shaped.
+function _cf2Line(line, bullet) {
+    if (!line) return '';
+    var pre = bullet ? '<span class="cf2-bullet">◆</span>' : '';
+    var m = /^([^:<]{1,22}):\s*([\s\S]*)$/.exec(line);
+    if (m) {
+        return '<div class="cf2-ability">' + pre + '<b>' + m[1] + '</b> — ' + m[2] + '</div>';
+    }
+    return '<div class="cf2-ability">' + pre + line + '</div>';
+}
+
+// React timing phrasing keyed by react_condition (matches the approved frame).
+var _CF2_REACT_TIMING = {
+    0: "opponent plays a magic or react card",
+    1: "opponent summons a minion",
+    2: "opponent attacks",
+    3: "opponent plays a magic or react card",
+    4: "opponent takes an action",
+    5: "a Wood card is played",
+    6: "a Fire card is played",
+    7: "an Earth card is played",
+    8: "a Water card is played",
+    9: "a Metal card is played",
+    10: "a Dark card is played",
+    11: "a Light card is played",
+    12: "opponent sacrifices",
+    13: "a card is discarded",
+    14: "opponent's Decay Phase",
+};
+
 function renderCardFrame(c, opts) {
     if (!c) return '';
     opts = opts || {};
@@ -2054,110 +2120,61 @@ function renderCardFrame(c, opts) {
     var typeClass = TYPE_CSS[c.card_type] || '';
     var elem = (c.element !== null && c.element !== undefined)
         ? ELEMENT_MAP[c.element] : NEUTRAL_ELEMENT;
+    var palette = (elem === NEUTRAL_ELEMENT) ? 'neutral' : elem.name.toLowerCase();
+    var elemEmoji = EL_EMOJI[palette] || EL_EMOJI.neutral;
+    var isMinion = c.card_type === 0;
 
     // Context class: hand context still carries .card-frame-hand so all
     // existing state selectors (.card-frame-hand.card-playable,
     // .card-selected-hand, .card-react-playable, mobile sizing) keep working.
     var contextClass = '';
-    var artClass = 'card-art-full';
     if (context === 'hand') {
         contextClass = ' card-frame-hand';
-        artClass = 'card-art-hand';
     } else if (context === 'pile') {
         contextClass = ' card-frame-pile';
     } else if (context === 'tooltip') {
         contextClass = ' card-frame-tooltip';
+    } else if (context === 'spell-stage') {
+        contextClass = ' card-frame-spell-stage';
     }
+    // 'deck-builder' (default) carries no extra context class — the base
+    // .card-frame-full.cf2 frame IS the deck-builder look; its x2/x3 count
+    // badge is overlaid below via opts.count.
 
     var dimClass = opts.dim ? ' card-dimmed' : '';
+    // cf2 = full-art frame marker; palette drives the element tint vars;
+    // cf2-spell strips the minion stat rail for magic/react cards.
+    var frameClasses = ' cf2 cf2-' + palette + (isMinion ? '' : ' cf2-spell');
     var dataAttrs = '';
     if (opts.handIndex != null) dataAttrs += ' data-hand-idx="' + opts.handIndex + '"';
     if (opts.numericId != null) dataAttrs += ' data-numeric-id="' + opts.numericId + '"';
 
-    var html = '<div class="card-frame card-frame-full ' + typeClass + contextClass + dimClass + '"' + dataAttrs + '>';
-    // Art area with mana + element badges + name overlay inside
-    var artStyle = c.card_id ? 'background-image:url(' + _cardArtUrl(c.card_id) + ')' : '';
-    html += '<div class="card-art ' + artClass + '" style="' + artStyle + '">';
-    html += '<div class="card-mana">' + c.mana_cost + '</div>';
-    html += '<div class="attr-circle ' + elem.css + '"><span class="attr-text">' + elem.name + '</span></div>';
-    html += '<div class="card-name-overlay">' + c.name + '</div>';
-    html += '</div>';
-    // Type badge bar — show tribe for minions, card type for spells
-    var isMultiPurpose = c.react_condition != null && c.react_mana_cost != null && (c.card_type === 0 || c.card_type === 1);
-    var badgeText = c.card_type === 0 ? (c.tribe || 'MINION').toUpperCase() : (c.card_type === 1 ? 'MAGIC' : 'REACT');
-    if (isMultiPurpose) html += '<div class="card-multi-wrapper"><div class="card-multi-half">';
-    html += '<div class="card-type-badge">' + badgeText + '</div>';
-
-    // === MINION SECTION: effects, activated, transform, flavour ===
+    // --- cost notes (rendered as bulleted lines inside the mode box) ---
+    var costLines = [];
     if (c.discard_cost_tribe) {
         var sacN = c.discard_cost_count || 1;
         if (c.discard_cost_tribe === 'any') {
-            html += '<div class="card-effect-full">Cost: Discard ' + (sacN > 1 ? sacN + ' cards' : 'a card') + '</div>';
+            costLines.push('Cost: Discard ' + (sacN > 1 ? sacN + ' cards' : 'a card'));
         } else {
-            html += '<div class="card-effect-full">Cost: Discard any ' + (sacN > 1 ? sacN + ' ' : '') + c.discard_cost_tribe + (sacN > 1 ? 's' : '') + '</div>';
+            costLines.push('Cost: Discard any ' + (sacN > 1 ? sacN + ' ' : '') + c.discard_cost_tribe + (sacN > 1 ? 's' : ''));
         }
     }
-    if (c.unique) {
-        html += '<div class="card-effect-full">Unique</div>';
-    }
-    if (c.cost_reduction === 'dark_matter') {
-        html += '<div class="card-effect-full">Cost: Reduce mana cost by ' + _dmTokenLive() + '</div>';
-    }
-    if (c.play_condition === 'discarded_last_turn') {
-        html += '<div class="card-effect-full">Cost: Discard last turn</div>';
-    }
-    if (c.hp_cost) {
-        html += '<div class="card-effect-full">Cost: Deal ' + c.hp_cost + HEART + ' to own face</div>';
-    }
-    if (c.effects && c.effects.length > 0 && c.card_type !== 2) {
-        // Skip effects block for pure REACT cards — their effects render in the react section
-        var desc = getEffectDescription(c.effects, c);
-        desc.split('. ').forEach(function(line) {
-            if (line) html += '<div class="card-effect-full">' + line + '</div>';
-        });
-    }
-    if (c.activated_ability) {
-        var ab = c.activated_ability;
-        var abDesc = ab.mana_cost > 0 ? 'Active (' + ab.mana_cost + '): ' : 'Active: ';
-        if (ab.effect_type === 'conjure_rat_and_buff') {
-            abDesc += 'Conjure Common Rat. Ally Rats gain ' + _dmTokenLive() + SWORD + HEART + '.';
-        } else if (ab.effect_type === 'dark_matter_buff') {
-            abDesc += 'Target gains ' + _dmTokenLive() + SWORD + '.';
-        } else if (ab.effect_type === 'summon_token' && ab.summon_card_id) {
-            abDesc += 'Summon ' + findCardNameById(ab.summon_card_id) + '.';
-        } else {
-            abDesc += (ab.name || ab.effect_type);
-        }
-        html += '<div class="card-effect-full">' + abDesc + '</div>';
-    }
-    if (c.transform_options && c.transform_options.length > 0) {
-        var tLines = c.transform_options.map(function(opt) {
-            return '(' + opt.mana_cost + ') ' + findCardNameById(opt.target);
-        });
-        html += '<div class="card-effect-full">Transform: ' + tLines.join(', ') + '</div>';
-    }
-    // Flavour text — always show if present
-    if (c.flavour_text) {
-        html += '<div class="card-flavour">' + c.flavour_text + '</div>';
-    }
+    if (c.cost_reduction === 'dark_matter') costLines.push('Cost: Reduce mana cost by ' + _dmTokenLive());
+    if (c.play_condition === 'discarded_last_turn') costLines.push('Cost: Discard last turn');
+    if (c.hp_cost) costLines.push('Cost: Deal ' + c.hp_cost + HEART + ' to own face');
 
-    // === REACT SECTION: condition + effect for react and multi-purpose cards ===
-    if (c.react_condition != null) {
-        if (isMultiPurpose) {
-            html += '</div><div class="card-multi-half">';
-            html += '<div class="card-type-badge card-react-bar">REACT<span class="react-mana-circle">' + c.react_mana_cost + '</span></div>';
-        }
-        var condMap = {
-            0: 'Magic or React', 1: 'Summon', 2: 'Attack',
-            3: 'Magic or React', 4: 'Any action',
-            5: 'Wood', 6: 'Fire', 7: 'Earth',
-            8: 'Water', 9: 'Metal', 10: 'Dark',
-            11: 'Light', 12: 'Sacrifice', 13: 'Discard',
-            14: 'End of turn'
-        };
-        var condText = condMap[c.react_condition] || 'Enemy acts';
-        var extraCond = c.react_requires_no_friendly_minions ? ' while no allies' : '';
-        var costText = c.react_mana_cost > 0 ? ' (' + c.react_mana_cost + ')' : '';
+    // --- static keyword tags (Range / Melee / Unique) ---
+    var tags = [];
+    if (isMinion && c.attack_range != null) {
+        tags.push(c.attack_range === 0 ? 'Melee' : 'Range ' + c.attack_range);
+    }
+    if (c.unique) tags.push('Unique');
+
+    // --- react mode box (shared by pure-react + multi-purpose cards) ---
+    function buildReactBox() {
+        var cost = (c.react_mana_cost != null) ? c.react_mana_cost : c.mana_cost;
+        var timing = _CF2_REACT_TIMING[c.react_condition] || 'opponent acts';
+        if (c.react_requires_no_friendly_minions) timing += ' while you control no minions';
         var reactEffectText = '';
         if (c.react_effect && c.react_effect.type === 5) {
             reactEffectText = 'Summon';
@@ -2166,22 +2183,115 @@ function renderCardFrame(c, opts) {
         } else if (c.effects && c.effects.length > 0) {
             reactEffectText = getEffectDescription(c.effects, c);
         }
-        html += '<div class="card-effect-full">' + condText + extraCond + (reactEffectText ? ' ▶ ' + reactEffectText : '') + '</div>';
-        if (isMultiPurpose) html += '</div></div>';
+        var body = '';
+        (reactEffectText || '').split('. ').forEach(function(line) {
+            if (line) body += _cf2Line(line, false);
+        });
+        return '<div class="cf2-mode cf2-react">'
+            + '<span class="cf2-modehead">⚡ React · ' + cost + ' mana — ' + timing + '</span>'
+            + body + '</div>';
     }
-    // Stats row at bottom: ATK | RANGE | HP (minions only)
-    if (c.card_type === 0 && c.attack != null) {
-        var rangeText = (c.attack_range != null) ? (c.attack_range === 0 ? 'MELEE' : 'RANGE ' + c.attack_range) : '';
-        html += '<div class="card-bottom-section">';
-        html += '<div class="card-stat-atk"><span class="stat-emoji-bg">' + SWORD + '</span> <span class="stat-num">' + c.attack + '</span></div>';
-        html += '<div class="card-bottom-center">';
-        if (rangeText) html += '<div class="card-bottom-range">' + rangeText + '</div>';
-        html += '</div>';
-        html += '<div class="card-stat-hp"><span class="stat-emoji-bg">' + HEART + '</span> <span class="stat-num">' + c.health + '</span></div>';
-        html += '</div>';
+
+    // --- assemble the floating mode boxes for the card body ---
+    var boxes = '';
+    if (isMinion) {
+        var minionInner = '';
+        costLines.forEach(function(l) { minionInner += _cf2Line(l, true); });
+        if (c.effects && c.effects.length > 0) {
+            getEffectDescription(c.effects, c).split('. ').forEach(function(line) {
+                if (line) minionInner += _cf2Line(line, true);
+            });
+        }
+        if (c.activated_ability) {
+            var ab = c.activated_ability;
+            var abDesc = ab.mana_cost > 0 ? 'Active (' + ab.mana_cost + '): ' : 'Active: ';
+            if (ab.effect_type === 'conjure_rat_and_buff') {
+                abDesc += 'Conjure Common Rat. Ally Rats gain ' + _dmTokenLive() + SWORD + HEART + '.';
+            } else if (ab.effect_type === 'dark_matter_buff') {
+                abDesc += 'Target gains ' + _dmTokenLive() + SWORD + '.';
+            } else if (ab.effect_type === 'summon_token' && ab.summon_card_id) {
+                abDesc += 'Summon ' + findCardNameById(ab.summon_card_id) + '.';
+            } else {
+                abDesc += (ab.name || ab.effect_type);
+            }
+            minionInner += _cf2Line(abDesc, true);
+        }
+        if (c.transform_options && c.transform_options.length > 0) {
+            var tLines = c.transform_options.map(function(opt) {
+                return '(' + opt.mana_cost + ') ' + findCardNameById(opt.target);
+            });
+            minionInner += _cf2Line('Transform: ' + tLines.join(', '), true);
+        }
+        if (minionInner) {
+            boxes += '<div class="cf2-mode cf2-minion">' + minionInner + '</div>';
+        } else if (c.flavour_text) {
+            // Vanilla minion with no abilities: flavour reads as the box body.
+            boxes += '<div class="cf2-mode cf2-minion"><span class="cf2-flavor">' + c.flavour_text + '</span></div>';
+        }
+        // Multi-purpose minion (Minion + React) — stack the react box.
+        if (c.react_condition != null) {
+            boxes += '<div class="cf2-ordiv">or</div>' + buildReactBox();
+        }
+    } else if (c.card_type === 1) {
+        // MAGIC — cast box (+ optional react half for dual-mode cards).
+        var magicInner = '';
+        costLines.forEach(function(l) { magicInner += _cf2Line(l, false); });
+        if (c.effects && c.effects.length > 0) {
+            getEffectDescription(c.effects, c).split('. ').forEach(function(line) {
+                if (line) magicInner += _cf2Line(line, false);
+            });
+        }
+        boxes += '<div class="cf2-mode cf2-magic">'
+            + '<span class="cf2-modehead">✨ Cast · ' + c.mana_cost + ' mana — your turn</span>'
+            + magicInner + '</div>';
+        if (c.react_condition != null) {
+            boxes += '<div class="cf2-ordiv">or</div>' + buildReactBox();
+        }
+    } else {
+        // Pure REACT card.
+        boxes += buildReactBox();
     }
+    // Vanilla non-minion with only flavour (rare) — show it if nothing else.
+    if (!boxes && c.flavour_text) {
+        boxes = '<div class="cf2-mode cf2-minion"><span class="cf2-flavor">' + c.flavour_text + '</span></div>';
+    }
+
+    // --- floating stat chips (minions only) ---
+    var rail = '';
+    if (isMinion && c.attack != null) {
+        rail = '<div class="cf2-rail">'
+            + '<div class="cf2-stat"><span class="cf2-stat-lbl">Attack</span><span class="cf2-stat-val">' + c.attack + '</span></div>'
+            + '<div class="cf2-stat"><span class="cf2-stat-lbl">Health</span><span class="cf2-stat-val">' + c.health + '</span></div>'
+            + '</div>';
+    }
+
+    // --- header subtitle: ◆ Element ◆ Tribe (minions) / ◆ Element (spells) ---
+    var subtitle = '<span class="cf2-d">◆</span> ' + elem.name;
+    if (isMinion && c.tribe) subtitle += ' <span class="cf2-d">◆</span> ' + c.tribe;
+
+    var tagsHtml = tags.length
+        ? '<div class="cf2-tags">' + tags.map(function(t) { return '<span class="cf2-tag">' + t + '</span>'; }).join('') + '</div>'
+        : '';
+    var artStyle = c.card_id ? ' style="background-image:url(' + _cardArtUrl(c.card_id) + ')"' : '';
+
+    var html = '<div class="card-frame card-frame-full ' + typeClass + contextClass + dimClass + frameClasses + '"' + dataAttrs + '>';
+    html += '<div class="cf2-frame">';
+    html += '<div class="cf2-artbg"' + artStyle + '></div>';
+    html += '<div class="cf2-head">';
+    html += '<div class="cf2-chip cf2-cost"><span class="cf2-chip-lbl">Mana</span><span class="cf2-cnum">' + c.mana_cost + '</span></div>';
+    html += '<div class="cf2-namebox"><div class="cf2-name">' + c.name + '</div><div class="cf2-subtype">' + subtitle + '</div></div>';
+    html += '<div class="cf2-chip cf2-elem"><span class="cf2-chip-lbl">' + elem.name + '</span><span class="cf2-eico">' + elemEmoji + '</span></div>';
     html += '</div>';
-    // Count badge (deck-builder / tooltip contexts)
+    html += tagsHtml;
+    html += '<div class="cf2-artspace"></div>';
+    html += '<div class="cf2-body"><div class="cf2-text">' + boxes + '</div>' + rail + '</div>';
+    html += '<div class="cf2-foot"><span>' + _cf2Collector(c) + '</span><span>' + SET_NAME + '</span><span>&copy; 2026 Grid Tactics</span></div>';
+    html += '</div>'; // .cf2-frame
+    html += '</div>'; // .card-frame
+
+    // Count badge (deck-builder / tooltip contexts) — sibling of .card-frame
+    // exactly as before, so the deck tile is its positioning context and the
+    // badge overhangs the card corner (not clipped by the frame overflow).
     if (opts.count != null) {
         if (opts.count === -1) {
             html += '<div class="card-count-badge prohibited">🚫</div>';

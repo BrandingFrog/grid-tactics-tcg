@@ -7,12 +7,14 @@ A fantasy trading card game on a 5x5 grid with RL-driven strategy discovery. Pla
 
 **Core Value:** The RL engine that discovers and validates game strategies.
 
-### Current Rules
-- **Auto-draw** at turn start (mandatory), then one action (play/move/attack/sacrifice/pass)
+### Current Rules (authoritative detail: data/turn_structure_spec.md)
+- **Turn Start**: auto-draw 1 + gain 1 mana (pool, 10 = full) → **Rally Phase** (positive triggers) → one action (play/move/attack/sacrifice/pass) → **Decay Phase** (negative triggers, e.g. Burning) → turn end (Handshake payout)
+- **PASS is free**; pass answered by pass = **Handshake** (both players +1 mana at turn end; at full mana, draw instead)
 - **Forward-only movement** in lane (same column), attacks any direction
-- **React window** after each action — opponent can counter
-- **Win by sacrifice** (minion crosses board) or **HP depletion**
-- 19 cards: 11 minions, 4 magic, 3 react, 1 multi-purpose. Elements: Wood, Fire, Earth, Water, Metal, Dark, Light.
+- **React window** after each action — opponent can counter (LIFO stack, no design depth limit)
+- **Win by HP depletion** only. **Sacrifice** (minion on opponent's back row, or Leap with an all-enemy path) removes the minion and deals its full 🗡️ as damage to the opponent — a damage race, not an instant win
+- **Max hand 10** — overdraw burns the card to the Exhaust Pile, revealed
+- 33 cards across minions/magic/react incl. multi-purpose. Elements: Wood, Fire, Earth, Water, Metal, Dark, Light.
 
 ### Constraints
 - **Language**: Python for game engine and RL
