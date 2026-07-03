@@ -8711,18 +8711,24 @@ body {
      gives the card — hand thumbnail, deck tile, tooltip, spell-stage. */
   container-type: inline-size;
   border: none !important;
-  background: #171310 !important;
+  /* Aged IVORY card stock — the outer gutter reads like the worn cream border
+     of an old playing card (was a dark grainy frame). Layers: faint paper-fibre
+     speckle + brighter fleck + a soft cream sheen gradient. */
+  background: #e7ddc2 !important;
   background-image:
-    radial-gradient(#221c15 1px, transparent 1px),
-    radial-gradient(#0d0a07 1px, transparent 1px) !important;
-  background-size: 5px 5px, 7px 7px !important;
+    radial-gradient(rgba(150, 120, 70, 0.06) 1px, transparent 1.6px),
+    radial-gradient(rgba(255, 252, 240, 0.55) 1px, transparent 1.6px),
+    linear-gradient(148deg, #efe7d1 0%, #e5d9bc 58%, #d7c9a4 100%) !important;
+  background-size: 4px 4px, 6px 6px, 100% 100% !important;
   /* percentage border-radius resolves against THIS element's own box (the card),
-     not the viewport — cqw on the query container itself resolves against an
-     ancestor container (none here) and would fall back to the viewport size.
-     The card is square (aspect-ratio 1/1) so 2.17% == 2.17% of the card width. */
-  border-radius: 2.17% !important;
+     not the viewport. Rounder = a friendlier, worn playing-card corner. */
+  border-radius: 4% !important;
   clip-path: none !important;
-  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.55) !important;
+  /* drop shadow + aged/foxed darkening that creeps in from the worn edge. */
+  box-shadow:
+    0 6px 24px rgba(0, 0, 0, 0.55),
+    inset 0 0 2px rgba(70, 50, 25, 0.55),
+    inset 0 0 11px rgba(120, 92, 50, 0.3) !important;
   /* NO outer padding here: cqw on the container resolves against an ancestor
      query container (none), so it would scale with the viewport and collapse
      the card at small sizes. The dark gutter is instead a margin on .cf2-frame,
@@ -8751,13 +8757,14 @@ body {
    Cosmetic-only px (box/text-shadow blur, grain) are intentionally left in px
    as they never cause clipping. ========================================== */
 .cf2 .cf2-frame {
-  /* The outer parchment-to-edge gutter. Lives here (a descendant of the query
+  /* The ivory card-stock border. Lives here (a descendant of the query
      container) rather than as padding on the container, so this cqw resolves
-     against the card width — the container's own cqw would not. */
-  margin: 1.96cqw;
+     against the card width — the container's own cqw would not. A touch wider
+     now so the worn cream edge reads like an old playing card. */
+  margin: 2.7cqw;
   border: 0.65cqw solid var(--el-dark);
   outline: 0.43cqw solid #0b0906;
-  border-radius: 1.3cqw;
+  border-radius: 1.6cqw;
   flex: 1;
   min-height: 0;
   display: flex;
