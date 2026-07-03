@@ -820,6 +820,8 @@ function onCardDefs(data) {
 // on a showpiece card, then cycles a shuffled deck. No-op until card defs have
 // loaded and the #lobby-hero element exists. Pauses while the lobby is hidden.
 var LOBBY_HERO_CARD = 'erebus';
+var LOBBY_HERO_HOLD_MS = 7000;   // how long each card is shown
+var LOBBY_HERO_FADE_MS = 800;    // crossfade duration (match the CSS transition)
 var _lobbyHeroCards = null;   // shuffled array of card defs
 var _lobbyHeroIdx = 0;
 var _lobbyHeroTimer = null;
@@ -843,6 +845,7 @@ function renderLobbyHero() {
     }
 
     _showLobbyHeroCard(host, _lobbyHeroCards[_lobbyHeroIdx], true);
+    _preloadHeroArt(_lobbyHeroCards[(_lobbyHeroIdx + 1) % _lobbyHeroCards.length]);
 
     if (_lobbyHeroTimer) clearInterval(_lobbyHeroTimer);
     _lobbyHeroTimer = setInterval(function() {
@@ -852,18 +855,45 @@ function renderLobbyHero() {
         if (!h || !_lobbyHeroCards || !_lobbyHeroCards.length) return;
         _lobbyHeroIdx = (_lobbyHeroIdx + 1) % _lobbyHeroCards.length;
         _showLobbyHeroCard(h, _lobbyHeroCards[_lobbyHeroIdx], false);
-    }, 4500);
+        // Preload the card AFTER this one so its art is cached before its turn.
+        _preloadHeroArt(_lobbyHeroCards[(_lobbyHeroIdx + 1) % _lobbyHeroCards.length]);
+    }, LOBBY_HERO_HOLD_MS);
+}
+// Warm the browser cache with a card's full-art PNG ahead of time.
+function _preloadHeroArt(def) {
+    if (!def || !def.card_id) return;
+    var img = new Image();
+    img.src = _cardArtUrl(def.card_id, true);
+}
+// Render the card straight to FULL art (no thumb→full pop): the art is already
+// preloaded, so paint the full PNG immediately.
+function _renderHeroNow(host, def) {
+    host.innerHTML = renderCardFrame(def, { context: 'deck-builder' });
+    var artEl = host.querySelector('.cf2-artbg, .card-art');
+    if (artEl) {
+        artEl.style.backgroundImage = 'url(' + _cardArtUrl(def.card_id, true) + ')';
+        artEl.dataset.fullArt = '1';
+    }
+    host.style.opacity = '1';
 }
 function _showLobbyHeroCard(host, def, instant) {
     if (!host || !def) return;
-    var swap = function() {
-        host.innerHTML = renderCardFrame(def, { context: 'deck-builder' });
-        _lazyUpgradeArt(host, def.card_id);
-        host.style.opacity = '1';
-    };
-    if (instant) { swap(); return; }
-    host.style.opacity = '0';           // fade out, then swap + fade in
-    setTimeout(swap, 240);
+    if (instant) {
+        // First paint: preload the image, then render (avoids an initial pop).
+        var i0 = new Image();
+        i0.onload = i0.onerror = function() { _renderHeroNow(host, def); };
+        i0.src = _cardArtUrl(def.card_id, true);
+        return;
+    }
+    // Crossfade: fade out, and only swap once BOTH the fade has finished AND the
+    // next image is decoded — so the incoming card never flashes half-loaded.
+    host.style.opacity = '0';
+    var faded = false, loaded = false;
+    var go = function() { if (faded && loaded) _renderHeroNow(host, def); };
+    var img = new Image();
+    img.onload = img.onerror = function() { loaded = true; go(); };
+    img.src = _cardArtUrl(def.card_id, true);
+    setTimeout(function() { faded = true; go(); }, LOBBY_HERO_FADE_MS);
 }
 
 function onError(data) {

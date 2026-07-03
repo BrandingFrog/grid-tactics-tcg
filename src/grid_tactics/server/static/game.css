@@ -9564,7 +9564,7 @@ body:has(#screen-game.active) .game-layout {
   width: clamp(184px, 24vw, 310px);
   transform: translateY(-46%) rotate(-6deg); filter: drop-shadow(0 16px 34px rgba(0,0,0,.72));
   z-index: 1;
-  opacity: 1; transition: opacity 0.24s ease;
+  opacity: 1; transition: opacity 0.8s ease-in-out;
 }
 #screen-lobby .lobby2-hero .card-frame-full { width: 100%; max-width: 100%; }
 #screen-lobby .lobby2-hero img { width: 100%; display: block; }
