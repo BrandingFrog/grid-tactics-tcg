@@ -180,8 +180,9 @@ PHASE_CONTRACTS: dict[str, frozenset[TurnPhase]] = {
     "trigger:on_summon": frozenset({_REACT}),
     # ON_DEATH allowed in all four phases (orchestrator decision #9 —
     # explicit, NOT wildcard). Death can occur from combat (ACTION),
-    # from a react card destroying a minion (REACT), from burn tick
-    # (START_OF_TURN), or from end-of-turn effects (END_OF_TURN).
+    # from a react card destroying a minion (REACT), from start-of-turn
+    # (Rally) effects (START_OF_TURN), or from the burn tick / other
+    # end-of-turn (Decay) effects (END_OF_TURN).
     "trigger:on_death": frozenset({_ACTION, _REACT, _START, _END}),
     "trigger:on_attack": frozenset({_ACTION}),
     "trigger:on_damaged": frozenset({_ACTION}),
@@ -212,7 +213,10 @@ PHASE_CONTRACTS: dict[str, frozenset[TurnPhase]] = {
     # ------------------------------------------------------------------
     # Status-bound contracts
     # ------------------------------------------------------------------
-    "status:burn": frozenset({_START}),
+    # Turn-structure redesign 2026-07: burn ticks in the DECAY phase
+    # (END_OF_TURN) instead of the old start-of-turn tick. See
+    # react_stack.tick_status_effects / enter_end_of_turn.
+    "status:burn": frozenset({_END}),
     # ------------------------------------------------------------------
     # Action-bound contracts (per research §"Action-bound contracts")
     # 20 entries (PASS is split into pass_action + pass_react)

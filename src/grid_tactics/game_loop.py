@@ -69,11 +69,13 @@ def run_game(
     while not state.is_game_over and state.turn_number <= turn_limit:
         actions = legal_actions(state, library)
 
-        # No legal actions = fatigue bleed (escalating 10/20/30...)
+        # No legal actions → PASS (free since the 2026-07 turn-structure
+        # redesign; fatigue now only fires on empty-deck turn-start draws,
+        # which resolve_action's turn-flip tail applies automatically).
         if len(actions) == 0:
             action = pass_action()
             state = resolve_action(state, action, library)
-            # Check if fatigue killed the player
+            # Check if turn-start fatigue killed a player
             if state.players[state.active_player_idx].hp <= 0 or state.players[1 - state.active_player_idx].hp <= 0:
                 break
             continue

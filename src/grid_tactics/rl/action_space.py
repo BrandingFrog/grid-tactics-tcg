@@ -35,12 +35,15 @@ from grid_tactics.actions import (
     Action,
     attack_action,
     conjure_deploy_action,
+    death_target_pick_action,
     decline_conjure_action,
     decline_post_move_attack_action,
+    decline_revive_action,
     decline_trigger_action,
     decline_tutor_action,
     draw_action,
     move_action,
+    revive_place_action,
     pass_action,
     play_card_action,
     play_react_action,
@@ -52,13 +55,12 @@ from grid_tactics.card_library import CardLibrary
 from grid_tactics.enums import ActionType, CardType, TargetType, TriggerType
 from grid_tactics.game_state import GameState
 from grid_tactics.legal_actions import legal_actions
-from grid_tactics.types import GRID_COLS, GRID_SIZE
+from grid_tactics.types import GRID_COLS, GRID_SIZE, MAX_HAND_SIZE
 
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
-
-MAX_HAND_SIZE: int = 10
+# MAX_HAND_SIZE now lives in grid_tactics.types (shared constant, 2026-07).
 
 PLAY_CARD_BASE: int = 0       # 250 slots: hand(10) * grid(25)
 MOVE_BASE: int = 250           # 100 slots: source(25) * dir(4)
@@ -138,6 +140,26 @@ class ActionEncoder:
         # Disambiguated at decode time by state.pending_trigger_picker_idx.
         if atype == ActionType.DECLINE_TRIGGER:
             return PASS_IDX
+
+        # 2026-07: DECLINE_REVIVE reuses slot 1001 (PASS).
+        # Disambiguated at decode time by state.pending_revive_player_idx.
+        # (Previously unencodable — random rollouts crashed with
+        # "Unknown action type" whenever a revive modal opened.)
+        if atype == ActionType.DECLINE_REVIVE:
+            return PASS_IDX
+
+        # 2026-07: REVIVE_PLACE reuses the PLAY_CARD slot space [0:250],
+        # cell = flat placement position (same trick as CONJURE_DEPLOY).
+        if atype == ActionType.REVIVE_PLACE:
+            cell = pos_to_flat(action.position) if action.position is not None else 0
+            return PLAY_CARD_BASE + cell
+
+        # 2026-07: DEATH_TARGET_PICK reuses the PLAY_CARD slot space
+        # [0:250], cell = flat target position. Disambiguated at decode
+        # time by state.pending_death_target.
+        if atype == ActionType.DEATH_TARGET_PICK:
+            cell = pos_to_flat(action.target_pos) if action.target_pos is not None else 0
+            return PLAY_CARD_BASE + cell
 
         # Phase 14.6: CONJURE_DEPLOY reuses the PLAY_CARD slot space [0:250].
         # card_index is fixed at 0, cell = deploy position flat index.
@@ -219,11 +241,26 @@ class ActionEncoder:
             # pending_post_move_attacker are mutually exclusive.
             if state.pending_tutor_player_idx is not None:
                 return decline_tutor_action()
+            # 2026-07: slot 1001 reinterpreted as DECLINE_REVIVE while a
+            # revive placement is pending.
+            if state.pending_revive_player_idx is not None:
+                return decline_revive_action()
             # Phase 14.1: slot 1001 reinterpreted as DECLINE_POST_MOVE_ATTACK
             # while a post-move attack is pending.
             if state.pending_post_move_attacker_id is not None:
                 return decline_post_move_attack_action()
             return pass_action()
+
+        # 2026-07: PLAY_CARD slot space reinterpreted as DEATH_TARGET_PICK
+        # while a death-target modal is pending. Checked FIRST — the
+        # pending_death_target gate is phase-agnostic and overrides every
+        # other pending state in resolve_action.
+        if (
+            state.pending_death_target is not None
+            and PLAY_CARD_BASE <= action_int < MOVE_BASE
+        ):
+            cell_flat = (action_int - PLAY_CARD_BASE) % GRID_SIZE
+            return death_target_pick_action(target_pos=flat_to_pos(cell_flat))
 
         # Phase 14.6: PLAY_CARD slot space reinterpreted as CONJURE_DEPLOY
         # while a conjure deployment is pending. cell = flat position.
@@ -234,6 +271,15 @@ class ActionEncoder:
             cell_flat = action_int - PLAY_CARD_BASE
             pos = flat_to_pos(cell_flat)
             return conjure_deploy_action(position=pos)
+
+        # 2026-07: PLAY_CARD slot space reinterpreted as REVIVE_PLACE
+        # while a revive placement is pending. cell = flat position.
+        if (
+            state.pending_revive_player_idx is not None
+            and PLAY_CARD_BASE <= action_int < MOVE_BASE
+        ):
+            cell_flat = (action_int - PLAY_CARD_BASE) % GRID_SIZE
+            return revive_place_action(position=flat_to_pos(cell_flat))
 
         # Phase 14.2: PLAY_CARD slot space reinterpreted as TUTOR_SELECT while
         # a tutor pick is pending. The slot's hand_idx field carries the match

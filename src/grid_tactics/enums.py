@@ -82,7 +82,14 @@ class EffectType(IntEnum):
     BUFF_HEALTH = 3
     NEGATE = 4       # Cancel the triggering action (react-only)
     DEPLOY_SELF = 5  # Deploy this card as a minion (react-only, for multi-purpose discount deploy)
-    RALLY_FORWARD = 6  # Move all other friendly minions with same card_id forward 1 space
+    RALLY_FORWARD = 6  # "March" (renamed from "Rally" 2026-07): move all other friendly minions with same card_id forward 1 space
+    # 2026-07 keyword rename: the movement keyword "Rally" is now "March"
+    # in all player-facing text. MARCH / MARCH_FORWARD are ALIASES of
+    # RALLY_FORWARD (same value 6 — IntEnum values are append-only) so
+    # card JSONs may use "march" or "march_forward" as the effect type
+    # while legacy "rally_forward" keeps loading.
+    MARCH = 6
+    MARCH_FORWARD = 6
     PROMOTE = 7        # On death: promote a friendly minion of promote_target type into this card
     TUTOR = 8          # Search deck for card matching tutor_target and add to hand
     DESTROY = 9        # Destroy target minion (remove regardless of health)

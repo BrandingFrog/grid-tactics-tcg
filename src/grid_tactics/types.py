@@ -24,6 +24,12 @@ STARTING_HAND_SIZE: int = 5  # legacy default
 STARTING_HAND_P1: int = 3    # Player 1 (goes first) draws fewer
 STARTING_HAND_P2: int = 4    # Player 2 (goes second) draws more to compensate
 
+# Maximum hand size (turn-structure redesign 2026-07). Any draw that would
+# exceed this cap "overdraw-burns": the drawn card goes to the Exhaust Pile
+# (revealed) instead of the hand. Applies to ALL draw paths (turn-start
+# draw, card effects, Handshake draw, tutor/conjure-to-hand).
+MAX_HAND_SIZE: int = 10
+
 # ---------------------------------------------------------------------------
 # Phase 2: Card system constants
 # ---------------------------------------------------------------------------
@@ -43,12 +49,16 @@ MAX_EFFECT_AMOUNT: int = 100
 # Phase 3: Action system constants
 # ---------------------------------------------------------------------------
 
-# Auto-draw variant flag (D-15, ENG-08): when True, draw happens at turn
-# start and DRAW is removed from legal actions
-AUTO_DRAW_ENABLED: bool = False
+# NOTE: AUTO_DRAW_ENABLED was DELETED (turn-structure redesign 2026-07).
+# The turn-start draw is now UNCONDITIONAL — see react_stack.py
+# _close_end_of_turn_and_flip. DRAW as an action is removed from legal
+# actions (slot 1000 stays reserved in the action space, never legal).
 
-# Safety cap to prevent infinite react chaining (research Pitfall 3)
-MAX_REACT_STACK_DEPTH: int = 10
+# Runaway failsafe ONLY — there is no design-level limit on react chaining
+# (turn-structure redesign 2026-07). This cap exists purely to stop a
+# pathological infinite PLAY_REACT loop from hanging the engine; normal
+# play should never come anywhere near it.
+MAX_REACT_STACK_DEPTH: int = 100
 
 # Back-row deployment positions for ranged minions (D-09)
 BACK_ROW_P1: int = 0  # Player 1's back row

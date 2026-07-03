@@ -23,6 +23,7 @@ from grid_tactics.types import (
     DEFAULT_TURN_LIMIT,
     GRID_COLS,
     GRID_ROWS,
+    MAX_HAND_SIZE,
     MAX_MANA_CAP,
     MAX_REACT_STACK_DEPTH,
     MAX_STAT,
@@ -33,8 +34,7 @@ from grid_tactics.types import (
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
-
-MAX_HAND_SIZE: int = 10
+# MAX_HAND_SIZE now lives in grid_tactics.types (shared constant, 2026-07).
 FEATURES_PER_CELL: int = 10
 HAND_FEATURES: int = 2
 OBSERVATION_SIZE: int = 292

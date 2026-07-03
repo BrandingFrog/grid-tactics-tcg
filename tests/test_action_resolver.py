@@ -225,6 +225,26 @@ def _make_state(
     )
 
 
+def _close_decay_window(state, lib):
+    """PASS through the mandatory Decay (BEFORE_END_OF_TURN) react window.
+
+    Turn-structure redesign 2026-07 (+ Phase 14.8-05c): every turn's Decay
+    phase closes with a react window even when no End triggers exist.
+    Closing it flips the turn and runs the new active player's turn-start
+    sequence (mandatory draw or empty-deck fatigue; +1 mana from turn 3
+    onward).
+    """
+    from grid_tactics.action_resolver import resolve_action
+
+    assert state.phase == TurnPhase.REACT, (
+        f"expected the Decay react window, got phase={state.phase}"
+    )
+    assert state.react_context == ReactContext.BEFORE_END_OF_TURN, (
+        f"expected BEFORE_END_OF_TURN context, got {state.react_context}"
+    )
+    return resolve_action(state, Action(action_type=ActionType.PASS), lib)
+
+
 # ---------------------------------------------------------------------------
 # PASS action tests
 # ---------------------------------------------------------------------------
@@ -554,6 +574,8 @@ class TestPlayCardMagic:
 
         # Effect applied: enemy took 2 damage
         assert state.get_minion(0).current_health == 3  # 5 - 2
+        # 2026-07: the mandatory Decay window opens before the turn flips.
+        state = _close_decay_window(state, lib)
         # Turn advanced
         assert state.phase.name == "ACTION"
         assert state.active_player_idx == 1
@@ -1519,7 +1541,14 @@ class TestPhaseTransition:
         action = Action(action_type=ActionType.PASS)
         new_state = resolve_action(state, action, lib)
 
-        # PASS during react resolves stack and advances turn
+        # Delegation happened: PASS resolved the (empty) stack and entered
+        # the mandatory Decay react window (2026-07 flow) — no flip yet.
+        assert new_state.phase == TurnPhase.REACT
+        assert new_state.react_context == ReactContext.BEFORE_END_OF_TURN
+        assert new_state.active_player_idx == 0
+
+        # Closing the Decay window advances the turn.
+        new_state = _close_decay_window(new_state, lib)
         assert new_state.phase == TurnPhase.ACTION
         assert new_state.active_player_idx == 1  # flipped from 0
         assert new_state.turn_number == 2
@@ -1687,13 +1716,13 @@ class TestPendingPostMoveAttack:
         assert new_state.pending_action == atk
 
     def test_pending_decline_skips_second_react_window(self):
-        """Phase 14.7-08: DECLINE means "no second action" → no second react window.
+        """Phase 14.7-08: DECLINE means "no second action" → no second AFTER_ACTION window.
 
         Prior to 14.7-08 the DECLINE opened a phantom react window. Now
         the post-move window already fired (around the move) and DECLINE
-        advances directly to END_OF_TURN (which, absent End triggers,
-        shortcuts to turn-advance, i.e. opponent's START_OF_TURN →
-        ACTION).
+        advances directly to END_OF_TURN. Turn-structure redesign 2026-07:
+        the Decay phase still closes with its own mandatory
+        BEFORE_END_OF_TURN window before the turn flips.
         """
         from grid_tactics.action_resolver import resolve_action
 
@@ -1722,13 +1751,18 @@ class TestPendingPostMoveAttack:
         decline = Action(action_type=ActionType.DECLINE_POST_MOVE_ATTACK)
         new_state = resolve_action(state, decline, lib)
 
-        # DECLINE clears pending, runs end-of-turn, and advances turn.
-        # No second react window opens — 14.7-08 explicit behavior.
+        # DECLINE clears pending and runs end-of-turn. No second
+        # AFTER_ACTION react window opens — 14.7-08 explicit behavior.
+        # The next window is the mandatory Decay window (2026-07).
         assert new_state.pending_post_move_attacker_id is None
         assert new_state.get_minion(0).current_health == 5
         assert new_state.get_minion(1).current_health == 5
-        # Turn has advanced to P2's ACTION (no End triggers, so END_OF_TURN
-        # shortcuts to turn-advance → new player's START_OF_TURN → ACTION).
+        assert new_state.phase == TurnPhase.REACT
+        assert new_state.react_context == ReactContext.BEFORE_END_OF_TURN
+        assert new_state.active_player_idx == 0  # no flip yet
+
+        # Closing the Decay window advances the turn to P2's ACTION.
+        new_state = _close_decay_window(new_state, lib)
         assert new_state.active_player_idx == 1
         assert new_state.phase == TurnPhase.ACTION
 
@@ -1924,8 +1958,10 @@ class TestMeleeTwoReactWindows:
         assert state.react_return_phase == TurnPhase.ACTION
         assert state.pending_post_move_attacker_id is None
 
-        # Close window 2 → turn advances to P2 exactly once.
+        # Close window 2 → the mandatory Decay window (2026-07) opens,
+        # then the turn advances to P2 exactly once.
         state = resolve_action(state, Action(action_type=ActionType.PASS), lib)
+        state = _close_decay_window(state, lib)
         assert state.active_player_idx == 1
         assert state.phase == TurnPhase.ACTION
         # One full round-trip consumed one turn, not two.
@@ -1955,16 +1991,19 @@ class TestMeleeTwoReactWindows:
         assert state.phase == TurnPhase.ACTION
         assert state.pending_post_move_attacker_id == 0
 
-        # DECLINE: no second window. Turn advances directly.
+        # DECLINE: no second AFTER_ACTION window — straight to the Decay
+        # phase, whose mandatory window (2026-07) closes before the flip.
         state = resolve_action(
             state,
             Action(action_type=ActionType.DECLINE_POST_MOVE_ATTACK),
             lib,
         )
         assert state.pending_post_move_attacker_id is None
+        assert state.phase == TurnPhase.REACT
+        assert state.react_context == ReactContext.BEFORE_END_OF_TURN
+
+        state = _close_decay_window(state, lib)
         assert state.active_player_idx == 1
-        # No End triggers / Start triggers in this test fixture → go direct
-        # to P2's ACTION phase without a second REACT window.
         assert state.phase == TurnPhase.ACTION
         assert state.react_stack == ()
 
@@ -1991,8 +2030,10 @@ class TestMeleeTwoReactWindows:
         assert state.phase == TurnPhase.REACT
         assert state.pending_post_move_attacker_id is None
 
-        # One PASS closes the window and advances the turn (no chain).
+        # One PASS closes the after-action window (no melee chain); the
+        # mandatory Decay window (2026-07) then closes to advance the turn.
         state = resolve_action(state, Action(action_type=ActionType.PASS), lib)
+        state = _close_decay_window(state, lib)
         assert state.active_player_idx == 1
         assert state.phase == TurnPhase.ACTION
 
@@ -2015,7 +2056,9 @@ class TestMeleeTwoReactWindows:
         assert state.pending_post_move_attacker_id is None
         assert state.phase == TurnPhase.REACT
 
+        # Close the after-action window, then the mandatory Decay window.
         state = resolve_action(state, Action(action_type=ActionType.PASS), lib)
+        state = _close_decay_window(state, lib)
         assert state.active_player_idx == 1
         assert state.phase == TurnPhase.ACTION
 

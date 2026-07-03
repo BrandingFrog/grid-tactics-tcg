@@ -26,6 +26,7 @@ from grid_tactics.enums import (
     ActionType,
     CardType,
     PlayerSide,
+    ReactContext,
     TurnPhase,
 )
 from grid_tactics.game_state import GameState
@@ -56,6 +57,10 @@ def react_state_empty_stack(library):
 
     P1 just played a magic card (active_player_idx=0), react window open for P2 (react_player_idx=1).
     P2 has counter_spell (react to magic) and surgefed_sparkbot (multi-purpose, react to sacrifice) in hand.
+
+    Both players carry a small deck so the mandatory turn-start draw
+    (turn-structure redesign 2026-07) draws a card instead of dealing
+    empty-deck fatigue.
     """
     counter_spell_id = library.get_numeric_id("prohibition")
     sparkbot_id = library.get_numeric_id("surgefed_sparkbot")
@@ -68,7 +73,7 @@ def react_state_empty_stack(library):
         current_mana=5,
         max_mana=5,
         hand=(counter_spell_id, rat_id),
-        deck=(),
+        deck=(rat_id,),
         # The magic card P1 "just played" sits in the grave — the legacy
         # OPPONENT_PLAYS_MAGIC condition check inspects grave[-1], and
         # _play_react now enforces react conditions at resolver level.
@@ -80,7 +85,7 @@ def react_state_empty_stack(library):
         current_mana=5,
         max_mana=5,
         hand=(counter_spell_id, sparkbot_id, rat_id),
-        deck=(),
+        deck=(rat_id,),
         grave=(),
     )
 
@@ -110,6 +115,24 @@ def react_state_empty_stack(library):
         react_player_idx=1,
         pending_action=pending,
     )
+
+
+def _close_decay_window_and_flip(state, library):
+    """PASS through the mandatory Decay (BEFORE_END_OF_TURN) react window.
+
+    Turn-structure redesign 2026-07 (+ Phase 14.8-05c): every turn's Decay
+    phase closes with a react window — even when no End triggers exist.
+    Closing it runs the turn flip plus the new active player's turn-start
+    sequence (mandatory draw or empty-deck fatigue; +1 mana from turn 3
+    onward) and the Rally phase.
+    """
+    assert state.phase == TurnPhase.REACT, (
+        f"expected the Decay react window, got phase={state.phase}"
+    )
+    assert state.react_context == ReactContext.BEFORE_END_OF_TURN, (
+        f"expected BEFORE_END_OF_TURN context, got {state.react_context}"
+    )
+    return handle_react_action(state, pass_action(), library)
 
 
 # ---------------------------------------------------------------------------
@@ -142,17 +165,34 @@ class TestReactEntry:
 
 class TestReactPass:
     def test_pass_empty_stack_advances_turn(self, react_state_empty_stack, library):
-        """PASS on empty react stack resolves and advances turn."""
+        """PASS on empty react stack routes through the Decay window, then advances turn.
+
+        Turn-structure redesign 2026-07: the PASS closes the after-action
+        window and enters the Decay phase, which ALWAYS opens its own react
+        window before the turn can flip. Closing THAT window performs the
+        flip plus the new player's mandatory turn-start draw.
+        """
         state = react_state_empty_stack
         result = handle_react_action(state, pass_action(), library)
 
-        # Turn should advance: active player flips, turn increments
+        # First stop: the mandatory Decay react window — no flip yet.
+        assert result.phase == TurnPhase.REACT
+        assert result.react_context == ReactContext.BEFORE_END_OF_TURN
+        assert result.active_player_idx == 0
+        assert result.turn_number == 1
+
+        result = _close_decay_window_and_flip(result, library)
+
+        # Turn advanced: active player flips, turn increments
         assert result.active_player_idx == 1
         assert result.turn_number == 2
         assert result.phase == TurnPhase.ACTION
         assert result.react_stack == ()
         assert result.react_player_idx is None
         assert result.pending_action is None
+        # Turn-start auto-draw: the new active player drew their deck card.
+        assert len(result.players[1].hand) == 4  # 3 in hand + 1 drawn
+        assert result.players[1].deck == ()
 
     def test_pass_resolves_stack_lifo(self, react_state_empty_stack, library):
         """PASS with entries on stack resolves them in LIFO order."""
@@ -172,6 +212,9 @@ class TestReactPass:
         assert minion is not None
         assert minion.current_health == 5  # unchanged
 
+        # 2026-07: the mandatory Decay window opens before the turn flips.
+        result = _close_decay_window_and_flip(result, library)
+
         # Turn should have advanced
         assert result.phase == TurnPhase.ACTION
         assert result.active_player_idx == 1
@@ -188,10 +231,14 @@ class TestReactPass:
         # Bump turn_number so the post-flip turn is > 2 and regen applies.
         state = replace(react_state_empty_stack, turn_number=3)
         result = handle_react_action(state, pass_action(), library)
+        # 2026-07: pass through the mandatory Decay window to flip the turn.
+        result = _close_decay_window_and_flip(result, library)
 
-        # P2 is now active (idx=1)
+        # P2 is now active (idx=1); turn-start mana gain applied (single
+        # pool, +1 per turn start — turn-structure redesign 2026-07).
+        assert result.active_player_idx == 1
         new_active = result.players[result.active_player_idx]
-        assert new_active.current_mana == 6  # 5 + 1 regen
+        assert new_active.current_mana == 6  # 5 + 1 turn-start gain
 
 
 # ---------------------------------------------------------------------------
@@ -332,6 +379,9 @@ class TestReactChaining:
         assert minion is not None
         assert minion.current_health == 5  # unchanged (shield_block was negated)
 
+        # 2026-07: the mandatory Decay window opens before the turn flips.
+        state = _close_decay_window_and_flip(state, library)
+
         # Turn advanced
         assert state.phase == TurnPhase.ACTION
         assert state.active_player_idx == 1
@@ -345,8 +395,14 @@ class TestReactChaining:
 
 class TestResolveReactStack:
     def test_resolve_empty_stack(self, react_state_empty_stack, library):
-        """Resolving empty stack just advances turn."""
+        """Resolving empty stack enters the Decay window, then advances turn."""
         result = resolve_react_stack(react_state_empty_stack, library)
+        # 2026-07: first stop is the mandatory Decay react window.
+        assert result.phase == TurnPhase.REACT
+        assert result.react_context == ReactContext.BEFORE_END_OF_TURN
+        assert result.react_stack == ()
+
+        result = _close_decay_window_and_flip(result, library)
         assert result.phase == TurnPhase.ACTION
         assert result.active_player_idx == 1
         assert result.turn_number == 2
@@ -363,10 +419,13 @@ class TestResolveReactStack:
         state = replace(react_state_empty_stack, react_stack=(entry,))
         result = resolve_react_stack(state, library)
 
-        # Counter_spell resolves (NEGATE) — minion unaffected, turn advances
+        # Counter_spell resolves (NEGATE) — minion unaffected
         minion = result.get_minion(0)
         assert minion is not None
         assert minion.current_health == 5  # unchanged
+
+        # 2026-07: pass through the mandatory Decay window; turn advances.
+        result = _close_decay_window_and_flip(result, library)
         assert result.phase == TurnPhase.ACTION
         assert result.turn_number == 2
 
@@ -403,6 +462,13 @@ class TestActionResolverReactDelegation:
         from grid_tactics.action_resolver import resolve_action
 
         result = resolve_action(react_state_empty_stack, pass_action(), library)
+        # Delegation happened: the PASS resolved the (empty) stack and
+        # entered the mandatory Decay react window (2026-07 flow).
+        assert result.phase == TurnPhase.REACT
+        assert result.react_context == ReactContext.BEFORE_END_OF_TURN
+
+        # A second delegated PASS closes the Decay window and flips the turn.
+        result = resolve_action(result, pass_action(), library)
         assert result.phase == TurnPhase.ACTION
         assert result.active_player_idx == 1
         assert result.turn_number == 2
@@ -440,10 +506,12 @@ class TestReactReturnPhaseDispatch:
     def test_react_window_returns_to_action_by_default(
         self, react_state_empty_stack, library,
     ):
-        """Legacy path: react_return_phase=None (unset) defaults to ACTION → advance turn.
+        """Legacy path: react_return_phase=None (unset) defaults to ACTION → Decay → advance.
 
-        Backward-compat — pre-14.7-02 code never set react_return_phase
-        so the default path MUST behave like the old turn-advance tail.
+        Backward-compat — pre-14.7-02 code never set react_return_phase so
+        the default path is the after-action route: it enters END_OF_TURN
+        (Decay), whose mandatory react window must close before the turn
+        flips (turn-structure redesign 2026-07).
         """
         state = react_state_empty_stack
         # Baseline sanity: fixture does not set react_return_phase.
@@ -451,7 +519,16 @@ class TestReactReturnPhaseDispatch:
 
         result = resolve_react_stack(state, library)
 
-        # Same as the old behavior: turn flip + phase=ACTION + inc turn number.
+        # First stop: the mandatory Decay window — no flip yet.
+        assert result.phase == TurnPhase.REACT
+        assert result.react_context == ReactContext.BEFORE_END_OF_TURN
+        assert result.react_return_phase == TurnPhase.END_OF_TURN
+        assert result.active_player_idx == 0
+        assert result.turn_number == 1
+
+        result = _close_decay_window_and_flip(result, library)
+
+        # Turn flip + phase=ACTION + inc turn number.
         assert result.phase == TurnPhase.ACTION
         assert result.active_player_idx == 1
         assert result.turn_number == 2
@@ -541,7 +618,7 @@ class TestPhaseTransitionHelpers:
         assert result.turn_number == 1
 
     def test_enter_end_of_turn_runs_tail_and_enters_next_start(self, library):
-        """enter_end_of_turn() runs the end-of-turn tail then enter_start_of_turn."""
+        """enter_end_of_turn() opens the Decay window; closing it flips the turn."""
         from grid_tactics.react_stack import enter_end_of_turn
 
         state = GameState(
@@ -558,11 +635,24 @@ class TestPhaseTransitionHelpers:
 
         result = enter_end_of_turn(state, library)
 
-        # Turn advanced: P2 now active, turn 2, phase = ACTION (because
-        # START_OF_TURN placeholder immediately passes through).
+        # 2026-07 (+14.8-05c): the Decay phase ALWAYS closes with a react
+        # window — no direct shortcut to the turn flip.
+        assert result.phase == TurnPhase.REACT
+        assert result.react_context == ReactContext.BEFORE_END_OF_TURN
+        assert result.active_player_idx == 0
+        assert result.turn_number == 1
+
+        result = _close_decay_window_and_flip(result, library)
+
+        # Turn advanced: P2 now active, turn 2, phase = ACTION (no Start
+        # triggers, so the Rally phase shortcuts through).
         assert result.phase == TurnPhase.ACTION
         assert result.active_player_idx == 1
         assert result.turn_number == 2
+        # Empty deck at the mandatory turn-start draw → escalating fatigue
+        # (10 for the first empty draw) instead of the draw (2026-07 §3.2).
+        assert result.players[1].hp == 20 - 10
+        assert result.fatigue_counts[1] == 1
 
     def test_close_start_react_and_enter_action_clears_react(self, library):
         """close_start_react_and_enter_action clears react state, phase=ACTION, no turn flip."""
@@ -954,8 +1044,14 @@ class TestEndOfTurnTriggers:
         assert result.react_return_phase == TurnPhase.END_OF_TURN
         assert result.react_player_idx == 1  # P2 reacts
 
-    def test_no_end_triggers_shortcuts_to_turn_advance(self, library):
-        """enter_end_of_turn with no End: triggers shortcuts to turn-advance."""
+    def test_no_end_triggers_still_opens_decay_window(self, library):
+        """enter_end_of_turn with no End: triggers STILL opens the Decay window.
+
+        Turn-structure redesign 2026-07 (+14.8-05c): the BEFORE_END_OF_TURN
+        react window is the mandatory closing beat of every Decay phase —
+        there is no shortcut straight to the turn flip. Closing the window
+        advances the turn.
+        """
         from grid_tactics.react_stack import enter_end_of_turn
 
         rat_id = library.get_numeric_id("rat")
@@ -984,7 +1080,16 @@ class TestEndOfTurnTriggers:
 
         result = enter_end_of_turn(state, library)
 
-        # Shortcut: turn-advance → phase=ACTION, P2 active, turn=4
+        # Mandatory Decay window opens — no flip yet.
+        assert result.phase == TurnPhase.REACT
+        assert result.react_context == ReactContext.BEFORE_END_OF_TURN
+        assert result.react_player_idx == 1  # opponent reacts
+        assert result.active_player_idx == 0
+        assert result.turn_number == 3
+
+        result = _close_decay_window_and_flip(result, library)
+
+        # Turn advanced → phase=ACTION, P2 active, turn=4
         assert result.phase == TurnPhase.ACTION
         assert result.active_player_idx == 1
         assert result.turn_number == 4
@@ -1065,12 +1170,17 @@ class TestResolveReactStackAfterActionRoutesThroughEnterEnd:
     def test_after_action_with_no_end_triggers_still_advances_turn(
         self, react_state_empty_stack, library,
     ):
-        """Legacy behavior preserved: after-action PASS with no End triggers → turn advance."""
+        """After-action PASS with no End triggers → Decay window → turn advance."""
         state = react_state_empty_stack
-        # Fixture has no End-trigger minions on the board.
+        # Fixture has no End-trigger minions on the board — but the Decay
+        # window still opens (2026-07 + 14.8-05c mandatory closing beat).
         result = resolve_react_stack(state, library)
+        assert result.phase == TurnPhase.REACT
+        assert result.react_context == ReactContext.BEFORE_END_OF_TURN
 
-        # Same observable effect as pre-14.7-03: turn advanced.
+        result = _close_decay_window_and_flip(result, library)
+
+        # Turn advanced.
         assert result.phase == TurnPhase.ACTION
         assert result.active_player_idx == 1
         assert result.turn_number == 2
@@ -1331,13 +1441,20 @@ class TestSummonCompoundWindows:
         state = resolve_action(state, play_card_action(card_index=0, position=(1, 0)), library)
         # P2 passes Window A. Since Rat has no ON_SUMMON effects, the
         # declaration originator resolves and no Window B opens — the
-        # normal post-action flow continues (turn advances).
+        # normal post-action flow continues into the Decay window.
         state = resolve_action(state, pass_action(), library)
 
         # Minion landed
         assert len(state.minions) == 1
         assert state.minions[0].card_numeric_id == rat_id
-        # Phase advanced (no dead-air Window B)
+        # No dead-air Window B: the next window is the turn's mandatory
+        # Decay window (2026-07), NOT an AFTER_SUMMON_EFFECT window.
+        assert state.phase == TurnPhase.REACT
+        assert state.react_context == ReactContext.BEFORE_END_OF_TURN
+        assert state.react_stack == ()
+
+        # Closing the Decay window advances the turn.
+        state = resolve_action(state, pass_action(), library)
         assert state.phase == TurnPhase.ACTION
         assert state.active_player_idx == 1
 
@@ -1399,7 +1516,11 @@ class TestSummonCompoundWindows:
         assert b_origin.origin_kind == "summon_effect"
         assert len(b_origin.effect_payload) == 2  # buff_attack + buff_health
 
-        # P2 passes Window B → both effects resolve, turn advances
+        # P2 passes Window B → both effects resolve; the mandatory Decay
+        # window (2026-07) opens next, then the turn advances.
+        state = resolve_action(state, pass_action(), library)
+        assert state.phase == TurnPhase.REACT
+        assert state.react_context == ReactContext.BEFORE_END_OF_TURN
         state = resolve_action(state, pass_action(), library)
         assert state.phase == TurnPhase.ACTION
         assert state.active_player_idx == 1

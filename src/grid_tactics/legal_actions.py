@@ -32,7 +32,6 @@ from grid_tactics.actions import (
     decline_trigger_action,
     decline_tutor_action,
     decline_revive_action,
-    draw_action,
     move_action,
     pass_action,
     play_card_action,
@@ -473,12 +472,13 @@ def _action_phase_actions(
                 target_pos=None,
             ))
 
-    # DRAW as an action (in addition to auto-draw at turn start)
-    if player.deck and len(player.hand) < 10:
-        actions.append(draw_action())
+    # Turn-structure redesign 2026-07: DRAW is REMOVED as an action.
+    # The draw now happens automatically (and unconditionally) at turn
+    # start; action-space slot 1000 stays reserved but is never legal.
 
     # PASS is always legal during the action phase (D-16, CLAUDE.md).
-    # Players can voluntarily skip their turn.
+    # Players can voluntarily skip their turn — PASS is FREE (no fatigue;
+    # fatigue now exists only for empty-deck turn-start draws).
     actions.append(pass_action())
 
     return tuple(actions)

@@ -18,7 +18,6 @@ import pytest
 from grid_tactics.action_resolver import resolve_action
 from grid_tactics.actions import (
     attack_action,
-    draw_action,
     move_action,
     pass_action,
     play_card_action,
@@ -79,6 +78,26 @@ def _make_state(
     )
 
 
+def _close_decay_window(state, library):
+    """PASS through the mandatory Decay (BEFORE_END_OF_TURN) react window.
+
+    Turn-structure redesign 2026-07 (+ Phase 14.8-05c): every turn's Decay
+    phase closes with a react window even when no End triggers exist.
+    Closing it flips the turn and runs the new active player's turn-start
+    sequence (mandatory draw or empty-deck fatigue; +1 mana from turn 3
+    onward).
+    """
+    from grid_tactics.enums import ReactContext
+
+    assert state.phase == TurnPhase.REACT, (
+        f"expected the Decay react window, got phase={state.phase}"
+    )
+    assert state.react_context == ReactContext.BEFORE_END_OF_TURN, (
+        f"expected BEFORE_END_OF_TURN context, got {state.react_context}"
+    )
+    return resolve_action(state, pass_action(), library)
+
+
 # ---------------------------------------------------------------------------
 # Full turn cycle
 # ---------------------------------------------------------------------------
@@ -99,45 +118,68 @@ class TestFullTurnCycle:
         assert state.react_player_idx == 1
         assert state.active_player_idx == 0  # still P1's "turn" until react resolves
 
-        # P2 passes react
+        # P2 passes react (Window A — summon declaration): minion lands.
         state = resolve_action(state, pass_action(), library)
-
-        # Turn advances to P2
-        assert state.phase == TurnPhase.ACTION
-        assert state.active_player_idx == 1
-        assert state.turn_number == 2
 
         # Minion should be on the board
         minion = state.get_minion(0)
         assert minion is not None
         assert minion.position == (0, 0)
 
-    def test_pass_action_then_pass_react(self, library):
-        """P1 passes -> react window -> P2 passes -> turn advances."""
-        state = _make_state()
+        # 2026-07: the mandatory Decay window closes before the turn flips.
+        state = _close_decay_window(state, library)
 
-        # P1 passes
-        state = resolve_action(state, pass_action(), library)
-        assert state.phase == TurnPhase.REACT
-
-        # P2 passes react
-        state = resolve_action(state, pass_action(), library)
+        # Turn advances to P2
         assert state.phase == TurnPhase.ACTION
         assert state.active_player_idx == 1
         assert state.turn_number == 2
 
-    def test_draw_then_pass_react(self, library):
-        """P1 draws -> react -> P2 passes -> turn advances."""
-        rat_id = library.get_numeric_id("rat")
-        state = _make_state(p1_deck=(rat_id,))
+    def test_pass_action_then_pass_react(self, library):
+        """P1 passes -> react window -> P2 passes -> Decay window -> turn advances."""
+        state = _make_state()
 
-        state = resolve_action(state, draw_action(), library)
-        assert state.phase == TurnPhase.REACT
-        assert rat_id in state.players[0].hand
-
+        # P1 passes — FREE (no fatigue; 2026-07) and counted toward the
+        # Handshake pass streak.
         state = resolve_action(state, pass_action(), library)
+        assert state.phase == TurnPhase.REACT
+        assert state.consecutive_passes == 1
+        assert state.players[0].hp == STARTING_HP  # PASS deals NO damage
+
+        # P2 passes react → mandatory Decay window → turn advances.
+        state = resolve_action(state, pass_action(), library)
+        state = _close_decay_window(state, library)
         assert state.phase == TurnPhase.ACTION
         assert state.active_player_idx == 1
+        assert state.turn_number == 2
+
+    def test_draw_removed_as_action_turn_start_autodraws(self, library):
+        """DRAW is no longer an action; the draw happens automatically at turn start.
+
+        Turn-structure redesign 2026-07: action slot 1000 (DRAW) stays
+        reserved but is never legal — the active player auto-draws at the
+        start of their turn instead.
+        """
+        rat_id = library.get_numeric_id("rat")
+        state = _make_state(p1_deck=(rat_id,), p2_deck=(rat_id,))
+
+        # DRAW is never among the legal actions.
+        acts = legal_actions(state, library)
+        assert all(a.action_type != ActionType.DRAW for a in acts)
+
+        # P1 passes -> after-action window -> Decay window -> turn flips.
+        state = resolve_action(state, pass_action(), library)
+        assert state.phase == TurnPhase.REACT
+        state = resolve_action(state, pass_action(), library)
+        state = _close_decay_window(state, library)
+
+        # P2's turn started: the mandatory turn-start draw pulled their
+        # deck card into hand automatically.
+        assert state.phase == TurnPhase.ACTION
+        assert state.active_player_idx == 1
+        assert rat_id in state.players[1].hand
+        assert state.players[1].deck == ()
+        # P1 did NOT draw (not their turn start).
+        assert rat_id not in state.players[0].hand
 
 
 # ---------------------------------------------------------------------------
@@ -206,8 +248,11 @@ class TestReactInteraction:
         state = resolve_action(state, play_react_action(card_index=0), library)
         assert state.react_player_idx == 0
 
-        # P1 passes -> resolve
+        # P1 passes -> resolve LIFO (NEGATE cancels the magic cast)
         state = resolve_action(state, pass_action(), library)
+
+        # 2026-07: the mandatory Decay window closes before the turn flips.
+        state = _close_decay_window(state, library)
 
         # Turn advanced
         assert state.phase == TurnPhase.ACTION
@@ -274,18 +319,21 @@ class TestMultiTurnFlow:
         # Turn 1: P1 deploys rathopper at (0,0)
         state = resolve_action(state, play_card_action(card_index=0, position=(0, 0)), library)
         state = resolve_action(state, pass_action(), library)  # P2 passes react
+        state = _close_decay_window(state, library)            # Decay window (2026-07)
         assert state.turn_number == 2
         assert state.active_player_idx == 1
 
         # Turn 2: P2 deploys rathopper at (4,4)
         state = resolve_action(state, play_card_action(card_index=0, position=(4, 4)), library)
         state = resolve_action(state, pass_action(), library)  # P1 passes react
+        state = _close_decay_window(state, library)
         assert state.turn_number == 3
         assert state.active_player_idx == 0
 
         # Turn 3: P1 moves rathopper from (0,0) to (1,0)
         state = resolve_action(state, move_action(minion_id=0, position=(1, 0)), library)
         state = resolve_action(state, pass_action(), library)  # P2 passes react
+        state = _close_decay_window(state, library)
         assert state.turn_number == 4
         assert state.active_player_idx == 1
 
@@ -313,8 +361,10 @@ class TestMultiTurnFlow:
         state = resolve_action(state, play_card_action(card_index=0, position=(0, 0)), library)
         assert state.players[0].current_mana == 2
 
-        # P2 passes react -> turn advances, P2 gets mana regen
+        # P2 passes react, then the Decay window -> turn advances, P2 gets
+        # the turn-start +1 mana (single pool, 2026-07).
         state = resolve_action(state, pass_action(), library)
+        state = _close_decay_window(state, library)
 
         # P1 had 2 mana, no regen yet (not P1's turn start)
         assert state.players[0].current_mana == 2
@@ -480,6 +530,12 @@ class TestAcidicRainProhibition:
         assert diodebot is not None, "Diodebot should still be on the board after one burn"
         assert diodebot.is_burning is True
 
+        # 2026-07: the mandatory Decay window closes before the turn flips.
+        # The Diodebot belongs to P2, so P1's Decay phase does NOT tick its
+        # burn (burn ticks in the minion OWNER's Decay phase — §7.1).
+        state = _close_decay_window(state, library)
+        assert state.get_minion(0).current_health == 8  # no tick yet
+
         # Turn advanced
         assert state.phase == TurnPhase.ACTION
         assert state.active_player_idx == 1
@@ -524,6 +580,9 @@ class TestAcidicRainProhibition:
             "Acidic Rain should have been negated by Prohibition — "
             "Diodebot should not be burning"
         )
+
+        # 2026-07: the mandatory Decay window closes before the turn flips.
+        state = _close_decay_window(state, library)
 
         # Turn still advances (mana was spent; scorched-earth by design)
         assert state.phase == TurnPhase.ACTION
@@ -804,6 +863,14 @@ class TestSummonCompoundWindowsIntegration:
         shade = state.minions[0]
         assert shade.card_numeric_id == shade_id
         assert shade.is_burning is True
+
+        # 2026-07: the mandatory Decay window closes before the turn flips.
+        # (Shade is P1's minion, so P1's own Decay phase ticks its burn.)
+        state = _close_decay_window(state, library)
+
+        # Shade survived the tick and is still burning
+        assert len(state.minions) == 1
+        assert state.minions[0].is_burning is True
         # Turn advanced
         assert state.phase == TurnPhase.ACTION
         assert state.active_player_idx == 1
@@ -872,8 +939,9 @@ class TestMeleeTwoReactWindowsIntegration:
         assert state.react_context.name == "AFTER_ACTION"
         assert state.react_return_phase == TurnPhase.ACTION
 
-        # 5) Close Window 2 → turn advances to P2.
+        # 5) Close Window 2 → mandatory Decay window → turn advances to P2.
         state = resolve_action(state, pass_action(), library)
+        state = _close_decay_window(state, library)
         assert state.active_player_idx == 1
         assert state.phase == TurnPhase.ACTION
         assert state.turn_number == 2  # exactly one turn consumed
@@ -900,12 +968,14 @@ class TestMeleeTwoReactWindowsIntegration:
         assert state.phase == TurnPhase.ACTION
         assert state.pending_post_move_attacker_id == 0
 
-        # DECLINE: no W2, turn flips to P2 directly.
+        # DECLINE: no W2 — straight to the Decay phase, whose mandatory
+        # window (2026-07) closes to flip the turn to P2.
         from grid_tactics.actions import Action as _A
         state = resolve_action(
             state, _A(action_type=ActionType.DECLINE_POST_MOVE_ATTACK), library,
         )
         assert state.pending_post_move_attacker_id is None
+        state = _close_decay_window(state, library)
         assert state.active_player_idx == 1
         assert state.phase == TurnPhase.ACTION
         # Both rats survive — no combat occurred.

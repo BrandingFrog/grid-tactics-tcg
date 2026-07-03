@@ -26,6 +26,7 @@ from grid_tactics.cards import CardDefinition
 from grid_tactics.effect_resolver import resolve_effects_for_trigger
 from grid_tactics.engine_events import (
     EVT_ATTACK_RESOLVED,
+    EVT_CARD_BURNED,
     EVT_CARD_DISCARDED,
     EVT_CARD_DRAWN,
     EVT_CARD_PLAYED,
@@ -171,26 +172,32 @@ def _can_attack(
 # ---------------------------------------------------------------------------
 
 
-FATIGUE_DAMAGE = 5
-
-
 def _apply_pass(state: GameState) -> GameState:
-    """Apply PASS action. Only triggers when no other actions available.
+    """Apply PASS action — FREE (turn-structure redesign 2026-07).
 
-    Deals a flat FATIGUE_DAMAGE (5) to the active player. The client
-    surfaces this via a big 'NO ACTION AVAILABLE' nudge overlay when
-    the resulting state shows fatigue_counts incrementing.
-    Fatigue counts are stored in GameState.fatigue_counts (per-player tuple)
-    instead of a module-level dict, ensuring concurrent game safety.
+    PASS no longer deals fatigue damage: fatigue now exists ONLY for
+    empty-deck turn-start draws (see react_stack._close_end_of_turn_and_flip,
+    which uses GameState.fatigue_counts as the escalating 10/20/30 counter).
+
+    Handshake tracking: consecutive ACTION-phase passes across BOTH players
+    are counted in GameState.consecutive_passes (react-window passes do NOT
+    count — they route through handle_react_action, never here). When this
+    PASS lands while the counter is already >= 1 (the opponent's
+    immediately-previous action was also PASS), a Handshake occurs:
+    handshake_pending is set (paid out at the end of this turn in
+    _close_end_of_turn_and_flip) and the counter resets to 0 so Handshakes
+    cannot chain off a single pass pair.
     """
     assert_phase_contract(state, "action:pass_action")
-    active_idx = state.active_player_idx
-    player = state.players[active_idx]
-    counts = list(state.fatigue_counts)
-    counts[active_idx] += 1
-    new_player = replace(player, hp=player.hp - FATIGUE_DAMAGE)
-    new_players = _replace_player(state.players, active_idx, new_player)
-    return replace(state, players=new_players, fatigue_counts=tuple(counts))
+    new_count = state.consecutive_passes + 1
+    if new_count >= 2:
+        # Handshake! Reset the streak — no chaining.
+        return replace(
+            state,
+            consecutive_passes=0,
+            handshake_pending=True,
+        )
+    return replace(state, consecutive_passes=new_count)
 
 
 def _apply_draw(state: GameState) -> GameState:
@@ -452,6 +459,7 @@ def _apply_play_card(
                     tmp_state = resolve_effect(
                         tmp_state, eff, (0, 0), active_side, library,
                         contract_source="trigger:on_discard",
+                        event_collector=event_collector,
                     )
                 # Pull updated state back (effects may have changed minions)
                 state = tmp_state
@@ -1894,13 +1902,23 @@ def resolve_action(
             )
         elif action.action_type == ActionType.DECLINE_CONJURE:
             assert_phase_contract(state, "action:decline_conjure")
-            # Decline deployment — card goes to hand instead
+            # Decline deployment — card goes to hand instead. Overdraw
+            # rule (2026-07): a full hand burns it to the exhaust pile.
             card_numeric_id = state.pending_conjure_deploy_card
             deployer = state.players[deployer_idx]
-            new_deployer = replace(
-                deployer,
-                hand=deployer.hand + (card_numeric_id,),
+            new_deployer, _burned = deployer.add_to_hand_with_overdraw(
+                card_numeric_id,
             )
+            if _burned and event_collector is not None:
+                event_collector.collect(
+                    EVT_CARD_BURNED,
+                    "action:decline_conjure",
+                    {
+                        "player_idx": deployer_idx,
+                        "card_numeric_id": card_numeric_id,
+                        "source": "decline_conjure",
+                    },
+                )
             new_players = _replace_player(state.players, deployer_idx, new_deployer)
             state = replace(
                 state,
@@ -1990,16 +2008,29 @@ def resolve_action(
                     pending_conjure_deploy_player_idx=caster_idx,
                 )
             else:
-                # Standard tutor: add to hand.
+                # Standard tutor: add to hand. Turn-structure redesign
+                # 2026-07: overdraw-burns — a full hand (MAX_HAND_SIZE)
+                # sends the tutored card to the exhaust pile (revealed)
+                # instead of fizzling, for consistency with all other
+                # draw paths.
                 # Multi-pick support (e.g. To The Ratmobile amount=2):
                 # decrement pending_tutor_remaining; if still >0 re-enter
                 # pending state with the remaining matches (indices shifted
                 # for the removed deck slot) so the player picks again.
-                new_caster = replace(
-                    caster,
-                    deck=new_deck,
-                    hand=caster.hand + (chosen_card,),
+                new_caster = replace(caster, deck=new_deck)
+                new_caster, _burned = new_caster.add_to_hand_with_overdraw(
+                    chosen_card,
                 )
+                if _burned and event_collector is not None:
+                    event_collector.collect(
+                        EVT_CARD_BURNED,
+                        "action:tutor_select",
+                        {
+                            "player_idx": caster_idx,
+                            "card_numeric_id": chosen_card,
+                            "source": "tutor",
+                        },
+                    )
                 new_players = _replace_player(state.players, caster_idx, new_caster)
                 remaining = max(0, state.pending_tutor_remaining - 1)
                 if remaining <= 0:
@@ -2200,6 +2231,11 @@ def resolve_action(
     _prev_mana = tuple(p.current_mana for p in state.players) if event_collector else None
     _prev_hp = tuple(p.hp for p in state.players) if event_collector else None
     _prev_grave_lens = tuple(len(p.grave) for p in state.players) if event_collector else None
+
+    # Turn-structure redesign 2026-07: any non-PASS main-phase action
+    # breaks the consecutive-pass streak (Handshake tracking).
+    if action.action_type != ActionType.PASS and state.consecutive_passes != 0:
+        state = replace(state, consecutive_passes=0)
 
     # Dispatch to action handler
     if action.action_type == ActionType.PASS:

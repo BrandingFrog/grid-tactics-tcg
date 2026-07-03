@@ -37,9 +37,9 @@
         "amount": 1
     },
     "tips": [
-        "A hard counter to Robot/Metal decks. Every Diodebot, Lasercannon, Surgebot, and Sparkbot on the board becomes burning simultaneously — turn-over they all take burn tick damage.",
+        "A hard counter to Robot/Metal decks. Every Diodebot, Lasercannon, Surgebot, and Sparkbot on the board becomes burning simultaneously — each then takes burn tick damage in its owner's Decay Phase.",
         "Burn is a boolean, not a stack — re-applying to an already-burning minion does nothing. Cast when several Metal/Robot targets are fresh.",
-        "Paired with Flame Wyrm, each burning Robot/Machine/Metal minion ticks for 6🤍 per turn start instead of 5🤍.",
+        "Paired with Flame Wyrm, each burning Robot/Machine/Metal minion ticks for 6🤍 per Decay Phase instead of 5🤍.",
         "Burns your OWN Robots too — don't cast it if you're the Metal deck. Water vs Metal is the intended matchup.",
         "The 2-mana react mode is cheap cycling. Keep Acidic Rain in hand against control opponents — any action they take is a free draw for you."
     ],

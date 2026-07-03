@@ -369,20 +369,17 @@ class TestActionCodec:
 
 
 # ---------------------------------------------------------------------------
-# Auto-draw bug fix test (D-04/D-05)
+# Turn-start draw (turn-structure redesign 2026-07: UNCONDITIONAL)
 # ---------------------------------------------------------------------------
 
 
-class TestNoAutoDraw:
-    """Verify auto-draw is guarded by AUTO_DRAW_ENABLED."""
+class TestUnconditionalTurnStartDraw:
+    """Turn-structure redesign 2026-07: the turn-start draw is now
+    UNCONDITIONAL (AUTO_DRAW_ENABLED was deleted from types.py)."""
 
-    def test_no_auto_draw_on_turn_transition(self):
-        """After turn transition, hand size does NOT increase when AUTO_DRAW_ENABLED=False.
-
-        D-04/D-05: The auto-draw code in react_stack.resolve_react_stack must
-        be guarded by AUTO_DRAW_ENABLED. With it False (default), no card is
-        drawn at turn start during react resolution.
-        """
+    def test_turn_transition_draws_for_new_active_player(self):
+        """After the turn transition, the new active player's hand grows
+        by exactly one card (top of deck) — the mandatory turn-start draw."""
         from pathlib import Path
 
         from grid_tactics import types as game_types
@@ -392,8 +389,8 @@ class TestNoAutoDraw:
         from grid_tactics.game_state import GameState
         from grid_tactics.react_stack import resolve_react_stack
 
-        # Ensure AUTO_DRAW_ENABLED is False (the default)
-        assert game_types.AUTO_DRAW_ENABLED is False
+        # The old feature flag is gone — the draw is unconditional.
+        assert not hasattr(game_types, "AUTO_DRAW_ENABLED")
 
         library = CardLibrary.from_directory(Path("data/cards"))
 
@@ -416,22 +413,28 @@ class TestNoAutoDraw:
             pending_action=Action(action_type=ActionType.PASS),
         )
 
-        # Resolve (PASS on empty stack -> advance turn)
+        # Resolve (PASS on empty stack -> advance turn). Since Phase
+        # 14.8-05c the end-of-turn react window ALWAYS opens as the
+        # closing beat of the end phase, so drain any windows until the
+        # turn actually flips.
         new_state = resolve_react_stack(state, library)
+        for _ in range(6):
+            if new_state.active_player_idx == 1 and new_state.phase == TurnPhase.ACTION:
+                break
+            assert new_state.phase == TurnPhase.REACT
+            new_state = resolve_react_stack(new_state, library)
 
         # New active player should be P1 (was P0)
         assert new_state.active_player_idx == 1
 
-        # P1's hand size should NOT have increased (no auto-draw)
+        # P1 drew exactly one card at turn start.
         p1_hand_after = len(new_state.players[1].hand)
-        assert p1_hand_after == p1_hand_before, (
-            f"Hand grew from {p1_hand_before} to {p1_hand_after} -- "
-            f"auto-draw fired when AUTO_DRAW_ENABLED=False"
+        assert p1_hand_after == p1_hand_before + 1, (
+            f"Hand went {p1_hand_before} -> {p1_hand_after} — the "
+            f"unconditional turn-start draw did not fire exactly once"
         )
-
-        # Deck size also unchanged (no card drawn)
         p1_deck_after = len(new_state.players[1].deck)
-        assert p1_deck_after == p1_deck_before
+        assert p1_deck_after == p1_deck_before - 1
 
 
 # ---------------------------------------------------------------------------

@@ -182,6 +182,15 @@ class CardLoader:
             TargetType, data["target"], f"{context} target", card_id
         )
 
+        # Turn-structure redesign 2026-07 (spec §7.2): optional per-card
+        # burn scoping — which turns' Decay phase an applied burn ticks in.
+        scope = data.get("scope")
+        if scope is not None and scope not in ("owner", "opponent", "every"):
+            raise ValueError(
+                f"Card '{card_id}': {context} has invalid scope '{scope}'. "
+                f"Valid: ['owner', 'opponent', 'every'] (or omit for default)"
+            )
+
         return EffectDefinition(
             effect_type=effect_type,
             trigger=trigger,
@@ -192,6 +201,7 @@ class CardLoader:
             target_element=data.get("target_element"),
             placement_condition=data.get("placement_condition"),
             condition_multiplier=data.get("condition_multiplier", 1),
+            scope=scope,
         )
 
     _TUTOR_SELECTOR_KEYS = frozenset({"tribe", "element", "card_type"})

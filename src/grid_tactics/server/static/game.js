@@ -210,6 +210,34 @@ function _setPhaseLeds(badgeEl, phase, reactReturnPhase) {
     }
 }
 
+// Turn-structure redesign (2026-07): START_OF_TURN / END_OF_TURN keep their
+// enum values on the wire, but the PLAYER-FACING names are "Rally Phase"
+// (positive start-of-turn triggers) and "Decay Phase" (negative end-of-turn
+// effects: burn ticks etc.). The phase-badge markup in game.html still ships
+// START/ACTION/END labels — rewrite them once at startup so both the live
+// badge (#phase-badge) and the sandbox badge (#sandbox-phase-badge) read
+// RALLY / ACTION / DECAY. LED keys ('start'/'end') are untouched.
+var _PHASE_LED_DISPLAY_NAMES = { start: 'RALLY', action: 'ACTION', end: 'DECAY' };
+function _applyPhaseLabelNames() {
+    try {
+        var leds = document.querySelectorAll('.phase-led');
+        for (var i = 0; i < leds.length; i++) {
+            var name = _PHASE_LED_DISPLAY_NAMES[leds[i].dataset.phase];
+            var label = leds[i].querySelector('.phase-led-label');
+            if (name && label && label.textContent !== name) {
+                label.textContent = name;
+            }
+        }
+    } catch (e) { /* defensive — labels are purely cosmetic */ }
+}
+if (typeof document !== 'undefined') {
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', _applyPhaseLabelNames);
+    } else {
+        _applyPhaseLabelNames();
+    }
+}
+
 // Briefly light the start/end LED. Defaults to 2200ms (matches a
 // trigger-blip animation length); callers can override for a shorter
 // "phase cycle" beat (~900ms) used on turn flips with no triggers.
@@ -249,7 +277,7 @@ function _cyclePhaseFlashOnTurnFlip() {
 
 const EFFECT_TYPE_NAMES = [
     'Damage', 'Heal', 'Buff ATK', 'Buff HP', 'Negate',
-    'Deploy Self', 'Rally Forward', 'Promote', 'Tutor', 'Destroy'
+    'Deploy Self', 'March Forward', 'Promote', 'Tutor', 'Destroy'
 ];
 const TRIGGER_NAMES = ['On Play', 'On Death', 'On Attack', 'On Damaged', 'On Move'];
 const TARGET_NAMES = ['Single Target', 'All Enemies', 'Adjacent', 'Self/Owner'];
@@ -592,15 +620,28 @@ function onChatMessage(data) {
 
 // Generic chat-nudge runner. Mounts a fixed full-screen overlay with
 // the given inner HTML + duration, removes itself when done.
-// No-action fatigue nudge — fires when the player has zero legal
-// actions and the engine auto-passes, dealing 5 player HP damage.
-// Big skull + -5❤️ + "NO ACTION AVAILABLE" in Montserrat Black.
-function triggerNoActionNudge() {
+// Fatigue nudge — turn-structure redesign (2026-07): fatigue now fires
+// ONLY when the turn-start auto-draw finds an empty deck, dealing
+// escalating damage (10/20/30...). PASS is free and NEVER deals fatigue.
+// Big skull + -N❤️ + "DECK EMPTY — FATIGUE" in Montserrat Black.
+function triggerFatigueNudge(damage, playerIdx) {
     playSfx('defeat');
+    var dmgText = (typeof damage === 'number' && damage > 0)
+        ? ('-' + damage + '❤️') : '💔';
+    var who = 'DECK EMPTY — FATIGUE';
+    try {
+        if (playerIdx != null) {
+            if (sandboxMode || isSpectator) {
+                who = 'P' + (playerIdx + 1) + ' — ' + who;
+            } else if (myPlayerIdx != null && playerIdx !== myPlayerIdx) {
+                who = (opponentName || 'OPPONENT').toUpperCase() + ' — ' + who;
+            }
+        }
+    } catch (e) { /* defensive — label is cosmetic */ }
     runNudge('nudge-no-action',
         '<div class="no-action-skull">💀</div>' +
-        '<div class="no-action-damage">-5❤️</div>' +
-        '<div class="no-action-text">NO ACTION AVAILABLE</div>',
+        '<div class="no-action-damage">' + dmgText + '</div>' +
+        '<div class="no-action-text">' + who + '</div>',
         3000);
 }
 
@@ -1427,7 +1468,9 @@ function renderCardBrowser() {
             var kw = deckFilterKeyword;
             if (kw === 'tutor' && c.tutor_target) hasKeyword = true;
             else if (kw === 'promote' && c.promote_target) hasKeyword = true;
-            else if (kw === 'rally' && c.effects && c.effects.some(function(e) { return e.type === 6; })) hasKeyword = true;
+            // 'march' is the current keyword name; 'rally' accepted for
+            // backward compat with any stale data-filter markup.
+            else if ((kw === 'march' || kw === 'rally') && c.effects && c.effects.some(function(e) { return e.type === 6; })) hasKeyword = true;
             else if (kw === 'transform' && c.transform_options && c.transform_options.length > 0) hasKeyword = true;
             else if (kw === 'discard' && c.discard_cost_tribe) hasKeyword = true;
             else if (kw === 'react' && c.react_condition != null) hasKeyword = true;
@@ -1524,6 +1567,8 @@ function setupDeckFilters() {
     });
 }
 
+// Kept in sync with data/GLOSSARY.md (source of truth) — update BOTH when
+// adding/changing/removing keywords.
 var KEYWORD_GLOSSARY = {
     // Trigger keywords
     'Summon': 'This effect activates when the minion is played onto the board.',
@@ -1533,33 +1578,33 @@ var KEYWORD_GLOSSARY = {
     'Damaged': 'This effect activates when the minion takes damage.',
     'Start': 'This effect triggers at the start of the owner\'s turn, before any actions.',
     'End': 'This effect triggers at the end of the owner\'s turn, after all actions.',
+    'Passive': 'This effect is always active while the minion is on the board.',
     'Active': 'This ability can be used once per turn instead of attacking.',
+    'Discarded': 'This effect triggers when the card is discarded from hand (via a Cost or opponent effect).',
     // Mechanic keywords
     'Unique': 'Only one copy of this minion can exist on the board per player at a time.',
     'Melee': 'Attacks adjacent orthogonal tiles (1 tile).',
     'Range': 'Attacks X+1 tiles orthogonally, X tiles diagonally.',
     'Tutor': 'Search your deck for a specific card and add it to your hand.',
     'Promote': 'When this minion dies, specified minion transforms into this card.',
-    'Rally': 'When this minion moves, all other friendly copies of it also advance forward.',
+    'March': 'When this minion moves, all other friendly copies of it also advance forward.',
     'Negate': 'Cancel the effect of an opponent\'s spell or ability.',
     'React': 'This card can be played during the opponent\'s turn in response to their action.',
-    'Deploy': 'Summon this card onto the battlefield from your hand during a React window.',
     'Destroy': 'Remove a target minion from the board regardless of its 🤍.',
     'Transform': 'Pay mana to transform this minion into another form.',
     'Cost': 'An additional requirement or modifier that changes how much you pay to play this card.',
     'Discard': 'Send a card from your hand to the Exhaust Pile.',
-    'Discarded': 'This effect triggers when this card is discarded from hand.',
-    'Exhaust': 'Send a card to the Exhaust Pile from anywhere.',
+    'Exhaust': 'Send a card to the Exhaust Pile. Cards drawn while your hand is full are also exhausted, revealed.',
     'Heal': 'Restore 🤍 to a target.',
     'Deal': 'Deal damage to a target.',
     'Burn': 'Applies Burning to affected enemies.',
-    'Burning': 'A burning minion takes 5🤍 damage at Start. Burning persists until the minion dies.',
+    'Burning': 'A burning minion takes 5🤍 in its owner\'s Decay Phase. Burning is a boolean status — re-applying it does nothing. It persists until the minion dies.',
     'Dark Matter': 'A stacking resource used by Dark Mages. Buffs and costs scale with accumulated stacks.',
     'Leap': 'If blocked by an enemy, jump over to the next available tile. Cannot leap allies. If all tiles ahead are enemy-occupied, enables sacrifice.',
     'Conjure': 'Summon a card from your deck directly to the board.',
     'Revive': 'Summon a card from the Grave to the board.',
-    'Draw': 'Draw cards from your deck to your hand.',
-    'Passive': 'This effect is always active while the minion is on the board.',
+    'Draw': 'Draw cards from your deck to your hand. If your hand is full (10 cards), the drawn card is sent to the Exhaust Pile, revealed, instead.',
+    'Handshake': 'When a player passes and the opponent\'s previous action was also a pass, a Handshake occurs: at the end of that turn, both players gain +1 mana. A player whose mana is already full draws a card instead. The pass counter then resets — no chaining.',
 };
 
 // Build the shared content for a card tooltip. Both the deck-builder
@@ -1693,7 +1738,7 @@ function buildCardTooltipContent(c) {
             if (eff.type === 3) addKw('Heal');
             if (eff.type === 4) addKw('Negate');
             if (eff.type === 5) addKw('Summon');
-            if (eff.type === 6) addKw('Rally');
+            if (eff.type === 6) addKw('March');
             if (eff.type === 7) addKw('Promote');
             if (eff.type === 8) addKw('Tutor');
             if (eff.type === 9) addKw('Destroy');
@@ -3073,6 +3118,21 @@ function playEvent(ev, done) {
         case "pending_modal_resolved":   return playPendingModalResolved(ev, done);
         case "fizzle":                   return playFizzle(ev, done);
         case "game_over":                return playGameOver(ev, done);
+        // Turn-structure redesign (2026-07): new engine events. Aliases are
+        // accepted defensively so the client renders them regardless of the
+        // final EVT_* wire name the engine lane settles on.
+        case "handshake":
+        case "handshake_resolved":       return playHandshake(ev, done);
+        case "card_burned":              // EVT_CARD_BURNED — the real wire name
+        case "overdraw_burn":
+        case "card_overdrawn":
+        case "card_exhausted":           return playOverdrawBurn(ev, done);
+        // NOTE: the engine has no fatigue event type — fatigue arrives as
+        // player_hp_change with payload.cause === "fatigue" and the skull
+        // nudge fires from playPlayerHpChange. These aliases stay wired
+        // defensively in case a dedicated event type is ever added.
+        case "fatigue":
+        case "fatigue_damage":           return playFatigueDamage(ev, done);
         default:
             console.warn("[eventQueue] Unknown event type: " + ev.type);
             return setTimeout(done, 0);
@@ -3501,10 +3561,19 @@ function playCardDiscarded(ev, done) {
 }
 
 function playPlayerHpChange(ev, done) {
-    // Payload: {player_idx, prev, new, delta}
+    // Payload: {player_idx, prev, new, delta, cause?}
     var payload = ev && ev.payload;
     if (!payload || typeof payload.delta !== 'number') { setTimeout(done, 0); return; }
     var delta = payload.delta;
+    // Fatigue (turn-structure redesign 2026-07): the engine emits empty-deck
+    // turn-start fatigue as player_hp_change with cause="fatigue" — there is
+    // NO dedicated fatigue event type. Fire the DECK EMPTY — FATIGUE skull
+    // nudge here and hold the queue long enough for it to register.
+    if (payload.cause === 'fatigue') {
+        try {
+            triggerFatigueNudge(delta < 0 ? -delta : null, payload.player_idx);
+        } catch (e) { /* defensive — nudge is purely visual */ }
+    }
     // Only negatives get the damage popup (heals on player HP are rare and
     // covered by green shield popup on the HP stat — snapshot path handles).
     if (delta < 0) {
@@ -3524,6 +3593,12 @@ function playPlayerHpChange(ev, done) {
                 el.classList.remove('hp-flash');
             }, 950);
         }
+    }
+    // Fatigue paces longer than a plain HP tick so the skull nudge lands
+    // before the next queued event (turn banner etc.) plays over it.
+    if (payload.cause === 'fatigue') {
+        setTimeout(done, Math.max(_evDurationOr(ev, 400), 1200));
+        return;
     }
     setTimeout(done, _evDurationOr(ev, 400));
 }
@@ -3905,6 +3980,167 @@ function playGameOver(ev, done) {
     } catch (e) { /* defensive — overlay is purely visual */ }
     // Game over modal stays up until user dismisses — no queue pacing needed.
     setTimeout(done, _evDurationOr(ev, 0));
+}
+
+// ----- Turn-structure redesign handlers (2026-07) ---------------------
+//
+// Three new event families from the Rally/Decay turn redesign:
+//   * handshake     — both players passed consecutively; at end of turn each
+//                     gains +1 mana (or draws a card if mana is already full).
+//   * overdraw_burn — a draw happened with a full hand (MAX_HAND_SIZE=10);
+//                     the drawn card is REVEALED then sent to the Exhaust
+//                     Pile instead of entering the hand. Applies to every
+//                     draw path (turn-start, card effects, Handshake, tutor).
+//   * fatigue       — the turn-start auto-draw found an empty deck; the
+//                     player takes escalating damage (10/20/30...) instead
+//                     of drawing. PASS is free and NEVER deals fatigue.
+//
+// The concrete payouts (mana_change / card_drawn / player_hp_change) arrive
+// as their own events on the same frame and animate via their existing slot
+// handlers — these handlers only render the headline beat.
+
+// Extraction of a per-player Handshake reward from the engine payload.
+// The engine emits {"outcomes": [{player_idx, reward}]} where reward is
+// 'mana' | 'card_drawn' | 'card_burned' | 'none' (react_stack.py
+// _resolve_handshake_payout). Legacy shapes accepted defensively.
+// Returns the reward string or null when unknown.
+function _handshakeRewardFor(payload, idx) {
+    if (!payload) return null;
+    var direct = payload['p' + idx + '_reward'] || payload['player' + idx + '_reward'];
+    if (typeof direct === 'string') return direct;
+    var r = payload.outcomes || payload.rewards;
+    if (Array.isArray(r)) {
+        for (var i = 0; i < r.length; i++) {
+            var e = r[i];
+            if (e && typeof e === 'object' && e.player_idx === idx) {
+                return e.reward || e.kind || e.type || null;
+            }
+        }
+        var entry = r[idx];
+        if (typeof entry === 'string') return entry;
+        if (entry && typeof entry === 'object') {
+            return entry.reward || entry.kind || entry.type || null;
+        }
+    }
+    return null;
+}
+
+// Player-facing text for a Handshake reward value.
+function _handshakeRewardText(reward) {
+    switch (reward) {
+        case 'mana':        return '+1 mana';
+        case 'card_drawn':
+        case 'draw':        return 'draws a card (mana full)';
+        case 'card_burned': return 'draws a card (mana full) — hand full, it burns!';
+        case 'none':        return 'nothing (mana full, deck empty)';
+        default:            return '+1 mana';  // legacy payloads carry no detail
+    }
+}
+
+// handshake — full-screen 🤝 banner naming both players' payout. The
+// mana/draw payout events that follow animate the actual numbers.
+// Payload (best-effort): per-player rewards, see _handshakeRewardFor.
+function playHandshake(ev, done) {
+    var payload = (ev && ev.payload) || {};
+    try {
+        var ownIdx = sandboxMode ? 0 : (myPlayerIdx != null ? myPlayerIdx : 0);
+        var nameFor = function(idx) {
+            if (sandboxMode || isSpectator) return 'P' + (idx + 1);
+            return idx === ownIdx ? 'You' : (opponentName || 'Opponent');
+        };
+        var lineFor = function(idx) {
+            var reward = _handshakeRewardFor(payload, idx);
+            return nameFor(idx) + ': ' + _handshakeRewardText(reward);
+        };
+        runNudge('nudge-handshake',
+            '<div class="handshake-emoji">🤝</div>' +
+            '<div class="handshake-title">HANDSHAKE!</div>' +
+            '<div class="handshake-sub">' + lineFor(0) + ' &nbsp;·&nbsp; ' + lineFor(1) + '</div>',
+            2200);
+    } catch (e) { /* defensive — banner is purely visual */ }
+    // Pace at the banner's own 2200ms choreography — deliberately NOT
+    // _evDurationOr: a shorter wire duration would let the next event
+    // (turn banner etc.) play over the still-visible handshake banner.
+    setTimeout(done, 2200);
+}
+
+// overdraw_burn — the drawn card is revealed center-screen for a beat, then
+// flies to the owner's Exhaust pile via the existing card_fly ghost
+// primitive (playCardFlyAnimation). Payload: {player_idx, card_numeric_id}.
+// Overdrawn cards are revealed to BOTH players, so card_numeric_id should
+// always be present; if redaction strips it, fall back to a text blip.
+function playOverdrawBurn(ev, done) {
+    var payload = (ev && ev.payload) || {};
+    var ownIdx = sandboxMode ? 0 : myPlayerIdx;
+    var zone = (payload.player_idx === ownIdx) ? 'exhaust_own' : 'exhaust_opp';
+    var def = (payload.card_numeric_id != null && cardDefs)
+        ? cardDefs[payload.card_numeric_id] : null;
+    if (!def) {
+        try {
+            runNudge('nudge-overdraw-fallback',
+                '<div class="overdraw-reveal-label">HAND FULL — CARD BURNED</div>',
+                1200);
+        } catch (e) { /* defensive */ }
+        setTimeout(done, 1200);  // match the fallback nudge, ignore wire duration
+        return;
+    }
+    var HOLD_MS = 900;   // reveal hold before the exhaust fly
+    var FLY_MS = 750;    // playCardFlyAnimation's fallback duration
+    try {
+        var reveal = document.createElement('div');
+        reveal.className = 'overdraw-reveal';
+        reveal.innerHTML =
+            '<div class="overdraw-reveal-card">' +
+                renderCardFrame(def, {
+                    context: 'hand',
+                    numericId: payload.card_numeric_id,
+                    interactive: false,
+                    showReactDeploy: false,
+                }) +
+            '</div>' +
+            '<div class="overdraw-reveal-label">HAND FULL — BURNED</div>';
+        document.body.appendChild(reveal);
+        playSfx('burn_tick');
+        setTimeout(function() {
+            var fromRect = null;
+            try {
+                var cardEl = reveal.querySelector('.overdraw-reveal-card');
+                fromRect = (cardEl || reveal).getBoundingClientRect();
+            } catch (e) { /* defensive */ }
+            if (reveal.parentNode) reveal.parentNode.removeChild(reveal);
+            if (fromRect && fromRect.width > 0) {
+                enqueueAnimation({
+                    type: 'card_fly',
+                    fromRect: fromRect,
+                    toZone: zone,
+                    cardNumericId: payload.card_numeric_id,
+                    stateApplied: true,
+                    _fromEventQueue: true,
+                });
+            }
+        }, HOLD_MS);
+    } catch (e) { /* defensive — worst case the pile count just ticks up */ }
+    // Pace at the handler's own choreography (reveal hold + exhaust fly) —
+    // deliberately NOT _evDurationOr: a shorter wire duration would advance
+    // the queue mid-reveal and the card_fly enqueued at HOLD_MS would play
+    // over whatever event came next.
+    setTimeout(done, HOLD_MS + FLY_MS);
+}
+
+// fatigue — DEFENSIVE ALIAS ONLY. The engine emits fatigue as
+// player_hp_change with payload.cause === "fatigue" (no dedicated event
+// type exists in engine_events.py); the live-play nudge fires from
+// playPlayerHpChange. This handler stays wired for the "fatigue" /
+// "fatigue_damage" aliases in case a dedicated type is added later.
+// Payload (hypothetical): {player_idx, damage, fatigue_count?}.
+function playFatigueDamage(ev, done) {
+    var payload = (ev && ev.payload) || {};
+    var dmg = (typeof payload.damage === 'number') ? payload.damage
+        : (typeof payload.amount === 'number') ? payload.amount : null;
+    try {
+        triggerFatigueNudge(dmg, payload.player_idx);
+    } catch (e) { /* defensive — nudge is purely visual */ }
+    setTimeout(done, _evDurationOr(ev, 1200));
 }
 
 // Debug hook (mirrors __animDebug). Plan 04b extends with spell-stage state.
@@ -4699,15 +4935,18 @@ function _applyStateFrameImmediate(frame, legal, prevState) {
         }
     } catch (e) { /* defensive: never block state application */ }
 
-    // Fatigue nudge: if either player's fatigue_counts just incremented,
-    // trigger the NO ACTION AVAILABLE overlay on the fatigued player's screen.
+    // Fatigue nudge (legacy snapshot path — post-plan-05 this only fires on
+    // reconnect/initial frames; live play renders fatigue via the eventQueue's
+    // playPlayerHpChange handler on cause==="fatigue"): if the viewer's fatigue_counts just
+    // incremented, show the DECK EMPTY — FATIGUE overlay with the escalating
+    // damage (10/20/30... = count * 10).
     try {
         if (prevState && prevState.fatigue_counts && frame && frame.fatigue_counts) {
             for (var fi = 0; fi < 2; fi++) {
                 var prevFat = prevState.fatigue_counts[fi] || 0;
                 var nextFat = frame.fatigue_counts[fi] || 0;
                 if (nextFat > prevFat && fi === myPlayerIdx) {
-                    triggerNoActionNudge();
+                    triggerFatigueNudge(nextFat * 10, fi);
                     break;
                 }
             }
@@ -7252,8 +7491,8 @@ function showTriggerPickerModal(options) {
             var kindPill = document.createElement('div');
             kindPill.className = 'tutor-copy-count';
             var kindLabel = opt.trigger_kind === 'start_of_turn'
-                ? 'Start of Turn'
-                : (opt.trigger_kind === 'end_of_turn' ? 'End of Turn' : opt.trigger_kind);
+                ? 'Rally Phase'
+                : (opt.trigger_kind === 'end_of_turn' ? 'Decay Phase' : opt.trigger_kind);
             kindPill.textContent = kindLabel;
             tile.appendChild(kindPill);
 
@@ -7902,7 +8141,11 @@ function renderActionBar() {
         // and let renderActionBar / floating button drive the manual click.
     }
 
-    // Action bar: show Draw Card / Skip React button
+    // Action bar: show Pass / Skip React button.
+    // Turn-structure redesign (2026-07): DRAW is no longer a legal action —
+    // the turn-start auto-draw covers it — so the old "Draw Card" button is
+    // GONE. In its place, ACTION phase shows a free "Pass" button (PASS no
+    // longer deals fatigue damage; two consecutive passes seal a Handshake).
     if (slot) {
         if (gameState.phase === 1) {
             // REACT phase: show Skip React button (only when player has react cards available)
@@ -7917,18 +8160,18 @@ function renderActionBar() {
                 slot.appendChild(skipBtn);
             }
         } else {
-            // ACTION phase: show Draw Card button
-            // Drawing IS the action — it counts as your turn's action and ends your turn.
-            var canDraw = legalActions.some(function(a) { return a.action_type === 3; });
-            if (canDraw) {
-                var drawBtn = document.createElement('button');
-                drawBtn.className = 'btn btn-action btn-draw';
-                drawBtn.textContent = 'Draw Card';
-                drawBtn.title = 'Draw a card (uses your turn action)';
-                drawBtn.addEventListener('click', function() {
-                    submitAction({ action_type: 3 });
+            // ACTION phase: show the free Pass button with the Handshake hint.
+            var canPassAction = legalActions.some(function(a) { return a.action_type === 4; });
+            if (canPassAction) {
+                var passBtn = document.createElement('button');
+                passBtn.className = 'btn btn-action btn-pass btn-pass-action';
+                passBtn.textContent = 'Pass 🤝';
+                passBtn.title = 'Pass — 2nd consecutive pass seals a Handshake '
+                    + '(both players gain +1 mana at end of turn; full mana draws a card instead)';
+                passBtn.addEventListener('click', function() {
+                    submitAction({ action_type: 4 });
                 });
-                slot.appendChild(drawBtn);
+                slot.appendChild(passBtn);
             }
         }
 
@@ -8453,9 +8696,9 @@ function getEffectDescription(effects, cardData) {
             desc = prefix + 'Negate';
         } else if (type === 5) { // Deploy Self
             desc = prefix + 'Summon';
-        } else if (type === 6) { // Rally Forward
-            var rallyName = (cardData && cardData.name) || 'this unit';
-            desc = 'Move: Rally friendly ' + rallyName;
+        } else if (type === 6) { // March Forward
+            var marchName = (cardData && cardData.name) || 'this unit';
+            desc = 'Move: March friendly ' + marchName;
         } else if (type === 7) { // Promote
             if (cardData && cardData.promote_target) {
                 var promoFrom = findCardNameById(cardData.promote_target);

@@ -219,6 +219,28 @@ class GameState:
     pending_trigger_queue_other: tuple = ()   # tuple[PendingTrigger, ...]
     pending_trigger_picker_idx: Optional[int] = None
 
+    # Turn-structure redesign 2026-07: Handshake tracking (appended fields).
+    # ``consecutive_passes`` counts consecutive ACTION-phase PASS actions
+    # across BOTH players (react-window passes do NOT count). When a PASS
+    # lands while the counter is already 1 (i.e. the opponent's
+    # immediately-previous action was also PASS), a Handshake occurs:
+    # ``handshake_pending`` is set and the counter resets to 0 (no
+    # chaining — the next Handshake needs a fresh pair of passes). The
+    # payout (+1 mana each, or a draw if already at MAX_MANA_CAP) happens
+    # in the end-of-turn tail (react_stack._close_end_of_turn_and_flip).
+    consecutive_passes: int = 0
+    handshake_pending: bool = False
+
+    # Turn-structure redesign fixup (2026-07): when the Decay-phase burn
+    # tick kills a minion and the death pipeline opens a react window or
+    # modal, the remaining Decay work (ON_END_OF_TURN trigger drain +
+    # BEFORE_END_OF_TURN react window) is DEFERRED, not skipped. This flag
+    # marks the deferral; ``close_end_react_and_advance_turn`` consumes it
+    # to resume the Decay phase after the death window closes instead of
+    # flipping the turn early (which would have eaten Decay triggers like
+    # Emberplague Rat / Dark Matter Battery every time a burn tick killed).
+    decay_resume_pending: bool = False
+
     # Phase 14.8-05: ``last_trigger_blip`` DELETED. Plan 14.8-03a introduced
     # EVT_TRIGGER_BLIP as a first-class EngineEvent in the event stream;
     # plan 14.8-04b added playTriggerBlip as a client slot handler. The
@@ -327,6 +349,7 @@ class GameState:
                     "current_health": m.current_health,
                     "attack_bonus": m.attack_bonus,
                     "is_burning": bool(m.is_burning),
+                    "burn_scope": m.burn_scope,
                     "dark_matter_stacks": m.dark_matter_stacks,
                     "max_health_bonus": m.max_health_bonus,
                     "from_deck": bool(m.from_deck),
@@ -373,8 +396,14 @@ class GameState:
             # Phase 4: Win/draw detection
             "winner": int(self.winner) if self.winner is not None else None,
             "is_game_over": self.is_game_over,
-            # Phase 11: Fatigue tracking
+            # Phase 11 (repurposed 2026-07): escalating fatigue counter for
+            # empty-deck turn-start draws (10/20/30... damage per player).
             "fatigue_counts": list(self.fatigue_counts),
+            # Turn-structure redesign 2026-07: Handshake tracking.
+            "consecutive_passes": self.consecutive_passes,
+            "handshake_pending": self.handshake_pending,
+            # Deferred-Decay marker (burn-tick death interrupt resume).
+            "decay_resume_pending": self.decay_resume_pending,
             # Phase 14.7-05: simultaneous-trigger priority queue
             "pending_trigger_queue_turn": [
                 {
@@ -481,6 +510,7 @@ class GameState:
                 current_health=m["current_health"],
                 attack_bonus=m.get("attack_bonus", 0),
                 is_burning=bool(m.get("is_burning", False)),
+                burn_scope=m.get("burn_scope", "owner"),
                 dark_matter_stacks=m.get("dark_matter_stacks", 0),
                 max_health_bonus=m.get("max_health_bonus", 0),
                 from_deck=bool(m.get("from_deck", True)),
@@ -624,6 +654,9 @@ class GameState:
             winner=winner,
             is_game_over=is_game_over,
             fatigue_counts=tuple(d.get("fatigue_counts", (0, 0))),
+            consecutive_passes=int(d.get("consecutive_passes") or 0),
+            handshake_pending=bool(d.get("handshake_pending", False)),
+            decay_resume_pending=bool(d.get("decay_resume_pending", False)),
             pending_trigger_queue_turn=pending_trigger_queue_turn,
             pending_trigger_queue_other=pending_trigger_queue_other,
             pending_trigger_picker_idx=d.get("pending_trigger_picker_idx"),

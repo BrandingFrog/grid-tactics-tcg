@@ -44,11 +44,26 @@ class EffectDefinition:
     target_element: Optional[str] = None  # filter ALL_MINIONS to only this element (e.g. "metal"); combined with target_tribe as OR
     placement_condition: Optional[str] = None  # e.g. "front_of_dark_ranged" — positional condition
     condition_multiplier: int = 1  # multiplier applied when placement_condition is met
+    # Turn-structure redesign 2026-07 (spec §7.2/§11): per-card turn scoping
+    # for BURN / APPLY_BURNING effects — which turns' Decay phase the applied
+    # burn ticks in. Card wording decides: "during your turn" -> "owner",
+    # "during your opponent's turn" -> "opponent", "every turn" -> "every".
+    # None means the card carries no scoping wording; the standard Burn
+    # keyword default ("owner" — spec §7.1: ticks in the minion OWNER's
+    # Decay phase) is applied at burn-application time in effect_resolver.
+    scope: Optional[str] = None
+
+    _VALID_SCOPES = ("owner", "opponent", "every")
 
     def __post_init__(self) -> None:
         if not (0 <= self.amount <= MAX_EFFECT_AMOUNT):
             raise ValueError(
                 f"Effect amount {self.amount} out of range [0, {MAX_EFFECT_AMOUNT}]"
+            )
+        if self.scope is not None and self.scope not in self._VALID_SCOPES:
+            raise ValueError(
+                f"Effect scope '{self.scope}' invalid. "
+                f"Valid: {list(self._VALID_SCOPES)} (or omit for the default)"
             )
 
 

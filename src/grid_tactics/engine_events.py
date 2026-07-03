@@ -42,7 +42,8 @@ from typing import Any, Optional
 
 
 # ---------------------------------------------------------------------------
-# Event type constants (19 total, per research §"Event types proposed")
+# Event type constants (per research §"Event types proposed"; +card_burned
+# and +handshake added by the 2026-07 turn-structure redesign)
 # ---------------------------------------------------------------------------
 
 # Board-state events
@@ -56,6 +57,13 @@ EVT_ATTACK_RESOLVED = "attack_resolved"
 EVT_CARD_DRAWN = "card_drawn"
 EVT_CARD_PLAYED = "card_played"
 EVT_CARD_DISCARDED = "card_discarded"
+# Turn-structure redesign 2026-07: a draw with a full hand (MAX_HAND_SIZE)
+# sends the drawn card to the Exhaust Pile (revealed) instead of the hand.
+EVT_CARD_BURNED = "card_burned"
+
+# Turn-structure redesign 2026-07: both players PASSed consecutively —
+# at the end of that turn BOTH players gain +1 mana (or draw if full).
+EVT_HANDSHAKE = "handshake"
 
 # Resource events
 EVT_MANA_CHANGE = "mana_change"
@@ -88,6 +96,8 @@ ALL_EVENT_TYPES: frozenset[str] = frozenset({
     EVT_CARD_DRAWN,
     EVT_CARD_PLAYED,
     EVT_CARD_DISCARDED,
+    EVT_CARD_BURNED,
+    EVT_HANDSHAKE,
     EVT_MANA_CHANGE,
     EVT_PLAYER_HP_CHANGE,
     EVT_REACT_WINDOW_OPENED,
@@ -121,6 +131,9 @@ DEFAULT_DURATION_MS: dict[str, int] = {
     EVT_CARD_DRAWN: 350,
     EVT_CARD_PLAYED: 0,                 # covered by spell stage in/out
     EVT_CARD_DISCARDED: 300,
+    EVT_CARD_BURNED: 1650,              # 900ms center reveal + 750ms exhaust fly
+                                        # (matches playOverdrawBurn choreography)
+    EVT_HANDSHAKE: 2200,                # 🤝 payout banner (matches playHandshake)
     EVT_MANA_CHANGE: 0,
     EVT_PLAYER_HP_CHANGE: 400,
     EVT_REACT_WINDOW_OPENED: 600,       # spell stage in
@@ -338,6 +351,8 @@ __all__ = [
     "EVT_CARD_DRAWN",
     "EVT_CARD_PLAYED",
     "EVT_CARD_DISCARDED",
+    "EVT_CARD_BURNED",
+    "EVT_HANDSHAKE",
     "EVT_MANA_CHANGE",
     "EVT_PLAYER_HP_CHANGE",
     "EVT_REACT_WINDOW_OPENED",

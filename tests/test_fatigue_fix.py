@@ -66,38 +66,43 @@ class TestFatigueInGameState:
         assert isinstance(state.fatigue_counts, tuple)
 
 
-class TestFatigueEscalates:
-    """Tests that each PASS applies flat FATIGUE_DAMAGE (currently 5)."""
+class TestPassIsFree:
+    """Turn-structure redesign 2026-07: PASS is FREE — no fatigue damage
+    and no fatigue_counts movement on pass. Fatigue now exists ONLY for
+    empty-deck turn-start draws (escalating 10/20/30 via fatigue_counts;
+    covered in tests/test_new_turn_structure.py)."""
 
-    def test_fatigue_escalates(self):
-        """3 consecutive PASS actions each deal FATIGUE_DAMAGE."""
-        from grid_tactics.card_library import CardLibrary
-        from pathlib import Path
-        from grid_tactics.action_resolver import _apply_pass, FATIGUE_DAMAGE
+    def test_pass_is_free_and_does_not_touch_fatigue(self):
+        """Consecutive PASS actions deal NO damage and never move
+        fatigue_counts. Two passes make a Handshake instead."""
+        from grid_tactics.action_resolver import _apply_pass
 
-        CardLibrary.from_directory(Path("data/cards"))
         state = _make_minimal_state()
-
         initial_hp = state.players[0].hp
 
         state1 = _apply_pass(state)
-        assert state1.players[0].hp == initial_hp - FATIGUE_DAMAGE
-        assert state1.fatigue_counts == (1, 0)
+        assert state1.players[0].hp == initial_hp
+        assert state1.fatigue_counts == (0, 0)
+        assert state1.consecutive_passes == 1
 
         state2 = _apply_pass(replace(state1, phase=TurnPhase.ACTION))
-        assert state2.players[0].hp == initial_hp - 2 * FATIGUE_DAMAGE
-        assert state2.fatigue_counts == (2, 0)
+        assert state2.players[0].hp == initial_hp
+        assert state2.fatigue_counts == (0, 0)
+        # Second consecutive pass → Handshake detected, streak resets.
+        assert state2.handshake_pending is True
+        assert state2.consecutive_passes == 0
 
-        state3 = _apply_pass(replace(state2, phase=TurnPhase.ACTION))
-        assert state3.players[0].hp == initial_hp - 3 * FATIGUE_DAMAGE
-        assert state3.fatigue_counts == (3, 0)
+    def test_no_fatigue_constant_left(self):
+        """The flat PASS fatigue constant was deleted with the behavior."""
+        import grid_tactics.action_resolver as ar
+        assert not hasattr(ar, "FATIGUE_DAMAGE")
 
 
 class TestFatigueIndependentGames:
-    """Tests that two GameStates with same seed have independent fatigue."""
+    """Tests that two GameStates with same seed have independent state."""
 
-    def test_fatigue_independent_games(self):
-        """Applying PASS to one game should NOT affect another game's fatigue."""
+    def test_pass_streak_independent_games(self):
+        """Applying PASS to one game should NOT affect another game."""
         from grid_tactics.action_resolver import _apply_pass
 
         game_a = _make_minimal_state(seed=42)
@@ -105,9 +110,10 @@ class TestFatigueIndependentGames:
 
         # Apply PASS to game_a only
         game_a = _apply_pass(game_a)
-        assert game_a.fatigue_counts == (1, 0)
+        assert game_a.consecutive_passes == 1
 
         # game_b should be completely unaffected
+        assert game_b.consecutive_passes == 0
         assert game_b.fatigue_counts == (0, 0)
 
 

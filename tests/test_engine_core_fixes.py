@@ -6,8 +6,10 @@ Covers (one test class per confirmed finding):
      instead of stranding the game in phase=REACT / react_player_idx=None.
   2. React stack is cleared when resolution is interrupted by a death
      modal — consumed entries must NOT re-resolve (double effects).
-  3. enter_start_of_turn respects react windows / modals opened by the
-     burn tick, and the active player's turn is NOT skipped.
+  3. The turn-phase entry helper respects react windows / modals opened
+     by the burn tick and the turn flow is preserved. (2026-07: the
+     burn tick moved from enter_start_of_turn to the Decay phase —
+     enter_end_of_turn — so these tests exercise it at its new home.)
   4. DECLINE_TRIGGER during an ACTION-phase death drain opens the
      deferred after-action react window (no free second action).
   5. event_collector is threaded through decline-post-move-attack and
@@ -50,6 +52,7 @@ from grid_tactics.minion import MinionInstance
 from grid_tactics.player import Player
 from grid_tactics.react_stack import (
     ReactEntry,
+    enter_end_of_turn,
     enter_start_of_turn,
     handle_react_action,
 )
@@ -285,16 +288,20 @@ class TestConsumedStackClearedOnDeathModal:
 
 
 # ---------------------------------------------------------------------------
-# Finding 3: burn-tick interrupts at start of turn
+# Finding 3: burn-tick interrupts (RELOCATED 2026-07: the burn tick moved
+# from enter_start_of_turn to the Decay phase — enter_end_of_turn — per
+# the turn-structure redesign. The interrupt machinery under test is the
+# same; it now guards the end-of-turn tick.)
 # ---------------------------------------------------------------------------
 
 
-class TestBurnTickInterruptsStartOfTurn:
-    def test_burn_death_react_window_not_clobbered_and_turn_not_skipped(self, library):
-        """Burning Giant Rat dies at its owner's turn start → its promote
+class TestBurnTickInterruptsDecayPhase:
+    def test_burn_death_react_window_not_clobbered_and_turn_advances(self, library):
+        """Burning Giant Rat dies in its owner's Decay phase → its promote
         auto-resolves and opens an AFTER_DEATH_EFFECT react window that
-        enter_start_of_turn must NOT clobber; the window must return to
-        the owner's ACTION phase (turn not skipped)."""
+        enter_end_of_turn must NOT clobber; the window's close must
+        advance the turn (react_return_phase=END_OF_TURN), never hand
+        the owner a free second action."""
         giant_id = library.get_numeric_id("giant_rat")
         rat_id = library.get_numeric_id("rat")
         p1 = _player(PlayerSide.PLAYER_1)
@@ -313,31 +320,34 @@ class TestBurnTickInterruptsStartOfTurn:
             [giant, promote_fodder],
             (p1, p2),
             active_player_idx=1,
-            phase=TurnPhase.ACTION,  # transient pre-start value
+            phase=TurnPhase.ACTION,  # transient pre-end value
         )
+        start_turn = state.turn_number
 
-        state = enter_start_of_turn(state, library)
+        state = enter_end_of_turn(state, library)
 
         # The AFTER_DEATH_EFFECT react window must survive.
         assert state.phase == TurnPhase.REACT
         assert state.react_player_idx == 0
         assert state.react_context == ReactContext.AFTER_DEATH_EFFECT
-        # And its close must return to START_OF_TURN → ACTION, not the
-        # legacy ACTION → END_OF_TURN path that skipped the turn.
-        assert state.react_return_phase == TurnPhase.START_OF_TURN
+        # And its close must route through the turn advance (END_OF_TURN),
+        # never back to the owner's ACTION (free second action).
+        assert state.react_return_phase == TurnPhase.END_OF_TURN
         # Promote resolved: the fodder rat became a Giant Rat.
         promoted = next(m for m in state.minions if m.instance_id != 1)
         assert promoted.card_numeric_id == giant_id
 
-        # Opponent passes the window: the active player keeps their turn.
+        # Opponent passes the window: the turn advances to them.
         state = resolve_action(state, pass_action(), library)
+        state = _drain_to_next_action_phase(state, library)
         assert state.phase == TurnPhase.ACTION
-        assert state.active_player_idx == 1, "active player's turn was skipped"
+        assert state.turn_number == start_turn + 1
+        assert state.active_player_idx == 0, "turn did not advance after Decay"
 
-    def test_burn_death_modal_hand_off_preserves_turn(self, library):
-        """Burning RGB Lasercannon dies at turn start → death-target modal
-        must survive (hand-off in ACTION phase, not clobbered), and after
-        the pick + react window the owner still gets their ACTION phase."""
+    def test_burn_death_modal_hand_off_preserves_flow(self, library):
+        """Burning RGB Lasercannon dies in the Decay phase → death-target
+        modal must survive (hand-off in ACTION phase, not clobbered), and
+        after the pick + react window the turn advances normally."""
         laser_id = library.get_numeric_id("rgb_lasercannon")
         rat_id = library.get_numeric_id("rat")
         p1 = _player(PlayerSide.PLAYER_1)
@@ -358,12 +368,13 @@ class TestBurnTickInterruptsStartOfTurn:
             active_player_idx=1,
             phase=TurnPhase.ACTION,
         )
+        start_turn = state.turn_number
 
-        state = enter_start_of_turn(state, library)
+        state = enter_end_of_turn(state, library)
 
         assert state.pending_death_target is not None
         assert state.pending_death_target.owner_idx == 1
-        assert state.react_return_phase == TurnPhase.START_OF_TURN
+        assert state.react_return_phase == TurnPhase.END_OF_TURN
 
         # Owner picks the enemy rat; the AFTER_DEATH_EFFECT window opens.
         state = resolve_action(
@@ -372,11 +383,84 @@ class TestBurnTickInterruptsStartOfTurn:
             library,
         )
         assert state.phase == TurnPhase.REACT
-        assert state.react_return_phase == TurnPhase.START_OF_TURN
+        assert state.react_return_phase == TurnPhase.END_OF_TURN
 
         state = resolve_action(state, pass_action(), library)
+        state = _drain_to_next_action_phase(state, library)
         assert state.phase == TurnPhase.ACTION
-        assert state.active_player_idx == 1, "active player's turn was skipped"
+        assert state.turn_number == start_turn + 1
+        assert state.active_player_idx == 0, "turn did not advance after Decay"
+
+    def test_burn_death_interrupt_defers_but_does_not_skip_decay_triggers(
+        self, library,
+    ):
+        """Turn-structure fixup 2026-07: a burn-tick death that opens a
+        react window must DEFER the remaining Decay work, not skip it.
+        After the death window closes, the owner's ON_END_OF_TURN
+        triggers (here: Emberplague Rat's adjacent burn) still fire and
+        the flow still ends with a normal turn advance — previously the
+        interrupt skipped every Decay trigger for the turn."""
+        giant_id = library.get_numeric_id("giant_rat")
+        rat_id = library.get_numeric_id("rat")
+        ember_id = library.get_numeric_id("emberplague_rat")
+        p1 = _player(PlayerSide.PLAYER_1)
+        p2 = _player(PlayerSide.PLAYER_2)
+
+        burning_giant = MinionInstance(
+            instance_id=1, card_numeric_id=giant_id,
+            owner=PlayerSide.PLAYER_2, position=(3, 2),
+            current_health=3, is_burning=True,
+        )
+        promote_fodder = MinionInstance(
+            instance_id=2, card_numeric_id=rat_id,
+            owner=PlayerSide.PLAYER_2, position=(4, 1), current_health=5,
+        )
+        ember = MinionInstance(
+            instance_id=3, card_numeric_id=ember_id,
+            owner=PlayerSide.PLAYER_2, position=(0, 4), current_health=10,
+        )
+        enemy_adjacent = MinionInstance(
+            instance_id=4, card_numeric_id=rat_id,
+            owner=PlayerSide.PLAYER_1, position=(1, 4), current_health=5,
+        )
+        state = _state_with_minions(
+            [burning_giant, promote_fodder, ember, enemy_adjacent],
+            (p1, p2),
+            active_player_idx=1,
+            phase=TurnPhase.ACTION,
+        )
+        start_turn = state.turn_number
+
+        state = enter_end_of_turn(state, library)
+
+        # Burn death interrupt: react window open, Decay work deferred.
+        assert state.phase == TurnPhase.REACT
+        assert state.react_context == ReactContext.AFTER_DEATH_EFFECT
+        assert state.decay_resume_pending is True
+        # The Decay trigger has NOT fired yet (deferred, not early).
+        assert state.get_minion(4).is_burning is False
+
+        # PASS through the death window: the Decay phase must RESUME
+        # (Emberplague's ON_END_OF_TURN burn fires) BEFORE any turn flip.
+        for _ in range(12):
+            if state.phase != TurnPhase.REACT:
+                break
+            state = resolve_action(state, pass_action(), library)
+            if state.get_minion(4) is not None and state.get_minion(4).is_burning:
+                break
+            assert state.turn_number == start_turn, (
+                "turn flipped before the deferred Decay triggers fired"
+            )
+        assert state.get_minion(4).is_burning is True, (
+            "Emberplague Rat's Decay trigger was skipped by the burn-death interrupt"
+        )
+        assert state.decay_resume_pending is False
+
+        # And the flow still ends with a normal turn advance.
+        state = _drain_to_next_action_phase(state, library)
+        assert state.phase == TurnPhase.ACTION
+        assert state.turn_number == start_turn + 1
+        assert state.active_player_idx == 0, "turn did not advance after Decay"
 
 
 # ---------------------------------------------------------------------------

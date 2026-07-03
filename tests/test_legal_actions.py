@@ -129,13 +129,15 @@ class TestBasicLegalActions:
         pass_actions = [a for a in actions if a.action_type == ActionType.PASS]
         assert len(pass_actions) == 1
 
-    def test_draw_is_action(self, library):
-        """DRAW is a player action when deck is non-empty."""
+    def test_draw_is_not_an_action(self, library):
+        """Turn-structure redesign 2026-07: DRAW is REMOVED as an action
+        (the draw is unconditional at turn start; slot 1000 stays
+        reserved but is never legal)."""
         rat_id = library.get_numeric_id("rat")
         state = _make_state(p1_deck=(rat_id,))
         actions = legal_actions(state, library)
         draw_actions = [a for a in actions if a.action_type == ActionType.DRAW]
-        assert len(draw_actions) == 1
+        assert len(draw_actions) == 0
 
     def test_pass_available_in_action_phase(self, library):
         """PASS is legal even when no other play/move/attack actions exist."""

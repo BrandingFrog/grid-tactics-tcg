@@ -19,10 +19,15 @@ from typing import Optional
 from grid_tactics.actions import Action
 from grid_tactics.card_library import CardLibrary
 from grid_tactics.engine_events import (
+    EVT_CARD_BURNED,
+    EVT_CARD_DRAWN,
     EVT_FIZZLE,
+    EVT_HANDSHAKE,
+    EVT_MANA_CHANGE,
     EVT_MINION_HP_CHANGE,
     EVT_PENDING_MODAL_OPENED,
     EVT_PHASE_CHANGED,
+    EVT_PLAYER_HP_CHANGE,
     EVT_REACT_WINDOW_CLOSED,
     EVT_REACT_WINDOW_OPENED,
     EVT_TRIGGER_BLIP,
@@ -41,7 +46,7 @@ from grid_tactics.enums import (
 from grid_tactics.game_state import GameState, PendingTrigger
 from grid_tactics.minion import BURN_DAMAGE, MinionInstance
 from grid_tactics.phase_contracts import assert_phase_contract
-from grid_tactics.types import AUTO_DRAW_ENABLED, MAX_REACT_STACK_DEPTH
+from grid_tactics.types import MAX_MANA_CAP, MAX_REACT_STACK_DEPTH
 
 
 @dataclass(frozen=True, slots=True)
@@ -113,17 +118,23 @@ def tick_status_effects(
     *,
     event_collector: Optional[EventStream] = None,
 ) -> GameState:
-    """Tick per-minion status effects at the start of the active player's turn.
+    """Tick per-minion burn status in the DECAY phase (end of turn).
+
+    Turn-structure redesign 2026-07: burn moved from the old start-of-turn
+    tick to the Decay phase (END_OF_TURN) — same once-per-round rate, just
+    moved. Called from ``enter_end_of_turn`` for the ACTIVE player's Decay
+    phase.
 
     Boolean burn semantics (locked):
-    - Who ticks: minions OWNED BY the newly-active player that have
-      `is_burning == True`. A burning minion takes one tick per full
-      turn cycle (when their owner becomes active again).
-    - When ticks: Called from `resolve_react_stack` AFTER the active
-      player flip, BEFORE the PASSIVE pipeline and mana regen for the
-      new active player. So a minion that gets the burn aura applied
-      this turn will take its first tick on the owner's NEXT turn.
-    - Damage: BURN_DAMAGE per tick (5).
+    - Who ticks: decided per-minion by ``MinionInstance.burn_scope``
+      (card wording decides — "during your turn" / "during your
+      opponent's turn" restrict; no wording = every turn):
+        * "owner" (default): ticks only when the ACTIVE player (whose
+          Decay phase this is) owns the minion — once per round.
+        * "opponent": ticks only in the opponent's Decay phase.
+        * "every": ticks in EVERY Decay phase (both players' turns).
+    - Damage: BURN_DAMAGE per tick (5) + BURN_BONUS auras owned by the
+      ENEMY of the ticking minion's owner.
     - Persistence: is_burning is NOT cleared by ticking. It persists
       until the minion dies.
     - Death: If current_health <= 0 after burn damage, route through
@@ -138,26 +149,36 @@ def tick_status_effects(
     # Snapshot in (row, col) order for determinism
     ordered = sorted(state.minions, key=lambda m: (m.position[0], m.position[1]))
 
-    # Calculate burn bonus from opponent's aura minions (BURN_BONUS effect)
+    # Calculate burn bonus per side from BURN_BONUS aura minions. A
+    # ticking minion takes bonus damage from auras owned by its ENEMY.
     from grid_tactics.enums import EffectType, TriggerType
-    opponent_side = PlayerSide.PLAYER_1 if active_side == PlayerSide.PLAYER_2 else PlayerSide.PLAYER_2
-    burn_bonus = 0
+    aura_bonus = {PlayerSide.PLAYER_1: 0, PlayerSide.PLAYER_2: 0}
     for m in state.minions:
-        if m.owner != opponent_side or m.current_health <= 0:
+        if m.current_health <= 0:
             continue
         card_def = library.get_by_id(m.card_numeric_id)
         for eff in card_def.effects:
             if eff.effect_type == EffectType.BURN_BONUS and eff.trigger == TriggerType.AURA:
-                burn_bonus += eff.amount
-
-    total_burn = BURN_DAMAGE + burn_bonus
+                aura_bonus[m.owner] += eff.amount
 
     new_minions_by_id: dict[int, MinionInstance] = {}
+    burn_amounts: dict[int, int] = {}
     for m in ordered:
         if not m.is_burning:
             continue
-        if m.owner != active_side:
+        scope = getattr(m, "burn_scope", "owner") or "owner"
+        if scope == "owner" and m.owner != active_side:
             continue
+        if scope == "opponent" and m.owner == active_side:
+            continue
+        # scope == "every" always ticks.
+        enemy_side = (
+            PlayerSide.PLAYER_1
+            if m.owner == PlayerSide.PLAYER_2
+            else PlayerSide.PLAYER_2
+        )
+        total_burn = BURN_DAMAGE + aura_bonus[enemy_side]
+        burn_amounts[m.instance_id] = total_burn
         new_minions_by_id[m.instance_id] = _replace(
             m,
             current_health=m.current_health - total_burn,
@@ -181,7 +202,7 @@ def tick_status_effects(
                 {
                     "instance_id": inst_id,
                     "new_hp": new_minion.current_health,
-                    "delta": -total_burn,
+                    "delta": -burn_amounts[inst_id],
                     "owner_idx": 0 if new_minion.owner == PlayerSide.PLAYER_1 else 1,
                     "position": list(new_minion.position),
                     "cause": "burn",
@@ -1070,6 +1091,87 @@ def _build_trigger_blip_payload(trigger: PendingTrigger, effect) -> dict:
 # window). 14.7-03 will hook trigger firing + REACT opening into both.
 
 
+def _resolve_handshake_payout(
+    state: GameState,
+    *,
+    event_collector: Optional[EventStream] = None,
+) -> GameState:
+    """Pay out a pending Handshake (turn-structure redesign 2026-07).
+
+    Both players PASSed consecutively → at the END of that turn BOTH
+    players gain +1 mana. A player whose mana is already full
+    (MAX_MANA_CAP) DRAWS A CARD instead (overdraw-burns on a full hand;
+    an empty deck means no payout for that player — fatigue exists ONLY
+    for turn-start draws). Clears ``handshake_pending``; the
+    consecutive-pass counter was already reset at detection time
+    (_apply_pass) so Handshakes cannot chain.
+
+    Called from ``_close_end_of_turn_and_flip`` under the
+    ``system:turn_flip`` contract (already asserted by the caller).
+    """
+    outcomes: list[dict] = []
+    for idx in (0, 1):
+        player = state.players[idx]
+        if player.current_mana >= MAX_MANA_CAP:
+            # Full mana → draw instead (if possible).
+            if player.deck:
+                new_player, card_id, burned = player.draw_card_with_overdraw()
+                state = replace(
+                    state,
+                    players=_replace_player(state.players, idx, new_player),
+                )
+                outcomes.append({
+                    "player_idx": idx,
+                    "reward": "card_burned" if burned else "card_drawn",
+                })
+                if event_collector is not None:
+                    event_collector.collect(
+                        EVT_CARD_BURNED if burned else EVT_CARD_DRAWN,
+                        "system:turn_flip",
+                        {
+                            "player_idx": idx,
+                            "source": "handshake",
+                            # Always included: view_filter redacts the
+                            # identity for the opponent on non-burn draws;
+                            # the drawer's own client needs it to animate
+                            # the draw into the correct hand slot. Burns
+                            # are public and never redacted.
+                            "card_numeric_id": card_id,
+                        },
+                    )
+            else:
+                # Full mana AND empty deck → no payout (never fatigue).
+                outcomes.append({"player_idx": idx, "reward": "none"})
+        else:
+            prev_mana = player.current_mana
+            new_player = replace(player, current_mana=prev_mana + 1)
+            state = replace(
+                state,
+                players=_replace_player(state.players, idx, new_player),
+            )
+            outcomes.append({"player_idx": idx, "reward": "mana"})
+            if event_collector is not None:
+                event_collector.collect(
+                    EVT_MANA_CHANGE,
+                    "system:turn_flip",
+                    {
+                        "player_idx": idx,
+                        "prev": prev_mana,
+                        "new": prev_mana + 1,
+                        "delta": 1,
+                        "cause": "handshake",
+                    },
+                )
+    state = replace(state, handshake_pending=False, consecutive_passes=0)
+    if event_collector is not None:
+        event_collector.collect(
+            EVT_HANDSHAKE,
+            "system:turn_flip",
+            {"outcomes": outcomes},
+        )
+    return state
+
+
 def _close_end_of_turn_and_flip(
     state: GameState,
     library: CardLibrary,
@@ -1082,19 +1184,25 @@ def _close_end_of_turn_and_flip(
     legacy _fire_passive_effects, now DELETED in Phase 14.8-05) now run
     INSIDE ``enter_start_of_turn`` for the newly-active player. This
     helper is now strictly the turn-flip tail:
-    discard bookkeeping, flip active_player_idx / turn_number, regen,
-    auto-draw. Phase is set to ACTION as a transient value — the chaining
+    handshake payout, discard bookkeeping, flip active_player_idx /
+    turn_number, regen, turn-start draw (or empty-deck fatigue).
+    Phase is set to ACTION as a transient value — the chaining
     call in ``close_end_react_and_advance_turn`` (and ``enter_end_of_turn``
     shortcut path) will invoke ``enter_start_of_turn`` next which sets
     phase=START_OF_TURN and fires burn tick + Start triggers.
 
-    Order:
-      1. Flip ``discarded_this_turn`` -> ``discarded_last_turn`` for the
+    Order (turn-structure redesign 2026-07):
+      1. Handshake payout (if pending): BOTH players +1 mana (or draw
+         if full) at the END of the turn the second PASS landed in.
+      2. Flip ``discarded_this_turn`` -> ``discarded_last_turn`` for the
          outgoing player and clear this-turn for them.
-      2. Flip ``active_player_idx`` and increment ``turn_number``.
-      3. Mana regen for new active player (suppressed on turn 2).
-      4. Auto-draw for new active player (if AUTO_DRAW_ENABLED and deck
-         non-empty).
+      3. Flip ``active_player_idx`` and increment ``turn_number``.
+      4. Mana regen for new active player (suppressed on turn 2).
+      5. UNCONDITIONAL turn-start draw for the new active player, AFTER
+         mana regen. Empty deck → escalating fatigue (10/20/30... per
+         player, tracked in GameState.fatigue_counts) instead of the
+         draw. Full hand → the drawn card overdraw-burns to the exhaust
+         pile (revealed).
 
     Rule-1 bug fix captured here: the old inline resolve_react_stack tail
     did NOT flip ``discarded_this_turn`` -> ``discarded_last_turn`` for
@@ -1102,6 +1210,14 @@ def _close_end_of_turn_and_flip(
     action_resolver.py did. Centralizing here fixes that gap silently.
     """
     assert_phase_contract(state, "system:turn_flip")
+
+    # Handshake payout — the END of the turn in which the second
+    # consecutive PASS landed (turn-structure redesign 2026-07 §6).
+    if state.handshake_pending:
+        state = _resolve_handshake_payout(
+            state, event_collector=event_collector,
+        )
+
     # Flip discard tracking for the outgoing player BEFORE the
     # active-player flip.
     old_active_idx = state.active_player_idx
@@ -1142,20 +1258,74 @@ def _close_end_of_turn_and_flip(
         )
 
     # Regenerate mana for the new active player at turn start.
-    # Skip on turn 2: P2's first action must start at STARTING_MANA to
-    # match P1's first action (turn 1). Regen applies from turn 3 onward.
+    # Opening-turn exception (documented — turn_structure_spec.md §3.4):
+    # spec §3's "every turn starts with +1 mana" applies from turn 3
+    # onward. Turn 1 never runs this tail at all (the game starts
+    # directly in P1's ACTION phase; the asymmetric starting hands
+    # 3/4 + STARTING_MANA stand in for the missing turn-start sequence),
+    # and turn 2 skips ONLY the regen: P2's first action must start at
+    # STARTING_MANA to match P1's first action. The turn-start draw
+    # below is NOT skipped on turn 2.
     if state.turn_number > 2:
         new_active_player = state.players[new_active_idx].regenerate_mana()
         new_players = _replace_player(state.players, new_active_idx, new_active_player)
         state = replace(state, players=new_players)
 
-    # Auto-draw for the new active player at turn start (only if enabled)
-    if AUTO_DRAW_ENABLED:
-        active_player = state.players[new_active_idx]
-        if active_player.deck:
-            drawn_player, _card_id = active_player.draw_card()
-            new_players = _replace_player(state.players, new_active_idx, drawn_player)
-            state = replace(state, players=new_players)
+    # Turn-structure redesign 2026-07: UNCONDITIONAL turn-start draw for
+    # the new active player (AFTER mana regen). Empty deck → escalating
+    # fatigue (10/20/30... per player) instead of the draw. Full hand →
+    # the drawn card overdraw-burns to the exhaust pile (revealed).
+    active_player = state.players[new_active_idx]
+    if active_player.deck:
+        drawn_player, drawn_card_id, burned = (
+            active_player.draw_card_with_overdraw()
+        )
+        new_players = _replace_player(state.players, new_active_idx, drawn_player)
+        state = replace(state, players=new_players)
+        if event_collector is not None:
+            event_collector.collect(
+                EVT_CARD_BURNED if burned else EVT_CARD_DRAWN,
+                "system:turn_flip",
+                {
+                    "player_idx": new_active_idx,
+                    "source": "turn_start",
+                    # Always included: view_filter redacts the identity for
+                    # the opponent on non-burn draws; the drawer's own
+                    # client needs it to animate the auto-draw into the
+                    # correct hand slot. Burns are public, never redacted.
+                    "card_numeric_id": drawn_card_id,
+                },
+            )
+    else:
+        # Empty-deck fatigue: escalating 10/20/30... damage. This is now
+        # the ONLY fatigue in the game (PASS is free).
+        counts = list(state.fatigue_counts)
+        counts[new_active_idx] += 1
+        fatigue_dmg = counts[new_active_idx] * 10
+        prev_hp = active_player.hp
+        fatigued_player = active_player.take_damage(fatigue_dmg)
+        new_players = _replace_player(state.players, new_active_idx, fatigued_player)
+        state = replace(
+            state,
+            players=new_players,
+            fatigue_counts=tuple(counts),
+        )
+        if event_collector is not None:
+            event_collector.collect(
+                EVT_PLAYER_HP_CHANGE,
+                "system:turn_flip",
+                {
+                    "player_idx": new_active_idx,
+                    "prev": prev_hp,
+                    "new": fatigued_player.hp,
+                    "delta": -fatigue_dmg,
+                    "cause": "fatigue",
+                },
+            )
+        # Fatigue can be lethal — run the game-over check so callers'
+        # is_game_over early-returns fire before entering the new turn.
+        from grid_tactics.action_resolver import _check_game_over
+        state = _check_game_over(state, event_collector=event_collector)
 
     return state
 
@@ -1166,15 +1336,19 @@ def enter_start_of_turn(
     *,
     event_collector: Optional[EventStream] = None,
 ) -> GameState:
-    """Enter START_OF_TURN phase for ``state.active_player_idx``.
+    """Enter START_OF_TURN phase ("Rally Phase") for ``state.active_player_idx``.
 
-    Phase 14.7-03: tick burns, fire ON_START_OF_TURN triggers, then
-    either open a REACT window (if any Start triggers exist) or
-    shortcut directly to ACTION. The "shortcut when no triggers"
-    behavior preserves snappy dead-air turns and keeps pre-14.7 test
-    expectations intact — opening an empty react window around no
-    actual triggered effects would stall direct resolve_react_stack
-    callers in unit tests.
+    Turn-structure redesign 2026-07: this is the RALLY PHASE — all
+    once-per-turn POSITIVE passives/triggers proc here (e.g. Fallen
+    Paladin's heal) via the ON_START_OF_TURN machinery. The burn tick
+    MOVED to the Decay phase (see ``enter_end_of_turn``).
+
+    Phase 14.7-03: fire ON_START_OF_TURN triggers, then either open a
+    REACT window (if any Start triggers exist) or shortcut directly to
+    ACTION. The "shortcut when no triggers" behavior preserves snappy
+    dead-air turns and keeps pre-14.7 test expectations intact —
+    opening an empty react window around no actual triggered effects
+    would stall direct resolve_react_stack callers in unit tests.
 
     Policy: the REACT window opens only if the active player has at
     least one minion with an ON_START_OF_TURN effect. 14.7-07 will
@@ -1195,43 +1369,10 @@ def enter_start_of_turn(
             },
         )
 
-    # 2. Tick burns for the active player's burning minions.
-    #
-    # Phase 14.8 bugfix: a burn death can open an on_death react window
-    # or modal (death-target pick / trigger picker) mid-tick. Pre-set
-    # react_return_phase=START_OF_TURN so any window opened by that
-    # death pipeline dispatches back through
-    # close_start_react_and_enter_action (the active player keeps their
-    # ACTION phase) instead of the legacy ACTION -> END_OF_TURN default,
-    # which skipped the newly-active player's entire turn.
-    _return_phase_before_tick = state.react_return_phase
-    state = replace(state, react_return_phase=TurnPhase.START_OF_TURN)
-    state = tick_status_effects(state, library, event_collector=event_collector)
-    if state.is_game_over:
-        return state
-
-    # Phase 14.8 bugfix: if the burn tick opened an interrupt, return it
-    # instead of clobbering it — previously this function fired start
-    # triggers on top of the open window or overwrote it via the
-    # no-trigger shortcut below (destroying the opponent's react window
-    # against the death effect).
-    if state.phase == TurnPhase.REACT:
-        # Burn death opened an on_death react window — hand control to it.
-        return state
-    if (
-        state.pending_death_target is not None
-        or state.pending_trigger_picker_idx is not None
-    ):
-        # Burn death opened a click-target modal / trigger picker. Hand
-        # off in ACTION phase (mirrors the pending-tutor hand-off in
-        # resolve_react_stack) so the server auto-advance loop serves
-        # the modal actions instead of spinning on START_OF_TURN. The
-        # preserved react_return_phase=START_OF_TURN routes the eventual
-        # window close back to the active player's ACTION phase.
-        return replace(state, phase=TurnPhase.ACTION)
-
-    # No interrupt — clear the temporary return-phase marker.
-    state = replace(state, react_return_phase=_return_phase_before_tick)
+    # 2. (Turn-structure redesign 2026-07) The burn tick that used to
+    # fire here MOVED to the Decay phase — see ``enter_end_of_turn``.
+    # The interrupt-handling machinery (burn death opening an on_death
+    # react window / modal mid-tick) moved with it.
 
     # 3. Fire ON_START_OF_TURN triggers (if any).
     had_triggers = _has_triggers_for(state, library, TriggerType.ON_START_OF_TURN)
@@ -1295,7 +1436,17 @@ def enter_end_of_turn(
     *,
     event_collector: Optional[EventStream] = None,
 ) -> GameState:
-    """Enter END_OF_TURN phase for ``state.active_player_idx``.
+    """Enter END_OF_TURN phase ("Decay Phase") for ``state.active_player_idx``.
+
+    Turn-structure redesign 2026-07: this is the DECAY PHASE — all
+    once-per-turn NEGATIVE effects proc here (Emberplague Rat / Dark
+    Matter Battery via ON_END_OF_TURN; the burn tick moved here from
+    the old start-of-turn tick, scoped per minion by ``burn_scope``).
+
+    Order: burn tick FIRST (a burn death can interrupt with an on_death
+    react window / modal — mirroring the interrupt handling that lived
+    in enter_start_of_turn pre-2026-07), then ON_END_OF_TURN triggers,
+    then the always-open BEFORE_END_OF_TURN react window.
 
     Phase 14.7-03: fire ON_END_OF_TURN triggers, then either open a
     REACT window (if any End triggers fired) or shortcut directly to
@@ -1321,7 +1472,78 @@ def enter_end_of_turn(
             },
         )
 
-    # 2. Fire ON_END_OF_TURN triggers (if any).
+    # 2. Tick burns (Decay phase — turn-structure redesign 2026-07).
+    #
+    # A burn death can open an on_death react window or modal
+    # (death-target pick / trigger picker) mid-tick. Pre-set
+    # react_return_phase=END_OF_TURN so any window opened by that death
+    # pipeline dispatches through close_end_react_and_advance_turn (the
+    # turn advances after the death resolves) instead of the legacy
+    # ACTION default, which would have handed the passing player a free
+    # second action. Mirrors the interrupt machinery that guarded the
+    # old start-of-turn tick (Phase 14.8 bugfix, relocated).
+    _return_phase_before_tick = state.react_return_phase
+    state = replace(state, react_return_phase=TurnPhase.END_OF_TURN)
+    state = tick_status_effects(state, library, event_collector=event_collector)
+    if state.is_game_over:
+        return state
+
+    # If the burn tick opened an interrupt, return it instead of
+    # clobbering it with the trigger drain / window open below.
+    if state.phase == TurnPhase.REACT:
+        # Burn death opened an on_death react window — hand control to
+        # it. The remaining Decay work (ON_END_OF_TURN triggers +
+        # BEFORE_END_OF_TURN window) is DEFERRED, not skipped:
+        # ``decay_resume_pending`` routes the window's eventual close
+        # (react_return_phase=END_OF_TURN →
+        # close_end_react_and_advance_turn) back into
+        # ``_fire_decay_triggers_and_open_window`` before the turn
+        # advances. Previously this path skipped the rest of the Decay
+        # phase outright ("same precedent as the old start-tick
+        # interrupt") — unacceptable now that ALL once-per-turn negative
+        # effects route through Decay and burn deaths are routine in
+        # exactly the decks whose Decay triggers would be eaten.
+        return replace(state, decay_resume_pending=True)
+    if (
+        state.pending_death_target is not None
+        or state.pending_trigger_picker_idx is not None
+    ):
+        # Burn death opened a click-target modal / trigger picker. Hand
+        # off in ACTION phase (mirrors the pending-tutor hand-off in
+        # resolve_react_stack) so the server auto-advance loop serves
+        # the modal actions instead of spinning on END_OF_TURN. The
+        # preserved react_return_phase=END_OF_TURN routes the eventual
+        # window close to close_end_react_and_advance_turn, where
+        # ``decay_resume_pending`` resumes the deferred Decay work
+        # before the turn advances.
+        return replace(
+            state, phase=TurnPhase.ACTION, decay_resume_pending=True,
+        )
+
+    # No interrupt — restore the pre-tick return-phase marker.
+    state = replace(state, react_return_phase=_return_phase_before_tick)
+
+    # 3+4. ON_END_OF_TURN trigger drain + BEFORE_END_OF_TURN window.
+    return _fire_decay_triggers_and_open_window(
+        state, library, event_collector=event_collector,
+    )
+
+
+def _fire_decay_triggers_and_open_window(
+    state: GameState,
+    library: CardLibrary,
+    *,
+    event_collector: Optional[EventStream] = None,
+) -> GameState:
+    """Steps 3–4 of the Decay phase: trigger drain + end react window.
+
+    Shared by ``enter_end_of_turn`` (normal path, right after the burn
+    tick) and ``close_end_react_and_advance_turn`` (the
+    ``decay_resume_pending`` path — a burn-tick death interrupt deferred
+    this work; it resumes here after the death window/modal resolves,
+    instead of the turn flipping with the Decay triggers skipped).
+    """
+    # 3. Fire ON_END_OF_TURN triggers (if any).
     had_triggers = _has_triggers_for(state, library, TriggerType.ON_END_OF_TURN)
     if had_triggers:
         state = fire_end_of_turn_triggers(
@@ -1330,7 +1552,7 @@ def enter_end_of_turn(
         if state.is_game_over:
             return state
 
-    # 3. Open the BEFORE_END_OF_TURN react window if the trigger drain
+    # 4. Open the BEFORE_END_OF_TURN react window if the trigger drain
     # didn't already open one.
     #
     # Phase 14.8-05c: previously this was gated on `had_triggers`, so if
@@ -1436,13 +1658,26 @@ def close_end_react_and_advance_turn(
 
     Clears react bookkeeping, runs the end-of-turn tail for the current
     active player, and enters the NEW active player's START_OF_TURN.
+
+    Decay-resume (turn-structure redesign fixup 2026-07): when the closing
+    window was opened by a burn-tick death interrupt in
+    ``enter_end_of_turn`` (``decay_resume_pending`` set), the deferred
+    Decay work — ON_END_OF_TURN trigger drain + BEFORE_END_OF_TURN react
+    window — resumes here INSTEAD of the turn flipping. The turn advances
+    when that resumed flow's own window ultimately PASS-PASSes back into
+    this helper with the flag cleared.
     """
     assert_phase_contract(state, "system:close_react_window")
+    resume_decay = state.decay_resume_pending
     if event_collector is not None:
         event_collector.collect(
             EVT_REACT_WINDOW_CLOSED,
             "system:close_react_window",
-            {"return_phase": "turn_flip"},
+            {
+                "return_phase": (
+                    TurnPhase.END_OF_TURN.name if resume_decay else "turn_flip"
+                ),
+            },
         )
     state = replace(
         state,
@@ -1452,6 +1687,30 @@ def close_end_react_and_advance_turn(
         react_context=None,
         react_return_phase=None,
     )
+    if resume_decay:
+        # Re-enter the Decay phase and run the deferred trigger drain +
+        # end react window. Burns do NOT re-tick (the tick already ran
+        # before the interrupt), so no double burn damage is possible;
+        # the flag is cleared first so the resumed flow's own window
+        # close falls through to the turn flip below.
+        prev_phase = state.phase
+        state = replace(
+            state,
+            decay_resume_pending=False,
+            phase=TurnPhase.END_OF_TURN,
+        )
+        if event_collector is not None:
+            event_collector.collect(
+                EVT_PHASE_CHANGED,
+                "system:enter_end_of_turn",
+                {
+                    "prev": prev_phase.name if prev_phase else None,
+                    "new": TurnPhase.END_OF_TURN.name,
+                },
+            )
+        return _fire_decay_triggers_and_open_window(
+            state, library, event_collector=event_collector,
+        )
     state = _close_end_of_turn_and_flip(
         state, library, event_collector=event_collector,
     )
@@ -2014,6 +2273,7 @@ def resolve_react_stack(
                     state = resolve_effect(
                         state, resolved_effect, (0, 0), caster_owner, library, tp,
                         contract_source="trigger:on_play",
+                        event_collector=event_collector,
                     )
             continue  # originator handled; skip the card_type dispatch below
 
@@ -2049,6 +2309,7 @@ def resolve_react_stack(
                             state, effect, (0, 0), caster_owner, library,
                             entry.target_pos,
                             contract_source="trigger:on_play",
+                            event_collector=event_collector,
                         )
             else:
                 # Normal react -- resolve all ON_PLAY effects
@@ -2058,6 +2319,7 @@ def resolve_react_stack(
                             state, effect, (0, 0), caster_owner, library,
                             entry.target_pos,
                             contract_source="trigger:on_play",
+                            event_collector=event_collector,
                         )
         elif card_def.is_multi_purpose:
             # Resolve the react_effect only for multi-purpose cards
@@ -2135,6 +2397,7 @@ def resolve_react_stack(
                         state, card_def.react_effect, (0, 0), caster_owner, library,
                         entry.target_pos,
                         contract_source="trigger:on_play",
+                        event_collector=event_collector,
                     )
         elif (card_def.card_type == CardType.MAGIC
               and card_def.react_condition is not None):
@@ -2162,6 +2425,7 @@ def resolve_react_stack(
                         state, card_def.react_effect, (0, 0), caster_owner, library,
                         entry.target_pos,
                         contract_source="trigger:on_play",
+                        event_collector=event_collector,
                     )
             else:
                 for effect in card_def.effects:
@@ -2170,6 +2434,7 @@ def resolve_react_stack(
                             state, effect, (0, 0), caster_owner, library,
                             entry.target_pos,
                             contract_source="trigger:on_play",
+                            event_collector=event_collector,
                         )
 
     # Phase 14.8 bugfix: the LIFO loop above has CONSUMED every entry on

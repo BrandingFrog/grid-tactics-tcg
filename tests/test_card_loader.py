@@ -366,10 +366,12 @@ class TestPhase1473NewTriggers:
         assert triggers[EffectType.DRAW] == TriggerType.ON_SUMMON
         assert triggers[EffectType.BURN_BONUS] == TriggerType.AURA
 
-    def test_fallen_paladin_has_on_end_of_turn(self, real_library) -> None:
-        """Fallen Paladin's passive_heal fires at end of owner's turn (matches card text)."""
+    def test_fallen_paladin_has_on_start_of_turn(self, real_library) -> None:
+        """Fallen Paladin's passive_heal is POSITIVE → it fires in the
+        Rally phase (start of owner's turn) per the 2026-07 turn-structure
+        redesign (positive effects at Rally, negative at Decay)."""
         card = real_library.get_by_card_id("fallen_paladin")
-        assert card.effects[0].trigger == TriggerType.ON_END_OF_TURN
+        assert card.effects[0].trigger == TriggerType.ON_START_OF_TURN
 
     def test_emberplague_rat_has_on_end_of_turn(self, real_library) -> None:
         """Emberplague Rat's adjacent burn is now on_end_of_turn."""
@@ -436,3 +438,39 @@ class TestPhase1477NewReactConditions:
         path = _write_card_json(tmp_path, valid_react_json)
         with pytest.raises(ValueError, match="react_condition"):
             CardLoader.load_card(path)
+
+
+# ---------------------------------------------------------------------------
+# Effect `scope` parsing (turn-structure redesign spec 7.2 — burn scoping)
+# ---------------------------------------------------------------------------
+
+
+class TestEffectScopeParsing:
+    def _effect(self, **overrides) -> dict:
+        base = {
+            "type": "apply_burning",
+            "trigger": "on_attack",
+            "target": "single_target",
+            "amount": 1,
+        }
+        base.update(overrides)
+        return base
+
+    def test_scope_absent_defaults_to_none(self):
+        eff = CardLoader._parse_single_effect(
+            self._effect(), "test_card", "effects[0]"
+        )
+        assert eff.scope is None
+
+    @pytest.mark.parametrize("scope", ["owner", "opponent", "every"])
+    def test_valid_scope_parsed(self, scope):
+        eff = CardLoader._parse_single_effect(
+            self._effect(scope=scope), "test_card", "effects[0]"
+        )
+        assert eff.scope == scope
+
+    def test_invalid_scope_raises_with_card_context(self):
+        with pytest.raises(ValueError, match="test_card.*invalid scope"):
+            CardLoader._parse_single_effect(
+                self._effect(scope="sometimes"), "test_card", "effects[0]"
+            )

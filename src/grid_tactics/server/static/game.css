@@ -2888,15 +2888,17 @@ body {
   box-shadow: 0 0 12px rgba(255, 152, 0, 0.3);
 }
 
-.btn-draw {
-  background: rgba(0, 212, 255, 0.15);
-  border-color: var(--cyan);
-  color: var(--cyan);
+/* .btn-draw DELETED (turn-structure redesign 2026-07): DRAW is no longer a
+   legal action — cards auto-draw at turn start. The ACTION-phase slot now
+   hosts the free Pass button (.btn-pass.btn-pass-action). */
+.btn-pass-action {
+  background: rgba(111, 232, 168, 0.12);
+  border-color: #6fe8a8;
+  color: #6fe8a8;
 }
-
-.btn-draw:hover {
-  background: rgba(0, 212, 255, 0.3);
-  box-shadow: 0 0 12px rgba(0, 212, 255, 0.3);
+.btn-pass-action:hover {
+  background: rgba(111, 232, 168, 0.28);
+  box-shadow: 0 0 12px rgba(111, 232, 168, 0.35);
 }
 
 /* How-to-play hint banner shown on the player's turn */
@@ -3780,6 +3782,93 @@ body {
   100% { transform: scale(1); opacity: 1; }
 }
 
+/* --- handshake banner — turn-structure redesign (2026-07) ---
+   Both players passed consecutively: 🤝 + HANDSHAKE! + per-player payout.
+   Rendered by playHandshake via runNudge (id nudge-handshake). */
+.nudge-overlay.nudge-handshake {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: radial-gradient(ellipse at center, rgba(20, 40, 30, 0.45), rgba(0, 0, 0, 0.1));
+}
+.handshake-emoji {
+  font-size: 180px;
+  line-height: 1;
+  filter: drop-shadow(0 8px 20px rgba(0, 0, 0, 0.7));
+  animation: no-action-skull-pop 400ms cubic-bezier(.16,1.5,.3,1) forwards;
+  transform-origin: center;
+}
+.handshake-title {
+  font-family: 'Montserrat', sans-serif; font-weight: 900; text-transform: uppercase;
+  font-size: 84px;
+  color: #6fe8a8;
+  line-height: 1;
+  margin-top: 14px;
+  letter-spacing: 3px;
+  text-shadow:
+    4px 4px 0 #000, -4px 4px 0 #000, 4px -4px 0 #000, -4px -4px 0 #000,
+    4px 0 0 #000, -4px 0 0 #000, 0 4px 0 #000, 0 -4px 0 #000;
+  animation: no-action-pop 400ms 250ms cubic-bezier(.16,1.5,.3,1) backwards;
+}
+.handshake-sub {
+  font-family: 'Montserrat', sans-serif; font-weight: 700;
+  font-size: 34px;
+  color: #ffffff;
+  line-height: 1.2;
+  margin-top: 12px;
+  letter-spacing: 1px;
+  text-shadow:
+    2px 2px 0 #000, -2px 2px 0 #000, 2px -2px 0 #000, -2px -2px 0 #000;
+  animation: no-action-pop 400ms 450ms cubic-bezier(.16,1.5,.3,1) backwards;
+}
+
+/* --- overdraw burn reveal — turn-structure redesign (2026-07) ---
+   A draw with a full hand (10 cards) reveals the card center-screen, then
+   playOverdrawBurn hands off to the card_fly ghost toward the Exhaust pile.
+   Card width matches the hand-card render so renderCardFrame lays out
+   correctly inside. */
+.overdraw-reveal {
+  position: fixed;
+  left: 50%;
+  top: 42%;
+  transform: translate(-50%, -50%);
+  z-index: 9999;
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  animation: overdraw-reveal-pop 300ms cubic-bezier(.16,1.5,.3,1) forwards;
+}
+.overdraw-reveal-card {
+  width: 170px;
+  filter: drop-shadow(0 10px 28px rgba(255, 100, 30, 0.55));
+}
+.overdraw-reveal-card .card-frame,
+.overdraw-reveal-card .card-frame-hand {
+  width: 100%;
+}
+.overdraw-reveal-label {
+  font-family: 'Montserrat', sans-serif; font-weight: 900; text-transform: uppercase;
+  font-size: 28px;
+  color: #ff8030;
+  margin-top: 10px;
+  letter-spacing: 2px;
+  text-shadow:
+    2px 2px 0 #000, -2px 2px 0 #000, 2px -2px 0 #000, -2px -2px 0 #000;
+}
+/* Fallback nudge when the overdrawn card identity is unavailable. */
+.nudge-overlay.nudge-overdraw-fallback {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+@keyframes overdraw-reveal-pop {
+  0%   { transform: translate(-50%, -50%) scale(0.4); opacity: 0; }
+  70%  { transform: translate(-50%, -50%) scale(1.08); opacity: 1; }
+  100% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+}
+
 /* --- kiss --- lipstick mark stamps and lingers --- */
 .kiss-mark {
   position: absolute;
@@ -3922,7 +4011,7 @@ body {
   border-color: var(--cyan);
 }
 
-/* Hand action bar — groups Draw Card / Skip React / Decline Attack
+/* Hand action bar — groups Pass / Skip React / Decline Attack
    directly above the hand so all player actions live in one place. */
 .hand-action-bar {
   display: flex;

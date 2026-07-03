@@ -15,6 +15,7 @@ from dataclasses import dataclass, replace
 
 from grid_tactics.enums import PlayerSide
 from grid_tactics.types import (
+    MAX_HAND_SIZE,
     MAX_MANA_CAP,
     MANA_REGEN_PER_TURN,
     STARTING_HP,
@@ -127,6 +128,58 @@ class Player:
             ),
             card_id,
         )
+
+    def draw_card_with_overdraw(self) -> tuple[Player, int, bool]:
+        """Draw the top deck card with overdraw-burn semantics.
+
+        Turn-structure redesign 2026-07: if the hand is already at
+        MAX_HAND_SIZE, the drawn card is BURNED — it goes to the exhaust
+        pile (revealed) instead of the hand. It does NOT fizzle back into
+        the deck. Used by ALL draw paths (turn-start draw, DRAW card
+        effects, Handshake draw).
+
+        Returns (new_player, card_id, burned). Raises if the deck is empty
+        (callers handle empty-deck fatigue / no-op themselves).
+
+        Note: unlike ``exhaust_from_hand`` this does NOT set
+        ``discarded_this_turn`` — an overdraw burn is not a discard cost.
+        """
+        if not self.deck:
+            raise ValueError("Cannot draw from empty deck")
+        card_id = self.deck[0]
+        if len(self.hand) >= MAX_HAND_SIZE:
+            return (
+                replace(
+                    self,
+                    deck=self.deck[1:],
+                    exhaust=self.exhaust + (card_id,),
+                ),
+                card_id,
+                True,
+            )
+        return (
+            replace(
+                self,
+                hand=self.hand + (card_id,),
+                deck=self.deck[1:],
+            ),
+            card_id,
+            False,
+        )
+
+    def add_to_hand_with_overdraw(self, card_id: int) -> tuple[Player, bool]:
+        """Add a card (from any source: tutor, conjure, decline-conjure)
+        to hand with overdraw-burn semantics.
+
+        Full hand (MAX_HAND_SIZE) → the card goes to the exhaust pile
+        (revealed) instead. Returns (new_player, burned).
+        """
+        if len(self.hand) >= MAX_HAND_SIZE:
+            return (
+                replace(self, exhaust=self.exhaust + (card_id,)),
+                True,
+            )
+        return (replace(self, hand=self.hand + (card_id,)), False)
 
     def discard_from_hand(self, card_id: int) -> Player:
         """Move a card from hand to grave. Raises if card not in hand."""

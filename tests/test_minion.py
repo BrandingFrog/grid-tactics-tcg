@@ -6,7 +6,7 @@ import pytest
 
 from grid_tactics.enums import ActionType, PlayerSide
 from grid_tactics.minion import MinionInstance
-from grid_tactics.types import AUTO_DRAW_ENABLED, MAX_REACT_STACK_DEPTH
+from grid_tactics.types import MAX_REACT_STACK_DEPTH
 
 
 class TestActionTypeEnum:
@@ -37,13 +37,16 @@ class TestActionTypeEnum:
 class TestPhase3Constants:
     """Tests for Phase 3 constants in types.py."""
 
-    def test_auto_draw_enabled_default(self):
-        """AUTO_DRAW_ENABLED defaults to False (per D-15)."""
-        assert AUTO_DRAW_ENABLED is False
+    def test_auto_draw_flag_deleted(self):
+        """Turn-structure redesign 2026-07: AUTO_DRAW_ENABLED was deleted —
+        the turn-start draw is unconditional now."""
+        import grid_tactics.types as gt_types
+        assert not hasattr(gt_types, "AUTO_DRAW_ENABLED")
 
     def test_max_react_stack_depth(self):
-        """MAX_REACT_STACK_DEPTH is 10 (safety cap per research Pitfall 3)."""
-        assert MAX_REACT_STACK_DEPTH == 10
+        """MAX_REACT_STACK_DEPTH is 100 — a pure runaway failsafe (no
+        design-level react chain limit per the 2026-07 redesign)."""
+        assert MAX_REACT_STACK_DEPTH == 100
 
 
 class TestMinionInstanceConstruction:

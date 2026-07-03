@@ -18,6 +18,8 @@ from grid_tactics.board import Board
 from grid_tactics.card_library import CardLibrary
 from grid_tactics.cards import CardDefinition, EffectDefinition
 from grid_tactics.engine_events import (
+    EVT_CARD_BURNED,
+    EVT_CARD_DRAWN,
     EVT_PENDING_MODAL_OPENED,
     EVT_PENDING_MODAL_RESOLVED,
     EventStream,
@@ -273,20 +275,29 @@ def _apply_effect_to_minion(
         return replace(state, minions=new_minions)
     elif effect.effect_type == EffectType.BURN:
         # Boolean burn aura: set is_burning=True. No-op if already burning
-        # (no refresh, no stacks). Burn persists until death.
+        # (no refresh, no stacks — the existing burn's scope is kept).
+        # Burn persists until death. ``burn_scope`` (spec §7.2) comes from
+        # the card's optional effect ``scope`` key; no wording = the
+        # standard Burn default "owner" (ticks in the owner's Decay phase).
         if minion.is_burning:
             return state
-        new_minion = replace(minion, is_burning=True)
+        new_minion = replace(
+            minion, is_burning=True, burn_scope=effect.scope or "owner",
+        )
         new_minions = _replace_minion(state.minions, minion.instance_id, new_minion)
         return replace(state, minions=new_minions)
     elif effect.effect_type == EffectType.PASSIVE_HEAL:
         # Heal self by `amount`, capped at base health.
         return _apply_heal_to_minion(state, minion, effect.amount, library)
     elif effect.effect_type == EffectType.APPLY_BURNING:
-        # Boolean burn: set is_burning=True. No-op if already burning.
+        # Boolean burn: set is_burning=True. No-op if already burning (the
+        # existing burn's scope is kept). ``burn_scope`` per spec §7.2 —
+        # card's effect ``scope`` key, defaulting to "owner".
         if minion.is_burning:
             return state
-        new_minion = replace(minion, is_burning=True)
+        new_minion = replace(
+            minion, is_burning=True, burn_scope=effect.scope or "owner",
+        )
         new_minions = _replace_minion(state.minions, minion.instance_id, new_minion)
         return replace(state, minions=new_minions)
     elif effect.effect_type == EffectType.GRANT_DARK_MATTER:
@@ -393,6 +404,9 @@ def _resolve_self_owner(
     caster_pos: tuple[int, int],
     caster_owner: PlayerSide,
     library: CardLibrary,
+    *,
+    contract_source: Optional[str] = None,
+    event_collector: Optional[EventStream] = None,
 ) -> GameState:
     """Resolve effect on the caster's minion or the owning player.
 
@@ -400,11 +414,29 @@ def _resolve_self_owner(
     For player-targeting effects (DAMAGE, HEAL): target the owning player.
     """
     if effect.effect_type == EffectType.DRAW:
+        # Turn-structure redesign 2026-07: overdraw-burns — a draw with a
+        # full hand (MAX_HAND_SIZE) sends the card to the exhaust pile
+        # (revealed) instead of fizzling. Empty deck = the draw is skipped
+        # (no fatigue here; fatigue only exists at turn-start draws).
         player_idx = _player_index_for_side(caster_owner)
         player = state.players[player_idx]
         for _ in range(effect.amount):
             if player.deck:
-                player, _card_id = player.draw_card()
+                player, card_id, burned = player.draw_card_with_overdraw()
+                # Spec: overdraw burns are REVEALED on ALL draw paths —
+                # emit per-card so the client animates every draw/burn
+                # (card_numeric_id on non-burn draws is redacted for the
+                # opponent by view_filter; burns are public).
+                if event_collector is not None:
+                    event_collector.collect(
+                        EVT_CARD_BURNED if burned else EVT_CARD_DRAWN,
+                        contract_source or "trigger:on_play",
+                        {
+                            "player_idx": player_idx,
+                            "source": "card_effect",
+                            "card_numeric_id": card_id,
+                        },
+                    )
         new_players = _replace_player(state.players, player_idx, player)
         return replace(state, players=new_players)
     elif effect.effect_type in (EffectType.DAMAGE, EffectType.HEAL):
@@ -457,9 +489,6 @@ def _enter_pending_tutor(
     assert state.pending_post_move_attacker_id is None, (
         "Cannot enter pending_tutor while pending_post_move_attacker_id is set"
     )
-    assert state.pending_tutor_player_idx is None, (
-        "Cannot enter pending_tutor while another pending_tutor is set"
-    )
 
     player_idx = _player_index_for_side(caster_owner)
     player = state.players[player_idx]
@@ -472,6 +501,31 @@ def _enter_pending_tutor(
             continue
         if card_def.tutor_matches(candidate):
             matches.append(deck_idx)
+
+    if state.pending_tutor_player_idx is not None:
+        # Latent double-tutor collision: two TUTOR effects resolving in
+        # the SAME LIFO react-chain drain (e.g. two Tree Wyrm reacts).
+        # This used to be a hard `assert` — a chain that legally played
+        # two tutors crashed the engine. There is only ONE pending_tutor
+        # slot, so:
+        #   - Same player + identical match set (same tutor filter):
+        #     MERGE by extending the remaining pick count — exactly the
+        #     rules-correct outcome for stacked same-card tutors.
+        #   - Anything else (different player / different filter):
+        #     the later tutor fizzles silently (spec §7.3 no-op) rather
+        #     than crashing mid-chain.
+        if (
+            state.pending_tutor_player_idx == player_idx
+            and not state.pending_tutor_is_conjure
+            and tuple(matches) == state.pending_tutor_matches
+            and matches
+        ):
+            new_remaining = min(
+                state.pending_tutor_remaining + max(1, amount),
+                len(matches),
+            )
+            return replace(state, pending_tutor_remaining=new_remaining)
+        return state
 
     if not matches:
         # No candidates -- silently no-op (caller proceeds to react window).
@@ -653,7 +707,11 @@ def resolve_effect(
     elif scaled_effect.target == TargetType.ADJACENT:
         return _resolve_adjacent(state, scaled_effect, caster_pos, library, caster_owner)
     elif scaled_effect.target == TargetType.SELF_OWNER:
-        return _resolve_self_owner(state, scaled_effect, caster_pos, caster_owner, library)
+        return _resolve_self_owner(
+            state, scaled_effect, caster_pos, caster_owner, library,
+            contract_source=contract_source,
+            event_collector=event_collector,
+        )
     elif scaled_effect.target == TargetType.OPPONENT_PLAYER:
         opp_idx = 1 - _player_index_for_side(caster_owner)
         return _apply_effect_to_player(state, scaled_effect, opp_idx)
@@ -1201,12 +1259,19 @@ def _resolve_conjure(
         return state
     player_idx = _player_index_for_side(caster_owner)
     player = state.players[player_idx]
-    # Hand cap: skip if hand is full
-    if len(player.hand) >= 10:
-        return state
-    new_player = replace(
-        player,
-        hand=player.hand + (target_numeric_id,),
-    )
+    # Turn-structure redesign 2026-07: overdraw-burns — a full hand
+    # (MAX_HAND_SIZE) sends the conjured card to the exhaust pile
+    # (revealed) instead of skipping the conjure.
+    new_player, _burned = player.add_to_hand_with_overdraw(target_numeric_id)
+    if _burned and event_collector is not None:
+        event_collector.collect(
+            EVT_CARD_BURNED,
+            contract_source or "trigger:on_play",
+            {
+                "player_idx": player_idx,
+                "card_numeric_id": target_numeric_id,
+                "source": "conjure",
+            },
+        )
     new_players = _replace_player(state.players, player_idx, new_player)
     return replace(state, players=new_players)

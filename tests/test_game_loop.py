@@ -83,17 +83,15 @@ def _build_no_heal_decks(library: CardLibrary) -> tuple[tuple[int, ...], tuple[i
         "surgefed_sparkbot": 3,
         "rathopper": 3,
         "giant_rat": 3,
-        "surgefed_sparkbot": 3,
         "to_the_ratmobile": 3,
-        "rgb_lasercannon": 3,
         "prohibition": 3,
         "reanimated_bones": 3,
-        # 13 * 3 = 39, need 1 more
+        "red_diodebot": 3,
+        "emberplague_rat": 3,
+        # 13 * 3 = 39, need 1 more (MIN_DECK_SIZE = 40)
         "ratical_resurrection": 1,
     }
     deck = library.build_deck(card_counts)
-    # Audit-followup: MIN_DECK_SIZE was lowered from 40 to 30; this helper
-    # still builds 40-card decks (a valid superset for the smoke loop).
     assert len(deck) >= MIN_DECK_SIZE
     return deck, deck
 

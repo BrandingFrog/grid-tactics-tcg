@@ -509,6 +509,25 @@ def enrich_pending_conjure_deploy(
     filtered_dict["pending_conjure_deploy_positions"] = positions
 
 
+def _draw_was_burned(payload: dict) -> bool:
+    """True when a card_drawn event's payload marks an OVERDRAW BURN.
+
+    Turn-structure redesign (2026-07): a draw made with a full hand
+    (MAX_HAND_SIZE) sends the card to the Exhaust Pile, REVEALED. Such
+    draws are public — the per-viewer filter must NOT redact the card
+    identity. The engine may tag the payload with a boolean flag or a
+    destination-zone key; accept both shapes so the server stays
+    compatible with whichever the engine emits.
+    """
+    for flag_key in ("burned", "overdraw", "overdraw_burned", "to_exhaust"):
+        if payload.get(flag_key):
+            return True
+    for zone_key in ("destination", "zone", "dest_zone"):
+        if payload.get(zone_key) == "exhaust":
+            return True
+    return False
+
+
 def filter_engine_events_for_viewer(
     events,
     viewer_idx: int,
@@ -529,8 +548,23 @@ def filter_engine_events_for_viewer(
         opponent's hand-size delta is public). Sandbox cheat-driven
         ``add_card_to_zone`` that looks like a draw uses the same
         rule because the wire format is uniform.
+        EXCEPTION (turn-structure redesign 2026-07): an overdraw BURN
+        is public. When the payload marks the drawn card as sent to
+        the Exhaust Pile instead of hand (any of: truthy ``burned`` /
+        ``overdraw`` / ``overdraw_burned`` / ``to_exhaust``, or a
+        ``destination`` / ``zone`` / ``dest_zone`` key equal to
+        ``"exhaust"``), the card identity is NOT redacted — burned
+        cards are revealed to both players by rule.
       - ``EVT_CARD_DISCARDED``: face-up info per Phase 14.5 — full
         card identity is public for both players. NO filtering.
+      - New turn-structure events (2026-07 redesign) are PUBLIC and
+        pass through unredacted for both viewers: Handshake (both
+        players gain +1 mana / draw at end of turn after a pass-pass),
+        overdraw-burn card reveals, and fatigue damage from empty-deck
+        turn-start draws. They fall through the default pass-through
+        branch below — listed here so a future redaction pass doesn't
+        accidentally hide them (the burned card's ``card_numeric_id``
+        must stay visible to BOTH players).
       - ``EVT_PENDING_MODAL_OPENED``: if the modal owner (``owner_idx``
         / ``picker_idx`` / ``player_idx`` in payload) is the opponent
         and not god_mode, replace ``options`` with ``{"option_count":
@@ -576,8 +610,11 @@ def filter_engine_events_for_viewer(
 
     out: list = []
     for ev in events:
-        # Card draw: redact card identity for the opponent.
-        if ev.type == EVT_CARD_DRAWN:
+        # Card draw: redact card identity for the opponent — UNLESS the
+        # draw was an overdraw burn (full hand → card revealed to the
+        # Exhaust Pile). Burned cards are public info for both players,
+        # so the identity keys must survive filtering.
+        if ev.type == EVT_CARD_DRAWN and not _draw_was_burned(ev.payload):
             owner = ev.payload.get("player_idx")
             if owner is None:
                 # Some emitters use "owner" / "owner_idx" key — be

@@ -875,13 +875,33 @@ def register_events(room_manager: RoomManager) -> None:
 
                 # Auto-pass / auto-advance loop.
                 # Two reasons to stay in the loop:
-                #   (1) Fatigue bleed — legal_actions is empty during an
-                #       ACTION phase. Submit PASS to resolve_action.
+                #   (1) No-legal-actions failsafe — legal_actions is empty
+                #       during an ACTION phase. Submit PASS to
+                #       resolve_action. Turn-structure redesign (2026-07):
+                #       PASS is FREE (no fatigue damage) — fatigue now
+                #       exists ONLY for empty-deck turn-start draws, which
+                #       the engine applies inside the turn-start draw
+                #       (Rally entry), not here. With PASS always legal in
+                #       ACTION phase this branch should be unreachable;
+                #       kept as a failsafe.
                 #   (2) Phase 14.7-02: legal_actions is empty during
                 #       START_OF_TURN / END_OF_TURN phases because those
                 #       phases are placeholders. Call the react_stack
                 #       helpers directly — resolve_action does NOT accept
                 #       START/END phase inputs.
+                # Turn-start draw contract (2026-07 redesign): the auto
+                # draw + 1 mana live INSIDE enter_start_of_turn (Rally
+                # entry). No double-draw is possible from this loop:
+                # enter_start_of_turn is invoked at most once per
+                # START_OF_TURN entry because every one of its return
+                # paths leaves the phase (REACT window, ACTION shortcut,
+                # modal hand-off in ACTION, or game over) — the phase
+                # check at the top of the loop therefore never routes
+                # back into it for the same turn. Handshake (+1 mana /
+                # draw for both players after a pass-pass pair) resolves
+                # inside the engine's end-of-turn processing; its events
+                # flow through the same EventStream and need no
+                # special-casing here.
                 # Safety counter: hard cap iterations to catch any
                 # infinite-loop regressions (triggers a 500 rather than a
                 # silent wedge).
@@ -918,7 +938,10 @@ def register_events(room_manager: RoomManager) -> None:
                     next_actions = legal_actions(session.state, session.library)
                     if len(next_actions) > 0:
                         break
-                    # ACTION phase with no legal actions = fatigue bleed.
+                    # ACTION phase with no legal actions — auto-PASS
+                    # failsafe. PASS is free under the 2026-07 turn
+                    # structure (no fatigue damage attached); this just
+                    # advances the turn.
                     session.state = resolve_action(
                         session.state, pass_action(), session.library,
                         event_collector=stream,
