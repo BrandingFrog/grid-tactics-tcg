@@ -12,6 +12,8 @@
   <link href="https://fonts.googleapis.com/css2?family=Michroma&family=Montserrat:wght@900&family=Source+Sans+3:wght@700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
   <!-- Card-frame typography (approved 2026-07-03 full-art frame) -->
   <link href="https://fonts.googleapis.com/css2?family=Alegreya+SC:wght@500;700;800&family=Alegreya:ital,wght@0,500;0,700;1,500&display=swap" rel="stylesheet">
+  <!-- In-game HUD pod / PASS typography (approved 2026-07 duel layout) -->
+  <link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/static/game.css">
   <script src="https://cdn.socket.io/4.7.4/socket.io.min.js" defer></script>
   <script src="/static/game.js" defer></script>
@@ -464,7 +466,7 @@
           <div class="tooltip-stats"></div>
           <div class="tooltip-section tooltip-keywords"></div>
         </div>
-        <div class="tooltip-sidebar-hint" id="game-tooltip-hint">Hover a card to see details</div>
+        <div class="tooltip-sidebar-hint" id="game-tooltip-hint">Tap a card to preview</div>
       </div>
 
       <div class="game-main">
@@ -497,97 +499,111 @@
           <span>Click a glowing card → click a glowing tile to play. Click your minion → click a glowing tile to move/attack.</span>
         </div>
 
-        <!-- Opponent Info Bar -->
-        <div class="info-bar opp-bar">
-          <span class="player-tag opp-tag" id="opp-name">PLAYER 2 (Opponent)</span>
-          <div class="stat-group">
-            <div class="stat">
-              <span class="stat-label">HP</span>
-              <span class="stat-value stat-hp-opp" id="opp-hp">20</span>
-            </div>
-            <div class="stat">
-              <span class="stat-label">MANA</span>
-              <span class="stat-value stat-mana" id="opp-mana">0</span>
-            </div>
-            <div class="stat">
-              <span class="stat-label">HAND</span>
-              <span class="stat-value" id="opp-hand">0</span>
-            </div>
-            <div class="stat">
-              <span class="stat-label">DECK</span>
-              <span class="stat-value" id="opp-deck">0</span>
-            </div>
-            <button class="pile-btn" id="pileBtnOppGrave" title="Opponent grave">
-              <span class="pile-emoji">⚰️</span>
-              <span class="pile-count stat-emoji">0</span>
-            </button>
-            <button class="pile-btn" id="pileBtnOppExhaust" title="Opponent exhaust">
-              <span class="pile-emoji">🌀</span>
-              <span class="pile-count stat-emoji">0</span>
-            </button>
-          </div>
-        </div>
+        <!-- ===================================================================
+             DUEL STAGE (approved 2026-07 in-game layout) — a relative stage that
+             holds the big centered board, hexagonal HUD player pods in the
+             corners, the opponent's face-down hand peeking from the top edge,
+             the PASS action bar, and your hand at the bottom.
 
-        <!-- Opponent face-down hand row (count only, no identities) -->
-        <div class="opp-hand-row" id="oppHandRow"></div>
+             This REPLACES the old .info-bar bars AND the board-embedded
+             .player-avatar pods. Every stat / pile / avatar element ID that the
+             socket + state-update JS writes to is preserved on the new pod
+             elements, so no JS changes are required to keep the readouts live:
+               • self-hp / opp-hp        big HP number (damage popups anchor here)
+               • self-mana / opp-mana    mana pool value
+               • self-hand / opp-hand    hand count
+               • self-deck / opp-deck    deck count
+               • self-name / opp-name    player name
+               • avatar-self / avatar-opp        click target → player preview
+               • avatar-self-disc / avatar-opp-disc   initial letter
+               • avatar-self-dm / avatar-opp-dm       DM chip (gets .dm-pulse)
+               • avatar-self-dm-num / avatar-opp-dm-num   DM value
+               • pileBtn{Own,Opp}{Grave,Exhaust}  pile buttons (.pile-count child)
+             (The old avatar-*-hp mirror spans were dropped — JS only WROTE to
+             them, nothing read them; the pod's big HP number replaces them.)
+             The HP power-bars (self-hp-bar / opp-hp-bar) are NEW; a tiny
+             self-contained script at the end of the page paints them from the
+             live HP numbers so game.js stays untouched.
+             =================================================================== -->
+        <div class="duel-stage">
 
-        <!-- 5x5 Board -->
-        <div class="board-container">
-          <!-- Player avatars (2026-07): one pod at each sacrifice end of the
-               board — opponent behind their home row (top), you behind yours
-               (bottom). Click either to open the player details preview. -->
-          <div class="player-avatar avatar-opp" id="avatar-opp" role="button" tabindex="0" title="View opponent details">
-            <div class="avatar-disc" id="avatar-opp-disc">P2</div>
-            <div class="avatar-hp">🤍<span class="avatar-hp-num" id="avatar-opp-hp">20</span></div>
-            <div class="avatar-dm" id="avatar-opp-dm">🌑<span class="avatar-dm-num" id="avatar-opp-dm-num">0</span></div>
+          <!-- 5x5 Board — big, centered, pushed up so the hand only kisses the
+               bottom row. Perspective tilt (Approach A) ships here: the
+               .board-container carries the perspective, .game-board reclines
+               rotateX(20deg), and each minion is counter-rotated upright via
+               the .board-standee wrapper (see the PERSPECTIVE TILT block in
+               game.css). Overlays read live getBoundingClientRect(), which
+               projects correctly through the transform; inline animation
+               transforms land on the inner .board-minion and compose with the
+               wrapper's counter-rotation. -->
+          <div class="board-container">
+            <div id="game-board" class="game-board">
+              <!-- 25 cells rendered by JS -->
+            </div>
           </div>
-          <div id="game-board" class="game-board">
-            <!-- 25 cells rendered by JS -->
-          </div>
-          <div class="player-avatar avatar-self" id="avatar-self" role="button" tabindex="0" title="View your details">
-            <div class="avatar-disc" id="avatar-self-disc">P1</div>
-            <div class="avatar-hp">🤍<span class="avatar-hp-num" id="avatar-self-hp">20</span></div>
-            <div class="avatar-dm" id="avatar-self-dm">🌑<span class="avatar-dm-num" id="avatar-self-dm-num">0</span></div>
-          </div>
-        </div>
 
-        <!-- Self Info Bar -->
-        <div class="info-bar self-bar">
-          <span class="player-tag self-tag" id="self-name">PLAYER 1 (You)</span>
-          <div class="stat-group">
-            <div class="stat">
-              <span class="stat-label">HP</span>
-              <span class="stat-value stat-hp-self" id="self-hp">20</span>
+          <!-- Opponent face-down hand — peeks DOWN from the top edge -->
+          <div class="opp-hand-row" id="oppHandRow"></div>
+
+          <!-- Opponent pod (top-right, mirrored). The hex avatar is the click
+               target (id avatar-opp) so the pile buttons keep their own clicks. -->
+          <div class="pod pod-opp">
+            <div class="pod-ava-wrap" id="avatar-opp" role="button" tabindex="0" title="View opponent details">
+              <div class="pod-ava-ring"></div>
+              <div class="pod-ava" id="avatar-opp-disc">P2</div>
             </div>
-            <div class="stat">
-              <span class="stat-label">MANA</span>
-              <span class="stat-value stat-mana" id="self-mana">0</span>
+            <div class="pod-plate">
+              <div class="pod-row-top">
+                <span class="pod-mana"><span class="pod-pip"></span><span id="opp-mana">0</span><small>/10</small></span>
+                <span class="pod-name" id="opp-name">PLAYER 2 (Opponent)</span>
+              </div>
+              <div class="pod-row-hp">
+                <span class="pod-hp-n stat-hp-opp" id="opp-hp">20</span>
+                <div class="pod-bar"><div class="pod-fill" id="opp-hp-bar"></div></div>
+              </div>
+              <div class="pod-row-stats">
+                <span class="pod-chip pod-chip-dm" id="avatar-opp-dm">🌑<b id="avatar-opp-dm-num">0</b></span>
+                <span class="pod-chip">DECK <b id="opp-deck">0</b></span>
+                <span class="pod-chip">HAND <b id="opp-hand">0</b></span>
+                <button class="pile-btn pod-pile" id="pileBtnOppGrave" title="Opponent grave"><span class="pile-emoji">⚰️</span><span class="pile-count">0</span></button>
+                <button class="pile-btn pod-pile" id="pileBtnOppExhaust" title="Opponent exhaust"><span class="pile-emoji">🌀</span><span class="pile-count">0</span></button>
+              </div>
             </div>
-            <div class="stat">
-              <span class="stat-label">HAND</span>
-              <span class="stat-value" id="self-hand">0</span>
-            </div>
-            <div class="stat">
-              <span class="stat-label">DECK</span>
-              <span class="stat-value" id="self-deck">0</span>
-            </div>
-            <button class="pile-btn" id="pileBtnOwnGrave" title="Your grave">
-              <span class="pile-emoji">⚰️</span>
-              <span class="pile-count stat-emoji">0</span>
-            </button>
-            <button class="pile-btn" id="pileBtnOwnExhaust" title="Your exhaust">
-              <span class="pile-emoji">🌀</span>
-              <span class="pile-count stat-emoji">0</span>
-            </button>
           </div>
-        </div>
 
-        <!-- Hand Action Bar — Pass / Skip React / Decline Attack -->
-        <div id="hand-action-bar" class="hand-action-bar"></div>
+          <!-- Your pod (bottom-left) -->
+          <div class="pod pod-self">
+            <div class="pod-ava-wrap" id="avatar-self" role="button" tabindex="0" title="View your details">
+              <div class="pod-ava-ring"></div>
+              <div class="pod-ava" id="avatar-self-disc">P1</div>
+            </div>
+            <div class="pod-plate">
+              <div class="pod-row-top">
+                <span class="pod-name" id="self-name">PLAYER 1 (You)</span>
+                <span class="pod-mana"><span id="self-mana">0</span><small>/10</small><span class="pod-pip"></span></span>
+              </div>
+              <div class="pod-row-hp">
+                <span class="pod-hp-n stat-hp-self" id="self-hp">20</span>
+                <div class="pod-bar"><div class="pod-fill" id="self-hp-bar"></div></div>
+              </div>
+              <div class="pod-row-stats">
+                <span class="pod-chip">HAND <b id="self-hand">0</b></span>
+                <span class="pod-chip">DECK <b id="self-deck">0</b></span>
+                <span class="pod-chip pod-chip-dm" id="avatar-self-dm">🌑<b id="avatar-self-dm-num">0</b></span>
+                <button class="pile-btn pod-pile" id="pileBtnOwnGrave" title="Your grave"><span class="pile-emoji">⚰️</span><span class="pile-count">0</span></button>
+                <button class="pile-btn pod-pile" id="pileBtnOwnExhaust" title="Your exhaust"><span class="pile-emoji">🌀</span><span class="pile-count">0</span></button>
+              </div>
+            </div>
+          </div>
 
-        <!-- Hand Container -->
-        <div id="hand-container" class="hand-container">
-          <!-- Cards rendered by JS as full YGO-style cards -->
+          <!-- Hand Action Bar — Pass / Skip React / Cancel / Decline (JS fills) -->
+          <div id="hand-action-bar" class="hand-action-bar"></div>
+
+          <!-- Hand Container — clipped ~20% at the bottom edge -->
+          <div id="hand-container" class="hand-container">
+            <!-- Cards rendered by JS as full YGO-style cards -->
+          </div>
+
         </div>
 
       </div>
@@ -661,7 +677,7 @@
           <div class="tooltip-stats"></div>
           <div class="tooltip-section tooltip-keywords"></div>
         </div>
-        <div class="tooltip-sidebar-hint" id="sandbox-tooltip-hint">Hover a card to see details</div>
+        <div class="tooltip-sidebar-hint" id="sandbox-tooltip-hint">Tap a card to preview</div>
       </div>
 
       <!-- Middle: game-main (identical structure to live game) -->
@@ -686,62 +702,104 @@
           <span class="sandbox-history-status" id="sandbox-history-status" style="margin-left:auto;">undo:0 redo:0</span>
         </div>
 
-        <!-- Player 2 info bar (top — mirrors opp-bar in live game) -->
-        <div class="info-bar opp-bar">
-          <span class="player-tag opp-tag">PLAYER 2</span>
-          <div class="stat-group">
-            <div class="stat"><span class="stat-label">HP</span><span class="stat-value stat-hp-opp" id="sandbox-p1-hp">20</span></div>
-            <div class="stat"><span class="stat-label">MANA</span><span class="stat-value stat-mana" id="sandbox-p1-mana">0</span></div>
-            <div class="stat"><span class="stat-label">HAND</span><span class="stat-value" id="sandbox-p1-handcount">0</span></div>
-            <div class="stat"><span class="stat-label">DECK</span><span class="stat-value" id="sandbox-p1-deck">0</span></div>
-            <button class="pile-btn sandbox-pile-btn" data-pile="graveyard" data-player="1" title="P2 grave">
-              <span class="pile-emoji">⚰️</span><span class="pile-count stat-emoji" id="sandbox-p1-grave">0</span>
-            </button>
-            <button class="pile-btn sandbox-pile-btn" data-pile="exhaust" data-player="1" title="P2 exhaust">
-              <span class="pile-emoji">🌀</span><span class="pile-count stat-emoji" id="sandbox-p1-exhaust">0</span>
-            </button>
-            <button class="pile-btn sandbox-pile-btn" data-pile="deck_top" data-player="1" title="P2 deck">
-              <span class="pile-emoji">🎴</span>
-            </button>
+        <!-- ===================================================================
+             DUEL STAGE (approved 2026-07 layout) — mirrors #screen-game.
+             God view: BOTH hands face-up (P2 peeks from the top, P1 at the
+             bottom), hexagonal HUD pods in the corners (P2 top-right / red,
+             P1 bottom-left / cyan), and a big centered board. Reuses the shared
+             .duel-stage / .pod / board CSS (the DUEL LAYOUT block in game.css is
+             dual-scoped to #screen-sandbox — no duplicated declarations).
+
+             Every readout keeps its sandbox-prefixed ID so renderSandboxStats()
+             drives it unchanged (p0 = PLAYER 1 / bottom, p1 = PLAYER 2 / top):
+               • sandbox-p0-hp / sandbox-p1-hp            big HP number
+               • sandbox-p0-mana / sandbox-p1-mana        mana pool
+               • sandbox-p0-handcount / sandbox-p1-handcount   hand count
+               • sandbox-p0-deck / sandbox-p1-deck        deck count
+               • sandbox-p0-grave / sandbox-p1-grave      grave pile count
+               • sandbox-p0-exhaust / sandbox-p1-exhaust  exhaust pile count
+             The .sandbox-pile-btn data-pile / data-player hooks (+ the extra
+             deck_top 🎴 peek button) are preserved for _wireSandboxPileButtons().
+             The NEW pod HP power-bars (sandbox-p0-hp-bar / sandbox-p1-hp-bar) are
+             painted by the self-contained MutationObserver script at the end of
+             the page (it watches the HP numbers), so game.js stays untouched.
+             No PASS pod: the sandbox drives turns via its control panel, and
+             renderActionBar's #hand-action-bar slot is intentionally absent here.
+             The hex avatars are static (no player-preview wiring in sandbox).
+             =================================================================== -->
+        <div class="duel-stage sandbox-stage">
+
+          <!-- 5x5 Board — big, centered, reclined under the SAME perspective
+               tilt as the live duel (Approach A). The .board-container carries
+               the perspective, .game-board reclines rotateX(20deg), and each
+               minion is counter-rotated upright via the .board-standee wrapper.
+               Dual-scoped in the PERSPECTIVE TILT block in game.css. -->
+          <div class="board-container">
+            <div id="sandbox-board" class="game-board">
+              <!-- 25 cells rendered by renderBoard({ mount: this, state }) -->
+            </div>
           </div>
-        </div>
 
-        <!-- Player 2 hand (face-up, using the same .hand-container styling
-             as the live self-hand — god view shows both hands) -->
-        <div class="hand-container sandbox-hand-top" id="sandbox-hand-p1">
-          <!-- renderHand({ mount: this, state, ownerIdx: 1, godView: true }) -->
-        </div>
-
-        <!-- 5x5 Board -->
-        <div class="board-container">
-          <div id="sandbox-board" class="game-board">
-            <!-- 25 cells rendered by renderBoard({ mount: this, state }) -->
+          <!-- Player 2 hand — face-up god view, peeks from the TOP edge -->
+          <div class="hand-container sandbox-hand-top" id="sandbox-hand-p1">
+            <!-- renderHand({ mount: this, state, ownerIdx: 1, godView: true }) -->
           </div>
-        </div>
 
-        <!-- Player 1 info bar (bottom — mirrors self-bar in live game) -->
-        <div class="info-bar self-bar">
-          <span class="player-tag self-tag">PLAYER 1</span>
-          <div class="stat-group">
-            <div class="stat"><span class="stat-label">HP</span><span class="stat-value stat-hp-self" id="sandbox-p0-hp">20</span></div>
-            <div class="stat"><span class="stat-label">MANA</span><span class="stat-value stat-mana" id="sandbox-p0-mana">0</span></div>
-            <div class="stat"><span class="stat-label">HAND</span><span class="stat-value" id="sandbox-p0-handcount">0</span></div>
-            <div class="stat"><span class="stat-label">DECK</span><span class="stat-value" id="sandbox-p0-deck">0</span></div>
-            <button class="pile-btn sandbox-pile-btn" data-pile="graveyard" data-player="0" title="P1 grave">
-              <span class="pile-emoji">⚰️</span><span class="pile-count stat-emoji" id="sandbox-p0-grave">0</span>
-            </button>
-            <button class="pile-btn sandbox-pile-btn" data-pile="exhaust" data-player="0" title="P1 exhaust">
-              <span class="pile-emoji">🌀</span><span class="pile-count stat-emoji" id="sandbox-p0-exhaust">0</span>
-            </button>
-            <button class="pile-btn sandbox-pile-btn" data-pile="deck_top" data-player="0" title="P1 deck">
-              <span class="pile-emoji">🎴</span>
-            </button>
+          <!-- Player 2 pod (top-right, red, mirrored) -->
+          <div class="pod pod-opp">
+            <div class="pod-ava-wrap" title="Player 2">
+              <div class="pod-ava-ring"></div>
+              <div class="pod-ava">P2</div>
+            </div>
+            <div class="pod-plate">
+              <div class="pod-row-top">
+                <span class="pod-mana"><span class="pod-pip"></span><span id="sandbox-p1-mana">0</span><small>/10</small></span>
+                <span class="pod-name">PLAYER 2</span>
+              </div>
+              <div class="pod-row-hp">
+                <span class="pod-hp-n stat-hp-opp" id="sandbox-p1-hp">20</span>
+                <div class="pod-bar"><div class="pod-fill" id="sandbox-p1-hp-bar"></div></div>
+              </div>
+              <div class="pod-row-stats">
+                <span class="pod-chip">DECK <b id="sandbox-p1-deck">0</b></span>
+                <span class="pod-chip">HAND <b id="sandbox-p1-handcount">0</b></span>
+                <button class="pile-btn pod-pile sandbox-pile-btn" data-pile="graveyard" data-player="1" title="P2 grave"><span class="pile-emoji">⚰️</span><span class="pile-count" id="sandbox-p1-grave">0</span></button>
+                <button class="pile-btn pod-pile sandbox-pile-btn" data-pile="exhaust" data-player="1" title="P2 exhaust"><span class="pile-emoji">🌀</span><span class="pile-count" id="sandbox-p1-exhaust">0</span></button>
+                <button class="pile-btn pod-pile sandbox-pile-btn" data-pile="deck_top" data-player="1" title="P2 deck"><span class="pile-emoji">🎴</span></button>
+              </div>
+            </div>
           </div>
-        </div>
 
-        <!-- Player 1 hand (bottom, face-up) -->
-        <div class="hand-container sandbox-hand-bottom" id="sandbox-hand-p0">
-          <!-- renderHand({ mount: this, state, ownerIdx: 0, godView: true }) -->
+          <!-- Player 1 pod (bottom-left, cyan) -->
+          <div class="pod pod-self">
+            <div class="pod-ava-wrap" title="Player 1">
+              <div class="pod-ava-ring"></div>
+              <div class="pod-ava">P1</div>
+            </div>
+            <div class="pod-plate">
+              <div class="pod-row-top">
+                <span class="pod-name">PLAYER 1</span>
+                <span class="pod-mana"><span id="sandbox-p0-mana">0</span><small>/10</small><span class="pod-pip"></span></span>
+              </div>
+              <div class="pod-row-hp">
+                <span class="pod-hp-n stat-hp-self" id="sandbox-p0-hp">20</span>
+                <div class="pod-bar"><div class="pod-fill" id="sandbox-p0-hp-bar"></div></div>
+              </div>
+              <div class="pod-row-stats">
+                <span class="pod-chip">HAND <b id="sandbox-p0-handcount">0</b></span>
+                <span class="pod-chip">DECK <b id="sandbox-p0-deck">0</b></span>
+                <button class="pile-btn pod-pile sandbox-pile-btn" data-pile="graveyard" data-player="0" title="P1 grave"><span class="pile-emoji">⚰️</span><span class="pile-count" id="sandbox-p0-grave">0</span></button>
+                <button class="pile-btn pod-pile sandbox-pile-btn" data-pile="exhaust" data-player="0" title="P1 exhaust"><span class="pile-emoji">🌀</span><span class="pile-count" id="sandbox-p0-exhaust">0</span></button>
+                <button class="pile-btn pod-pile sandbox-pile-btn" data-pile="deck_top" data-player="0" title="P1 deck"><span class="pile-emoji">🎴</span></button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Player 1 hand — face-up, anchored to the BOTTOM edge -->
+          <div class="hand-container sandbox-hand-bottom" id="sandbox-hand-p0">
+            <!-- renderHand({ mount: this, state, ownerIdx: 0, godView: true }) -->
+          </div>
+
         </div>
       </div>
 
@@ -971,6 +1029,54 @@
       <div class="bug-modal-status" id="bug-modal-status"></div>
     </div>
   </div>
+
+  <!-- ==============================================================
+       Pod HP power-bars (approved 2026-07 duel layout).
+       The pods reuse every existing stat ID so game.js needs no
+       changes; the HP power-bar is the one NEW element. Rather than
+       touch the socket/state-update path, this self-contained script
+       mirrors the live HP numbers (#self-hp / #opp-hp) into the bar
+       widths + green→amber→red hue (hue = pct * 1.2) via a
+       MutationObserver. Baseline max HP = 20 (starting pool); heals
+       above that simply cap the bar at 100%.
+       ============================================================== -->
+  <script>
+  (function () {
+    var MAX_HP = 20;
+    function paint(numId, barId) {
+      var n = document.getElementById(numId);
+      var bar = document.getElementById(barId);
+      if (!n || !bar) return;
+      var hp = parseInt(n.textContent, 10);
+      if (isNaN(hp)) hp = 0;
+      var pct = Math.max(0, Math.min(100, (hp / MAX_HP) * 100));
+      var hue = pct * 1.2; /* 0 = red, 60 = amber, 120 = green */
+      bar.style.width = pct + '%';
+      bar.style.background = 'linear-gradient(180deg, hsl(' + hue + ',80%,58%), hsl(' + hue + ',75%,44%))';
+      bar.style.boxShadow = '0 0 8px -1px hsl(' + hue + ',80%,50%)';
+    }
+    function watch(numId, barId) {
+      var n = document.getElementById(numId);
+      if (!n) return;
+      paint(numId, barId);
+      new MutationObserver(function () { paint(numId, barId); })
+        .observe(n, { childList: true, characterData: true, subtree: true });
+    }
+    function init() {
+      watch('self-hp', 'self-hp-bar');
+      watch('opp-hp', 'opp-hp-bar');
+      // Sandbox pods reuse the same power-bar element; renderSandboxStats()
+      // writes the HP numbers, this observer paints the fills.
+      watch('sandbox-p0-hp', 'sandbox-p0-hp-bar');
+      watch('sandbox-p1-hp', 'sandbox-p1-hp-bar');
+    }
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', init);
+    } else {
+      init();
+    }
+  })();
+  </script>
 
 </body>
 </html>

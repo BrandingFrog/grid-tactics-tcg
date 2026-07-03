@@ -7516,7 +7516,7 @@ body {
   background: rgba(10, 20, 35, 0.6) !important;
   border: 1px solid var(--hud-g-edge) !important;
   border-radius: 0 !important;
-  padding-top: 22px !important;
+  padding-top: 10px !important;
   position: relative;
   clip-path: polygon(
     0 8px, 8px 0,
@@ -7525,18 +7525,9 @@ body {
     8px 100%, 0 calc(100% - 8px)
   );
 }
+/* DOSSIER label removed per design */
 #screen-game .tooltip-sidebar::before,
-#screen-sandbox .tooltip-sidebar::before {
-  content: 'STN-001 · DOSSIER';
-  position: absolute;
-  top: 6px; left: 14px;
-  font-family: var(--hud-g-display);
-  font-size: 9px;
-  letter-spacing: 0.24em;
-  color: var(--hud-g-cyan);
-  text-transform: uppercase;
-  opacity: 0.8;
-}
+#screen-sandbox .tooltip-sidebar::before { content: none; }
 #screen-game .tooltip-sidebar-hint,
 #screen-sandbox .tooltip-sidebar-hint {
   font-family: var(--hud-g-mono) !important;
@@ -9054,7 +9045,12 @@ body {
        subtract exactly that to fill the remaining height with no overflow. */
     grid-template-columns: clamp(116px, 20vw, 190px) minmax(0, 1fr) !important;
     height: calc(100vh - 54px);
-    max-width: none;
+    /* !important so short-landscape stays edge-to-edge: the duel block's
+       `body:has(#screen-game.active) .game-layout { max-width: calc(100vh*16/9.5) }`
+       has higher specificity (id inside :has) and would otherwise cap this
+       baseline to ~656px and letterbox it. The wide-viewport cap still applies
+       on taller (desktop/tablet) frames where this media query doesn't match. */
+    max-width: none !important;
     overflow: hidden !important;
     padding: 4px;
     gap: 4px;
@@ -9087,3 +9083,384 @@ body {
   .card-frame-full.cf2.card-frame-hand { --cardw: clamp(52px, 15vh, 96px); }
 }
 
+
+/* ==========================================================================
+   APPROVED IN-GAME DUEL LAYOUT (2026-07)
+   Mobile-first landscape (baseline 844x390), fluid up to desktop. Replaces the
+   old .info-bar bars + board-embedded .player-avatar pods with hexagonal HUD
+   pods in the corners, a big centered board, the opponent hand peeking from the
+   top edge, and a restyled PASS button. Selectors are dual-scoped to BOTH
+   #screen-game (live duel) and #screen-sandbox (dev god-view) so the sandbox
+   mirrors this layout with the exact same classes — no duplicated declarations.
+   The nav-hide + 100vh reclaim (below) stay #screen-game only: the sandbox
+   keeps the nav visible (its only exit) and uses the default game-layout
+   height (calc(100vh - 52px)), which already bounds the flex duel-stage.
+   ========================================================================== */
+
+/* --- Hide the nav header while in a duel; reclaim the full viewport height --- */
+body:has(#screen-game.active) .hud-header { display: none !important; }
+body:has(#screen-game.active) .game-layout {
+  height: 100vh;
+  max-width: calc(100vh * 16 / 9.5);
+}
+
+/* --- The duel stage: a relative canvas the board + pods + hands float on --- */
+#screen-game .duel-stage, #screen-sandbox .duel-stage {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;   /* clips the opp-hand peek (top) + hand clip (bottom) */
+}
+
+/* --- Board: big, centered, pushed up so the hand only kisses the bottom row.
+       The #screen-game board reclines under a perspective tilt (Approach A);
+       see the PERSPECTIVE TILT block below. --- */
+#screen-game .duel-stage .board-container, #screen-sandbox .duel-stage .board-container {
+  position: absolute;
+  left: 0; right: 0;
+  top: 30px;      /* headroom for the opponent hand peeking from the top */
+  bottom: 74px;   /* footroom for your hand at the bottom */
+  padding: 0;
+  background: none;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1;
+}
+#screen-game .duel-stage .game-board, #screen-sandbox .duel-stage .game-board {
+  height: 100%;
+  width: auto;
+  max-width: 100%;
+  max-height: 100%;
+  aspect-ratio: 5 / 4;
+  margin: 0 auto;
+  gap: 6px;
+  padding: 8px;
+  background: radial-gradient(120% 120% at 50% 60%, #13233f 0%, #0a1526 70%);
+  border: 1px solid #26456e;
+  border-radius: 12px;
+  box-shadow: 0 0 30px -8px rgba(42, 95, 160, 0.67), inset 0 0 24px rgba(0, 0, 0, 0.5);
+}
+
+/* =========================================================================
+   PERSPECTIVE TILT (Approach A, live-verified) — the board reclines ~20deg
+   so the far (opponent) edge recedes to ~90%; minions counter-rotate upright
+   as standees facing the camera. Dual-scoped to BOTH #screen-game (live duel)
+   and #screen-sandbox (dev god-view) so the sandbox board reclines with the
+   same standee look — the task calls for the "big perspective standee board"
+   on the sandbox too, and both reuse the identical, verified transform:
+   getBoundingClientRect reads used by the fly/attack/summon overlays still
+   project through the transform to correct screen rects, and cell clicks /
+   targeting hit-test through the transform natively. In the god-view the
+   near (P1) row stays large and the far (P2) row recedes — the same
+   opponent-edge-recedes read as the live duel.
+
+   The counter-rotation lives on the .board-standee WRAPPER (added by
+   renderBoard around .board-minion) — NOT on .board-minion itself — because
+   the animation layer writes inline transforms straight onto .board-minion.
+   Wrapper + inner compose, so animations are never clobbered.
+   ========================================================================= */
+#screen-game .duel-stage .board-container,
+#screen-sandbox .duel-stage .board-container {
+  perspective: 760px;
+  perspective-origin: 50% 100%;
+}
+#screen-game .duel-stage .game-board,
+#screen-sandbox .duel-stage .game-board {
+  transform: rotateX(20deg);
+  transform-origin: center bottom;
+  transform-style: preserve-3d;
+}
+/* Cells must keep (not flatten) the 3D context so the standee counter-
+   rotation genuinely stands the minion up instead of merely squashing it. */
+#screen-game .duel-stage .board-cell,
+#screen-sandbox .duel-stage .board-cell {
+  transform-style: preserve-3d;
+}
+/* Base sizing is UNSCOPED so the wrapper fills its cell everywhere it is
+   rendered. The upright counter-rotation is scoped to the duel/sandbox
+   stages (both tilted). */
+.board-standee {
+  width: 100%;
+  height: 100%;
+  display: flex;
+}
+#screen-game .duel-stage .board-standee,
+#screen-sandbox .duel-stage .board-standee {
+  transform: rotateX(-20deg);
+  transform-origin: center bottom;
+  transform-style: preserve-3d;
+}
+
+/* =========================================================================
+   PLAYER PODS -- hexagonal avatar fused into an angular combat-readout plate.
+   Self = cyan (bottom-left), Opponent = red (top-right), fully mirrored.
+   ========================================================================= */
+#screen-game .pod, #screen-sandbox .pod {
+  position: absolute;
+  z-index: 6;
+  font-family: 'Chakra Petch', 'Michroma', sans-serif;
+  display: flex;
+  align-items: center;
+  height: 56px;
+}
+#screen-game .pod.pod-self, #screen-sandbox .pod.pod-self {
+  bottom: 78px; left: 8px;
+  transform: scale(0.76);
+  transform-origin: bottom left;
+  --acc: #3fd0ff; --acc-deep: #0d3a55;
+}
+#screen-game .pod.pod-opp, #screen-sandbox .pod.pod-opp {
+  top: 6px; right: 8px;
+  transform: scale(0.76);
+  transform-origin: top right;
+  flex-direction: row-reverse;
+  --acc: #ff5d6e; --acc-deep: #4a1620;
+}
+
+/* Hex avatar (this element carries id avatar-self / avatar-opp -> click target) */
+#screen-game .pod-ava-wrap, #screen-sandbox .pod-ava-wrap {
+  position: relative;
+  width: 56px; height: 56px;
+  flex: 0 0 56px;
+  z-index: 3;
+  cursor: pointer;
+  filter: drop-shadow(0 0 9px color-mix(in srgb, var(--acc) 55%, transparent));
+}
+#screen-game .pod-ava-ring, #screen-sandbox .pod-ava-ring,
+#screen-game .pod-ava, #screen-sandbox .pod-ava {
+  position: absolute; inset: 0;
+  clip-path: polygon(50% 0%, 100% 27%, 100% 73%, 50% 100%, 0% 73%, 0% 27%);
+}
+#screen-game .pod-ava-ring, #screen-sandbox .pod-ava-ring { background: linear-gradient(160deg, var(--acc), var(--acc-deep)); }
+#screen-game .pod-ava, #screen-sandbox .pod-ava {
+  inset: 3px;
+  background: #0a1322;
+  overflow: hidden;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 22px; font-weight: 700; color: #eaf6ff;
+  text-shadow: 0 0 10px color-mix(in srgb, var(--acc) 55%, #000);
+}
+#screen-game .pod-ava-wrap:hover, #screen-sandbox .pod-ava-wrap:hover { filter: drop-shadow(0 0 12px var(--acc)); }
+#screen-game .pod-ava-wrap:focus-visible, #screen-sandbox .pod-ava-wrap:focus-visible { outline: 2px solid var(--acc); outline-offset: 2px; }
+#screen-game .pod.pod-self .pod-ava-wrap, #screen-sandbox .pod.pod-self .pod-ava-wrap { margin-right: -13px; }
+#screen-game .pod.pod-opp  .pod-ava-wrap, #screen-sandbox .pod.pod-opp  .pod-ava-wrap { margin-left: -13px; }
+
+/* Angular plate */
+#screen-game .pod-plate, #screen-sandbox .pod-plate {
+  position: relative;
+  height: 50px;
+  width: 232px;
+  z-index: 1;
+  padding: 5px 12px 5px 22px;
+  background:
+    linear-gradient(180deg, rgba(22, 41, 70, 0.53) 0%, transparent 30%),
+    linear-gradient(105deg, var(--acc-deep) 0%, #0b1526 46%, #0a1220 100%);
+  clip-path: polygon(0 0, 100% 0, 100% calc(100% - 11px), calc(100% - 11px) 100%, 0 100%);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06), inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 4px 12px rgba(0, 0, 0, 0.5);
+  display: flex; flex-direction: column; justify-content: center; gap: 2px;
+}
+#screen-game .pod.pod-opp .pod-plate, #screen-sandbox .pod.pod-opp .pod-plate {
+  padding: 5px 22px 5px 12px; text-align: right;
+  clip-path: polygon(0 0, 100% 0, 100% 100%, 11px 100%, 0 calc(100% - 11px));
+}
+#screen-game .pod-plate::before, #screen-sandbox .pod-plate::before {
+  content: ''; position: absolute; top: 5px; bottom: 5px; left: 0; width: 3px;
+  background: linear-gradient(var(--acc), transparent);
+  box-shadow: 0 0 8px var(--acc);
+}
+#screen-game .pod.pod-opp .pod-plate::before, #screen-sandbox .pod.pod-opp .pod-plate::before { left: auto; right: 0; }
+
+/* Row 1 -- name + mana */
+#screen-game .pod-row-top, #screen-sandbox .pod-row-top {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+}
+#screen-game .pod-name, #screen-sandbox .pod-name {
+  font-size: 11px; font-weight: 700; letter-spacing: 1.2px; text-transform: uppercase;
+  color: #e8f1ff; white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis; max-width: 130px;
+}
+#screen-game .pod-mana, #screen-sandbox .pod-mana {
+  display: flex; align-items: center; gap: 3px;
+  color: #ffd45a; font-weight: 600; font-size: 11px; white-space: nowrap;
+}
+#screen-game .pod-mana small, #screen-sandbox .pod-mana small { color: #8a97b5; font-weight: 500; }
+#screen-game .pod-pip, #screen-sandbox .pod-pip {
+  width: 7px; height: 7px; transform: rotate(45deg);
+  background: #ffd45a; box-shadow: 0 0 6px rgba(255, 212, 90, 0.6);
+}
+
+/* Row 2 -- big HP number + power bar */
+#screen-game .pod-row-hp, #screen-sandbox .pod-row-hp { display: flex; align-items: center; gap: 8px; }
+#screen-game .pod.pod-opp .pod-row-hp, #screen-sandbox .pod.pod-opp .pod-row-hp { flex-direction: row-reverse; }
+#screen-game .pod-hp-n, #screen-sandbox .pod-hp-n {
+  font-size: 23px; font-weight: 700; line-height: 0.8; color: #fff; letter-spacing: 0.5px;
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 0 11px color-mix(in srgb, var(--acc) 60%, #000);
+  min-width: 30px;
+}
+#screen-game .pod.pod-opp .pod-hp-n, #screen-sandbox .pod.pod-opp .pod-hp-n { text-align: right; }
+#screen-game .pod-bar, #screen-sandbox .pod-bar {
+  position: relative; flex: 1; height: 8px;
+  background: #060c16; border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 2px; overflow: hidden; box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.8);
+}
+#screen-game .pod-fill, #screen-sandbox .pod-fill {
+  position: absolute; inset: 0; width: 100%; border-radius: 1px;
+  background: linear-gradient(180deg, hsl(120,80%,58%), hsl(120,75%,44%));
+  transition: width 0.5s ease, background 0.5s;
+}
+#screen-game .pod-bar::after, #screen-sandbox .pod-bar::after {
+  content: ''; position: absolute; inset: 0; pointer-events: none;
+  background: repeating-linear-gradient(90deg, transparent 0 14px, rgba(0, 0, 0, 0.33) 14px 15px);
+}
+
+/* Row 3 -- compact chips (Hand / Deck / Dark-Matter) + pile buttons */
+#screen-game .pod-row-stats, #screen-sandbox .pod-row-stats {
+  display: flex; gap: 6px; align-items: center;
+}
+#screen-game .pod.pod-opp .pod-row-stats, #screen-sandbox .pod.pod-opp .pod-row-stats { justify-content: flex-end; }
+#screen-game .pod-chip, #screen-sandbox .pod-chip {
+  font-size: 9px; letter-spacing: 0.4px; color: #9fb2d6; text-transform: uppercase;
+  display: flex; align-items: center; gap: 3px; white-space: nowrap;
+}
+#screen-game .pod-chip b, #screen-sandbox .pod-chip b { color: #eaf2ff; font-size: 10.5px; font-weight: 700; }
+#screen-game .pod-chip-dm, #screen-sandbox .pod-chip-dm { color: #cfa6f5; }
+#screen-game .pod-chip-dm b, #screen-sandbox .pod-chip-dm b { color: #e9d6ff; }
+/* Dark-Matter pulse (reuses the existing .dm-pulse hook fired by the JS). */
+#screen-game .pod-chip-dm.dm-pulse, #screen-sandbox .pod-chip-dm.dm-pulse { animation: avatar-dm-pulse 800ms ease-out; }
+
+/* Pile buttons rendered as tight HUD chips inside the stats row. Keep the
+   .pile-count child (JS writes counts into it) and .pile-emoji glyph. */
+#screen-game .pod-pile, #screen-sandbox .pod-pile {
+  display: inline-flex; align-items: center; gap: 3px;
+  padding: 1px 4px; border-radius: 3px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(0, 0, 0, 0.28);
+  color: #9fb2d6; font-family: inherit; cursor: pointer;
+  line-height: 1;
+}
+#screen-game .pod-pile:hover, #screen-sandbox .pod-pile:hover { border-color: var(--acc); background: rgba(255, 255, 255, 0.06); }
+#screen-game .pod-pile .pile-emoji, #screen-sandbox .pod-pile .pile-emoji { font-size: 11px; line-height: 1; }
+#screen-game .pod-pile .pile-count, #screen-sandbox .pod-pile .pile-count { font-size: 10px; font-weight: 700; color: #eaf2ff; min-width: 8px; text-align: center; }
+
+/* =========================================================================
+   OPPONENT FACE-DOWN HAND -- peeks DOWN from the top edge (clipped by the
+   stage overflow). The existing per-card fan transform is preserved.
+   ========================================================================= */
+#screen-game .duel-stage .opp-hand-row, #screen-sandbox .duel-stage .opp-hand-row {
+  position: absolute; top: 0; left: 0; right: 0;
+  transform: translateY(-46%);
+  z-index: 4;
+  pointer-events: none;
+  padding: 0;
+  min-height: 0;
+}
+
+/* =========================================================================
+   YOUR HAND -- anchored to the bottom, nudged toward the bottom edge but with
+   enough footroom that the pulsing glow halo is never clipped.
+   ========================================================================= */
+#screen-game .duel-stage .hand-container, #screen-sandbox .duel-stage .hand-container {
+  position: absolute; left: 0; right: 0; bottom: 0;
+  /* The pulsing playable / selected / react drop-shadow halo (keyframes
+     hand-halo-*) blooms up to ~19px OUTSIDE the card silhouette on every side.
+     The stage's overflow:hidden would swallow the halo's lower arc if the cards
+     sat at the very bottom edge. The previous height-RELATIVE translateY(6%)
+     grew with the container (worst on tall desktop frames) and ate most of the
+     footroom, so the lower arc kept clipping. Fix: a small FIXED downward nudge
+     (keeps the "hand rides the bottom" look, constant at every viewport size)
+     PLUS a bottom padding that comfortably exceeds nudge + halo radius, so the
+     card bottoms sit >=20px above the clip line and the full halo reads. The
+     board-kiss is unaffected — that overlap happens at the hand's TOP edge. */
+  transform: translateY(4px);
+  min-height: 0 !important;
+  max-height: none;
+  padding: 4px 4px 24px;
+  z-index: 5;
+}
+
+/* =========================================================================
+   PASS BUTTON -- tactical cyan HUD action (angular clip, Chakra Petch, cyan
+   skip-chevron, NO handshake emoji). The JS sets textContent 'Pass' + emoji;
+   we hide that text with font-size:0 and render the label + chevron via
+   pseudo-elements, so the emoji never shows and no JS change is needed.
+   ========================================================================= */
+#screen-game .duel-stage .hand-action-bar, #screen-sandbox .duel-stage .hand-action-bar {
+  position: absolute; right: 12px; bottom: 82px;
+  z-index: 7;
+  padding: 0; min-height: 0;
+  justify-content: flex-end; gap: 6px;
+}
+#screen-game .hand-action-bar .btn-pass-action, #screen-sandbox .hand-action-bar .btn-pass-action {
+  position: relative;
+  font-family: 'Chakra Petch', sans-serif !important;
+  font-weight: 700;
+  font-size: 0 !important;               /* hides the JS 'Pass' + handshake emoji */
+  letter-spacing: 2.5px; text-transform: uppercase; color: #e7f4ff !important;
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 8px 15px 8px 17px !important;
+  background: linear-gradient(180deg, #1c3350 0%, #0e1c2f 100%) !important;
+  border: none !important;
+  border-top: 2px solid #3fd0ff !important;
+  border-radius: 0 !important;
+  clip-path: polygon(9px 0, 100% 0, 100% calc(100% - 9px), calc(100% - 9px) 100%, 0 100%, 0 9px) !important;
+  box-shadow: inset 0 0 0 1px rgba(63, 208, 255, 0.27), 0 3px 12px rgba(0, 0, 0, 0.6), 0 0 16px -5px #3fd0ff !important;
+  transition: filter 0.15s, transform 0.05s;
+}
+#screen-game .hand-action-bar .btn-pass-action::before, #screen-sandbox .hand-action-bar .btn-pass-action::before {
+  content: 'Pass'; font-size: 13px; letter-spacing: 2.5px;
+}
+#screen-game .hand-action-bar .btn-pass-action::after, #screen-sandbox .hand-action-bar .btn-pass-action::after {
+  content: '\00BB'; color: #3fd0ff; font-size: 13px; letter-spacing: -3px;
+  text-shadow: 0 0 8px #3fd0ff;
+}
+#screen-game .hand-action-bar .btn-pass-action:hover, #screen-sandbox .hand-action-bar .btn-pass-action:hover { filter: brightness(1.18); }
+#screen-game .hand-action-bar .btn-pass-action:active, #screen-sandbox .hand-action-bar .btn-pass-action:active { transform: translateY(1px); }
+
+/* Keep the room bar + hint compact so the stage owns the vertical budget. */
+#screen-game .room-bar, #screen-sandbox .room-bar { flex-shrink: 0; }
+#screen-game .how-to-play-hint, #screen-sandbox .how-to-play-hint { margin: 1px 0; }
+
+/* =========================================================================
+   MOBILE-FIRST LANDSCAPE FIT (baseline 844x390). Tightens the corners so the
+   whole board + pods + hands fit with no vertical scroll on a phone.
+   ========================================================================= */
+@media (orientation: landscape) and (max-height: 560px) {
+  body:has(#screen-game.active) .game-layout { height: 100vh !important; }
+  #screen-game .duel-stage .board-container, #screen-sandbox .duel-stage .board-container { top: 24px; bottom: 66px; }
+  #screen-game .pod, #screen-sandbox .pod { height: 52px; }
+  #screen-game .pod.pod-self, #screen-sandbox .pod.pod-self { bottom: 68px; transform: scale(0.68); }
+  #screen-game .pod.pod-opp, #screen-sandbox .pod.pod-opp { transform: scale(0.68); }
+  #screen-game .duel-stage .hand-action-bar, #screen-sandbox .duel-stage .hand-action-bar { bottom: 72px; }
+  #screen-game .duel-stage .game-board, #screen-sandbox .duel-stage .game-board { gap: 4px; padding: 5px; }
+}
+
+/* Roomier pods on larger (desktop / tablet-landscape) viewports. */
+@media (min-height: 720px) {
+  #screen-game .pod.pod-self, #screen-sandbox .pod.pod-self { transform: scale(0.9); bottom: 92px; }
+  #screen-game .pod.pod-opp, #screen-sandbox .pod.pod-opp { transform: scale(0.9); }
+  #screen-game .duel-stage .board-container, #screen-sandbox .duel-stage .board-container { top: 40px; bottom: 92px; }
+  #screen-game .duel-stage .hand-action-bar, #screen-sandbox .duel-stage .hand-action-bar { bottom: 100px; }
+}
+
+/* =========================================================================
+   SANDBOX GOD-VIEW OVERRIDES (mirrors #screen-game; dev-only second hand).
+   The sandbox shows BOTH hands face-up inside the shared .duel-stage: P1
+   (#sandbox-hand-p0) at the BOTTOM like the live self-hand, and P2
+   (#sandbox-hand-p1) peeking from the TOP edge. The dual-scoped
+   `.duel-stage .hand-container` rule anchors every hand to the bottom, so the
+   P2 (top) hand is re-anchored to the top here. Its inverted downward fan is
+   already defined for .sandbox-hand-top near line 2483. This is the one piece
+   the live layout has no equivalent for (it peeks a face-DOWN opp row instead),
+   so it lives as a small sandbox-scoped override rather than a shared rule.
+   ========================================================================= */
+#screen-sandbox .duel-stage .hand-container.sandbox-hand-top {
+  top: 0; bottom: auto;
+  transform: translateY(-6%);
+  z-index: 4;               /* under the pods (z6), same layer as the opp peek */
+}
+#screen-sandbox .duel-stage .hand-container.sandbox-hand-bottom {
+  z-index: 5;               /* over the top hand; inherits the bottom anchor */
+}

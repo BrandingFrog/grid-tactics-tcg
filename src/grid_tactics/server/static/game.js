@@ -2626,6 +2626,13 @@ function renderOppHandRow(count, elements) {
         _tintCardBack(back, (elements && elements.length > i) ? elements[i] : null);
         row.appendChild(back);
     }
+    // Width-aware overlap (approved 2026-07 duel layout) — same layout engine as
+    // the player hand, at 90% of its max width so the opponent peek stays a hair
+    // narrower. Overrides the legacy --i/--n margin calc; the fan rotation stays.
+    _layoutHandRow(
+        Array.prototype.slice.call(row.querySelectorAll('.opp-hand-card-back')),
+        HAND_MAXW * 0.9
+    );
 }
 
 // Update the 4 pile button counts from the current gameState.
@@ -8629,6 +8636,8 @@ function renderOpponentInfo() {
     if (oppHp) {
         oppHp.textContent = oppPlayer.hp;
     }
+    // Pod HP power-bar (green→amber→red by HP%).
+    paintPodHpBar('opp-hp-bar', oppPlayer.hp);
 
     // Mana (banking pool — single number, not X/Y)
     var oppMana = document.getElementById('opp-mana');
@@ -8670,6 +8679,8 @@ function renderSelfInfo() {
     if (selfHp) {
         selfHp.textContent = myPlayer.hp;
     }
+    // Pod HP power-bar (green→amber→red by HP%).
+    paintPodHpBar('self-hp-bar', myPlayer.hp);
 
     // Mana (banking pool — single number, not X/Y)
     var selfMana = document.getElementById('self-mana');
@@ -8890,7 +8901,13 @@ function renderBoard(opts) {
             if (minion) {
                 var isOwn = minion.owner === perspectiveIdx;
                 cell.classList.add(isOwn ? 'cell-owner-self' : 'cell-owner-opp');
-                cell.innerHTML = renderBoardMinion(minion);
+                // Perspective tilt (Approach A): the .board-standee wrapper
+                // carries the upright counter-rotation via CSS so it stands
+                // the minion up on the reclined board. The animation layer
+                // still writes inline transforms onto the inner .board-minion
+                // (summon scale-in, attack pullback, move slide, damage popup)
+                // and the two compose — the wrapper is never clobbered.
+                cell.innerHTML = '<div class="board-standee">' + renderBoardMinion(minion) + '</div>';
                 // Hover tooltip for board minions
                 (function(m) {
                     cell.addEventListener('mouseenter', function() { showGameTooltip(m.card_numeric_id, this, m); });
@@ -9044,6 +9061,95 @@ function renderHand(opts) {
     // Auto-fit names and effects for hand cards
     fitHandCardNames();
     fitHandCardEffects();
+
+    // Width-aware overlap (approved 2026-07 duel layout). Replaces the legacy
+    // count-based CSS fan (--i/--n margin calc) with a measured row: comfortable
+    // gap when the cards fit, overlap only when they don't. The two-hand
+    // spectator god-view keeps the legacy per-hand CSS fan (mixed hands + labels
+    // in one flex row can't share a single measured spacing). Sandbox mounts
+    // (opts.godView) are explicitly out of scope for the 2026-07 duel layout —
+    // they keep the legacy --i/--n fan, and relayoutHandRows() never revisits
+    // their mounts, so measured inline margins must NOT be stamped there.
+    if (!(isSpectator && spectatorGodMode) && !(opts && opts.godView)) {
+        _layoutHandRow(
+            Array.prototype.slice.call(handEl.querySelectorAll('.card-frame-hand')),
+            HAND_MAXW
+        );
+    }
+}
+
+// ==========================================================================
+// Width-aware hand-row layout (approved 2026-07 duel layout).
+// Given the card elements of a single row, sets an inline margin-left (which
+// wins over the stylesheet's --i/--n calc): a comfortable HAND_ROW_GAP when the
+// cards fit inside min(container, maxW), otherwise an even negative margin that
+// slides them left, capped at HAND_OVERLAP_CAP (45%) of a card width. The
+// maxW cap keeps the row from ever spanning the whole screen / running under
+// the PASS button. Used for BOTH the player hand (#hand-container) and the
+// opponent face-down row (#oppHandRow). Re-run on resize via relayoutHandRows.
+// ==========================================================================
+var HAND_MAXW = 615;          // ~7 cards wide — beyond this the cards overlap
+var HAND_ROW_GAP = 8;         // comfortable spacing when the cards fit
+var HAND_OVERLAP_CAP = 0.45;  // max fraction of a card width they may overlap
+
+function _layoutHandRow(cards, maxW) {
+    var n = cards.length;
+    if (!n) return;
+    var parent = cards[0].parentElement;
+    if (!parent) return;
+    var cardW = cards[0].offsetWidth || cards[0].getBoundingClientRect().width || 0;
+    var avail = Math.min(parent.clientWidth || Infinity, maxW || Infinity);
+    var spacing;
+    if (n <= 1 || !cardW) {
+        spacing = HAND_ROW_GAP;
+    } else if (n * cardW + (n - 1) * HAND_ROW_GAP <= avail) {
+        spacing = HAND_ROW_GAP;                                       // they fit
+    } else {
+        spacing = -Math.min((n * cardW - avail) / (n - 1), cardW * HAND_OVERLAP_CAP);
+    }
+    for (var i = 0; i < n; i++) {
+        cards[i].style.marginLeft = (i === 0 ? 0 : spacing) + 'px';
+        cards[i].style.marginRight = '0px';
+    }
+}
+
+// Re-apply width-aware overlap to the already-rendered rows (no rebuild) so the
+// hand + opponent peek re-fit when the viewport changes size / orientation.
+function relayoutHandRows() {
+    if (isSpectator && spectatorGodMode) return;   // legacy fan owns this case
+    var hc = document.getElementById('hand-container');
+    if (hc) {
+        _layoutHandRow(
+            Array.prototype.slice.call(hc.querySelectorAll('.card-frame-hand')),
+            HAND_MAXW
+        );
+    }
+    var oh = document.getElementById('oppHandRow');
+    if (oh) {
+        _layoutHandRow(
+            Array.prototype.slice.call(oh.querySelectorAll('.opp-hand-card-back')),
+            HAND_MAXW * 0.9
+        );
+    }
+}
+window.addEventListener('resize', relayoutHandRows);
+
+// Paint a pod HP power-bar from a live HP value (approved 2026-07 duel layout).
+// Mirrors the self-contained observer in game.html, but called directly from
+// renderSelfInfo/renderOppInfo so the bar tracks the number on every state
+// update independent of MutationObserver timing. hue = pct*1.2 → green (full)
+// through amber to red (near death). Heals above the starting pool cap at 100%.
+var POD_MAX_HP = 20;
+function paintPodHpBar(barId, hp) {
+    var bar = document.getElementById(barId);
+    if (!bar) return;
+    var h = parseInt(hp, 10);
+    if (isNaN(h)) h = 0;
+    var pct = Math.max(0, Math.min(100, (h / POD_MAX_HP) * 100));
+    var hue = pct * 1.2;
+    bar.style.width = pct + '%';
+    bar.style.background = 'linear-gradient(180deg, hsl(' + hue + ',80%,58%), hsl(' + hue + ',75%,44%))';
+    bar.style.boxShadow = '0 0 8px -1px hsl(' + hue + ',80%,50%)';
 }
 
 // =============================================
