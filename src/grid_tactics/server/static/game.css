@@ -9207,15 +9207,18 @@ body:has(#screen-game.active) .game-layout {
   transform-origin: center bottom;
   transform-style: preserve-3d;
 }
-/* Cells must keep (not flatten) the 3D context so the standee counter-
-   rotation genuinely stands the minion up instead of merely squashing it. */
+/* Cells must keep (not flatten) the 3D context so the minion inside genuinely
+   reclines into the board plane instead of rendering as a flat overlay. */
 #screen-game .duel-stage .board-cell,
 #screen-sandbox .duel-stage .board-cell {
   transform-style: preserve-3d;
 }
 /* Base sizing is UNSCOPED so the wrapper fills its cell everywhere it is
-   rendered. The upright counter-rotation is scoped to the duel/sandbox
-   stages (both tilted). */
+   rendered. On the tilted stages the minion LIES FLAT in the board plane
+   (user-chosen 2026-07-03 over upright standees): the wrapper carries NO
+   counter-rotation, so the minion inherits the board's rotateX(20deg) and
+   reclines into the perspective — its border/edges follow the tilt, far rows
+   recede smaller, and nothing overflows its cell to cover the row behind it. */
 .board-standee {
   width: 100%;
   height: 100%;
@@ -9223,7 +9226,7 @@ body:has(#screen-game.active) .game-layout {
 }
 #screen-game .duel-stage .board-standee,
 #screen-sandbox .duel-stage .board-standee {
-  transform: rotateX(-20deg);
+  transform: none;
   transform-origin: center bottom;
   transform-style: preserve-3d;
 }
