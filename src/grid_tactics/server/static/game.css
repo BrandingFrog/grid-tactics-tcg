@@ -1554,6 +1554,97 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
+  /* Positioning context for the player avatar pods (2026-07). */
+  position: relative;
+}
+
+/* =====================================================================
+   Player avatars (2026-07) — one pod at each sacrifice end of the board.
+   Opponent pod sits behind their home row (top-left of the board area),
+   own pod behind your home row (bottom-left). Element-neutral placeholder
+   art: an initial disc + live HP + Dark Matter pool (public info).
+   ===================================================================== */
+.player-avatar {
+  position: absolute;
+  left: 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  z-index: 6;
+  cursor: pointer;
+  user-select: none;
+  padding: 4px;
+  border-radius: 10px;
+  transition: background 0.15s ease;
+}
+.player-avatar:hover,
+.player-avatar:focus-visible {
+  background: rgba(255, 255, 255, 0.06);
+  outline: none;
+}
+.player-avatar.avatar-opp  { top: 10px; }
+.player-avatar.avatar-self { bottom: 10px; }
+.avatar-disc {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  font-weight: 700;
+  color: #eaf6ff;
+  background: linear-gradient(135deg, #223349 0%, #101c2e 100%);
+  border: 2px solid rgba(255, 255, 255, 0.28);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5);
+}
+.avatar-opp .avatar-disc { border-color: rgba(255, 107, 107, 0.55); }
+.avatar-self .avatar-disc { border-color: rgba(0, 212, 255, 0.55); }
+.avatar-hp,
+.avatar-dm {
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 6px;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.45);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  color: #fff;
+}
+.avatar-dm { color: #cfa6f5; border-color: rgba(130, 50, 180, 0.5); }
+.avatar-dm.dm-pulse { animation: avatar-dm-pulse 800ms ease-out; }
+@keyframes avatar-dm-pulse {
+  0%   { transform: scale(1);    box-shadow: 0 0 0 0 rgba(130, 50, 180, 0.7); }
+  40%  { transform: scale(1.25); box-shadow: 0 0 10px 4px rgba(130, 50, 180, 0.55); }
+  100% { transform: scale(1);    box-shadow: 0 0 0 0 rgba(130, 50, 180, 0); }
+}
+
+/* Player preview (avatar click → game-tooltip host): big neutral disc in
+   the art slot where a card render normally goes. */
+.player-preview-disc {
+  width: 110px;
+  height: 110px;
+  margin: 12px auto;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 48px;
+  font-weight: 700;
+  color: #eaf6ff;
+  background: linear-gradient(135deg, #223349 0%, #101c2e 100%);
+  border: 3px solid rgba(255, 255, 255, 0.3);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.5);
+}
+
+@media (max-width: 900px) {
+  .player-avatar { left: 4px; padding: 2px; }
+  .avatar-disc { width: 32px; height: 32px; font-size: 15px; }
+  .avatar-hp, .avatar-dm { font-size: 10px; padding: 1px 4px; }
 }
 
 .game-board {
@@ -4431,6 +4522,42 @@ body {
   margin-left: calc(-14px * min(1, var(--i)));
   position: relative;
   z-index: calc(var(--i) + 1);
+}
+
+/* Element-tinted card backs (2026-07) — DESIGNED information leak: the
+   server exposes each opponent hand card's ELEMENT (only), and the back is
+   tinted with the matching element color (--back-tint set from JS via
+   ELEMENT_MAP). The face-down DECK pile stays neutral — only HAND backs
+   tint. Falls back to the neutral back above if color-mix is unsupported. */
+.opp-hand-card-back.element-back {
+  --back-tint: rgb(128, 128, 128);
+  border-color: color-mix(in srgb, var(--back-tint) 65%, #ffffff 10%);
+  background:
+    repeating-linear-gradient(45deg,
+      rgba(0, 0, 0, 0.30) 0 6px,
+      rgba(0, 0, 0, 0.06) 6px 12px),
+    linear-gradient(135deg,
+      color-mix(in srgb, var(--back-tint) 55%, #0a1a30) 0%,
+      color-mix(in srgb, var(--back-tint) 22%, #061224) 100%);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.4),
+    inset 0 0 0 1px color-mix(in srgb, var(--back-tint) 40%, transparent);
+}
+
+/* Mini tinted back used by the redacted overdraw-burn fallback nudge. */
+.overdraw-burn-back {
+  --back-tint: rgb(128, 128, 128);
+  width: 52px;
+  height: 70px;
+  margin: 0 auto 6px;
+  border-radius: 5px;
+  border: 1px solid color-mix(in srgb, var(--back-tint) 65%, #ffffff 10%);
+  background:
+    repeating-linear-gradient(45deg,
+      rgba(0, 0, 0, 0.30) 0 6px,
+      rgba(0, 0, 0, 0.06) 6px 12px),
+    linear-gradient(135deg,
+      color-mix(in srgb, var(--back-tint) 55%, #0a1a30) 0%,
+      color-mix(in srgb, var(--back-tint) 22%, #061224) 100%);
 }
 
 /* Pile modal overlay — reuses the tutor-modal aesthetic. */

@@ -531,8 +531,21 @@
 
         <!-- 5x5 Board -->
         <div class="board-container">
+          <!-- Player avatars (2026-07): one pod at each sacrifice end of the
+               board — opponent behind their home row (top), you behind yours
+               (bottom). Click either to open the player details preview. -->
+          <div class="player-avatar avatar-opp" id="avatar-opp" role="button" tabindex="0" title="View opponent details">
+            <div class="avatar-disc" id="avatar-opp-disc">P2</div>
+            <div class="avatar-hp">🤍<span class="avatar-hp-num" id="avatar-opp-hp">20</span></div>
+            <div class="avatar-dm" id="avatar-opp-dm">🌑<span class="avatar-dm-num" id="avatar-opp-dm-num">0</span></div>
+          </div>
           <div id="game-board" class="game-board">
             <!-- 25 cells rendered by JS -->
+          </div>
+          <div class="player-avatar avatar-self" id="avatar-self" role="button" tabindex="0" title="View your details">
+            <div class="avatar-disc" id="avatar-self-disc">P1</div>
+            <div class="avatar-hp">🤍<span class="avatar-hp-num" id="avatar-self-hp">20</span></div>
+            <div class="avatar-dm" id="avatar-self-dm">🌑<span class="avatar-dm-num" id="avatar-self-dm-num">0</span></div>
           </div>
         </div>
 

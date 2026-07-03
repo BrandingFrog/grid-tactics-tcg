@@ -392,12 +392,17 @@ def test_minion_py_dark_matter_comment_not_stale():
 
 
 def test_enums_dark_matter_buff_comment_not_stale():
+    """Dark Matter pool redesign 2026-07: the buff scales by the
+    activating PLAYER's pool — the comment must not claim caster-minion
+    own-stacks scaling anymore."""
     src = (ROOT / "src" / "grid_tactics" / "enums.py").read_text(
         encoding="utf-8"
     )
     m = re.search(r"DARK_MATTER_BUFF = 11\s*#(.*)", src)
     assert m, "DARK_MATTER_BUFF comment not found"
-    assert "player's Dark Matter stacks" not in m.group(1), (
-        "activated-ability path scales by the CASTER minion's stacks, not "
-        "the player's pool — comment is stale"
+    assert "minion's own Dark Matter stacks" not in m.group(1), (
+        "pool redesign: the buff reads the PLAYER's pool — comment is stale"
+    )
+    assert "pool" in m.group(1).lower(), (
+        "DARK_MATTER_BUFF comment should reference the player pool"
     )

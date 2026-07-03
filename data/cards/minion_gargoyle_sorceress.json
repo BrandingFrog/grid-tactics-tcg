@@ -32,16 +32,17 @@
         }
     ],
     "tips": [
-        "20🗡️/50🤍 for 5 mana is already a wall. Placement matters — drop her one row in front of a Dark ranged ally and the DM buff triples.",
+        "20🗡️/50🤍 for 5 mana is already a wall. Placement matters — drop her one row in front of a Dark ranged ally and the Dark Matter buff triples.",
         "Best pair: a Dark ranged minion (Range > 0, Element Dark) sitting behind her in the same column — Shadow Blaster and Grave Caller both qualify. Erebus does not (Range 0, melee).",
-        "DM here means your TOTAL Dark Matter across your minions on the board — she has none of her own at Summon. Without the placement condition you get +DM🗡️/+DM🤍. With it you get +3×DM🗡️/+3×DM🤍. At 5 total DM that's +15🗡️/+15🤍 vs +5🗡️/+5🤍.",
-        "The 2-card discard cost is 'any' tribe — dump cards you can't play this turn rather than sitting on them.",
-        "Discarding Dark Matter Stash triggers its on-Discard +1 DM to ally Mages already on the board. The grant resolves before the Sorceress lands, so she herself does not receive it — but your other Mages do."
+        "The buff reads your Dark Matter POOL — a player resource. Without the placement condition you get +pool🗡️/+pool🤍. With it you get +3×pool🗡️/+3×pool🤍. At 5 Dark Matter that's +15🗡️/+15🤍 vs +5🗡️/+5🤍.",
+        "She's a Dark Mage herself — once on board she counts toward every per-Dark-Mage gain and receives Dark Matter Stash's buff.",
+        "Discarding Dark Matter Stash to pay her cost triggers its on-Discard gain (+1 Dark Matter per Dark Mage already on the board). That gain lands BEFORE her Summon buff resolves, so it pumps her own buff."
     ],
     "rulings": [
         "The placement condition checks the tile directly behind her (one row toward your own back row) when her Summon effects resolve — after the post-summon react window. A react that removes the Dark ranged ally behind her before then cancels the triple; a friendly Dark ranged minion must sit there at resolution, i.e. she must be directly in front of it.",
-        "condition_multiplier applies to the scaled amount: base 0 + your total Dark Matter across your live minions = N, then N × 3 = final buff. Her own DM is always 0 at Summon — the scale reads your board's pool, not her personal stacks.",
+        "condition_multiplier applies to the scaled amount: base 0 + YOUR Dark Matter pool = N, then N × 3 = final buff. Dark Matter is a player pool (redesign 2026-07) — she carries no stacks of her own.",
         "Both buffs (atk and hp) share the same placement condition — either both triple or neither triples.",
-        "Discarded cards go to the Exhaust pile, not the Graveyard. Cost-discards fire on-Discard triggers (e.g. Dark Matter Stash's DM grant)."
+        "She is a [[Dark Mage]] (element Dark, tribe Mage) — she counts toward per-Dark-Mage gains and receives Dark-Mage-targeted buffs once on board. She is NOT on the board yet while her own summon costs are being paid, so a cost-discard's gain does not count her.",
+        "Discarded cards go to the Exhaust pile, not the Graveyard. Cost-discards fire on-Discard triggers (e.g. Dark Matter Stash's Dark Matter gain)."
     ]
 }

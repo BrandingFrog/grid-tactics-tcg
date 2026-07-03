@@ -20,13 +20,43 @@ from grid_tactics.types import (
 )
 
 
-def filter_state_for_player(state_dict: dict, viewer_idx: int) -> dict:
+def _element_of_card(library, numeric_id) -> int | None:
+    """Resolve a card's element as its wire int (matches _build_card_defs).
+
+    Returns None when the library is unavailable, the id is unknown, or
+    the card has no element (element-neutral).
+    """
+    if library is None or numeric_id is None:
+        return None
+    try:
+        card = library.get_by_id(int(numeric_id))
+    except Exception:
+        return None
+    return int(card.element) if card.element is not None else None
+
+
+def filter_state_for_player(state_dict: dict, viewer_idx: int, library=None) -> dict:
     """Filter a GameState dict for a specific player's view.
 
     Hides:
       - Opponent's hand contents (replaced with empty list + hand_count)
       - Both players' deck contents (replaced with empty list + deck_count)
       - RNG seed (removed entirely)
+
+    Element card backs (2026-07 redesign — DESIGNED information leak):
+      - The opponent's hand additionally exposes ``hand_elements``: a list
+        (parallel to the hidden hand, same order/length) of per-card
+        ELEMENT wire ints (``int(Element)``, matching card_defs'
+        ``element`` field; ``None`` for element-neutral cards or when no
+        ``library`` is passed). Card id / name / cost are NEVER exposed —
+        only the element, so the client can tint card backs. The viewer's
+        OWN hand is unchanged (full card ids). The face-down DECK pile
+        stays fully hidden (count only, no elements).
+
+    Dark Matter pool redesign 2026-07:
+      - BOTH players' ``dark_matter`` pools are PUBLIC — the field passes
+        through unfiltered for both sides, and is defaulted to 0 when a
+        legacy state dict lacks the key.
 
     Preserves:
       - Board, minions, HP, mana, phase, turn_number,
@@ -41,6 +71,9 @@ def filter_state_for_player(state_dict: dict, viewer_idx: int) -> dict:
     Args:
         state_dict: Output of GameState.to_dict().
         viewer_idx: 0 or 1 -- which player is viewing.
+        library: Optional CardLibrary used to resolve opponent-hand card
+            elements. When None (legacy callers), ``hand_elements`` is
+            emitted as a list of ``None`` of the correct length.
 
     Returns:
         Deep-copied and filtered dict safe to send to the viewer.
@@ -49,15 +82,23 @@ def filter_state_for_player(state_dict: dict, viewer_idx: int) -> dict:
 
     opponent_idx = 1 - viewer_idx
 
-    # Hide opponent hand: store count, then clear
+    # Hide opponent hand: store count + per-card elements, then clear.
+    # hand_elements order matches the (hidden) hand order so draw/burn
+    # animations can tint the correct back.
     opp_player = filtered["players"][opponent_idx]
     opp_player["hand_count"] = len(opp_player["hand"])
+    opp_player["hand_elements"] = [
+        _element_of_card(library, nid) for nid in opp_player["hand"]
+    ]
     opp_player["hand"] = []
 
     # Hide both decks: store counts, then clear
     for player_dict in filtered["players"]:
         player_dict["deck_count"] = len(player_dict["deck"])
         player_dict["deck"] = []
+        # Dark Matter pool: PUBLIC for both sides. Legacy-safe default
+        # for state dicts serialized before the 2026-07 pool redesign.
+        player_dict.setdefault("dark_matter", 0)
 
     # Strip seed
     filtered.pop("seed", None)
@@ -533,6 +574,7 @@ def filter_engine_events_for_viewer(
     viewer_idx: int,
     *,
     god_mode: bool = False,
+    library=None,
 ):
     """Phase 14.8-03b: per-viewer EngineEvent filter.
 
@@ -548,6 +590,13 @@ def filter_engine_events_for_viewer(
         opponent's hand-size delta is public). Sandbox cheat-driven
         ``add_card_to_zone`` that looks like a draw uses the same
         rule because the wire format is uniform.
+        ELEMENT CARD BACKS (2026-07 redesign): the redacted payload
+        gains an ``element`` key — the drawn card's element wire int
+        (``int(Element)``; ``None`` if unresolvable) — and ONLY that.
+        This is a DESIGNED leak so the opponent's draw / overdraw-burn
+        animation can tint the card back by element. Requires the
+        ``library`` kwarg to resolve the element from the (pre-
+        redaction) ``card_numeric_id``.
         EXCEPTION (turn-structure redesign 2026-07): an overdraw BURN
         is public. When the payload marks the drawn card as sent to
         the Exhaust Pile instead of hand (any of: truthy ``burned`` /
@@ -622,6 +671,13 @@ def filter_engine_events_for_viewer(
                 owner = ev.payload.get("owner_idx", ev.payload.get("owner"))
             if owner is not None and int(owner) != viewer_idx:
                 redacted = dict(ev.payload)
+                # Element card backs (2026-07): resolve the element
+                # BEFORE stripping identity — it is the only card info
+                # the opponent is allowed to see (designed leak for
+                # tinted card-back draw animations).
+                redacted["element"] = _element_of_card(
+                    library, ev.payload.get("card_numeric_id")
+                )
                 # Strip every card-identity key the engine might have
                 # written into the payload — be exhaustive so a
                 # forgotten key never leaks identity.
@@ -685,7 +741,7 @@ def filter_engine_events_for_viewer(
 
 
 def filter_state_for_spectator(
-    state_dict: dict, god_mode: bool, perspective_idx: int = 0
+    state_dict: dict, god_mode: bool, perspective_idx: int = 0, library=None
 ) -> dict:
     """Filter game state for a spectator (Phase 14.4-02).
 
@@ -694,10 +750,11 @@ def filter_state_for_spectator(
       matches all remain visible. Adds top-level flag
       ``spectator_god_mode=True`` for client UI.
 
-    god_mode=False: delegate to ``filter_state_for_player(state, perspective_idx)``.
-      The spectator sees exactly what player ``perspective_idx`` sees
-      (default 0 = Player 1's perspective). Inherits all hidden-info
-      filtering rules including pending-tutor opponent stripping.
+    god_mode=False: delegate to ``filter_state_for_player(state, perspective_idx,
+      library)``. The spectator sees exactly what player ``perspective_idx``
+      sees (default 0 = Player 1's perspective). Inherits all hidden-info
+      filtering rules including pending-tutor opponent stripping and the
+      element-card-back ``hand_elements`` leak on the opposing hand.
 
     Always adds top-level ``is_spectator=True`` so the client knows to
     enter spectator mode, plus ``spectator_perspective`` to record which
@@ -706,7 +763,7 @@ def filter_state_for_spectator(
     if god_mode:
         filtered = copy.deepcopy(state_dict)
     else:
-        filtered = filter_state_for_player(state_dict, perspective_idx)
+        filtered = filter_state_for_player(state_dict, perspective_idx, library)
     filtered["is_spectator"] = True
     filtered["spectator_god_mode"] = god_mode
     filtered["spectator_perspective"] = perspective_idx

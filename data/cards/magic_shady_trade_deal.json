@@ -11,22 +11,23 @@
         {
             "type": "grant_dark_matter",
             "trigger": "on_play",
-            "target": "all_allies",
-            "target_tribe": "Mage",
+            "target": "owner_player",
+            "scale_with": "dark_mages",
             "amount": 1
         }
     ],
     "tips": [
-        "The best discard target is Dark Matter Stash — you get Shady's +1 DM per Mage AND Stash's on-discard +1 DM per Mage, netting +2 DM per Mage for 1 mana.",
+        "The best discard target is Dark Matter Stash — you get Shady's gain AND Stash's on-discard gain, each worth +1 Dark Matter per friendly Dark Mage, for 1 mana total.",
         "Discarding any card also enables Illicit Shadow Stones on your next turn (play condition: discarded last turn). Plan your sequencing across turns.",
-        "At only 1 mana, this is one of the cheapest actions in the game — an easy pick for your single action on a light-mana turn. Play a Mage one turn, then follow up with Shady Trade Deal the next to immediately start building DM.",
+        "At only 1 mana, this is one of the cheapest actions in the game — an easy pick for your single action on a light-mana turn. Play a Dark Mage one turn, then follow up with Shady Trade Deal the next to immediately start building your pool.",
         "Be careful what you discard — cards go to the exhaust pile, not the grave. Ratical Resurrection cannot bring back discarded cards.",
-        "This card is the engine of the Dark Mage archetype. Without it, DM stacking is much slower — in Mage-heavy decks treat every copy as precious, and never burn it as discard fodder for another card."
+        "This card is the engine of the Dark Matter archetype. Without it, pool growth is much slower — treat every copy as precious, and never burn it as discard fodder for another card."
     ],
     "rulings": [
         "To play this card, you must discard one other card from your hand (any card, any type). The discarded card goes to the exhaust pile.",
-        "Each friendly Mage on the board gains +1 Dark Matter. Mages in hand or deck are not affected.",
-        "The discarded card may trigger its own on-discard effects (e.g. Dark Matter Stash grants Dark Matter to all Mages when discarded).",
+        "You gain +1 Dark Matter per friendly [[Dark Mage]] on the board (element Dark AND tribe exactly Mage). Dark Mages in hand or deck do not count. With zero Dark Mages on board, the gain is 0.",
+        "Dark Matter is a PLAYER pool — the gain credits your pool, not any minion. Both players can always see both pools.",
+        "The discarded card may trigger its own on-discard effects (e.g. Dark Matter Stash grants +1 Dark Matter per friendly Dark Mage when discarded).",
         "If you have no other cards in hand, you cannot pay the discard cost and cannot play this card."
     ]
 }

@@ -977,16 +977,17 @@ class TestEndOfTurnTriggers:
         from grid_tactics.react_stack import enter_end_of_turn
 
         battery_id = library.get_numeric_id("dark_matter_battery")
-        # Battery on P1's side with 3 DM stacks — damage = 0 + 3 = 3.
+        # Battery on P1's side; P1 pool = 3 DM — damage = 0 + 3 = 3
+        # (Dark Matter pool redesign 2026-07: scale reads the player pool).
         battery = MinionInstance(
             instance_id=0, card_numeric_id=battery_id,
             owner=PlayerSide.PLAYER_1, position=(0, 2), current_health=20,
-            dark_matter_stacks=3,
         )
         board = Board.empty().place(0, 2, 0)
         p1 = Player(
             side=PlayerSide.PLAYER_1, hp=STARTING_HP,
             current_mana=3, max_mana=3, hand=(), deck=(), grave=(),
+            dark_matter=3,
         )
         p2 = Player(
             side=PlayerSide.PLAYER_2, hp=STARTING_HP,
@@ -1016,12 +1017,12 @@ class TestEndOfTurnTriggers:
         battery = MinionInstance(
             instance_id=0, card_numeric_id=battery_id,
             owner=PlayerSide.PLAYER_1, position=(0, 2), current_health=20,
-            dark_matter_stacks=1,
         )
         board = Board.empty().place(0, 2, 0)
         p1 = Player(
             side=PlayerSide.PLAYER_1, hp=STARTING_HP,
             current_mana=3, max_mana=3, hand=(), deck=(), grave=(),
+            dark_matter=1,  # pool redesign: DM lives on the player
         )
         p2 = Player(
             side=PlayerSide.PLAYER_2, hp=STARTING_HP,
@@ -1194,12 +1195,12 @@ class TestResolveReactStackAfterActionRoutesThroughEnterEnd:
         battery = MinionInstance(
             instance_id=0, card_numeric_id=battery_id,
             owner=PlayerSide.PLAYER_1, position=(0, 2), current_health=20,
-            dark_matter_stacks=1,
         )
         board = Board.empty().place(0, 2, 0)
         p1 = Player(
             side=PlayerSide.PLAYER_1, hp=STARTING_HP,
             current_mana=3, max_mana=3, hand=(), deck=(), grave=(),
+            dark_matter=1,  # pool redesign: DM lives on the player
         )
         p2 = Player(
             side=PlayerSide.PLAYER_2, hp=STARTING_HP,

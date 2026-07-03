@@ -63,16 +63,14 @@ from grid_tactics.types import (
 def effective_mana_cost(card_def, state: GameState, player_idx: int) -> int:
     """Compute effective mana cost after cost reductions (e.g. dark_matter).
 
-    Returns max(0, base_cost - reduction). Summing dark_matter_stacks across
-    all of the player's minions on the board.
+    Returns max(0, base_cost - reduction). Dark Matter pool redesign
+    2026-07: cost_reduction="dark_matter" (Erebus) subtracts the PLAYER's
+    Dark Matter pool (Player.dark_matter). Reading the pool does NOT
+    consume it.
     """
     cost = card_def.mana_cost
     if card_def.cost_reduction == "dark_matter":
-        side = state.players[player_idx].side
-        total_dm = sum(
-            m.dark_matter_stacks for m in state.minions if m.owner == side
-        )
-        cost = max(0, cost - total_dm)
+        cost = max(0, cost - state.players[player_idx].dark_matter)
     return cost
 
 

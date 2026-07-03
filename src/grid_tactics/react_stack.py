@@ -2259,7 +2259,17 @@ def resolve_react_stack(
                 resolved_effect = effect
                 if effect.scale_with in ("destroyed_attack", "destroyed_attack_plus_dm"):
                     if effect.scale_with == "destroyed_attack_plus_dm":
-                        bonus = entry.destroyed_attack + entry.destroyed_dm
+                        # Dark Matter pool redesign 2026-07: the DM half
+                        # reads the CASTER PLAYER's pool at resolution
+                        # time (minions no longer carry stacks).
+                        # entry.destroyed_dm is deprecated / always 0 for
+                        # new casts; still added for in-flight legacy
+                        # saves captured before the redesign.
+                        bonus = (
+                            entry.destroyed_attack
+                            + state.players[entry.player_idx].dark_matter
+                            + entry.destroyed_dm
+                        )
                     else:
                         bonus = entry.destroyed_attack
                     if bonus > 0:

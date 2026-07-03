@@ -12,22 +12,22 @@
         {
             "type": "grant_dark_matter",
             "trigger": "on_play",
-            "target": "all_allies",
-            "target_tribe": "Mage",
+            "target": "owner_player",
+            "scale_with": "dark_mages",
             "amount": 1
         }
     ],
     "tips": [
-        "The classic setup: play Shady Trade Deal (discard any card) on turn N, then play Illicit Shadow Stones for free on turn N+1. Two DM triggers across two turns for just 1 mana total.",
-        "The react mode is a hidden counter to discard-heavy opponents — if they use their own Shady Trade Deal, you can react with this for 1 mana to steal DM momentum.",
+        "The classic setup: play Shady Trade Deal (discard any card) on turn N, then play Illicit Shadow Stones for free on turn N+1. Two pool gains across two turns for just 1 mana total.",
+        "The react mode is a hidden counter to discard-heavy opponents — if they use their own Shady Trade Deal, you can react with this for 1 mana to steal Dark Matter momentum.",
         "This is one of the few cards that can function as both a proactive play and a reactive counter. Keep it in hand even if you can't meet the play condition — the react mode may come up.",
-        "In a Mage-heavy board, this card's value scales with your Mage count. With 3 Mages out, it's +3 DM total for 0 mana.",
+        "With a wide Dark Mage board, this card's value scales with your Dark Mage count. With 3 Dark Mages out, it's +3 Dark Matter to your pool for 0 mana.",
         "Discarding this card via Shady Trade Deal does NOT trigger its effect — it has no on-discard trigger. Save Dark Matter Stash for discard fodder instead."
     ],
     "rulings": [
         "This card can only be played from hand if you discarded a card on your previous turn (e.g. via Shady Trade Deal).",
-        "When played as a magic card (0 mana), each friendly Mage gains +1 Dark Matter.",
-        "Can also be played as a react (1 mana) when your opponent discards a card. The same effect triggers: each friendly Mage gains +1 Dark Matter.",
+        "When played as a magic card (0 mana), you gain +1 Dark Matter per friendly [[Dark Mage]] on the board (element Dark AND tribe exactly Mage). The gain credits your PLAYER pool, not any minion.",
+        "Can also be played as a react (1 mana) when your opponent discards a card. The same effect triggers: +1 Dark Matter per friendly Dark Mage.",
         "The react mode does not require the 'discarded last turn' play condition — it only needs the opponent to discard.",
         "Cards that BURN to the Exhaust Pile from drawing on a full hand are NOT discards. An overdraw burn (yours or your opponent's) does not satisfy this card's play condition and does not open its react mode — only paying a discard cost (e.g. Shady Trade Deal) counts."
     ]

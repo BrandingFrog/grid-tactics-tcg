@@ -74,7 +74,17 @@ _TRIGGER_PREFIX: dict[int | str, str] = {
     5: "[[End]]", "passive": "[[End]]",
     6: "[[Discarded]]", "on_discard": "[[Discarded]]",
     7: "Passive", "aura": "Passive",
+    # 2026-07 turn structure: ON_START_OF_TURN fires in the Rally Phase,
+    # ON_END_OF_TURN in the Decay Phase (both keywords in data/GLOSSARY.md).
+    9: "[[Rally]]", "on_start_of_turn": "[[Rally]]",
+    10: "[[Decay]]", "on_end_of_turn": "[[Decay]]",
 }
+
+# Both Dark-Matter scale spellings live in card JSONs: 'dark_matter'
+# (a minion's own stacks) and 'player_dark_matter' (the owner's pooled
+# total — e.g. Gargoyle Sorceress). Rules-text rendering treats both as
+# DM-scaled. Mirrors _isDmScale in game.js.
+_DM_SCALES = ("dark_matter", "player_dark_matter")
 
 
 # ---------------------------------------------------------------------------
@@ -178,9 +188,13 @@ def derive_keywords(card: dict) -> list[str]:
             kws.add("End of Turn")
         if trigger == "on_discard":
             kws.add("Discarded")
+        if trigger in (9, "on_start_of_turn"):
+            kws.add("Rally")
+        if trigger in (10, "on_end_of_turn"):
+            kws.add("Decay")
 
         # scale_with
-        if eff.get("scale_with") == "dark_matter":
+        if eff.get("scale_with") in _DM_SCALES:
             kws.add("Dark Matter")
 
         # Effect type keywords
@@ -191,7 +205,12 @@ def derive_keywords(card: dict) -> list[str]:
             "destroy": "Destroy",
             "negate": "Negate",
             "leap": "Leap",
-            "rally_forward": "Rally",
+            # 2026-07 keyword rename: the movement keyword "Rally" is now
+            # "March". "rally_forward" is the legacy JSON spelling; "march" /
+            # "march_forward" are the enum aliases (enums.py EffectType 6).
+            "rally_forward": "March",
+            "march": "March",
+            "march_forward": "March",
             "deploy_self": "Summon",
             "grant_dark_matter": "Dark Matter",
             "dark_matter_buff": "Dark Matter",
@@ -313,7 +332,7 @@ def build_rules_text(card: dict, name_map: dict[str, str] | None = None) -> str:
 
         if eff_type == "damage":
             scale = eff.get("scale_with")
-            if scale == "dark_matter":
+            if scale in _DM_SCALES:
                 desc = f"{pfx}Deal ([[Dark Matter]]) damage" if amount == 0 else f"{pfx}Deal {amount} + ([[Dark Matter]]) damage"
             elif scale in ("destroyed_attack", "destroyed_attack_plus_dm",
                            "sacrificed_attack", "sacrificed_attack_plus_dm"):
@@ -334,10 +353,17 @@ def build_rules_text(card: dict, name_map: dict[str, str] | None = None) -> str:
             tribe = eff.get("target_tribe", "")
             tribe_text = "Dark Mages" if tribe == "Mage" else (tribe + "s" if tribe else "allies")
             icon = "🗡️" if eff_type == "buff_attack" else "🤍"
-            if scale == "dark_matter":
+            if scale in _DM_SCALES:
                 other = "buff_health" if eff_type == "buff_attack" else "buff_attack"
-                has_pair = any(e.get("type") == other and e.get("scale_with") == "dark_matter" and e.get("target") == eff.get("target") for e in render_effects)
-                if eff_type == "buff_attack" and has_pair:
+                has_pair = any(e.get("type") == other and e.get("scale_with") in _DM_SCALES and e.get("target") == eff.get("target") for e in render_effects)
+                is_ally_buff = eff.get("target") in (5, "all_allies")
+                if is_ally_buff and has_pair:
+                    # Paired ally-wide DM buff (Dark Matter Stash): one
+                    # combined clause naming the buffed tribe.
+                    if eff_type == "buff_health":
+                        continue
+                    desc = f"{pfx}Ally {tribe_text} gain ([[Dark Matter]])🗡️🤍"
+                elif eff_type == "buff_attack" and has_pair:
                     desc = f"{pfx}Gain ([[Dark Matter]])🗡️🤍"
                     # Placement condition modifier
                     pcond = eff.get("placement_condition")
@@ -354,9 +380,11 @@ def build_rules_text(card: dict, name_map: dict[str, str] | None = None) -> str:
             desc = f"{pfx}[[Negate]]"
         elif eff_type == "deploy_self":
             desc = f"{pfx}[[Summon]]"
-        elif eff_type == "rally_forward":
+        elif eff_type in ("rally_forward", "march", "march_forward"):
+            # 2026-07 keyword rename: movement keyword is "March" ([[Rally]]
+            # now names the start-of-turn phase, a different mechanic).
             card_name = card.get("name", "this unit")
-            desc = f"Move: [[Rally]] friendly {card_name}"
+            desc = f"Move: [[March]] friendly {card_name}"
         elif eff_type == "promote":
             target_id = card.get("promote_target", "")
             if target_id:
@@ -406,17 +434,24 @@ def build_rules_text(card: dict, name_map: dict[str, str] | None = None) -> str:
                 burn_target = burn_target_map.get(target, "")
             desc = f"{pfx}[[Burn]]{burn_target}"
         elif eff_type == "grant_dark_matter":
+            # DM pool redesign 2026-07: canonical shape is target
+            # "owner_player" + scale_with "dark_mages" (+N per friendly
+            # Dark Mage). Legacy all_allies/target_tribe JSONs render the
+            # same wording.
             tribe = eff.get("target_tribe", "")
-            tribe_text = "Dark Mage" if tribe == "Mage" else (tribe or "ally")
+            tribe_text = "Dark Mage" if tribe in ("Mage", "") else tribe
             target_val = eff.get("target", 0)
-            if target_val in (5, "all_allies"):
+            if (
+                eff.get("scale_with") == "dark_mages"
+                or target_val in (5, "all_allies")
+            ):
                 desc = f"{pfx}[[Dark Matter]] +{amount} per ally {tribe_text}"
             else:
                 desc = f"{pfx}[[Dark Matter]] +{amount}"
         elif eff_type == "dark_matter_buff":
             desc = f"Active: Target gains ([[Dark Matter]])🗡️"
         elif eff_type == "passive_heal":
-            desc = f"[[End]]: [[Heal]] {amount}"
+            desc = f"[[Rally]]: [[Heal]] {amount}"
         elif eff_type == "leap":
             desc = "[[Move]]: [[Leap]]"
         elif eff_type == "revive":
@@ -491,7 +526,7 @@ def build_rules_text(card: dict, name_map: dict[str, str] | None = None) -> str:
                     effect_parts.append("[[Negate]]")
                 elif eff_type == "grant_dark_matter":
                     tribe = eff.get("target_tribe", "")
-                    tribe_text = "Dark Mage" if tribe == "Mage" else (tribe or "ally")
+                    tribe_text = "Dark Mage" if tribe in ("Mage", "") else tribe
                     effect_parts.append(f"[[Dark Matter]] +{eff.get('amount', 1)} per ally {tribe_text}")
                 else:
                     effect_parts.append(eff_type)
@@ -625,7 +660,7 @@ def card_to_wikitext(
                 eff_type = eff.get("type", "")
                 if eff_type == "grant_dark_matter":
                     t = eff.get("target_tribe", "")
-                    t_text = "Dark Mage" if t == "Mage" else (t or "ally")
+                    t_text = "Dark Mage" if t in ("Mage", "") else t
                     effect_parts.append(f"[[Dark Matter]] +{eff.get('amount', 1)} per ally {t_text}")
                 elif eff_type == "negate":
                     effect_parts.append("[[Negate]]")

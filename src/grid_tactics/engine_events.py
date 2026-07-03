@@ -14,10 +14,11 @@ server-driven state changes.
 
 Wire-format design:
 
-- 22 ``EVT_*`` constants enumerated explicitly (no wildcards). Listed in
+- 23 ``EVT_*`` constants enumerated explicitly (no wildcards). Listed in
   ``ALL_EVENT_TYPES`` for runtime validation. (19 from the original
   research doc; +card_burned +handshake from the 2026-07 turn-structure
-  redesign; +minion_transformed from the 2026-07 card audit.)
+  redesign; +minion_transformed from the 2026-07 card audit;
+  +dark_matter_change from the 2026-07 Dark Matter pool redesign.)
 - Per-event ``DEFAULT_DURATION_MS`` lookup so emitters don't have to
   duplicate animation timings across modules. Emitters can override by
   passing ``animation_duration_ms`` explicitly.
@@ -75,6 +76,10 @@ EVT_HANDSHAKE = "handshake"
 # Resource events
 EVT_MANA_CHANGE = "mana_change"
 EVT_PLAYER_HP_CHANGE = "player_hp_change"
+# Dark Matter pool redesign 2026-07: a player's Dark Matter pool changed
+# (grant_dark_matter resolution). Payload: {player_idx, prev, new, delta,
+# source}. Public info — sent unredacted to both viewers.
+EVT_DARK_MATTER_CHANGE = "dark_matter_change"
 
 # Phase / turn events
 EVT_REACT_WINDOW_OPENED = "react_window_opened"
@@ -108,6 +113,7 @@ ALL_EVENT_TYPES: frozenset[str] = frozenset({
     EVT_HANDSHAKE,
     EVT_MANA_CHANGE,
     EVT_PLAYER_HP_CHANGE,
+    EVT_DARK_MATTER_CHANGE,
     EVT_REACT_WINDOW_OPENED,
     EVT_REACT_WINDOW_CLOSED,
     EVT_PHASE_CHANGED,
@@ -145,6 +151,8 @@ DEFAULT_DURATION_MS: dict[str, int] = {
     EVT_HANDSHAKE: 2200,                # 🤝 payout banner (matches playHandshake)
     EVT_MANA_CHANGE: 0,
     EVT_PLAYER_HP_CHANGE: 400,
+    EVT_DARK_MATTER_CHANGE: 400,        # pool counter pulse / floating +N
+
     EVT_REACT_WINDOW_OPENED: 600,       # spell stage in
     EVT_REACT_WINDOW_CLOSED: 400,       # spell stage out
     EVT_PHASE_CHANGED: 0,
@@ -365,6 +373,7 @@ __all__ = [
     "EVT_HANDSHAKE",
     "EVT_MANA_CHANGE",
     "EVT_PLAYER_HP_CHANGE",
+    "EVT_DARK_MATTER_CHANGE",
     "EVT_REACT_WINDOW_OPENED",
     "EVT_REACT_WINDOW_CLOSED",
     "EVT_PHASE_CHANGED",

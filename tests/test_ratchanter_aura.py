@@ -3,8 +3,9 @@
 The old continuous +5/+5 aura model is GONE. New semantics:
 
   - Activated ability "Conjure Common Rat" costs 2 mana.
-  - Each cast applies a FLAT stacking buff of (1 + caster.dark_matter_stacks)
-    to every living friendly Rat on the board EXCEPT the caster:
+  - Each cast applies a FLAT stacking buff of (1 + owner's Dark Matter
+    pool — Player.dark_matter, pool redesign 2026-07) to every living
+    friendly Rat on the board EXCEPT the caster:
     +attack_bonus, +max_health_bonus, +current_health (immediately usable).
   - Each cast also conjures a Common Rat from the caster's deck via the
     Phase 14.2 tutor machinery. If the deck has zero common rats, the
@@ -199,13 +200,21 @@ def test_buff_stacks_on_repeated_cast():
     assert rat.current_health == rat_def.health + 3
 
 
-def test_buff_scales_with_dark_matter_stacks():
+def test_buff_scales_with_dark_matter_pool():
+    """Pool redesign 2026-07: the buff magnitude reads the OWNER's pool."""
     lib = _lib()
     rat_id = lib.get_numeric_id("rat")
     rc_id = lib.get_numeric_id("ratchanter")
     rat_def = lib.get_by_card_id("rat")
 
     state = _empty_state(lib, mana=5)
+    state = replace(
+        state,
+        players=(
+            replace(state.players[0], dark_matter=4),
+            state.players[1],
+        ),
+    )
     state = _put(state, MinionInstance(
         instance_id=1, card_numeric_id=rat_id,
         owner=PlayerSide.PLAYER_1, position=(4, 0), current_health=rat_def.health,
@@ -213,7 +222,6 @@ def test_buff_scales_with_dark_matter_stacks():
     state = _put(state, MinionInstance(
         instance_id=2, card_numeric_id=rc_id,
         owner=PlayerSide.PLAYER_1, position=(4, 2), current_health=30,
-        dark_matter_stacks=4,
     ))
     state = resolve_action(state, _activate(2), lib)
     rat = state.get_minion(1)

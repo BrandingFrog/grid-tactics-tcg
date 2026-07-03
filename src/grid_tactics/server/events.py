@@ -256,7 +256,7 @@ def _emit_state_to_players(
     decision_idx = _decision_idx(state)
 
     for idx in (0, 1):
-        filtered = filter_state_for_player(state_dict, idx)
+        filtered = filter_state_for_player(state_dict, idx, session.library)
         enrich_pending_tutor_for_viewer(state, filtered, idx, session.library)
         enrich_pending_conjure_deploy(state, filtered, idx, session.library)
         enrich_pending_death_target(state, filtered, idx, session.library)
@@ -270,7 +270,9 @@ def _emit_state_to_players(
         # state snapshot for error-recovery / reconnect parity (stashed to
         # window.__lastFinalState on the client).
         if events is not None:
-            filtered_events = filter_engine_events_for_viewer(events, idx)
+            filtered_events = filter_engine_events_for_viewer(
+                events, idx, library=session.library,
+            )
             emit("engine_events", {
                 "events": [ev.to_dict() for ev in filtered_events],
                 "final_state": filtered,
@@ -306,6 +308,7 @@ def _fanout_state_to_spectators(
             continue
         spec_state = filter_state_for_spectator(
             base_state_dict, god_mode=slot.god_mode, perspective_idx=0,
+            library=session.library,
         )
         # Spectators inherit the same pending-tutor/conjure enrichment as their perspective seat.
         if not slot.god_mode:
@@ -331,6 +334,7 @@ def _fanout_state_to_spectators(
                 # perspective per Phase 14.4 contract.
                 spec_events = filter_engine_events_for_viewer(
                     events, 0, god_mode=slot.god_mode,
+                    library=session.library,
                 )
                 emit("engine_events", {
                     "events": [ev.to_dict() for ev in spec_events],
@@ -353,7 +357,7 @@ def _emit_game_over(session, state):
     state_dict = state.to_dict()
     enrich_pending_post_move_attack(state, state_dict, session.library)
     for idx in (0, 1):
-        filtered = filter_state_for_player(state_dict, idx)
+        filtered = filter_state_for_player(state_dict, idx, session.library)
         enrich_pending_tutor_for_viewer(state, filtered, idx, session.library)
         enrich_pending_conjure_deploy(state, filtered, idx, session.library)
         enrich_pending_death_target(state, filtered, idx, session.library)
@@ -381,6 +385,7 @@ def _fanout_game_start_to_spectators(session, base_state_dict, card_defs):
             continue
         spec_state = filter_state_for_spectator(
             base_state_dict, god_mode=slot.god_mode, perspective_idx=0,
+            library=session.library,
         )
         if not slot.god_mode:
             enrich_pending_tutor_for_viewer(session.state, spec_state, 0, session.library)
@@ -449,18 +454,10 @@ def _apply_test_op(sandbox, op):
         sandbox.place_on_board(
             int(op["player_idx"]), nid, int(op["row"]), int(op["col"]),
         )
-        # Optional post-placement DM injection (replaces the just-placed
-        # minion with a copy carrying dark_matter_stacks). Kept as a direct
-        # state edit rather than an engine call — tests need a way to seed
-        # DM without having to chain buff cards for every scenario.
-        dm = op.get("dark_matter")
-        if dm is not None and dm > 0:
-            from dataclasses import replace as _replace
-            minions = list(sandbox._state.minions)
-            if minions:
-                last = minions[-1]
-                minions[-1] = _replace(last, dark_matter_stacks=int(dm))
-                sandbox._state = _replace(sandbox._state, minions=tuple(minions))
+        # NOTE: the old optional "dark_matter" key (per-minion DM injection)
+        # was removed in the 2026-07 DM pool redesign — Dark Matter is a
+        # player-level pool now. Tests seed DM via
+        # `set_player field=dark_matter` instead.
         # Optional starting health override — lets tests pre-damage a minion
         # without going through an attack. Caps at 1 to avoid placing a
         # corpse; overcap above base is allowed (caller's responsibility).
@@ -615,7 +612,7 @@ def register_events(room_manager: RoomManager) -> None:
             # Emit game_start to each player individually with filtered state
             for idx in (0, 1):
                 opponent_idx = 1 - idx
-                filtered = filter_state_for_player(state_dict, idx)
+                filtered = filter_state_for_player(state_dict, idx, session.library)
                 enrich_pending_tutor_for_viewer(session.state, filtered, idx, session.library)
                 enrich_pending_conjure_deploy(session.state, filtered, idx, session.library)
                 enrich_pending_death_target(session.state, filtered, idx, session.library)
@@ -666,6 +663,7 @@ def register_events(room_manager: RoomManager) -> None:
             enrich_pending_post_move_attack(session.state, state_dict, session.library)
             spec_state = filter_state_for_spectator(
                 state_dict, god_mode=god_mode, perspective_idx=0,
+                library=session.library,
             )
             if not god_mode:
                 enrich_pending_tutor_for_viewer(session.state, spec_state, 0, session.library)
@@ -733,7 +731,7 @@ def register_events(room_manager: RoomManager) -> None:
         serialized_actions = [serialize_action(a) for a in initial_actions]
         for idx in (0, 1):
             opponent_idx = 1 - idx
-            filtered = filter_state_for_player(state_dict, idx)
+            filtered = filter_state_for_player(state_dict, idx, new_session.library)
             enrich_pending_tutor_for_viewer(new_session.state, filtered, idx, new_session.library)
             enrich_pending_conjure_deploy(new_session.state, filtered, idx, new_session.library)
             enrich_pending_death_target(new_session.state, filtered, idx, new_session.library)

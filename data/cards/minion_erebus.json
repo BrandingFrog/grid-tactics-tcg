@@ -12,16 +12,16 @@
     "cost_reduction": "dark_matter",
     "effects": [],
     "tips": [
-        "Erebus costs 20 mana minus your Dark Matter stacks. At 15 DM he's a 5-mana 80/80, and at 20+ DM he's free — the most efficient body in the game.",
-        "Build DM with Shady Trade Deal and Dark Matter Stash before dropping Erebus. The entire Dark Mage archetype exists to make this card affordable.",
-        "As a Mage, Erebus also receives Dark Matter Stash buffs after being played. An 80/80 that keeps growing is nearly impossible to remove.",
-        "Don't wait for 0-cost — playing Erebus at 8-10 mana is still a dominant play. Holding too long risks losing your Mages and DM momentum.",
-        "Erebus is the primary reason to run the Dark Mage package. If your opponent sees Ratchanter and Shady Trade Deal, they should expect Erebus is coming."
+        "Erebus costs 20 mana minus your Dark Matter pool. At 15 Dark Matter he's a 5-mana 80/80, and at 20+ he's free — the most efficient body in the game.",
+        "Grow the pool with Shady Trade Deal and Dark Matter Stash before dropping Erebus. The entire Dark Matter archetype exists to make this card affordable.",
+        "Erebus is himself a Dark Mage — once on board he counts toward every future gain (Shady Trade Deal, Stash, Illicit Shadow Stones) and receives Dark Matter Stash's buff.",
+        "Playing Erebus doesn't spend the pool — the cost reduction only READS it. Your Barrage / Matter of Time / Battery keep their full scaling after he lands.",
+        "Don't wait for 0-cost — playing Erebus at 8-10 mana is still a dominant play. Holding too long risks losing your Dark Mages and pool momentum."
     ],
     "rulings": [
-        "cost_reduction=dark_matter subtracts the PLAYER'S total DM pool from the printed 20 mana at play time. Minimum cost is clamped at 0 — with 20+ DM, Erebus is free.",
-        "The cost reduction uses DM summed across your minions on the board (not a single mage's DM). Multiple low-DM Mages still contribute.",
-        "Erebus is a Mage, so he's a valid target for Dark Matter Stash's DM grant and ally-Mage buffs after he's on board.",
-        "Dying resets all his buffs (he respawns only via Revive-type effects, none of which currently target him)."
+        "cost_reduction=dark_matter subtracts YOUR Dark Matter pool (a player resource, visible to both players) from the printed 20 mana at play time. Minimum cost is clamped at 0 — with 20+ Dark Matter, Erebus is free.",
+        "The cost reduction reads the pool without consuming it — the pool stays intact after Erebus is played.",
+        "Erebus is a [[Dark Mage]] (element Dark, tribe Mage), so he counts toward per-Dark-Mage gains and receives ally-Dark-Mage buffs after he's on board.",
+        "Dying resets all his buffs (he respawns only via Revive-type effects, none of which currently target him). Your Dark Matter pool is unaffected by his death."
     ]
 }

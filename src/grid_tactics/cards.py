@@ -27,6 +27,26 @@ from grid_tactics.enums import (
 from grid_tactics.types import MAX_EFFECT_AMOUNT, MAX_STAT, MIN_STAT
 
 
+def is_dark_mage(card_def: "CardDefinition") -> bool:
+    """THE single Dark-Mage predicate (Dark Matter pool redesign 2026-07).
+
+    A "Dark Mage" is a MINION whose tribe is exactly "Mage" (case-
+    insensitive) AND whose element is DARK. Composite tribes ("Mage Rat"
+    Ratchanter, "Mage Undead" Grave Caller) do NOT qualify — they are
+    Mage-adjacent but not Dark Mages.
+
+    Every card effect that targets / counts Dark Mages must route through
+    this predicate rather than a bare target_tribe "Mage" filter, so the
+    definition lives in exactly one place.
+    """
+    return (
+        card_def.card_type == CardType.MINION
+        and card_def.tribe is not None
+        and card_def.tribe.strip().lower() == "mage"
+        and card_def.element == Element.DARK
+    )
+
+
 @dataclass(frozen=True, slots=True)
 class EffectDefinition:
     """A single declarative effect on a card (per D-04).
@@ -39,7 +59,7 @@ class EffectDefinition:
     trigger: TriggerType
     target: TargetType
     amount: int
-    scale_with: Optional[str] = None  # "dark_matter" (caster minion's own DM stacks; player pool for spells), "player_dark_matter" (caster PLAYER's total DM across live minions — 2026-07), "destroyed_attack", "destroyed_attack_plus_dm"
+    scale_with: Optional[str] = None  # "dark_matter" / "player_dark_matter" (both read the CASTER PLAYER's Dark Matter pool — pool redesign 2026-07), "dark_mages" (grant_dark_matter only: amount × friendly Dark Mages on board), "destroyed_attack", "destroyed_attack_plus_dm" (destroyed ally's attack + caster player's DM pool)
     target_tribe: Optional[str] = None  # filter ALL_ALLIES/ALL_MINIONS to only this tribe (e.g. "Mage")
     target_element: Optional[str] = None  # filter ALL_MINIONS to only this element (e.g. "metal"); combined with target_tribe as OR
     placement_condition: Optional[str] = None  # e.g. "front_of_dark_ranged" — positional condition

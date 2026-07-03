@@ -50,7 +50,7 @@ class MinionInstance:
     current_health: int          # starts at CardDefinition.health, decreases from damage
     attack_bonus: int = 0        # cumulative attack buff (effective attack = card_def.attack + attack_bonus)
     is_burning: bool = False     # Boolean burn status. Tick fires for BURN_DAMAGE in the Decay phase (end of turn) per burn_scope. Persists until death.
-    dark_matter_stacks: int = 0  # Dark Matter counters on this minion. Granted by grant_dark_matter effects (Shady Trade Deal, Dark Matter Stash, Illicit Shadow Stones, Feed the Shadow, Matter of Time, Dark Matter Barrage); consumed by Ratchanter/Grave Caller DM-scaled buffs and by cost_reduction="dark_matter" (Erebus), which sums stacks across all your minions.
+    dark_matter_stacks: int = 0  # DEPRECATED (Dark Matter pool redesign 2026-07). Dark Matter is now a PLAYER resource — see Player.dark_matter. grant_dark_matter effects credit the owning player's pool; nothing writes minion stacks anymore, so this field is ALWAYS 0. Kept only for serialization compatibility (old saves may carry nonzero values; the engine ignores them). Do NOT read this in new code.
     max_health_bonus: int = 0    # Cumulative max-HP buff. Effective max HP = card_def.health + max_health_bonus. Heals cap at the effective max. Added on top of current_health when the buff is applied so it is immediately usable.
     from_deck: bool = True       # True for minions that originated from a deck card (PLAY_CARD or Conjure). False only for tokens spawned by activated abilities (summon_token). Death cleanup adds card to owner's grave only when from_deck=True; tokens vanish silently.
     # Appended field (keep at end — positional construction stability).

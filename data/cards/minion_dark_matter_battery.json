@@ -19,16 +19,17 @@
         }
     ],
     "tips": [
-        "Dark Matter Battery deals damage to the opponent's 🤍 equal to its own Dark Matter stacks in your Decay Phase. At high DM, this is a win condition by itself.",
+        "Dark Matter Battery deals damage to the opponent's 🤍 equal to YOUR Dark Matter pool in your Decay Phase. At a high pool, this is a win condition by itself.",
         "At range 2, Battery can sit in the back row and ping the opponent's life total without ever entering combat. Protect it with front-line minions.",
-        "Unlike other DM cards, Battery is a Machine, not a Mage — it doesn't benefit from Mage-specific DM buffs. Its value is purely in the Decay Phase damage.",
-        "Battery can't gain DM from Mage-only sources like Shady Trade Deal and Dark Matter Stash — it's tribe Machine, not Mage. Grave Caller's activated ability gives it +🗡️ equal to Grave Caller's DM (useful to turn Battery into an attacker), but does not grant it Dark Matter stacks.",
+        "Battery is a Machine, not a Dark Mage — it doesn't count toward Dark Matter gains and doesn't receive Dark Mage buffs. Its value is purely converting the pool your Dark Mages build into face damage every turn.",
+        "Pair with the pool engine: Shady Trade Deal, Dark Matter Stash and Illicit Shadow Stones grow the pool while Battery converts it. The pool is never spent — every point keeps ticking turn after turn.",
         "At 0🗡️/20🤍, Battery can't attack normally. Its entire value is the Decay Phase damage. If the opponent ignores it, the damage adds up fast; if they focus it, your other minions operate freely."
     ],
     "rulings": [
-        "Damage fires once per full turn cycle, in the owner's Decay Phase (the end of the owner's turn). scale_with=dark_matter uses the Battery's own DM stacks — not a pooled player total.",
-        "At Battery DM=0, the damage is 0 and the effect is skipped entirely (no visible tick).",
-        "No current source grants Battery DM: Mage-tribe-only sources (Dark Matter Stash, Shady Trade Deal) skip it, and Grave Caller's activated ability grants bonus 🗡️ scaled by Grave Caller's DM — it does not grant Dark Matter stacks.",
+        "Damage fires once per full turn cycle, in the owner's Decay Phase (the end of the owner's turn). scale_with=dark_matter reads the OWNER's Dark Matter pool — Dark Matter is a player resource, visible to both players.",
+        "At pool = 0, the damage is 0 and the effect is skipped entirely (no visible tick).",
+        "Reading the pool does not consume it — the same pool also discounts Erebus and scales your Dark spells.",
+        "If the Battery dies before its Decay trigger resolves, the trigger fizzles — a dead source deals no damage even if your pool is huge.",
         "If the opponent's HP reaches 0 from this damage, they lose immediately — the effect checks win condition during passive resolution."
     ]
 }

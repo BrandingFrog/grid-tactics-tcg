@@ -40,6 +40,14 @@ class Player:
     exhaust: tuple[int, ...] = ()
     discarded_this_turn: bool = False
     discarded_last_turn: bool = False
+    # Dark Matter pool redesign 2026-07 (appended field — keep at end for
+    # positional-construction stability). Dark Matter is a PLAYER-level
+    # stacking resource: grant_dark_matter effects add here, scale_with
+    # "dark_matter" / "player_dark_matter" effects and Erebus'
+    # cost_reduction read from here. Minions NEVER hold DM (the old
+    # MinionInstance.dark_matter_stacks field is deprecated, always 0).
+    # PUBLIC information — both players see both pools.
+    dark_matter: int = 0
 
     # -- Construction -------------------------------------------------------
 
@@ -198,6 +206,20 @@ class Player:
         destroyed (e.g. Feed the Shadow's destroy_ally_cost) — the card's
         numeric id is recorded in the owner's graveyard."""
         return replace(self, grave=self.grave + (card_id,))
+
+    # -- Dark Matter pool ----------------------------------------------------
+
+    def gain_dark_matter(self, amount: int) -> Player:
+        """Add Dark Matter stacks to this player's pool.
+
+        Dark Matter pool redesign 2026-07: DM is a player resource. There
+        is no cap and no decay; the pool only grows (nothing currently
+        spends it — Erebus' cost_reduction READS it without consuming).
+        Negative amounts are rejected — no effect removes DM today.
+        """
+        if amount < 0:
+            raise ValueError(f"Cannot gain negative Dark Matter: {amount}")
+        return replace(self, dark_matter=self.dark_matter + amount)
 
     # -- HP / damage --------------------------------------------------------
 

@@ -16,10 +16,11 @@ from typing import Optional
 
 from grid_tactics.board import Board
 from grid_tactics.card_library import CardLibrary
-from grid_tactics.cards import CardDefinition, EffectDefinition
+from grid_tactics.cards import CardDefinition, EffectDefinition, is_dark_mage
 from grid_tactics.engine_events import (
     EVT_CARD_BURNED,
     EVT_CARD_DRAWN,
+    EVT_DARK_MATTER_CHANGE,
     EVT_MINION_MOVED,
     EVT_PENDING_MODAL_OPENED,
     EVT_PENDING_MODAL_RESOLVED,
@@ -145,6 +146,93 @@ def _validate_target_at_resolve_time(
 def _player_index_for_side(side: PlayerSide) -> int:
     """Return the player tuple index for a PlayerSide."""
     return int(side)
+
+
+def _effect_tribe_matches(card_def: CardDefinition, target_tribe: str) -> bool:
+    """Tribe filter for area effects (ALL_ALLIES / ALL_MINIONS).
+
+    Dark Matter pool redesign 2026-07: the special filter value
+    "Dark Mage" routes through the single ``is_dark_mage`` predicate
+    (tribe exactly "Mage" AND element DARK) instead of a substring match
+    — a bare "Mage" filter would wrongly include Ratchanter ("Mage Rat")
+    and Grave Caller ("Mage Undead"). Any other value keeps the legacy
+    case-insensitive substring semantics.
+    """
+    normalized = target_tribe.strip().lower()
+    if normalized in ("dark mage", "dark_mage"):
+        return is_dark_mage(card_def)
+    return bool(card_def.tribe) and normalized in card_def.tribe.lower()
+
+
+def _count_friendly_dark_mages(
+    state: GameState, side: PlayerSide, library: CardLibrary,
+) -> int:
+    """Count the LIVE friendly minions satisfying ``is_dark_mage``."""
+    count = 0
+    for m in state.minions:
+        if m.owner != side or m.current_health <= 0:
+            continue
+        try:
+            card_def = library.get_by_id(m.card_numeric_id)
+        except KeyError:
+            continue
+        if is_dark_mage(card_def):
+            count += 1
+    return count
+
+
+def _resolve_grant_dark_matter(
+    state: GameState,
+    effect: EffectDefinition,
+    caster_owner: PlayerSide,
+    library: CardLibrary,
+    *,
+    event_collector: Optional[EventStream] = None,
+    contract_source: Optional[str] = None,
+) -> GameState:
+    """GRANT_DARK_MATTER: credit the CASTER PLAYER's Dark Matter pool.
+
+    Dark Matter pool redesign 2026-07 — minions never hold DM anymore.
+
+    Amount rules:
+      - target "owner_player" + scale_with "dark_mages": the player gains
+        ``effect.amount`` per friendly LIVE Dark Mage on the board (the
+        canonical shape for all migrated cards).
+      - target "owner_player" without scale_with: flat ``effect.amount``.
+      - legacy target "all_allies" (old per-minion grant JSONs): resolved
+        as amount × friendly Dark Mage count — identical totals to the
+        old per-minion semantics, restricted to true Dark Mages.
+
+    A computed amount of 0 (no Dark Mages on board) is a silent
+    identity-preserving no-op — no event is emitted.
+    """
+    player_idx = _player_index_for_side(caster_owner)
+    amount = effect.amount
+    if (
+        effect.scale_with == "dark_mages"
+        or effect.target in (TargetType.ALL_ALLIES, TargetType.ALL_MINIONS)
+    ):
+        amount = effect.amount * _count_friendly_dark_mages(
+            state, caster_owner, library,
+        )
+    if amount <= 0:
+        return state
+    player = state.players[player_idx]
+    new_player = player.gain_dark_matter(amount)
+    if event_collector is not None:
+        event_collector.collect(
+            EVT_DARK_MATTER_CHANGE,
+            contract_source or "trigger:on_play",
+            {
+                "player_idx": player_idx,
+                "prev": player.dark_matter,
+                "new": new_player.dark_matter,
+                "delta": amount,
+                "source": "grant_dark_matter",
+            },
+        )
+    new_players = _replace_player(state.players, player_idx, new_player)
+    return replace(state, players=new_players)
 
 
 def _check_placement_condition(
@@ -301,14 +389,9 @@ def _apply_effect_to_minion(
         )
         new_minions = _replace_minion(state.minions, minion.instance_id, new_minion)
         return replace(state, minions=new_minions)
-    elif effect.effect_type == EffectType.GRANT_DARK_MATTER:
-        # Add `amount` Dark Matter stacks to the target minion. Stacks
-        # additively; currently consumed by Ratchanter's activated ability.
-        new_minion = replace(
-            minion, dark_matter_stacks=minion.dark_matter_stacks + effect.amount,
-        )
-        new_minions = _replace_minion(state.minions, minion.instance_id, new_minion)
-        return replace(state, minions=new_minions)
+    # NOTE: GRANT_DARK_MATTER never reaches this helper — it is intercepted
+    # in resolve_effect and credited to the caster PLAYER's pool (Dark
+    # Matter pool redesign 2026-07). Minions never hold DM.
     # Unimplemented or non-minion-targeting effect types: skip gracefully
     return state
 
@@ -656,76 +739,34 @@ def resolve_effect(
         state, effect, caster_pos, source_minion_id, target_pos,
     ):
         return state
-    # Scale amount if scale_with is set (e.g. "dark_matter" adds caster's DM stacks)
-    # When the caster is a minion on the board, scale once using the caster's DM.
-    # When the caster is a magic card (no minion at caster_pos), defer scaling to
-    # each individual target inside the dispatch branches below so the scale uses
-    # the target's own DM — matches rulings like Dark Matter Stash
-    # ("each Mage gains atk/hp equal to their own DM").
-    scaled_effect = effect
-    _per_target_dm_scale = False
-    _dm_scaled = False  # True when a scale_with computed a flat amount → 0 skips AFTER multiplier
-    if effect.scale_with == "player_dark_matter":
-        # 2026-07 card-audit fix (Gargoyle Sorceress / Dark Matter
-        # Battery): scale by the CASTER PLAYER's total Dark Matter pool
-        # (sum across their live minions), regardless of whether the
-        # source is a minion or a spell. A freshly-summoned minion always
-        # has 0 own stacks, so "own stacks" scaling made these on_summon
-        # buffs permanently +0.
-        # Dead-source fizzle still applies: a triggered effect whose
-        # source minion died before resolution fizzles silently.
-        if source_minion_id is not None:
-            src = state.get_minion(source_minion_id)
-            if src is None or src.current_health <= 0:
-                return state
-        player_dm_sum = sum(
-            m.dark_matter_stacks for m in state.minions
-            if m.owner == caster_owner and m.current_health > 0
+    # Dark Matter pool redesign 2026-07: GRANT_DARK_MATTER is intercepted
+    # here — it ALWAYS credits the caster PLAYER's pool, never a minion,
+    # regardless of the (possibly legacy) target on the JSON effect.
+    if effect.effect_type == EffectType.GRANT_DARK_MATTER:
+        return _resolve_grant_dark_matter(
+            state, effect, caster_owner, library,
+            event_collector=event_collector,
+            contract_source=contract_source,
         )
-        scaled_effect = replace(effect, amount=effect.amount + player_dm_sum)
-        _dm_scaled = True
-    elif effect.scale_with == "dark_matter":
-        # Determine whether the effect source is GENUINELY a minion.
-        # Magic-cast / react-card / on-discard paths resolve with a
-        # sentinel caster_pos of (0, 0) — which is a real board cell
-        # (P1's back-row corner) — so a bare position lookup would
-        # mistake whatever minion happens to sit on (0, 0) for the
-        # caster and scale off ITS dark-matter stacks. Only trust:
-        #   1. source_minion_id (triggered effects thread it), or
-        #   2. the activated-ability contract, whose caster_pos is
-        #      always the activating minion's true position (the
-        #      resolver call site doesn't thread source_minion_id).
-        # Everything else takes the player-pool / per-target path.
-        caster = None
+
+    # Scale amount if scale_with is set. Dark Matter pool redesign 2026-07:
+    # BOTH spellings — "dark_matter" (legacy) and "player_dark_matter" —
+    # read the CASTER PLAYER's Dark Matter pool (Player.dark_matter). The
+    # old caster-minion own-stacks lookup and the per-target ALL_ALLIES
+    # scaling are gone: minions never hold DM anymore.
+    scaled_effect = effect
+    _dm_scaled = False  # True when a scale_with computed a flat amount → 0 skips AFTER multiplier
+    if effect.scale_with in ("dark_matter", "player_dark_matter"):
+        # Dead-source fizzle still applies (Dark Matter Battery rule): a
+        # queued trigger whose SOURCE minion died before resolution
+        # fizzles silently — the aura dies with its source.
         if source_minion_id is not None:
             src = state.get_minion(source_minion_id)
             if src is None or src.current_health <= 0:
-                # 2026-07 card-audit fix (Dark Matter Battery): a queued
-                # trigger whose SOURCE minion died before resolution
-                # FIZZLES — it must not fall through to the player-pool
-                # path and deal damage scaled by other minions' DM.
                 return state
-            caster = src
-        elif contract_source == "action:activate_ability":
-            caster = _find_minion_at_pos(state.minions, caster_pos)
-        if caster is not None:
-            dm = caster.dark_matter_stacks
-            scaled_effect = replace(effect, amount=effect.amount + dm)
-            _dm_scaled = True
-        else:
-            # Magic card path: no caster minion. ALL_ALLIES still scales
-            # per-target using each ally's own DM (Dark Matter Stash rule);
-            # every other target scales by the caster player's TOTAL DM
-            # pool (sum across their live minions) — "(Dark Matter)" on a
-            # spell means "how much DM you currently hold."
-            _per_target_dm_scale = True
-            if effect.target != TargetType.ALL_ALLIES:
-                player_dm_sum = sum(
-                    m.dark_matter_stacks for m in state.minions
-                    if m.owner == caster_owner and m.current_health > 0
-                )
-                scaled_effect = replace(effect, amount=effect.amount + player_dm_sum)
-                _dm_scaled = True
+        pool = state.players[_player_index_for_side(caster_owner)].dark_matter
+        scaled_effect = replace(effect, amount=effect.amount + pool)
+        _dm_scaled = True
 
     # Placement condition multiplier (e.g. "triple if placed in front of dark ranged")
     if scaled_effect.placement_condition and scaled_effect.condition_multiplier > 1:
@@ -754,6 +795,14 @@ def resolve_effect(
     elif scaled_effect.target == TargetType.OPPONENT_PLAYER:
         opp_idx = 1 - _player_index_for_side(caster_owner)
         return _apply_effect_to_player(state, scaled_effect, opp_idx)
+    elif scaled_effect.target == TargetType.OWNER_PLAYER:
+        # Dark Matter pool redesign 2026-07: direct-to-caster-player
+        # target. GRANT_DARK_MATTER was already intercepted above; the
+        # remaining player-shaped effects (DAMAGE / HEAL) apply to the
+        # casting player.
+        return _apply_effect_to_player(
+            state, scaled_effect, _player_index_for_side(caster_owner),
+        )
     elif scaled_effect.target == TargetType.ALL_MINIONS:
         for minion in state.minions:
             if minion.current_health <= 0:
@@ -762,8 +811,7 @@ def resolve_effect(
                 card_def = library.get_by_id(minion.card_numeric_id)
                 tribe_match = bool(
                     scaled_effect.target_tribe
-                    and card_def.tribe
-                    and scaled_effect.target_tribe.lower() in card_def.tribe.lower()
+                    and _effect_tribe_matches(card_def, scaled_effect.target_tribe)
                 )
                 element_match = bool(
                     scaled_effect.target_element
@@ -779,17 +827,9 @@ def resolve_effect(
                 continue
             if scaled_effect.target_tribe:
                 card_def = library.get_by_id(minion.card_numeric_id)
-                if not card_def.tribe or scaled_effect.target_tribe.lower() not in card_def.tribe.lower():
+                if not _effect_tribe_matches(card_def, scaled_effect.target_tribe):
                     continue
-            if _per_target_dm_scale:
-                # Scale per-target using the target's own DM (magic cards path)
-                this_amount = effect.amount + minion.dark_matter_stacks
-                if this_amount <= 0:
-                    continue
-                this_effect = replace(scaled_effect, amount=this_amount)
-            else:
-                this_effect = scaled_effect
-            state = _apply_effect_to_minion(state, this_effect, minion, library)
+            state = _apply_effect_to_minion(state, scaled_effect, minion, library)
         return state
     else:
         raise ValueError(f"Unknown target type: {scaled_effect.target}")

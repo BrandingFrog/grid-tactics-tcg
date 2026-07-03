@@ -392,27 +392,23 @@ class TestDiodebotSummonTutor:
 
 class TestDeadBatterySourceFizzles:
     def test_dead_battery_trigger_fizzles(self, library):
+        """DM pool redesign 2026-07: the scale reads the OWNER's pool, but
+        a queued trigger whose SOURCE minion died must still fizzle."""
         battery_id = library.get_numeric_id("dark_matter_battery")
-        rat_id = library.get_numeric_id("rat")
         dead_battery = MinionInstance(
             instance_id=1, card_numeric_id=battery_id,
             owner=PlayerSide.PLAYER_1, position=(0, 0),
-            current_health=0, dark_matter_stacks=0,
+            current_health=0,
         )
-        live_dm_ally = MinionInstance(
-            instance_id=2, card_numeric_id=rat_id,
-            owner=PlayerSide.PLAYER_1, position=(1, 1),
-            current_health=10, dark_matter_stacks=7,
-        )
-        # Board only holds the live ally (dead battery is off-board but
-        # still in the minions tuple, exactly like a queued Decay trigger
-        # whose source died before resolution).
-        board = Board.empty().place(1, 1, live_dm_ally.instance_id)
-        state = _make_state((live_dm_ally,))
+        state = _make_state(())
+        # Fat pool that must NOT be dealt by a dead source.
         state = replace(
             state,
-            minions=(dead_battery, live_dm_ally),
-            board=board,
+            minions=(dead_battery,),
+            players=(
+                replace(state.players[0], dark_matter=7),
+                state.players[1],
+            ),
         )
         effect = library.get_by_card_id("dark_matter_battery").effects[0]
         result = resolve_effect(
@@ -422,14 +418,22 @@ class TestDeadBatterySourceFizzles:
         assert result is state, "dead-source DM trigger must fizzle"
         assert result.players[1].hp == STARTING_HP
 
-    def test_live_battery_deals_own_stack_damage(self, library):
+    def test_live_battery_deals_pool_damage(self, library):
+        """DM pool redesign 2026-07: Battery's Decay damage = owner's pool."""
         battery_id = library.get_numeric_id("dark_matter_battery")
         battery = MinionInstance(
             instance_id=1, card_numeric_id=battery_id,
             owner=PlayerSide.PLAYER_1, position=(0, 0),
-            current_health=20, dark_matter_stacks=3,
+            current_health=20,
         )
         state = _make_state((battery,))
+        state = replace(
+            state,
+            players=(
+                replace(state.players[0], dark_matter=3),
+                state.players[1],
+            ),
+        )
         effect = library.get_by_card_id("dark_matter_battery").effects[0]
         result = resolve_effect(
             state, effect, battery.position, PlayerSide.PLAYER_1,
@@ -528,22 +532,31 @@ class TestGargoylePlayerDmScaling:
         gargoyle = MinionInstance(
             instance_id=1, card_numeric_id=gargoyle_id,
             owner=PlayerSide.PLAYER_1, position=(1, 2),
-            current_health=50, dark_matter_stacks=0,
+            current_health=50,
         )
-        dm_holder = MinionInstance(
+        ally = MinionInstance(
             instance_id=2, card_numeric_id=rat_id,
             owner=PlayerSide.PLAYER_1, position=(0, 4),
-            current_health=10, dark_matter_stacks=4,
+            current_health=10,
         )
-        minions = [gargoyle, dm_holder]
+        minions = [gargoyle, ally]
         if with_dark_ranged_behind:
             blaster_id = library.get_numeric_id("shadow_blaster")
             minions.append(MinionInstance(
                 instance_id=3, card_numeric_id=blaster_id,
                 owner=PlayerSide.PLAYER_1, position=(0, 2),
-                current_health=10, dark_matter_stacks=0,
+                current_health=10,
             ))
-        return _make_state(minions), gargoyle
+        state = _make_state(minions)
+        # DM pool redesign 2026-07: the buff reads the PLAYER's pool.
+        state = replace(
+            state,
+            players=(
+                replace(state.players[0], dark_matter=4),
+                state.players[1],
+            ),
+        )
+        return state, gargoyle
 
     def test_buffs_scale_with_owner_pool(self, library):
         state, gargoyle = self._setup(library, with_dark_ranged_behind=False)

@@ -1601,7 +1601,7 @@ var KEYWORD_GLOSSARY = {
     'Deal': 'Deal damage to a target.',
     'Burn': 'Applies Burning to the affected minions — usually enemies, but some cards burn their own minion (e.g. Eclipse Shade\'s Summon).',
     'Burning': 'A burning minion takes 5🤍 in its owner\'s Decay Phase. Burning is a boolean status — re-applying it does nothing. It persists until the minion dies.',
-    'Dark Matter': 'A stacking resource used by Dark Mages. Buffs and costs scale with accumulated stacks.',
+    'Dark Matter': 'A stacking PLAYER resource pool, visible to both players. Gains add +1 per friendly Dark Mage on board (a minion with the Dark element and tribe exactly Mage). Dark spells, buffs and costs scale with your pool; reading it never spends it.',
     'Leap': 'If blocked by an enemy, jump over to the next available tile. Cannot leap allies. If all tiles ahead are enemy-occupied, enables sacrifice.',
     'Conjure': 'Summon a card from your deck directly to the board.',
     'Revive': 'Summon a card from the Grave to the board.',
@@ -2471,8 +2471,39 @@ function hidePileModal() {
     if (modal) modal.style.display = 'none';
 }
 
-// Render N face-down card backs in the opp hand row. Count-only, no identities.
-function renderOppHandRow(count) {
+// Element-only opponent hand info (DESIGNED information leak, 2026-07):
+// view_filter emits each opponent hand card's ELEMENT (and nothing else —
+// no id/name/cost) so card backs can telegraph deck composition. Accept a
+// couple of payload shapes defensively; return null when the server
+// doesn't expose elements (older server / god-mode full hand of ints).
+function _playerHandElements(p) {
+    if (!p) return null;
+    if (Array.isArray(p.hand_elements)) return p.hand_elements;
+    if (Array.isArray(p.hand) && p.hand.length > 0
+            && typeof p.hand[0] === 'object' && p.hand[0] !== null) {
+        return p.hand.map(function(e) {
+            return (e && e.element != null) ? e.element : null;
+        });
+    }
+    return null;
+}
+
+// Apply an element tint to a face-down card back. Neutral (no-op) when the
+// element is unknown/null. Uses the same ELEMENT_MAP colors as everywhere
+// else in the client so the tint reads consistently.
+function _tintCardBack(backEl, element) {
+    if (!backEl || element == null || !ELEMENT_MAP[element]) return;
+    backEl.classList.add('element-back');
+    backEl.style.setProperty('--back-tint', ELEMENT_MAP[element].color);
+    backEl.title = ELEMENT_MAP[element].name;
+    backEl.dataset.element = element;
+}
+
+// Render N face-down card backs in the opp hand row. Count + per-card
+// element tint only, no identities. `elements` is optional (array of
+// element ints, index-aligned with the opponent's hand; null entries and
+// missing arrays render neutral backs).
+function renderOppHandRow(count, elements) {
     var row = document.getElementById('oppHandRow');
     if (!row) return;
     row.innerHTML = '';
@@ -2482,6 +2513,7 @@ function renderOppHandRow(count) {
         back.className = 'opp-hand-card-back';
         back.style.setProperty('--i', i);
         back.style.setProperty('--n', n);
+        _tintCardBack(back, (elements && elements.length > i) ? elements[i] : null);
         row.appendChild(back);
     }
 }
@@ -2937,6 +2969,15 @@ function commitEventToDom(ev) {
             }
             break;
 
+        case "dark_matter_change":
+            // Payload: {player_idx, prev, new, delta, source} — DM pool
+            // redesign (2026-07). Public info, committed for both viewers.
+            if (_commitPlayerField(live, payload.player_idx, 'dark_matter', payload['new'])) {
+                if (sbMode) gameState = sandboxState;
+                needsStatsRerender = true;
+            }
+            break;
+
         case "turn_flipped":
             // Payload: {prev_turn, new_turn, new_active_idx}
             if (typeof payload.new_turn === 'number') {
@@ -3026,6 +3067,9 @@ function commitEventToDom(ev) {
             if (typeof renderOpponentInfo === 'function') {
                 try { renderOpponentInfo(); } catch (e) { /* defensive */ }
             }
+            if (typeof renderPlayerAvatars === 'function') {
+                try { renderPlayerAvatars(); } catch (e) { /* defensive */ }
+            }
         }
     }
 }
@@ -3114,6 +3158,8 @@ function playEvent(ev, done) {
         case "card_discarded":           return playCardDiscarded(ev, done);
         case "mana_change":              return playInstant(ev, done);
         case "player_hp_change":         return playPlayerHpChange(ev, done);
+        // Dark Matter pool redesign (2026-07): a player's DM pool changed.
+        case "dark_matter_change":       return playDarkMatterChange(ev, done);
         // Phase 14.8-04b: 9 harder handlers fully implemented.
         case "react_window_opened":      return playReactWindowOpened(ev, done);
         case "react_window_closed":      return playReactWindowClosed(ev, done);
@@ -3487,8 +3533,41 @@ function playCardDrawn(ev, done) {
             _fromEventQueue: true,
         });
     } else {
+        // Element card backs (2026-07): the view filter attaches the drawn
+        // card's ELEMENT (and only that) to opponent card_drawn events so
+        // the pop-in back can carry the tint. Accept both key spellings.
+        var elVal = (payload.element != null) ? payload.element : payload.card_element;
+        // Incrementally commit the opponent hand-size delta + element list
+        // and re-render the row NOW (mirrors the own-draw fix above): the
+        // final-state snapshot only lands post-drain, so without this the
+        // pop-in would target the PRE-draw last back. The final_state
+        // hand_count caps the increment so wholesale-synced paths never
+        // double-append.
+        try {
+            if (!sandboxMode && gameState && gameState.players) {
+                var liveOpp = gameState.players[playerIdx];
+                if (liveOpp && liveOpp.hand_count != null) {
+                    var fsCount = null;
+                    var fs2 = window.__lastFinalState;
+                    if (fs2 && fs2.players && fs2.players[playerIdx]) {
+                        var fsp = fs2.players[playerIdx];
+                        fsCount = (fsp.hand_count != null)
+                            ? fsp.hand_count
+                            : (Array.isArray(fsp.hand) ? fsp.hand.length : null);
+                    }
+                    if (fsCount === null || liveOpp.hand_count < fsCount) {
+                        liveOpp.hand_count = (liveOpp.hand_count | 0) + 1;
+                        if (Array.isArray(liveOpp.hand_elements)) {
+                            liveOpp.hand_elements.push(elVal != null ? elVal : null);
+                        }
+                        renderOppHandRow(liveOpp.hand_count, _playerHandElements(liveOpp));
+                    }
+                }
+            }
+        } catch (e) { /* defensive — fall back to last-back targeting */ }
         enqueueAnimation({
             type: 'draw_opp',
+            element: (elVal != null) ? elVal : null,
             stateApplied: true,
             _fromEventQueue: true,
         });
@@ -4134,7 +4213,15 @@ function playOverdrawBurn(ev, done) {
         ? cardDefs[payload.card_numeric_id] : null;
     if (!def) {
         try {
+            // Element card backs (2026-07): if the redacted payload still
+            // carries the element (designed leak — see view_filter), show a
+            // tinted card back so the burn animation carries the tint.
+            var burnEl = (payload.element != null) ? payload.element : payload.card_element;
+            var burnTint = (burnEl != null && ELEMENT_MAP[burnEl]) ? ELEMENT_MAP[burnEl] : null;
             runNudge('nudge-overdraw-fallback',
+                (burnTint
+                    ? '<div class="overdraw-burn-back" style="--back-tint:' + burnTint.color + '" title="' + burnTint.name + '"></div>'
+                    : '') +
                 '<div class="overdraw-reveal-label">HAND FULL — CARD BURNED</div>',
                 1200);
         } catch (e) { /* defensive */ }
@@ -4198,6 +4285,39 @@ function playFatigueDamage(ev, done) {
         triggerFatigueNudge(dmg, payload.player_idx);
     } catch (e) { /* defensive — nudge is purely visual */ }
     setTimeout(done, _evDurationOr(ev, 1200));
+}
+
+// dark_matter_change — Dark Matter pool redesign (2026-07). A player's
+// PLAYER-LEVEL DM pool changed (grant_dark_matter resolution). Public info
+// for both viewers. Payload: {player_idx, prev, new, delta, source}.
+// The state commit happens in commitEventToDom (same pattern as
+// mana_change); this slot handler renders the beat: pulse the avatar's DM
+// badge + float a 🌑 delta popup off the avatar pod.
+function playDarkMatterChange(ev, done) {
+    var payload = (ev && ev.payload) || {};
+    try {
+        if (!sandboxMode && myPlayerIdx != null
+                && typeof payload.player_idx === 'number') {
+            var which = (payload.player_idx === myPlayerIdx) ? 'self' : 'opp';
+            var badge = document.getElementById('avatar-' + which + '-dm');
+            if (badge) {
+                badge.classList.remove('dm-pulse');
+                void badge.offsetWidth;  // restart the CSS animation
+                badge.classList.add('dm-pulse');
+                setTimeout(function() { badge.classList.remove('dm-pulse'); }, 900);
+            }
+            var delta = (typeof payload.delta === 'number') ? payload.delta
+                : (typeof payload['new'] === 'number' && typeof payload.prev === 'number')
+                    ? payload['new'] - payload.prev
+                    : null;
+            var pod = document.getElementById('avatar-' + which);
+            if (pod && delta) {
+                showFloatingPopup(pod, '🌑 ' + (delta > 0 ? '+' : '') + delta,
+                    delta > 0 ? 'buff' : 'debuff');
+            }
+        }
+    } catch (e) { /* defensive — pulse/popup are purely visual */ }
+    setTimeout(done, _evDurationOr(ev, 400));
 }
 
 // Debug hook (mirrors __animDebug). Plan 04b extends with spell-stage state.
@@ -4411,6 +4531,12 @@ function playDrawOppAnimation(job, done) {
     var backs = row.querySelectorAll('.opp-hand-card-back');
     if (backs.length === 0) { setTimeout(done, 0); return; }
     var target = backs[backs.length - 1];
+    // Element card backs (2026-07): the draw event carries the element so
+    // the pop-in back is tinted even if the state re-render that normally
+    // tints it hasn't happened yet.
+    if (job && job.element != null) {
+        try { _tintCardBack(target, job.element); } catch (e) { /* defensive */ }
+    }
     target.classList.add('pop-in');
 
     var finished = false;
@@ -6260,10 +6386,11 @@ function renderGame() {
         var hc = (opp.hand_count != null)
             ? opp.hand_count
             : (opp.hand ? opp.hand.length : 0);
-        renderOppHandRow(hc);
+        renderOppHandRow(hc, _playerHandElements(opp));
         updatePileButtonCounts();
     })();
     renderBoard();
+    renderPlayerAvatars();
     renderSelfInfo();
     renderHand();
     renderActionBar();
@@ -8402,6 +8529,139 @@ function renderSelfInfo() {
 }
 
 // =============================================
+// Section 13b: Player avatars (2026-07)
+// =============================================
+// One avatar pod at EACH sacrifice end of the board — behind the opponent's
+// home row (top) and behind your own home row (bottom). Shows a neutral
+// placeholder disc (player initial), live HP (🤍 + number) and the player's
+// Dark Matter pool (🌑 + number — PUBLIC info, both pools always visible;
+// your own pool therefore stays persistently on-screen next to your
+// avatar). Clicking either avatar opens the existing hover-preview panel
+// (game-tooltip) with that player's details — both players can click both.
+
+function _avatarDisplayName(playerIdx) {
+    if (myPlayerIdx != null && playerIdx === myPlayerIdx) {
+        return myName || 'You';
+    }
+    return opponentName || ('Player ' + (playerIdx + 1));
+}
+
+function renderPlayerAvatars() {
+    if (!gameState || !gameState.players || myPlayerIdx == null) return;
+    _renderAvatarPod('self', myPlayerIdx);
+    _renderAvatarPod('opp', 1 - myPlayerIdx);
+}
+
+function _renderAvatarPod(which, playerIdx) {
+    var p = gameState.players[playerIdx];
+    var pod = document.getElementById('avatar-' + which);
+    if (!p || !pod) return;
+    var disc = document.getElementById('avatar-' + which + '-disc');
+    if (disc) {
+        var nm = _avatarDisplayName(playerIdx);
+        disc.textContent = nm ? nm.charAt(0).toUpperCase() : ('P' + (playerIdx + 1));
+    }
+    var hpEl = document.getElementById('avatar-' + which + '-hp');
+    if (hpEl) hpEl.textContent = p.hp;
+    var dmEl = document.getElementById('avatar-' + which + '-dm-num');
+    if (dmEl) dmEl.textContent = _playerDarkMatter(gameState, playerIdx);
+    if (!pod._gtAvatarBound) {
+        pod._gtAvatarBound = true;
+        var openPreview = function() {
+            // Resolve the player idx at CLICK time — myPlayerIdx can change
+            // across rematches / re-joins while the DOM node persists.
+            if (myPlayerIdx == null) return;
+            showPlayerPreview(which === 'self' ? myPlayerIdx : 1 - myPlayerIdx);
+        };
+        pod.addEventListener('click', openPreview);
+        pod.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openPreview(); }
+        });
+    }
+}
+
+// Populate the existing game preview panel (game-tooltip — the same host
+// used for card/minion hover previews) with PLAYER details: name/side, HP,
+// mana, Dark Matter pool, and player-level passives/statuses. All of this
+// is public information, so either player may inspect either avatar.
+function showPlayerPreview(playerIdx) {
+    var state = sandboxMode ? sandboxState : gameState;
+    if (!state || !state.players || !state.players[playerIdx]) return;
+    var p = state.players[playerIdx];
+    var tooltipId = sandboxMode ? 'sandbox-tooltip' : 'game-tooltip';
+    var hintId = sandboxMode ? 'sandbox-tooltip-hint' : 'game-tooltip-hint';
+    var host = document.getElementById(tooltipId);
+    if (!host) return;
+    host.style.display = '';
+
+    var name = _avatarDisplayName(playerIdx);
+    var initial = name ? name.charAt(0).toUpperCase() : ('P' + (playerIdx + 1));
+    var dm = _playerDarkMatter(state, playerIdx);
+
+    // Placeholder avatar art in the art slot (element-neutral disc).
+    var artHost = host.querySelector('.tooltip-card-art');
+    if (artHost) {
+        artHost.innerHTML =
+            '<div class="player-preview-disc">' + escapeHtml(initial) + '</div>';
+    }
+
+    var nameEl = host.querySelector('.tooltip-name');
+    if (nameEl) nameEl.textContent = name + ' — Player ' + (playerIdx + 1);
+
+    // Stat chips — same chip container the card preview uses.
+    var statsEl = host.querySelector('.tooltip-stats');
+    if (statsEl) {
+        var chips = '';
+        chips += '<span style="color:var(--red)">' + (p.hp | 0) + HEART + '</span>';
+        chips += '<span style="color:var(--cyan)">' + (p.current_mana | 0) + ' Mana</span>';
+        chips += '<span style="color:rgb(130,50,180)">🌑 ' + dm + ' Dark Matter</span>';
+        statsEl.innerHTML = chips;
+    }
+
+    // Body: player-level passives / statuses + zone counts.
+    var bodyEl = host.querySelector('.tooltip-keywords');
+    if (bodyEl) {
+        var body = '';
+        var handN = (p.hand_count != null)
+            ? p.hand_count : (Array.isArray(p.hand) ? p.hand.length : 0);
+        var deckN = (p.deck_count != null)
+            ? p.deck_count : (Array.isArray(p.deck) ? p.deck.length : 0);
+        body += '<div class="tooltip-text">Hand ' + handN + ' · Deck ' + deckN
+            + ' · Grave ' + (p.grave ? p.grave.length : 0)
+            + ' · Exhaust ' + (p.exhaust ? p.exhaust.length : 0) + '</div>';
+        var panels = [];
+        panels.push('<div class="tooltip-keyword"><span class="tooltip-keyword-name">🌑 Dark Matter ×' + dm
+            + '</span> <span class="tooltip-keyword-desc">— '
+            + (KEYWORD_GLOSSARY['Dark Matter'] || 'A stacking player resource pool, visible to both players.')
+            + '</span></div>');
+        if (p.discarded_last_turn) {
+            panels.push('<div class="tooltip-keyword"><span class="tooltip-keyword-name">🗑️ Discarded last turn'
+                + '</span> <span class="tooltip-keyword-desc">— enables cards with the "Discard last turn" play condition.</span></div>');
+        }
+        var fatigueN = 0;
+        try {
+            if (state.fatigue_counts && state.fatigue_counts[playerIdx] != null) {
+                fatigueN = state.fatigue_counts[playerIdx] | 0;
+            }
+        } catch (e) { /* defensive */ }
+        if (fatigueN > 0) {
+            panels.push('<div class="tooltip-keyword"><span class="tooltip-keyword-name">💀 Fatigue ×' + fatigueN
+                + '</span> <span class="tooltip-keyword-desc">— empty-deck turn-start draws deal escalating damage.</span></div>');
+        }
+        if (panels.length === 0) {
+            panels.push('<div class="tooltip-text">No player passives active.</div>');
+        }
+        body += panels.join('');
+        bodyEl.innerHTML = body;
+    }
+
+    var hint = document.getElementById(hintId);
+    if (hint) hint.style.display = 'none';
+    // Clear any minion status stack left over from a minion hover.
+    _renderMinionStatusPanels(host, null);
+}
+
+// =============================================
 // Section 14: renderBoard() (UI-01, D-03, D-10)
 // =============================================
 
@@ -8647,11 +8907,17 @@ function renderHandCard(numericId, handIndex, currentMana, isMyTurn) {
 // Section 17: Helper -- getEffectDescription()
 // =============================================
 
-// Sum of Dark Matter stacks across the viewing player's live minions.
-// Returns null when not in an active game (deck builder, card DB) so the
-// placeholder "(Dark Matter)" stays literal in those contexts.
+// Dark Matter pool redesign (2026-07): DM is a PLAYER-level pool
+// (players[i].dark_matter), not per-minion stacks. Returns the viewing
+// player's pool, or null when not in an active game (deck builder, card
+// DB) so the placeholder "(Dark Matter)" stays literal in those contexts.
+// Legacy fallback: pre-redesign states lack the player field — sum the
+// (deprecated, now always-0) per-minion stacks so old replays still read.
 function _viewerDarkMatterSum() {
-    if (!gameState || !gameState.minions || myPlayerIdx == null) return null;
+    if (!gameState || myPlayerIdx == null) return null;
+    var p = gameState.players && gameState.players[myPlayerIdx];
+    if (p && p.dark_matter != null) return p.dark_matter | 0;
+    if (!gameState.minions) return null;
     var sum = 0;
     for (var i = 0; i < gameState.minions.length; i++) {
         var m = gameState.minions[i];
@@ -8660,6 +8926,13 @@ function _viewerDarkMatterSum() {
         }
     }
     return sum;
+}
+
+// Read any player's Dark Matter pool from a state dict (public info).
+function _playerDarkMatter(state, playerIdx) {
+    var p = state && state.players && state.players[playerIdx];
+    if (!p) return 0;
+    return (p.dark_matter != null) ? (p.dark_matter | 0) : 0;
 }
 
 // In card rules text, live games substitute "(Dark Matter)" with the
@@ -8835,10 +9108,15 @@ function getEffectDescription(effects, cardData) {
             var burnAmt = amount || 1;
             desc = prefix + 'Apply ' + burnAmt + ' Burning';
         } else if (type === 16) { // Grant Dark Matter
+            // DM pool redesign 2026-07: canonical shape is target 7
+            // (owner_player) + scale_with 'dark_mages' (+N per friendly
+            // Dark Mage). Legacy all_allies (target 5) JSONs render the
+            // same wording. Mirrors wiki/sync/sync_cards.py.
             desc = prefix + 'Dark Matter +' + amount;
-            if (eff.target === 5 && eff.target_tribe === 'Mage') desc += ' per ally Dark Mage';
-            else if (eff.target === 5 && eff.target_tribe) desc += ' per ally ' + eff.target_tribe;
-            else if (eff.target === 5) desc += ' per ally';
+            if (eff.scale_with === 'dark_mages' || eff.target === 5) {
+                var dmTribe = (eff.target_tribe && eff.target_tribe !== 'Mage') ? eff.target_tribe : 'Dark Mage';
+                desc += ' per ally ' + dmTribe;
+            }
         } else if (type === 17) { // Revive
             var reviveName = (cardData && cardData.revive_card_id) ? findCardNameById(cardData.revive_card_id) : 'minion';
             desc = prefix + 'Revive ' + amount + ' ' + reviveName + (amount > 1 ? 's' : '') + ' from Grave';

@@ -339,6 +339,9 @@ class GameState:
                     "grave": list(p.grave),
                     "exhaust": list(p.exhaust),
                     "discarded_last_turn": p.discarded_last_turn,
+                    # Dark Matter pool redesign 2026-07 — PUBLIC info,
+                    # serialized for both players (view_filter keeps it).
+                    "dark_matter": p.dark_matter,
                 }
                 for p in self.players
             ],
@@ -502,6 +505,8 @@ class GameState:
                 grave=tuple(p["grave"]),
                 exhaust=tuple(p.get("exhaust", ())),
                 discarded_last_turn=p.get("discarded_last_turn", False),
+                # Legacy-safe: pre-redesign save dicts lack the key.
+                dark_matter=int(p.get("dark_matter", 0) or 0),
             )
             for p in d["players"]
         )

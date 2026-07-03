@@ -86,28 +86,40 @@ def _make_state(minions, p1_hand=(), p2_hand=(), p1_mana=10, p2_mana=10, **kwarg
 
 class TestDarkMatterSentinelCasterFix:
     """Magic casts resolve with caster_pos=(0,0); a minion sitting on that
-    cell must NOT be mistaken for the caster."""
+    cell must NOT influence DM scaling.
+
+    Dark Matter pool redesign 2026-07: scale_with="dark_matter" now reads
+    the CASTER PLAYER's pool (Player.dark_matter) on every path — minions
+    never hold DM. These tests keep the original squatter setups to pin
+    that a minion at (0,0) has no effect on the result.
+    """
+
+    def _with_p1_pool(self, state, amount):
+        return replace(
+            state,
+            players=(
+                replace(state.players[0], dark_matter=amount),
+                state.players[1],
+            ),
+        )
 
     def test_barrage_scales_with_player_pool_despite_enemy_on_origin(self, library):
-        """Dark Matter Barrage: 5 + caster's total DM pool, even with a
-        0-DM ENEMY minion parked on (0,0)."""
+        """Dark Matter Barrage: 5 + caster player's pool, even with an
+        ENEMY minion parked on (0,0)."""
         rat_id = library.get_numeric_id("rat")
         enemy_on_origin = MinionInstance(
             instance_id=0, card_numeric_id=rat_id,
             owner=PlayerSide.PLAYER_2, position=(0, 0),
-            current_health=20, dark_matter_stacks=0,
+            current_health=20,
         )
         enemy_far = MinionInstance(
             instance_id=1, card_numeric_id=rat_id,
             owner=PlayerSide.PLAYER_2, position=(3, 3),
             current_health=20,
         )
-        friendly_dm_holder = MinionInstance(
-            instance_id=2, card_numeric_id=rat_id,
-            owner=PlayerSide.PLAYER_1, position=(1, 1),
-            current_health=20, dark_matter_stacks=4,
+        state = self._with_p1_pool(
+            _make_state((enemy_on_origin, enemy_far)), 4,
         )
-        state = _make_state((enemy_on_origin, enemy_far, friendly_dm_holder))
 
         barrage = library.get_by_card_id("dark_matter_barrage")
         damage_effect = barrage.effects[0]
@@ -118,32 +130,26 @@ class TestDarkMatterSentinelCasterFix:
             state, damage_effect, (0, 0), PlayerSide.PLAYER_1, library,
         )
 
-        # 5 base + 4 pooled DM = 9 to every enemy. The buggy code scaled
-        # off the 0-DM enemy at (0,0) and dealt only 5.
+        # 5 base + 4 pool DM = 9 to every enemy.
         assert result.get_minion(0).current_health == 20 - 9
         assert result.get_minion(1).current_health == 20 - 9
 
     def test_zero_amount_dm_damage_not_skipped_by_origin_squatter(self, library):
         """Matter-of-Time-style amount=0 DM damage must use the caster
-        player's DM pool — not silently no-op because a 0-DM minion sits
+        player's DM pool — not silently no-op because a minion sits
         on (0,0)."""
         rat_id = library.get_numeric_id("rat")
         squatter = MinionInstance(
             instance_id=0, card_numeric_id=rat_id,
             owner=PlayerSide.PLAYER_1, position=(0, 0),
-            current_health=20, dark_matter_stacks=0,
-        )
-        dm_holder = MinionInstance(
-            instance_id=1, card_numeric_id=rat_id,
-            owner=PlayerSide.PLAYER_1, position=(1, 1),
-            current_health=20, dark_matter_stacks=6,
+            current_health=20,
         )
         enemy = MinionInstance(
             instance_id=2, card_numeric_id=rat_id,
             owner=PlayerSide.PLAYER_2, position=(3, 3),
             current_health=20,
         )
-        state = _make_state((squatter, dm_holder, enemy))
+        state = self._with_p1_pool(_make_state((squatter, enemy)), 6)
 
         effect = EffectDefinition(
             effect_type=EffectType.DAMAGE,
@@ -156,57 +162,52 @@ class TestDarkMatterSentinelCasterFix:
             state, effect, (0, 0), PlayerSide.PLAYER_1, library,
             target_pos=(3, 3),
         )
-        # 0 base + 6 pooled DM = 6 damage. The buggy code returned the
-        # state unchanged (0 + squatter's 0 DM -> skip).
+        # 0 base + 6 pool DM = 6 damage.
         assert result.get_minion(2).current_health == 20 - 6
 
-    def test_stash_per_mage_scaling_despite_mage_on_origin(self, library):
-        """Dark Matter Stash buffs each Mage by ITS OWN DM even when a
-        0-DM Mage occupies (0,0)."""
+    def test_stash_buffs_every_dark_mage_by_pool(self, library):
+        """Dark Matter Stash's buff (pool redesign): EVERY friendly Dark
+        Mage gains the caster player's pool total — a Dark Mage occupying
+        (0,0) is buffed like any other."""
         mage_id = library.get_numeric_id("shadow_blaster")
         mage_on_origin = MinionInstance(
             instance_id=0, card_numeric_id=mage_id,
             owner=PlayerSide.PLAYER_1, position=(0, 0),
-            current_health=10, dark_matter_stacks=0,
+            current_health=10,
         )
-        mage_with_dm = MinionInstance(
+        mage_far = MinionInstance(
             instance_id=1, card_numeric_id=mage_id,
             owner=PlayerSide.PLAYER_1, position=(0, 2),
-            current_health=10, dark_matter_stacks=3,
+            current_health=10,
         )
-        state = _make_state((mage_on_origin, mage_with_dm))
+        state = self._with_p1_pool(
+            _make_state((mage_on_origin, mage_far)), 3,
+        )
 
         stash = library.get_by_card_id("dark_matter_stash")
-        buff_attack = stash.effects[0]
-        assert buff_attack.effect_type == EffectType.BUFF_ATTACK
+        buff_attack = next(
+            e for e in stash.effects
+            if e.effect_type == EffectType.BUFF_ATTACK
+        )
         assert buff_attack.scale_with == "dark_matter"
 
         result = resolve_effect(
             state, buff_attack, (0, 0), PlayerSide.PLAYER_1, library,
         )
-        # Per-target own-DM scaling: 3-DM Mage gets +3, 0-DM Mage nothing.
-        # The buggy code treated the (0,0) Mage as the caster (0 DM) and
-        # skipped the ENTIRE effect.
+        # Pool scaling: BOTH Dark Mages get +3 (the player's pool).
         assert result.get_minion(1).attack_bonus == 3
-        assert result.get_minion(0).attack_bonus == 0
+        assert result.get_minion(0).attack_bonus == 3
 
-    def test_minion_source_still_scales_with_own_dm(self, library):
-        """Triggered effects that thread source_minion_id keep the
-        minion's OWN DM scaling (Dark Matter Battery rule)."""
+    def test_minion_source_scales_with_owner_pool(self, library):
+        """Triggered effects that thread source_minion_id read the OWNER
+        PLAYER's pool (Dark Matter Battery — pool redesign 2026-07)."""
         battery_id = library.get_numeric_id("dark_matter_battery")
         battery = MinionInstance(
             instance_id=0, card_numeric_id=battery_id,
             owner=PlayerSide.PLAYER_1, position=(0, 1),
-            current_health=20, dark_matter_stacks=5,
+            current_health=20,
         )
-        # Another friendly DM holder that must NOT contribute (own-DM rule).
-        rat_id = library.get_numeric_id("rat")
-        other = MinionInstance(
-            instance_id=1, card_numeric_id=rat_id,
-            owner=PlayerSide.PLAYER_1, position=(1, 1),
-            current_health=20, dark_matter_stacks=9,
-        )
-        state = _make_state((battery, other))
+        state = self._with_p1_pool(_make_state((battery,)), 5)
 
         battery_def = library.get_by_card_id("dark_matter_battery")
         effect = battery_def.effects[0]  # damage opponent, scale dark_matter
@@ -217,22 +218,22 @@ class TestDarkMatterSentinelCasterFix:
         )
         assert result.players[1].hp == STARTING_HP - 5
 
-    def test_activated_ability_uses_activator_dm(self, library):
+    def test_activated_ability_uses_activator_player_pool(self, library):
         """Grave Caller's dark_matter_buff (contract action:activate_ability)
-        keeps scaling off the ACTIVATOR's own DM stacks."""
+        scales off the activating PLAYER's pool (redesign 2026-07)."""
         caller_id = library.get_numeric_id("grave_caller")
         rat_id = library.get_numeric_id("rat")
         caller = MinionInstance(
             instance_id=0, card_numeric_id=caller_id,
             owner=PlayerSide.PLAYER_1, position=(1, 1),
-            current_health=13, dark_matter_stacks=4,
+            current_health=13,
         )
         target = MinionInstance(
             instance_id=1, card_numeric_id=rat_id,
             owner=PlayerSide.PLAYER_1, position=(2, 2),
             current_health=10,
         )
-        state = _make_state((caller, target))
+        state = self._with_p1_pool(_make_state((caller, target)), 4)
 
         buff_effect = EffectDefinition(
             effect_type=EffectType.BUFF_ATTACK,
@@ -481,13 +482,15 @@ class TestCardRulingsMatchImplementation:
         assert "directly behind her" in rulings
         assert "in front of her (one row toward the opponent's back row)" not in rulings
 
-    def test_gargoyle_tip_no_longer_claims_stash_dm_on_summon(self):
-        """The on-discard Stash DM grant resolves before the Sorceress
-        lands, so she cannot receive it."""
+    def test_gargoyle_ruling_excludes_her_from_cost_discard_gain(self):
+        """DM pool redesign: a cost-discard's per-Dark-Mage gain cannot
+        count the Sorceress (she isn't on the board yet), but the grown
+        POOL does pump her own Summon buff."""
         data = self._load("minion_gargoyle_sorceress.json")
+        rulings = " ".join(data["rulings"])
+        assert "does not count her" in rulings
         tips = " ".join(data["tips"])
-        assert "she herself does not receive it" in tips
-        assert "you gain the DM right as she's summoned" not in tips
+        assert "it pumps her own buff" in tips
 
     def test_shadow_blaster_tip_places_gargoyle_in_front(self):
         data = self._load("minion_shadow_blaster.json")
@@ -495,7 +498,11 @@ class TestCardRulingsMatchImplementation:
         assert "Gargoyle Sorceress directly in FRONT of her" in tips
         assert "Gargoyle Sorceress directly BEHIND her" not in tips
 
-    def test_stash_ruling_describes_per_mage_own_dm(self):
+    def test_stash_ruling_describes_pool_gain_first_buff_second(self):
+        """DM pool redesign 2026-07: gain lands FIRST, then every friendly
+        Dark Mage buffs by the pool total AFTER the gain."""
         data = self._load("magic_dark_matter_stash.json")
-        assert "that Mage's OWN Dark Matter stacks" in data["rulings"][0]
-        assert "your current Dark Matter stack count" not in data["rulings"][0]
+        first = data["rulings"][0]
+        assert "FIRST" in first and "THEN" in first
+        assert "AFTER that gain" in first
+        assert "that Mage's OWN Dark Matter stacks" not in first

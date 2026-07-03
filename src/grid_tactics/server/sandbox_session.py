@@ -66,7 +66,9 @@ HISTORY_MAX = 64  # >= 50 per DEV-09; deque drops oldest on overflow
 SLOT_NAME_RE = re.compile(r"^[a-zA-Z0-9_-]{1,64}$")
 SLOT_DIR = Path("data/sandbox_saves")  # relative to project root
 ZONES = ("hand", "deck_top", "deck_bottom", "graveyard", "exhaust")
-PLAYER_FIELDS = ("current_mana", "max_mana", "hp")
+# Dark Matter pool redesign 2026-07: "dark_matter" appended so UAT
+# scenarios / sandbox cheats can set a player's DM pool directly.
+PLAYER_FIELDS = ("current_mana", "max_mana", "hp", "dark_matter")
 
 
 # ---------------------------------------------------------------------------

@@ -94,12 +94,12 @@ class EffectType(IntEnum):
     TUTOR = 8          # Search deck for card matching tutor_target and add to hand
     DESTROY = 9        # Destroy target minion (remove regardless of health)
     BURN = 10          # Apply burn DoT to target (amount damage per action, non-stacking)
-    DARK_MATTER_BUFF = 11  # Buff target's attack by amount + the activating minion's own Dark Matter stacks (magic-card fallback path sums the player's pool instead)
+    DARK_MATTER_BUFF = 11  # Buff target's attack by amount + the activating PLAYER's Dark Matter pool (Player.dark_matter — pool redesign 2026-07)
     PASSIVE_HEAL = 12  # Heal self by amount (fires on ON_START_OF_TURN — the owner's Rally Phase)
     LEAP = 13          # On move: if blocked by enemy, advance to next available tile instead
     CONJURE = 14       # Create a card from outside the deck (specified by summon_token_target)
     APPLY_BURNING = 15  # Phase 14.3: grant N burning_stacks to the target minion (stacks additively)
-    GRANT_DARK_MATTER = 16  # Add `amount` Dark Matter stacks to a target minion. Currently only consumed by Ratchanter's activated ability (magnitude scales with caster.dark_matter_stacks).
+    GRANT_DARK_MATTER = 16  # Add Dark Matter stacks to the OWNING PLAYER's pool (pool redesign 2026-07). With target=owner_player + scale_with="dark_mages" the player gains `amount` per friendly Dark Mage on board; legacy all_allies-target JSONs resolve the same way. Read by scale_with="dark_matter" effects and cost_reduction="dark_matter" (Erebus).
     REVIVE = 17  # Summon up to `amount` copies of revive_card_id from grave to the board
     DRAW = 18    # Draw `amount` cards from deck to hand
     BURN_BONUS = 19  # Aura: adds `amount` to burn tick damage for this player's burning enemies
@@ -170,6 +170,7 @@ class TargetType(IntEnum):
     OPPONENT_PLAYER = 4  # Deals damage/effect to the opponent player's HP
     ALL_ALLIES = 5       # Hits all friendly minions (optionally filtered by target_tribe)
     ALL_MINIONS = 6      # Hits every living minion (both sides), optionally filtered by target_tribe and/or target_element
+    OWNER_PLAYER = 7     # Affects the owning/casting player directly (Dark Matter pool redesign 2026-07 — e.g. grant_dark_matter with target "owner_player"). Append-only value.
 
 
 # ---------------------------------------------------------------------------

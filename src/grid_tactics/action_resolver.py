@@ -1006,7 +1006,12 @@ def _cast_magic(
             )
         destroyed_def = library.get_by_id(destroyed_minion.card_numeric_id)
         destroyed_attack = destroyed_def.attack + destroyed_minion.attack_bonus
-        destroyed_dm = destroyed_minion.dark_matter_stacks
+        # Dark Matter pool redesign 2026-07: minions no longer carry DM.
+        # ReactEntry.destroyed_dm is deprecated (kept at 0 for wire/save
+        # compat); the DM half of scale_with="destroyed_attack_plus_dm"
+        # now reads the CASTER PLAYER's pool at resolution time in
+        # react_stack.resolve_react_stack.
+        destroyed_dm = 0
 
         # Phase 14.8 bugfix: route the destroyed ally through the STANDARD
         # death pipeline instead of deleting it from the board directly.
@@ -1255,8 +1260,9 @@ def _apply_activate_ability(
       - ``summon_token`` with target ``own_side_empty``: summon a fresh
         MinionInstance at ``action.target_pos`` (legacy shape).
       - ``conjure_rat_and_buff`` with target ``none`` (Ratchanter rework):
-        stacking flat buff. Applies +(1 + caster.dark_matter_stacks) to
-        every living friendly Rat's attack, max-HP bonus AND current HP.
+        stacking flat buff. Applies +(1 + owning player's Dark Matter
+        pool) to every living friendly Rat's attack, max-HP bonus AND
+        current HP (pool redesign 2026-07).
         Then, if the caster's deck contains any card with card_id ``rat``,
         enters the Phase 14.2 pending_tutor state so the player selects
         one to add to hand. If the deck has zero matches, the conjure is
@@ -1397,16 +1403,17 @@ def _apply_conjure_rat_and_buff(
 
     Step 1 (buff, unconditional): for every living friendly minion
     matching _is_rat_card EXCEPT the caster itself, add
-    ``1 + caster.dark_matter_stacks`` to ``attack_bonus``,
+    ``1 + owning player's Dark Matter pool`` to ``attack_bonus``,
     ``max_health_bonus`` AND ``current_health`` so the extra HP is
-    usable right away.
+    usable right away (Dark Matter pool redesign 2026-07 — the old
+    caster-own-stacks scaling is gone; minions never hold DM).
 
     Step 2 (conjure, conditional): scan the caster's deck for card_id
     ``rat``. If >=1 matches, enter pending_tutor state with those deck
     indices so the caller resolves via TUTOR_SELECT / DECLINE_TUTOR.
     Zero matches -> no pending state, no prompt.
     """
-    magnitude = 1 + caster.dark_matter_stacks
+    magnitude = 1 + state.players[active_idx].dark_matter
 
     # ---- Step 1: buff friendly rats on board --------------------------
     new_minions_list = list(state.minions)

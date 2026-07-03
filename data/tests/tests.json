@@ -284,7 +284,7 @@
       "id": "dm-number-shown-in-purple",
       "title": "Live Dark Matter count in card text",
       "instructions": "1. Hover (or click) Dark Matter Barrage in P1's hand.\n2. Read the rules line.",
-      "expected": "The line should read 'Deal 5 + 9 (Dark Matter) damage to all enemies' (approximately) with the number 9 glowing in PURPLE. Each of P1's three Mages has 3 Dark Matter stacks, summing to 9.",
+      "expected": "The line should read 'Deal 5 + 9 (Dark Matter) damage to all enemies' (approximately) with the number 9 glowing in PURPLE. P1's Dark Matter POOL is set to 9 (pool redesign 2026-07 — DM is a player resource, not per-minion stacks).",
       "setup": [
         {
           "op": "reset"
@@ -302,28 +302,31 @@
           "value": 10
         },
         {
+          "op": "set_player",
+          "player_idx": 0,
+          "field": "dark_matter",
+          "value": 9
+        },
+        {
           "op": "place",
           "player_idx": 0,
           "card_id": "gargoyle_sorceress",
           "row": 3,
-          "col": 2,
-          "dark_matter": 3
+          "col": 2
         },
         {
           "op": "place",
           "player_idx": 0,
           "card_id": "shadow_blaster",
           "row": 3,
-          "col": 1,
-          "dark_matter": 3
+          "col": 1
         },
         {
           "op": "place",
           "player_idx": 0,
           "card_id": "shadow_blaster",
           "row": 3,
-          "col": 3,
-          "dark_matter": 3
+          "col": 3
         },
         {
           "op": "add_to_hand",
