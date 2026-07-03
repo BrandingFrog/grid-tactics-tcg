@@ -39,7 +39,7 @@
     ],
     "tips": [
         "Best played late when you already have multiple Mages on the board with high Dark Matter stacks — the buff scales multiplicatively with both Mage count and DM.",
-        "Discard this with Shady Trade Deal for a 2-for-1: Shady grants +1 DM to all Mages, then Stash's on-discard grants another +1 DM. You net +2 DM per Mage for just 1 mana.",
+        "Discard this with Shady Trade Deal for a 2-for-1: Stash's on-discard +1 DM lands immediately as the discard cost is paid, then Shady's own +1 DM resolves after the react window. You net +2 DM per Mage for just 1 mana — and Stash's DM sticks even if Shady itself gets negated.",
         "Pair with Ratchanter — the Rats he conjures don't benefit, but Ratchanter himself is a Mage and receives the full buff.",
         "At 5 mana this competes with Erebus for your mana. If your DM is high enough, Erebus may be cheaper and put a body on board. Use Stash when you need to buff existing Mages rather than deploy a new one.",
         "Sometimes it's better to hold this card as discard fodder than to play it — the on-discard effect costs 0 mana and still grants DM."
@@ -48,6 +48,6 @@
         "When played, each friendly Mage on the board gains attack and health equal to that Mage's OWN Dark Matter stacks (per-Mage, not a pooled player total), then gains +1 Dark Matter.",
         "The buff is applied first, then the Dark Matter is granted. A Mage with 3 Dark Matter gets +3🗡️/+3🤍, then goes to 4 Dark Matter.",
         "If discarded from hand (e.g. by Shady Trade Deal), the on-discard effect triggers: each friendly Mage gains +1 Dark Matter. The buff effects do not trigger on discard.",
-        "Only Mages on the board at the time of casting receive the buff. Mages played later do not retroactively benefit."
+        "Only Mages on the board when the spell resolves — after the react window closes — receive the buff. A Mage removed during the react window gets nothing, and Mages played later do not retroactively benefit."
     ]
 }

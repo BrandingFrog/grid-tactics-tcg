@@ -191,6 +191,25 @@ class CardLoader:
                 f"Valid: ['owner', 'opponent', 'every'] (or omit for default)"
             )
 
+        # 2026-07 card-audit fix (Eclipse Shade): the engine IGNORES a
+        # BURN/APPLY_BURNING effect's ``amount`` — the tick always deals
+        # the global BURN_DAMAGE constant (react_stack.tick_status_effects).
+        # An amount that silently differs from the constant would be a
+        # data/behavior mismatch that only shows up in card text, so
+        # reject it at load time (amount == BURN_DAMAGE for documentation
+        # or 0 for "unspecified" are both accepted).
+        if effect_type in (EffectType.BURN, EffectType.APPLY_BURNING):
+            from grid_tactics.minion import BURN_DAMAGE
+            burn_amount = data.get("amount", 0)
+            if burn_amount not in (0, BURN_DAMAGE):
+                raise ValueError(
+                    f"Card '{card_id}': {context} BURN amount {burn_amount} "
+                    f"differs from the engine's BURN_DAMAGE constant "
+                    f"({BURN_DAMAGE}). The engine ignores per-card burn "
+                    f"amounts — set it to {BURN_DAMAGE} (or 0) or change "
+                    f"BURN_DAMAGE in grid_tactics/minion.py."
+                )
+
         return EffectDefinition(
             effect_type=effect_type,
             trigger=trigger,

@@ -19,10 +19,10 @@
         }
     ],
     "tips": [
-        "Pyre Archer applies burn on every attack at range 2. Over multiple turns, the burn damage stacks and can outpace the direct attack damage.",
+        "Pyre Archer applies Burning on every attack at range 2. Burning never wears off and ticks 5 🤍 in each of the target's Decay Phases, so the accumulated burn damage can outpace the direct attack damage over a long game.",
         "Only obtainable via Reanimated Bones transform (1+2 = 3 mana total). This is the cheapest transform option and gets burn pressure online fastest.",
-        "At 9/5, Pyre Archer is fragile. Keep it in the back row behind a tanky minion — its range 2 means it can attack from two rows away.",
-        "Pair with Emberplague Rat for a double burn strategy. Targets caught between both will take Decay-Phase burn + on-attack burn simultaneously.",
+        "At 9🗡️/5🤍, Pyre Archer is fragile. Keep it in the back row behind a tanky minion — Range 2 reaches three tiles orthogonally (and two diagonally), so it can strike from deep inside your own territory.",
+        "Pair with Emberplague Rat for a fire package — Emberplague sets adjacent enemies Burning in your Decay Phase while Pyre Archer tags anything it shoots from range. Burn doesn't stack, but between the two of them nearly every enemy minion ends up Burning for 5 🤍 a turn.",
         "As an Archer and Undead, it shares tribal tags with both ranged and undead synergies. The dual tribe may become more relevant as new cards are added."
     ],
     "rulings": [

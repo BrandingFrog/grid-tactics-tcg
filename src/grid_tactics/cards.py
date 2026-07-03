@@ -39,7 +39,7 @@ class EffectDefinition:
     trigger: TriggerType
     target: TargetType
     amount: int
-    scale_with: Optional[str] = None  # e.g. "dark_matter" — adds caster's DM stacks to amount
+    scale_with: Optional[str] = None  # "dark_matter" (caster minion's own DM stacks; player pool for spells), "player_dark_matter" (caster PLAYER's total DM across live minions — 2026-07), "destroyed_attack", "destroyed_attack_plus_dm"
     target_tribe: Optional[str] = None  # filter ALL_ALLIES/ALL_MINIONS to only this tribe (e.g. "Mage")
     target_element: Optional[str] = None  # filter ALL_MINIONS to only this element (e.g. "metal"); combined with target_tribe as OR
     placement_condition: Optional[str] = None  # e.g. "front_of_dark_ranged" — positional condition

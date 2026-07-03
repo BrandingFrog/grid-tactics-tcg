@@ -35,6 +35,7 @@ from grid_tactics.engine_events import (
     EVT_MINION_DIED,
     EVT_MINION_MOVED,
     EVT_MINION_SUMMONED,
+    EVT_MINION_TRANSFORMED,
     EVT_PENDING_MODAL_OPENED,
     EVT_PENDING_MODAL_RESOLVED,
     EVT_PHASE_CHANGED,
@@ -214,13 +215,26 @@ def _apply_draw(state: GameState) -> GameState:
     return replace(state, players=new_players)
 
 
-def _apply_move(state: GameState, action: Action, library: CardLibrary = None) -> GameState:
+def _apply_move(
+    state: GameState,
+    action: Action,
+    library: CardLibrary = None,
+    *,
+    event_collector: Optional[EventStream] = None,
+) -> GameState:
     """Apply MOVE action. Moves minion forward one cell in its lane.
 
     Validates:
       - Minion exists and belongs to active player
       - Target position is forward-only in the same column (lane-locked)
       - Target cell is empty
+
+    2026-07 card-audit fix (Furryroach): emits EVT_MINION_MOVED for the
+    acting minion BEFORE the ON_MOVE trigger dispatch (previously the
+    dispatch site emitted it after, so March-sweep events would have
+    preceded the mover's own event), and threads ``event_collector``
+    into the ON_MOVE dispatch so March advances emit per-ally
+    EVT_MINION_MOVED events too.
     """
     assert_phase_contract(state, "action:move")
     active_side = _get_active_side(state)
@@ -314,14 +328,29 @@ def _apply_move(state: GameState, action: Action, library: CardLibrary = None) -
     new_minions = _replace_minion(state.minions, minion.instance_id, new_minion)
     state = replace(state, board=new_board, minions=new_minions)
 
+    # Emit the acting minion's move event BEFORE the ON_MOVE dispatch so
+    # any March-sweep events it spawns come after it in seq order.
+    if event_collector is not None:
+        event_collector.collect(
+            EVT_MINION_MOVED,
+            "action:move",
+            {
+                "instance_id": minion.instance_id,
+                "from": [src_row, src_col],
+                "to": list(target_pos),
+                "owner_idx": state.active_player_idx,
+            },
+        )
+
     # ON_MOVE trigger: fire any effects with trigger=ON_MOVE on this minion
-    # (e.g. Furryroach's RALLY_FORWARD). Mirrors tensor engine behaviour.
-    # Must happen AFTER the position update so rally sees the new location
-    # (and the mover is correctly excluded from the rally sweep).
+    # (e.g. Furryroach's march_forward). Mirrors tensor engine behaviour.
+    # Must happen AFTER the position update so the March sweep sees the new
+    # location (and the mover is correctly excluded from the sweep).
     if library is not None:
         state = resolve_effects_for_trigger(
             state, TriggerType.ON_MOVE, new_minion, library,
             contract_source="trigger:on_move",
+            event_collector=event_collector,
         )
 
     # Phase 14.1 / 14.7-08: For melee (range=0) minions, if there is at least
@@ -378,6 +407,23 @@ def _apply_play_card(
     # React cards cannot be played in ACTION phase
     if card_def.card_type == CardType.REACT:
         raise ValueError("React cards cannot be played during ACTION phase")
+
+    # Unique enforcement (2026-07 card-audit fix, Giant Rat): a unique
+    # minion cannot be played while a live copy owned by the same player
+    # is on the board. Mirrors the tensor-engine gate; also enforced in
+    # legal_actions so the UI / RL mask never offers it, but re-checked
+    # here so out-of-band resolve_action callers are rejected too.
+    if card_def.card_type == CardType.MINION and card_def.unique:
+        for m in state.minions:
+            if (
+                m.owner == active_side
+                and m.is_alive
+                and m.card_numeric_id == card_numeric_id
+            ):
+                raise ValueError(
+                    f"Card '{card_def.card_id}' is Unique — a copy is "
+                    f"already alive on your board"
+                )
 
     # Check mana (with cost reduction)
     from grid_tactics.legal_actions import effective_mana_cost
@@ -611,6 +657,28 @@ def _enter_pending_revive(
     if grave_count == 0:
         return state
 
+    # Check at least one empty deploy cell exists (2026-07 card-audit
+    # fix: the docstring promised this check but it was never
+    # implemented — a full deploy zone forced the player through a
+    # modal whose only legal action was DECLINE_REVIVE). Deploy rows
+    # mirror legal_actions._pending_revive_actions: melee (range 0)
+    # may use any own-side row, ranged only the back row.
+    if player_idx == 0:
+        deploy_rows = (
+            PLAYER_1_ROWS if revive_def.attack_range == 0 else (BACK_ROW_P1,)
+        )
+    else:
+        deploy_rows = (
+            PLAYER_2_ROWS if revive_def.attack_range == 0 else (BACK_ROW_P2,)
+        )
+    has_empty_cell = any(
+        state.board.get(r, c) is None
+        for r in deploy_rows
+        for c in range(5)
+    )
+    if not has_empty_cell:
+        return state
+
     # Cap at available grave copies
     actual_amount = min(amount, grave_count)
 
@@ -702,6 +770,50 @@ def _apply_revive_place(
             players=tuple(players),
             pending_revive_remaining=new_remaining,
         )
+
+
+def _resume_after_pending_revive(
+    state: GameState,
+    action: Action,
+    library: CardLibrary,
+    *,
+    event_collector: Optional[EventStream] = None,
+) -> GameState:
+    """Resume the post-action flow after the pending_revive modal clears.
+
+    2026-07 card-audit fix (Ratical Resurrection): REVIVE_PLACE /
+    DECLINE_REVIVE previously returned the raw state with
+    phase=ACTION and the CASTER still active — the caster got a free
+    second action and the turn never advanced. This runs the same
+    resume tail as the pending-tutor gate: stash pending_action, clean
+    up dead minions, check game over, defer on any newly-opened modal,
+    then open the AFTER_ACTION react window whose close routes through
+    close_end_react_and_advance_turn.
+    """
+    state = replace(state, pending_action=action)
+    state = _cleanup_dead_minions(state, library, event_collector=event_collector)
+    state = _check_game_over(state, event_collector=event_collector)
+    if state.is_game_over:
+        return state
+    if state.pending_death_target is not None:
+        return state
+    if state.pending_trigger_picker_idx is not None:
+        return state
+    if state.phase == TurnPhase.REACT:
+        _emit_after_action_react_window_opened(state, event_collector)
+        return state
+    state = replace(
+        state,
+        phase=TurnPhase.REACT,
+        react_player_idx=1 - state.active_player_idx,
+        react_context=ReactContext.AFTER_ACTION,
+        # Preserve an in-flight react_return_phase (e.g. END_OF_TURN when
+        # the revive was react-played on a Decay window) — same rule as
+        # the pending-tutor resume.
+        react_return_phase=state.react_return_phase or TurnPhase.ACTION,
+    )
+    _emit_after_action_react_window_opened(state, event_collector)
+    return state
 
 
 # ---------------------------------------------------------------------------
@@ -1114,7 +1226,11 @@ def _apply_transform(
     new_player = player.spend_mana(matched_cost)
     new_players = _replace_player(state.players, active_idx, new_player)
 
-    # Replace minion stats — full reset: new card, fresh HP, clear all buffs/status
+    # Replace minion stats — full reset: new card, fresh HP, clear all
+    # buffs/status. 2026-07 card-audit fix: dark_matter_stacks is reset
+    # too — the "completely fresh minion" ruling (and the tensor engine)
+    # both zero DM on transform; the Python engine previously carried it
+    # over.
     new_minion = replace(
         minion,
         card_numeric_id=target_numeric_id,
@@ -1122,6 +1238,8 @@ def _apply_transform(
         attack_bonus=0,
         max_health_bonus=0,
         is_burning=False,
+        burn_scope="owner",
+        dark_matter_stacks=0,
     )
     new_minions = _replace_minion(state.minions, minion.instance_id, new_minion)
 
@@ -1796,16 +1914,29 @@ def resolve_action(
     # Pending revive-place gate — runs before REACT delegation so the player
     # can place revived minions even when the state is technically in REACT
     # (the react window is deferred until revive completes).
+    # 2026-07 card-audit fix: when the LAST placement (or a decline)
+    # clears the pending state, run the shared resume tail so the react
+    # window opens and the turn advances (previously the caster kept the
+    # ACTION phase and got a free second action).
     if state.pending_revive_player_idx is not None:
         if action.action_type == ActionType.REVIVE_PLACE:
-            return _apply_revive_place(state, action, library)
+            state = _apply_revive_place(state, action, library)
+            if state.pending_revive_player_idx is not None:
+                # Mid-chain — more placements to make; keep the modal open.
+                return state
+            return _resume_after_pending_revive(
+                state, action, library, event_collector=event_collector,
+            )
         elif action.action_type == ActionType.DECLINE_REVIVE:
             assert_phase_contract(state, "action:decline_revive")
-            return replace(
+            state = replace(
                 state,
                 pending_revive_player_idx=None,
                 pending_revive_card_id=None,
                 pending_revive_remaining=0,
+            )
+            return _resume_after_pending_revive(
+                state, action, library, event_collector=event_collector,
             )
         else:
             raise ValueError(
@@ -1975,6 +2106,12 @@ def resolve_action(
             "pending_tutor and pending_post_move_attacker cannot coexist"
         )
         is_conjure = state.pending_tutor_is_conjure
+        # 2026-07 card-audit fix (Red Diodebot): capture WHERE the tutor
+        # was opened from BEFORE the pending state clears. A tutor fired
+        # by an on_summon effect (Window B) must NOT open a third
+        # AFTER_ACTION react window on resume — it routes straight to
+        # the Decay phase, matching the no-match summon path.
+        _tutor_origin = state.pending_tutor_origin
         if action.action_type == ActionType.TUTOR_SELECT:
             assert_phase_contract(state, "action:tutor_select")
             match_idx = action.card_index  # reuse card_index payload
@@ -2004,6 +2141,7 @@ def resolve_action(
                     pending_tutor_player_idx=None,
                     pending_tutor_matches=(),
                     pending_tutor_is_conjure=False,
+                    pending_tutor_origin=None,
                     pending_conjure_deploy_card=chosen_card,
                     pending_conjure_deploy_player_idx=caster_idx,
                 )
@@ -2041,6 +2179,7 @@ def resolve_action(
                         pending_tutor_matches=(),
                         pending_tutor_is_conjure=False,
                         pending_tutor_remaining=0,
+                        pending_tutor_origin=None,
                     )
                 else:
                     # Recompute matches against the NEW deck using the same
@@ -2064,6 +2203,7 @@ def resolve_action(
                             pending_tutor_matches=(),
                             pending_tutor_is_conjure=False,
                             pending_tutor_remaining=0,
+                            pending_tutor_origin=None,
                         )
                     else:
                         remaining = min(remaining, len(new_matches))
@@ -2085,10 +2225,27 @@ def resolve_action(
                 pending_tutor_matches=(),
                 pending_tutor_is_conjure=False,
                 pending_tutor_remaining=0,
+                pending_tutor_origin=None,
             )
         else:
             raise ValueError(
                 "Pending tutor: must TUTOR_SELECT or DECLINE_TUTOR"
+            )
+
+        # 2026-07 card-audit fix: pair the EVT_PENDING_MODAL_OPENED that
+        # _enter_pending_tutor emitted with a RESOLVED event once the
+        # pending state clears, so the client's eventQueue gate releases.
+        # (Mirrors the death_target_pick pattern above.) Mid-chain multi-
+        # picks return early before this point and keep the modal open.
+        if state.pending_tutor_player_idx is None and event_collector is not None:
+            event_collector.collect(
+                EVT_PENDING_MODAL_RESOLVED,
+                (
+                    "action:decline_tutor"
+                    if action.action_type == ActionType.DECLINE_TUTOR
+                    else "action:tutor_select"
+                ),
+                {"modal_kind": "tutor_select"},
             )
 
         # If we just entered pending_conjure_deploy, defer the react window.
@@ -2110,6 +2267,25 @@ def resolve_action(
         if state.phase == TurnPhase.REACT:
             _emit_after_action_react_window_opened(state, event_collector)
             return state
+        # 2026-07 card-audit fix (Red Diodebot): a tutor opened by an
+        # on_summon effect already had its react window (Window B —
+        # AFTER_SUMMON_EFFECT). Opening another AFTER_ACTION window here
+        # gave the opponent a THIRD react window that the no-match path
+        # never opens. Route straight to the Decay phase instead,
+        # matching the summon flow when the tutor finds no match.
+        if _tutor_origin == "summon_effect":
+            from grid_tactics.react_stack import enter_end_of_turn
+            state = replace(
+                state,
+                react_stack=(),
+                react_player_idx=None,
+                pending_action=None,
+                react_context=None,
+                react_return_phase=None,
+            )
+            return enter_end_of_turn(
+                state, library, event_collector=event_collector,
+            )
         state = replace(
             state,
             phase=TurnPhase.REACT,
@@ -2132,18 +2308,27 @@ def resolve_action(
             f"{action.action_type.name} only legal during pending_tutor state"
         )
 
-    # Pending revive-place gate.
+    # Pending revive-place gate (defense in depth — the phase-agnostic
+    # gate earlier in this function normally catches these first).
     # Player picks a deploy cell for each revived minion, or declines.
     if state.pending_revive_player_idx is not None:
         if action.action_type == ActionType.REVIVE_PLACE:
-            return _apply_revive_place(state, action, library)
+            state = _apply_revive_place(state, action, library)
+            if state.pending_revive_player_idx is not None:
+                return state
+            return _resume_after_pending_revive(
+                state, action, library, event_collector=event_collector,
+            )
         elif action.action_type == ActionType.DECLINE_REVIVE:
             assert_phase_contract(state, "action:decline_revive")
-            return replace(
+            state = replace(
                 state,
                 pending_revive_player_idx=None,
                 pending_revive_card_id=None,
                 pending_revive_remaining=0,
+            )
+            return _resume_after_pending_revive(
+                state, action, library, event_collector=event_collector,
             )
         else:
             raise ValueError(
@@ -2251,27 +2436,13 @@ def resolve_action(
                 {"player_idx": state.active_player_idx},
             )
     elif action.action_type == ActionType.MOVE:
-        # Snapshot the moving minion's pre-position so we can emit a
-        # MINION_MOVED event with from/to coords.
-        _moved_minion_id = action.minion_id
-        _from_pos: Optional[tuple[int, int]] = None
-        if _moved_minion_id is not None:
-            _src = state.get_minion(_moved_minion_id)
-            if _src is not None:
-                _from_pos = _src.position
-        state = _apply_move(state, action, library)
-        if event_collector is not None and _moved_minion_id is not None:
-            _dst = state.get_minion(_moved_minion_id)
-            event_collector.collect(
-                EVT_MINION_MOVED,
-                "action:move",
-                {
-                    "instance_id": _moved_minion_id,
-                    "from": list(_from_pos) if _from_pos else None,
-                    "to": list(_dst.position) if _dst else None,
-                    "owner_idx": state.active_player_idx,
-                },
-            )
+        # 2026-07 card-audit fix (Furryroach): EVT_MINION_MOVED for the
+        # acting minion is now emitted INSIDE _apply_move (before the
+        # ON_MOVE trigger dispatch) so March-sweep events sequence after
+        # the mover's own event instead of before it.
+        state = _apply_move(
+            state, action, library, event_collector=event_collector,
+        )
     elif action.action_type == ActionType.PLAY_CARD:
         # Emit EVT_CARD_PLAYED before dispatching so the event seq comes
         # BEFORE any inner trigger / summon events the handler emits.
@@ -2333,7 +2504,36 @@ def resolve_action(
     elif action.action_type == ActionType.SACRIFICE:
         state = _apply_sacrifice(state, action, library)
     elif action.action_type == ActionType.TRANSFORM:
+        # Snapshot the pre-transform card so the event carries the swap.
+        _pre_transform = (
+            state.get_minion(action.minion_id)
+            if action.minion_id is not None else None
+        )
         state = _apply_transform(state, action, library)
+        # 2026-07 card-audit fix (Reanimated Bones): emit a board event
+        # for the swap so the client eventQueue can animate it — since
+        # Phase 14.8-05 removed state_update, a TRANSFORM previously
+        # rendered silently on the final snapshot commit.
+        if event_collector is not None and _pre_transform is not None:
+            _post_transform = state.get_minion(action.minion_id)
+            event_collector.collect(
+                EVT_MINION_TRANSFORMED,
+                "action:transform",
+                {
+                    "instance_id": _pre_transform.instance_id,
+                    "from_card_numeric_id": _pre_transform.card_numeric_id,
+                    "to_card_numeric_id": (
+                        _post_transform.card_numeric_id
+                        if _post_transform else None
+                    ),
+                    "position": list(_pre_transform.position),
+                    "owner_idx": int(_pre_transform.owner),
+                    "new_hp": (
+                        _post_transform.current_health
+                        if _post_transform else None
+                    ),
+                },
+            )
     elif action.action_type == ActionType.ACTIVATE_ABILITY:
         state = _apply_activate_ability(state, action, library)
     else:

@@ -19,15 +19,15 @@
     ],
     "tips": [
         "Emberplague Rat has 0 attack but burns all adjacent enemies in your Decay Phase. Position it next to enemy minions to apply constant burn damage without attacking.",
-        "At 24 health for 2 mana, it's extremely tanky for its cost. It can soak hits while its burn whittles down neighbours.",
-        "Place it in a central lane to potentially burn enemies in adjacent columns. Burn stacks mean sustained damage over multiple turns.",
+        "At 24🤍 for 2 mana, it's extremely tanky for its cost. It can soak hits while its burn whittles down neighbours.",
+        "Place it in a central lane to potentially burn enemies in adjacent columns. Burn doesn't stack, but it persists until death — each burned enemy keeps taking 5🤍 in its owner's Decay Phase, turn after turn.",
         "Pair with Pyre Archer for a fire-heavy strategy — Emberplague burns in the Decay Phase while Pyre Archer burns on attack from range.",
-        "As a Rat, it's still a valid promote target for Giant Rat's death trigger. A 24-health Rat is harder to kill than a Common Rat, keeping your promote chain alive."
+        "Despite the Rat tribe, it is NOT a promote target for Giant Rat — only Common Rats promote. It still counts for To The Ratmobile!'s Rat tutor, and its 24🤍 body anchors the Rat board while your Common Rats stay back as promote fodder."
     ],
     "rulings": [
         "The passive burn applies to adjacent enemy minions. It does not burn your own minions.",
         "Burn is a boolean — adjacent enemies become burning, they don't accumulate stacks from repeated passes.",
-        "Moving Emberplague Rat changes which enemies it burns. An enemy that's no longer adjacent still has is_burning=true from previous ticks, but won't be re-targeted.",
+        "Moving Emberplague Rat changes which enemies it burns. An enemy that's no longer adjacent still has Burning from the earlier application — burn persists until death — but Emberplague won't target it again unless it becomes adjacent (re-applying would be a no-op anyway).",
         "With an allied Flame Wyrm, the burns you apply tick for 6 🤍 in the enemy's Decay Phase."
     ]
 }

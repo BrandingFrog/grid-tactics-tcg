@@ -20,16 +20,16 @@
     "promote_target": "rat",
     "unique": true,
     "tips": [
-        "Giant Rat is the Rat deck's resilience engine. As long as you have any Rat on the board, killing Giant Rat just creates another one at full stats.",
+        "Giant Rat is the Rat deck's resilience engine. As long as you have a Common Rat on the board, killing Giant Rat just creates another one at full stats.",
         "Pair with Ratchanter's conjured Common Rats — they serve as both board presence and promote fodder when Giant Rat dies.",
-        "When Giant Rat dies, you choose which Rat on the board to promote. Pick the one in the best position — a Rat already deep in enemy territory becomes a fresh 30/30 threat immediately.",
-        "To The Ratmobile! tutoring 2 Rats helps ensure you always have promote targets available when Giant Rat falls.",
+        "When Giant Rat dies with two or more Common Rats on board, you choose which one to promote (with exactly one, it promotes automatically). Pick the one in the best position — a Common Rat already deep in enemy territory becomes a fresh 30🗡️/30🤍 threat immediately.",
+        "To The Ratmobile! tutors 2 Rat-tribe cards — grabbing Common Rats with it keeps promote targets available when Giant Rat falls.",
         "Be aware that Unique prevents you from playing a second Giant Rat while one is alive. If your Giant Rat is damaged, you cannot play a fresh copy — you must wait for it to die and promote."
     ],
     "rulings": [
         "Unique means only one Giant Rat can be on the board at a time. You cannot play a second copy while one is already in play.",
-        "When Giant Rat dies, its death effect promotes any Rat you control into a new Giant Rat. The promoted Rat is replaced in-place on the board.",
-        "If no friendly Rats are on the board when Giant Rat dies, the promote effect fizzles and nothing happens.",
-        "The promoted Rat becomes a fresh Giant Rat at full stats (30🗡️/30🤍), regardless of the original Rat's stats or damage. All buffs, debuffs, and status effects (including burn) are removed."
+        "When Giant Rat dies, its death effect promotes a Common Rat you control into a new Giant Rat. If you control two or more Common Rats you pick which one; with exactly one it happens automatically. The promoted minion is transformed in-place on the board.",
+        "If no friendly Common Rats are on the board when Giant Rat dies, the promote effect fizzles and nothing happens.",
+        "The promoted Common Rat becomes a fresh Giant Rat at full stats (30🗡️/30🤍), regardless of the original's stats or damage. All buffs, debuffs, and status effects (including burn) are removed."
     ]
 }

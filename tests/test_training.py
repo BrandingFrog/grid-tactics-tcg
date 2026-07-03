@@ -29,11 +29,17 @@ from grid_tactics.rl.training import (
 def _make_env() -> SelfPlayEnv:
     """Build a SelfPlayEnv with starter deck for testing."""
     library = CardLibrary.from_directory(Path("data/cards"))
-    # Build a 40-card deck: 2 copies of each of 18 cards = 36, + 4 extras
-    card_ids = sorted(library._card_id_to_id.keys())
+    # Build a valid deck: 2 copies of every DECKABLE card (transform-target
+    # cards like grave_caller/pyre_archer/fallen_paladin are tokens-only —
+    # validate_deck rejects them; 2026-07 card-audit test repair). Then top
+    # up with 3rd copies until we clear the 40-card minimum.
+    card_ids = sorted(
+        cid for cid in library._card_id_to_id
+        if getattr(library.get_by_card_id(cid), "deckable", True)
+    )
     counts: dict[str, int] = {cid: 2 for cid in card_ids}
-    # Add extra copies to hit 40 (pick first 4 cards for a 3rd copy)
-    for cid in card_ids[:4]:
+    deficit = max(0, 40 - 2 * len(card_ids))
+    for cid in card_ids[:deficit]:
         counts[cid] = 3
     deck = library.build_deck(counts)
     base_env = GridTacticsEnv(library, deck, deck, seed=42)

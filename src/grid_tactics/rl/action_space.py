@@ -18,10 +18,13 @@ Encoding scheme (position-based, not minion-ID-based):
   TOTAL                                                        1287
 
 ACTIVATE_ABILITY slots are indexed by the activator minion's current
-board flat position (row * 5 + col). All currently-supported abilities
-have ``target: "none"`` (Ratchanter), so the activator's tile uniquely
-identifies the action. If a future ability uses a target tile, a
-separate slot block can be added without disturbing the existing layout.
+board flat position (row * 5 + col). Only UNTARGETED abilities
+(``target: "none"``, e.g. Ratchanter) are representable — the slot
+carries no target information. TARGETED abilities (``target:
+"single_target"``, e.g. Grave Caller's Dark Matter Buff) are EXCLUDED
+from ``build_action_mask`` until a target-encoded slot block
+(source(25) x target(25)) is added, because encoding drops the target
+and decode would produce an Action the resolver rejects.
 
 Adding ACTIVATE_ABILITY invalidates all RL checkpoints trained against
 the prior 1262-slot space — see STATE.md.
@@ -547,8 +550,10 @@ class ActionEncoder:
     def _encode_activate_ability(self, action: Action, state: GameState) -> int:
         """Encode ACTIVATE_ABILITY using the activator minion's flat position.
 
-        All currently-supported activated abilities have ``target: "none"``,
-        so the activator's position uniquely identifies the action.
+        Only UNTARGETED (``target: "none"``) abilities are representable:
+        ``action.target_pos`` is NOT encoded, so targeted abilities all
+        collapse into the activator's slot. ``build_action_mask`` excludes
+        targeted-ability actions for this reason — see module docstring.
         """
         minion = state.get_minion(action.minion_id)
         if minion is None:
@@ -611,6 +616,39 @@ def build_action_mask(
     actions = legal_actions(state, library)
 
     for action in actions:
+        # 2026-07 card-audit fix (Grave Caller): TARGETED activated
+        # abilities (target: "single_target") cannot be represented in
+        # the 25-slot ACTIVATE_ABILITY block — the encoder drops
+        # action.target_pos, so every distinct target collapses into one
+        # slot whose decode yields target_pos=None, which the resolver
+        # rejects. Exclude them from the mask until a target-encoded
+        # slot block (source(25) x target(25)) is added.
+        if (
+            action.action_type == ActionType.ACTIVATE_ABILITY
+            and action.target_pos is not None
+        ):
+            continue
+        # 2026-07 card-audit fix (To The Ratmobile): TUTOR_SELECT /
+        # TRIGGER_PICK encode as PLAY_CARD_BASE + idx * GRID_SIZE, so only
+        # indices 0..MAX_HAND_SIZE-1 fit inside the PLAY_CARD block. A
+        # Rat-heavy deck can produce >10 tutor matches; index 10 would
+        # collide with MOVE_BASE and decode as an illegal MOVE. Mask out
+        # the unrepresentable tail — the agent still picks among the
+        # first 10 matches (or declines).
+        if (
+            action.action_type in (ActionType.TUTOR_SELECT, ActionType.TRIGGER_PICK)
+            and action.card_index is not None
+            and action.card_index >= MAX_HAND_SIZE
+        ):
+            continue
+        # 2026-07 card-audit fix (Reanimated Bones): TRANSFORM has no slot
+        # block in the action space — encode() raises ValueError, which
+        # previously crashed build_action_mask the moment a transformable
+        # minion (Reanimated Bones) sat on the board with enough mana.
+        # Exclude it until a TRANSFORM block (source(25) x option(3)) is
+        # added; RL agents simply never transform for now.
+        if action.action_type == ActionType.TRANSFORM:
+            continue
         idx = encoder.encode(action, state)
         if 0 <= idx < ACTION_SPACE_SIZE:
             mask[idx] = True

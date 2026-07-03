@@ -171,6 +171,13 @@ class GameState:
     pending_tutor_matches: tuple = ()                    # Deck indices of matching cards (in deck order)
     pending_tutor_is_conjure: bool = False               # True when tutor is for conjure-to-field (not hand)
     pending_tutor_remaining: int = 0                     # How many more picks before auto-close (Ratmobile amount=2 etc)
+    # 2026-07 card-audit fix (Red Diodebot extra react window): WHERE the
+    # pending tutor was opened from. "summon_effect" = a minion's on_summon
+    # tutor (Window B already gave the opponent their react window, so the
+    # TUTOR_SELECT / DECLINE_TUTOR resume must NOT open a third AFTER_ACTION
+    # window — it routes straight to the Decay phase). Other values
+    # ("magic_cast", "react", "trigger:*", None) keep the legacy resume path.
+    pending_tutor_origin: Optional[str] = None
 
     # Pending revive-place state (revive effects from magic cards).
     # When a REVIVE effect fires, we enter pending state so the player can
@@ -445,6 +452,7 @@ class GameState:
             "pending_tutor_matches": [int(i) for i in self.pending_tutor_matches],
             "pending_tutor_is_conjure": bool(self.pending_tutor_is_conjure),
             "pending_tutor_remaining": int(self.pending_tutor_remaining),
+            "pending_tutor_origin": self.pending_tutor_origin,
             "pending_revive_player_idx": self.pending_revive_player_idx,
             "pending_revive_card_id": self.pending_revive_card_id,
             "pending_revive_remaining": int(self.pending_revive_remaining),
@@ -666,6 +674,7 @@ class GameState:
             pending_tutor_matches=pending_tutor_matches,
             pending_tutor_is_conjure=bool(d.get("pending_tutor_is_conjure", False)),
             pending_tutor_remaining=int(d.get("pending_tutor_remaining") or 0),
+            pending_tutor_origin=d.get("pending_tutor_origin"),
             pending_revive_player_idx=d.get("pending_revive_player_idx"),
             pending_revive_card_id=d.get("pending_revive_card_id"),
             pending_revive_remaining=int(d.get("pending_revive_remaining") or 0),

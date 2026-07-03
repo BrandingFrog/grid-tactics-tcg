@@ -20,6 +20,7 @@ from grid_tactics.cards import CardDefinition, EffectDefinition
 from grid_tactics.engine_events import (
     EVT_CARD_BURNED,
     EVT_CARD_DRAWN,
+    EVT_MINION_MOVED,
     EVT_PENDING_MODAL_OPENED,
     EVT_PENDING_MODAL_RESOLVED,
     EventStream,
@@ -464,6 +465,8 @@ def _enter_pending_tutor(
     amount: int = 1,
     *,
     event_collector: Optional[EventStream] = None,
+    origin: Optional[str] = None,
+    contract_source: Optional[str] = None,
 ) -> GameState:
     """Phase 14.2: enter pending_tutor state.
 
@@ -475,6 +478,15 @@ def _enter_pending_tutor(
     ``amount`` is how many picks the player may make before the modal
     auto-closes (e.g. To The Ratmobile has amount=2 — picker gets 2
     picks). Capped to the number of available matches.
+
+    ``origin`` records WHERE the tutor was opened from (stored on
+    ``state.pending_tutor_origin``): "summon_effect" tells the
+    TUTOR_SELECT/DECLINE_TUTOR resume in action_resolver to skip the
+    extra AFTER_ACTION react window (the summon's Window B already gave
+    the opponent their react window — 2026-07 Red Diodebot fix).
+
+    ``contract_source`` tags the EVT_PENDING_MODAL_OPENED emission with
+    the caller's contract (defaults to "trigger:on_play" for back-compat).
 
     Mutex: asserts no concurrent pending_post_move_attacker_id (defense in
     depth -- tutor only fires from on_play, not from MOVE).
@@ -537,12 +549,13 @@ def _enter_pending_tutor(
         pending_tutor_player_idx=player_idx,
         pending_tutor_matches=tuple(matches),
         pending_tutor_remaining=remaining,
+        pending_tutor_origin=origin,
     )
     # Phase 14.8-03a: pending modal opened — client gates eventQueue.
     if event_collector is not None:
         event_collector.collect(
             EVT_PENDING_MODAL_OPENED,
-            "trigger:on_play",
+            contract_source or "trigger:on_play",
             {
                 "modal_kind": "tutor_select",
                 "owner_idx": player_idx,
@@ -651,7 +664,27 @@ def resolve_effect(
     # ("each Mage gains atk/hp equal to their own DM").
     scaled_effect = effect
     _per_target_dm_scale = False
-    if effect.scale_with == "dark_matter":
+    _dm_scaled = False  # True when a scale_with computed a flat amount → 0 skips AFTER multiplier
+    if effect.scale_with == "player_dark_matter":
+        # 2026-07 card-audit fix (Gargoyle Sorceress / Dark Matter
+        # Battery): scale by the CASTER PLAYER's total Dark Matter pool
+        # (sum across their live minions), regardless of whether the
+        # source is a minion or a spell. A freshly-summoned minion always
+        # has 0 own stacks, so "own stacks" scaling made these on_summon
+        # buffs permanently +0.
+        # Dead-source fizzle still applies: a triggered effect whose
+        # source minion died before resolution fizzles silently.
+        if source_minion_id is not None:
+            src = state.get_minion(source_minion_id)
+            if src is None or src.current_health <= 0:
+                return state
+        player_dm_sum = sum(
+            m.dark_matter_stacks for m in state.minions
+            if m.owner == caster_owner and m.current_health > 0
+        )
+        scaled_effect = replace(effect, amount=effect.amount + player_dm_sum)
+        _dm_scaled = True
+    elif effect.scale_with == "dark_matter":
         # Determine whether the effect source is GENUINELY a minion.
         # Magic-cast / react-card / on-discard paths resolve with a
         # sentinel caster_pos of (0, 0) — which is a real board cell
@@ -666,17 +699,19 @@ def resolve_effect(
         caster = None
         if source_minion_id is not None:
             src = state.get_minion(source_minion_id)
-            if src is not None and src.current_health > 0:
-                caster = src
+            if src is None or src.current_health <= 0:
+                # 2026-07 card-audit fix (Dark Matter Battery): a queued
+                # trigger whose SOURCE minion died before resolution
+                # FIZZLES — it must not fall through to the player-pool
+                # path and deal damage scaled by other minions' DM.
+                return state
+            caster = src
         elif contract_source == "action:activate_ability":
             caster = _find_minion_at_pos(state.minions, caster_pos)
         if caster is not None:
             dm = caster.dark_matter_stacks
-            scaled_amount = effect.amount + dm
-            if scaled_amount > 0:
-                scaled_effect = replace(effect, amount=scaled_amount)
-            else:
-                return state  # 0 damage, skip
+            scaled_effect = replace(effect, amount=effect.amount + dm)
+            _dm_scaled = True
         else:
             # Magic card path: no caster minion. ALL_ALLIES still scales
             # per-target using each ally's own DM (Dark Matter Stash rule);
@@ -689,16 +724,20 @@ def resolve_effect(
                     m.dark_matter_stacks for m in state.minions
                     if m.owner == caster_owner and m.current_health > 0
                 )
-                scaled_amount = effect.amount + player_dm_sum
-                if scaled_amount > 0:
-                    scaled_effect = replace(effect, amount=scaled_amount)
-                else:
-                    return state
+                scaled_effect = replace(effect, amount=effect.amount + player_dm_sum)
+                _dm_scaled = True
 
     # Placement condition multiplier (e.g. "triple if placed in front of dark ranged")
     if scaled_effect.placement_condition and scaled_effect.condition_multiplier > 1:
         if _check_placement_condition(state, caster_pos, caster_owner, scaled_effect.placement_condition, library):
             scaled_effect = replace(scaled_effect, amount=scaled_effect.amount * scaled_effect.condition_multiplier)
+
+    # DM-scaled effects with a final amount of 0 skip silently (identity-
+    # preserving no-op, matching the fizzle contract). This check runs
+    # AFTER the placement multiplier so a nonzero base amount on a
+    # condition card still multiplies before being tested.
+    if _dm_scaled and scaled_effect.amount <= 0:
+        return state
 
     if scaled_effect.target == TargetType.SINGLE_TARGET:
         return _resolve_single_target(state, scaled_effect, library, target_pos)
@@ -800,6 +839,12 @@ def resolve_effects_for_trigger(
                 state, card_def, minion.owner, library,
                 amount=max(1, effect.amount or 1),
                 event_collector=event_collector,
+                origin=(
+                    "summon_effect"
+                    if trigger == TriggerType.ON_SUMMON
+                    else contract_source
+                ),
+                contract_source=contract_source,
             )
         elif effect.effect_type == EffectType.CONJURE:
             state = _resolve_conjure(
@@ -808,7 +853,9 @@ def resolve_effects_for_trigger(
                 event_collector=event_collector,
             )
         elif effect.effect_type == EffectType.RALLY_FORWARD:
-            state = _apply_rally_forward(state, minion)
+            state = _apply_rally_forward(
+                state, minion, event_collector=event_collector,
+            )
         elif effect.effect_type == EffectType.PROMOTE:
             state = _apply_promote_on_death(
                 state, minion.card_numeric_id, minion.owner, library,
@@ -991,6 +1038,8 @@ def resolve_death_effects_or_enter_modal(
             state = _enter_pending_tutor(
                 state, card_def, owner, library,
                 amount=max(1, effect.amount or 1),
+                origin="trigger:on_death",
+                contract_source="trigger:on_death",
             )
         elif effect.effect_type == EffectType.CONJURE:
             state = _resolve_conjure(
@@ -1194,6 +1243,7 @@ def _apply_promote_on_death(
         attack_bonus=0,
         max_health_bonus=0,
         is_burning=False,
+        burn_scope="owner",
     )
     new_minions = _replace_minion(state.minions, chosen.instance_id, promoted)
     return replace(state, minions=new_minions)
@@ -1202,14 +1252,20 @@ def _apply_promote_on_death(
 def _apply_rally_forward(
     state: GameState,
     mover: MinionInstance,
+    *,
+    event_collector: Optional[EventStream] = None,
 ) -> GameState:
-    """RALLY_FORWARD: advance every other friendly minion with the same
-    card_numeric_id forward 1 tile in its column, if the destination is
-    in-bounds and empty. Mirrors the tensor engine implementation
-    (``tensor_engine/actions.py::_apply_rally_forward``).
+    """MARCH (march_forward, ex-RALLY_FORWARD): advance every other friendly
+    minion with the same card_numeric_id forward 1 tile in its column, if
+    the destination is in-bounds and empty. Mirrors the tensor engine
+    implementation (``tensor_engine/actions.py::_apply_rally_forward``).
 
     The mover itself is excluded. Minions whose forward tile is blocked
     or off the board are left in place.
+
+    2026-07 card-audit fix (Furryroach): emits one EVT_MINION_MOVED per
+    marched ally so the client eventQueue animates the swarm advance
+    instead of snapping positions on the final-state commit.
     """
     delta = 1 if mover.owner == PlayerSide.PLAYER_1 else -1
     new_minions_list = list(state.minions)
@@ -1232,6 +1288,18 @@ def _apply_rally_forward(
         new_board = new_board.remove(src_row, src_col)
         new_board = new_board.place(dst_row, src_col, m.instance_id)
         new_minions_list[i] = replace(m, position=(dst_row, src_col))
+        if event_collector is not None:
+            event_collector.collect(
+                EVT_MINION_MOVED,
+                "trigger:on_move",
+                {
+                    "instance_id": m.instance_id,
+                    "from": [src_row, src_col],
+                    "to": [dst_row, src_col],
+                    "owner_idx": _player_index_for_side(m.owner),
+                    "cause": "march",
+                },
+            )
     return replace(state, board=new_board, minions=tuple(new_minions_list))
 
 

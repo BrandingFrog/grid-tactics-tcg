@@ -19,15 +19,15 @@
         }
     ],
     "tips": [
-        "Red Diodebot tutors Green Diodebot on play, starting the Diodebot chain. Playing any one Diodebot guarantees you draw the next one.",
+        "Red Diodebot tutors Green Diodebot on play, starting the Diodebot chain. Playing any one Diodebot lets you search the next one out of your deck.",
         "The chain cycle is Red → Green → Blue → Red. Each one tutors the next, ensuring you never run out of Robots in hand.",
         "At 12/12 for 2 mana, the stats are decent but the real value is deck thinning. Each Diodebot played pulls another card, accelerating your draws.",
         "The tutored Robots fuel RGB Lasercannon's discard cost (2 Robots). Play a Diodebot to tutor another, then discard both for Lasercannon.",
         "In a Robot deck, lead with whichever Diodebot you draw first — the chain ensures you'll see all three regardless of draw order."
     ],
     "rulings": [
-        "Summon: Tutor searches the caster's deck for Green Diodebot and adds the first match to hand.",
+        "Summon: Tutor opens a deck search — the caster picks a Green Diodebot from their deck to add to hand, or may decline and leave it in the deck.",
         "If no Green Diodebot is in deck, the tutor silently no-ops.",
-        "Tutor resolves BEFORE the react window opens for the opponent — the tutored card is already in hand when the opponent gets their reaction."
+        "The summon opens two react windows: one for the summon itself, then one for the Summon: tutor. The opponent reacts BEFORE the search resolves — negating the first window forfeits the minion and the mana; negating the second keeps Red Diodebot on the board but cancels the search."
     ]
 }

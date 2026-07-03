@@ -28,6 +28,7 @@
         "This card can only be played from hand if you discarded a card on your previous turn (e.g. via Shady Trade Deal).",
         "When played as a magic card (0 mana), each friendly Mage gains +1 Dark Matter.",
         "Can also be played as a react (1 mana) when your opponent discards a card. The same effect triggers: each friendly Mage gains +1 Dark Matter.",
-        "The react mode does not require the 'discarded last turn' play condition — it only needs the opponent to discard."
+        "The react mode does not require the 'discarded last turn' play condition — it only needs the opponent to discard.",
+        "Cards that BURN to the Exhaust Pile from drawing on a full hand are NOT discards. An overdraw burn (yours or your opponent's) does not satisfy this card's play condition and does not open its react mode — only paying a discard cost (e.g. Shady Trade Deal) counts."
     ]
 }

@@ -37,17 +37,17 @@
         "amount": 1
     },
     "tips": [
-        "A hard counter to Robot/Metal decks. Every Diodebot, Lasercannon, Surgebot, and Sparkbot on the board becomes burning simultaneously — each then takes burn tick damage in its owner's Decay Phase.",
+        "A hard counter to Robot/Metal decks. Every Diodebot, RGB Lasercannon, Surgefed Sparkbot, and Dark Matter Battery on the board becomes burning simultaneously — each then takes burn tick damage in its owner's Decay Phase.",
         "Burn is a boolean, not a stack — re-applying to an already-burning minion does nothing. Cast when several Metal/Robot targets are fresh.",
-        "Paired with Flame Wyrm, each burning Robot/Machine/Metal minion ticks for 6🤍 per Decay Phase instead of 5🤍.",
+        "Paired with Flame Wyrm, each burning ENEMY Robot/Machine/Metal minion ticks for 6🤍 in its owner's Decay Phase instead of 5🤍. The aura never boosts burns on your own minions — your own burned Robots still tick for 5🤍.",
         "Burns your OWN Robots too — don't cast it if you're the Metal deck. Water vs Metal is the intended matchup.",
-        "The 2-mana react mode is cheap cycling. Keep Acidic Rain in hand against control opponents — any action they take is a free draw for you."
+        "The 2-mana react mode is cheap cycling. Keep Acidic Rain in hand against control opponents — every turn they end lets you convert 2 mana into a card during their Decay Phase."
     ],
     "rulings": [
         "Magic mode (5 mana): burns every living minion on the board — both sides — whose tribe is Robot or Machine, OR whose element is Metal. A Blue Diodebot (Robot + Metal) is still burned only once (burn is boolean).",
         "The tribe/element filter is an OR: a Fire-element Robot still qualifies, as does a Metal-element non-Robot.",
         "Does not damage players. Burn only affects minions.",
-        "React mode (2 mana): playable during the react window after ANY opponent action. Draws exactly 1 card for the reacting player.",
+        "React mode (2 mana): playable only in the react window at the end of the opponent's turn — their Decay Phase, after all automatic end-of-turn effects resolve. Draws exactly 1 card for the reacting player.",
         "React mode does NOT burn anything — only the draw effect fires. Magic mode does NOT draw — only the burns fire. The two modes are mutually exclusive per cast."
     ]
 }

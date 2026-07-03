@@ -37,14 +37,16 @@
     },
     {
       "id": "end-of-turn-trigger-blip-paladin",
-      "title": "14.7-09: Fallen Paladin End: heal blip fires on turn end",
-      "instructions": "GOAL: see the end-of-turn trigger animation (source-tile pulse + ⏳ glyph at centre) and the resulting +2 self-heal on the Paladin.\n\nSetup state: P1 has a damaged Fallen Paladin on the board (current 30/42 🤍, visible in your bottom area) and a Common Rat in hand with 1 mana. P1 is the active player.\n\n1. Click the Common Rat in your bottom hand. Click any green-tinted tile in the bottom two rows to deploy it. (This consumes P1's action and ends the turn.)\n2. The react window auto-closes (P2 has no react cards). Watch the Fallen Paladin's tile and the centre of the screen as P1's End-of-Turn fires (just before the turn flips to P2).",
-      "expected": "Before the turn flips: the Fallen Paladin's tile briefly pulses yellow and an ⏳ glyph blooms in the centre of the screen, then the Paladin's HP ticks up from 30 to 32 🤍 (End: passive_heal +2 to itself). The TURN 2 / PLAYER 2 banner blooms only after the react window has fully closed. No console errors.",
+      "title": "14.7-09: Fallen Paladin Rally: heal blip fires at owner's turn start",
+      "instructions": "GOAL: see the Rally-Phase trigger animation (source-tile pulse + ⏳ glyph at centre) and the resulting +2 self-heal on the Paladin at the START of its owner's turn.\n\nSetup state: P1 has a damaged Fallen Paladin on the board (current 30/42 🤍, visible in your bottom area) and a Common Rat in hand with 1 mana. Both decks hold a spare card so the turn-start auto-draws don't trigger fatigue. P1 is the active player.\n\n1. Click the Common Rat in your bottom hand. Click any green-tinted tile in the bottom two rows to deploy it. (This consumes P1's action; the react window auto-closes — P2 has no react cards — and the turn flips to P2.)\n2. Toggle Controlling → P2 (right sidebar) and Pass as P2's action. The turn flips BACK to P1.\n3. Watch the Fallen Paladin's tile and the centre of the screen at the start of P1's turn (Rally Phase, before P1 acts).",
+      "expected": "At the start of P1's turn (Rally Phase, before P1 acts): the Fallen Paladin's tile briefly pulses yellow, an ⏳ glyph blooms at the centre of the screen, then the Paladin's HP ticks up from 30 to 32 🤍 (Rally: passive_heal +2 to itself). The TURN 3 / PLAYER 1 banner blooms at the flip, before the Rally trigger fires. Nothing heals during P1's or P2's Decay Phase. No console errors.",
       "setup": [
         {"op": "reset"},
         {"op": "set_player", "player_idx": 0, "field": "current_mana", "value": 1},
         {"op": "place", "player_idx": 0, "card_id": "fallen_paladin", "row": 1, "col": 2, "current_health": 30},
-        {"op": "add_to_hand", "player_idx": 0, "card_id": "rat"}
+        {"op": "add_to_hand", "player_idx": 0, "card_id": "rat"},
+        {"op": "add_to_zone", "player_idx": 0, "card_id": "rat", "zone": "deck"},
+        {"op": "add_to_zone", "player_idx": 1, "card_id": "rat", "zone": "deck"}
       ]
     },
     {
@@ -62,15 +64,17 @@
     },
     {
       "id": "priority-modal-two-end-triggers",
-      "title": "14.7-09: Priority modal opens when 2+ same-player triggers fire",
-      "instructions": "GOAL: see the priority-pick modal that appears when two of P1's end-of-turn triggers fire on the same turn end.\n\nSetup state: P1 has TWO damaged Fallen Paladins on the board (each at 30/42 🤍), a Common Rat in hand, and 1 mana. P1 is the active player.\n\n1. Click the Common Rat in your bottom hand. Click any green-tinted tile in the bottom two rows to deploy it. (Ends P1's turn.)\n2. The react window auto-closes. As P1's End-of-Turn resolves, a priority-pick modal opens titled 'Pick the order to resolve these effects' showing TWO Fallen Paladin cards.\n3. Click one Paladin card. That trigger fires (blip + heal that Paladin from 30 to 32). The remaining trigger has no other choices to compete with, so it auto-resolves and the modal closes.",
-      "expected": "Modal opens with two full-art Fallen Paladin cards, styled like the tutor modal (cyan border, dark header bar reading 'Pick the order to resolve these effects' and '2 triggers waiting'). Clicking either card fires that Paladin's blip + heal (30→32 🤍). The remaining trigger then auto-resolves (second Paladin also heals 30→32 🤍) and the modal closes cleanly. The TURN 2 / PLAYER 2 banner blooms only after both heals resolve. Both Paladins on the board now show 16/32 🤍.",
+      "title": "14.7-09: Priority modal opens when 2+ same-player Rally triggers fire",
+      "instructions": "GOAL: see the priority-pick modal that appears when two of P1's Rally-Phase triggers fire at the start of the same turn.\n\nSetup state: P1 has TWO damaged Fallen Paladins on the board (each at 30/42 🤍), a Common Rat in hand, and 1 mana. Both decks hold a spare card so the turn-start auto-draws don't trigger fatigue. P1 is the active player.\n\n1. Click the Common Rat in your bottom hand. Click any green-tinted tile in the bottom two rows to deploy it. (Consumes P1's action; the react window auto-closes and the turn flips to P2.)\n2. Toggle Controlling → P2 (right sidebar) and Pass as P2's action. The turn flips BACK to P1.\n3. As P1's Rally Phase resolves (start of P1's turn, before P1 acts), a priority-pick modal opens titled 'Pick the order to resolve these effects' showing TWO Fallen Paladin cards.\n4. Click one Paladin card. That trigger fires (blip + heal that Paladin from 30 to 32). The remaining trigger has no other choices to compete with, so it auto-resolves and the modal closes.",
+      "expected": "Modal opens with two full-art Fallen Paladin cards, styled like the tutor modal (cyan border, dark header bar reading 'Pick the order to resolve these effects' and '2 triggers waiting'). Clicking either card fires that Paladin's blip + heal (30→32 🤍). The remaining trigger then auto-resolves (second Paladin also heals 30→32 🤍) and the modal closes cleanly. The TURN 3 / PLAYER 1 banner blooms at the flip, before the modal opens. Both Paladins on the board now show 32/42 🤍.",
       "setup": [
         {"op": "reset"},
         {"op": "set_player", "player_idx": 0, "field": "current_mana", "value": 1},
         {"op": "place", "player_idx": 0, "card_id": "fallen_paladin", "row": 1, "col": 1, "current_health": 30},
         {"op": "place", "player_idx": 0, "card_id": "fallen_paladin", "row": 1, "col": 3, "current_health": 30},
-        {"op": "add_to_hand", "player_idx": 0, "card_id": "rat"}
+        {"op": "add_to_hand", "player_idx": 0, "card_id": "rat"},
+        {"op": "add_to_zone", "player_idx": 0, "card_id": "rat", "zone": "deck"},
+        {"op": "add_to_zone", "player_idx": 1, "card_id": "rat", "zone": "deck"}
       ]
     },
     {

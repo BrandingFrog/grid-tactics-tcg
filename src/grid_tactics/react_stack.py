@@ -1941,9 +1941,17 @@ def resolve_summon_effect_originator(
             continue
         effect = card_def.effects[effect_idx]
         if effect.effect_type == EffectType.TUTOR:
+            # 2026-07 card-audit fix (Red/Blue Diodebot): pass the
+            # event_collector so EVT_PENDING_MODAL_OPENED gates the client
+            # eventQueue, and tag origin="summon_effect" so the tutor
+            # resume does NOT open a third AFTER_ACTION react window
+            # (Window B already gave the opponent their react window).
             state = _enter_pending_tutor(
                 state, card_def, caster_owner, library,
                 amount=max(1, effect.amount or 1),
+                event_collector=event_collector,
+                origin="summon_effect",
+                contract_source="trigger:on_summon",
             )
         elif effect.effect_type == EffectType.REVIVE:
             state = _enter_pending_revive(state, card_def, caster_owner, library)
@@ -2260,9 +2268,14 @@ def resolve_react_stack(
                 # the old _cast_magic inline path).
                 if resolved_effect.effect_type == EffectType.TUTOR:
                     from grid_tactics.effect_resolver import _enter_pending_tutor
+                    # 2026-07 card-audit fix (To The Ratmobile): thread the
+                    # event_collector so EVT_PENDING_MODAL_OPENED reaches
+                    # the client's eventQueue gate.
                     state = _enter_pending_tutor(
                         state, card_def, caster_owner, library,
                         amount=max(1, resolved_effect.amount or 1),
+                        event_collector=event_collector,
+                        origin="magic_cast",
                     )
                 elif resolved_effect.effect_type == EffectType.REVIVE:
                     from grid_tactics.action_resolver import _enter_pending_revive
@@ -2386,6 +2399,7 @@ def resolve_react_stack(
                         state, card_def, caster_owner, library,
                         amount=max(1, card_def.react_effect.amount or 1),
                         event_collector=event_collector,
+                        origin="react",
                     )
                 elif card_def.react_effect.effect_type == EffectType.REVIVE:
                     from grid_tactics.action_resolver import _enter_pending_revive
@@ -2414,6 +2428,7 @@ def resolve_react_stack(
                         state, card_def, caster_owner, library,
                         amount=max(1, card_def.react_effect.amount or 1),
                         event_collector=event_collector,
+                        origin="react",
                     )
                 elif card_def.react_effect.effect_type == EffectType.REVIVE:
                     from grid_tactics.action_resolver import _enter_pending_revive

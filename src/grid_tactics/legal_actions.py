@@ -208,6 +208,18 @@ def _action_phase_actions(
         if card_def.play_condition == "discarded_last_turn" and not player.discarded_last_turn:
             continue
 
+        # Unique keyword (2026-07 card-audit fix, Giant Rat): a unique
+        # minion cannot be played while a live copy owned by this player
+        # is already on the board. Mirrors the tensor engine's play gate;
+        # action_resolver re-validates for out-of-band callers.
+        if card_def.unique and any(
+            m.owner == player_side
+            and m.is_alive
+            and m.card_numeric_id == card_numeric_id
+            for m in state.minions
+        ):
+            continue
+
         # Check mana (D-11), with cost reduction
         eff_cost = effective_mana_cost(card_def, state, state.active_player_idx)
         if player.current_mana < eff_cost:

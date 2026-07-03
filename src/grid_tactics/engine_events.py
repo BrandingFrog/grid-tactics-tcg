@@ -14,8 +14,10 @@ server-driven state changes.
 
 Wire-format design:
 
-- 19 ``EVT_*`` constants enumerated explicitly (no wildcards). Listed in
-  ``ALL_EVENT_TYPES`` for runtime validation.
+- 22 ``EVT_*`` constants enumerated explicitly (no wildcards). Listed in
+  ``ALL_EVENT_TYPES`` for runtime validation. (19 from the original
+  research doc; +card_burned +handshake from the 2026-07 turn-structure
+  redesign; +minion_transformed from the 2026-07 card audit.)
 - Per-event ``DEFAULT_DURATION_MS`` lookup so emitters don't have to
   duplicate animation timings across modules. Emitters can override by
   passing ``animation_duration_ms`` explicitly.
@@ -52,6 +54,11 @@ EVT_MINION_DIED = "minion_died"
 EVT_MINION_HP_CHANGE = "minion_hp_change"
 EVT_MINION_MOVED = "minion_moved"
 EVT_ATTACK_RESOLVED = "attack_resolved"
+# 2026-07 card-audit fix: TRANSFORM (e.g. Reanimated Bones) previously
+# emitted NO board event, so the swap rendered silently on the final
+# state snapshot. Payload: {instance_id, from_card_numeric_id,
+# to_card_numeric_id, position, owner_idx, new_hp}.
+EVT_MINION_TRANSFORMED = "minion_transformed"
 
 # Card / hand events
 EVT_CARD_DRAWN = "card_drawn"
@@ -93,6 +100,7 @@ ALL_EVENT_TYPES: frozenset[str] = frozenset({
     EVT_MINION_HP_CHANGE,
     EVT_MINION_MOVED,
     EVT_ATTACK_RESOLVED,
+    EVT_MINION_TRANSFORMED,
     EVT_CARD_DRAWN,
     EVT_CARD_PLAYED,
     EVT_CARD_DISCARDED,
@@ -128,6 +136,7 @@ DEFAULT_DURATION_MS: dict[str, int] = {
     EVT_MINION_HP_CHANGE: 400,          # floating popup
     EVT_MINION_MOVED: 350,
     EVT_ATTACK_RESOLVED: 500,
+    EVT_MINION_TRANSFORMED: 600,        # swap flash on the tile (client)
     EVT_CARD_DRAWN: 350,
     EVT_CARD_PLAYED: 0,                 # covered by spell stage in/out
     EVT_CARD_DISCARDED: 300,
@@ -348,6 +357,7 @@ __all__ = [
     "EVT_MINION_HP_CHANGE",
     "EVT_MINION_MOVED",
     "EVT_ATTACK_RESOLVED",
+    "EVT_MINION_TRANSFORMED",
     "EVT_CARD_DRAWN",
     "EVT_CARD_PLAYED",
     "EVT_CARD_DISCARDED",

@@ -10,5 +10,15 @@
     "element": "dark",
     "tribe": "Mage",
     "hp_cost": 25,
-    "effects": []
+    "effects": [],
+    "tips": [
+        "A 25🗡️/25🤍 body for 1 mana is the cheapest big threat in the game — the real price is the 25🤍 it deals to your own face.",
+        "Play it early while your life total is high. From a full 100🤍 you land at 75🤍 — still comfortable, but have a plan to protect your face afterwards.",
+        "Melee only — it must be orthogonally adjacent to attack, so it wants to march up its lane."
+    ],
+    "rulings": [
+        "Cost: Deal 25🤍 to own face is paid the moment the card is played, on top of the 1 mana. You must have at least 25🤍 to play it.",
+        "Playing Matter Possessed at exactly 25🤍 is legal — it reduces you to 0🤍, and 0🤍 = defeat. The minion still lands, but you immediately lose the game.",
+        "The 25🤍 hits your life total, not a minion, and cannot be redirected or reduced."
+    ]
 }

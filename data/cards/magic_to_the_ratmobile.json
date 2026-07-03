@@ -22,9 +22,9 @@
         "At 3 mana with no board impact, this is a tempo loss on the turn you play it. Use it on a turn where the opponent can't punish you for not developing the board."
     ],
     "rulings": [
-        "tutor_target matches any card in your deck with the 'Rat' tribe — Common Rat, Giant Rat, Rathopper, Emberplague Rat, Ratchanter, and Furryroach all qualify (if Furryroach were tagged Rat; currently it's Insect so is excluded).",
-        "Picks are sequential: the modal stays open until both picks resolve or you DECLINE_TUTOR early.",
+        "tutor_target matches any card in your deck with the 'Rat' tribe — Common Rat, Giant Rat, Rathopper, Emberplague Rat, and Ratchanter (composite tribe 'Mage Rat' counts) all qualify. Furryroach is tribe Insect and is NOT a valid target.",
+        "Picks are sequential: the modal stays open until both picks resolve, no matches remain, or you decline early. Tutoring with a full hand (10 cards) burns the picked Rat to your Exhaust Pile face-up instead of adding it to hand — the pick is still consumed.",
         "Picking fewer than 2 Rats when more exist in deck wastes the effect — no refund.",
-        "If fewer than 2 matching Rats are in deck, the modal caps at the available count (e.g. 1 match = 1 pick required)."
+        "If fewer than 2 matching Rats are in deck, the modal caps at the available count (e.g. 1 match = only 1 pick available). You may still decline instead of picking."
     ]
 }

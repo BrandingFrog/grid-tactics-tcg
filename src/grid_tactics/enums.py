@@ -94,8 +94,8 @@ class EffectType(IntEnum):
     TUTOR = 8          # Search deck for card matching tutor_target and add to hand
     DESTROY = 9        # Destroy target minion (remove regardless of health)
     BURN = 10          # Apply burn DoT to target (amount damage per action, non-stacking)
-    DARK_MATTER_BUFF = 11  # Buff attack by amount + player's Dark Matter stacks
-    PASSIVE_HEAL = 12  # Heal self by amount (fires on PASSIVE trigger each turn)
+    DARK_MATTER_BUFF = 11  # Buff target's attack by amount + the activating minion's own Dark Matter stacks (magic-card fallback path sums the player's pool instead)
+    PASSIVE_HEAL = 12  # Heal self by amount (fires on ON_START_OF_TURN — the owner's Rally Phase)
     LEAP = 13          # On move: if blocked by enemy, advance to next available tile instead
     CONJURE = 14       # Create a card from outside the deck (specified by summon_token_target)
     APPLY_BURNING = 15  # Phase 14.3: grant N burning_stacks to the target minion (stacks additively)
@@ -156,8 +156,8 @@ class TriggerType(IntEnum):
     AURA = 7        # Always active while this minion is alive on the board
     # Phase 14.7-03: explicit turn-phase and summon triggers
     ON_SUMMON = 8             # When minion is deployed from hand (14.7-04 opens compound windows)
-    ON_START_OF_TURN = 9      # At the start of the owner's turn (after burn ticks, before ACTION)
-    ON_END_OF_TURN = 10       # At the end of the owner's turn (before turn passes)
+    ON_START_OF_TURN = 9      # Rally Phase: at the start of the owner's turn, before ACTION
+    ON_END_OF_TURN = 10       # Decay Phase: at the end of the owner's turn (burn ticks here, before the turn passes)
 
 
 class TargetType(IntEnum):

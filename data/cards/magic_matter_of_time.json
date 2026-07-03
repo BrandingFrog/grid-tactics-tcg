@@ -35,7 +35,7 @@
         "Redundant against already-burning targets: the burn effect is a boolean, so casting a second Matter of Time on the same minion wastes the burn half. Chain onto a fresh target instead."
     ],
     "rulings": [
-        "Damage equals the sum of Dark Matter stacks across your live minions at cast time. Zero DM on-board = 0 damage (the burn and DM grant still resolve).",
+        "Damage equals the sum of Dark Matter stacks across your live minions when the cast RESOLVES (after the react window closes) — a react that removes a DM carrier shrinks the hit. Zero DM at resolution = 0 damage (the burn and DM grant still resolve).",
         "Both the damage and the [[Burn]] hit the same chosen target — one target pick resolves all three effect lines.",
         "Burn is a boolean [[Burning]] status — re-applying it to an already-burning minion is a no-op; the first burn persists until the minion dies.",
         "The +1 Dark Matter grants to every ally Dark [[Mage]] on the board, not just the caster's lane. Applies after damage and burn resolve, so newly-banked DM does not scale THIS cast.",

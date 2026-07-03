@@ -1576,8 +1576,10 @@ var KEYWORD_GLOSSARY = {
     'Move': 'This effect activates when the minion moves forward.',
     'Attack': 'This effect activates when the minion attacks.',
     'Damaged': 'This effect activates when the minion takes damage.',
-    'Start': 'This effect triggers at the start of the owner\'s turn, before any actions.',
-    'End': 'This effect triggers at the end of the owner\'s turn, after all actions.',
+    'Start': 'This effect triggers in the Rally Phase at the start of the owner\'s turn, before any actions.',
+    'End': 'This effect triggers in the Decay Phase at the end of the owner\'s turn, after all actions.',
+    'Rally': 'The Rally Phase is the start-of-turn window (after the auto-draw) where positive once-per-turn effects trigger. "Rally:" effects proc here.',
+    'Decay': 'The Decay Phase is the end-of-turn window where negative once-per-turn effects trigger. "Decay:" effects and Burning ticks proc here.',
     'Passive': 'This effect is always active while the minion is on the board.',
     'Active': 'This ability can be used once per turn instead of attacking.',
     'Discarded': 'This effect triggers when the card is discarded from hand (via a Cost or opponent effect).',
@@ -1597,7 +1599,7 @@ var KEYWORD_GLOSSARY = {
     'Exhaust': 'Send a card to the Exhaust Pile. Cards drawn while your hand is full are also exhausted, revealed.',
     'Heal': 'Restore 🤍 to a target.',
     'Deal': 'Deal damage to a target.',
-    'Burn': 'Applies Burning to affected enemies.',
+    'Burn': 'Applies Burning to the affected minions — usually enemies, but some cards burn their own minion (e.g. Eclipse Shade\'s Summon).',
     'Burning': 'A burning minion takes 5🤍 in its owner\'s Decay Phase. Burning is a boolean status — re-applying it does nothing. It persists until the minion dies.',
     'Dark Matter': 'A stacking resource used by Dark Mages. Buffs and costs scale with accumulated stacks.',
     'Leap': 'If blocked by an enemy, jump over to the next available tile. Cannot leap allies. If all tiles ahead are enemy-occupied, enables sacrifice.',
@@ -1732,9 +1734,12 @@ function buildCardTooltipContent(c) {
             if (eff.trigger === 4) addKw('Move');
             if (eff.trigger === 5) addKw('End');
             if (eff.trigger === 6) addKw('Discarded');
+            if (eff.trigger === 9) addKw('Rally');   // ON_START_OF_TURN — Rally Phase
+            if (eff.trigger === 10) addKw('Decay');  // ON_END_OF_TURN — Decay Phase
             // Effect types
-            if (eff.type === 0) { addKw('Deal'); if (eff.scale_with === 'dark_matter') addKw('Dark Matter'); }
+            if (eff.type === 0) { addKw('Deal'); if (_isDmScale(eff.scale_with)) addKw('Dark Matter'); }
             if (eff.type === 1) addKw('Heal');
+            if ((eff.type === 2 || eff.type === 3) && _isDmScale(eff.scale_with)) addKw('Dark Matter');
             if (eff.type === 3) addKw('Heal');
             if (eff.type === 4) addKw('Negate');
             if (eff.type === 5) addKw('Summon');
@@ -1744,7 +1749,7 @@ function buildCardTooltipContent(c) {
             if (eff.type === 9) addKw('Destroy');
             if (eff.type === 10) addKw('Burn');
             if (eff.type === 11) { addKw('Active'); addKw('Dark Matter'); }
-            if (eff.type === 12) { addKw('End'); addKw('Heal'); }
+            if (eff.type === 12) { addKw('Rally'); addKw('Heal'); }  // PASSIVE_HEAL fires in the Rally Phase (ON_START_OF_TURN)
             if (eff.type === 13) addKw('Leap');
             if (eff.type === 14) addKw('Conjure');
             if (eff.type === 15) addKw('Burning');
@@ -1971,7 +1976,7 @@ function _renderMinionStatusPanels(tooltipEl, minion) {
         panels.push({
             icon: '🔥',
             name: 'Burning',
-            desc: 'Takes 5 🤍 damage at the start of its owner\'s turn.',
+            desc: 'Takes 5🤍 damage in its owner\'s Decay Phase.',
             tone: 'debuff',
         });
     }
@@ -3102,6 +3107,7 @@ function playEvent(ev, done) {
         case "minion_died":              return playMinionDied(ev, done);
         case "minion_hp_change":         return playMinionHpChange(ev, done);
         case "minion_moved":             return playMinionMoved(ev, done);
+        case "minion_transformed":       return playMinionTransformed(ev, done);
         case "attack_resolved":          return playAttackResolved(ev, done);
         case "card_drawn":               return playCardDrawn(ev, done);
         case "card_played":              return playCardPlayed(ev, done);
@@ -3331,6 +3337,57 @@ function playMinionMoved(ev, done) {
         _fromEventQueue: true,
     });
     setTimeout(done, _evDurationOr(ev, 350));
+}
+
+// minion_transformed — EVT_MINION_TRANSFORMED (2026-07 card audit,
+// Reanimated Bones). Payload: {instance_id, from_card_numeric_id,
+// to_card_numeric_id, position, owner_idx, new_hp}. Post-plan-05 there
+// is no snapshot path to pre-apply the swap, so commit it into the live
+// state NOW, re-render so the tile shows the NEW form at this beat, and
+// flash the tile so the swap reads as an event instead of a silent
+// repaint at the post-drain snapshot commit.
+function playMinionTransformed(ev, done) {
+    var payload = ev && ev.payload;
+    if (!payload) { setTimeout(done, 0); return; }
+    var sbMode = (typeof sandboxMode !== 'undefined' && sandboxMode);
+    try {
+        var live = sbMode ? sandboxState : gameState;
+        if (live && live.minions && payload.instance_id != null) {
+            for (var i = 0; i < live.minions.length; i++) {
+                var m = live.minions[i];
+                if (m && m.instance_id === payload.instance_id) {
+                    if (payload.to_card_numeric_id != null) {
+                        m.card_numeric_id = payload.to_card_numeric_id;
+                    }
+                    if (typeof payload.new_hp === 'number') {
+                        m.current_health = payload.new_hp;
+                    }
+                    break;
+                }
+            }
+            if (sbMode) gameState = sandboxState;  // keep sandbox alias in sync
+        }
+        if (sbMode) {
+            if (typeof renderSandbox === 'function') renderSandbox();
+        } else {
+            if (typeof renderBoard === 'function') renderBoard();
+        }
+    } catch (e) { /* defensive — worst case the swap lands at drain end */ }
+    // Swap flash on the tile (engine DEFAULT_DURATION_MS = 600).
+    var duration = _evDurationOr(ev, 600);
+    try {
+        var tile = _evTileForPos(payload.position);
+        if (tile) {
+            playSfx('summon');
+            var flash = document.createElement('div');
+            flash.className = 'transform-flash';
+            tile.appendChild(flash);
+            setTimeout(function() {
+                if (flash.parentNode) flash.parentNode.removeChild(flash);
+            }, duration + 100);
+        }
+    } catch (e) { /* defensive — flash is purely visual */ }
+    setTimeout(done, duration);
 }
 
 function playAttackResolved(ev, done) {
@@ -4861,7 +4918,7 @@ function applyStateFrame(frame, legal) {
 
     // Detect burn-deaths: minions that were is_burning in prevState and
     // are MISSING from the next frame. We assume these died from the
-    // start-of-turn burn tick (combat-killed minions are removed by other
+    // Decay-Phase burn tick (combat-killed minions are removed by other
     // code paths after their own animations).
     try {
         if (prevState && prevState.minions && frame && frame.minions) {
@@ -4921,13 +4978,14 @@ function _applyStateFrameImmediate(frame, legal, prevState) {
                     showFloatingPopup(tileEl, '💚 +' + (nextHp - prevHp), 'heal');
                 }
 
-                // Burn tick: turn just flipped, prev was burning, and HP
-                // went DOWN. The engine ticks burn at the start of the
-                // owner's turn — only fire the popup when the new active
-                // player is the owner. Anchor to the prev tile so lethal
-                // burns still show the number before the minion vanishes.
+                // Burn tick: prev was burning and HP went DOWN. The engine ticks
+                // burn in the OWNER's Decay Phase (end of the owner's turn,
+                // before the flip) — fire the popup when the owner was the
+                // active player on the previous frame. Anchor to the prev tile
+                // so lethal burns still show the number before the minion
+                // vanishes.
                 if (turnFlipped && p.is_burning && nextHp < prevHp
-                        && frame.active_player_idx === p.owner) {
+                        && prevState.active_player_idx === p.owner) {
                     var burnTile = getTileElForMinion(p) || tileEl;
                     showFloatingPopup(burnTile, '🔥 -' + (prevHp - nextHp), 'burn-tick');
                 }
@@ -7031,34 +7089,35 @@ function showMinionActionMenu(minion, moves, attacks, transforms, canSac) {
             submitAction({ action_type: 6, minion_id: minion.instance_id });
         });
     }
-    if (transforms && transforms.length > 0) {
-        // Look up the SOURCE minion's card def so we can read the per-target
-        // transform cost from `transform_options` (the engine charges this,
-        // NOT the target card's base mana_cost). Without this, the menu used
-        // to display the target's BASE cost which often differed from the
-        // actual transform cost, confusing the player about affordability.
-        var sourceCard = cardDefs[minion.card_numeric_id];
-        var transformCostByTarget = {};
-        if (sourceCard && sourceCard.transform_options) {
-            sourceCard.transform_options.forEach(function(opt) {
-                transformCostByTarget[opt.target] = opt.mana_cost;
-            });
-        }
-        transforms.forEach(function(t) {
+    // Transform options — always render EVERY option from the SOURCE card
+    // def's `transform_options` so the player can see the full menu with
+    // per-target costs (the engine charges these, NOT the target card's
+    // base mana_cost). Options the engine did not enumerate in legalActions
+    // (e.g. unaffordable) are shown greyed-out and un-clickable — same
+    // pattern as the activated-ability button above.
+    var transformSourceCard = cardDefs[minion.card_numeric_id];
+    if (transformSourceCard && transformSourceCard.transform_options &&
+        transformSourceCard.transform_options.length > 0) {
+        var legalTransformTargets = {};
+        (transforms || []).forEach(function(t) {
+            legalTransformTargets[t.transform_target] = true;
+        });
+        transformSourceCard.transform_options.forEach(function(opt) {
             var targetCard = null;
             for (var nid in cardDefs) {
-                if (cardDefs[nid].card_id === t.transform_target) { targetCard = cardDefs[nid]; break; }
+                if (cardDefs[nid].card_id === opt.target) { targetCard = cardDefs[nid]; break; }
             }
-            var name = targetCard ? targetCard.name : t.transform_target;
-            var cost = transformCostByTarget[t.transform_target];
+            var name = targetCard ? targetCard.name : opt.target;
+            var cost = opt.mana_cost;
             if (cost == null) cost = targetCard ? targetCard.mana_cost : '?';
+            var transformLegal = !!legalTransformTargets[opt.target];
             addBtn('Transform → ' + name + ' (' + cost + ')', 'transform', function() {
                 submitAction({
                     action_type: 7,
                     minion_id: minion.instance_id,
-                    transform_target: t.transform_target,
+                    transform_target: opt.target,
                 });
-            });
+            }, !transformLegal);
         });
     }
 
@@ -8612,11 +8671,21 @@ function _dmTokenLive() {
     return '<span class="dm-live-num">' + dm + '</span> (Dark Matter)';
 }
 
+// Two Dark-Matter scale spellings are live in card JSONs: 'dark_matter'
+// (scales with a minion's OWN stacks — e.g. Dark Matter Battery) and
+// 'player_dark_matter' (scales with the owner's pooled total across the
+// board — e.g. Gargoyle Sorceress). Card-text rendering treats both as
+// DM-scaled; the live substitution (_dmTokenLive) already sums the
+// viewer's whole board, which IS the player pool.
+function _isDmScale(s) {
+    return s === 'dark_matter' || s === 'player_dark_matter';
+}
+
 function getEffectDescription(effects, cardData) {
     if (!effects || effects.length === 0) return '';
     var isMinion = cardData && cardData.card_type === 0;
     var DM = _dmTokenLive();
-    var triggerMap = {0: isMinion ? 'Summon' : '', 1: 'Death', 2: 'Attack', 3: 'Damaged', 4: 'Move', 5: 'End', 6: 'Discarded'};
+    var triggerMap = {0: isMinion ? 'Summon' : '', 1: 'Death', 2: 'Attack', 3: 'Damaged', 4: 'Move', 5: 'End', 6: 'Discarded', 9: 'Rally', 10: 'Decay'};
     // Coalesce sibling burn-all-minions effects that only differ in
     // target_tribe/target_element into a single rendered clause — so
     // Acidic Rain reads "Burn all Robots, Machines and Metal minions"
@@ -8650,7 +8719,7 @@ function getEffectDescription(effects, cardData) {
         var desc = '';
 
         if (type === 0) { // Damage
-            if (eff.scale_with === 'dark_matter') {
+            if (_isDmScale(eff.scale_with)) {
                 desc = prefix + 'Deal ' + DM + ' damage';
                 if (amount > 0) desc = prefix + 'Deal ' + amount + ' + ' + DM + ' damage';
             } else if (eff.scale_with === 'destroyed_attack_plus_dm' || eff.scale_with === 'sacrificed_attack_plus_dm') {
@@ -8666,10 +8735,10 @@ function getEffectDescription(effects, cardData) {
         } else if (type === 1) { // Heal
             desc = prefix + 'Heal ' + amount;
         } else if (type === 2) { // Buff ATK
-            if (eff.scale_with === 'dark_matter') {
+            if (_isDmScale(eff.scale_with)) {
                 // Check if next effect is BUFF_HP with same scale — merge icons
                 var hasMatchingHp = effects.some(function(e2) {
-                    return e2.type === 3 && e2.scale_with === 'dark_matter' && e2.target === eff.target;
+                    return e2.type === 3 && _isDmScale(e2.scale_with) && e2.target === eff.target;
                 });
                 var tribeName = eff.target_tribe === 'Mage' ? 'Dark Mages' : (eff.target_tribe ? eff.target_tribe + 's' : 'allies');
                 var selfTarget = (eff.target === 3); // SELF_OWNER
@@ -8681,10 +8750,10 @@ function getEffectDescription(effects, cardData) {
                 desc = prefix + '+' + amount + SWORD;
             }
         } else if (type === 3) { // Buff HP
-            if (eff.scale_with === 'dark_matter') {
+            if (_isDmScale(eff.scale_with)) {
                 // Skip if already merged with BUFF_ATK above
                 var alreadyMerged = effects.some(function(e2) {
-                    return e2.type === 2 && e2.scale_with === 'dark_matter' && e2.target === eff.target;
+                    return e2.type === 2 && _isDmScale(e2.scale_with) && e2.target === eff.target;
                 });
                 if (alreadyMerged) { desc = ''; return; }
                 var tribeNameHp = eff.target_tribe === 'Mage' ? 'Dark Mages' : (eff.target_tribe ? eff.target_tribe + 's' : 'allies');
@@ -8701,9 +8770,10 @@ function getEffectDescription(effects, cardData) {
             desc = 'Move: March friendly ' + marchName;
         } else if (type === 7) { // Promote
             if (cardData && cardData.promote_target) {
+                // Only the promote_target card promotes (e.g. Common Rat),
+                // NOT any minion of the tribe — name the actual card.
                 var promoFrom = findCardNameById(cardData.promote_target);
-                var promoteTribe = cardData.tribe || promoFrom;
-                desc = prefix + 'Promote any ' + promoteTribe + ' to ' + (cardData.name || '?');
+                desc = prefix + 'Promote a ' + (promoFrom || cardData.promote_target) + ' to ' + (cardData.name || '?');
             } else {
                 desc = prefix + 'Promote';
             }
@@ -8750,8 +8820,8 @@ function getEffectDescription(effects, cardData) {
             desc = prefix + 'Burn' + burnTarget;
         } else if (type === 11) { // Dark Matter Buff
             desc = prefix + 'Target gains (Dark Matter)' + SWORD;
-        } else if (type === 12) { // End Heal
-            desc = 'End: Heal ' + amount;
+        } else if (type === 12) { // Rally Heal
+            desc = 'Rally: Heal ' + amount;
         } else if (type === 13) { // Leap
             desc = 'Move: Leap';
         } else if (type === 14) { // Conjure

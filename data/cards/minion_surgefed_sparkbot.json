@@ -21,10 +21,10 @@
     "react_mana_cost": 0,
     "react_requires_no_friendly_minions": true,
     "tips": [
-        "This card hard-counters sacrifice strategies. If your opponent scores a sacrifice and your board is empty, react with Surgebot for a free 27/25 to immediately recover.",
+        "This card hard-counters sacrifice strategies. If your opponent scores a sacrifice and your board is empty, react with Surgebot for a free 27🗡️/25🤍 to immediately recover.",
         "The no-allies gate means this works best as a comeback card. If your board has been wiped, an opponent sacrifice lets you instantly recover with a premium body for 0 mana.",
         "In Robot decks, RGB Lasercannon's discard cost can thin your Robot count. If Surgebot is your last card and your board is empty, you're set up for the react.",
-        "Don't be afraid to play this normally for 5 mana if the react condition seems unlikely — 27/25 melee is strong raw stats for the cost.",
+        "Don't be afraid to play this normally for 5 mana if the react condition seems unlikely — 27🗡️/25🤍 melee is strong raw stats for the cost.",
         "Against Rat decks, Giant Rat's death-promote is not a sacrifice and won't trigger the react. Surgebot shines when the opponent sacrifices their last minion and you have nothing left on board."
     ],
     "rulings": [

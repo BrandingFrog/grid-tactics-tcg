@@ -219,13 +219,31 @@ class GridTacticsEnv(gymnasium.Env):
     def _current_player_idx(self) -> int:
         """Determine which player should act in the current state.
 
+        Mirrors the pending-modal gate order in ``legal_actions``: while a
+        decision modal is open, its OWNER acts regardless of phase — and
+        the state may sit in REACT with ``react_player_idx=None`` (the
+        react window is deferred until the modal resolves), so the
+        phase-based dispatch alone would crash (2026-07 card-audit fix).
+
         Returns:
             0 or 1, the index of the player who must make a decision.
         """
-        if self.state.phase == TurnPhase.ACTION:
-            return self.state.active_player_idx
-        elif self.state.phase == TurnPhase.REACT:
-            return self.state.react_player_idx
+        s = self.state
+        if s.pending_death_target is not None:
+            return int(s.pending_death_target.owner_idx)
+        if s.pending_trigger_picker_idx is not None:
+            return int(s.pending_trigger_picker_idx)
+        if s.pending_revive_player_idx is not None:
+            return int(s.pending_revive_player_idx)
+        if s.pending_conjure_deploy_player_idx is not None:
+            return int(s.pending_conjure_deploy_player_idx)
+        if s.pending_tutor_player_idx is not None:
+            return int(s.pending_tutor_player_idx)
+        if s.phase == TurnPhase.ACTION:
+            return s.active_player_idx
+        elif s.phase == TurnPhase.REACT and s.react_player_idx is not None:
+            return s.react_player_idx
         else:
-            # Fallback: active player
-            return self.state.active_player_idx
+            # Fallback: active player (START/END drain phases, or a REACT
+            # shell whose window was torn down before a modal deferral).
+            return s.active_player_idx

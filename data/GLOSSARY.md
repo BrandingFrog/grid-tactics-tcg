@@ -12,8 +12,10 @@ Update this file and the matching `KEYWORD_GLOSSARY` in `src/grid_tactics/server
 | Move | This effect activates when the minion moves forward. |
 | Attack | This effect activates when the minion attacks. |
 | Damaged | This effect activates when the minion takes damage. |
-| Start | This effect triggers at the start of the owner's turn, before any actions. |
-| End | This effect triggers at the end of the owner's turn, after all actions. |
+| Start | This effect triggers in the Rally Phase at the start of the owner's turn, before any actions. |
+| End | This effect triggers in the Decay Phase at the end of the owner's turn, after all actions. |
+| Rally | The Rally Phase is the start-of-turn window (after the auto-draw) where positive once-per-turn effects trigger. "Rally:" effects proc here. |
+| Decay | The Decay Phase is the end-of-turn window where negative once-per-turn effects trigger. "Decay:" effects and Burning ticks proc here. |
 | Passive | This effect is always active while the minion is on the board. |
 | Active | This ability can be used once per turn instead of attacking. |
 | Discarded | This effect triggers when the card is discarded from hand (via a Cost or opponent effect). |
@@ -37,7 +39,7 @@ Update this file and the matching `KEYWORD_GLOSSARY` in `src/grid_tactics/server
 | Exhaust | Send a card to the Exhaust Pile. Cards drawn while your hand is full are also exhausted, revealed. |
 | Heal | Restore 🤍 to a target. |
 | Deal | Deal damage to a target. |
-| Burn | Applies Burning to affected enemies. |
+| Burn | Applies Burning to the affected minions — usually enemies, but some cards burn their own minion (e.g. Eclipse Shade's Summon). |
 | Burning | A burning minion takes 5🤍 in its owner's Decay Phase. Burning is a boolean status — re-applying it does nothing. It persists until the minion dies. |
 | Dark Matter | A stacking resource used by Dark Mages. Buffs and costs scale with accumulated stacks. |
 | Leap | If blocked by an enemy, jump over to the next available tile. Cannot leap allies. If all tiles ahead are enemy-occupied, enables sacrifice. |

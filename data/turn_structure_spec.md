@@ -127,7 +127,7 @@ Both have `Death:` effects. They kill each other. Because it is Player 1's turn:
 
 **Multiple same-player triggers:** When the turn player has multiple cards that died with `Death:` effects, they see a modal window showing the **full card face** of each dying minion's source. They pick which effect resolves first; it resolves (with its own react window if needed); then they pick the next. After all turn-player effects resolve or fizzle, the opposing player does the same with theirs.
 
-This is **not limited to Death: effects** — the same priority/queue/fizzle system applies to any effect that triggers simultaneously with others (Summon:, Rally, Decay, activated-ability triggers, etc.).
+This is **not limited to Death: effects** — the same priority/queue/fizzle system applies to any effect that triggers simultaneously with others (Summon:, Rally-Phase (Start:) triggers, Decay-Phase (End:) triggers, activated-ability triggers, etc.).
 
 ---
 
@@ -169,7 +169,7 @@ See §11 for the wording rules.
 
 ## 8. Handshake
 
-New mechanic. When a player **PASSES** and the opponent's immediately-previous action was **also PASS**, a **Handshake** occurs.
+New mechanic. When a player **PASSES as their Action-Phase action** and the opponent's immediately-previous Action-Phase action was **also PASS**, a **Handshake** occurs. (Passes that merely close react windows do not count.)
 
 At the **end of that turn** (Decay/turn-end processing):
 
@@ -263,6 +263,7 @@ When touching turn logic, verify:
 - **March:** Movement keyword (formerly "Rally") — when this minion moves, all other friendly copies also advance.
 - **React window:** A bounded timing window during which eligible React cards may be played.
 - **Fizzle:** An effect that fails to resolve because its target/condition is no longer valid.
-- **Stack / Queue:** LIFO structure holding pending effects awaiting resolution.
-- **Summon: / Death: / Rally / Decay:** Triggered ability moments. Each opens its own react window when triggered.
+- **Stack:** LIFO structure holding pending reacts — the last react played resolves first (§6).
+- **Queue:** Priority-ordered list of simultaneous triggers — the turn player's effects resolve first, each owner picking the resolution order via the modal card picker (§5.3).
+- **Summon: / Death: / Start (Rally Phase) / End (Decay Phase):** Triggered ability moments. Each opens its own react window when triggered.
 - **Melee sub-action:** One of the two actions a melee minion may take in a single Action Phase (move or attack). Each opens its own react window.

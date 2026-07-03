@@ -447,11 +447,14 @@ class TestPhase1477NewReactConditions:
 
 class TestEffectScopeParsing:
     def _effect(self, **overrides) -> dict:
+        # amount must be 0 or BURN_DAMAGE (5): the loader rejects any other
+        # burn amount since the engine ignores per-card burn amounts
+        # (2026-07 card-audit fix, card_loader._parse_single_effect).
         base = {
             "type": "apply_burning",
             "trigger": "on_attack",
             "target": "single_target",
-            "amount": 1,
+            "amount": 0,
         }
         base.update(overrides)
         return base
