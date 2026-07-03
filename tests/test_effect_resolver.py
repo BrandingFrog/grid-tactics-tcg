@@ -852,12 +852,27 @@ class TestPendingTutorResolution:
         assert new_state.phase == TurnPhase.REACT
         assert new_state.react_player_idx == 1
 
-    def test_decline_tutor_clears_pending_keeps_deck(self):
+    def test_decline_tutor_illegal_while_matches_remain(self):
+        """Mandatory tutoring (2026-07-03): DECLINE_TUTOR raises while
+        matching picks remain — the player MUST TUTOR_SELECT."""
+        from grid_tactics.action_resolver import resolve_action
+        from grid_tactics.actions import Action
+        from grid_tactics.enums import ActionType
+
+        state, lib = self._make_pending_state()
+        action = Action(action_type=ActionType.DECLINE_TUTOR)
+        with pytest.raises(ValueError, match="mandatory tutoring"):
+            resolve_action(state, action, lib)
+
+    def test_decline_tutor_zero_matches_clears_pending_keeps_deck(self):
+        """Defensive zero-match pending state: DECLINE_TUTOR stays legal
+        and clears the pending flags without touching the deck."""
         from grid_tactics.action_resolver import resolve_action
         from grid_tactics.actions import Action
         from grid_tactics.enums import ActionType, TurnPhase
 
         state, lib = self._make_pending_state()
+        state = replace(state, pending_tutor_matches=())
         original_deck = state.players[0].deck
 
         action = Action(action_type=ActionType.DECLINE_TUTOR)

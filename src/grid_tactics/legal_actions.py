@@ -504,7 +504,24 @@ def _pending_tutor_actions(state: GameState) -> tuple[Action, ...]:
 
     Legal:
       - TUTOR_SELECT(match_idx) for each ``match_idx in [0, len(matches))``
-      - DECLINE_TUTOR (encoded on slot 1001 by the encoder)
+      - DECLINE_TUTOR (encoded on slot 1001 by the encoder) when zero
+        matches remain, OR when this pending state is a conjure deck-pick
+        (``pending_tutor_is_conjure``) — conjure decline semantics are
+        unchanged by design.
+
+    Mandatory tutoring (user-decided 2026-07-03): when a TUTOR modal opens
+    WITH matches, the player MUST pick — declining is only legal at ZERO
+    matches. In practice ``_enter_pending_tutor`` never enters the pending
+    state with zero matches (it auto-resolves), so the zero-match
+    DECLINE_TUTOR branch here is a defensive escape hatch that keeps the
+    game from wedging if a zero-match pending state ever materialises. A
+    full hand does NOT exempt the pick: the tutored card overdraw-burns to
+    the Exhaust Pile revealed (Player.add_to_hand_with_overdraw).
+
+    Conjure exemption: Ratchanter's conjure ability enters this SAME
+    pending state with ``pending_tutor_is_conjure=True``. Mandatory
+    tutoring applies to tutors ONLY — a conjure deck-pick may still be
+    declined (DECLINE_TUTOR leaves the card in the deck).
 
     Mutually exclusive with the 14.1 pending-post-move-attack state (asserted
     upstream in ``legal_actions``).
@@ -513,7 +530,8 @@ def _pending_tutor_actions(state: GameState) -> tuple[Action, ...]:
         tutor_select_action(match_index=i)
         for i in range(len(state.pending_tutor_matches))
     ]
-    actions.append(decline_tutor_action())
+    if not actions or state.pending_tutor_is_conjure:
+        actions.append(decline_tutor_action())
     return tuple(actions)
 
 

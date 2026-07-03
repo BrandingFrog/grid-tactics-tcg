@@ -28,7 +28,7 @@
     "rulings": [
         "Summon: Tutor searches the caster's deck for Red Diodebot and adds it to hand. Picker modal shows every Red in deck as a match.",
         "If no Red Diodebot is in deck, the tutor silently does nothing — no modal, no toast.",
-        "The tutor pick happens through the standard pending_tutor flow (TUTOR_SELECT or DECLINE_TUTOR). If your hand is full (10 cards) when the pick resolves, the tutored card BURNS to the Exhaust Pile revealed instead of entering your hand — the same rule as every other draw path.",
+        "The tutor pick happens through the standard pending_tutor flow and is MANDATORY — you must TUTOR_SELECT while a match exists (a full hand does not let you decline). If your hand is full (10 cards) when the pick resolves, the tutored card BURNS to the Exhaust Pile revealed instead of entering your hand — the same rule as every other draw path.",
         "Chain order: Red → Green → Blue → Red (cycles indefinitely as long as you keep drawing and playing Diodebots)."
     ]
 }

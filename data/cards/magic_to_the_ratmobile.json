@@ -23,8 +23,7 @@
     ],
     "rulings": [
         "tutor_target matches any card in your deck with the 'Rat' tribe — Common Rat, Giant Rat, Rathopper, Emberplague Rat, and Ratchanter (composite tribe 'Mage Rat' counts) all qualify. Furryroach is tribe Insect and is NOT a valid target.",
-        "Picks are sequential: the modal stays open until both picks resolve, no matches remain, or you decline early. Tutoring with a full hand (10 cards) burns the picked Rat to your Exhaust Pile face-up instead of adding it to hand — the pick is still consumed.",
-        "Picking fewer than 2 Rats when more exist in deck wastes the effect — no refund.",
-        "If fewer than 2 matching Rats are in deck, the modal caps at the available count (e.g. 1 match = only 1 pick available). You may still decline instead of picking."
+        "Picks are sequential and MANDATORY: the modal stays open until both picks resolve or no matches remain — you cannot decline while a matching Rat is still in deck. Tutoring with a full hand (10 cards) burns the picked Rat to your Exhaust Pile face-up instead of adding it to hand — the pick is still consumed.",
+        "If fewer than 2 matching Rats are in deck, the modal caps at the available count (e.g. 1 match = only 1 pick, made mandatorily)."
     ]
 }

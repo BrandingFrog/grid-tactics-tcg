@@ -1085,7 +1085,13 @@ class TestPendingPostMoveAttackMask:
 
 
 class TestPendingTutorMask:
-    """While pending_tutor is set, only TUTOR_SELECT[0..n) + DECLINE_TUTOR legal."""
+    """While pending_tutor is set, only TUTOR_SELECT[0..n) legal.
+
+    Mandatory tutoring (2026-07-03): DECLINE_TUTOR is only legal at ZERO
+    matches (a defensive state — _enter_pending_tutor auto-resolves
+    zero-match tutors and never enters pending). With matches present,
+    the player MUST pick.
+    """
 
     def _state_with_pending_tutor(self, library, num_matches, *, p1_extras=()):
         """Construct a state with ``num_matches`` pending tutor matches.
@@ -1109,20 +1115,21 @@ class TestPendingTutorMask:
         )
 
     def test_pending_tutor_restricts_to_select_and_decline(self, library):
-        """3 matches -> exactly TUTOR_SELECT(0..2) + DECLINE_TUTOR, nothing else."""
+        """3 matches -> exactly TUTOR_SELECT(0..2), nothing else. Mandatory
+        tutoring: DECLINE_TUTOR is NOT legal while matches remain."""
         state = self._state_with_pending_tutor(library, num_matches=3)
         actions = legal_actions(state, library)
 
-        # Every action must be TUTOR_SELECT or DECLINE_TUTOR
+        # Every action must be TUTOR_SELECT (decline illegal with matches)
         for a in actions:
-            assert a.action_type in (
-                ActionType.TUTOR_SELECT, ActionType.DECLINE_TUTOR,
-            ), f"Forbidden action type in pending_tutor: {a}"
+            assert a.action_type == ActionType.TUTOR_SELECT, (
+                f"Forbidden action type in pending_tutor: {a}"
+            )
 
         selects = [a for a in actions if a.action_type == ActionType.TUTOR_SELECT]
         declines = [a for a in actions if a.action_type == ActionType.DECLINE_TUTOR]
         assert len(selects) == 3
-        assert len(declines) == 1
+        assert len(declines) == 0
         assert {a.card_index for a in selects} == {0, 1, 2}
 
         # No PLAY_CARD / MOVE / ATTACK / SACRIFICE / DRAW / PASS / REACT
@@ -1135,12 +1142,13 @@ class TestPendingTutorMask:
             assert a.action_type not in forbidden
 
     def test_pending_tutor_single_match(self, library):
-        """1 match -> exactly one TUTOR_SELECT(0) and one DECLINE_TUTOR."""
+        """1 match -> exactly one TUTOR_SELECT(0); no DECLINE_TUTOR
+        (mandatory tutoring)."""
         state = self._state_with_pending_tutor(library, num_matches=1)
         actions = legal_actions(state, library)
-        assert len(actions) == 2
-        kinds = sorted(a.action_type for a in actions)
-        assert kinds == sorted([ActionType.TUTOR_SELECT, ActionType.DECLINE_TUTOR])
+        assert len(actions) == 1
+        assert actions[0].action_type == ActionType.TUTOR_SELECT
+        assert actions[0].card_index == 0
 
     def test_pending_tutor_masks_out_play_move_attack_sacrifice_pass(self, library):
         """Even with playable cards + a movable owned minion + an enemy in
@@ -1168,9 +1176,9 @@ class TestPendingTutorMask:
         )
         actions = legal_actions(state, library)
         kinds = {a.action_type for a in actions}
-        assert kinds == {ActionType.TUTOR_SELECT, ActionType.DECLINE_TUTOR}
-        # And the count is exactly 2 selects + 1 decline
-        assert len(actions) == 3
+        assert kinds == {ActionType.TUTOR_SELECT}
+        # And the count is exactly 2 selects (no decline — mandatory tutoring)
+        assert len(actions) == 2
 
     def test_no_pending_unchanged(self, library):
         """Non-pending state must enumerate the same actions as the pre-tutor
@@ -1264,9 +1272,10 @@ class TestPendingTutorMask:
         assert decoded_decline.action_type == ActionType.DECLINE_TUTOR
 
         # build_action_mask round-trip: every legal action encodes within
-        # bounds and the mask covers exactly 4 slots (3 selects + decline).
+        # bounds and the mask covers exactly 3 slots (3 selects; DECLINE is
+        # masked OUT under mandatory tutoring while matches remain).
         mask = build_action_mask(state, library, encoder)
-        assert mask[PASS_IDX]
+        assert not mask[PASS_IDX]
         for i in range(3):
             assert mask[PLAY_CARD_BASE + i * GRID_SIZE]
-        assert int(mask.sum()) == 4
+        assert int(mask.sum()) == 3

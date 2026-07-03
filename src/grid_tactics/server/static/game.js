@@ -7458,6 +7458,30 @@ function hideDeclinePostMoveAttackButton() {
 // =============================================
 
 var tutorModalOpen = false;
+// Mandatory tutoring (2026-07): re-render key so the open modal refreshes
+// when the match set or the hand-full status changes mid multi-pick chain
+// (e.g. To The Ratmobile amount=2 — the second pick's indices shift and
+// the first pick may have just filled the hand).
+var tutorModalKey = null;
+var TUTOR_MAX_HAND_SIZE = 10;  // mirrors grid_tactics.types.MAX_HAND_SIZE
+
+function tutorPickerHandLen() {
+    // Hand length of the PICKING player (pending_tutor_player_idx). Own
+    // hand arrives as full card ids; a filtered opponent hand only has
+    // hand_count (not hit in practice — the modal only opens for self).
+    if (!gameState || !gameState.players) return 0;
+    var pl = gameState.players[gameState.pending_tutor_player_idx];
+    if (!pl) return 0;
+    if (pl.hand && pl.hand.length) return pl.hand.length;
+    if (typeof pl.hand_count === 'number') return pl.hand_count;
+    return 0;
+}
+
+function tutorModalStateKey(matches) {
+    var idxs = (matches || []).map(function(m) { return m.match_idx; }).join(',');
+    var full = tutorPickerHandLen() >= TUTOR_MAX_HAND_SIZE ? 'full' : 'ok';
+    return idxs + '|' + full;
+}
 
 function syncPendingTutorUI() {
     if (!gameState) {
@@ -7474,13 +7498,15 @@ function syncPendingTutorUI() {
     if (pendingIdx === myPlayerIdx) {
         // I'm the caster — show the picker modal.
         hideOpponentTutoringToast();
-        if (!tutorModalOpen) {
-            var matches = gameState.pending_tutor_matches || [];
+        var matches = gameState.pending_tutor_matches || [];
+        var key = tutorModalStateKey(matches);
+        if (!tutorModalOpen || key !== tutorModalKey) {
             var deckSize = (gameState.players && gameState.players[myPlayerIdx])
                 ? (gameState.players[myPlayerIdx].deck_count || 0)
                 : 0;
             var totals = gameState.pending_tutor_total_copies_owned || {};
             showTutorModal(matches, deckSize, totals);
+            tutorModalKey = key;
         }
     } else {
         // Opponent is choosing — passive toast, no modal.
@@ -7519,6 +7545,21 @@ function showTutorModal(matches, deckSize, totalCopiesByCardId) {
     header.appendChild(deckLine);
     modal.appendChild(header);
 
+    // Mandatory tutoring (2026-07): a full hand does NOT exempt the pick —
+    // the tutored card overdraw-burns to the Exhaust Pile revealed (the
+    // resolution reuses the existing overdraw-burn animation via
+    // EVT_CARD_BURNED). Warn the picker above the card fan.
+    // NOT for conjure picks (pending_tutor_is_conjure — Ratchanter): a
+    // conjure TUTOR_SELECT goes to the FIELD via pending_conjure_deploy
+    // and never burns on select, so the banner would be wrong there.
+    var isConjurePick = !!(gameState && gameState.pending_tutor_is_conjure);
+    if (!isConjurePick && tutorPickerHandLen() >= TUTOR_MAX_HAND_SIZE) {
+        var warnBanner = document.createElement('div');
+        warnBanner.className = 'tutor-modal-warning';
+        warnBanner.textContent = 'Hand full — tutored card will be burnt';
+        modal.appendChild(warnBanner);
+    }
+
     var fan = document.createElement('div');
     fan.className = 'tutor-modal-cards';
 
@@ -7552,19 +7593,29 @@ function showTutorModal(matches, deckSize, totalCopiesByCardId) {
     }
     modal.appendChild(fan);
 
-    var footer = document.createElement('div');
-    footer.className = 'tutor-modal-footer';
-    var skipBtn = document.createElement('button');
-    skipBtn.className = 'tutor-skip-button';
-    skipBtn.textContent = 'Skip';
-    skipBtn.title = 'Decline tutor — leave matching cards in deck';
-    skipBtn.addEventListener('click', function(e) {
-        e.stopPropagation();
-        // ActionType.DECLINE_TUTOR = 10 (Phase 14.2)
-        submitAction({ action_type: 10 });
-    });
-    footer.appendChild(skipBtn);
-    modal.appendChild(footer);
+    // Mandatory tutoring (2026-07): while matching picks remain, declining
+    // is ILLEGAL for TUTORS — the Skip button only renders at zero matches
+    // (defensive escape hatch; the engine auto-resolves zero-match tutors
+    // so that footer should never appear in normal play). Conjure deck-
+    // picks (pending_tutor_is_conjure — Ratchanter) keep their decline:
+    // DECLINE_TUTOR leaves the card in the deck, so always offer Skip.
+    if (!matches || matches.length === 0 || isConjurePick) {
+        var footer = document.createElement('div');
+        footer.className = 'tutor-modal-footer';
+        var skipBtn = document.createElement('button');
+        skipBtn.className = 'tutor-skip-button';
+        skipBtn.textContent = 'Skip';
+        skipBtn.title = isConjurePick
+            ? 'Decline the conjure — leave the card in your deck'
+            : 'No matching cards — close the search';
+        skipBtn.addEventListener('click', function(e) {
+            e.stopPropagation();
+            // ActionType.DECLINE_TUTOR = 10 (Phase 14.2)
+            submitAction({ action_type: 10 });
+        });
+        footer.appendChild(skipBtn);
+        modal.appendChild(footer);
+    }
 
     overlay.appendChild(modal);
     // Block background clicks (no accidental dismiss — must Skip explicitly).
@@ -7576,6 +7627,7 @@ function closeTutorModal() {
     var existing = document.getElementById('tutor-modal-overlay');
     if (existing) existing.remove();
     tutorModalOpen = false;
+    tutorModalKey = null;
 }
 
 function showOpponentTutoringToast() {

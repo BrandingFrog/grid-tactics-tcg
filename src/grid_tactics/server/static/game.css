@@ -2794,6 +2794,21 @@ body {
   color: var(--cyan);
 }
 
+/* Mandatory tutoring (2026-07): full-hand warning banner rendered between
+   the header and the card fan when the picking player's hand is at
+   MAX_HAND_SIZE — the tutored card will overdraw-burn to the Exhaust Pile
+   revealed instead of entering hand. */
+.tutor-modal-warning {
+  padding: 10px 20px;
+  background: rgba(255, 152, 0, 0.12);
+  border-bottom: 1px solid var(--yellow);
+  color: var(--yellow);
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.3px;
+  text-align: center;
+}
+
 .tutor-modal-cards {
   display: flex;
   flex-wrap: wrap;

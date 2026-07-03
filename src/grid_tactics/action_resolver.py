@@ -2226,6 +2226,19 @@ def resolve_action(
                         return state
         elif action.action_type == ActionType.DECLINE_TUTOR:
             assert_phase_contract(state, "action:decline_tutor")
+            # Mandatory tutoring (user-decided 2026-07-03): declining is
+            # only legal when ZERO matches remain. A full hand does NOT
+            # exempt the pick — the tutored card overdraw-burns to the
+            # Exhaust Pile revealed. Mirrors _pending_tutor_actions in
+            # legal_actions.py; this raise is the runtime backstop.
+            # Conjure deck-picks (pending_tutor_is_conjure — Ratchanter)
+            # are exempt: their decline semantics are unchanged by design.
+            if state.pending_tutor_matches and not state.pending_tutor_is_conjure:
+                raise ValueError(
+                    "DECLINE_TUTOR illegal: mandatory tutoring — "
+                    f"{len(state.pending_tutor_matches)} matching pick(s) "
+                    "remain; must TUTOR_SELECT"
+                )
             state = replace(
                 state,
                 pending_tutor_player_idx=None,

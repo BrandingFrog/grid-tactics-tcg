@@ -292,7 +292,9 @@ class TestRatmobileTutorModalEvents:
         # Both rats reached the hand.
         assert list(state.players[0].hand).count(rat) == 2
 
-    def test_decline_tutor_emits_resolved(self, library):
+    def test_decline_tutor_illegal_with_matches_then_select_resolves(self, library):
+        """Mandatory tutoring (2026-07-03): DECLINE_TUTOR raises while a
+        match remains; the mandatory TUTOR_SELECT then emits RESOLVED."""
         ratmobile = library.get_numeric_id("to_the_ratmobile")
         rat = library.get_numeric_id("rat")
         state = _make_state(p1_hand=(ratmobile,), p1_deck=(rat,))
@@ -305,8 +307,12 @@ class TestRatmobileTutorModalEvents:
             state, pass_action(), library, event_collector=stream,
         )
         assert state.pending_tutor_player_idx == 0
+        with pytest.raises(ValueError, match="mandatory tutoring"):
+            resolve_action(
+                state, decline_tutor_action(), library, event_collector=stream,
+            )
         state = resolve_action(
-            state, decline_tutor_action(), library, event_collector=stream,
+            state, tutor_select_action(0), library, event_collector=stream,
         )
         assert state.pending_tutor_player_idx is None
         resolved = [
@@ -374,11 +380,18 @@ class TestDiodebotSummonTutor:
         state = _pass_until_action(state, library, collector=stream)
         assert state.active_player_idx == 1
 
-    def test_decline_tutor_does_not_open_third_react_window(self, library):
+    def test_decline_tutor_illegal_during_summon_tutor(self, library):
+        """Mandatory tutoring (2026-07-03): the on-summon Diodebot tutor
+        cannot be declined while its match remains; the mandatory pick
+        still routes to Decay without a third react window."""
         stream = EventStream(next_seq=0)
         state = self._deploy_and_open_tutor(library, stream)
+        with pytest.raises(ValueError, match="mandatory tutoring"):
+            resolve_action(
+                state, decline_tutor_action(), library, event_collector=stream,
+            )
         state = resolve_action(
-            state, decline_tutor_action(), library, event_collector=stream,
+            state, tutor_select_action(0), library, event_collector=stream,
         )
         assert state.react_context != ReactContext.AFTER_ACTION
         state = _pass_until_action(state, library, collector=stream)
@@ -732,8 +745,9 @@ class TestActivatedAbilityRlMask:
         for slot in [action_space.PLAY_CARD_BASE + i * 25 for i in range(10)]:
             decoded = encoder.decode(slot, state, library)
             assert decoded.action_type == ActionType.TUTOR_SELECT
-        # DECLINE_TUTOR (slot 1001) stays available.
-        assert mask[action_space.PASS_IDX]
+        # DECLINE_TUTOR (slot 1001) is masked OUT — mandatory tutoring
+        # (2026-07-03): declining is illegal while matches remain.
+        assert not mask[action_space.PASS_IDX]
 
     def test_transform_actions_excluded_from_mask(self, library):
         """TRANSFORM has no slot block; encode() raises ValueError, which
