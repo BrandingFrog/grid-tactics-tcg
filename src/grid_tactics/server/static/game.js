@@ -721,56 +721,33 @@ function onRoomsList(data) {
     listEl.innerHTML = '';
     if (rooms.length === 0) {
         var empty = document.createElement('div');
-        empty.className = 'rooms-empty hud-rooms-empty';
-        empty.innerHTML =
-            '<div class="hud-radar" aria-hidden="true">' +
-              '<span></span><span></span><span></span>' +
-            '</div>' +
-            '<div class="hud-rooms-empty-head">— NO ACTIVE DEPLOYMENTS —</div>' +
-            '<div class="hud-rooms-empty-sub">Awaiting first operator. Host a sortie or paste a code →</div>';
+        empty.className = 'lobby2-rooms-empty';
+        empty.textContent = 'No open games yet — create one to start.';
         listEl.appendChild(empty);
         return;
     }
     var nowSec = Date.now() / 1000;
     rooms.forEach(function(r, idx) {
         var row = document.createElement('div');
-        row.className = 'rooms-row hud-row';
+        row.className = 'lobby2-room-row';
         // staggered reveal on fresh-list render
         row.style.setProperty('--row-delay', (idx * 45) + 'ms');
         row.innerHTML =
-            '<span class="hud-row-bracket hud-row-bracket-l" aria-hidden="true"></span>' +
-            '<span class="hud-row-bracket hud-row-bracket-r" aria-hidden="true"></span>' +
-            '<span class="hud-row-live" aria-hidden="true">' +
-              '<span class="hud-row-live-dot"></span>' +
-              '<span class="hud-row-live-label">LIVE</span>' +
-            '</span>' +
-            '<span class="hud-row-callsign">' +
-              '<span class="hud-row-callsign-label">CALLSIGN</span>' +
-              '<span class="rooms-row-creator"></span>' +
-            '</span>' +
-            '<span class="hud-row-code">' +
-              '<span class="hud-row-code-label">ROOM</span>' +
-              '<span class="rooms-row-code"></span>' +
-            '</span>' +
-            '<span class="hud-row-meta">' +
-              '<span class="hud-row-meta-label">OPEN</span>' +
-              '<span class="hud-row-meta-value"></span>' +
-            '</span>' +
-            '<button class="btn btn-primary btn-sm rooms-row-join hud-row-join">' +
-              '<span class="hud-btn-chev">⟶</span>' +
-              '<span>JOIN</span>' +
-            '</button>';
-        row.querySelector('.rooms-row-creator').textContent = r.creator_name || '(anon)';
-        row.querySelector('.rooms-row-code').textContent = r.code;
+            '<span class="lobby2-room-who"></span>' +
+            '<span class="lobby2-room-rcode"></span>' +
+            '<span class="lobby2-room-age"></span>' +
+            '<span class="lobby2-room-go">Join ▸</span>';
+        row.querySelector('.lobby2-room-who').textContent = r.creator_name || '(anon)';
+        row.querySelector('.lobby2-room-rcode').textContent = r.code;
         var age = Math.max(0, Math.floor(nowSec - (r.created_at || nowSec)));
         var ageLabel = age < 60 ? (age + 's')
                      : age < 3600 ? (Math.floor(age / 60) + 'm')
                      : (Math.floor(age / 3600) + 'h');
-        row.querySelector('.hud-row-meta-value').textContent = ageLabel;
-        row.querySelector('.rooms-row-join').addEventListener('click', function() {
+        row.querySelector('.lobby2-room-age').textContent = ageLabel;
+        row.addEventListener('click', function() {
             var name = (typeof getCurrentDisplayName === 'function') ? getCurrentDisplayName() : null;
             if (!name) {
-                showLobbyStatus('Please enter a display name.', 'error');
+                showLobbyStatus('Please enter your name first.', 'error');
                 return;
             }
             myName = name;
@@ -834,7 +811,59 @@ function onCardDefs(data) {
         if (document.getElementById('screen-deck-builder').classList.contains('active')) {
             renderDeckBuilder();
         }
+        // Fill the lobby hero with a real rendered card
+        renderLobbyHero();
     }
+}
+
+// Lobby hero: a slow carousel that fades through real rendered cards. Starts
+// on a showpiece card, then cycles a shuffled deck. No-op until card defs have
+// loaded and the #lobby-hero element exists. Pauses while the lobby is hidden.
+var LOBBY_HERO_CARD = 'erebus';
+var _lobbyHeroCards = null;   // shuffled array of card defs
+var _lobbyHeroIdx = 0;
+var _lobbyHeroTimer = null;
+function renderLobbyHero() {
+    var host = document.getElementById('lobby-hero');
+    if (!host) return;
+    var defs = allCardDefs || cardDefs;
+    if (!defs) return;
+
+    if (!_lobbyHeroCards) {
+        _lobbyHeroCards = Object.keys(defs).map(function(k) { return defs[k]; }).filter(Boolean);
+        // Fisher–Yates shuffle so the order is different each visit
+        for (var i = _lobbyHeroCards.length - 1; i > 0; i--) {
+            var j = Math.floor(Math.random() * (i + 1));
+            var t = _lobbyHeroCards[i]; _lobbyHeroCards[i] = _lobbyHeroCards[j]; _lobbyHeroCards[j] = t;
+        }
+        // Lead with the showpiece card if it's present
+        var ei = _lobbyHeroCards.findIndex(function(d) { return d.card_id === LOBBY_HERO_CARD; });
+        if (ei > 0) { _lobbyHeroCards.unshift(_lobbyHeroCards.splice(ei, 1)[0]); }
+        _lobbyHeroIdx = 0;
+    }
+
+    _showLobbyHeroCard(host, _lobbyHeroCards[_lobbyHeroIdx], true);
+
+    if (_lobbyHeroTimer) clearInterval(_lobbyHeroTimer);
+    _lobbyHeroTimer = setInterval(function() {
+        var screen = document.getElementById('screen-lobby');
+        if (!screen || !screen.classList.contains('active')) return;   // pause when hidden
+        var h = document.getElementById('lobby-hero');
+        if (!h || !_lobbyHeroCards || !_lobbyHeroCards.length) return;
+        _lobbyHeroIdx = (_lobbyHeroIdx + 1) % _lobbyHeroCards.length;
+        _showLobbyHeroCard(h, _lobbyHeroCards[_lobbyHeroIdx], false);
+    }, 4500);
+}
+function _showLobbyHeroCard(host, def, instant) {
+    if (!host || !def) return;
+    var swap = function() {
+        host.innerHTML = renderCardFrame(def, { context: 'deck-builder' });
+        _lazyUpgradeArt(host, def.card_id);
+        host.style.opacity = '1';
+    };
+    if (instant) { swap(); return; }
+    host.style.opacity = '0';           // fade out, then swap + fade in
+    setTimeout(swap, 240);
 }
 
 function onError(data) {

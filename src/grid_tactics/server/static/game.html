@@ -52,182 +52,89 @@
 
   <!-- Screen: Lobby — Tactical Command HUD -->
   <div id="screen-lobby" class="screen active">
-    <div class="lobby-hud">
+    <div class="lobby2">
 
-      <!-- Ambient HUD decorations: fixed 5×5 ref-grid backdrop + corner
-           bracket frames + crawl ticker. Purely visual, no wiring. -->
-      <div class="hud-grid-bg" aria-hidden="true"></div>
-      <div class="hud-corner tl" aria-hidden="true"></div>
-      <div class="hud-corner tr" aria-hidden="true"></div>
-      <div class="hud-corner bl" aria-hidden="true"></div>
-      <div class="hud-corner br" aria-hidden="true"></div>
+      <!-- LEFT: identity + nav + hero card -->
+      <div class="lobby2-brand">
+        <div class="lobby2-title">Grid<br>Tactics</div>
+        <div class="lobby2-rule"></div>
+        <div class="lobby2-tag">A 5×5 tactical card duel. Deploy minions, cast magic, and out-position your opponent.</div>
 
-      <header class="hud-hero">
-        <div class="hud-hero-meta">
-          <span class="hud-meta-key">//</span>
-          <span class="hud-meta-val">OPERATIONS</span>
-          <span class="hud-meta-sep">·</span>
-          <span class="hud-meta-val">LOBBY</span>
-          <span class="hud-meta-sep">·</span>
-          <span class="hud-meta-dim">5 × 5 GRID TCG</span>
-        </div>
-        <h1 class="lobby-heading hud-title">GRID TACTICS</h1>
-        <p class="lobby-subheading hud-tagline">
-          Select an active sortie — or call for reinforcement.
-        </p>
-      </header>
+        <nav class="lobby2-nav">
+          <a href="#" onclick="showScreen('screen-deck-builder');return false;"><span class="ico">🃏</span> Deck Builder</a>
+          <a href="https://mediawiki-production-7169.up.railway.app/wiki/Main_Page" target="_blank" rel="noopener"><span class="ico">📖</span> Wiki</a>
+        </nav>
 
-      <div class="hud-grid">
-
-        <!-- ========== LEFT COLUMN: operator + create sortie ========== -->
-        <section class="hud-panel hud-panel-operator">
-          <div class="hud-panel-head">
-            <span class="hud-panel-id">001</span>
-            <span class="hud-panel-title">OPERATOR</span>
-            <span class="hud-panel-dim">IDENT</span>
-          </div>
-
-          <!-- Display name input / saved state. JS wires the same IDs. -->
-          <div class="lobby-section hud-callsign" id="name-input-section">
-            <label class="hud-label" for="input-name">Callsign</label>
-            <div class="join-row hud-callsign-row">
-              <input type="text" id="input-name" class="input hud-input" placeholder="enter callsign" maxlength="14">
-            </div>
-            <div class="hud-hint">Saved automatically — used on every room you join.</div>
-          </div>
-
-          <div class="lobby-section hud-sortie">
-            <div class="hud-label-row">
-              <span class="hud-label">Open a new sortie</span>
-              <span class="hud-tag hud-tag-muted">HOST</span>
-            </div>
-            <button class="btn btn-primary full-width hud-btn hud-btn-primary" id="btn-create-room">
-              <span class="hud-btn-chev">▶</span>
-              <span class="hud-btn-label">NEW DEPLOYMENT</span>
-              <span class="hud-btn-hint">You pick the rules · Shareable code</span>
-            </button>
-          </div>
-        </section>
-
-        <!-- ========== CENTRE COLUMN: active deployments (rooms list) ========== -->
-        <section class="hud-panel hud-panel-rooms lobby-rooms">
-          <div class="hud-panel-head">
-            <span class="hud-panel-id">002</span>
-            <span class="hud-panel-title">ACTIVE DEPLOYMENTS</span>
-            <span class="hud-live" aria-hidden="true">
-              <span class="hud-live-dot"></span>
-              <span class="hud-live-label">LIVE</span>
-            </span>
-            <span class="hud-panel-dim">OPEN ROOMS</span>
-          </div>
-
-          <div class="hud-rooms-toolbar lobby-rooms-header">
-            <span class="hud-sweep" aria-hidden="true"></span>
-            <span class="hud-rooms-hint">Tap a row to drop into a game.</span>
-            <button class="btn btn-secondary btn-sm hud-btn hud-btn-ghost" id="btn-refresh-rooms" title="Rescan the lobby">
-              <span class="hud-rescan-icon">◎</span>
-              <span>RESCAN</span>
-            </button>
-          </div>
-
-          <div class="rooms-list hud-rooms-list" id="rooms-list">
-            <div class="rooms-empty hud-rooms-empty">
-              <div class="hud-radar" aria-hidden="true">
-                <span></span><span></span><span></span>
-              </div>
-              <div class="hud-rooms-empty-head">— NO ACTIVE DEPLOYMENTS —</div>
-              <div class="hud-rooms-empty-sub">Awaiting first operator. Host a sortie or paste a code →</div>
-            </div>
-          </div>
-        </section>
-
-        <!-- ========== RIGHT COLUMN: classified code / spectate ========== -->
-        <section class="hud-panel hud-panel-classified lobby-join">
-          <div class="hud-panel-head">
-            <span class="hud-panel-id">003</span>
-            <span class="hud-panel-title">CLASSIFIED JOIN</span>
-            <span class="hud-panel-dim">CODE</span>
-          </div>
-
-          <label class="hud-label" for="input-room-code">Access code (6 chars)</label>
-          <div class="hud-code-shell">
-            <input type="text" id="input-room-code" class="input input-code hud-code-input" placeholder="XXXXXX" maxlength="6" autocomplete="off">
-            <div class="hud-code-slots" aria-hidden="true">
-              <span></span><span></span><span></span>
-              <span></span><span></span><span></span>
-            </div>
-          </div>
-
-          <div class="hud-code-actions">
-            <button class="btn btn-secondary hud-btn hud-btn-solid" id="btn-join-room">
-              <span class="hud-btn-chev">⟶</span>
-              <span>JOIN</span>
-            </button>
-            <button class="btn btn-secondary hud-btn hud-btn-solid" id="btn-spectate-room">
-              <span class="hud-btn-chev">◉</span>
-              <span>OBSERVE</span>
-            </button>
-          </div>
-
-          <label class="god-mode-label hud-checkbox">
-            <input type="checkbox" id="god-mode-checkbox" />
-            <span class="hud-check-box" aria-hidden="true"></span>
-            <span class="hud-check-text">
-              <strong>ADMIRAL'S EYE</strong>
-              <span class="hud-check-sub">See both hands + decks while observing</span>
-            </span>
-          </label>
-
-          <div class="hud-panel-footnote">
-            Private rooms are only reachable via code.<br>
-            Public ones appear in the ACTIVE DEPLOYMENTS list.
-          </div>
-        </section>
-
-      </div> <!-- /.hud-grid -->
-
-      <!-- ========== ROOM PANEL (after join/create) — briefing mode ========== -->
-      <div id="room-panel" class="room-panel hud-briefing" style="display:none;">
-        <div class="hud-briefing-ribbon">
-          <span class="hud-briefing-pulse"></span>
-          <span>BRIEFING ACTIVE</span>
-          <span class="hud-briefing-divider">//</span>
-          <span class="hud-briefing-meta">Awaiting operators to ready up</span>
-        </div>
-
-        <div class="room-panel-header hud-briefing-head">
-          <div class="hud-briefing-code-col">
-            <span class="hud-label">Room code</span>
-            <span class="room-code-display hud-briefing-code" id="room-code-display"></span>
-          </div>
-          <div class="hud-briefing-status">
-            <span class="hud-briefing-label">CHANNEL</span>
-            <span class="hud-briefing-value">SECURE</span>
-          </div>
-        </div>
-
-        <div class="player-list hud-briefing-roster" id="player-list">
-          <!-- Populated by JS -->
-        </div>
-
-        <div class="lobby-section hud-briefing-deck">
-          <label class="hud-label" for="deck-selector">Load deck</label>
-          <select id="deck-selector" class="input select hud-select">
-            <option value="">Default Deck (preset)</option>
-            <!-- Populated from localStorage by JS -->
-          </select>
-        </div>
-
-        <button class="btn btn-primary full-width hud-btn hud-btn-primary hud-briefing-ready" id="btn-ready">
-          <span class="hud-btn-chev">▶</span>
-          <span class="hud-btn-label">READY // DEPLOY</span>
-        </button>
+        <div class="lobby2-hero" id="lobby-hero" aria-hidden="true"></div>
+        <div class="lobby2-foot">Core Beta WIP</div>
       </div>
 
-      <!-- Error/Status Messages (global, below everything) -->
-      <div id="lobby-status" class="lobby-status hud-status"></div>
+      <!-- RIGHT: play -->
+      <div class="lobby2-play">
+        <div class="lobby2-field" id="name-input-section">
+          <label class="lobby2-label" for="input-name">Your name</label>
+          <input type="text" id="input-name" class="lobby2-input" placeholder="Enter a name" maxlength="14" autocomplete="off">
+        </div>
+
+        <button class="lobby2-btn lobby2-btn-play" id="btn-create-room">
+          <span class="lobby2-chev">▶</span> Create Game
+        </button>
+
+        <div class="lobby2-or">or join with a code</div>
+
+        <div class="lobby2-joinrow">
+          <input type="text" id="input-room-code" class="lobby2-input lobby2-code" placeholder="GAME CODE" maxlength="6" autocomplete="off">
+          <button class="lobby2-btn lobby2-btn-join" id="btn-join-room">Join</button>
+          <button class="lobby2-btn lobby2-btn-ghost" id="btn-spectate-room">Watch</button>
+        </div>
+
+        <label class="lobby2-observe">
+          <input type="checkbox" id="god-mode-checkbox">
+          <span>Watch with full view — see both hands &amp; decks</span>
+        </label>
+
+        <div class="lobby2-games">
+          <div class="lobby2-games-h">
+            <span>Open games</span>
+            <button id="btn-refresh-rooms">↻ Refresh</button>
+          </div>
+          <div class="rooms-list lobby2-rooms" id="rooms-list">
+            <div class="lobby2-rooms-empty">No open games yet — create one to start.</div>
+          </div>
+        </div>
+      </div>
 
     </div>
+
+    <!-- ROOM PANEL (after join/create) — clean waiting room -->
+    <div id="room-panel" class="lobby2-room" style="display:none;">
+      <div class="lobby2-room-head">
+        <div>
+          <div class="lobby2-label">Room code</div>
+          <div class="lobby2-room-code" id="room-code-display"></div>
+        </div>
+        <div class="lobby2-room-tag">Waiting for players…</div>
+      </div>
+
+      <div class="player-list lobby2-roster" id="player-list">
+        <!-- Populated by JS -->
+      </div>
+
+      <div class="lobby2-field">
+        <label class="lobby2-label" for="deck-selector">Your deck</label>
+        <select id="deck-selector" class="lobby2-input lobby2-select">
+          <option value="">Default Deck (preset)</option>
+          <!-- Populated from localStorage by JS -->
+        </select>
+      </div>
+
+      <button class="lobby2-btn lobby2-btn-play" id="btn-ready">
+        <span class="lobby2-chev">▶</span> Ready
+      </button>
+    </div>
+
+    <!-- Error/Status Messages (global) -->
+    <div id="lobby-status" class="lobby2-status"></div>
   </div>
 
   <!-- Screen: Deck Builder — Loadout Armoury Console -->
