@@ -2270,7 +2270,7 @@ body {
 }
 .tooltip-card .card-frame-full {
   width: 100%;
-  max-width: 220px;
+  max-width: 320px;
 }
 
 .tooltip-header {
@@ -9110,7 +9110,7 @@ body {
 @media (orientation: landscape) and (min-height: 561px) {
   body:has(#screen-game.active) .game-layout,
   body:has(#screen-sandbox.active) .game-layout {
-    grid-template-columns: clamp(150px, 16vw, 240px) minmax(0, 1fr) 220px;
+    grid-template-columns: clamp(210px, 21vw, 320px) minmax(0, 1fr) 220px;
   }
   body:has(#screen-game.active) .game-layout > .tooltip-sidebar,
   body:has(#screen-sandbox.active) .game-layout > .tooltip-sidebar {
