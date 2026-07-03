@@ -9514,11 +9514,16 @@ body:has(#screen-game.active) .game-layout {
    btn-spectate-room, god-mode-checkbox, btn-refresh-rooms, rooms-list,
    deck-selector, room-panel, room-code-display, player-list, btn-ready).
    ========================================================================== */
+/* The top nav bar is hidden on the lobby — Deck Builder + Wiki now live as the
+   buttons under the title, and the big "GRID TACTICS" title replaces the logo.
+   (Leaving the lobby to Deck Builder/Wiki/game restores the nav on those screens.) */
+body:has(#screen-lobby.active) .hud-header { display: none !important; }
+
 #screen-lobby { padding: 0 !important; }
 #screen-lobby .lobby2 {
   display: grid;
   grid-template-columns: 46% 54%;
-  min-height: calc(100vh - 54px);
+  min-height: 100vh;
   color: #dfe7f4;
   font-family: 'Chakra Petch', system-ui, sans-serif;
   background: radial-gradient(120% 130% at 20% 0%, #14243f 0%, #0a1120 55%, #06090f 100%);
