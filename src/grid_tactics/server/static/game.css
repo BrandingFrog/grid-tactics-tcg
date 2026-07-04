@@ -10331,3 +10331,789 @@ body:has(#screen-lobby.active) .hud-header { display: none !important; }
   display: flex; gap: 8px; padding: 8px 14px 14px;
 }
 #screen-deck-builder .deck-share-row .hud-loadout-share-btn { flex: 1; justify-content: center; }
+
+
+/* ==== APPENDED: In-game duel vintage re-skin (workflow draft, integrated) ==== */
+/* =========================================================================
+   IN-GAME DUEL — "1999 WORN UNSLEEVED VINTAGE TCG" RE-SKIN
+   Scope: #screen-game (live PvP) + #screen-sandbox (dev god-view) + #tests-overlay.
+   RE-SKIN ONLY. Every id / class / data-* / click target is preserved.
+   LAYOUT + perspective(760px)/rotateX(20deg) board tilt + .board-standee
+   compositing + fly/attack/move animations are UNTOUCHED — only fills,
+   borders, glows, fonts and the four slop content: strings change.
+
+   Append AFTER the legacy "TACTICAL COMMAND HUD" block (css 7207–8078) and the
+   APPROVED IN-GAME DUEL LAYOUT block (9172–9553) so equal-specificity rules win
+   on source order; !important is used to beat the legacy !important cyan rules.
+   ========================================================================= */
+
+/* -------------------------------------------------------------------------
+   A1. SHARED THEME TOKENS — declared identically on both screen roots
+   (same values as .lobby2 + .cf2). Repoints the old --hud-g-* cyan vars too,
+   so any lingering rule that still reads them renders warm, not neon.
+   ------------------------------------------------------------------------- */
+#screen-game, #screen-sandbox {
+  /* palette — canonical, matches lobby + cards */
+  --parch:      #f2ead2;   /* brightest text / titles */
+  --parch2:     #ded0a8;   /* parchment inlay / outline */
+  --parch-dim:  #cbb98f;   /* default body text */
+  --parch-mute: #9a865c;   /* muted labels, secondary */
+  --gold:       #e0a23c;   /* accent, focus, active */
+  --gold-lt:    #ffd873;   /* hover, primary-button top */
+  --bronze:     #6b5730;   /* medium borders */
+  --bronze-dk:  #3a2e18;   /* subtle borders */
+  --field:      #191207;   /* input / row fill */
+  --field-hi:   #221809;   /* row hover fill */
+  --line:       #2c2113;   /* dividers */
+  --panel:      rgba(14,10,4,0.55);
+  --panel-solid:rgba(20,14,6,0.94);
+  --ink:        #241c10;   /* dark ink on parchment surfaces */
+  --rust:       #b5623a;   /* warm danger / opponent / decay */
+  --rust-dk:    #8a3f22;
+  --warm-green: #7d9a3e;   /* readiness / rally / positive */
+  --react:      #c2731f;   /* react-window amber */
+  /* element accents (mirror .cf2 --el) */
+  --el-fire:#a8332a; --el-dark:#5d3a8f; --el-earth:#8a6d2f; --el-water:#2b5f9e;
+  --el-metal:#5c5c60; --el-wood:#4a7a2e; --el-light:#b09a34; --el-neutral:#6a6a6e;
+  /* fonts — Alegreya SC for all HUD/labels/buttons, Alegreya for body */
+  --ui-display: 'Alegreya SC', Georgia, serif;
+  --ui-body:    'Alegreya', Georgia, serif;
+
+  /* Repoint the legacy sci-fi vars to warm values (belt-and-braces) */
+  --hud-g-display: var(--ui-display);
+  --hud-g-mono: var(--ui-body);
+  --hud-g-cyan: var(--gold);
+  --hud-g-ink: var(--field);
+  --hud-g-edge: var(--bronze);
+  --hud-g-edge-hot: var(--gold);
+  --hud-g-dim: var(--parch-mute);
+
+  color: var(--parch-dim);
+  font-family: var(--ui-body);
+}
+
+/* -------------------------------------------------------------------------
+   A3. SIGNATURE BACKGROUND — candlelit table + vignette (from .lobby2).
+   Interactive content stays above the vignette (z-index:1). The duel-stage
+   already establishes its own stacking; this just warms the backdrop.
+   ------------------------------------------------------------------------- */
+#screen-game, #screen-sandbox {
+  background:
+    radial-gradient(120% 120% at 22% 4%,  rgba(224,162,60,0.16) 0%, transparent 46%),
+    radial-gradient(135% 130% at 82% 104%, rgba(120,60,130,0.09) 0%, transparent 52%),
+    radial-gradient(150% 150% at 50% 38%, #251a0e 0%, #160f07 56%, #0b0805 100%) !important;
+}
+#screen-game::before, #screen-sandbox::before {
+  content: ''; position: absolute; inset: 0; z-index: 0; pointer-events: none;
+  background: radial-gradient(120% 120% at 40% 30%, transparent 55%, rgba(0,0,0,0.5) 100%);
+}
+/* Keep the duel content above the vignette. */
+#screen-game .duel-stage, #screen-sandbox .duel-stage,
+#screen-game .room-bar,   #screen-sandbox .room-bar,
+#screen-game .game-sidebar, #screen-sandbox #sandbox-control-panel { position: relative; z-index: 1; }
+
+/* =========================================================================
+   WEAR UTILITY: dark aged-cardboard panel (W1 dark variant). The dark chrome
+   surfaces (sidebar, sandbox panel, tooltip, room bar) use this rather than
+   ivory so they stay legible chrome, just warm + foxed instead of cyan-glass.
+   ========================================================================= */
+#screen-game .v-cardboard, #screen-sandbox .v-cardboard,
+#screen-game .room-bar, #screen-sandbox .room-bar,
+#screen-game #activity-panel,
+#screen-game .tooltip-sidebar, #screen-sandbox .tooltip-sidebar,
+#screen-sandbox #sandbox-control-panel {
+  background:
+    radial-gradient(rgba(255,240,200,0.03) 1px, transparent 1.6px),
+    linear-gradient(160deg,#1a1409 0%, #140f07 60%, #0b0805 100%) !important;
+  background-size: 5px 5px, 100% 100% !important;
+}
+
+/* =========================================================================
+   BOARD — keep geometry, perspective + tilt UNTOUCHED. Reskin fills only:
+   cyan navy glass → aged cardboard, blue glow → warm candle glow.
+   ========================================================================= */
+#screen-game .duel-stage .game-board, #screen-sandbox .duel-stage .game-board {
+  background:
+    radial-gradient(rgba(150,120,70,0.05) 1px, transparent 1.6px),
+    radial-gradient(120% 120% at 50% 60%, #2a1f10 0%, #160f07 72%) !important;
+  background-size: 6px 6px, 100% 100% !important;
+  border: 1px solid var(--bronze) !important;
+  box-shadow:
+    0 24px 60px -20px rgba(0,0,0,0.7),
+    inset 0 0 40px rgba(120,92,50,0.15) !important;
+}
+#screen-game .duel-stage .board-cell, #screen-sandbox .duel-stage .board-cell {
+  border-color: rgba(107,87,48,0.35);
+}
+
+/* =========================================================================
+   ROOM BAR — mission-strip → worn parchment info strip. Drop the notch
+   clip-path; add a torn-tape corner. Room code = lobby code style (gold,
+   wide-tracked Alegreya SC).
+   ========================================================================= */
+#screen-game .room-bar, #screen-sandbox .room-bar {
+  border: 1px solid var(--bronze) !important;
+  border-radius: 10px !important;
+  clip-path: none !important;
+  padding: 6px 14px !important;
+  box-shadow: inset 0 0 22px rgba(0,0,0,0.5), inset 0 1px 0 rgba(224,162,60,0.05) !important;
+}
+#screen-game .room-bar::before, #screen-sandbox .room-bar::before {
+  /* worn tape strip pinning the corner (decorative) */
+  content: ''; position: absolute; top: -7px; left: 22px;
+  width: 62px; height: 18px; pointer-events: none; opacity: .85;
+  background: linear-gradient(180deg, rgba(226,208,150,0.40), rgba(206,186,128,0.32));
+  border-left: 1px solid rgba(255,255,255,0.16); border-right: 1px solid rgba(120,96,50,0.25);
+  box-shadow: 0 1px 2px rgba(0,0,0,0.25);
+  -webkit-mask: linear-gradient(90deg, transparent 0, #000 8%, #000 92%, transparent 100%);
+  mask: linear-gradient(90deg, transparent 0, #000 8%, #000 92%, transparent 100%);
+  transform: rotate(-4deg);
+  background-size: auto; height: 18px; left: 22px; right: auto;
+}
+#screen-game .room-bar-code, #screen-sandbox .room-bar-code {
+  font-family: var(--ui-display) !important;
+  font-size: 12px !important;
+  letter-spacing: 0.24em !important;
+  text-transform: uppercase;
+  color: var(--gold) !important;
+  background: none !important;
+  padding: 2px 0 !important;
+  text-shadow: 0 0 12px rgba(224,162,60,0.35);
+}
+
+/* Turn banner + turn text + turn number */
+#screen-game .turn-banner, #screen-sandbox .turn-banner {
+  font-family: var(--ui-display) !important;
+  letter-spacing: 0.16em !important;
+  font-size: 12px !important;
+  background: none !important; border: none !important; padding: 0 !important;
+  color: var(--parch) !important;
+}
+#screen-game .turn-text, #screen-sandbox .turn-text {
+  font-family: var(--ui-display) !important;
+  letter-spacing: 0.16em !important;
+  color: var(--parch) !important;
+}
+#screen-game .turn-dot, #screen-sandbox .turn-dot,
+#screen-game .pulse-dot, #screen-sandbox .pulse-dot {
+  background: var(--gold) !important;
+  box-shadow: 0 0 8px rgba(224,162,60,0.6) !important;
+}
+#screen-game .turn-number, #screen-sandbox .turn-number {
+  font-family: var(--ui-display) !important;
+  font-size: 12px !important;
+  letter-spacing: 0.08em;
+  color: var(--parch-mute) !important;
+  text-transform: uppercase;
+}
+#screen-sandbox .sandbox-history-status,
+#screen-sandbox #sandbox-active-label {
+  font-family: var(--ui-body) !important;
+  font-size: 11px !important;
+  letter-spacing: 0.04em;
+  color: var(--parch-mute) !important;
+  text-transform: none;
+}
+
+/* =========================================================================
+   PHASE PIPS — Rally / Action / Decay. Keep structure + .active/.react/.flash
+   state classes; recolor to warm inks (rally green, action gold, decay rust),
+   drop neon glow. These live at base scope (1386–1416, cyan); scope + win here.
+   ========================================================================= */
+#screen-game .phase-led-label, #screen-sandbox .phase-led-label,
+#screen-game .phase-led-dot,   #screen-sandbox .phase-led-dot { transition: color .2s ease, background .2s ease; }
+#screen-game .phase-led-label, #screen-sandbox .phase-led-label {
+  font-family: var(--ui-display) !important;
+  letter-spacing: 0.1em; color: var(--parch-mute) !important;
+}
+#screen-game .phase-led-dot, #screen-sandbox .phase-led-dot {
+  background: #4a3d22; box-shadow: none;
+}
+/* Rally / active positive window → warm green */
+#screen-game .phase-led.active .phase-led-dot, #screen-sandbox .phase-led.active .phase-led-dot {
+  background: var(--warm-green) !important;
+  box-shadow: 0 0 6px rgba(125,154,62,0.55) !important;
+}
+#screen-game .phase-led.active .phase-led-label, #screen-sandbox .phase-led.active .phase-led-label { color: var(--warm-green) !important; }
+/* React window → amber */
+#screen-game .phase-led.react .phase-led-dot, #screen-sandbox .phase-led.react .phase-led-dot {
+  background: var(--react) !important;
+  box-shadow: 0 0 6px rgba(194,115,31,0.6) !important;
+}
+#screen-game .phase-led.react .phase-led-label, #screen-sandbox .phase-led.react .phase-led-label { color: var(--react) !important; }
+/* Transient START/END flash → gold (keeps the pulse keyframes, just warm) */
+#screen-game .phase-led.flash .phase-led-dot, #screen-sandbox .phase-led.flash .phase-led-dot {
+  background: var(--gold) !important;
+  box-shadow: 0 0 10px rgba(224,162,60,0.85), 0 0 16px rgba(224,162,60,0.5) !important;
+}
+#screen-game .phase-led.flash .phase-led-label, #screen-sandbox .phase-led.flash .phase-led-label {
+  color: var(--gold) !important; text-shadow: 0 0 6px rgba(224,162,60,0.6) !important;
+}
+
+/* React-mode toggle → warm ghost pill. Keep data-mode states, recolor. */
+#screen-game .react-mode-btn, #screen-sandbox .react-mode-btn {
+  font-family: var(--ui-display) !important;
+  font-size: 10px !important;
+  letter-spacing: 0.12em !important;
+  text-transform: uppercase;
+  border: 1px solid var(--bronze) !important;
+  background: var(--field) !important;
+  color: var(--parch-dim) !important;
+  border-radius: 6px !important;
+  clip-path: none !important;
+  padding: 4px 10px !important;
+}
+#screen-game .react-mode-btn:hover, #screen-sandbox .react-mode-btn:hover {
+  border-color: var(--gold) !important; background: var(--field-hi) !important;
+}
+#screen-game .react-mode-prefix, #screen-sandbox .react-mode-prefix { color: var(--parch-mute) !important; }
+#screen-game .react-mode-value, #screen-sandbox .react-mode-value { color: var(--gold) !important; text-shadow: none !important; }
+#screen-game .react-mode-btn[data-mode="on"]   .react-mode-value,
+#screen-sandbox .react-mode-btn[data-mode="on"]   .react-mode-value { color: var(--react) !important; text-shadow: none !important; }
+#screen-game .react-mode-btn[data-mode="auto"] .react-mode-value,
+#screen-sandbox .react-mode-btn[data-mode="auto"] .react-mode-value { color: var(--gold) !important; text-shadow: none !important; }
+#screen-game .react-mode-btn[data-mode="off"]  .react-mode-value,
+#screen-sandbox .react-mode-btn[data-mode="off"]  .react-mode-value { color: var(--rust) !important; text-shadow: none !important; }
+#screen-game .react-mode-btn[data-mode="on"],  #screen-sandbox .react-mode-btn[data-mode="on"]  { border-color: rgba(194,115,31,0.55) !important; }
+#screen-game .react-mode-btn[data-mode="off"], #screen-sandbox .react-mode-btn[data-mode="off"] { border-color: rgba(181,98,58,0.55) !important; }
+
+/* Floating Skip-React button → worn bronze/amber token (was cyan). */
+.floating-skip-react-btn {
+  background: linear-gradient(180deg, #2a2010, #1a1207) !important;
+  border: 2px solid var(--react) !important;
+  color: var(--gold-lt) !important;
+  font-family: var(--ui-display) !important;
+  letter-spacing: 0.1em !important;
+  box-shadow: 0 6px 18px rgba(0,0,0,0.55), 0 0 14px rgba(194,115,31,0.35) !important;
+}
+.floating-skip-react-btn:hover {
+  background: linear-gradient(180deg, #34290f, #201607) !important;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.6), 0 0 22px rgba(194,115,31,0.5) !important;
+}
+
+/* =========================================================================
+   PLAYER PODS — cyan/red hex-HUD → aged parchment/leather name-plates.
+   Corner positions + hex click targets + all stat ids UNTOUCHED. Self = gold
+   (bottom-left), Opp = warm rust (top-right). Chakra Petch → Alegreya SC.
+   ========================================================================= */
+#screen-game .pod, #screen-sandbox .pod {
+  font-family: var(--ui-display) !important;
+}
+#screen-game .pod.pod-self, #screen-sandbox .pod.pod-self {
+  --acc: var(--gold); --acc-deep: #2a1c07;
+}
+#screen-game .pod.pod-opp, #screen-sandbox .pod.pod-opp {
+  --acc: var(--rust); --acc-deep: #2a1408;
+}
+
+/* Hex avatar — warm cardboard fill, bronze ring, candle drop-shadow. */
+#screen-game .pod-ava-wrap, #screen-sandbox .pod-ava-wrap {
+  filter: drop-shadow(0 0 7px color-mix(in srgb, var(--acc) 45%, transparent));
+}
+#screen-game .pod-ava-ring, #screen-sandbox .pod-ava-ring {
+  background: linear-gradient(160deg, var(--acc), var(--acc-deep)) !important;
+}
+#screen-game .pod-ava, #screen-sandbox .pod-ava {
+  background:
+    radial-gradient(rgba(255,240,200,0.04) 1px, transparent 1.6px),
+    linear-gradient(160deg,#1a1409 0%, #0b0805 100%) !important;
+  background-size: 4px 4px, 100% 100%;
+  color: var(--parch) !important;
+  text-shadow: 0 0 8px color-mix(in srgb, var(--acc) 45%, #000), 0 1px 0 #000 !important;
+}
+#screen-game .pod-ava-wrap:hover, #screen-sandbox .pod-ava-wrap:hover { filter: drop-shadow(0 0 11px var(--acc)); }
+#screen-game .pod-ava-wrap:focus-visible, #screen-sandbox .pod-ava-wrap:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+
+/* Plate — dark leather gradient + parchment inlay outline (card double-border
+   motif). Drop the cyan side-glow bar; replace with a thin gold rule. */
+#screen-game .pod-plate, #screen-sandbox .pod-plate {
+  background:
+    linear-gradient(180deg, rgba(224,162,60,0.06) 0%, transparent 30%),
+    linear-gradient(105deg, var(--acc-deep) 0%, #1a1409 46%, #0b0805 100%) !important;
+  outline: 1px solid var(--parch2);
+  outline-offset: -3px;
+  box-shadow:
+    inset 0 0 0 1px rgba(224,162,60,0.10),
+    inset 0 1px 0 rgba(224,162,60,0.10),
+    0 4px 12px rgba(0,0,0,0.55) !important;
+}
+#screen-game .pod-plate::before, #screen-sandbox .pod-plate::before {
+  background: linear-gradient(var(--acc), transparent) !important;
+  box-shadow: none !important;
+  opacity: 0.8;
+}
+
+/* Row 1 — name + mana */
+#screen-game .pod-name, #screen-sandbox .pod-name {
+  font-family: var(--ui-display) !important;
+  letter-spacing: 0.06em; text-transform: none;
+  color: var(--parch) !important;
+}
+#screen-game .pod-mana, #screen-sandbox .pod-mana { color: var(--gold) !important; }
+#screen-game .pod-mana small, #screen-sandbox .pod-mana small { color: var(--parch-mute) !important; }
+#screen-game .pod-pip, #screen-sandbox .pod-pip {
+  background: var(--gold) !important;
+  box-shadow: 0 0 5px rgba(224,162,60,0.55) !important;
+}
+
+/* Row 2 — big HP number + worn power bar */
+#screen-game .pod-hp-n, #screen-sandbox .pod-hp-n {
+  font-family: var(--ui-display) !important;
+  color: var(--parch) !important;
+  text-shadow: 0 1px 0 #000, 0 0 10px color-mix(in srgb, var(--acc) 40%, #000) !important;
+}
+#screen-game .pod-bar, #screen-sandbox .pod-bar {
+  background: var(--field) !important;
+  border: 1px solid var(--bronze-dk) !important;
+  box-shadow: inset 0 1px 3px rgba(0,0,0,0.8) !important;
+}
+#screen-game .pod-fill, #screen-sandbox .pod-fill {
+  background: linear-gradient(180deg, var(--gold-lt), var(--gold)) !important;
+}
+/* Opponent bar reads warm rust so the mirror still colour-codes. */
+#screen-game .pod.pod-opp .pod-fill, #screen-sandbox .pod.pod-opp .pod-fill {
+  background: linear-gradient(180deg, #d08a4e, var(--rust)) !important;
+}
+/* Tick hatching → subtle ink notches (was black-on-cyan). */
+#screen-game .pod-bar::after, #screen-sandbox .pod-bar::after {
+  background: repeating-linear-gradient(90deg, transparent 0 14px, rgba(0,0,0,0.30) 14px 15px) !important;
+}
+
+/* Row 3 — stat chips + Dark-Matter + pile buttons */
+#screen-game .pod-chip, #screen-sandbox .pod-chip {
+  font-family: var(--ui-display) !important;
+  color: var(--parch-mute) !important; text-transform: uppercase;
+}
+#screen-game .pod-chip b, #screen-sandbox .pod-chip b { color: var(--parch) !important; }
+#screen-game .pod-chip-dm, #screen-sandbox .pod-chip-dm { color: #b596d8 !important; }
+#screen-game .pod-chip-dm b, #screen-sandbox .pod-chip-dm b { color: #e2d3f2 !important; }
+
+/* Pile buttons — small worn chips; gold count. Keep .pile-count/.pile-emoji. */
+#screen-game .pod-pile, #screen-sandbox .pod-pile {
+  border: 1px solid var(--bronze-dk) !important;
+  background: rgba(0,0,0,0.3) !important;
+  color: var(--parch-mute) !important;
+  font-family: var(--ui-display) !important;
+}
+#screen-game .pod-pile:hover, #screen-sandbox .pod-pile:hover {
+  border-color: var(--gold) !important; background: var(--field-hi) !important;
+}
+#screen-game .pod-pile .pile-count, #screen-sandbox .pod-pile .pile-count { color: var(--gold-lt) !important; }
+
+/* =========================================================================
+   PASS BUTTON — cyan angular chevron token → worn wooden/parchment "Pass"
+   token. Keep the font-size:0 + ::before label / ::after chevron trick so no
+   JS change is needed. Drop the angular clip; warm gold gradient.
+   ========================================================================= */
+#screen-game .hand-action-bar .btn-pass-action,
+#screen-sandbox .hand-action-bar .btn-pass-action {
+  font-family: var(--ui-display) !important;
+  font-weight: 700;
+  font-size: 0 !important;                 /* still hides JS 'Pass' + handshake emoji */
+  letter-spacing: 1.5px; text-transform: uppercase;
+  color: var(--ink) !important;
+  background: linear-gradient(180deg, var(--gold-lt) 0%, var(--gold) 100%) !important;
+  border: 1px solid var(--bronze) !important;
+  border-top: 1px solid var(--gold-lt) !important;
+  border-radius: 8px !important;
+  clip-path: none !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255,246,222,0.5),
+    0 3px 10px rgba(0,0,0,0.5),
+    0 0 0 1px rgba(58,46,24,0.4) !important;
+  padding: 8px 16px !important;
+}
+#screen-game .hand-action-bar .btn-pass-action::before,
+#screen-sandbox .hand-action-bar .btn-pass-action::before {
+  content: 'Pass'; font-size: 14px; letter-spacing: 1.5px; color: var(--ink);
+}
+#screen-game .hand-action-bar .btn-pass-action::after,
+#screen-sandbox .hand-action-bar .btn-pass-action::after {
+  content: '\00BB'; color: var(--bronze); font-size: 14px; letter-spacing: -2px;
+  text-shadow: none !important;
+}
+#screen-game .hand-action-bar .btn-pass-action:hover,
+#screen-sandbox .hand-action-bar .btn-pass-action:hover { filter: brightness(1.06); }
+#screen-game .hand-action-bar .btn-pass-action:active,
+#screen-sandbox .hand-action-bar .btn-pass-action:active { transform: translateY(1px); }
+
+/* Secondary hand-action buttons (Skip React / Cancel / Decline) → ghost bronze */
+#screen-game .hand-action-bar button, #screen-sandbox .hand-action-bar button {
+  font-family: var(--ui-display) !important;
+  font-size: 11px !important;
+  letter-spacing: 0.08em !important;
+  text-transform: uppercase;
+  border-radius: 8px !important;
+  clip-path: none !important;
+}
+
+/* =========================================================================
+   LEFT CARD-PREVIEW tooltip sidebar (game + sandbox) → aged cardboard panel.
+   ========================================================================= */
+#screen-game .tooltip-sidebar, #screen-sandbox .tooltip-sidebar {
+  border: 1px solid var(--bronze) !important;
+  border-radius: 12px !important;
+  clip-path: none !important;
+  box-shadow: inset 0 0 24px rgba(0,0,0,0.55) !important;
+}
+#screen-game .tooltip-sidebar::before, #screen-sandbox .tooltip-sidebar::before { content: none !important; }
+#screen-game .tooltip-sidebar-hint, #screen-sandbox .tooltip-sidebar-hint,
+#screen-game .game-tooltip-hint, #screen-sandbox .game-tooltip-hint {
+  font-family: var(--ui-display) !important;
+  font-size: 11px !important;
+  letter-spacing: 0.04em;
+  color: var(--parch-mute) !important;
+}
+#screen-game .tooltip-name, #screen-sandbox .tooltip-name { font-family: var(--ui-display) !important; color: var(--parch) !important; }
+#screen-game .tooltip-stats, #screen-sandbox .tooltip-stats,
+#screen-game .tooltip-keywords, #screen-sandbox .tooltip-keywords { font-family: var(--ui-body) !important; color: var(--parch-dim) !important; }
+
+/* =========================================================================
+   RIGHT SIDEBAR — log / chat "COMMS station" → warm activity panel.
+   Kill the STN-004 · COMMS slop content; drop notch clip-path.
+   ========================================================================= */
+#screen-game .game-sidebar { background: transparent !important; }
+#screen-game .sidebar-section, #screen-game #activity-panel {
+  border: 1px solid var(--bronze) !important;
+  border-radius: 12px !important;
+  clip-path: none !important;
+  padding-top: 24px !important;
+  box-shadow: inset 0 0 24px rgba(0,0,0,0.55) !important;
+}
+#screen-game #activity-panel::before {
+  content: 'Activity' !important;
+  top: 7px; left: 14px;
+  font-family: var(--ui-display) !important;
+  font-size: 11px !important;
+  letter-spacing: 0.1em !important;
+  color: var(--gold) !important;
+  text-transform: none !important;
+  opacity: 0.9;
+}
+#screen-game .activity-tabs { border-bottom: 1px solid var(--line) !important; }
+#screen-game .activity-tab {
+  font-family: var(--ui-display) !important;
+  font-size: 12px !important;
+  letter-spacing: 0.06em !important;
+  text-transform: none;
+  color: var(--parch-mute) !important;
+  border-radius: 0 !important;
+}
+#screen-game .activity-tab:hover { color: var(--parch) !important; }
+#screen-game .activity-tab.active {
+  color: var(--gold) !important;
+  background: rgba(224,162,60,0.06) !important;
+}
+#screen-game .activity-tab.active::after {
+  background: var(--gold) !important; box-shadow: none !important;
+}
+#screen-game .log-entries, #screen-game .chat-messages {
+  font-family: var(--ui-body) !important;
+  font-size: 13px; line-height: 1.55; color: var(--parch-dim) !important;
+}
+#screen-game .chat-input-row { border-top: 1px solid var(--line) !important; }
+#screen-game .chat-input {
+  background: var(--field) !important;
+  border: 1px solid var(--bronze) !important;
+  color: var(--parch) !important;
+  font-family: var(--ui-body) !important;
+  border-radius: 8px !important;
+}
+#screen-game .chat-input:focus {
+  border-color: var(--gold) !important; outline: none !important;
+  box-shadow: 0 0 0 2px rgba(224,162,60,0.22) !important;
+}
+#screen-game .btn-chat-send {
+  font-family: var(--ui-display) !important;
+  font-size: 11px !important; letter-spacing: 0.06em !important; text-transform: none;
+  border-radius: 8px !important;
+  background: linear-gradient(180deg, var(--gold-lt), var(--gold)) !important;
+  border: 1px solid var(--bronze) !important; color: var(--ink) !important;
+}
+#screen-game #btn-leave {
+  font-family: var(--ui-display) !important;
+  font-size: 12px !important; letter-spacing: 0.08em !important; text-transform: uppercase;
+  background: rgba(60,24,14,0.4) !important;
+  border: 1px solid var(--bronze-dk) !important;
+  color: #c07a4a !important;
+  border-radius: 8px !important;
+  clip-path: none !important;
+}
+#screen-game #btn-leave:hover {
+  background: rgba(80,32,18,0.55) !important; border-color: var(--rust) !important; color: #e0925a !important;
+}
+#screen-game .log-entries::-webkit-scrollbar-thumb,
+#screen-game .chat-messages::-webkit-scrollbar-thumb { background: var(--bronze) !important; }
+#screen-game .log-entries::-webkit-scrollbar-track,
+#screen-game .chat-messages::-webkit-scrollbar-track { background: var(--field) !important; }
+
+/* =========================================================================
+   SANDBOX DEV-OPS PANEL — utilitarian but WARM. Plain aged panel, not neon.
+   Kill "· DEV OPS" + "00N" station-counter slop.
+   ========================================================================= */
+#screen-sandbox #sandbox-control-panel {
+  border: 1px solid var(--bronze) !important;
+  border-radius: 12px !important;
+  clip-path: none !important;
+  padding: 20px 14px 14px !important;
+}
+#screen-sandbox #sandbox-control-panel::before {
+  background: linear-gradient(90deg, transparent, var(--gold), transparent) !important;
+  opacity: 0.4 !important;
+}
+#screen-sandbox .sandbox-ctrl-title {
+  font-family: var(--ui-display) !important;
+  font-size: 13px !important;
+  letter-spacing: 0.12em !important;
+  color: var(--parch) !important;
+  text-transform: none;
+  padding-left: 16px;
+}
+#screen-sandbox .sandbox-ctrl-title::before {
+  border-color: var(--gold) !important; box-shadow: none !important; opacity: 0.8;
+}
+#screen-sandbox .sandbox-ctrl-title::after {
+  content: ' · sandbox' !important;
+  font-size: 10px; letter-spacing: 0.06em; color: var(--parch-mute) !important;
+}
+#screen-sandbox .sandbox-ctrl-group {
+  background: rgba(224,162,60,0.03) !important;
+  border: 1px solid var(--bronze-dk) !important;
+  clip-path: none !important;
+  border-radius: 8px !important;
+}
+#screen-sandbox .sandbox-ctrl-group::before {
+  content: counter(sandstation) '.' !important;   /* 1. 2. 3. — plain numbering, no mil framing */
+  font-family: var(--ui-display) !important;
+  font-size: 11px !important; letter-spacing: 0.04em !important;
+  color: var(--parch-mute) !important;
+}
+#screen-sandbox .sandbox-ctrl-subtitle {
+  font-family: var(--ui-display) !important;
+  font-size: 11px !important; letter-spacing: 0.06em !important; text-transform: none;
+  color: var(--parch) !important;
+}
+#screen-sandbox .sandbox-inline-label {
+  font-family: var(--ui-display) !important;
+  font-size: 10px !important; letter-spacing: 0.06em !important; text-transform: uppercase;
+  color: var(--parch-mute) !important;
+}
+/* Sandbox buttons → warm ghost lozenges */
+#screen-sandbox .sandbox-ctrl-group .btn,
+#screen-sandbox .sandbox-ctrl-group .btn-sm {
+  font-family: var(--ui-display) !important;
+  font-size: 11px !important; letter-spacing: 0.04em !important; text-transform: none;
+  background: var(--field) !important;
+  border: 1px solid var(--bronze) !important;
+  color: var(--parch-dim) !important;
+  border-radius: 7px !important;
+  clip-path: none !important;
+}
+#screen-sandbox .sandbox-ctrl-group .btn:hover,
+#screen-sandbox .sandbox-ctrl-group .btn-sm:hover {
+  background: var(--field-hi) !important; border-color: var(--gold) !important; color: var(--parch) !important;
+}
+#screen-sandbox .sandbox-ctrl-group .btn.active,
+#screen-sandbox .sandbox-ctrl-group .btn-sm.active,
+#screen-sandbox .sandbox-ctrl-group .sandbox-target-btn.active,
+#screen-sandbox .sandbox-ctrl-group .sandbox-zone-btn.active,
+#screen-sandbox .sandbox-ctrl-group .sandbox-control-btn.active {
+  background: linear-gradient(180deg, var(--gold-lt), var(--gold)) !important;
+  border-color: var(--bronze) !important;
+  color: var(--ink) !important;
+  box-shadow: none !important;
+  font-weight: 700;
+}
+/* Sandbox search + cheat inputs + slot name → warm text fields */
+#screen-sandbox #sandbox-search,
+#screen-sandbox .sandbox-cheat-input,
+#screen-sandbox #sandbox-slot-name {
+  background: var(--field) !important;
+  border: 1px solid var(--bronze) !important;
+  color: var(--parch) !important;
+  font-family: var(--ui-body) !important;
+  border-radius: 8px !important;
+}
+#screen-sandbox #sandbox-search:focus,
+#screen-sandbox .sandbox-cheat-input:focus,
+#screen-sandbox #sandbox-slot-name:focus {
+  border-color: var(--gold) !important; outline: none !important;
+  box-shadow: 0 0 0 2px rgba(224,162,60,0.22) !important;
+}
+#screen-sandbox .sandbox-search-results {
+  background: var(--panel-solid) !important;
+  border: 1px solid var(--bronze) !important;
+  font-family: var(--ui-body) !important; color: var(--parch-dim) !important;
+}
+#screen-sandbox .sandbox-cheat-col {
+  background: rgba(224,162,60,0.03) !important;
+  border: 1px solid var(--bronze-dk) !important;
+}
+#screen-sandbox .sandbox-cheat-col strong {
+  font-family: var(--ui-display) !important;
+  font-size: 11px !important; letter-spacing: 0.06em !important; text-transform: none;
+  color: var(--parch) !important;
+}
+#screen-sandbox .sandbox-cheat-col label {
+  font-family: var(--ui-display) !important;
+  font-size: 10px !important; letter-spacing: 0.04em !important; text-transform: uppercase;
+  color: var(--parch-mute) !important;
+}
+#screen-sandbox .sandbox-slots-list {
+  font-family: var(--ui-body) !important; font-size: 12px; color: var(--parch-dim) !important;
+}
+/* Reset stays a warm rust warning (not neon amber) */
+#screen-sandbox #sandbox-reset-btn {
+  background: rgba(80,32,18,0.4) !important;
+  border-color: var(--rust) !important;
+  color: #e0925a !important;
+}
+#screen-sandbox #sandbox-reset-btn:hover {
+  background: rgba(100,40,22,0.6) !important; border-color: #d0824a !important; color: var(--parch) !important;
+}
+
+/* =========================================================================
+   TESTS OVERLAY (UAT runner) — warm cardboard. Kill "PROTOCOL // UAT RUN".
+   ========================================================================= */
+#tests-overlay { font-family: var(--ui-body); }
+#tests-overlay .tests-overlay-inner {
+  background:
+    radial-gradient(rgba(255,240,200,0.03) 1px, transparent 1.6px),
+    linear-gradient(160deg,#1a1409 0%, #0b0805 100%) !important;
+  background-size: 5px 5px, 100% 100% !important;
+  border: 1px solid var(--bronze) !important;
+  border-radius: 12px !important;
+  clip-path: none !important;
+  box-shadow: 0 24px 60px -18px rgba(0,0,0,0.7) !important;
+}
+#tests-overlay .tests-overlay-inner::before {
+  content: 'Test Run' !important;
+  font-family: var(--ui-display) !important;
+  font-size: 11px !important; letter-spacing: 0.08em !important;
+  color: var(--gold) !important; text-transform: none !important; opacity: 0.9;
+}
+#tests-overlay .tests-overlay-inner::after {
+  background: linear-gradient(90deg, transparent, var(--gold), transparent) !important; opacity: 0.4 !important;
+}
+#tests-overlay .tests-overlay-header { border-bottom: 1px solid var(--line) !important; }
+#tests-overlay .tests-progress {
+  font-family: var(--ui-display) !important;
+  color: var(--gold) !important; text-transform: none;
+  background: rgba(224,162,60,0.08) !important;
+  border: 1px solid var(--bronze) !important; border-radius: 7px !important;
+}
+#tests-overlay .tests-title {
+  font-family: var(--ui-display) !important;
+  color: var(--parch) !important; text-transform: none; text-shadow: none !important;
+}
+#tests-overlay .tests-exit,
+#tests-overlay .tests-comment,
+#tests-overlay .tests-toc-close {
+  font-family: var(--ui-body) !important;
+  background: var(--field) !important;
+  border: 1px solid var(--bronze) !important;
+  color: var(--parch-dim) !important;
+  border-radius: 6px !important;
+}
+#tests-overlay .tests-comment:focus {
+  border-color: var(--gold) !important; outline: none !important;
+  box-shadow: 0 0 0 2px rgba(224,162,60,0.22) !important;
+}
+#tests-overlay .tests-section-label {
+  font-family: var(--ui-display) !important;
+  color: var(--gold) !important; text-transform: none;
+}
+#tests-overlay .tests-section-label::before { content: '\25B8'; color: var(--gold) !important; text-shadow: none !important; }
+#tests-overlay .tests-instructions,
+#tests-overlay .tests-expected {
+  font-family: var(--ui-body) !important;
+  color: var(--parch-dim) !important;
+  background: rgba(224,162,60,0.03) !important;
+  border-left: 2px solid var(--bronze) !important;
+}
+#tests-overlay .tests-btn {
+  font-family: var(--ui-display) !important;
+  text-transform: none;
+  border-radius: 8px !important; clip-path: none !important;
+  border: 1px solid var(--bronze) !important;
+  background: var(--field) !important; color: var(--parch-dim) !important;
+}
+#tests-overlay .tests-btn-pass {
+  background: rgba(125,154,62,0.12) !important; border-color: rgba(125,154,62,0.5) !important; color: var(--warm-green) !important;
+}
+#tests-overlay .tests-btn-pass:hover { background: rgba(125,154,62,0.28) !important; border-color: var(--warm-green) !important; color: var(--parch) !important; box-shadow: none !important; }
+#tests-overlay .tests-btn-fail {
+  background: rgba(181,98,58,0.12) !important; border-color: rgba(181,98,58,0.5) !important; color: #d0824a !important;
+}
+#tests-overlay .tests-btn-fail:hover { background: rgba(181,98,58,0.28) !important; border-color: var(--rust) !important; color: var(--parch) !important; box-shadow: none !important; }
+#tests-overlay .tests-btn-skip:hover,
+#tests-overlay .tests-btn-reset:hover { background: var(--field-hi) !important; border-color: var(--gold) !important; color: var(--parch) !important; }
+#tests-overlay .tests-summary {
+  font-family: var(--ui-body) !important; color: var(--parch-dim) !important;
+  background: rgba(224,162,60,0.04) !important; border-top: 1px solid var(--line) !important;
+}
+#tests-overlay .tests-toc-panel { background: var(--panel-solid) !important; border-top: 1px solid var(--bronze) !important; border-bottom: 1px solid var(--bronze) !important; }
+#tests-overlay .tests-toc-header {
+  font-family: var(--ui-display) !important; color: var(--gold) !important; text-transform: none;
+  border-bottom: 1px solid var(--line) !important; background: rgba(224,162,60,0.04) !important;
+}
+#tests-overlay .tests-toc-item {
+  font-family: var(--ui-body) !important; color: var(--parch-dim) !important;
+  border-bottom: 1px solid var(--line) !important;
+}
+#tests-overlay .tests-toc-item:hover { background: var(--field-hi) !important; color: var(--parch) !important; border-bottom-color: var(--bronze) !important; }
+#tests-overlay .tests-toc-item.is-current {
+  background: rgba(224,162,60,0.12) !important; color: var(--gold) !important;
+  border-left: 3px solid var(--gold) !important;
+}
+#tests-overlay .tests-toc-empty { font-family: var(--ui-body) !important; color: var(--parch-mute) !important; }
+
+/* =========================================================================
+   GAME-OVER MODAL — HUD readout → framed aged-cardboard result card.
+   ========================================================================= */
+#game-over-overlay .game-over-modal {
+  background:
+    radial-gradient(rgba(255,240,200,0.03) 1px, transparent 1.6px),
+    linear-gradient(160deg,#1a1409 0%, #0b0805 100%) !important;
+  background-size: 5px 5px, 100% 100% !important;
+  border: 1px solid var(--gold) !important;
+  border-radius: 12px !important;
+  clip-path: none !important;
+  box-shadow: 0 24px 80px -18px rgba(0,0,0,0.8), inset 0 0 30px rgba(120,92,50,0.15) !important;
+}
+#game-over-overlay .game-over-result {
+  font-family: var(--ui-display) !important;
+  letter-spacing: 0.08em !important; text-transform: none;
+  color: var(--parch) !important;
+}
+#game-over-overlay .game-over-reason,
+#game-over-overlay .game-over-hp-label,
+#game-over-overlay .game-over-hp-value,
+#game-over-overlay .game-over-status {
+  font-family: var(--ui-body) !important; color: var(--parch-dim) !important;
+}
+#game-over-overlay #btn-rematch {
+  font-family: var(--ui-display) !important;
+  background: linear-gradient(180deg, var(--gold-lt), var(--gold)) !important;
+  border: 1px solid var(--bronze) !important; color: var(--ink) !important;
+  border-radius: 8px !important;
+}
+#game-over-overlay #btn-back-to-lobby {
+  font-family: var(--ui-display) !important;
+  background: var(--field) !important; border: 1px solid var(--bronze) !important;
+  color: var(--parch-dim) !important; border-radius: 8px !important;
+}
+#game-over-overlay #btn-back-to-lobby:hover { border-color: var(--gold) !important; color: var(--parch) !important; }
+
+/* =========================================================================
+   SANDBOX STAT MIRROR — the god-view drives sandbox-p0-hp / p1-hp etc via
+   renderSandboxStats and .sandbox-pile-btn. They share .pod* markup so the
+   pod rules above already cover them; this only warms the extra pile buttons.
+   ========================================================================= */
+#screen-sandbox .sandbox-pile-btn {
+  border: 1px solid var(--bronze-dk) !important;
+  background: rgba(0,0,0,0.3) !important;
+  color: var(--parch-mute) !important;
+  font-family: var(--ui-display) !important;
+}
+#screen-sandbox .sandbox-pile-btn:hover { border-color: var(--gold) !important; background: var(--field-hi) !important; }
