@@ -71,6 +71,14 @@
     </defs>
   </svg>
 
+  <!-- Landscape-only game: in portrait on phones, cover the app and ask the
+       player to rotate. Shown/hidden purely by CSS (orientation + width). -->
+  <div id="rotate-nudge" aria-hidden="true">
+    <div class="rotate-nudge-icon">⟳</div>
+    <div class="rotate-nudge-title">Rotate your device</div>
+    <div class="rotate-nudge-sub">Grid Tactics plays in landscape</div>
+  </div>
+
   <!-- Screen: Lobby — Tactical Command HUD -->
   <div id="screen-lobby" class="screen active">
     <div class="lobby2">

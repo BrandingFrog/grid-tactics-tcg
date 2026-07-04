@@ -9774,17 +9774,31 @@ body:has(#screen-lobby.active) .hud-header { display: none !important; }
 #screen-lobby .lobby2-status:empty { display: none; }
 #screen-lobby .lobby2-status.error { border-color: #a5502e; color: #f0b48a; }
 
-/* Portrait / very narrow: stack the two columns so nothing clips. */
-@media (max-width: 620px) {
-  /* Portrait / very narrow: stack the two columns. Rebase --u on a ~390px-wide
-     PORTRAIT baseline (not the 844px landscape width) so the single-column
-     stack stays legible instead of collapsing to ~46% like the landscape
-     scale would (min(100vw/844,...) shrinks hard when width is small). Capped
-     at 1.7px so tablets in this range don't over-inflate. */
-  #screen-lobby { --u: min(100vw / 390, 1.7px); }
-  #screen-lobby .lobby2 { grid-template-columns: 1fr; min-height: auto; }
-  #screen-lobby .lobby2-hero { display: none; }
-  #screen-lobby .lobby2-play { border-left: none; border-top: 1px solid var(--line); }
+/* Landscape-only game: the lobby NEVER reflows to a vertical portrait stack.
+   It always renders the horizontal composition (scaled by --u). Portrait phones
+   get the rotate-to-landscape nudge (#rotate-nudge) instead. */
+
+/* ===== ROTATE-TO-LANDSCAPE NUDGE (whole app is landscape-first) ===== */
+#rotate-nudge { display: none; }
+@keyframes rotate-nudge-spin { 0%, 100% { transform: rotate(-12deg); } 50% { transform: rotate(102deg); } }
+@media (orientation: portrait) and (max-width: 820px) {
+  #rotate-nudge {
+    display: flex; position: fixed; inset: 0; z-index: 100000;
+    flex-direction: column; align-items: center; justify-content: center; gap: 16px;
+    text-align: center; padding: 28px;
+    background: radial-gradient(150% 150% at 50% 40%, #251a0e 0%, #0b0805 100%);
+    color: #f2ead2; font-family: 'Alegreya SC', Georgia, serif;
+  }
+  #rotate-nudge .rotate-nudge-icon {
+    font-size: 68px; line-height: 1; color: #e0a23c;
+    text-shadow: 0 0 24px rgba(224, 162, 60, 0.35);
+    animation: rotate-nudge-spin 2.6s ease-in-out infinite;
+  }
+  #rotate-nudge .rotate-nudge-title { font-size: 27px; font-weight: 800; letter-spacing: 1px; }
+  #rotate-nudge .rotate-nudge-sub {
+    font-family: 'Alegreya', Georgia, serif; font-style: italic;
+    color: #9a865c; font-size: 15px;
+  }
 }
 
 
