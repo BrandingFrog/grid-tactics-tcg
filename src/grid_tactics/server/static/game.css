@@ -11117,3 +11117,48 @@ body:has(#screen-lobby.active) .hud-header { display: none !important; }
   font-family: var(--ui-display) !important;
 }
 #screen-sandbox .sandbox-pile-btn:hover { border-color: var(--gold) !important; background: var(--field-hi) !important; }
+
+
+/* ==== GLOBAL NAV HEADER → worn-vintage (matches the reskinned screens) ==== */
+.header.hud-header {
+  background:
+    radial-gradient(rgba(255,240,200,0.03) 1px, transparent 1.6px),
+    linear-gradient(180deg, #1a1409 0%, #0f0a05 100%) !important;
+  background-size: 5px 5px, 100% 100% !important;
+  border-bottom: 1px solid #6b5730 !important;
+  box-shadow: 0 2px 16px -10px rgba(0,0,0,0.6) !important;
+}
+.header.hud-header::before {
+  background: linear-gradient(90deg, transparent 0%, rgba(224,162,60,0.12) 8%,
+    rgba(224,162,60,0.5) 50%, rgba(224,162,60,0.12) 92%, transparent 100%) !important;
+}
+.hud-logo { border-right: 1px solid #3a2e18 !important; }
+.hud-logo-status { background: #7d9a3e !important; box-shadow: 0 0 8px #7d9a3e, inset 0 0 2px rgba(255,255,255,0.6) !important; }
+.hud-logo-text {
+  font-family: 'Alegreya SC', Georgia, serif !important;
+  font-weight: 800 !important; letter-spacing: 0.06em !important;
+  color: #f2ead2 !important; text-shadow: 0 0 16px rgba(224,162,60,0.25) !important;
+}
+.hud-logo-sub {
+  font-family: 'Alegreya SC', Georgia, serif !important;
+  color: #9a865c !important; border: 1px solid #3a2e18 !important;
+  background: #191207 !important; border-radius: 5px !important; letter-spacing: 0.14em !important;
+}
+.hud-nav .nav-btn {
+  font-family: 'Alegreya SC', Georgia, serif !important;
+  color: #9a865c !important; text-transform: none !important; letter-spacing: 0.04em !important;
+}
+.hud-nav .nav-btn::before { color: #6b5730 !important; }
+.hud-nav .nav-btn::after { background: #e0a23c !important; box-shadow: none !important; }
+.hud-nav .nav-btn:hover { color: #f2ead2 !important; }
+.hud-nav .nav-btn:hover::before { color: #9a865c !important; }
+.hud-nav .nav-btn.active { color: #e0a23c !important; }
+.hud-nav .nav-btn.active::before { color: #e0a23c !important; }
+.hud-nav a.hud-nav-ext:hover .hud-nav-ext-arrow { color: #e0a23c !important; }
+.hud-nav-toggle-bar { background: #cbb98f !important; }
+.patch-badge {
+  font-family: 'Alegreya SC', Georgia, serif !important;
+  color: #9a865c !important; border: 1px solid #3a2e18 !important; background: #191207 !important;
+}
+.patch-badge .patch-version { color: #e0a23c !important; }
+.patch-badge .patch-updated { color: #9a865c !important; }
