@@ -9036,7 +9036,9 @@ function renderBoardMinion(minion) {
 
     return '<div class="board-minion ' + ownerClass + ' ' + typeClass + '" data-numeric-id="' + minion.card_numeric_id + '" style="' + boardArtStyle + '">'
         + '<div class="board-minion-overlay"></div>'
-        + '<div class="attr-circle-sm ' + elem.css + '"><span class="attr-text-sm">' + elem.name + '</span></div>'
+        /* element pill removed from board minions (user 2026-07-04) — the
+           element reads from the card art/frame + tooltip; the label was
+           noise at cell size */
         + '<div class="board-minion-name">' + cardDef.name + '</div>'
         + '<div class="board-minion-stats">'
         + '<span class="board-minion-atk"><span class="stat-emoji-bg">' + SWORD_SVG + '</span><span class="stat-num">' + atk + '</span></span>'
