@@ -7529,7 +7529,7 @@ body {
   background: rgba(10, 20, 35, 0.6) !important;
   border: 1px solid var(--hud-g-edge) !important;
   border-radius: 0 !important;
-  padding-top: 10px !important;
+  padding-top: 4px !important;
   position: relative;
   clip-path: polygon(
     0 8px, 8px 0,
@@ -9110,7 +9110,7 @@ body {
        the board its width back. No horizontal OR vertical scroll. The
        persistent .hud-header is 54px tall (border-box) at every width, so
        subtract exactly that to fill the remaining height with no overflow. */
-    grid-template-columns: clamp(116px, 20vw, 190px) minmax(0, 1fr) !important;
+    grid-template-columns: clamp(150px, 26vw, 250px) minmax(0, 1fr) !important;
     height: calc(100vh - 54px);
     /* !important so short-landscape stays edge-to-edge: the duel block's
        `body:has(#screen-game.active) .game-layout { max-width: calc(100vh*16/9.5) }`
@@ -11341,7 +11341,7 @@ body:has(#screen-lobby.active) .hud-header { display: none !important; }
   border: 1px solid var(--bronze) !important;
   box-shadow: 0 6px 20px rgba(0,0,0,0.5), inset 0 0 0 1px rgba(224,162,60,0.06) !important;
   background: var(--field) !important;      /* #191207 — warm dark, not cyan-tinted */
-  padding: 8px !important;                   /* trimmed from 12px to buy width @150px */
+  padding: 4px !important;                   /* tight — the card preview runs near the edges */
   color: var(--parch-dim) !important;
 }
 
@@ -11576,7 +11576,7 @@ body:has(#screen-lobby.active) .hud-header { display: none !important; }
 
   #screen-deck-builder .card-tooltip,
   #screen-game .game-tooltip, #screen-game .card-tooltip,
-  #screen-sandbox .game-tooltip, #screen-sandbox .card-tooltip { padding: 10px !important; }
+  #screen-sandbox .game-tooltip, #screen-sandbox .card-tooltip { padding: 6px !important; }
 }
 
 
