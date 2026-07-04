@@ -212,11 +212,13 @@
 
           <div class="card-tooltip hud-dossier-card" id="card-tooltip" style="display:none;">
             <div class="tooltip-card tooltip-card-art"></div>
-            <div class="tooltip-header tooltip-name"></div>
-            <div class="tooltip-stats"></div>
-            <div class="tooltip-section tooltip-keywords"></div>
-            <div class="tooltip-section tooltip-related-label" style="display:none;">Related Cards</div>
-            <div class="tooltip-related"></div>
+            <div class="tooltip-body"><!-- scrolls; card above stays put -->
+              <div class="tooltip-header tooltip-name"></div>
+              <div class="tooltip-stats"></div>
+              <div class="tooltip-section tooltip-keywords"></div>
+              <div class="tooltip-section tooltip-related-label" style="display:none;">Related Cards</div>
+              <div class="tooltip-related"></div>
+            </div>
           </div>
 
           <div class="tooltip-sidebar-hint hud-dossier-empty" id="deck-tooltip-hint">
@@ -414,9 +416,11 @@
       <div class="tooltip-sidebar game-tooltip-sidebar" id="game-tooltip-sidebar">
         <div class="card-tooltip game-tooltip" id="game-tooltip" style="display:none;">
           <div class="tooltip-card tooltip-card-art"></div>
-          <div class="tooltip-header tooltip-name"></div>
-          <div class="tooltip-stats"></div>
-          <div class="tooltip-section tooltip-keywords"></div>
+          <div class="tooltip-body"><!-- scrolls; card above stays put -->
+            <div class="tooltip-header tooltip-name"></div>
+            <div class="tooltip-stats"></div>
+            <div class="tooltip-section tooltip-keywords"></div>
+          </div>
         </div>
         <div class="tooltip-sidebar-hint" id="game-tooltip-hint">Tap a card to preview</div>
       </div>
@@ -625,9 +629,11 @@
       <div class="tooltip-sidebar game-tooltip-sidebar" id="sandbox-tooltip-sidebar">
         <div class="card-tooltip game-tooltip" id="sandbox-tooltip" style="display:none;">
           <div class="tooltip-card tooltip-card-art"></div>
-          <div class="tooltip-header tooltip-name"></div>
-          <div class="tooltip-stats"></div>
-          <div class="tooltip-section tooltip-keywords"></div>
+          <div class="tooltip-body"><!-- scrolls; card above stays put -->
+            <div class="tooltip-header tooltip-name"></div>
+            <div class="tooltip-stats"></div>
+            <div class="tooltip-section tooltip-keywords"></div>
+          </div>
         </div>
         <div class="tooltip-sidebar-hint" id="sandbox-tooltip-hint">Tap a card to preview</div>
       </div>
