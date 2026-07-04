@@ -11610,3 +11610,41 @@ body:has(#screen-sandbox.active) #sbx-toggles { display: flex; }
 #sbx-toggles button:hover { border-color: #e0a23c; color: #f2ead2; }
 /* clear the floating toggles: give the sandbox room-bar right headroom */
 body:has(#screen-sandbox.active) .room-bar { padding-right: 84px !important; }
+
+
+/* ==========================================================================
+   TOOLTIP: pinned card, scrollable text. The preview card sticks to the top
+   of the (already-scrolling) tooltip; the name/stats/effect/keyword text
+   scrolls UNDER it. Slim bronze scrollbar so the scroll is discoverable
+   (the base rule hid it entirely).
+   ========================================================================== */
+#screen-deck-builder .card-tooltip .tooltip-card,
+#screen-game .card-tooltip .tooltip-card,
+#screen-game .game-tooltip .tooltip-card,
+#screen-sandbox .card-tooltip .tooltip-card,
+#screen-sandbox .game-tooltip .tooltip-card {
+  position: sticky; top: -4px;              /* counter the 4px host padding */
+  z-index: 2;
+  background: var(--field);                  /* opaque so text passes beneath */
+  padding: 2px 0 4px;
+  margin-bottom: 6px;
+  box-shadow: 0 6px 10px -4px rgba(0, 0, 0, 0.65);   /* seam mask */
+}
+#screen-deck-builder .card-tooltip, #screen-game .card-tooltip,
+#screen-game .game-tooltip, #screen-sandbox .card-tooltip,
+#screen-sandbox .game-tooltip {
+  scrollbar-width: thin !important;
+  scrollbar-color: var(--bronze) var(--field);
+}
+#screen-deck-builder .card-tooltip::-webkit-scrollbar,
+#screen-game .card-tooltip::-webkit-scrollbar,
+#screen-game .game-tooltip::-webkit-scrollbar,
+#screen-sandbox .card-tooltip::-webkit-scrollbar,
+#screen-sandbox .game-tooltip::-webkit-scrollbar { display: block; width: 6px; }
+#screen-deck-builder .card-tooltip::-webkit-scrollbar-thumb,
+#screen-game .card-tooltip::-webkit-scrollbar-thumb,
+#screen-game .game-tooltip::-webkit-scrollbar-thumb,
+#screen-sandbox .card-tooltip::-webkit-scrollbar-thumb,
+#screen-sandbox .game-tooltip::-webkit-scrollbar-thumb {
+  background: var(--bronze); border-radius: 4px;
+}
