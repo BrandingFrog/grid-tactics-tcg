@@ -8729,7 +8729,10 @@ body {
    filter displaces only this paper layer; the content above stays crisp. */
 .card-frame-full.cf2::before {
   content: '' !important; display: block !important;
-  position: absolute; inset: 0; z-index: 0;
+  /* Size with container units, NOT inset:0 — inside a container-type card an
+     abs-pos inset:0 pseudo collapses its width (was a 2px left strip) once the
+     filter was removed. 100cqw = the card's width; aspect-ratio 1/1 → square. */
+  position: absolute; top: 0; left: 0; width: 100cqw; height: 100cqw; z-index: 0;
   border-radius: 4%;
   background: #e7ddc2;
   background-image:
