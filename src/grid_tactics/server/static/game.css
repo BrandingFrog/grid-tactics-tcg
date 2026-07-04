@@ -9765,3 +9765,569 @@ body:has(#screen-lobby.active) .hud-header { display: none !important; }
   #screen-lobby .lobby2-hero { display: none; }
   #screen-lobby .lobby2-play { border-left: none; border-top: 1px solid var(--line); }
 }
+
+
+/* ==== APPENDED: Deck Builder vintage re-skin (workflow draft, integrated) ==== */
+/* ============================================================================
+   DECK BUILDER — "1999 WORN UNSLEEVED VINTAGE TCG" RE-SKIN
+   Scope: everything under #screen-deck-builder
+   Purpose: override the legacy cold sci-fi HUD (.hud-armoury / .hud-dossier /
+            .hud-loadout / .hud-readiness) with the warm, aged, kitchen-table
+            aesthetic already used by the lobby (.lobby2) and cards (.cf2).
+   Rules:  restyle ONLY. Every id / class / data-* / click target preserved.
+           No cyan, no scanlines, no radar, no crosshairs, no clip-path notches,
+           no Michroma / Space Mono. Pure-CSS / data-URI textures, no network.
+   Append AFTER the legacy block (css ~6321–7204) so these win by source order;
+   a few !important where a legacy rule is equally specific.
+   ============================================================================ */
+
+/* ---------------------------------------------------------------------------
+   0. THEME TOKENS — reuse the exact lobby palette + Alegreya fonts.
+      Declared on the screen root so every descendant inherits the warm theme
+      and the old --hud-* vars are simply not consulted by our new rules.
+   --------------------------------------------------------------------------- */
+#screen-deck-builder {
+  --parch:      #f2ead2;   /* brightest text / titles */
+  --parch-dim:  #cbb98f;   /* default body text */
+  --parch-mute: #9a865c;   /* muted labels, secondary */
+  --parch2:     #ded0a8;   /* card-stock inlay outline */
+  --gold:       #e0a23c;   /* accent, focus, active */
+  --gold-lt:    #ffd873;   /* hover, primary-button top */
+  --bronze:     #6b5730;   /* medium borders */
+  --bronze-dk:  #3a2e18;   /* subtle borders */
+  --field:      #191207;   /* input / row fill */
+  --field-hi:   #221809;   /* row hover fill */
+  --line:       #2c2113;   /* dividers */
+  --ink:        #241c10;   /* dark ink on parchment surfaces */
+  --rust:       #b5623a;   /* warm "invalid"/danger (replaces neon red) */
+  --leaf:       #7d9a3e;   /* warm "valid"/ready green (replaces neon green) */
+
+  /* element accents — mirror .cf2-* --el so chips read as element badges */
+  --el-fire:#a8332a; --el-dark:#5d3a8f; --el-earth:#8a6d2f; --el-water:#2b5f9e;
+  --el-metal:#5c5c60; --el-wood:#4a7a2e; --el-light:#b09a34; --el-neutral:#6a6a6e;
+
+  --ui-display: 'Alegreya SC', Georgia, serif;   /* headers / labels / buttons */
+  --ui-body:    'Alegreya', Georgia, serif;       /* body / inputs / prose */
+
+  color: var(--parch-dim);
+  font-family: var(--ui-body);
+}
+
+/* ---------------------------------------------------------------------------
+   1. PAGE BACKGROUND — candlelit aged-cardboard table + sinking vignette.
+      Same recipe as .lobby2 so the screens feel like one book.
+   --------------------------------------------------------------------------- */
+#screen-deck-builder .deck-builder-layout.hud-armoury {
+  position: relative;
+  background:
+    radial-gradient(120% 120% at 22% 4%,   rgba(224,162,60,0.17) 0%, transparent 46%),
+    radial-gradient(135% 130% at 82% 104%, rgba(120,60,130,0.10) 0%, transparent 52%),
+    radial-gradient(150% 150% at 50% 38%,  #251a0e 0%, #160f07 56%, #0b0805 100%);
+  overflow: hidden;
+}
+#screen-deck-builder .deck-builder-layout.hud-armoury::before {
+  content: ''; position: absolute; inset: 0; z-index: 0; pointer-events: none;
+  background: radial-gradient(120% 120% at 40% 30%, transparent 55%, rgba(0,0,0,0.5) 100%);
+}
+/* keep interactive content above the vignette */
+#screen-deck-builder .hud-armoury-header,
+#screen-deck-builder .deck-builder-body { position: relative; z-index: 1; }
+
+/* ---------------------------------------------------------------------------
+   2. KILL THE SCI-FI FX — grid drift, CRT scanlines, blink, radar, crosshairs.
+   --------------------------------------------------------------------------- */
+#screen-deck-builder .hud-armoury-bg,
+#screen-deck-builder .hud-armoury-scanlines,
+#screen-deck-builder .hud-dossier-radar,
+#screen-deck-builder .hud-dossier-crosshair,
+#screen-deck-builder .hud-armoury-online {
+  display: none !important;
+}
+/* neutralise any lingering keyframe hooks */
+#screen-deck-builder .hud-armoury-blink { animation: none !important; }
+
+/* ---------------------------------------------------------------------------
+   3. WEAR VOCABULARY — pure-CSS aged textures. Applied 1–2 per surface below.
+   --------------------------------------------------------------------------- */
+
+/* W1a — dark cardboard: the framed panels (left/right chrome) */
+#screen-deck-builder .v-cardboard {
+  background:
+    radial-gradient(rgba(255,240,200,0.03) 1px, transparent 1.6px),
+    linear-gradient(160deg, #1a1409 0%, #140f07 60%, #0b0805 100%);
+  background-size: 5px 5px, 100% 100%;
+  border: 1px solid var(--bronze);
+  box-shadow: inset 0 0 24px rgba(0,0,0,0.55), inset 0 1px 0 rgba(224,162,60,0.05);
+}
+
+/* W2 — faint coffee ring (decorative, non-interactive) */
+#screen-deck-builder .v-coffee-ring { position: relative; }
+#screen-deck-builder .v-coffee-ring::after {
+  content: ''; position: absolute; width: 116px; height: 116px; pointer-events: none;
+  border-radius: 50%; opacity: .45; mix-blend-mode: screen; z-index: 0;
+  background:
+    radial-gradient(circle, transparent 44%, rgba(150,110,50,0.22) 47%,
+                    rgba(150,110,50,0.09) 52%, transparent 56%),
+    radial-gradient(circle, rgba(150,110,50,0.05) 40%, transparent 62%);
+}
+
+/* W3 — dog-eared folded corner (dark-surface variant) */
+#screen-deck-builder .v-dogear { position: relative; }
+#screen-deck-builder .v-dogear::after {
+  content: ''; position: absolute; right: 0; bottom: 0;
+  width: 22px; height: 22px; pointer-events: none; z-index: 2;
+  background: linear-gradient(135deg, transparent 50%, #241a0d 50%);
+  box-shadow: -1px -1px 2px rgba(0,0,0,0.5);
+  border-bottom-right-radius: 12px;
+}
+
+/* W4 — worn yellowed tape strip (torn ends via mask, slight rotate) */
+#screen-deck-builder .v-tape {
+  position: absolute; width: 70px; height: 22px; pointer-events: none; z-index: 3;
+  background: linear-gradient(180deg, rgba(226,208,150,0.40), rgba(206,186,128,0.30));
+  border-left: 1px solid rgba(255,255,255,0.16);
+  border-right: 1px solid rgba(120,96,50,0.22);
+  box-shadow: 0 1px 2px rgba(0,0,0,0.25);
+  -webkit-mask: linear-gradient(90deg, transparent 0, #000 7%, #000 93%, transparent 100%);
+          mask: linear-gradient(90deg, transparent 0, #000 7%, #000 93%, transparent 100%);
+  transform: rotate(-4deg);
+}
+
+/* W5 — faded ballpoint margin scribble (flavour only, never functional text) */
+#screen-deck-builder .v-annotation {
+  font-family: 'Segoe Script', 'Bradley Hand', cursive;
+  color: rgba(120,150,210,0.55); font-size: 15px; letter-spacing: .3px;
+  transform: rotate(-6deg); opacity: .8; pointer-events: none;
+  text-shadow: 0 0 1px rgba(60,80,150,0.2);
+}
+
+/* ---------------------------------------------------------------------------
+   4. TOP HEADER STRIP — parchment-labelled cardboard bar (drop the clip-path).
+   --------------------------------------------------------------------------- */
+#screen-deck-builder .hud-armoury-header {
+  clip-path: none !important;
+  background:
+    radial-gradient(rgba(255,240,200,0.03) 1px, transparent 1.6px),
+    linear-gradient(160deg, #1a1409 0%, #140f07 100%);
+  background-size: 5px 5px, 100% 100%;
+  border: 1px solid var(--bronze);
+  border-radius: 10px;
+  box-shadow: inset 0 1px 0 rgba(224,162,60,0.06);
+  padding: 10px 16px;
+  display: flex; align-items: center; justify-content: space-between; gap: 14px;
+}
+#screen-deck-builder .hud-armoury-header-left,
+#screen-deck-builder .hud-armoury-header-right {
+  display: flex; align-items: center; gap: 12px;
+}
+/* "DECK" tag → small worn ghost pill */
+#screen-deck-builder .hud-armoury-kbd {
+  font-family: var(--ui-display); font-weight: 700; font-size: 11px;
+  letter-spacing: 2px; color: var(--parch-mute);
+  background: var(--field); border: 1px solid var(--bronze-dk);
+  border-radius: 6px; padding: 3px 9px;
+}
+#screen-deck-builder .hud-armoury-title {
+  font-family: var(--ui-display); font-weight: 800; font-size: 19px;
+  letter-spacing: 1px; color: var(--parch);
+  text-shadow: 0 2px 14px #000, 0 0 30px rgba(224,162,60,0.18);
+  text-transform: none;
+}
+#screen-deck-builder .hud-armoury-sep { color: var(--bronze); font-weight: 700; }
+#screen-deck-builder .hud-armoury-dim,
+#screen-deck-builder .hud-armoury-header-right {
+  font-family: var(--ui-body); font-style: italic;
+  color: var(--parch-mute); font-size: 13px; letter-spacing: .3px;
+  text-transform: none;
+}
+
+/* ---------------------------------------------------------------------------
+   5. BODY GRID — keep the three-column layout, warm the gaps only.
+   --------------------------------------------------------------------------- */
+#screen-deck-builder .deck-builder-body { gap: 14px; padding: 14px; }
+
+/* ---------------------------------------------------------------------------
+   6. PANELS — aged cardboard frames. Drop the cyan edge ::before.
+      Left (dossier) gets a dog-ear; right (deck) gets a faint coffee ring.
+   --------------------------------------------------------------------------- */
+#screen-deck-builder .hud-armoury-panel {
+  position: relative;
+  background:
+    radial-gradient(rgba(255,240,200,0.03) 1px, transparent 1.6px),
+    linear-gradient(160deg, #1a1409 0%, #140f07 60%, #0b0805 100%);
+  background-size: 5px 5px, 100% 100%;
+  border: 1px solid var(--bronze);
+  border-radius: 12px;
+  box-shadow: inset 0 0 24px rgba(0,0,0,0.5), inset 0 1px 0 rgba(224,162,60,0.05),
+              0 10px 28px -14px rgba(0,0,0,0.7);
+}
+#screen-deck-builder .hud-armoury-panel::before {
+  content: none !important;   /* remove legacy cyan corner accent */
+}
+/* left preview panel — dog-eared corner */
+#screen-deck-builder .hud-dossier { position: relative; }
+#screen-deck-builder .hud-dossier::after {
+  content: ''; position: absolute; right: 0; bottom: 0;
+  width: 22px; height: 22px; pointer-events: none; z-index: 2;
+  background: linear-gradient(135deg, transparent 50%, #241a0d 50%);
+  box-shadow: -1px -1px 2px rgba(0,0,0,0.5);
+  border-bottom-right-radius: 12px;
+}
+/* right deck panel — faint coffee ring drifting off the top edge */
+#screen-deck-builder .hud-loadout::after {
+  content: ''; position: absolute; top: -34px; right: 30px;
+  width: 116px; height: 116px; pointer-events: none;
+  border-radius: 50%; opacity: .4; mix-blend-mode: screen; z-index: 0;
+  transform: rotate(-8deg);
+  background:
+    radial-gradient(circle, transparent 44%, rgba(150,110,50,0.22) 47%,
+                    rgba(150,110,50,0.09) 52%, transparent 56%),
+    radial-gradient(circle, rgba(150,110,50,0.05) 40%, transparent 62%);
+}
+
+/* panel heads (shared .hud-panel-* also used by game screens) */
+#screen-deck-builder .hud-panel-head,
+#screen-deck-builder .hud-armoury-panel-head {
+  display: flex; align-items: baseline; gap: 10px;
+  padding: 10px 14px; border-bottom: 1px solid var(--line);
+  background: linear-gradient(180deg, rgba(224,162,60,0.05), transparent);
+}
+#screen-deck-builder .hud-panel-id {
+  font-family: var(--ui-display); font-weight: 700; font-size: 11px;
+  letter-spacing: 1.5px; color: var(--parch-mute);
+  border: 1px solid var(--bronze-dk); border-radius: 5px; padding: 1px 6px;
+}
+#screen-deck-builder .hud-panel-title {
+  font-family: var(--ui-display); font-weight: 800; font-size: 15px;
+  letter-spacing: 1px; color: var(--parch); text-transform: none;
+}
+#screen-deck-builder .hud-panel-dim {
+  font-family: var(--ui-body); font-style: italic; font-size: 12px;
+  color: var(--parch-mute); margin-left: auto; text-transform: none;
+}
+
+/* ---------------------------------------------------------------------------
+   7. LEFT — CARD PREVIEW (dossier). Plain, warm empty-state; no radar.
+   --------------------------------------------------------------------------- */
+#screen-deck-builder .hud-dossier-card {
+  padding: 12px; color: var(--parch-dim); font-family: var(--ui-body);
+}
+#screen-deck-builder .hud-dossier-empty {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 8px; padding: 40px 20px; text-align: center; min-height: 200px;
+}
+#screen-deck-builder .hud-dossier-empty-head {
+  font-family: var(--ui-display); font-weight: 700; font-size: 14px;
+  letter-spacing: 1px; color: var(--parch-mute); text-transform: none;
+}
+#screen-deck-builder .hud-dossier-empty-sub {
+  font-family: var(--ui-body); font-style: italic; font-size: 13px;
+  color: var(--parch-mute); max-width: 220px;
+}
+/* tooltip card internals — warm text */
+#screen-deck-builder .tooltip-name {
+  font-family: var(--ui-display); font-weight: 800; color: var(--parch);
+  letter-spacing: .5px;
+}
+#screen-deck-builder .tooltip-stats,
+#screen-deck-builder .tooltip-keywords,
+#screen-deck-builder .tooltip-related-label { color: var(--parch-dim); }
+#screen-deck-builder .tooltip-related-label {
+  font-family: var(--ui-display); color: var(--parch-mute); letter-spacing: 1px;
+}
+
+/* scrollbars — bronze thumb on dark track (whole screen) */
+#screen-deck-builder ::-webkit-scrollbar { width: 10px; height: 10px; }
+#screen-deck-builder ::-webkit-scrollbar-track { background: var(--field); border-radius: 6px; }
+#screen-deck-builder ::-webkit-scrollbar-thumb {
+  background: var(--bronze); border-radius: 6px; border: 2px solid var(--field);
+}
+#screen-deck-builder ::-webkit-scrollbar-thumb:hover { background: #86703f; }
+
+/* ---------------------------------------------------------------------------
+   8. CENTRE — SEARCH INPUT. Text-field recipe, gold focus, no sweep/glow.
+   --------------------------------------------------------------------------- */
+#screen-deck-builder .hud-armoury-search-wrap {
+  position: relative; margin: 12px 14px; display: flex; align-items: center;
+}
+#screen-deck-builder .hud-armoury-search-wrap::after { content: none !important; }
+#screen-deck-builder .hud-armoury-search-icon {
+  position: absolute; left: 12px; color: var(--parch-mute); font-size: 15px;
+  pointer-events: none;
+}
+#screen-deck-builder input.hud-armoury-search {
+  width: 100%; box-sizing: border-box;
+  padding: 9px 58px 9px 34px;
+  background: var(--field); color: var(--parch);
+  border: 1px solid var(--bronze); border-radius: 8px;
+  font-family: var(--ui-body); font-size: 14px; letter-spacing: .2px;
+  box-shadow: inset 0 1px 3px rgba(0,0,0,0.5); transition: border-color .13s, box-shadow .13s;
+}
+#screen-deck-builder input.hud-armoury-search::placeholder { color: #6a5a3a; font-style: italic; }
+#screen-deck-builder input.hud-armoury-search:focus {
+  outline: none; border-color: var(--gold);
+  box-shadow: 0 0 0 2px rgba(224,162,60,0.22), inset 0 1px 3px rgba(0,0,0,0.5);
+}
+#screen-deck-builder .hud-armoury-search-kbd {
+  position: absolute; right: 10px;
+  font-family: var(--ui-display); font-weight: 700; font-size: 13px;
+  color: var(--parch-mute);
+  background: rgba(40,30,14,0.6); border: 1px solid var(--bronze-dk);
+  border-radius: 5px; padding: 1px 7px;
+}
+
+/* ---------------------------------------------------------------------------
+   9. CENTRE — FILTER CHIPS. Element-badge motif; element/type inline accents kept.
+   --------------------------------------------------------------------------- */
+#screen-deck-builder .card-browser-filters {
+  padding: 0 14px 10px; display: flex; flex-direction: column; gap: 8px;
+}
+#screen-deck-builder .hud-armoury-filter-row {
+  display: flex; align-items: center; gap: 10px;
+}
+#screen-deck-builder .filter-label {
+  font-family: var(--ui-display); font-weight: 700; font-size: 12px;
+  letter-spacing: 1.5px; color: var(--parch-mute); min-width: 66px;
+  text-transform: none;
+}
+#screen-deck-builder .hud-armoury-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+
+#screen-deck-builder .hud-armoury-chips .filter-btn {
+  font-family: var(--ui-display); font-weight: 600; font-size: 13px;
+  letter-spacing: .5px; color: var(--parch-dim);
+  background: var(--field); border: 1px solid var(--bronze-dk);
+  border-radius: 7px; padding: 4px 11px; cursor: pointer;
+  transition: background .13s, border-color .13s, color .13s;
+}
+#screen-deck-builder .hud-armoury-chips .filter-btn::before { content: none !important; }
+#screen-deck-builder .hud-armoury-chips .filter-btn:hover {
+  border-color: var(--bronze); background: var(--field-hi); color: var(--parch);
+}
+#screen-deck-builder .hud-armoury-chips .filter-btn.active {
+  background: linear-gradient(180deg, var(--gold-lt), var(--gold));
+  color: var(--ink); border-color: var(--bronze);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.35), 0 2px 6px -2px rgba(0,0,0,0.5);
+}
+/* Element/type chips carry an inline border-color+color accent (JS-agnostic).
+   Give the accent a faint tint at rest, and make ACTIVE fill with the accent. */
+#screen-deck-builder .hud-armoury-chips .filter-btn[style*="border-color"] {
+  background: rgba(255,255,255,0.02);
+}
+#screen-deck-builder .hud-armoury-chips .filter-btn[style*="border-color"]:hover {
+  background: rgba(255,255,255,0.05);
+}
+#screen-deck-builder .hud-armoury-chips .filter-btn[style*="border-color"].active {
+  /* keep the element hue the inline style provides, darken text for contrast */
+  background: rgba(224,162,60,0.14);
+  color: var(--parch) !important;
+  box-shadow: inset 0 0 0 1px rgba(255,236,190,0.15), 0 2px 6px -2px rgba(0,0,0,0.5);
+}
+#screen-deck-builder .hud-armoury-chips-mana .filter-btn { min-width: 30px; text-align: center; }
+
+/* checkbox (Non-Deckable) — gold check, no cyan */
+#screen-deck-builder .hud-armoury-cbox {
+  display: inline-flex; align-items: center; gap: 7px; cursor: pointer;
+  font-family: var(--ui-body); font-size: 13px; color: var(--parch-dim);
+}
+#screen-deck-builder .hud-armoury-cbox input { position: absolute; opacity: 0; width: 0; height: 0; }
+#screen-deck-builder .hud-armoury-cbox-box {
+  width: 15px; height: 15px; border-radius: 4px;
+  background: var(--field); border: 1px solid var(--bronze);
+  display: inline-flex; align-items: center; justify-content: center;
+  transition: background .13s, border-color .13s;
+}
+#screen-deck-builder .hud-armoury-cbox:hover .hud-armoury-cbox-box { border-color: var(--gold); }
+#screen-deck-builder .hud-armoury-cbox input:checked + .hud-armoury-cbox-box {
+  background: linear-gradient(180deg, var(--gold-lt), var(--gold)); border-color: var(--bronze);
+}
+#screen-deck-builder .hud-armoury-cbox input:checked + .hud-armoury-cbox-box::after {
+  content: '✓'; color: var(--ink); font-size: 11px; font-weight: 900; line-height: 1;
+}
+
+/* ---------------------------------------------------------------------------
+   10. CENTRE — CARD GRID. Warm lift on hover, no cyan glow.
+   --------------------------------------------------------------------------- */
+#screen-deck-builder .card-browser-grid { padding: 4px 14px 14px; }
+#screen-deck-builder .card-browser-item {
+  transition: transform .13s ease, box-shadow .13s ease; cursor: pointer;
+}
+#screen-deck-builder .card-browser-item:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 18px -6px rgba(0,0,0,0.65);
+}
+
+/* ---------------------------------------------------------------------------
+   11. RIGHT — SAVE / LOAD ROWS. Text inputs + button recipes.
+   --------------------------------------------------------------------------- */
+#screen-deck-builder .deck-save-row,
+#screen-deck-builder .deck-load-row {
+  display: flex; align-items: center; gap: 8px; padding: 10px 14px;
+}
+#screen-deck-builder .hud-loadout-prefix {
+  font-family: var(--ui-display); font-weight: 700; font-size: 11px;
+  letter-spacing: 1.5px; color: var(--parch-mute); min-width: 34px;
+  text-transform: none;
+}
+#screen-deck-builder input.hud-loadout-input,
+#screen-deck-builder select.hud-loadout-select {
+  flex: 1; box-sizing: border-box; padding: 8px 10px;
+  background: var(--field); color: var(--parch);
+  border: 1px solid var(--bronze); border-radius: 8px;
+  font-family: var(--ui-body); font-size: 14px;
+  box-shadow: inset 0 1px 3px rgba(0,0,0,0.5);
+  transition: border-color .13s, box-shadow .13s;
+}
+#screen-deck-builder input.hud-loadout-input::placeholder { color: #6a5a3a; font-style: italic; }
+#screen-deck-builder input.hud-loadout-input:focus,
+#screen-deck-builder select.hud-loadout-select:focus {
+  outline: none; border-color: var(--gold);
+  box-shadow: 0 0 0 2px rgba(224,162,60,0.22), inset 0 1px 3px rgba(0,0,0,0.5);
+}
+#screen-deck-builder select.hud-loadout-select { cursor: pointer; }
+
+/* shared button recipes */
+#screen-deck-builder .hud-loadout-save,
+#screen-deck-builder .hud-loadout-share-btn,
+#screen-deck-builder .hud-loadout-del {
+  font-family: var(--ui-display); font-weight: 700; letter-spacing: 1px;
+  border-radius: 8px; cursor: pointer; text-transform: none;
+  display: inline-flex; align-items: center; gap: 5px;
+  transition: filter .13s, background .13s, border-color .13s, color .13s;
+}
+/* primary — SAVE (gold) */
+#screen-deck-builder .hud-loadout-save {
+  padding: 8px 14px; color: var(--ink);
+  background: linear-gradient(180deg, var(--gold-lt), var(--gold));
+  border: 1px solid var(--bronze);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.4), 0 3px 8px -3px rgba(0,0,0,0.6);
+}
+#screen-deck-builder .hud-loadout-save:hover { filter: brightness(1.06); }
+#screen-deck-builder .hud-loadout-save .hud-btn-chev { color: var(--ink); }
+
+/* secondary — EXPORT / IMPORT (bronze ghost) */
+#screen-deck-builder .hud-loadout-share-btn {
+  padding: 8px 12px; color: var(--parch);
+  background: #33260f; border: 1px solid var(--bronze);
+}
+#screen-deck-builder .hud-loadout-share-btn:hover { background: #45330f; border-color: var(--gold); }
+
+/* danger — delete slot (warm rust, not neon red) */
+#screen-deck-builder .hud-loadout-del {
+  padding: 8px 12px; color: #c07a4a;
+  background: rgba(60,24,14,0.4); border: 1px solid var(--bronze-dk);
+}
+#screen-deck-builder .hud-loadout-del:hover { border-color: #a5502e; color: #d68a52; }
+
+/* ---------------------------------------------------------------------------
+   12. RIGHT — READINESS METER.
+       ⚠ JS rebuilds className to "deck-status valid|invalid" / "deck-count
+       valid|invalid", DROPPING hud-readiness-*. So key rules on the BASE
+       classes + .valid / .invalid, not on the hud-readiness-* names.
+   --------------------------------------------------------------------------- */
+#screen-deck-builder .hud-readiness-wrap { padding: 10px 14px; position: relative; }
+#screen-deck-builder .deck-validation {
+  display: flex; flex-direction: column; gap: 4px; margin-bottom: 8px;
+}
+#screen-deck-builder .hud-readiness-meta {
+  display: flex; align-items: baseline; justify-content: space-between;
+}
+#screen-deck-builder .hud-readiness-label {
+  font-family: var(--ui-display); font-weight: 700; font-size: 12px;
+  letter-spacing: 1.5px; color: var(--parch-mute); text-transform: none;
+}
+/* status + count — base + state (survive the JS className rebuild) */
+#screen-deck-builder .deck-status,
+#screen-deck-builder .deck-count {
+  font-family: var(--ui-display); font-weight: 700; letter-spacing: .5px;
+}
+#screen-deck-builder .deck-status { font-size: 14px; color: var(--parch-dim); }
+#screen-deck-builder .deck-count  { font-size: 13px; color: var(--parch-mute); }
+#screen-deck-builder .deck-status.valid,
+#screen-deck-builder .deck-count.valid   { color: var(--leaf); }
+#screen-deck-builder .deck-status.invalid,
+#screen-deck-builder .deck-count.invalid { color: var(--rust); }
+
+/* faded ballpoint "40!" scribbled by the meter (flavour) */
+#screen-deck-builder .hud-readiness-wrap::before {
+  content: '40!'; position: absolute; top: 2px; right: 16px;
+  font-family: 'Segoe Script', 'Bradley Hand', cursive;
+  color: rgba(120,150,210,0.5); font-size: 15px; transform: rotate(-8deg);
+  pointer-events: none; opacity: .75;
+}
+
+/* segmented LED cells — keep mechanics, recolor to warm buckets, no glow */
+#screen-deck-builder .hud-readiness-cells {
+  display: flex; flex-wrap: wrap; gap: 3px; margin-top: 6px;
+}
+#screen-deck-builder .hud-readiness-cells span {
+  flex: 1 1 6px; height: 8px; min-width: 6px; border-radius: 2px;
+  background: var(--field); border: 1px solid var(--bronze-dk);
+  transition: background .13s, border-color .13s;
+}
+#screen-deck-builder .hud-readiness-cells span.on {
+  border-color: var(--bronze);
+  background: linear-gradient(180deg, var(--gold-lt), var(--gold));
+}
+/* bucket tints (parent state classes) */
+#screen-deck-builder .hud-readiness-low  .hud-readiness-cells span.on {
+  background: linear-gradient(180deg, #c9784c, var(--rust)); border-color: #7a3c22;
+}
+#screen-deck-builder .hud-readiness-mid  .hud-readiness-cells span.on {
+  background: linear-gradient(180deg, var(--gold-lt), var(--gold)); border-color: var(--bronze);
+}
+#screen-deck-builder .hud-readiness-ready .hud-readiness-cells span.on {
+  background: linear-gradient(180deg, #9bb85a, var(--leaf)); border-color: #52672a;
+}
+
+/* ---------------------------------------------------------------------------
+   13. RIGHT — DECK LIST BAYS + ITEMS (.deck-list-item created by JS).
+   --------------------------------------------------------------------------- */
+#screen-deck-builder .deck-list { padding: 4px 14px 8px; overflow-y: auto; }
+#screen-deck-builder .deck-group { margin-bottom: 12px; }
+#screen-deck-builder .hud-bay-title {
+  display: flex; align-items: center; gap: 8px; margin: 0 0 6px;
+  padding-bottom: 4px; border-bottom: 1px solid var(--line);
+}
+#screen-deck-builder .hud-bay-id {
+  font-family: var(--ui-display); font-weight: 800; font-size: 12px;
+  color: var(--ink); background: var(--parch-mute);
+  border-radius: 4px; width: 18px; height: 18px; line-height: 18px;
+  text-align: center;
+}
+#screen-deck-builder .hud-bay-name {
+  font-family: var(--ui-display); font-weight: 700; font-size: 14px;
+  letter-spacing: .5px; color: var(--parch); text-transform: none;
+}
+#screen-deck-builder .hud-bay-sub {
+  font-family: var(--ui-body); font-style: italic; font-size: 11px;
+  color: var(--parch-mute); margin-left: auto; text-transform: none;
+}
+#screen-deck-builder .deck-group-items { display: flex; flex-direction: column; gap: 4px; }
+
+/* list rows */
+#screen-deck-builder .deck-list-item {
+  position: relative;
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 9px; border-radius: 7px;
+  background: var(--field); border: 1px solid var(--bronze-dk);
+  color: var(--parch-dim); font-family: var(--ui-body); font-size: 13px;
+  transition: background .13s, border-color .13s;
+}
+#screen-deck-builder .deck-list-item::before { content: none !important; }
+#screen-deck-builder .deck-list-item:hover {
+  background: var(--field-hi); border-color: var(--bronze);
+}
+#screen-deck-builder .deck-list-item-name { flex: 1; color: var(--parch); }
+#screen-deck-builder .deck-list-item-count {
+  font-family: var(--ui-display); font-weight: 700; font-size: 12px;
+  color: var(--gold); background: rgba(224,162,60,0.10);
+  border: 1px solid var(--bronze-dk); border-radius: 5px; padding: 1px 7px;
+}
+
+/* ---------------------------------------------------------------------------
+   14. RIGHT — SHARE ROW.
+   --------------------------------------------------------------------------- */
+#screen-deck-builder .deck-share-row {
+  display: flex; gap: 8px; padding: 8px 14px 14px;
+}
+#screen-deck-builder .deck-share-row .hud-loadout-share-btn { flex: 1; justify-content: center; }

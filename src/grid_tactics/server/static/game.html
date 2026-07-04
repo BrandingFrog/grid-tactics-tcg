@@ -166,14 +166,13 @@
       <!-- Top strip: mission callsign + armoury meta -->
       <div class="hud-armoury-header" aria-hidden="true">
         <div class="hud-armoury-header-left">
-          <span class="hud-armoury-kbd">ARM</span>
-          <span class="hud-armoury-title">LOADOUT ARMOURY</span>
+          <span class="hud-armoury-kbd">DECK</span>
+          <span class="hud-armoury-title">Deck Builder</span>
           <span class="hud-armoury-sep">//</span>
-          <span class="hud-armoury-dim">module · bay 00 · ready for configuration</span>
+          <span class="hud-armoury-dim">build your 40-card deck</span>
         </div>
         <div class="hud-armoury-header-right">
           <span class="hud-armoury-blink">●</span>
-          <span>SYSTEMS NOMINAL</span>
         </div>
       </div>
 
@@ -183,8 +182,8 @@
         <div class="tooltip-sidebar hud-armoury-panel hud-dossier" id="deck-tooltip-sidebar">
           <div class="hud-panel-head hud-armoury-panel-head">
             <span class="hud-panel-id">001</span>
-            <span class="hud-panel-title">DOSSIER</span>
-            <span class="hud-panel-dim">INTEL</span>
+            <span class="hud-panel-title">Card</span>
+            <span class="hud-panel-dim">details</span>
           </div>
 
           <div class="card-tooltip hud-dossier-card" id="card-tooltip" style="display:none;">
@@ -200,8 +199,8 @@
             <div class="hud-radar hud-dossier-radar" aria-hidden="true">
               <span></span><span></span><span></span>
             </div>
-            <div class="hud-dossier-empty-head">— NO MODULE SELECTED —</div>
-            <div class="hud-dossier-empty-sub">Hover a card in the armoury to pull its dossier.</div>
+            <div class="hud-dossier-empty-head">— no card selected —</div>
+            <div class="hud-dossier-empty-sub">Hover a card to see its details.</div>
             <div class="hud-dossier-crosshair" aria-hidden="true">
               <span></span><span></span><span></span><span></span>
             </div>
@@ -212,19 +211,19 @@
         <div class="card-browser hud-armoury-panel hud-armoury-browser">
           <div class="hud-panel-head hud-armoury-panel-head">
             <span class="hud-panel-id">002</span>
-            <span class="hud-panel-title">ARMOURY</span>
+            <span class="hud-panel-title">Cards</span>
             <span class="hud-armoury-online">
               <span class="hud-armoury-online-dot"></span>
               <span>ONLINE</span>
             </span>
-            <span class="hud-panel-dim">MODULE SELECT</span>
+            <span class="hud-panel-dim">browse</span>
           </div>
 
           <!-- search bar + scan sweep bg -->
           <div class="hud-armoury-search-wrap">
             <span class="hud-armoury-search-icon" aria-hidden="true">⌕</span>
-            <input type="text" id="card-search" class="input hud-armoury-search" placeholder="search module name, keyword, tribe…">
-            <span class="hud-armoury-search-kbd" aria-hidden="true">QUERY</span>
+            <input type="text" id="card-search" class="input hud-armoury-search" placeholder="search name, keyword, tribe…">
+            <span class="hud-armoury-search-kbd" aria-hidden="true">⏎</span>
           </div>
 
           <div class="card-browser-filters hud-armoury-filters">
@@ -297,14 +296,14 @@
         <div class="deck-sidebar hud-armoury-panel hud-loadout">
           <div class="hud-panel-head hud-armoury-panel-head">
             <span class="hud-panel-id">003</span>
-            <span class="hud-panel-title">LOADOUT</span>
-            <span class="hud-panel-dim">MANIFEST</span>
+            <span class="hud-panel-title">Deck</span>
+            <span class="hud-panel-dim">list</span>
           </div>
 
           <!-- Deck name + save -->
           <div class="deck-save-row hud-loadout-name">
-            <span class="hud-loadout-prefix" aria-hidden="true">CFG</span>
-            <input type="text" id="deck-slot-name" class="input input-slot-name hud-loadout-input" placeholder="designation…" maxlength="20">
+            <span class="hud-loadout-prefix" aria-hidden="true">Name</span>
+            <input type="text" id="deck-slot-name" class="input input-slot-name hud-loadout-input" placeholder="deck name…" maxlength="20">
             <button class="btn btn-primary btn-sm hud-loadout-save" id="btn-save-deck">
               <span class="hud-btn-chev">▸</span><span>SAVE</span>
             </button>
@@ -312,25 +311,27 @@
 
           <!-- Load slot -->
           <div class="deck-load-row hud-loadout-load">
-            <span class="hud-loadout-prefix" aria-hidden="true">BAY</span>
+            <span class="hud-loadout-prefix" aria-hidden="true">Load</span>
             <select id="deck-load-select" class="input select select-sm hud-loadout-select">
-              <option value="">— select cabinet —</option>
+              <option value="">— load a deck —</option>
               <!-- 5 slots populated by JS -->
             </select>
-            <button class="btn btn-danger btn-sm hud-loadout-del" id="btn-delete-slot" title="Purge this cabinet">✕</button>
+            <button class="btn btn-danger btn-sm hud-loadout-del" id="btn-delete-slot" title="Delete this deck">✕</button>
           </div>
 
           <!-- Readiness readout -->
           <div class="hud-readiness-wrap">
             <div class="deck-validation hud-readiness" id="deck-validation">
               <div class="hud-readiness-meta">
-                <span class="hud-readiness-label">READINESS</span>
-                <span class="deck-status hud-readiness-status" id="deck-status">NEED 30</span>
+                <span class="hud-readiness-label">Progress</span>
+                <span class="deck-status hud-readiness-status" id="deck-status">NEED 40</span>
               </div>
-              <span class="deck-count hud-readiness-count" id="deck-count">0/30 cards</span>
+              <span class="deck-count hud-readiness-count" id="deck-count">0/40 cards</span>
             </div>
             <div class="hud-readiness-cells" aria-hidden="true">
-              <!-- 30 segmented LED cells, CSS fills based on --deck-fill var set by JS observer -->
+              <!-- 40 segmented cells (1 per card); JS toggles .on on the first N -->
+              <span></span><span></span><span></span><span></span><span></span>
+              <span></span><span></span><span></span><span></span><span></span>
               <span></span><span></span><span></span><span></span><span></span>
               <span></span><span></span><span></span><span></span><span></span>
               <span></span><span></span><span></span><span></span><span></span>
@@ -346,7 +347,7 @@
               <h4 class="deck-group-title hud-bay-title">
                 <span class="hud-bay-id">M</span>
                 <span class="hud-bay-name">Minions</span>
-                <span class="hud-bay-sub" aria-hidden="true">ground force</span>
+                <span class="hud-bay-sub" aria-hidden="true">minions</span>
               </h4>
               <div class="deck-group-items hud-bay-items" id="deck-minions"></div>
             </div>
@@ -354,7 +355,7 @@
               <h4 class="deck-group-title hud-bay-title">
                 <span class="hud-bay-id">S</span>
                 <span class="hud-bay-name">Magic</span>
-                <span class="hud-bay-sub" aria-hidden="true">spell stock</span>
+                <span class="hud-bay-sub" aria-hidden="true">spells</span>
               </h4>
               <div class="deck-group-items hud-bay-items" id="deck-magic"></div>
             </div>
@@ -362,7 +363,7 @@
               <h4 class="deck-group-title hud-bay-title">
                 <span class="hud-bay-id">R</span>
                 <span class="hud-bay-name">React</span>
-                <span class="hud-bay-sub" aria-hidden="true">counter-stack</span>
+                <span class="hud-bay-sub" aria-hidden="true">reacts</span>
               </h4>
               <div class="deck-group-items hud-bay-items" id="deck-react"></div>
             </div>
