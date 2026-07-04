@@ -1699,15 +1699,15 @@ function buildCardTooltipContent(c) {
     // Stats chips
     var statsHtml = '';
     var typeNames = ['Minion', 'Magic', 'React'];
-    statsHtml += '<span style="color:var(--cyan)">' + (typeNames[c.card_type] || '') + '</span>';
-    if (c.tribe) statsHtml += '<span>' + c.tribe + '</span>';
+    statsHtml += '<span class="ts-type">' + (typeNames[c.card_type] || '') + '</span>';
+    if (c.tribe) statsHtml += '<span class="ts-tribe">' + c.tribe + '</span>';
     var elem = (c.element !== null && c.element !== undefined) ? ELEMENT_MAP[c.element] : NEUTRAL_ELEMENT;
-    statsHtml += '<span style="color:' + elem.color + '">' + elem.name + '</span>';
-    statsHtml += '<span style="color:var(--cyan)">' + c.mana_cost + ' Mana</span>';
-    if (c.attack != null) statsHtml += '<span style="color:var(--red)">' + c.attack + SWORD + '</span>';
-    if (c.health != null) statsHtml += '<span style="color:var(--green)">' + c.health + HEART + '</span>';
+    statsHtml += '<span class="ts-elem ' + elem.css + '">' + elem.name + '</span>';
+    statsHtml += '<span class="ts-mana">' + c.mana_cost + ' Mana</span>';
+    if (c.attack != null) statsHtml += '<span class="ts-atk">' + c.attack + SWORD + '</span>';
+    if (c.health != null) statsHtml += '<span class="ts-hp">' + c.health + HEART + '</span>';
     if (c.card_type === 0 && c.attack_range != null) {
-        statsHtml += '<span>' + (c.attack_range === 0 ? 'Melee' : 'Range ' + c.attack_range) + '</span>';
+        statsHtml += '<span class="ts-range">' + (c.attack_range === 0 ? 'Melee' : 'Range ' + c.attack_range) + '</span>';
     }
 
     // Card text lines (effect, activated ability, transform, react)
@@ -8859,9 +8859,9 @@ function showPlayerPreview(playerIdx) {
     var statsEl = host.querySelector('.tooltip-stats');
     if (statsEl) {
         var chips = '';
-        chips += '<span style="color:var(--red)">' + (p.hp | 0) + HEART + '</span>';
-        chips += '<span style="color:var(--cyan)">' + (p.current_mana | 0) + ' Mana</span>';
-        chips += '<span style="color:rgb(130,50,180)">🌑 ' + dm + ' Dark Matter</span>';
+        chips += '<span class="ts-hp">' + (p.hp | 0) + HEART + '</span>';
+        chips += '<span class="ts-mana">' + (p.current_mana | 0) + ' Mana</span>';
+        chips += '<span class="ts-dm">🌑 ' + dm + ' Dark Matter</span>';
         statsEl.innerHTML = chips;
     }
 

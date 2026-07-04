@@ -11305,3 +11305,276 @@ body:has(#screen-lobby.active) .hud-header { display: none !important; }
   #screen-deck-builder .deck-list { padding: 2px 8px 6px; }
   #screen-deck-builder .deck-share-row { padding: 6px 8px 8px; }
 }
+
+
+/* ==== APPENDED: Card-preview tooltip vintage reskin (workflow, integrated) ==== */
+/* ===========================================================================
+   CARD-PREVIEW TOOLTIP — WARM VINTAGE RESKIN  (consolidated, append to game.css)
+   ---------------------------------------------------------------------------
+   Retheme the tooltip TEXT block (name / stats / effect / flavour / keywords /
+   related) to the site's warm parchment look. Card ART is untouched.
+
+   Cascade strategy: every rule is scoped to the three screen roots
+   (#screen-deck-builder / #screen-game / #screen-sandbox) AND carries
+   !important on the fighting properties, so it beats:
+     - the unscoped sci-fi !important block (game.css 8495-8524, Michroma/Space Mono/cyan)
+     - the tiny #game-tooltip 9-11px size overrides (game.css 3397-3402)
+     - the base .tooltip-* / .card-tooltip / .game-tooltip cyan+Inter rules
+   Paste this AT THE END of game.css (last wins). Tokens are already declared on
+   the three roots (--parch, --gold, --rust, --el-*, --ui-display/body, etc.).
+
+   NOTE: the stat-chip / player-preview colors are set in game.js as INLINE
+   styles (color:var(--cyan)/--red/--green) which beat ALL css. Those must be
+   removed in JS (see tooltip-js.md) — this file styles the semantic classes
+   (.ts-type/.ts-mana/.ts-atk/.ts-hp/.ts-elem/.ts-dm) that the JS will emit.
+
+   Green token differs by scope: deck-builder = --leaf, game/sandbox = --warm-green
+   (both #7d9a3e). We use a fallback chain so one rule works in every host.
+   ======================================================================== */
+
+/* --- shorthand: all three tooltip hosts, one warm surface ---------------- */
+#screen-deck-builder .card-tooltip,
+#screen-game .game-tooltip,
+#screen-game .card-tooltip,
+#screen-sandbox .game-tooltip,
+#screen-sandbox .card-tooltip {
+  border: 1px solid var(--bronze) !important;
+  box-shadow: 0 6px 20px rgba(0,0,0,0.5), inset 0 0 0 1px rgba(224,162,60,0.06) !important;
+  background: var(--field) !important;      /* #191207 — warm dark, not cyan-tinted */
+  padding: 8px !important;                   /* trimmed from 12px to buy width @150px */
+  color: var(--parch-dim) !important;
+}
+
+/* ===========================================================================
+   1. CARD NAME  — Alegreya SC, warm parch, NO white stroke, NO cyan glow
+   Kills base .tooltip-header (Montserrat/white-stroke) + 8495 (Michroma/cyan).
+   ======================================================================== */
+#screen-deck-builder .tooltip-header,
+#screen-deck-builder .tooltip-name,
+#screen-game .tooltip-header,
+#screen-game .tooltip-name,
+#screen-sandbox .tooltip-header,
+#screen-sandbox .tooltip-name {
+  font-family: var(--ui-display) !important;   /* Alegreya SC */
+  font-weight: 700 !important;
+  font-size: 15px !important;
+  line-height: 1.12 !important;
+  letter-spacing: 0.3px !important;
+  text-transform: none !important;             /* Alegreya SC already small-caps */
+  color: var(--parch) !important;
+  -webkit-text-stroke: 0 !important;
+  text-shadow: none !important;
+}
+
+/* ===========================================================================
+   2. STATS LINE  — small-caps chips, warm + semantic colors, wraps at 150px
+   Type/Mana = gold · Attack = rust · Health = warm green · Element = accent
+   ======================================================================== */
+#screen-deck-builder .tooltip-stats,
+#screen-game .tooltip-stats,
+#screen-sandbox .tooltip-stats {
+  font-family: var(--ui-display) !important;   /* Alegreya SC small caps */
+  font-size: 12px !important;
+  line-height: 1.5 !important;
+  letter-spacing: 0.3px !important;
+  color: var(--parch-dim) !important;
+  display: block !important;
+}
+#screen-deck-builder .tooltip-stats span,
+#screen-game .tooltip-stats span,
+#screen-sandbox .tooltip-stats span {
+  display: inline-block !important;
+  margin: 0 8px 1px 0 !important;
+  white-space: nowrap !important;
+  color: var(--parch-dim);                     /* default; per-class below overrides */
+}
+/* semantic stat colors (emitted as classes by the patched JS) */
+#screen-deck-builder .tooltip-stats .ts-type, #screen-deck-builder .tooltip-stats .ts-mana,
+#screen-game .tooltip-stats .ts-type, #screen-game .tooltip-stats .ts-mana,
+#screen-sandbox .tooltip-stats .ts-type, #screen-sandbox .tooltip-stats .ts-mana {
+  color: var(--gold) !important; font-weight: 700 !important;
+}
+#screen-deck-builder .tooltip-stats .ts-atk,
+#screen-game .tooltip-stats .ts-atk,
+#screen-sandbox .tooltip-stats .ts-atk {
+  color: var(--rust) !important; font-weight: 700 !important;         /* attack 🗡️ */
+}
+#screen-deck-builder .tooltip-stats .ts-hp,
+#screen-game .tooltip-stats .ts-hp,
+#screen-sandbox .tooltip-stats .ts-hp {
+  /* health 🤍 — green var name differs per scope; fallback chain covers both */
+  color: var(--leaf, var(--warm-green, #7d9a3e)) !important; font-weight: 700 !important;
+}
+#screen-deck-builder .tooltip-stats .ts-tribe, #screen-deck-builder .tooltip-stats .ts-range,
+#screen-game .tooltip-stats .ts-tribe, #screen-game .tooltip-stats .ts-range,
+#screen-sandbox .tooltip-stats .ts-tribe, #screen-sandbox .tooltip-stats .ts-range {
+  color: var(--parch-mute) !important;
+}
+/* Element chip — brightened, readable-on-dark element accents (raw --el-dark /
+   --el-metal fail small-text contrast, so those two are lightened here). */
+/* Default is UNSCOPED (0,2,0) so the .attr-* accents (0,3,0) below win — an
+   ID-scoped default (1,2,0) would out-rank them and flatten every element chip. */
+.tooltip-stats .ts-elem { color: var(--parch-dim) !important; font-weight: 700 !important; }
+.tooltip-stats .ts-elem.attr-fire    { color: #c4544a !important; }
+.tooltip-stats .ts-elem.attr-wood    { color: #7ba83f !important; }
+.tooltip-stats .ts-elem.attr-earth   { color: #b08a3e !important; }
+.tooltip-stats .ts-elem.attr-water   { color: #4f86c6 !important; }
+.tooltip-stats .ts-elem.attr-metal   { color: #9a9aa4 !important; }  /* lightened */
+.tooltip-stats .ts-elem.attr-dark    { color: #a074d0 !important; }  /* lightened */
+.tooltip-stats .ts-elem.attr-light   { color: #cdb85a !important; }
+.tooltip-stats .ts-elem.attr-neutral { color: var(--parch-mute) !important; }
+/* Player-preview only: Dark Matter chip (showPlayerPreview) */
+.tooltip-stats .ts-dm { color: #b28ce0 !important; font-weight: 700 !important; }
+/* keep the stat SVG glyphs aligned with the text baseline */
+#screen-deck-builder .tooltip-stats .stat-emoji,
+#screen-game .tooltip-stats .stat-emoji,
+#screen-sandbox .tooltip-stats .stat-emoji { vertical-align: -1px; }
+
+/* ===========================================================================
+   3. BODY — effect text + flavour  (were Inter white / Inter cyan)
+   .tooltip-section wrapper: reset the 8504 Space-Mono !important font.
+   ======================================================================== */
+#screen-deck-builder .tooltip-section,
+#screen-game .tooltip-section,
+#screen-sandbox .tooltip-section {
+  font-family: var(--ui-body) !important;
+  font-size: 13px !important;
+  color: var(--parch-dim) !important;
+}
+#screen-deck-builder .tooltip-text,
+#screen-game .tooltip-text,
+#screen-sandbox .tooltip-text {
+  font-family: var(--ui-body) !important;      /* Alegreya */
+  font-weight: 400 !important;                 /* drop the bold-700 slab look */
+  font-size: 13px !important;
+  line-height: 1.4 !important;
+  color: var(--parch) !important;              /* highest-contrast primary read */
+}
+#screen-deck-builder .tooltip-flavour,
+#screen-game .tooltip-flavour,
+#screen-sandbox .tooltip-flavour {
+  font-family: var(--ui-body) !important;      /* Alegreya italic */
+  font-style: italic !important;
+  font-size: 12px !important;
+  line-height: 1.35 !important;
+  color: var(--parch-mute) !important;         /* warm dim, not cyan */
+  margin-top: 4px !important;
+}
+
+/* ===========================================================================
+   4. KEYWORD GLOSSARY ROWS  (name was cyan Michroma; desc white 9-10px)
+   ======================================================================== */
+#screen-deck-builder .tooltip-keyword,
+#screen-game .tooltip-keyword,
+#screen-sandbox .tooltip-keyword {
+  margin: 4px 0 0 0 !important;
+  line-height: 1.35 !important;
+}
+#screen-deck-builder .tooltip-keyword-name,
+#screen-game .tooltip-keyword-name,
+#screen-sandbox .tooltip-keyword-name {
+  font-family: var(--ui-display) !important;   /* Alegreya SC */
+  font-weight: 700 !important;
+  font-size: 11px !important;
+  letter-spacing: 0.3px !important;            /* was 0.18em Michroma tracking */
+  text-transform: none !important;
+  color: var(--gold) !important;               /* was cyan */
+}
+#screen-deck-builder .tooltip-keyword-desc,
+#screen-game .tooltip-keyword-desc,
+#screen-sandbox .tooltip-keyword-desc {
+  font-family: var(--ui-body) !important;      /* Alegreya */
+  font-weight: 400 !important;
+  font-size: 12px !important;
+  line-height: 1.35 !important;
+  color: var(--parch-dim) !important;          /* was white 9-10px */
+}
+
+/* ===========================================================================
+   5. RELATED CARDS  (deck-builder only) — warm the label + row text
+   ======================================================================== */
+#screen-deck-builder .tooltip-related-label {
+  font-family: var(--ui-display) !important;
+  font-weight: 700 !important;
+  font-size: 11px !important;
+  letter-spacing: 0.5px !important;
+  text-transform: none !important;
+  color: var(--parch-mute) !important;         /* was cyan */
+}
+#screen-deck-builder .tooltip-related-name {
+  font-family: var(--ui-display) !important;   /* was Michroma icy */
+  font-weight: 700 !important;
+  font-size: 11px !important;
+  letter-spacing: 0.2px !important;
+  color: var(--parch) !important;
+  -webkit-text-stroke: 0 !important;
+  text-shadow: none !important;
+}
+#screen-deck-builder .tooltip-related-stats {
+  font-family: var(--ui-body) !important;      /* was Space Mono 10px */
+  font-weight: 500 !important;
+  font-size: 10.5px !important;
+  color: var(--parch-dim) !important;
+}
+#screen-deck-builder .tooltip-related-effect {
+  font-family: var(--ui-body) !important;
+  font-weight: 400 !important;
+  font-size: 10.5px !important;
+  line-height: 1.3 !important;
+  color: var(--parch-dim) !important;
+}
+/* related-card thumb border → bronze, not cyan */
+#screen-deck-builder .tooltip-related-card { border-color: var(--bronze-dk) !important; }
+
+/* ===========================================================================
+   6. MINION STATUS STACK  (cold blue borders → warm) — optional but on-theme
+   ======================================================================== */
+#screen-game .tooltip-status-name,
+#screen-sandbox .tooltip-status-name,
+#screen-deck-builder .tooltip-status-name {
+  font-family: var(--ui-display) !important; color: var(--parch) !important;
+}
+#screen-game .tooltip-status-desc,
+#screen-sandbox .tooltip-status-desc,
+#screen-deck-builder .tooltip-status-desc {
+  font-family: var(--ui-body) !important; color: var(--parch-dim) !important;
+}
+
+/* ===========================================================================
+   7. DESKTOP / TALL BUMP — mirror of the short-landscape squeeze
+   (@media (orientation:landscape) and (max-height:560px)). Any viewport
+   taller than the squeeze gets a small legibility bump.
+   ======================================================================== */
+@media (min-height: 561px) {
+  #screen-deck-builder .tooltip-header, #screen-deck-builder .tooltip-name,
+  #screen-game .tooltip-header, #screen-game .tooltip-name,
+  #screen-sandbox .tooltip-header, #screen-sandbox .tooltip-name { font-size: 17px !important; }
+
+  #screen-deck-builder .tooltip-stats,
+  #screen-game .tooltip-stats,
+  #screen-sandbox .tooltip-stats { font-size: 13px !important; }
+
+  #screen-deck-builder .tooltip-text,
+  #screen-game .tooltip-text,
+  #screen-sandbox .tooltip-text { font-size: 14px !important; }
+
+  #screen-deck-builder .tooltip-flavour,
+  #screen-game .tooltip-flavour,
+  #screen-sandbox .tooltip-flavour { font-size: 13px !important; }
+
+  #screen-deck-builder .tooltip-keyword-name,
+  #screen-game .tooltip-keyword-name,
+  #screen-sandbox .tooltip-keyword-name { font-size: 12px !important; }
+
+  #screen-deck-builder .tooltip-keyword-desc,
+  #screen-game .tooltip-keyword-desc,
+  #screen-sandbox .tooltip-keyword-desc { font-size: 13px !important; }
+
+  #screen-deck-builder .tooltip-related-name  { font-size: 12px !important; }
+  #screen-deck-builder .tooltip-related-stats,
+  #screen-deck-builder .tooltip-related-effect { font-size: 11px !important; }
+
+  #screen-deck-builder .card-tooltip,
+  #screen-game .game-tooltip, #screen-game .card-tooltip,
+  #screen-sandbox .game-tooltip, #screen-sandbox .card-tooltip { padding: 10px !important; }
+}
