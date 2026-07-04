@@ -11578,3 +11578,35 @@ body:has(#screen-lobby.active) .hud-header { display: none !important; }
   #screen-game .game-tooltip, #screen-game .card-tooltip,
   #screen-sandbox .game-tooltip, #screen-sandbox .card-tooltip { padding: 10px !important; }
 }
+
+
+/* ==========================================================================
+   SANDBOX CHROME TOGGLES — the sandbox now hides the top nav bar like the
+   live duel (full-bleed board), and the dev-ops sidebar can be hidden for
+   clean previews. Two tiny floating buttons (top-right, sandbox only):
+   ☰ shows/hides the nav (the sandbox's exit), ⚙ shows/hides the dev panel.
+   ========================================================================== */
+body:has(#screen-sandbox.active):not(.sbx-show-nav) .hud-header { display: none !important; }
+body:has(#screen-sandbox.active):not(.sbx-show-nav) .game-layout { height: 100vh !important; }
+
+/* dev sidebar hidden → give its column back to the stage */
+body.sbx-hide-side #screen-sandbox .game-sidebar { display: none !important; }
+@media (orientation: landscape) and (min-height: 561px) {
+  body.sbx-hide-side:has(#screen-sandbox.active) .game-layout {
+    grid-template-columns: clamp(260px, 26vw, 420px) minmax(0, 1fr) !important;
+  }
+}
+
+/* the floating toggles */
+#sbx-toggles {
+  display: none; position: fixed; top: 6px; right: 8px; z-index: 20000; gap: 6px;
+}
+body:has(#screen-sandbox.active) #sbx-toggles { display: flex; }
+#sbx-toggles button {
+  width: 30px; height: 30px; border-radius: 7px; cursor: pointer;
+  font-size: 15px; line-height: 1; padding: 0;
+  background: rgba(25, 18, 7, 0.85); border: 1px solid #6b5730; color: #cbb98f;
+}
+#sbx-toggles button:hover { border-color: #e0a23c; color: #f2ead2; }
+/* clear the floating toggles: give the sandbox room-bar right headroom */
+body:has(#screen-sandbox.active) .room-bar { padding-right: 84px !important; }

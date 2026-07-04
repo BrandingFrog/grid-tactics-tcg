@@ -71,6 +71,22 @@
     </defs>
   </svg>
 
+  <!-- Sandbox chrome toggles (visible only when #screen-sandbox is active,
+       via CSS): ☰ shows/hides the top nav (the sandbox's exit), ⚙ shows/
+       hides the dev-ops sidebar for clean previews. -->
+  <div id="sbx-toggles" aria-hidden="true">
+    <button id="sbx-toggle-nav" type="button" title="Show / hide menu">☰</button>
+    <button id="sbx-toggle-side" type="button" title="Show / hide sandbox panel">⚙</button>
+  </div>
+  <script>
+    document.addEventListener('DOMContentLoaded', function () {
+      var nav = document.getElementById('sbx-toggle-nav');
+      var side = document.getElementById('sbx-toggle-side');
+      if (nav)  nav.addEventListener('click',  function () { document.body.classList.toggle('sbx-show-nav'); });
+      if (side) side.addEventListener('click', function () { document.body.classList.toggle('sbx-hide-side'); });
+    });
+  </script>
+
   <!-- Landscape-only game: in portrait on phones, cover the app and ask the
        player to rotate. Shown/hidden purely by CSS (orientation + width). -->
   <div id="rotate-nudge" aria-hidden="true">
