@@ -11163,3 +11163,111 @@ body:has(#screen-lobby.active) .hud-header { display: none !important; }
 }
 .patch-badge .patch-version { color: #e0a23c !important; }
 .patch-badge .patch-updated { color: #9a865c !important; }
+
+
+/* ==========================================================================
+   DECK BUILDER — legacy-specificity patch + short-landscape (mobile) fit.
+   (1) A few legacy cyan rules out-rank the vintage skin by class count
+       (.btn.hud-loadout-save, .deck-sidebar.hud-loadout, .input.*) — restate
+       the vintage values at matching specificity.
+   (2) At 844×390 the armoury header + panel heads + tall filter rows ate the
+       whole viewport (card grid rendered below the fold) — compact the chrome
+       so the grid + deck list get the height.
+   ========================================================================== */
+#screen-deck-builder .deck-sidebar.hud-loadout {
+  background:
+    radial-gradient(rgba(255,240,200,0.03) 1px, transparent 1.6px),
+    linear-gradient(160deg, #1a1409 0%, #140f07 60%, #0b0805 100%);
+  background-size: 5px 5px, 100% 100%;
+}
+#screen-deck-builder .btn.hud-loadout-save {
+  background: linear-gradient(180deg, var(--gold-lt), var(--gold));
+  border: 1px solid var(--bronze); color: var(--ink);
+  border-radius: 8px;
+  font-family: var(--ui-display); letter-spacing: 1px; font-size: 12px;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.4), 0 3px 8px -3px rgba(0,0,0,0.6);
+}
+#screen-deck-builder .btn.hud-loadout-save:hover {
+  background: linear-gradient(180deg, var(--gold-lt), var(--gold));
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.4), 0 3px 8px -3px rgba(0,0,0,0.6);
+  filter: brightness(1.06); transform: none;
+}
+#screen-deck-builder .btn.hud-loadout-share-btn {
+  background: #33260f; border: 1px solid var(--bronze); color: var(--parch);
+  border-radius: 8px; font-family: var(--ui-display); letter-spacing: 1px; font-size: 12px;
+}
+#screen-deck-builder .btn.hud-loadout-share-btn:hover {
+  background: #45330f; border-color: var(--gold); box-shadow: none; transform: none;
+}
+#screen-deck-builder .btn.hud-loadout-del {
+  background: rgba(60,24,14,0.4); border: 1px solid var(--bronze-dk);
+  color: #c07a4a; border-radius: 8px;
+}
+#screen-deck-builder .btn.hud-loadout-del:hover { border-color: #a5502e; color: #d68a52; }
+#screen-deck-builder .input.hud-loadout-input,
+#screen-deck-builder .input.hud-armoury-search {
+  background: var(--field); border: 1px solid var(--bronze); color: var(--parch);
+  font-family: var(--ui-body); font-size: 14px; border-radius: 8px; letter-spacing: 0.2px;
+}
+#screen-deck-builder .input.hud-loadout-input:focus,
+#screen-deck-builder .input.hud-armoury-search:focus {
+  border-color: var(--gold);
+  box-shadow: 0 0 0 2px rgba(224,162,60,0.22), inset 0 1px 3px rgba(0,0,0,0.5);
+}
+/* card hover: kill the leftover cyan drop-shadow */
+#screen-deck-builder .card-browser-item:hover {
+  filter: none;
+  transform: translateY(-2px);
+  box-shadow: 0 8px 18px -6px rgba(0,0,0,0.65);
+}
+
+/* --- short landscape (mobile 844×390): give the height to the cards --- */
+@media (orientation: landscape) and (max-height: 560px) {
+  #screen-deck-builder .deck-builder-layout { padding: 4px; height: calc(100vh - 54px); }
+  /* the nav already says Deck Builder — drop the redundant header strip */
+  #screen-deck-builder .hud-armoury-header { display: none; }
+  /* panel heads are dead weight at this size — the nav names the screen */
+  #screen-deck-builder .hud-panel-head,
+  #screen-deck-builder .hud-armoury-panel-head { display: none !important; }
+  #screen-deck-builder .deck-builder-body { gap: 6px; grid-template-columns: minmax(0,1fr) 200px; }
+  #screen-deck-builder .deck-builder-body > .tooltip-sidebar { display: none; }
+  /* compact search (legacy gives the wrap ~68px of padding) */
+  #screen-deck-builder .hud-armoury-search-wrap { margin: 4px 8px !important; padding: 0 !important; }
+  #screen-deck-builder input.hud-armoury-search,
+  #screen-deck-builder .input.hud-armoury-search { padding: 5px 40px 5px 30px !important; font-size: 13px !important; }
+  #screen-deck-builder .card-browser { padding: 6px !important; }
+  /* filter rows: strip legacy padding so each row is one slim line */
+  #screen-deck-builder .filter-row,
+  #screen-deck-builder .hud-armoury-filter-row { padding: 0 !important; margin: 0 !important; gap: 6px; }
+  /* filters: labels off, five slim full-width rows; long rows swipe sideways */
+  #screen-deck-builder .card-browser-filters {
+    padding: 0 8px 4px; gap: 3px;
+    flex-direction: column !important;
+  }
+  /* legacy sets display:grid with a 72px label column (specificity (1,2,0));
+     with the label hidden the chips fell into that 72px track — force flex. */
+  #screen-deck-builder .filter-row.hud-armoury-filter-row {
+    display: flex !important; width: 100%;
+  }
+  #screen-deck-builder .filter-label { display: none !important; }
+  #screen-deck-builder .hud-armoury-chips {
+    flex: 1; min-width: 0;
+    flex-wrap: nowrap !important; overflow-x: auto; overflow-y: hidden;
+    scrollbar-width: none;
+  }
+  #screen-deck-builder .hud-armoury-chips::-webkit-scrollbar { display: none; }
+  #screen-deck-builder .hud-armoury-chips .filter-btn {
+    font-size: 10.5px !important; padding: 2px 8px !important;
+    white-space: nowrap; flex: 0 0 auto;
+  }
+  #screen-deck-builder .filter-row { flex-wrap: nowrap; min-width: 0; }
+  /* the ballpoint "40!" scribble overlaps the meter at this size */
+  #screen-deck-builder .hud-readiness-wrap::before { display: none; }
+  /* the grid gets the rest */
+  #screen-deck-builder .card-browser-grid { padding: 2px 8px 8px; }
+  /* deck sidebar: compact rows, list scrolls */
+  #screen-deck-builder .deck-save-row, #screen-deck-builder .deck-load-row { padding: 6px 8px !important; }
+  #screen-deck-builder .hud-readiness-wrap { padding: 6px 8px; }
+  #screen-deck-builder .deck-list { padding: 2px 8px 6px; }
+  #screen-deck-builder .deck-share-row { padding: 6px 8px 8px; }
+}
