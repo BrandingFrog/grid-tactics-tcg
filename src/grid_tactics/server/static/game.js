@@ -2212,10 +2212,13 @@ function renderCardFrame(c, opts) {
     var dimClass = opts.dim ? ' card-dimmed' : '';
     // cf2 = full-art frame marker; palette drives the element tint vars;
     // cf2-spell strips the minion stat rail for magic/react cards.
-    // Deckle paper edge is the default (via .cf2::before). The seeded worn
-    // crease is OFF for now (user preference) — to re-enable, append
-    // ' cf2-crease-' + (hash(card_id) % 12); the 12 variants live in game.css.
-    var frameClasses = ' cf2 cf2-' + palette + (isMinion ? '' : ' cf2-spell');
+    // Deckle paper edge (default). A stable hash of the card id picks one of 12
+    // fray variants (.cf2-deckle-N) so each card's edge wears differently but
+    // consistently. (Seeded crease is OFF for now — to re-enable, also append
+    // ' cf2-crease-' + (deckleSeed % 12); those 12 variants live in game.css.)
+    var _cid = ((c && c.card_id) || '') + '', _seed = 0;
+    for (var _i = 0; _i < _cid.length; _i++) _seed = (_seed * 31 + _cid.charCodeAt(_i)) >>> 0;
+    var frameClasses = ' cf2 cf2-' + palette + (isMinion ? '' : ' cf2-spell') + ' cf2-deckle-' + (_seed % 12);
     var dataAttrs = '';
     if (opts.handIndex != null) dataAttrs += ' data-hand-idx="' + opts.handIndex + '"';
     if (opts.numericId != null) dataAttrs += ' data-numeric-id="' + opts.numericId + '"';

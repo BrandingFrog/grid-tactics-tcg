@@ -51,14 +51,23 @@
   </header>
 
   <!-- Aged-paper card edge: turbulence displacement that frays ONLY the card's
-       ::before paper layer (content stays crisp). Lives in the DOM so every
-       .card-frame-full.cf2 can reference filter:url(#card-deckle). -->
+       ::before paper layer (content stays crisp). 12 SEEDED VARIANTS so each
+       card wears differently — renderCardFrame stamps cf2-deckle-<0..11> from a
+       hash of the card id; CSS maps that to filter:url(#card-deckle-N). -->
   <svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
     <defs>
-      <filter id="card-deckle" x="-8%" y="-8%" width="116%" height="116%">
-        <feTurbulence type="fractalNoise" baseFrequency="0.012 0.018" numOctaves="4" seed="7" result="n"/>
-        <feDisplacementMap in="SourceGraphic" in2="n" scale="9" xChannelSelector="R" yChannelSelector="G"/>
-      </filter>
+      <filter id="card-deckle-0"  x="-8%" y="-8%" width="116%" height="116%"><feTurbulence type="fractalNoise" baseFrequency="0.012 0.018" numOctaves="4" seed="2"  result="n"/><feDisplacementMap in="SourceGraphic" in2="n" scale="9"  xChannelSelector="R" yChannelSelector="G"/></filter>
+      <filter id="card-deckle-1"  x="-8%" y="-8%" width="116%" height="116%"><feTurbulence type="fractalNoise" baseFrequency="0.014 0.016" numOctaves="4" seed="5"  result="n"/><feDisplacementMap in="SourceGraphic" in2="n" scale="8"  xChannelSelector="R" yChannelSelector="G"/></filter>
+      <filter id="card-deckle-2"  x="-8%" y="-8%" width="116%" height="116%"><feTurbulence type="fractalNoise" baseFrequency="0.011 0.020" numOctaves="4" seed="9"  result="n"/><feDisplacementMap in="SourceGraphic" in2="n" scale="10" xChannelSelector="R" yChannelSelector="G"/></filter>
+      <filter id="card-deckle-3"  x="-8%" y="-8%" width="116%" height="116%"><feTurbulence type="fractalNoise" baseFrequency="0.016 0.014" numOctaves="4" seed="13" result="n"/><feDisplacementMap in="SourceGraphic" in2="n" scale="7"  xChannelSelector="R" yChannelSelector="G"/></filter>
+      <filter id="card-deckle-4"  x="-8%" y="-8%" width="116%" height="116%"><feTurbulence type="fractalNoise" baseFrequency="0.013 0.019" numOctaves="4" seed="17" result="n"/><feDisplacementMap in="SourceGraphic" in2="n" scale="11" xChannelSelector="R" yChannelSelector="G"/></filter>
+      <filter id="card-deckle-5"  x="-8%" y="-8%" width="116%" height="116%"><feTurbulence type="fractalNoise" baseFrequency="0.012 0.017" numOctaves="4" seed="23" result="n"/><feDisplacementMap in="SourceGraphic" in2="n" scale="9"  xChannelSelector="R" yChannelSelector="G"/></filter>
+      <filter id="card-deckle-6"  x="-8%" y="-8%" width="116%" height="116%"><feTurbulence type="fractalNoise" baseFrequency="0.015 0.015" numOctaves="4" seed="29" result="n"/><feDisplacementMap in="SourceGraphic" in2="n" scale="8"  xChannelSelector="R" yChannelSelector="G"/></filter>
+      <filter id="card-deckle-7"  x="-8%" y="-8%" width="116%" height="116%"><feTurbulence type="fractalNoise" baseFrequency="0.010 0.021" numOctaves="4" seed="31" result="n"/><feDisplacementMap in="SourceGraphic" in2="n" scale="10" xChannelSelector="R" yChannelSelector="G"/></filter>
+      <filter id="card-deckle-8"  x="-8%" y="-8%" width="116%" height="116%"><feTurbulence type="fractalNoise" baseFrequency="0.014 0.018" numOctaves="4" seed="37" result="n"/><feDisplacementMap in="SourceGraphic" in2="n" scale="9"  xChannelSelector="R" yChannelSelector="G"/></filter>
+      <filter id="card-deckle-9"  x="-8%" y="-8%" width="116%" height="116%"><feTurbulence type="fractalNoise" baseFrequency="0.017 0.013" numOctaves="4" seed="41" result="n"/><feDisplacementMap in="SourceGraphic" in2="n" scale="7"  xChannelSelector="R" yChannelSelector="G"/></filter>
+      <filter id="card-deckle-10" x="-8%" y="-8%" width="116%" height="116%"><feTurbulence type="fractalNoise" baseFrequency="0.012 0.020" numOctaves="4" seed="43" result="n"/><feDisplacementMap in="SourceGraphic" in2="n" scale="11" xChannelSelector="R" yChannelSelector="G"/></filter>
+      <filter id="card-deckle-11" x="-8%" y="-8%" width="116%" height="116%"><feTurbulence type="fractalNoise" baseFrequency="0.013 0.016" numOctaves="4" seed="47" result="n"/><feDisplacementMap in="SourceGraphic" in2="n" scale="9"  xChannelSelector="R" yChannelSelector="G"/></filter>
     </defs>
   </svg>
 

@@ -8738,8 +8738,21 @@ body {
     linear-gradient(148deg, #efe7d1 0%, #e5d9bc 58%, #d7c9a4 100%);
   background-size: 4px 4px, 6px 6px, 100% 100%;
   box-shadow: inset 0 0 2px rgba(70, 50, 25, 0.55), inset 0 0 11px rgba(120, 92, 50, 0.3);
-  filter: url(#card-deckle);
+  filter: var(--deckle, url(#card-deckle-0));   /* seeded per card via .cf2-deckle-N */
 }
+/* 12 seeded deckle variants — each card wears a different fray pattern. */
+.cf2-deckle-0  { --deckle: url(#card-deckle-0); }
+.cf2-deckle-1  { --deckle: url(#card-deckle-1); }
+.cf2-deckle-2  { --deckle: url(#card-deckle-2); }
+.cf2-deckle-3  { --deckle: url(#card-deckle-3); }
+.cf2-deckle-4  { --deckle: url(#card-deckle-4); }
+.cf2-deckle-5  { --deckle: url(#card-deckle-5); }
+.cf2-deckle-6  { --deckle: url(#card-deckle-6); }
+.cf2-deckle-7  { --deckle: url(#card-deckle-7); }
+.cf2-deckle-8  { --deckle: url(#card-deckle-8); }
+.cf2-deckle-9  { --deckle: url(#card-deckle-9); }
+.cf2-deckle-10 { --deckle: url(#card-deckle-10); }
+.cf2-deckle-11 { --deckle: url(#card-deckle-11); }
 /* .cf2-frame must paint above the paper layer. */
 .cf2 .cf2-frame { z-index: 1; }
 
