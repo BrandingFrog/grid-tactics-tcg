@@ -12004,3 +12004,15 @@ body.sbx-hide-side #screen-deck-builder .deck-builder-body {
   padding: calc(var(--mfu) * 6) calc(var(--mfu) * 4) !important;
   justify-content: center;
 }
+
+/* The split-scroll block forces display:flex !important on tooltip hosts,
+   which silently defeated the JS inline display:none used to hide them —
+   tooltip and NO-CARD hint rendered on top of each other (caught at 844x390,
+   2026-07-05). Honour the inline hide at higher priority. */
+#screen-deck-builder .card-tooltip[style*="display: none"],
+#screen-game .card-tooltip[style*="display: none"],
+#screen-game .game-tooltip[style*="display: none"],
+#screen-sandbox .card-tooltip[style*="display: none"],
+#screen-sandbox .game-tooltip[style*="display: none"] {
+  display: none !important;
+}
