@@ -12414,3 +12414,20 @@ body.fs-switching *, body.fs-switching *::before, body.fs-switching *::after {
 .tooltip-stats .ts-elem.attr-dark    .ts-dot { background: var(--el-dark,    #5d3a8f); }
 .tooltip-stats .ts-elem.attr-light   .ts-dot { background: var(--el-light,   #b09a34); }
 .tooltip-stats .ts-elem.attr-neutral .ts-dot { background: var(--el-neutral, #6a6a6e); }
+
+/* Deck meter = strict 2 rows x 20 cells at every size (user 2026-07-05).
+   The flex row wrapped unevenly and overflowed onto the deck list. */
+#screen-deck-builder .hud-readiness-cells {
+  display: grid !important;
+  grid-template-columns: repeat(20, 1fr);
+  grid-auto-rows: calc(var(--mfu) * 7);
+  gap: calc(var(--mfu) * 2);
+  height: auto !important; max-height: none !important;
+  overflow: visible !important;
+  margin-bottom: calc(var(--mfu) * 4);
+}
+#screen-deck-builder .hud-readiness-cells span {
+  width: auto !important; height: auto !important;
+  min-width: 0 !important; flex: none !important;
+  border-radius: calc(var(--mfu) * 1.5) !important;
+}
