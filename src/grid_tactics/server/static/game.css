@@ -12563,3 +12563,37 @@ body:has(#screen-deck-builder.active) #sbx-toggles { display: none !important; }
   background: #3a2e18;
 }
 #screen-deck-builder .hud-readiness-cells span:not(.on) { background: #3a2e18 !important; }
+
+/* ==========================================================================
+   DECK METER v2 (user 2026-07-05): continuous fill bar — a single width
+   edge instead of 40 boxes, so no subpixel stutter. Card ticks every 1/40
+   are drawn with a repeating gradient (antialiases instead of snapping).
+   JS supplies --fill (0..1); bucket classes recolour; green at 40/40.
+   ========================================================================== */
+#screen-deck-builder .hud-readiness-cells {
+  display: block !important;
+  position: relative;
+  height: calc(var(--mfu) * 8) !important;
+  background: #241a0c;
+  border-radius: calc(var(--mfu) * 4);
+  overflow: hidden;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.6);
+}
+#screen-deck-builder .hud-readiness-cells span { display: none !important; }
+#screen-deck-builder .hud-readiness-cells::before {
+  content: ''; position: absolute; top: 0; bottom: 0; left: 0;
+  width: calc(var(--fill, 0) * 100%);
+  background: linear-gradient(180deg, var(--gold-lt), var(--gold));
+  transition: width 0.25s ease;
+}
+#screen-deck-builder .hud-readiness-cells.hud-readiness-ready::before {
+  background: linear-gradient(180deg, #9bb85a, var(--leaf));
+}
+/* 40 card ticks, antialiased */
+#screen-deck-builder .hud-readiness-cells::after {
+  content: ''; position: absolute; inset: 0;
+  background: repeating-linear-gradient(90deg,
+    transparent 0, transparent calc(2.5% - 1px),
+    rgba(20, 13, 4, 0.55) calc(2.5% - 1px), rgba(20, 13, 4, 0.55) 2.5%);
+  pointer-events: none;
+}

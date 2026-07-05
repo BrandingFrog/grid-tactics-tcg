@@ -2775,6 +2775,9 @@ function _wireDeckReadinessMeter() {
         var filled = m ? parseInt(m[1], 10) : 0;
         var total = m ? parseInt(m[2], 10) : 30;
         var ratio = total > 0 ? (filled / total) : 0;
+        // Continuous-fill rendering (one edge, no per-cell subpixel snapping);
+        // CSS draws the bar from --fill. The .on cells remain for any legacy skin.
+        meter.style.setProperty('--fill', String(ratio));
         var target = Math.min(cells.length, Math.round(ratio * cells.length));
         for (var i = 0; i < cells.length; i++) {
             cells[i].classList.toggle('on', i < target);
