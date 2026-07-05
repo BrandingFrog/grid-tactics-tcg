@@ -12198,3 +12198,10 @@ body.sbx-hide-side #screen-deck-builder .deck-builder-body {
 }
 #screen-lobby .lobby2-fs:hover { color: var(--gold-lt, #ffd873); border-color: var(--gold, #e0a23c); }
 #screen-lobby .lobby2-fs.fs-on { color: var(--gold, #e0a23c); border-color: var(--gold, #e0a23c); }
+
+/* While toggling fullscreen the viewport resize re-scales the whole layout —
+   mute transitions/animations for the switch so it snaps instead of janking */
+body.fs-switching *, body.fs-switching *::before, body.fs-switching *::after {
+  transition: none !important;
+  animation-play-state: paused !important;
+}

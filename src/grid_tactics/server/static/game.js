@@ -1047,6 +1047,11 @@ function setupLobbyHandlers() {
                 document.addEventListener(ev, function() {
                     btnFs.classList.toggle('fs-on', !!fsElement());
                     btnFs.title = fsElement() ? 'Exit fullscreen' : 'Fullscreen';
+                    // The resize re-derives --mfu/--u and re-lays-out every
+                    // screen; firing all CSS transitions at once during that
+                    // reads as lag. Mute them for the switch.
+                    document.body.classList.add('fs-switching');
+                    setTimeout(function() { document.body.classList.remove('fs-switching'); }, 400);
                 });
             });
         }
