@@ -628,14 +628,24 @@ def card_to_wikitext(
 
     # Build metadata table rows (Tribe, Range, Keywords) as pre-rendered wikitext
     # This avoids {{#if:0}} issues and conditional row breakage in the template
-    _cell_style = 'style="padding:4px 10px; background:#222;"'
+    # Vintage ivory rows matching Template:Card (parchment fill, bronze labels)
+    _cell_style = (
+        'style="padding:5px 12px; background:rgba(222,208,168,0.5); '
+        'border-bottom:1px solid rgba(107,87,48,0.3);"'
+    )
+    _label_style = (
+        "style=\"color:#6b5730; font-family:'Alegreya SC',Georgia,serif; "
+        'font-weight:700; font-size:10.5px; letter-spacing:0.08em; '
+        'text-transform:uppercase;"'
+    )
+    _value_style = 'style="float:right; color:#241c10; font-weight:700;"'
     meta_rows = []
     if tribe:
         tribe_links = "<br/>".join(f"[[{t}]]" for t in tribe.split())
-        meta_rows.append(f'{{{{!}}}}-\n{{{{!}}}} colspan="3" {_cell_style} {{{{!}}}} <span style="color:#888; font-size:0.85em;">Tribe</span> <span style="float:right;">{tribe_links}</span>')
+        meta_rows.append(f'{{{{!}}}}-\n{{{{!}}}} colspan="3" {_cell_style} {{{{!}}}} <span {_label_style}>Tribe</span> <span {_value_style}>{tribe_links}</span>')
     if is_minion and card.get("range") is not None:
         range_val = "[[Melee]]" if card.get("range") == 0 else f"[[Ranged|Range {card.get('range')}]]"
-        meta_rows.append(f'{{{{!}}}}-\n{{{{!}}}} colspan="3" {_cell_style} {{{{!}}}} <span style="color:#888; font-size:0.85em;">Range</span> <span style="float:right;">{range_val}</span>')
+        meta_rows.append(f'{{{{!}}}}-\n{{{{!}}}} colspan="3" {_cell_style} {{{{!}}}} <span {_label_style}>Range</span> <span {_value_style}>{range_val}</span>')
     # Keywords row removed — keywords are linked inline in effect text instead
     if meta_rows:
         fields["meta_rows"] = "\n".join(meta_rows)

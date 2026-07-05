@@ -8,7 +8,7 @@ Usage:
 
 Parameters:
 * patch - The patch version in which this card was removed.
-</noinclude><includeonly><div style="border:2px solid #c00; border-radius:8px; background:#2a0000; color:#faa; padding:12px; margin-bottom:1em;">
+</noinclude><includeonly><div style="border:2px solid #b5623a; border-left-width:8px; border-radius:8px; background:#2a1008; color:#e8c9b0; font-family:'Alegreya',Georgia,serif; padding:12px; margin-bottom:1em; box-shadow:inset 0 0 18px rgba(0,0,0,0.45);">
 &#9888; '''This card was removed in [[Patch:{{{patch|unknown}}}|Patch {{{patch|unknown}}}]].''' It is preserved here for historical reference.
 </div>
 [[Category:Deprecated]]</includeonly>

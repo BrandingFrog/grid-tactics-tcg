@@ -492,13 +492,8 @@ def main(argv: list[str] | None = None) -> int:
     # --polish
     if args.polish:
         from sync.sync_polish import (
-            configure_logo_and_favicon,
-            push_dark_search_css,
-            push_font_css,
-            push_hero_search,
-            push_hud_fonts_js,
-            push_hud_theme,
-            push_mobile_css,
+            push_vintage_common_js,
+            push_vintage_theme,
             upload_favicon,
             upload_logo,
         )
@@ -511,20 +506,11 @@ def main(argv: list[str] | None = None) -> int:
         dry_label = " (dry run)" if args.dry_run else ""
         print(f"Running launch polish{dry_label}...")
 
-        print("\n=== Font CSS ===")
-        push_font_css(site, dry_run=args.dry_run)
+        print("\n=== Vintage Theme CSS (Common.css, wholesale) ===")
+        theme_status = push_vintage_theme(site, dry_run=args.dry_run)
 
-        print("\n=== Dark Search CSS ===")
-        push_dark_search_css(site, dry_run=args.dry_run)
-
-        print("\n=== HUD Theme CSS ===")
-        hud_status = push_hud_theme(site, dry_run=args.dry_run)
-
-        print("\n=== HUD Fonts Loader JS ===")
-        hud_fonts_status = push_hud_fonts_js(site, dry_run=args.dry_run)
-
-        print("\n=== Mobile CSS ===")
-        css_status = push_mobile_css(site, dry_run=args.dry_run)
+        print("\n=== Vintage JS (Common.js: fonts + favicon + hero search) ===")
+        js_status = push_vintage_common_js(site, dry_run=args.dry_run)
 
         print("\n=== Logo ===")
         logo_status = upload_logo(site, dry_run=args.dry_run)
@@ -532,15 +518,8 @@ def main(argv: list[str] | None = None) -> int:
         print("\n=== Favicon ===")
         fav_status = upload_favicon(site, dry_run=args.dry_run)
 
-        print("\n=== Logo & Favicon Configuration ===")
-        config_status = configure_logo_and_favicon(site, dry_run=args.dry_run)
-
-        print("\n=== Hero Search Bar ===")
-        hero_status = push_hero_search(site, dry_run=args.dry_run)
-
-        print(f"\nPolish complete: HUD={hud_status}, HUDFonts={hud_fonts_status}, "
-              f"CSS={css_status}, Logo={logo_status}, Favicon={fav_status}, "
-              f"Config={config_status}, HeroSearch={hero_status}")
+        print(f"\nPolish complete: Theme={theme_status}, JS={js_status}, "
+              f"Logo={logo_status}, Favicon={fav_status}")
         return 0
 
     # --verify-search
