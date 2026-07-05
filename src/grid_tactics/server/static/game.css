@@ -12281,3 +12281,8 @@ body.fs-switching *, body.fs-switching *::before, body.fs-switching *::after {
 }
 /* x0 badge hid the element chip for no reason — only show a real count */
 .card-count-badge.empty { display: none !important; }
+/* Badges jittered against their cards while scrolling: z-index:5 badges in
+   items with no stacking context stack (and composite) at GRID level, apart
+   from the scrolling card layers. Isolate each item so its badge scrolls as
+   part of the same layer as the card. */
+#screen-deck-builder .card-browser-item { isolation: isolate; }
