@@ -12482,3 +12482,7 @@ body.deck-dragging #screen-deck-builder .deck-sidebar {
   -webkit-user-select: none;
   user-select: none;
 }
+/* 6 cards per row (user 2026-07-05, was 5) */
+#screen-deck-builder .card-browser-grid {
+  grid-template-columns: repeat(6, minmax(0, 1fr)) !important;
+}
