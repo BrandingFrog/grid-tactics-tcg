@@ -445,6 +445,21 @@ textarea#wpTextbox1 {
   padding: 12px;
 }
 
+/* --- Section collapse chevrons -------------------------------------------- */
+/* Citizen never flips its 'collapse' icon (chevron up) when a section is
+   collapsed, so the arrow reads backwards. Re-map to accordion convention:
+   expanded = chevron down (content open below), collapsed = chevron right.
+   Collapsed state marker: the [hidden] attribute Citizen sets on the
+   heading's following section. */
+.citizen-section-heading .citizen-section-indicator {
+  transform: rotate(180deg);           /* expanded: point down */
+  transition: transform 180ms ease;
+  color: var(--gtv-gold);
+}
+.citizen-section-heading:has(+ .citizen-section[hidden]) .citizen-section-indicator {
+  transform: rotate(90deg);            /* collapsed: point right */
+}
+
 /* --- Selection highlight -------------------------------------------------- */
 ::selection { background: rgba(224, 162, 60, 0.4); color: #fff8e8; }
 """
@@ -693,19 +708,42 @@ _CF2_CARD_CSS = """\
 """
 
 _HERO_SEARCH_CSS = """\
-/* --- Hero search bar (injected by Common.js) ----------------------------- */
+/* --- Hero bar: wordmark (home link) + search (injected by Common.js) ----- */
 #gt-hero-search {
-  text-align: center;
+  display: flex;
+  align-items: center;
+  gap: 18px;
   margin: 0 auto;
-  max-width: 560px;
+  max-width: 760px;
   padding: 1em 1em 0.5em;
   width: 100%;
   box-sizing: border-box;
 }
 
+.gt-wordmark, a.gt-wordmark, a.gt-wordmark:visited {
+  font-family: var(--gtv-display);
+  font-weight: 800;
+  font-size: 24px;
+  line-height: 1;
+  letter-spacing: 0.02em;
+  color: var(--gtv-parch) !important;
+  white-space: nowrap;
+  text-decoration: none;
+  text-shadow: 0 2px 10px #000, 0 0 22px rgba(224, 162, 60, 0.25);
+}
+a.gt-wordmark:hover {
+  color: var(--gtv-gold-lt) !important;
+  text-shadow: 0 2px 10px #000, 0 0 22px rgba(224, 162, 60, 0.5);
+}
+
 #gt-hero-search form {
   display: flex;
+  flex: 1;
   gap: 0;
+}
+
+@media (max-width: 720px) {
+  #gt-hero-search { flex-wrap: wrap; justify-content: center; }
 }
 
 #gt-hero-search input[type="search"] {
@@ -894,11 +932,18 @@ COMPOSED_COMMON_JS = """\
   document.head.appendChild(link);
 })();
 
-/* Hero search bar above the page title */
+/* Hero bar above the page title: wordmark (home link) + search */
 (function gtHeroSearch() {
   function build() {
     var wrapper = document.createElement('div');
     wrapper.id = 'gt-hero-search';
+
+    var mark = document.createElement('a');
+    mark.className = 'gt-wordmark';
+    mark.href = '/wiki/Main_Page';
+    mark.title = 'Back to the Main Page';
+    mark.textContent = 'Grid Tactics';
+    wrapper.appendChild(mark);
 
     var form = document.createElement('form');
     form.action = '/wiki/Special:Search';
