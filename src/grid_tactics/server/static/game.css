@@ -12891,3 +12891,12 @@ body.sbx-hide-bar:has(#screen-sandbox.active) .room-bar { display: none !importa
 #screen-game .pod .pod-name, #screen-sandbox .pod .pod-name {
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%;
 }
+
+/* Hand cards match the tooltip render (user 2026-07-05): the unplayable dim
+   was brightness(0.7) sat(0.6) — heavy enough to read as a different card
+   style entirely. The playable halo already carries the affordance; keep the
+   dim subtle so the ivory frame stays recognisable. */
+#screen-game .card-frame-hand.card-dimmed,
+#screen-sandbox .card-frame-hand.card-dimmed {
+  filter: brightness(0.9) saturate(0.8) !important;
+}
