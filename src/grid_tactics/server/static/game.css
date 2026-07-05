@@ -12868,7 +12868,7 @@ body.sbx-hide-bar:has(#screen-sandbox.active) .room-bar { display: none !importa
   transform-origin: bottom left !important;
 }
 #screen-game .pod-opp, #screen-sandbox .pod-opp {
-  right: 6px !important; top: 54px !important; bottom: auto !important; left: auto !important;
+  right: 12px !important; top: 54px !important; bottom: auto !important; left: auto !important;
   transform-origin: top right !important;
 }
 #screen-game .pod .pod-plate, #screen-sandbox .pod .pod-plate {
@@ -12879,4 +12879,15 @@ body.sbx-hide-bar:has(#screen-sandbox.active) .room-bar { display: none !importa
 #screen-game .pod .pod-bar, #screen-sandbox .pod .pod-bar { height: 6px !important; }
 #screen-game .pod .pod-chip, #screen-sandbox .pod .pod-chip {
   font-size: 9.5px !important; padding: 1px 5px !important;
+}
+/* half-width pods (user): plate capped, rows wrap, bar flexes */
+#screen-game .pod .pod-plate, #screen-sandbox .pod .pod-plate {
+  width: 140px !important; min-width: 0 !important; max-width: 140px !important;
+}
+#screen-game .pod .pod-row-top, #screen-sandbox .pod .pod-row-top,
+#screen-game .pod .pod-row-stats, #screen-sandbox .pod .pod-row-stats {
+  flex-wrap: wrap !important; gap: 2px 5px !important;
+}
+#screen-game .pod .pod-name, #screen-sandbox .pod .pod-name {
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%;
 }
