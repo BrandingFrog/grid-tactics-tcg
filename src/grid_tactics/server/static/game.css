@@ -8700,8 +8700,9 @@ body {
 
 .cf2 {
   --parch:#e8dcbb; --parch2:#ded0a8; --ink:#241c10;
-  --magic:#4656b8; --magic-dark:#2b3576; --magic-tint:#dfe2f2;
-  --react:#c2731f; --react-dark:#7c4812; --react-tint:#f4e3c8;
+  --minion:#7a4f28;                                             /* leather brown */
+  --magic:#6f42a0; --magic-dark:#48286e; --magic-tint:#e8def1;  /* purple */
+  --react:#a8352c; --react-dark:#6e2018; --react-tint:#f3dbd3;  /* red */
 }
 
 /* --- neutralise the HUD skin so the parchment frame reads cleanly --- */
@@ -8914,7 +8915,7 @@ body {
   border: 0.43cqw solid; border-left-width: 1.3cqw;
   box-shadow: 0 3px 9px rgba(0, 0, 0, 0.55);
 }
-.cf2 .cf2-mode.cf2-minion { background: rgba(242, 233, 206, 0.95); border-color: var(--el); }
+.cf2 .cf2-mode.cf2-minion { background: rgba(242, 233, 206, 0.95); border-color: var(--minion); }
 .cf2 .cf2-mode.cf2-magic  { background: var(--magic-tint); border-color: var(--magic); }
 .cf2 .cf2-mode.cf2-react  { background: var(--react-tint); border-color: var(--react); }
 .cf2 .cf2-modehead {
@@ -8925,7 +8926,7 @@ body {
 .cf2 .cf2-mode.cf2-react .cf2-modehead { color: var(--react-dark); }
 .cf2 .cf2-ability { margin-bottom: 1.09cqw; }
 .cf2 .cf2-ability:last-child { margin-bottom: 0; }
-.cf2 .cf2-bullet { color: var(--el); margin-right: 0.87cqw; font-size: 2.83cqw; }
+.cf2 .cf2-bullet { color: var(--minion); margin-right: 0.87cqw; font-size: 2.83cqw; }
 .cf2 .cf2-mode.cf2-magic .cf2-bullet { color: var(--magic); }
 .cf2 .cf2-mode.cf2-react .cf2-bullet { color: var(--react); }
 .cf2 .cf2-ability b { font-family: 'Alegreya SC', serif; font-weight: 800; letter-spacing: 0.09cqw; }
@@ -11937,11 +11938,11 @@ body.sbx-hide-side #screen-deck-builder .deck-builder-body {
   /* neutralise the legacy hover-chevron ::before (opacity:0 + translate) */
   opacity: 1 !important; transform: none !important;
 }
-#screen-deck-builder .dli-minion { --dli-a: #7d9a3e; --dli-b: #7d9a3e; }
-#screen-deck-builder .dli-magic  { --dli-a: #565a86; --dli-b: #565a86; }
-#screen-deck-builder .dli-react  { --dli-a: #b07a2e; --dli-b: #b07a2e; }
-#screen-deck-builder .dli-minion-react { --dli-a: #7d9a3e; --dli-b: #b07a2e; }
-#screen-deck-builder .dli-magic-react  { --dli-a: #565a86; --dli-b: #b07a2e; }
+#screen-deck-builder .dli-minion { --dli-a: #9a6b33; --dli-b: #9a6b33; }
+#screen-deck-builder .dli-magic  { --dli-a: #8355b5; --dli-b: #8355b5; }
+#screen-deck-builder .dli-react  { --dli-a: #c04438; --dli-b: #c04438; }
+#screen-deck-builder .dli-minion-react { --dli-a: #9a6b33; --dli-b: #c04438; }
+#screen-deck-builder .dli-magic-react  { --dli-a: #8355b5; --dli-b: #c04438; }
 
 /* Related cards in the tooltip are clickable — they jump the tooltip to that
    card (user 2026-07-05). Mana menu is tall (0-10+), keep it scroll-friendly. */
