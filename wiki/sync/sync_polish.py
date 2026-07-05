@@ -173,13 +173,26 @@ h1, h2, h3, h4, h5, h6,
 }
 
 /* Tagline / "From Grid Tactics Wiki" subtitle under the page title */
-.page-header__sub, .mw-page-description, .citizen-tagline,
+.page-header__sub, .mw-page-description, .citizen-tagline, #siteSub,
+.citizen-sticky-header-page-tagline,
 .citizen-body .mw-body-header .mw-body-header-description {
   font-family: var(--gtv-display) !important;
   font-size: 12px !important;
   letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--gtv-parch-mute) !important;
+}
+/* The tagline is a home link (wrapped by Common.js) — stay muted, gold on hover */
+#siteSub a, #siteSub a:visited,
+.citizen-sticky-header-page-tagline a,
+.citizen-sticky-header-page-tagline a:visited {
+  color: var(--gtv-parch-mute);
+  text-decoration: none;
+}
+#siteSub a:hover,
+.citizen-sticky-header-page-tagline a:hover {
+  color: var(--gtv-gold-lt);
+  text-shadow: none;
 }
 
 /* --- Links ----------------------------------------------------------- */
@@ -930,6 +943,31 @@ COMPOSED_COMMON_JS = """\
   link.type = 'image/png';
   link.href = '/w/images/Favicon.png';
   document.head.appendChild(link);
+})();
+
+/* Tagline "From Grid Tactics Wiki" links back to the Main Page.
+   Two copies exist: #siteSub under the page title and the sticky-header
+   tagline (which can mount late — hence the short poll). */
+(function gtTaglineLink() {
+  function linkify(el) {
+    if (!el || el.querySelector('a') || !el.textContent.trim()) return;
+    var a = document.createElement('a');
+    a.href = '/wiki/Main_Page';
+    a.title = 'Back to the Main Page';
+    a.textContent = el.textContent;
+    el.textContent = '';
+    el.appendChild(a);
+  }
+  function run() {
+    linkify(document.getElementById('siteSub'));
+    document.querySelectorAll('.citizen-sticky-header-page-tagline').forEach(linkify);
+  }
+  run();
+  var tries = 0;
+  var poll = setInterval(function() {
+    run();
+    if (++tries > 40) clearInterval(poll);
+  }, 250);
 })();
 
 /* Hero bar above the page title: wordmark (home link) + search */
