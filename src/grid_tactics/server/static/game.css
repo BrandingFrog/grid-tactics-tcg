@@ -12365,3 +12365,18 @@ body.fs-switching *, body.fs-switching *::before, body.fs-switching *::after {
 #screen-deck-builder .card-browser-filters { padding-left: calc(var(--mfu) * 2) !important; padding-right: calc(var(--mfu) * 2) !important; }
 #screen-deck-builder .fsort { padding-right: calc(var(--mfu) * 3); }
 #screen-deck-builder .fbar-nondeckable { padding-left: calc(var(--mfu) * 3) !important; }
+/* pin (!): smaller, and only visible while hovering the card (or when
+   pinned) — it was too big and always-on (user 2026-07-05) */
+#screen-deck-builder .card-info-lock {
+  width: calc(var(--mfu) * 14); height: calc(var(--mfu) * 14);
+  top: calc(var(--mfu) * -3); left: calc(var(--mfu) * -3);
+  font-size: calc(var(--mfu) * 9);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.12s ease;
+}
+#screen-deck-builder .card-browser-item:hover .card-info-lock,
+#screen-deck-builder .card-info-lock.locked {
+  opacity: 1;
+  pointer-events: auto;
+}
