@@ -12965,3 +12965,19 @@ body.sbx-hide-bar:has(#screen-sandbox.active) .room-bar {
   border-color: #3a2e18 !important;
   color: #cbb98f !important;
 }
+
+/* Log/Chat keep one width (user 2026-07-06): the chat input row forced its
+   section to 265 design px, overflowing the ~207px sidebar. Pin the panel
+   and make both sections fill it instead of sizing to content. */
+#screen-game .game-sidebar {
+  width: 207px !important; min-width: 207px !important; max-width: 207px !important;
+  overflow: hidden;
+}
+#screen-game .game-sidebar .sidebar-section {
+  width: 100% !important; min-width: 0 !important; max-width: 100% !important;
+  box-sizing: border-box;
+}
+#screen-game .game-sidebar input,
+#screen-game .game-sidebar textarea {
+  min-width: 0 !important; flex: 1 1 0 !important;
+}
