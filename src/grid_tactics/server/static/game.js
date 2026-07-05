@@ -1024,6 +1024,34 @@ function setupLobbyHandlers() {
         });
     }
 
+    // Fullscreen toggle (user 2026-07-05). Works on desktop + Android;
+    // iPhone Safari has no Fullscreen API for elements — hide the button.
+    var btnFs = document.getElementById('lobby-fullscreen');
+    if (btnFs) {
+        var docEl = document.documentElement;
+        var fsSupported = !!(docEl.requestFullscreen || docEl.webkitRequestFullscreen);
+        if (!fsSupported) {
+            btnFs.style.display = 'none';
+        } else {
+            var fsElement = function() {
+                return document.fullscreenElement || document.webkitFullscreenElement || null;
+            };
+            btnFs.addEventListener('click', function() {
+                if (fsElement()) {
+                    (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+                } else {
+                    (docEl.requestFullscreen || docEl.webkitRequestFullscreen).call(docEl);
+                }
+            });
+            ['fullscreenchange', 'webkitfullscreenchange'].forEach(function(ev) {
+                document.addEventListener(ev, function() {
+                    btnFs.classList.toggle('fs-on', !!fsElement());
+                    btnFs.title = fsElement() ? 'Exit fullscreen' : 'Fullscreen';
+                });
+            });
+        }
+    }
+
     // Create Room
     var btnCreate = document.getElementById('btn-create-room');
     if (btnCreate) {

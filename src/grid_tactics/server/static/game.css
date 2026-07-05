@@ -12176,3 +12176,25 @@ body.sbx-hide-side #screen-deck-builder .deck-builder-body {
   white-space: nowrap; overflow: hidden;
 }
 #screen-deck-builder .btn.hud-loadout-share-btn .hud-btn-chev { font-size: calc(var(--mfu) * 10) !important; }
+
+/* ==========================================================================
+   LOBBY FULLSCREEN TOGGLE (user 2026-07-05) — top-right ⛶ button, mobile +
+   desktop. JS hides it where the Fullscreen API is missing (iPhone Safari).
+   ========================================================================== */
+#screen-lobby .lobby2 { position: relative; }
+#screen-lobby .lobby2-fs {
+  position: absolute;
+  top: calc(var(--u) * 10); right: calc(var(--u) * 10);
+  width: calc(var(--u) * 28); height: calc(var(--u) * 28);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 50;
+  font-size: calc(var(--u) * 16); line-height: 1;
+  color: var(--parch-mute, #9a865c);
+  background: rgba(20, 14, 6, 0.65);
+  border: 1px solid var(--bronze, #6b5730);
+  border-radius: calc(var(--u) * 4);
+  cursor: pointer;
+  padding: 0;
+}
+#screen-lobby .lobby2-fs:hover { color: var(--gold-lt, #ffd873); border-color: var(--gold, #e0a23c); }
+#screen-lobby .lobby2-fs.fs-on { color: var(--gold, #e0a23c); border-color: var(--gold, #e0a23c); }

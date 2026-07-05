@@ -99,6 +99,10 @@
   <div id="screen-lobby" class="screen active">
     <div class="lobby2">
 
+      <!-- Fullscreen toggle (mobile + desktop, user 2026-07-05). Hidden by JS
+           where the Fullscreen API is unavailable (e.g. iPhone Safari). -->
+      <button id="lobby-fullscreen" class="lobby2-fs" type="button" aria-label="Toggle fullscreen" title="Fullscreen">⛶</button>
+
       <!-- LEFT: identity + nav + hero card -->
       <div class="lobby2-brand">
         <div class="lobby2-title">Grid<br>Tactics</div>
