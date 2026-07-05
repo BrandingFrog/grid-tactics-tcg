@@ -77,6 +77,7 @@
   <div id="sbx-toggles" aria-hidden="true">
     <button id="sbx-toggle-nav" type="button" title="Show / hide menu">☰</button>
     <button id="sbx-toggle-side" type="button" title="Show / hide sandbox panel">⚙</button>
+    <button id="sbx-toggle-bar" type="button" title="Show / hide top bar">▭</button>
   </div>
   <script>
     document.addEventListener('DOMContentLoaded', function () {
@@ -87,6 +88,8 @@
       document.body.classList.add('sbx-hide-side');
       if (nav)  nav.addEventListener('click',  function () { document.body.classList.toggle('sbx-show-nav'); });
       if (side) side.addEventListener('click', function () { document.body.classList.toggle('sbx-hide-side'); });
+      var bar = document.getElementById('sbx-toggle-bar');
+      if (bar) bar.addEventListener('click', function () { document.body.classList.toggle('sbx-hide-bar'); });
     });
   </script>
 
@@ -505,6 +508,18 @@
             <div id="game-board" class="game-board">
               <!-- 25 cells rendered by JS -->
             </div>
+            <div class="pile-board pile-board-own" data-side="own" aria-label="Your piles">
+              <button class="pile-cell" data-pile="exhaust" title="Your exhaust"><span class="pile-cell-ico">🌀</span><span class="pile-cell-n">0</span><span class="pile-cell-lbl">Exhaust</span></button>
+              <div class="pile-cell pile-cell-empty" aria-hidden="true"></div>
+              <button class="pile-cell" data-pile="grave" title="Your grave"><span class="pile-cell-ico">⚰️</span><span class="pile-cell-n">0</span><span class="pile-cell-lbl">Grave</span></button>
+              <button class="pile-cell pile-cell-deck" data-pile="deck" title="Your deck"><span class="pile-cell-ico">🎴</span><span class="pile-cell-n">0</span><span class="pile-cell-lbl">Deck</span></button>
+            </div>
+            <div class="pile-board pile-board-opp" data-side="opp" aria-label="Opponent piles">
+              <button class="pile-cell pile-cell-deck" data-pile="deck" title="Opponent deck"><span class="pile-cell-ico">🎴</span><span class="pile-cell-n">0</span><span class="pile-cell-lbl">Deck</span></button>
+              <button class="pile-cell" data-pile="grave" title="Opponent grave"><span class="pile-cell-ico">⚰️</span><span class="pile-cell-n">0</span><span class="pile-cell-lbl">Grave</span></button>
+              <div class="pile-cell pile-cell-empty" aria-hidden="true"></div>
+              <button class="pile-cell" data-pile="exhaust" title="Opponent exhaust"><span class="pile-cell-ico">🌀</span><span class="pile-cell-n">0</span><span class="pile-cell-lbl">Exhaust</span></button>
+            </div>
           </div>
 
           <!-- Opponent face-down hand — peeks DOWN from the top edge -->
@@ -530,8 +545,6 @@
                 <span class="pod-chip pod-chip-dm" id="avatar-opp-dm">🌑<b id="avatar-opp-dm-num">0</b></span>
                 <span class="pod-chip">DECK <b id="opp-deck">0</b></span>
                 <span class="pod-chip">HAND <b id="opp-hand">0</b></span>
-                <button class="pile-btn pod-pile" id="pileBtnOppGrave" title="Opponent grave"><span class="pile-emoji">⚰️</span><span class="pile-count">0</span></button>
-                <button class="pile-btn pod-pile" id="pileBtnOppExhaust" title="Opponent exhaust"><span class="pile-emoji">🌀</span><span class="pile-count">0</span></button>
               </div>
             </div>
           </div>
@@ -555,8 +568,6 @@
                 <span class="pod-chip">HAND <b id="self-hand">0</b></span>
                 <span class="pod-chip">DECK <b id="self-deck">0</b></span>
                 <span class="pod-chip pod-chip-dm" id="avatar-self-dm">🌑<b id="avatar-self-dm-num">0</b></span>
-                <button class="pile-btn pod-pile" id="pileBtnOwnGrave" title="Your grave"><span class="pile-emoji">⚰️</span><span class="pile-count">0</span></button>
-                <button class="pile-btn pod-pile" id="pileBtnOwnExhaust" title="Your exhaust"><span class="pile-emoji">🌀</span><span class="pile-count">0</span></button>
               </div>
             </div>
           </div>
@@ -704,6 +715,18 @@
           <div class="board-container">
             <div id="sandbox-board" class="game-board">
               <!-- 25 cells rendered by renderBoard({ mount: this, state }) -->
+            </div>
+            <div class="pile-board pile-board-own" data-side="own" aria-label="Your piles">
+              <button class="pile-cell" data-pile="exhaust" title="Your exhaust"><span class="pile-cell-ico">🌀</span><span class="pile-cell-n">0</span><span class="pile-cell-lbl">Exhaust</span></button>
+              <div class="pile-cell pile-cell-empty" aria-hidden="true"></div>
+              <button class="pile-cell" data-pile="grave" title="Your grave"><span class="pile-cell-ico">⚰️</span><span class="pile-cell-n">0</span><span class="pile-cell-lbl">Grave</span></button>
+              <button class="pile-cell pile-cell-deck" data-pile="deck" title="Your deck"><span class="pile-cell-ico">🎴</span><span class="pile-cell-n">0</span><span class="pile-cell-lbl">Deck</span></button>
+            </div>
+            <div class="pile-board pile-board-opp" data-side="opp" aria-label="Opponent piles">
+              <button class="pile-cell pile-cell-deck" data-pile="deck" title="Opponent deck"><span class="pile-cell-ico">🎴</span><span class="pile-cell-n">0</span><span class="pile-cell-lbl">Deck</span></button>
+              <button class="pile-cell" data-pile="grave" title="Opponent grave"><span class="pile-cell-ico">⚰️</span><span class="pile-cell-n">0</span><span class="pile-cell-lbl">Grave</span></button>
+              <div class="pile-cell pile-cell-empty" aria-hidden="true"></div>
+              <button class="pile-cell" data-pile="exhaust" title="Opponent exhaust"><span class="pile-cell-ico">🌀</span><span class="pile-cell-n">0</span><span class="pile-cell-lbl">Exhaust</span></button>
             </div>
           </div>
 

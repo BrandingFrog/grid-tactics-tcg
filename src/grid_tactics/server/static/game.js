@@ -3112,44 +3112,53 @@ function renderOppHandRow(count, elements) {
     );
 }
 
-// Update the 4 pile button counts from the current gameState.
+// Piles live on the pile boards flanking the game board (user 2026-07-05):
+// deck/grave/exhaust cells at the board-extension positions (own = E6/D6/D5,
+// opponent mirrored top-left). This refreshes every cell's count.
+function _pileLen(p, kind) {
+    if (!p) return 0;
+    var v = p[kind];
+    if (Array.isArray(v)) return v.length;
+    if (typeof v === 'number') return v;
+    // live-mode deck is count-only; try the _count convention as fallback
+    return p[kind + '_count'] | 0;
+}
 function updatePileButtonCounts() {
-    if (!gameState || !gameState.players || myPlayerIdx == null) return;
-    var me = gameState.players[myPlayerIdx];
-    var opp = gameState.players[1 - myPlayerIdx];
-    function setCount(id, n) {
-        var btn = document.getElementById(id);
-        if (!btn) return;
-        var countEl = btn.querySelector('.pile-count');
-        if (countEl) countEl.textContent = n | 0;
-    }
-    setCount('pileBtnOwnGrave', (me && me.grave) ? me.grave.length : 0);
-    setCount('pileBtnOwnExhaust',   (me && me.exhaust)   ? me.exhaust.length   : 0);
-    setCount('pileBtnOppGrave', (opp && opp.grave) ? opp.grave.length : 0);
-    setCount('pileBtnOppExhaust',   (opp && opp.exhaust)   ? opp.exhaust.length   : 0);
+    if (!gameState || !gameState.players) return;
+    var meIdx = myPlayerIdx != null ? myPlayerIdx : 0;  // sandbox: P1 = own
+    var me = gameState.players[meIdx];
+    var opp = gameState.players[1 - meIdx];
+    document.querySelectorAll('.pile-board').forEach(function(board) {
+        var p = board.dataset.side === 'own' ? me : opp;
+        board.querySelectorAll('.pile-cell[data-pile]').forEach(function(cell) {
+            var n = cell.querySelector('.pile-cell-n');
+            if (n) n.textContent = _pileLen(p, cell.dataset.pile);
+        });
+    });
 }
 
 function setupPileHandlers() {
-    function bind(id, titleFn, idsFn) {
-        var btn = document.getElementById(id);
-        if (!btn) return;
-        btn.addEventListener('click', function() {
-            if (!gameState || !gameState.players || myPlayerIdx == null) return;
-            showPileModal(titleFn(), idsFn() || []);
+    // Pile-board cells (deck / grave / exhaust, own + opponent, both stages)
+    var PILE_TITLES = { deck: 'Deck', grave: 'Grave', exhaust: 'Exhaust' };
+    document.querySelectorAll('.pile-board .pile-cell[data-pile]').forEach(function(cell) {
+        cell.addEventListener('click', function() {
+            if (!gameState || !gameState.players) return;
+            // sandbox god-view has no seat: treat P1 as "own" (matches pods)
+            var meIdx = myPlayerIdx != null ? myPlayerIdx : 0;
+            var own = cell.closest('.pile-board').dataset.side === 'own';
+            var idx = own ? meIdx : 1 - meIdx;
+            var kind = cell.dataset.pile;
+            var p = gameState.players[idx] || {};
+            var ids = Array.isArray(p[kind]) ? p[kind] : [];
+            var title = (own ? 'Your ' : "Opponent's ") + PILE_TITLES[kind];
+            if (kind === 'deck' && !Array.isArray(p.deck)) {
+                title += ' — ' + _pileLen(p, 'deck') + ' cards (hidden)';
+            }
+            var inSandbox = typeof sandboxState !== 'undefined' && sandboxState &&
+                document.getElementById('screen-sandbox').classList.contains('active');
+            showPileModal(title, ids, inSandbox ? { pileType: kind, playerIdx: idx } : undefined);
         });
-    }
-    bind('pileBtnOwnGrave',
-        function() { return 'Your Grave'; },
-        function() { return gameState.players[myPlayerIdx].grave; });
-    bind('pileBtnOwnExhaust',
-        function() { return 'Your Exhaust'; },
-        function() { return gameState.players[myPlayerIdx].exhaust; });
-    bind('pileBtnOppGrave',
-        function() { return "Opponent's Grave"; },
-        function() { return gameState.players[1 - myPlayerIdx].grave; });
-    bind('pileBtnOppExhaust',
-        function() { return "Opponent's Exhaust"; },
-        function() { return gameState.players[1 - myPlayerIdx].exhaust; });
+    });
 
     var closeBtn = document.getElementById('pileModalClose');
     if (closeBtn) closeBtn.addEventListener('click', hidePileModal);
