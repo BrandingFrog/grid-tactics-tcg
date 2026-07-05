@@ -12849,3 +12849,10 @@ body.sbx-hide-bar:has(#screen-sandbox.active) .room-bar { display: none !importa
   font-family: 'Alegreya SC', Georgia, serif !important;
   text-transform: none;
 }
+/* every pixel of a pile cell must hit the BUTTON (emoji spans were eating
+   clicks under the 3D transform); pressed state for tap feedback */
+.pile-cell > span { pointer-events: none; }
+.pile-cell:active {
+  background: rgba(224, 162, 60, 0.18);
+  border-color: #ffd873;
+}
