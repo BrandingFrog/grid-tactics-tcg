@@ -12475,3 +12475,10 @@ body.deck-dragging #screen-deck-builder .deck-sidebar {
 #screen-deck-builder .card-browser-grid {
   grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
 }
+/* long-press must start a drag, not iOS text-selection / image callout */
+#screen-deck-builder .card-browser-item,
+#screen-deck-builder .deck-list-item {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}

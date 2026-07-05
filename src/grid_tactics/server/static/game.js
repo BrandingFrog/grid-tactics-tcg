@@ -1804,7 +1804,9 @@ function setupDeckFilters() {
 var deckDragSuppressClick = false;
 
 function setupDeckDragAndDrop() {
-    var SLOP = 8, HOLD_MOUSE = 220, HOLD_TOUCH = 280;
+    // Touch gets a bigger slop: fingers jitter well past 8px during a
+    // long-press, which silently cancelled the drag (user 2026-07-05).
+    var SLOP = 8, TOUCH_SLOP = 16, HOLD_MOUSE = 220, HOLD_TOUCH = 260;
     var pending = null;   // pointer down, drag not yet started
     var drag = null;      // { numId, from: 'grid'|'deck' }
     var ghost = null;
@@ -1874,7 +1876,8 @@ function setupDeckDragAndDrop() {
             return;
         }
         if (pending) {
-            var moved = Math.hypot(e.clientX - pending.x, e.clientY - pending.y) > SLOP;
+            var slop = pending.touch ? TOUCH_SLOP : SLOP;
+            var moved = Math.hypot(e.clientX - pending.x, e.clientY - pending.y) > slop;
             if (!moved) return;
             clearTimeout(pending.timer);
             if (pending.touch) {
@@ -1885,9 +1888,19 @@ function setupDeckDragAndDrop() {
         }
     });
 
-    // Once a touch drag is live, the finger must drag the ghost, not the page
+    // Touch scrolling fights the long-press: if the browser commits to a
+    // scroll during the hold it fires pointercancel and the drag never
+    // starts. While a touch press is pending and still inside the slop,
+    // suppress the native scroll so the hold can complete; once the drag is
+    // live the finger drags the ghost, not the page.
     document.addEventListener('touchmove', function(e) {
-        if (drag) e.preventDefault();
+        if (drag) { e.preventDefault(); return; }
+        if (pending && pending.touch && e.touches.length === 1) {
+            var t = e.touches[0];
+            if (Math.hypot(t.clientX - pending.x, t.clientY - pending.y) <= TOUCH_SLOP) {
+                e.preventDefault();
+            }
+        }
     }, { passive: false });
 
     document.addEventListener('pointerup', function(e) {
@@ -1905,6 +1918,12 @@ function setupDeckDragAndDrop() {
     document.addEventListener('pointercancel', function() {
         if (pending) { clearTimeout(pending.timer); pending = null; }
         if (drag) end();
+    });
+
+    // Android fires contextmenu on long-press — that would eat the drag.
+    // (Mouse right-click never creates a pending: button 0 only.)
+    document.addEventListener('contextmenu', function(e) {
+        if (drag || pending) e.preventDefault();
     });
 }
 
