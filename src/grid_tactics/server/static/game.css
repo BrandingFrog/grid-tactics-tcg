@@ -11643,3 +11643,73 @@ body:has(#screen-sandbox.active) .room-bar { padding-right: 84px !important; }
 .tooltip-body::-webkit-scrollbar { width: 6px; }
 .tooltip-body::-webkit-scrollbar-track { background: var(--field, #191207); }
 .tooltip-body::-webkit-scrollbar-thumb { background: var(--bronze, #6b5730); border-radius: 4px; }
+
+
+/* ==========================================================================
+   DECK BUILDER — MOBILE-FIRST v2 (844×390 short landscape).
+   Design: full-bleed like the game screens (nav hidden, ☰ brings it back),
+   THREE working columns [ preview | browse | deck ], ONE swipeable filter
+   strip instead of five stacked rows, and the card grid gets the height.
+   The ⚙ toggle hides the deck column for full-width browsing.
+   Supersedes the earlier "squeeze" block (later in source wins).
+   ========================================================================== */
+@media (orientation: landscape) and (max-height: 560px) {
+  /* full-bleed: nav hidden (☰ toggles it back — shared sbx-show-nav class) */
+  body:has(#screen-deck-builder.active):not(.sbx-show-nav) .hud-header { display: none !important; }
+  body:has(#screen-deck-builder.active):not(.sbx-show-nav) .deck-builder-layout { height: 100vh !important; }
+  body:has(#screen-deck-builder.active) #sbx-toggles { display: flex; }
+
+  /* three columns: preview | browse | deck. ⚙ (sbx-hide-side) drops the deck col. */
+  #screen-deck-builder .deck-builder-body {
+    grid-template-columns: clamp(150px, 20vw, 185px) minmax(0, 1fr) clamp(165px, 21vw, 200px) !important;
+  }
+  #screen-deck-builder .deck-builder-body > .tooltip-sidebar { display: flex !important; }
+  body.sbx-hide-side #screen-deck-builder .deck-sidebar { display: none !important; }
+  body.sbx-hide-side #screen-deck-builder .deck-builder-body {
+    grid-template-columns: clamp(150px, 20vw, 185px) minmax(0, 1fr) !important;
+  }
+
+  /* preview panel: reuse the game-tooltip compact look; hide its dead chrome */
+  #screen-deck-builder .deck-builder-body > .tooltip-sidebar .hud-panel-head { display: none !important; }
+  #screen-deck-builder .card-tooltip.hud-dossier-card { padding: 4px !important; }
+  #screen-deck-builder .hud-dossier-empty { padding: 20px 10px !important; min-height: 0 !important; }
+
+  /* filters: ONE horizontally-swipeable strip (groups divided by a hairline) */
+  #screen-deck-builder .card-browser-filters {
+    flex-direction: row !important; flex-wrap: nowrap !important;
+    align-items: center;
+    overflow-x: auto; overflow-y: hidden;
+    gap: 0 !important; padding: 0 8px 4px !important;
+    scrollbar-width: none;
+  }
+  #screen-deck-builder .card-browser-filters::-webkit-scrollbar { display: none; }
+  #screen-deck-builder .filter-row.hud-armoury-filter-row {
+    display: flex !important; width: auto !important; flex: 0 0 auto;
+    padding: 0 10px 0 0 !important; margin: 0 10px 0 0 !important;
+    border-right: 1px solid var(--line);
+  }
+  #screen-deck-builder .filter-row.hud-armoury-filter-row:last-child { border-right: none; }
+  #screen-deck-builder .hud-armoury-chips {
+    flex-wrap: nowrap !important; overflow: visible !important; flex: 0 0 auto;
+  }
+
+  /* grid: ~3 cards per row in the ~440px browse column (base minmax(160,220)
+     collapsed it to one oversized card per row) */
+  #screen-deck-builder .card-browser-grid {
+    grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)) !important;
+    gap: 8px 6px !important;
+    justify-content: stretch !important;
+    padding: 4px 8px 8px !important;
+  }
+  #screen-deck-builder .card-browser-item .card-frame-full { max-width: none !important; }
+
+  /* deck column: keep the Name/Load rows inside their 165-200px track */
+  #screen-deck-builder .deck-save-row, #screen-deck-builder .deck-load-row {
+    gap: 4px !important; align-items: center;
+  }
+  #screen-deck-builder .hud-loadout-prefix { display: none !important; }  /* labels implied */
+  #screen-deck-builder .input.hud-loadout-input,
+  #screen-deck-builder select.hud-loadout-select { min-width: 0 !important; flex: 1 1 0 !important; font-size: 12px !important; padding: 6px 8px !important; }
+  #screen-deck-builder .btn.hud-loadout-save { padding: 6px 10px !important; font-size: 11px !important; flex-shrink: 0; }
+  #screen-deck-builder .btn.hud-loadout-del { padding: 4px 8px !important; flex-shrink: 0; }
+}
