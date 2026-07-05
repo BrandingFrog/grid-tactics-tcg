@@ -12608,3 +12608,16 @@ body:has(#screen-deck-builder.active) #sbx-toggles { display: none !important; }
     transparent calc(75% + 1px));
   pointer-events: none;
 }
+
+/* ! pin on deck rows (user 2026-07-05): inline at the row start (not the
+   floating corner variant), same hover-reveal + gold locked state */
+#screen-deck-builder .deck-list-item .card-info-lock {
+  position: static;
+  width: calc(var(--mfu) * 13); height: calc(var(--mfu) * 13);
+  font-size: calc(var(--mfu) * 8.5);
+  margin-right: calc(var(--mfu) * 5);
+  flex: 0 0 auto;
+}
+#screen-deck-builder .deck-list-item:hover .card-info-lock {
+  opacity: 1; pointer-events: auto; transform: scale(1);
+}

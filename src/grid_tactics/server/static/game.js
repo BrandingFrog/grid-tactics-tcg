@@ -1633,24 +1633,7 @@ function renderCardBrowser() {
         wrapper.innerHTML = renderDeckBuilderCard(numId, count);
         // ! pin (user 2026-07-05): locks this card in the tooltip WITHOUT
         // adding it to the deck, so stray mouse-overs don't replace it.
-        var pin = document.createElement('button');
-        pin.type = 'button';
-        pin.className = 'card-info-lock' + (deckTooltipLockId === numId ? ' locked' : '');
-        pin.title = 'Pin card details';
-        pin.textContent = '!';
-        pin.addEventListener('click', function(e) {
-            e.stopPropagation();
-            if (deckTooltipLockId === numId) {
-                deckTooltipLockId = null;           // unpin; tooltip follows hover again
-            } else {
-                deckTooltipLockId = numId;
-                showCardTooltip(numId);
-            }
-            grid.querySelectorAll('.card-info-lock').forEach(function(b) {
-                b.classList.toggle('locked', deckTooltipLockId !== null && b === pin);
-            });
-        });
-        wrapper.appendChild(pin);
+        wrapper.appendChild(_makeTooltipPin(numId));
         // Click to add (disabled for non-deckable). On touch devices (no
         // hover) the FIRST tap only previews the card in the tooltip;
         // tapping it again adds it (user 2026-07-05). Desktop unchanged —
@@ -2746,6 +2729,8 @@ function renderDeckSidebar() {
             e.stopPropagation();
             addCardToDeck(parseInt(item.numId, 10));
         });
+        // ! pin on deck rows too (user 2026-07-05) — same shared behaviour
+        div.insertBefore(_makeTooltipPin(parseInt(item.numId, 10)), div.firstChild);
         // Hovering a deck row previews the card in the tooltip (user
         // 2026-07-05), same pin-aware rules as the grid.
         div.addEventListener('mouseenter', function() {
@@ -2757,6 +2742,35 @@ function renderDeckSidebar() {
         container.appendChild(div);
     });
     container.scrollTop = prevScroll;
+}
+
+// Shared ! pin (grid cards + deck rows): locks the card in the tooltip
+// without deck changes. One card pinned at a time; clicking again unpins.
+function _makeTooltipPin(numId) {
+    var pin = document.createElement('button');
+    pin.type = 'button';
+    pin.className = 'card-info-lock' + (deckTooltipLockId === numId ? ' locked' : '');
+    pin.dataset.pinId = numId;
+    pin.title = 'Pin card details';
+    pin.textContent = '!';
+    pin.addEventListener('click', function(e) {
+        e.stopPropagation();
+        if (deckTooltipLockId === numId) {
+            deckTooltipLockId = null;           // unpin; tooltip follows hover again
+        } else {
+            deckTooltipLockId = numId;
+            showCardTooltip(numId);
+        }
+        _syncTooltipPins();
+    });
+    return pin;
+}
+
+function _syncTooltipPins() {
+    document.querySelectorAll('#screen-deck-builder .card-info-lock').forEach(function(b) {
+        b.classList.toggle('locked',
+            deckTooltipLockId != null && parseInt(b.dataset.pinId, 10) === deckTooltipLockId);
+    });
 }
 
 // Colour-coding class for a deck-list row: base type, or a multi class when a
