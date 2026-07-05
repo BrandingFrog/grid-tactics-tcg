@@ -12279,3 +12279,5 @@ body.fs-switching *, body.fs-switching *::before, body.fs-switching *::after {
 #screen-deck-builder .card-browser-grid::-webkit-scrollbar {
   width: calc(var(--mfu) * 6);
 }
+/* x0 badge hid the element chip for no reason — only show a real count */
+.card-count-badge.empty { display: none !important; }
