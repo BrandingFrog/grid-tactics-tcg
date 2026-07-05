@@ -2448,10 +2448,25 @@ function renderDeckSidebar() {
     items.forEach(function(item) {
         var div = document.createElement('div');
         div.className = 'deck-list-item ' + deckItemTypeClass(item.card);
+        // Qty stepper on the right: "- n +", or "- 3 =" at max copies
+        // (user 2026-07-05). The = marks max; - stays clickable to decrement.
+        var atMax = item.count >= MAX_COPIES;
         div.innerHTML = '<span class="deck-list-item-name">' + item.name + '</span>'
-            + '<span class="deck-list-item-count">x' + item.count + '</span>';
-        div.addEventListener('click', function() {
+            + '<span class="deck-qty">'
+            + '<button class="deck-qty-btn deck-qty-minus" type="button" aria-label="Remove one">&#8722;</button>'
+            + '<span class="deck-qty-count">' + item.count + '</span>'
+            + (atMax
+                ? '<span class="deck-qty-btn deck-qty-max" title="Max copies">=</span>'
+                : '<button class="deck-qty-btn deck-qty-plus" type="button" aria-label="Add one">+</button>')
+            + '</span>';
+        div.querySelector('.deck-qty-minus').addEventListener('click', function(e) {
+            e.stopPropagation();
             removeCardFromDeck(parseInt(item.numId, 10));
+        });
+        var plusBtn = div.querySelector('.deck-qty-plus');
+        if (plusBtn) plusBtn.addEventListener('click', function(e) {
+            e.stopPropagation();
+            addCardToDeck(parseInt(item.numId, 10));
         });
         container.appendChild(div);
     });
@@ -2515,6 +2530,31 @@ function setupDeckBuilderHandlers() {
             refreshLoadDropdown();
             populateDeckSelector();  // refresh lobby dropdown too
             showLobbyStatus('Deck saved!', 'info');
+        });
+    }
+
+    // Clear Deck — two-step confirm (first click arms, second clears;
+    // disarms after 2.5s). No browser confirm() dialogs.
+    var btnClear = document.getElementById('btn-clear-deck');
+    if (btnClear) {
+        var clearArmTimer = null;
+        var clearLabel = btnClear.querySelector('span:last-child');
+        var disarmClear = function() {
+            if (clearArmTimer) clearTimeout(clearArmTimer);
+            clearArmTimer = null;
+            btnClear.classList.remove('armed');
+            if (clearLabel) clearLabel.textContent = 'CLEAR';
+        };
+        btnClear.addEventListener('click', function() {
+            if (clearArmTimer) {
+                disarmClear();
+                currentDeck = {};
+                renderDeckBuilder();
+            } else {
+                btnClear.classList.add('armed');
+                if (clearLabel) clearLabel.textContent = 'SURE?';
+                clearArmTimer = setTimeout(disarmClear, 2500);
+            }
         });
     }
 

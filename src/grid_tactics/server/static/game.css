@@ -11962,3 +11962,45 @@ body.sbx-hide-side #screen-deck-builder .deck-builder-body {
   background: var(--field, #191207) !important;
   border-color: var(--bronze-dk, #3a2e18) !important;
 }
+
+/* ==========================================================================
+   DECK ROW QTY STEPPER + CLEAR DECK (user 2026-07-05).
+   Right side of each deck row: [-] n [+], or [-] 3 [=] at max copies.
+   CLEAR arms to SURE? on first click (rust), clears on second.
+   ========================================================================== */
+#screen-deck-builder .deck-qty {
+  display: inline-flex; align-items: center; gap: calc(var(--mfu) * 4);
+  flex: 0 0 auto; margin-left: auto;
+}
+#screen-deck-builder .deck-list-item { display: flex; align-items: center; }
+#screen-deck-builder .deck-list-item-name {
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0;
+}
+#screen-deck-builder .deck-qty-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: calc(var(--mfu) * 15); height: calc(var(--mfu) * 15);
+  font-family: var(--ui-display); font-weight: 700;
+  font-size: calc(var(--mfu) * 11); line-height: 1;
+  color: var(--parch-dim); background: var(--field);
+  border: 1px solid var(--bronze); border-radius: calc(var(--mfu) * 2);
+  padding: 0; cursor: pointer;
+}
+#screen-deck-builder button.deck-qty-btn:hover { color: var(--gold-lt); border-color: var(--gold); }
+#screen-deck-builder .deck-qty-max { cursor: default; color: var(--gold); border-color: var(--bronze-dk); }
+#screen-deck-builder .deck-qty-count {
+  min-width: calc(var(--mfu) * 12); text-align: center;
+  font-family: var(--ui-display); font-weight: 700;
+  font-size: calc(var(--mfu) * 12); color: var(--parch);
+}
+#screen-deck-builder #btn-clear-deck.armed {
+  color: var(--rust) !important; border-color: var(--rust) !important;
+}
+/* share row must fit three buttons now (EXPORT / IMPORT / CLEAR) */
+#screen-deck-builder .deck-share-row {
+  display: flex !important; gap: calc(var(--mfu) * 4) !important;
+}
+#screen-deck-builder .btn.hud-loadout-share-btn {
+  flex: 1 1 0 !important; min-width: 0 !important;
+  padding: calc(var(--mfu) * 6) calc(var(--mfu) * 4) !important;
+  justify-content: center;
+}
