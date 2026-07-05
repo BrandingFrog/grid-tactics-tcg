@@ -449,6 +449,249 @@ textarea#wpTextbox1 {
 ::selection { background: rgba(224, 162, 60, 0.4); color: #fff8e8; }
 """
 
+_CF2_CARD_CSS = """\
+/* --- Full-art card frame — replica of the game client's .cf2 ------------ */
+/* Copied from game.css (2026-07 full-art frame redesign) and adapted for
+   MediaWiki: the art layer is an <img> child (the wikitext sanitizer strips
+   url() from inline styles, so background-image is not available). All
+   internal dimensions are container-query units so the card renders
+   identically at any width — same trick as the game. */
+
+.gt-cardwrap { float: right; width: 300px; margin: 0 0 1em 1em; }
+.gt-cotd-wrap { width: 300px; margin: 0 auto 1em; }
+
+/* Element palettes — set on the root as .cf2-<element>. */
+.cf2-fire    { --el:#a8332a; --el-dark:#5e1c14; --el-chip:#8c2a20; }
+.cf2-dark    { --el:#5d3a8f; --el-dark:#33204f; --el-chip:#4b2d77; }
+.cf2-earth   { --el:#8a6d2f; --el-dark:#4f3d17; --el-chip:#71581f; }
+.cf2-water   { --el:#2b5f9e; --el-dark:#173a63; --el-chip:#234f86; }
+.cf2-metal   { --el:#5c5c60; --el-dark:#333336; --el-chip:#4a4a4e; }
+.cf2-wood    { --el:#4a7a2e; --el-dark:#2a4a17; --el-chip:#3c6424; }
+.cf2-light   { --el:#b09a34; --el-dark:#6e5e17; --el-chip:#96822a; }
+.cf2-neutral { --el:#6a6a6e; --el-dark:#3a3a3d; --el-chip:#555559; }
+
+.cf2 {
+  --parch:#e8dcbb; --parch2:#ded0a8; --ink:#241c10;
+  --minion:#7a4f28;                                             /* leather brown */
+  --magic:#6f42a0; --magic-dark:#48286e; --magic-tint:#e8def1;  /* purple */
+  --react:#c2367e; --react-dark:#7e1f50; --react-tint:#f6dcea;  /* hot pink */
+}
+
+.card-frame-full.cf2 {
+  container-type: inline-size;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  aspect-ratio: 1 / 1;
+  border: none;
+  background: transparent;
+  border-radius: 4%;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.55);
+  overflow: visible;
+  color: var(--ink);
+  font-family: 'Alegreya', Georgia, serif;
+  line-height: 1.3;
+}
+/* Aged ivory card stock */
+.card-frame-full.cf2::before {
+  content: ''; display: block;
+  position: absolute; top: 0; left: 0; width: 100cqw; height: 100cqw; z-index: 0;
+  border-radius: 4%;
+  background: #e7ddc2;
+  background-image:
+    radial-gradient(rgba(150, 120, 70, 0.06) 1px, transparent 1.6px),
+    radial-gradient(rgba(255, 252, 240, 0.55) 1px, transparent 1.6px),
+    linear-gradient(148deg, #efe7d1 0%, #e5d9bc 58%, #d7c9a4 100%);
+  background-size: 4px 4px, 6px 6px, 100% 100%;
+  box-shadow: inset 0 0 2px rgba(70, 50, 25, 0.55), inset 0 0 11px rgba(120, 92, 50, 0.3);
+}
+.cf2 .cf2-frame {
+  margin: 2.7cqw;
+  border: 0.65cqw solid var(--el-dark);
+  outline: 0.43cqw solid #0b0906;
+  border-radius: 1.6cqw;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--parch);
+  overflow: hidden;
+  position: relative;
+  z-index: 1;
+}
+
+/* full-art background layer — an <img>, not background-image (see note). */
+.cf2 .cf2-artbg {
+  position: absolute; inset: 0; z-index: 0;
+  background-color: #0d0a07;
+  overflow: hidden;
+}
+.cf2 .cf2-artbg a, .cf2 .cf2-artbg span {
+  display: block; width: 100%; height: 100%;
+}
+.cf2 .cf2-artbg img {
+  width: 100% !important; height: 100% !important;
+  object-fit: cover; object-position: center 20%;
+  display: block;
+}
+.cf2 .cf2-artbg::after {
+  content: ''; position: absolute; inset: 0;
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.34), transparent 26%);
+}
+
+/* ---------- header ---------- */
+.cf2 .cf2-head {
+  position: relative; z-index: 1;
+  display: flex; align-items: stretch; gap: 1.52cqw;
+  padding: 1.52cqw 1.52cqw 1.09cqw;
+  margin: 0;
+}
+.cf2 .cf2-chip {
+  width: 11.3cqw; min-width: 11.3cqw; height: 11.3cqw;
+  background: var(--el-chip);
+  border: 0.65cqw solid #17110a;
+  outline: 0.43cqw solid var(--parch2);
+  border-radius: 1.09cqw;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  padding: 0.43cqw 0;
+  color: #f4ead0;
+  font-family: 'Alegreya SC', Georgia, serif; font-weight: 800; font-size: 7.39cqw;
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.5);
+  box-shadow: inset 0 0 0 2px rgba(0, 0, 0, 0.25),
+              inset 0 2px 4px rgba(255, 255, 255, 0.12),
+              0 2px 7px rgba(0, 0, 0, 0.6);
+}
+.cf2 .cf2-chip-lbl {
+  font-family: 'Alegreya SC', Georgia, serif; font-weight: 700; font-size: 2.07cqw;
+  letter-spacing: 0.22cqw; line-height: 1;
+}
+.cf2 .cf2-cnum {
+  font-family: 'Alegreya SC', Georgia, serif; font-weight: 800; font-size: 6.52cqw; line-height: 0.9;
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.5);
+}
+.cf2 .cf2-eico { font-size: 4.35cqw; line-height: 0.9; margin-top: 1.09cqw; }
+
+.cf2 .cf2-namebox {
+  flex: 1; min-width: 0; text-align: center;
+  display: flex; flex-direction: column; justify-content: center;
+  padding: 0.43cqw 0.87cqw;
+  border: 0.43cqw solid var(--el-dark); border-radius: 0.87cqw;
+  background: rgba(240, 230, 200, 0.93);
+  box-shadow: inset 0 0 10px #c9b98d;
+}
+.cf2 .cf2-name {
+  font-family: 'Alegreya SC', Georgia, serif; font-weight: 800;
+  font-size: 6.3cqw; letter-spacing: 0.22cqw; color: var(--ink); line-height: 1.02;
+}
+.cf2 .cf2-name a, .cf2 .cf2-name a:visited {
+  color: var(--ink) !important; font-weight: 800;
+}
+.cf2 .cf2-subtype { font-size: 3.15cqw; color: #4a3d24; font-weight: 700; letter-spacing: 0.11cqw; }
+.cf2 .cf2-d { color: var(--el); font-size: 2.39cqw; vertical-align: 0.22cqw; }
+
+/* ---------- static keyword tags ---------- */
+.cf2 .cf2-tags {
+  position: relative; z-index: 1;
+  display: flex; gap: 1.3cqw; justify-content: center; flex-wrap: wrap;
+  padding: 1.3cqw 0 0.43cqw;
+}
+.cf2 .cf2-tag {
+  font-family: 'Alegreya SC', Georgia, serif; font-weight: 800; font-size: 2.61cqw; letter-spacing: 0.17cqw;
+  color: #f4ead0; background: var(--el-chip);
+  border: 0.43cqw solid #17110a; outline: 0.22cqw solid var(--parch2);
+  border-radius: 0.87cqw; padding: 0.43cqw 2.17cqw;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.55);
+}
+
+.cf2 .cf2-artspace { flex: 1; min-height: 15.2cqw; }
+
+/* ---------- body: floating effect boxes + optional stat rail ---------- */
+.cf2 .cf2-body {
+  position: relative; z-index: 1;
+  display: flex; align-items: flex-end; gap: 1.3cqw;
+  min-height: 0;
+  padding: 0 1.3cqw;
+}
+.cf2 .cf2-text {
+  flex: 1; min-width: 0;
+  color: var(--ink);
+  font-size: 3.37cqw; line-height: 1.3;
+  padding-bottom: 0.43cqw;
+}
+.cf2 .cf2-text p { margin: 0; font-size: inherit; line-height: inherit; color: inherit; font-family: inherit; }
+
+.cf2 .cf2-mode {
+  border-radius: 0.87cqw; padding: 1.09cqw 1.74cqw 1.3cqw; margin-bottom: 1.3cqw;
+  border: 0.43cqw solid; border-left-width: 1.3cqw;
+  box-shadow: 0 3px 9px rgba(0, 0, 0, 0.55);
+}
+.cf2 .cf2-mode.cf2-minion { background: rgba(242, 233, 206, 0.95); border-color: var(--minion); }
+.cf2 .cf2-mode.cf2-magic  { background: var(--magic-tint); border-color: var(--magic); }
+.cf2 .cf2-mode.cf2-react  { background: var(--react-tint); border-color: var(--react); }
+.cf2 .cf2-modehead {
+  font-family: 'Alegreya SC', Georgia, serif; font-weight: 800; font-size: 3.04cqw;
+  letter-spacing: 0.13cqw; display: block; margin-bottom: 0.22cqw;
+}
+.cf2 .cf2-mode.cf2-magic .cf2-modehead { color: var(--magic); }
+.cf2 .cf2-mode.cf2-react .cf2-modehead { color: var(--react-dark); }
+.cf2 .cf2-ability { margin-bottom: 1.09cqw; }
+.cf2 .cf2-ability:last-child { margin-bottom: 0; }
+.cf2 .cf2-bullet { color: var(--minion); margin-right: 0.87cqw; font-size: 2.83cqw; }
+.cf2 .cf2-mode.cf2-magic .cf2-bullet { color: var(--magic); }
+.cf2 .cf2-mode.cf2-react .cf2-bullet { color: var(--react); }
+.cf2 .cf2-ability b { font-family: 'Alegreya SC', Georgia, serif; font-weight: 800; letter-spacing: 0.09cqw; }
+.cf2 .cf2-flavor { font-style: italic; color: var(--ink); }
+.cf2 .cf2-flavor-rule { border: 0; border-top: 1px dashed rgba(107, 87, 48, 0.5); margin: 1.09cqw 0; }
+
+.cf2 .cf2-ordiv {
+  text-align: center; font-family: 'Alegreya SC', Georgia, serif; font-weight: 700;
+  color: #f0e4c4; font-size: 2.61cqw; letter-spacing: 0.65cqw; margin: 0.22cqw 0 1.09cqw;
+  display: flex; align-items: center; gap: 1.74cqw;
+  text-shadow: 0 1px 3px #000;
+}
+.cf2 .cf2-ordiv::before, .cf2 .cf2-ordiv::after {
+  content: ''; flex: 1; border-top: 0.33cqw solid rgba(255, 255, 255, 0.33);
+}
+
+/* floating stat chips (minions only) */
+.cf2 .cf2-rail {
+  display: flex; flex-direction: column; justify-content: flex-end; gap: 1.3cqw;
+  width: 18.7cqw; min-width: 18.7cqw;
+  padding-bottom: 0.43cqw;
+}
+.cf2 .cf2-stat {
+  background: var(--el-chip);
+  border: 0.65cqw solid #17110a; outline: 0.43cqw solid var(--parch2);
+  border-radius: 1.09cqw; text-align: center; color: #f4ead0;
+  padding: 0.87cqw 0.43cqw 1.3cqw;
+  box-shadow: inset 0 0 0 2px rgba(0, 0, 0, 0.25),
+              inset 0 2px 4px rgba(255, 255, 255, 0.12),
+              0 3px 9px rgba(0, 0, 0, 0.62);
+}
+.cf2 .cf2-stat-lbl { font-family: 'Alegreya SC', Georgia, serif; font-weight: 700; font-size: 2.72cqw; letter-spacing: 0.22cqw; display: block; }
+.cf2 .cf2-stat-val { font-family: 'Alegreya SC', Georgia, serif; font-weight: 800; font-size: 7.17cqw; line-height: 1; display: block; text-shadow: 0 1px 0 rgba(0, 0, 0, 0.5); }
+
+/* ---------- footer ---------- */
+.cf2 .cf2-foot {
+  position: relative; z-index: 1;
+  display: flex; justify-content: space-between; gap: 1.3cqw;
+  padding: 0.43cqw 2.17cqw 1.09cqw;
+  color: #f0e6cc; font-size: 2.5cqw; letter-spacing: 0.09cqw;
+  font-family: 'Alegreya SC', Georgia, serif; font-weight: 500;
+  text-shadow: 0 1px 3px #000, 0 0 6px rgba(0, 0, 0, 0.6);
+}
+
+/* ---------- meta-links strip below the card ---------- */
+.gt-card-meta {
+  width: 100%; margin-top: 8px;
+  border-collapse: separate !important; border-spacing: 0;
+  border-radius: 8px; overflow: hidden;
+  background: linear-gradient(148deg, #efe7d1 0%, #e5d9bc 58%, #d7c9a4 100%);
+  box-shadow: inset 0 0 2px rgba(70, 50, 25, 0.55), 0 4px 14px rgba(0, 0, 0, 0.45);
+  color: #241c10; font-family: 'Alegreya', Georgia, serif; font-size: 13px;
+}
+"""
+
 _HERO_SEARCH_CSS = """\
 /* --- Hero search bar (injected by Common.js) ----------------------------- */
 #gt-hero-search {
@@ -580,6 +823,7 @@ _LOGO_CSS = """\
 COMPOSED_COMMON_CSS = "\n\n".join([
     _COMMON_CSS_HEADER,
     _VINTAGE_THEME_CSS,
+    _CF2_CARD_CSS,
     _HERO_SEARCH_CSS,
     _MOBILE_CSS,
     _LOGO_CSS,

@@ -542,6 +542,154 @@ def build_rules_text(card: dict, name_map: dict[str, str] | None = None) -> str:
     return ". ".join(parts)
 
 
+_CARDS_DIR_DEFAULT = Path(__file__).resolve().parent.parent.parent / "data" / "cards"
+_collector_cache: dict | None = None
+
+
+def _collector_number(stable_id) -> str | None:
+    """Collector number ``NNN/TTT`` ranked by numeric stable_id across the set.
+
+    Mirrors game.js ``_cf2Collector`` so the wiki card footer matches the
+    in-game card frame. Lazily scans ``data/cards/*.json`` once per run.
+    """
+    global _collector_cache
+    if _collector_cache is None:
+        ids = []
+        for path in sorted(_CARDS_DIR_DEFAULT.glob("*.json")):
+            try:
+                data = json.loads(path.read_text(encoding="utf-8"))
+            except (json.JSONDecodeError, OSError):
+                continue
+            sid = data.get("stable_id")
+            if sid is not None:
+                ids.append(sid)
+        ids.sort()
+        _collector_cache = {sid: i + 1 for i, sid in enumerate(ids)}
+    if stable_id is None or stable_id not in _collector_cache:
+        return None
+    total = len(_collector_cache)
+    return f"{_collector_cache[stable_id]:03d}/{total:03d}"
+
+
+_EL_EMOJI = {
+    "wood": "🌿", "fire": "🔥", "earth": "⛰️", "water": "💧",
+    "metal": "⚙️", "dark": "🌑", "light": "☀️", "neutral": "◇",
+}
+
+
+def build_cf2_card_html(card: dict, name_map: dict[str, str] | None = None,
+                        link_page: str | None = None,
+                        wrap_class: str = "gt-cotd gt-cotd-wrap") -> str:
+    """Full-art ``.cf2`` card frame markup — replica of the game client card.
+
+    Mirrors Template:Card's infobox DOM for contexts that must NOT emit SMW
+    annotations or categories (e.g. the Main Page Card of the Day). Styles
+    live in MediaWiki:Common.css (pushed by sync_polish.py).
+    """
+    card_type = card.get("card_type", "")
+    is_minion = card_type == "minion"
+    element = (card.get("element") or "").capitalize()
+    palette = element.lower() if element.lower() in (
+        "wood", "fire", "earth", "water", "metal", "dark", "light") else "neutral"
+    emoji = _EL_EMOJI.get(palette, "◇")
+    name = card.get("name", "")
+    cost = card.get("mana_cost", "?")
+    tribe = card.get("tribe", "")
+    card_id = card.get("card_id", "")
+    art = f"{card_id}.png" if card_id else "CardBack.png"
+    rules = build_rules_text(card, name_map)
+    flavor = card.get("flavour_text", "")
+
+    name_html = f"[[{link_page}|<span>{name}</span>]]" if link_page else name
+
+    subtype = f'<span class="cf2-d">◆</span> {element or "Neutral"}'
+    if is_minion and tribe:
+        subtype += f' <span class="cf2-d">◆</span> {tribe}'
+
+    tags = ""
+    if is_minion and card.get("range") is not None:
+        r = card.get("range")
+        tags += f'<span class="cf2-tag">{"Melee" if r == 0 else f"Range {r}"}</span>'
+    if card.get("unique"):
+        tags += '<span class="cf2-tag">Unique</span>'
+    tags_html = f'<div class="cf2-tags">{tags}</div>' if tags else ""
+
+    flavor_html = (
+        f'<hr class="cf2-flavor-rule"/><span class="cf2-flavor">{flavor}</span>'
+        if flavor else ""
+    )
+
+    if card_type == "magic":
+        mode = (
+            f'<div class="cf2-mode cf2-magic">'
+            f'<span class="cf2-modehead">✨ Cast · {cost} mana — your turn</span>'
+            f'<div class="cf2-ability">{rules}</div>{flavor_html}</div>'
+        )
+    elif card_type == "react":
+        mode = (
+            f'<div class="cf2-mode cf2-react">'
+            f'<span class="cf2-modehead">⚡ React · {cost} mana</span>'
+            f'<div class="cf2-ability">{rules}</div>{flavor_html}</div>'
+        )
+    else:
+        mode = (
+            f'<div class="cf2-mode cf2-minion">'
+            f'<div class="cf2-ability">{rules}</div>{flavor_html}</div>'
+        )
+
+    # Multi-purpose cards stack a react half under an "or" divider.
+    react_cond = card.get("react_condition")
+    if react_cond is not None and card_type != "react":
+        cond_text = _REACT_CONDITION_TEXT.get(react_cond) or _REACT_CONDITION_TEXT_STR.get(
+            str(react_cond), "Any action")
+        extra = " while no allies" if card.get("react_requires_no_friendly_minions") else ""
+        react_eff = card.get("react_effect")
+        eff_text = " ▶ Summon" if react_eff and react_eff.get("type") == "deploy_self" else ""
+        react_cost = card.get("react_mana_cost", cost)
+        mode += (
+            f'<div class="cf2-ordiv">or</div>'
+            f'<div class="cf2-mode cf2-react">'
+            f'<span class="cf2-modehead">⚡ React · {react_cost} mana</span>'
+            f'<div class="cf2-ability">{cond_text}{extra}{eff_text}</div></div>'
+        )
+
+    rail = ""
+    if is_minion and card.get("attack") is not None:
+        rail = (
+            f'<div class="cf2-rail">'
+            f'<div class="cf2-stat"><span class="cf2-stat-lbl">Attack</span>'
+            f'<span class="cf2-stat-val">{card.get("attack")}</span></div>'
+            f'<div class="cf2-stat"><span class="cf2-stat-lbl">Health</span>'
+            f'<span class="cf2-stat-val">{card.get("health")}</span></div>'
+            f'</div>'
+        )
+
+    collector = _collector_number(card.get("stable_id")) or "—"
+    spell_cls = "" if is_minion else " cf2-spell"
+    art_link = link_page or ""
+
+    return (
+        f'<div class="{wrap_class}">'
+        f'<div class="card-frame card-frame-full cf2 cf2-{palette}{spell_cls}">'
+        f'<div class="cf2-frame">'
+        f'<div class="cf2-artbg">[[File:{art}|300px|link={art_link}]]</div>'
+        f'<div class="cf2-head">'
+        f'<div class="cf2-chip cf2-cost"><span class="cf2-chip-lbl">Mana</span>'
+        f'<span class="cf2-cnum">{cost}</span></div>'
+        f'<div class="cf2-namebox"><div class="cf2-name">{name_html}</div>'
+        f'<div class="cf2-subtype">{subtype}</div></div>'
+        f'<div class="cf2-chip cf2-elem"><span class="cf2-chip-lbl">{element or "?"}</span>'
+        f'<span class="cf2-eico">{emoji}</span></div>'
+        f'</div>'
+        f'{tags_html}'
+        f'<div class="cf2-artspace"></div>'
+        f'<div class="cf2-body"><div class="cf2-text">{mode}</div>{rail}</div>'
+        f'<div class="cf2-foot"><span>{collector}</span><span>Core Beta WIP</span>'
+        f'<span>© 2026 Grid Tactics</span></div>'
+        f'</div></div></div>'
+    )
+
+
 def card_to_wikitext(
     card: dict,
     name_map: dict[str, str] | None = None,
@@ -700,6 +848,15 @@ def card_to_wikitext(
     stable_id = card.get("card_id", "")
     if stable_id:
         fields["stable_id"] = stable_id
+
+    # Unique tag (renders as a cf2 keyword tag on the card frame)
+    if card.get("unique"):
+        fields["unique"] = "true"
+
+    # Collector number (card frame footer, e.g. 024/033)
+    collector = _collector_number(card.get("stable_id"))
+    if collector:
+        fields["collector"] = collector
 
     # Deckable
     deckable = card.get("deckable", True)

@@ -10,9 +10,10 @@ Usage:
 | attack    = 15
 | hp        = 30
 | range     = 0
+| unique    = true
 | rules     = Activated: pay 2 mana to conjure a Common Rat and buff it.
 | flavor    = The rats listen, and the rats remember.
-| keywords  = Sacrifice, Summon
+| collector = 024/033
 | art       = Ratchanter.png
 | patch     = 0.4.2
 | stable_id = ratchanter
@@ -21,34 +22,22 @@ Usage:
 </pre>
 
 This template renders a card infobox AND emits SMW property annotations in a
-single pass. Styling mirrors the game client's worn-vintage card frame (.cf2
-in game.css): aged ivory stock, Alegreya SC display type, element-coloured
-chips, type-coded rule boxes (minion leather / magic purple / react hot pink).
-</noinclude><includeonly>{| class="gt-card gt-element-{{lc:{{{element|}}}}}" style="float:right; width:300px; border:none; border-radius:10px; background:linear-gradient(148deg,#efe7d1 0%,#e5d9bc 58%,#d7c9a4 100%); color:#241c10; font-family:'Alegreya',Georgia,serif; margin:0 0 1em 1em; box-shadow:inset 0 0 2px rgba(70,50,25,0.55), inset 0 0 11px rgba(120,92,50,0.3), 0 6px 24px rgba(0,0,0,0.55);"
-|-
-! colspan="3" style="padding:10px 46px; background:{{#switch:{{lc:{{{type|}}}}}|minion=linear-gradient(180deg,#8a5c30,#7a4f28)|magic=linear-gradient(180deg,#7d4fb2,#6f42a0)|react=linear-gradient(180deg,#d24390,#c2367e)|#default=linear-gradient(180deg,#4a4a4e,#3a3a3d)}}; border-radius:10px 10px 0 0; text-align:center; position:relative; line-height:1.12;" | <span style="position:absolute; left:8px; top:50%; transform:translateY(-50%); background:{{#switch:{{lc:{{{element|}}}}}|wood=#3c6424|fire=#8c2a20|earth=#71581f|water=#234f86|metal=#4a4a4e|dark=#4b2d77|light=#96822a|#default=#555559}}; border-radius:6px; width:34px; height:34px; border:2px solid #17110a; outline:2px solid #ded0a8; display:flex; align-items:center; justify-content:center; color:#f4ead0; font-family:'Alegreya SC',Georgia,serif; font-weight:800; font-size:17px; text-shadow:0 1px 0 rgba(0,0,0,0.5); box-shadow:inset 0 2px 4px rgba(255,255,255,0.12), 0 2px 7px rgba(0,0,0,0.5);">{{{cost|?}}}</span><span style="font-size:1.05em; font-family:'Alegreya SC',Georgia,serif; font-weight:800; letter-spacing:0.02em; color:#f4ead0; text-shadow:0 1px 0 rgba(0,0,0,0.5); display:block; word-break:break-word;">{{{name|{{PAGENAME}}}}}</span><span style="position:absolute; right:8px; top:50%; transform:translateY(-50%); background:{{#switch:{{lc:{{{element|}}}}}|wood=#3c6424|fire=#8c2a20|earth=#71581f|water=#234f86|metal=#4a4a4e|dark=#4b2d77|light=#96822a|#default=#555559}}; border-radius:6px; width:34px; height:34px; border:2px solid #17110a; outline:2px solid #ded0a8; display:flex; align-items:center; justify-content:center; color:#f4ead0; font-family:'Alegreya SC',Georgia,serif; font-weight:700; font-size:7.5px; text-transform:uppercase; letter-spacing:0.04em; box-shadow:inset 0 2px 4px rgba(255,255,255,0.12), 0 2px 7px rgba(0,0,0,0.5);">{{{element|?}}}</span>
-|-
-| colspan="3" style="padding:0; border-top:1px solid rgba(107,87,48,0.45); border-bottom:1px solid rgba(107,87,48,0.45); background:#0d0a07;" | [[File:{{{art|CardBack.png}}}|300px|center|link=]]
+single pass. The infobox is a faithful replica of the game client's full-art
+card frame (renderCardFrame / .cf2 in game.css + game.js): aged ivory stock,
+element-tinted frame and chips, floating type-coded rule boxes (minion
+leather / magic purple / react hot pink), stat rail, and collector footer.
+The .cf2-* styles live in MediaWiki:Common.css (pushed by sync_polish.py).
+A slim ivory meta table below the card carries the Type/Element/Tribe/Range
+links for navigation.
+</noinclude><includeonly><div class="gt-card gt-cardwrap gt-element-{{lc:{{{element|}}}}}"><div class="card-frame card-frame-full cf2 cf2-{{#switch:{{lc:{{{element|}}}}}|wood|fire|earth|water|metal|dark|light={{lc:{{{element}}}}}|#default=neutral}}{{#ifeq:{{lc:{{{type|}}}}}|minion||&#32;cf2-spell}}"><div class="cf2-frame"><div class="cf2-artbg">[[File:{{{art|CardBack.png}}}|300px|link=]]</div><div class="cf2-head"><div class="cf2-chip cf2-cost"><span class="cf2-chip-lbl">Mana</span><span class="cf2-cnum">{{{cost|?}}}</span></div><div class="cf2-namebox"><div class="cf2-name">{{{name|{{PAGENAME}}}}}</div><div class="cf2-subtype"><span class="cf2-d">◆</span> {{{element|Neutral}}}{{#if:{{{tribe|}}}|&#32;<span class="cf2-d">◆</span> {{{tribe}}}}}</div></div><div class="cf2-chip cf2-elem"><span class="cf2-chip-lbl">{{{element|?}}}</span><span class="cf2-eico">{{#switch:{{lc:{{{element|}}}}}|wood=🌿|fire=🔥|earth=⛰️|water=💧|metal=⚙️|dark=🌑|light=☀️|#default=◇}}</span></div></div>{{#if:{{{range|}}}{{{unique|}}}|<div class="cf2-tags">{{#if:{{{range|}}}|<span class="cf2-tag">{{#ifeq:{{{range}}}|0|Melee|Range {{{range}}}}}</span>}}{{#ifeq:{{{unique|}}}|true|<span class="cf2-tag">Unique</span>}}</div>}}<div class="cf2-artspace"></div><div class="cf2-body"><div class="cf2-text">{{#switch:{{lc:{{{type|}}}}}|magic=<div class="cf2-mode cf2-magic"><span class="cf2-modehead">✨ Cast · {{{cost|?}}} mana — your turn</span><div class="cf2-ability">{{{rules|}}}</div>{{#if:{{{flavor|}}}|<hr class="cf2-flavor-rule"/><span class="cf2-flavor">{{{flavor}}}</span>}}</div>|react=<div class="cf2-mode cf2-react"><span class="cf2-modehead">⚡ React · {{{cost|?}}} mana</span><div class="cf2-ability">{{{rules|}}}</div>{{#if:{{{flavor|}}}|<hr class="cf2-flavor-rule"/><span class="cf2-flavor">{{{flavor}}}</span>}}</div>|#default=<div class="cf2-mode cf2-minion"><div class="cf2-ability">{{{rules|}}}</div>{{#if:{{{flavor|}}}|<hr class="cf2-flavor-rule"/><span class="cf2-flavor">{{{flavor}}}</span>}}</div>}}{{#if:{{{react_rules|}}}|<div class="cf2-ordiv">or</div><div class="cf2-mode cf2-react"><span class="cf2-modehead">⚡ React · {{{react_cost|{{{cost|?}}}}}} mana</span><div class="cf2-ability">{{{react_rules}}}</div></div>}}</div>{{#if:{{{attack|}}}|<div class="cf2-rail"><div class="cf2-stat"><span class="cf2-stat-lbl">Attack</span><span class="cf2-stat-val">{{{attack}}}</span></div><div class="cf2-stat"><span class="cf2-stat-lbl">Health</span><span class="cf2-stat-val">{{{hp|?}}}</span></div></div>}}</div><div class="cf2-foot"><span>{{{collector|—}}}</span><span>Core Beta WIP</span><span>© 2026 Grid Tactics</span></div></div></div>
+{| class="gt-card-meta"
 |-
 | colspan="3" style="padding:5px 12px; background:rgba(222,208,168,0.5); border-bottom:1px solid rgba(107,87,48,0.3);" | <span style="color:#6b5730; font-family:'Alegreya SC',Georgia,serif; font-weight:700; font-size:10.5px; letter-spacing:0.08em; text-transform:uppercase;">Type</span> <span style="float:right; color:#241c10; font-weight:700;">[[{{{type|Minion}}}]]</span>
 |-
 | colspan="3" style="padding:5px 12px; background:rgba(222,208,168,0.5); border-bottom:1px solid rgba(107,87,48,0.3);" | <span style="color:#6b5730; font-family:'Alegreya SC',Georgia,serif; font-weight:700; font-size:10.5px; letter-spacing:0.08em; text-transform:uppercase;">Element</span> <span style="float:right; color:#241c10; font-weight:700;">[[{{{element|Neutral}}}]]</span>
 {{{meta_rows|}}}
-|-
-| colspan="3" style="padding:0 8px;" | <div style="background:{{#switch:{{lc:{{{type|}}}}}|magic=#e8def1|react=#f6dcea|#default=rgba(242,233,206,0.95)}}; border:2px solid {{#switch:{{lc:{{{type|}}}}}|magic=#6f42a0|react=#c2367e|#default=#7a4f28}}; border-left-width:8px; border-radius:6px; margin:8px 0; padding:8px 12px; min-height:56px; font-family:'Alegreya',Georgia,serif; font-size:13.5px; line-height:1.4; color:#241c10; box-shadow:0 3px 9px rgba(0,0,0,0.25);">{{{rules|}}}{{#if:{{{flavor|}}}|<hr style="border:0;border-top:1px dashed rgba(107,87,48,0.5); margin:8px 0;"/><span style="color:#4a3d24; font-style:italic; font-size:12px;">{{{flavor}}}</span>}}</div>
-|-
-{{#if:{{{attack|}}}|
-{{!}} style="padding:7px 12px; background:rgba(222,208,168,0.55); text-align:left; font-family:'Alegreya SC',Georgia,serif; font-weight:800; font-size:18px; color:#b06a15; text-shadow:0 1px 0 rgba(255,250,235,0.6); border-top:1px solid rgba(107,87,48,0.35); border-radius:0 0 0 10px;" {{!}} {{{attack}}}🗡️
-{{!}} style="padding:7px 12px; background:rgba(222,208,168,0.55); text-align:center; font-family:'Alegreya SC',Georgia,serif; font-weight:700; font-size:10px; color:#6b5730; letter-spacing:0.14em; text-transform:uppercase; border-top:1px solid rgba(107,87,48,0.35);" {{!}} {{#if:{{{range|}}}|{{#ifeq:{{{range}}}|0|MELEE|RANGE {{{range}}}}}}}
-{{!}} style="padding:7px 12px; background:rgba(222,208,168,0.55); text-align:right; font-family:'Alegreya SC',Georgia,serif; font-weight:800; font-size:18px; color:#c0392b; text-shadow:0 1px 0 rgba(255,250,235,0.6); border-top:1px solid rgba(107,87,48,0.35); border-radius:0 0 10px 0;" {{!}} {{{hp}}}🤍
-}}
-{{#if:{{{react_rules|}}}|
-{{!}}-
-! colspan="3" style="padding:6px 12px; background:linear-gradient(180deg,#c2367e,#7e1f50); text-align:left; font-family:'Alegreya SC',Georgia,serif; font-weight:800; font-size:11px; letter-spacing:0.14em; text-transform:uppercase; color:#fdf2f8; text-shadow:0 1px 0 rgba(0,0,0,0.4); position:relative;" {{!}} REACT{{#if:{{{react_cost|}}}|<span style="position:absolute; right:8px; top:50%; transform:translateY(-50%); background:rgba(0,0,0,0.3); border-radius:5px; width:22px; height:22px; border:1px solid rgba(255,255,255,0.5); display:flex; align-items:center; justify-content:center; font-family:'Alegreya SC',Georgia,serif; font-size:12px; font-weight:800; letter-spacing:0;">{{{react_cost}}}</span>}}
-{{!}}-
-{{!}} colspan="3" style="padding:0 8px 8px;" {{!}} <div style="background:#f6dcea; border:2px solid #c2367e; border-left-width:8px; border-radius:6px; margin-top:8px; padding:8px 12px; font-family:'Alegreya',Georgia,serif; font-size:13px; line-height:1.4; color:#241c10; box-shadow:0 3px 9px rgba(0,0,0,0.25);">{{{react_rules}}}</div>
-}}
-{{!}}}
+|}
+</div>
 
 
 {{DISPLAYTITLE:{{{name|{{PAGENAME}}}}}}}{{DEFAULTSORT:{{{name|{{PAGENAME}}}}}}}{{#set:Name={{{name|{{PAGENAME}}}}} }}{{#if:{{{stable_id|}}}|{{#set:StableId={{{stable_id}}} }}}}{{#if:{{{type|}}}|{{#set:CardType={{{type}}} }}}}{{#if:{{{element|}}}|{{#set:Element={{{element}}} }}}}{{{tribe_annotations|}}}{{#if:{{{cost|}}}|{{#set:ManaCost={{{cost}}} }}}}{{#if:{{{attack|}}}|{{#set:Attack={{{attack}}} }}}}{{#if:{{{hp|}}}|{{#set:HP={{{hp}}} }}}}{{#if:{{{range|}}}|{{#set:Range={{{range}}} }}}}{{#if:{{{art|}}}|{{#set:ArtFile=File:{{{art}}} }}}}{{#if:{{{patch|}}}|{{#set:FirstPatch={{{patch}}} }}}}{{#if:{{{last_changed_patch|}}}|{{#set:LastChangedPatch={{{last_changed_patch}}} }}}}{{#if:{{{deckable|}}}|{{#set:Deckable={{{deckable}}} }}}}{{{keyword_annotations|}}}{{#set:LastModified={{CURRENTTIMESTAMP}} }}{{#ifeq:{{{deprecated|}}}|1|[[Category:Deprecated]]|[[Category:Card]]}}{{#if:{{{element|}}}|[[Category:{{{element}}} cards]]}}{{#if:{{{type|}}}|[[Category:{{{type}}}s]]}}</includeonly>
