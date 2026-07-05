@@ -1526,18 +1526,26 @@ function renderCardBrowser() {
         // Hide non-deckable cards unless checkbox is checked
         var showNonDeckable = document.getElementById('show-nondeckable') && document.getElementById('show-nondeckable').checked;
         if (c.deckable === false && !showNonDeckable) return;
-        // Type filter (multi-select; empty = all)
-        if (deckFilterTypes.length && deckFilterTypes.indexOf(typeMap[c.card_type]) === -1) return;
+        // Type filter (multi-select; empty = all). Multi-purpose cards — a
+        // minion/magic card with a react mode — count as both types.
+        if (deckFilterTypes.length) {
+            var cardTypes = [typeMap[c.card_type]];
+            if (c.react_condition != null && c.card_type !== 2) cardTypes.push('react');
+            if (!cardTypes.some(function(t) { return deckFilterTypes.indexOf(t) !== -1; })) return;
+        }
         // Element filter
         if (deckFilterElements.length) {
             var cardElem = (c.element !== undefined && c.element !== null) ? String(c.element) : '-1';
             if (deckFilterElements.indexOf(cardElem) === -1) return;
         }
-        // Mana filter
+        // Mana filter. Multi-purpose cards match on either of their two costs.
         if (deckFilterManas.length) {
-            var manaCost = c.mana_cost || 0;
+            var costs = [c.mana_cost || 0];
+            if (c.react_condition != null && c.react_mana_cost != null) costs.push(c.react_mana_cost);
             var manaOk = deckFilterManas.some(function(m) {
-                return m === '5+' ? manaCost >= 5 : manaCost === parseInt(m);
+                return costs.some(function(mc) {
+                    return m === '10+' ? mc >= 10 : mc === parseInt(m);
+                });
             });
             if (!manaOk) return;
         }
@@ -1935,12 +1943,14 @@ function populateTooltip(hostEl, numericId, opts) {
     if (relatedIds.length > 0) {
         relatedLabel.style.display = '';
         var relHtml = '';
+        var relNumIds = [];
         relatedIds.forEach(function(rid) {
-            var rc = null;
+            var rc = null, rnid = null;
             for (var nid3 in defs) {
-                if (defs[nid3].card_id === rid) { rc = defs[nid3]; break; }
+                if (defs[nid3].card_id === rid) { rc = defs[nid3]; rnid = nid3; break; }
             }
             if (!rc) return;
+            relNumIds.push(rnid);
             var artBg = 'background-image:url(' + _cardArtUrl(rc.card_id) + ')';
             relHtml += '<div class="tooltip-related-card">';
             relHtml += '<div class="tooltip-related-art" style="' + artBg + '"></div>';
@@ -1969,6 +1979,14 @@ function populateTooltip(hostEl, numericId, opts) {
             relHtml += '</div></div>';
         });
         relatedContainer.innerHTML = relHtml;
+        // Clicking a related card jumps the tooltip to that card (user 2026-07-05)
+        relatedContainer.querySelectorAll('.tooltip-related-card').forEach(function(el, i) {
+            el.addEventListener('click', function() {
+                populateTooltip(hostEl, parseInt(relNumIds[i], 10), opts);
+                var scroller = hostEl.querySelector('.tooltip-body');
+                if (scroller) scroller.scrollTop = 0;
+            });
+        });
     } else {
         relatedLabel.style.display = 'none';
         relatedContainer.innerHTML = '';

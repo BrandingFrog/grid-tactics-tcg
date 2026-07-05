@@ -11942,3 +11942,23 @@ body.sbx-hide-side #screen-deck-builder .deck-builder-body {
 #screen-deck-builder .dli-react  { --dli-a: #b07a2e; --dli-b: #b07a2e; }
 #screen-deck-builder .dli-minion-react { --dli-a: #7d9a3e; --dli-b: #b07a2e; }
 #screen-deck-builder .dli-magic-react  { --dli-a: #565a86; --dli-b: #b07a2e; }
+
+/* Related cards in the tooltip are clickable — they jump the tooltip to that
+   card (user 2026-07-05). Mana menu is tall (0-10+), keep it scroll-friendly. */
+#screen-deck-builder .tooltip-related-card,
+#screen-game .tooltip-related-card,
+#screen-sandbox .tooltip-related-card { cursor: pointer; }
+#screen-deck-builder .tooltip-related-card:hover,
+#screen-game .tooltip-related-card:hover,
+#screen-sandbox .tooltip-related-card:hover {
+  background: rgba(224, 162, 60, 0.08) !important;
+  outline: 1px solid var(--bronze, #6b5730);
+}
+#screen-deck-builder .fdrop-menu-mana { max-height: calc(var(--mfu) * 200); }
+/* related rows still carried the old navy fill — bring them into the vintage theme */
+#screen-deck-builder .tooltip-related-card,
+#screen-game .tooltip-related-card,
+#screen-sandbox .tooltip-related-card {
+  background: var(--field, #191207) !important;
+  border-color: var(--bronze-dk, #3a2e18) !important;
+}
