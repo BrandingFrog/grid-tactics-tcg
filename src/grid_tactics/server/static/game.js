@@ -1523,6 +1523,9 @@ function renderCardBrowser() {
         grid.innerHTML = '<div class="deck-empty-state"><h4>Loading cards...</h4><p>Connect to the server to browse cards</p></div>';
         return;
     }
+    // Full rebuild resets the container's scroll on some engines — clicking a
+    // card to add it must not move the grid (user 2026-07-05). Save/restore.
+    var prevScroll = grid.scrollTop;
     grid.innerHTML = '';
     // Type filter map: card_type int -> filter name
     var typeMap = {0: 'minion', 1: 'magic', 2: 'react'};
@@ -1606,6 +1609,7 @@ function renderCardBrowser() {
         wrapper.addEventListener('mouseleave', function() { hideCardTooltip(); });
         grid.appendChild(wrapper);
     });
+    grid.scrollTop = prevScroll;
 }
 
 // One card / one keyword check, shared by the multi-select keyword filter.
@@ -2474,6 +2478,7 @@ function renderDeckSidebar() {
     // or magic card with a react mode) get a gradient stripe.
     var container = document.getElementById('deck-flat');
     if (!container) return;
+    var prevScroll = container.scrollTop;
     var defs = allCardDefs || cardDefs;
     var items = [];
     Object.keys(currentDeck).forEach(function(numId) {
@@ -2511,6 +2516,7 @@ function renderDeckSidebar() {
         });
         container.appendChild(div);
     });
+    container.scrollTop = prevScroll;
 }
 
 // Colour-coding class for a deck-list row: base type, or a multi class when a
