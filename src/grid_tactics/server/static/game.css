@@ -12016,3 +12016,119 @@ body.sbx-hide-side #screen-deck-builder .deck-builder-body {
 #screen-sandbox .game-tooltip[style*="display: none"] {
   display: none !important;
 }
+
+/* ==========================================================================
+   SORT CONTROL + CENTERED FILTERS (user 2026-07-05).
+   Bar zones: sort (left) | dropdowns (centered) | non-deckable (right).
+   Chevron buttons set direction; the ACTIVE direction shows a DOUBLE
+   chevron (both stacked spans), inactive shows a single one.
+   ========================================================================== */
+#screen-deck-builder .fdrops {
+  display: flex; align-items: center; gap: calc(var(--mfu) * 5);
+  margin: 0 auto;                       /* centers between sort and cbox */
+  flex: 0 0 auto;
+}
+#screen-deck-builder .fbar-nondeckable { margin-left: 0; }
+#screen-deck-builder .fsort {
+  display: inline-flex; align-items: center; gap: calc(var(--mfu) * 3);
+  flex: 0 0 auto;
+}
+#screen-deck-builder .fsort-dir {
+  display: inline-flex; flex-direction: column; align-items: center; justify-content: center;
+  width: calc(var(--mfu) * 15); height: calc(var(--mfu) * 20);
+  color: var(--parch-mute); background: var(--field);
+  border: 1px solid var(--bronze-dk); border-radius: calc(var(--mfu) * 3);
+  font-size: calc(var(--mfu) * 9); line-height: 0.55;
+  padding: 0; cursor: pointer;
+}
+#screen-deck-builder .fsort-dir span { display: block; }
+#screen-deck-builder .fsort-dir:not(.active) span + span { display: none; }
+#screen-deck-builder .fsort-dir:hover { color: var(--parch); border-color: var(--gold); }
+#screen-deck-builder .fsort-dir.active {
+  color: var(--gold-lt); border-color: var(--gold);
+}
+#screen-deck-builder .fsort-field {
+  display: inline-flex; align-items: center;
+  font-family: var(--ui-display); font-weight: 700;
+  font-size: calc(var(--mfu) * 11); letter-spacing: 0.05em;
+  color: var(--parch-dim); background: var(--field);
+  border: 1px solid var(--bronze); border-radius: calc(var(--mfu) * 3);
+  padding: calc(var(--mfu) * 3) calc(var(--mfu) * 9);
+  min-width: calc(var(--mfu) * 58); justify-content: center;
+  cursor: pointer;
+}
+#screen-deck-builder .fsort-field:hover { color: var(--gold-lt); border-color: var(--gold); }
+/* compact pass: sort + 4 dropdowns + cbox must fit the 475px bar at 844 */
+#screen-deck-builder .card-browser-filters { padding-left: calc(var(--mfu) * 6) !important; padding-right: calc(var(--mfu) * 6) !important; }
+#screen-deck-builder .fdrops { gap: calc(var(--mfu) * 4); }
+#screen-deck-builder .fdrop-btn {
+  font-size: calc(var(--mfu) * 10.5); gap: calc(var(--mfu) * 4);
+  padding: calc(var(--mfu) * 3) calc(var(--mfu) * 6);
+}
+#screen-deck-builder .fsort-field {
+  font-size: calc(var(--mfu) * 10.5);
+  padding: calc(var(--mfu) * 3) calc(var(--mfu) * 6);
+  min-width: calc(var(--mfu) * 56);
+}
+#screen-deck-builder .fbar-nondeckable { font-size: calc(var(--mfu) * 9) !important; }
+/* sort direction buttons: deliberate vertical pair (up=asc over down=desc) */
+#screen-deck-builder .fsort-dirs {
+  display: flex; flex-direction: column; gap: calc(var(--mfu) * 2);
+  flex: 0 0 auto;
+}
+#screen-deck-builder .fsort-dir {
+  width: calc(var(--mfu) * 16); height: calc(var(--mfu) * 11);
+}
+#screen-deck-builder .fbar-nondeckable { flex-shrink: 0; }
+/* legacy uppercase + letter-spacing ballooned the cbox to 122px; undo */
+#screen-deck-builder .fbar-nondeckable {
+  text-transform: none !important;
+  letter-spacing: 0.02em !important;
+  font-family: var(--ui-display) !important;
+  font-size: calc(var(--mfu) * 10) !important;
+  gap: calc(var(--mfu) * 5) !important;
+}
+
+/* ==========================================================================
+   SORT CHEVRONS v2 (user 2026-07-05, from reference screenshot): two SQUARE
+   side-by-side buttons, bold geometric SVG chevrons. Active = DOUBLE chevron
+   in glowing gold; inactive = single muted chevron. Plus a squeeze pass so
+   sort + filters + Non-Deckable all fit the 475px bar at the 844 baseline.
+   ========================================================================== */
+#screen-deck-builder .fsort-dirs { flex-direction: row; gap: calc(var(--mfu) * 3); }
+#screen-deck-builder .fsort-dir {
+  width: calc(var(--mfu) * 20); height: calc(var(--mfu) * 20);
+  padding: calc(var(--mfu) * 2);
+  align-items: center; justify-content: center;
+  color: var(--parch-mute);
+}
+#screen-deck-builder .fsort-dir svg { width: 100%; height: 100%; display: block; }
+#screen-deck-builder .fsort-dir path {
+  stroke: currentColor; fill: none;
+  stroke-width: 3.2; stroke-linecap: round; stroke-linejoin: round;
+}
+#screen-deck-builder .fsort-dir:not(.active) .chev2 { display: none; }
+#screen-deck-builder .fsort-dir:not(.active) .chev1 { transform: translateY(3.5px); }
+#screen-deck-builder .fsort-dir.active {
+  color: var(--gold-lt); border-color: var(--gold);
+}
+#screen-deck-builder .fsort-dir.active svg {
+  filter: drop-shadow(0 0 calc(var(--mfu) * 2.5) rgba(255, 216, 115, 0.55));
+}
+
+/* squeeze: reclaim the width the square buttons cost */
+#screen-deck-builder .card-browser-filters { padding-left: calc(var(--mfu) * 4) !important; padding-right: calc(var(--mfu) * 4) !important; gap: calc(var(--mfu) * 4) !important; }
+#screen-deck-builder .fdrops { gap: calc(var(--mfu) * 3); }
+#screen-deck-builder .fdrop-btn {
+  font-size: calc(var(--mfu) * 10); gap: calc(var(--mfu) * 3);
+  padding: calc(var(--mfu) * 3) calc(var(--mfu) * 5);
+}
+#screen-deck-builder .fsort { gap: calc(var(--mfu) * 3); }
+#screen-deck-builder .fsort-field {
+  font-size: calc(var(--mfu) * 10);
+  padding: calc(var(--mfu) * 3) calc(var(--mfu) * 5);
+  min-width: calc(var(--mfu) * 52);
+}
+#screen-deck-builder .fbar-nondeckable { padding: 0 !important; }
+#screen-deck-builder .fdrop-btn, #screen-deck-builder .fsort-field { letter-spacing: 0.02em; }
+#screen-deck-builder .fdrop-count { min-width: calc(var(--mfu) * 11); }

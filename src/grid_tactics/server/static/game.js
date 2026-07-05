@@ -374,6 +374,18 @@ let deckFilterElements = [];    // of element ints as strings
 let deckFilterManas = [];       // of '1', '2', '3', '4', '5+'
 let deckFilterKeywords = [];    // of 'tutor', 'promote', etc. (OR match)
 let deckSearchQuery = '';       // search text
+// Sort control (user 2026-07-05): field cycles via the fsort button,
+// direction via the chevron buttons (1 = asc, -1 = desc).
+let deckSortField = 'name';
+let deckSortDir = 1;
+var DECK_SORT_FIELDS = [
+    { key: 'name',    label: 'Name' },
+    { key: 'attack',  label: 'Attack' },
+    { key: 'health',  label: 'Health' },
+    { key: 'mana',    label: 'Mana' },
+    { key: 'type',    label: 'Type' },
+    { key: 'release', label: 'Release' }
+];
 
 // =============================================
 // Section 3: Screen Manager
@@ -1515,11 +1527,20 @@ function renderCardBrowser() {
     // Type filter map: card_type int -> filter name
     var typeMap = {0: 'minion', 1: 'magic', 2: 'react'};
     var query = deckSearchQuery.toLowerCase().trim();
-    // Sort by card_type then name
+    // Sort by the fsort control's field/direction; ties fall back to name.
+    // 'release' = numeric card id, i.e. set/collector order.
+    var sorters = {
+        name:    function(ca, cb) { return (ca.name || '').localeCompare(cb.name || ''); },
+        attack:  function(ca, cb) { return (ca.attack || 0) - (cb.attack || 0); },
+        health:  function(ca, cb) { return (ca.health || 0) - (cb.health || 0); },
+        mana:    function(ca, cb) { return (ca.mana_cost || 0) - (cb.mana_cost || 0); },
+        type:    function(ca, cb) { return ca.card_type - cb.card_type; }
+    };
     var ids = Object.keys(defs).map(Number).sort(function(a, b) {
         var ca = defs[a], cb = defs[b];
-        if (ca.card_type !== cb.card_type) return ca.card_type - cb.card_type;
-        return (ca.name || '').localeCompare(cb.name || '');
+        var d = deckSortField === 'release' ? (a - b) : sorters[deckSortField](ca, cb);
+        if (d === 0 && deckSortField !== 'name') d = (ca.name || '').localeCompare(cb.name || '');
+        return d * deckSortDir;
     });
     ids.forEach(function(numId) {
         var c = defs[numId];
@@ -1650,6 +1671,26 @@ function setupDeckFilters() {
         });
     });
     document.addEventListener('click', closeAllDrops);
+    // Sort control: chevrons pick direction (active one renders doubled),
+    // the field button cycles Name/Attack/Health/Mana/Type/Release.
+    var sortUp = document.getElementById('fsort-up');
+    var sortDown = document.getElementById('fsort-down');
+    var sortField = document.getElementById('fsort-field');
+    function setSortDir(dir) {
+        deckSortDir = dir;
+        if (sortUp) sortUp.classList.toggle('active', dir === 1);
+        if (sortDown) sortDown.classList.toggle('active', dir === -1);
+        renderCardBrowser();
+    }
+    if (sortUp) sortUp.addEventListener('click', function() { setSortDir(1); });
+    if (sortDown) sortDown.addEventListener('click', function() { setSortDir(-1); });
+    if (sortField) sortField.addEventListener('click', function() {
+        var idx = DECK_SORT_FIELDS.findIndex(function(f) { return f.key === deckSortField; });
+        var next = DECK_SORT_FIELDS[(idx + 1) % DECK_SORT_FIELDS.length];
+        deckSortField = next.key;
+        sortField.textContent = next.label;
+        renderCardBrowser();
+    });
     // Non-deckable checkbox
     var nonDeckCheckbox = document.getElementById('show-nondeckable');
     if (nonDeckCheckbox) {

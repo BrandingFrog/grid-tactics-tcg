@@ -252,8 +252,22 @@
             <span class="hud-armoury-search-kbd" aria-hidden="true">⏎</span>
           </div>
 
-          <!-- dropdown filters with checkboxes (user 2026-07-05); empty group = All -->
+          <!-- dropdown filters with checkboxes (user 2026-07-05); empty group = All.
+               Left: sort control (chevrons = direction, doubled when active;
+               button cycles the sort field). Filters sit centered. -->
           <div class="card-browser-filters hud-armoury-filters" id="filter-bar">
+            <div class="fsort" id="fsort">
+              <div class="fsort-dirs">
+                <button class="fsort-dir active" id="fsort-up" type="button" aria-label="Sort ascending">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path class="chev2" d="M5 20 L12 13 L19 20"/><path class="chev1" d="M5 13 L12 6 L19 13"/></svg>
+                </button>
+                <button class="fsort-dir" id="fsort-down" type="button" aria-label="Sort descending">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path class="chev2" d="M5 4 L12 11 L19 4"/><path class="chev1" d="M5 11 L12 18 L19 11"/></svg>
+                </button>
+              </div>
+              <button class="fsort-field" id="fsort-field" type="button" title="Cycle sort field">Name</button>
+            </div>
+            <div class="fdrops">
             <div class="fdrop" data-group="type">
               <button class="fdrop-btn" type="button"><span>Type</span><span class="fdrop-count"></span><span class="fdrop-caret" aria-hidden="true">&#9662;</span></button>
               <div class="fdrop-menu">
@@ -303,6 +317,7 @@
                 <label class="fdrop-opt"><input type="checkbox" value="9"><span class="fdrop-box" aria-hidden="true"></span><span>9</span></label>
                 <label class="fdrop-opt"><input type="checkbox" value="10+"><span class="fdrop-box" aria-hidden="true"></span><span>10+</span></label>
               </div>
+            </div>
             </div>
             <label class="filter-checkbox hud-armoury-cbox fbar-nondeckable">
               <input type="checkbox" id="show-nondeckable">
