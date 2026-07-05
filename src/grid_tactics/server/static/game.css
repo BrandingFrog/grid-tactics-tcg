@@ -12395,3 +12395,22 @@ body.fs-switching *, body.fs-switching *::before, body.fs-switching *::after {
   transition: opacity 0.35s ease, transform 0.45s cubic-bezier(0.34, 1.45, 0.64, 1),
               color 0.13s ease, border-color 0.13s ease;
 }
+
+/* "— or —" between dual-mode boxes: bigger text, same footprint — tight
+   line-height + trimmed margins offset the size (user 2026-07-05) */
+.cf2 .cf2-ordiv {
+  font-size: 4.35cqw;
+  line-height: 0.72;
+  margin: 0 0 0.87cqw;
+}
+/* tooltip element dots: use the SAME --el-* accents as the filter dropdown
+   dots (they were inheriting the lightened text colour and looked washed) */
+.tooltip-stats .ts-elem .ts-dot { box-shadow: none; }
+.tooltip-stats .ts-elem.attr-fire    .ts-dot { background: var(--el-fire,    #a8332a); }
+.tooltip-stats .ts-elem.attr-wood    .ts-dot { background: var(--el-wood,    #4a7a2e); }
+.tooltip-stats .ts-elem.attr-earth   .ts-dot { background: var(--el-earth,   #8a6d2f); }
+.tooltip-stats .ts-elem.attr-water   .ts-dot { background: var(--el-water,   #2b5f9e); }
+.tooltip-stats .ts-elem.attr-metal   .ts-dot { background: var(--el-metal,   #5c5c60); }
+.tooltip-stats .ts-elem.attr-dark    .ts-dot { background: var(--el-dark,    #5d3a8f); }
+.tooltip-stats .ts-elem.attr-light   .ts-dot { background: var(--el-light,   #b09a34); }
+.tooltip-stats .ts-elem.attr-neutral .ts-dot { background: var(--el-neutral, #6a6a6e); }
