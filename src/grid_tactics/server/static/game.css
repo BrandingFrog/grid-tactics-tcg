@@ -12856,3 +12856,27 @@ body.sbx-hide-bar:has(#screen-sandbox.active) .room-bar { display: none !importa
   background: rgba(224, 162, 60, 0.18);
   border-color: #ffd873;
 }
+
+/* ==========================================================================
+   POD CONDENSE (user 2026-07-05): smaller, tighter player pillboxes that
+   clear the board — self below the board's bottom-left, opponent right of
+   rows 1-2 under the top bar. No more plate-over-board overlap.
+   ========================================================================== */
+#screen-game .pod, #screen-sandbox .pod { transform: scale(0.62) !important; }
+#screen-game .pod-self, #screen-sandbox .pod-self {
+  left: 6px !important; bottom: 4px !important; top: auto !important;
+  transform-origin: bottom left !important;
+}
+#screen-game .pod-opp, #screen-sandbox .pod-opp {
+  right: 6px !important; top: 54px !important; bottom: auto !important; left: auto !important;
+  transform-origin: top right !important;
+}
+#screen-game .pod .pod-plate, #screen-sandbox .pod .pod-plate {
+  padding: 4px 8px !important;
+}
+#screen-game .pod .pod-name, #screen-sandbox .pod .pod-name { font-size: 11px !important; letter-spacing: 0.04em !important; }
+#screen-game .pod .pod-hp-n, #screen-sandbox .pod .pod-hp-n { font-size: 19px !important; }
+#screen-game .pod .pod-bar, #screen-sandbox .pod .pod-bar { height: 6px !important; }
+#screen-game .pod .pod-chip, #screen-sandbox .pod .pod-chip {
+  font-size: 9.5px !important; padding: 1px 5px !important;
+}
