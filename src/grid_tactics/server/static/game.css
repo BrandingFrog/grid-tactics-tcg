@@ -11827,3 +11827,85 @@ body.sbx-hide-side #screen-deck-builder .deck-builder-body {
 #screen-deck-builder .tooltip-related-name { font-size: calc(var(--mfu) * 11) !important; }
 #screen-deck-builder .tooltip-related-stats,
 #screen-deck-builder .tooltip-related-effect { font-size: calc(var(--mfu) * 10.5) !important; }
+
+/* ==========================================================================
+   FILTER DROPDOWNS — the top filter chips are now dropdown filters with
+   checkboxes (user 2026-07-05). One group per dropdown; empty group = All.
+   Vintage skin, --mfu units, appended last so it wins the cascade.
+   ========================================================================== */
+#screen-deck-builder .card-browser-filters {
+  overflow: visible !important;               /* menus must escape the bar */
+  gap: calc(var(--mfu) * 5) !important;
+  padding: 0 calc(var(--mfu) * 8) calc(var(--mfu) * 5) !important;
+  position: relative; z-index: 60;            /* menus float above the grid */
+}
+#screen-deck-builder .fdrop { position: relative; flex: 0 0 auto; }
+#screen-deck-builder .fdrop-btn {
+  display: inline-flex; align-items: center; gap: calc(var(--mfu) * 5);
+  font-family: var(--ui-display); font-weight: 700;
+  font-size: calc(var(--mfu) * 11); letter-spacing: 0.05em;
+  color: var(--parch-dim); background: var(--field);
+  border: 1px solid var(--bronze); border-radius: calc(var(--mfu) * 3);
+  padding: calc(var(--mfu) * 3) calc(var(--mfu) * 9);
+  cursor: pointer;
+}
+#screen-deck-builder .fdrop-btn:hover { color: var(--parch); border-color: var(--gold); }
+#screen-deck-builder .fdrop.open .fdrop-btn,
+#screen-deck-builder .fdrop.has-active .fdrop-btn { color: var(--gold-lt); border-color: var(--gold); }
+#screen-deck-builder .fdrop-count {
+  min-width: calc(var(--mfu) * 13); text-align: center;
+  font-size: calc(var(--mfu) * 9); line-height: calc(var(--mfu) * 13);
+  color: var(--ink); background: var(--gold);
+  border-radius: calc(var(--mfu) * 7); padding: 0 calc(var(--mfu) * 3);
+}
+#screen-deck-builder .fdrop-count:empty { display: none; }
+#screen-deck-builder .fdrop-caret {
+  font-size: calc(var(--mfu) * 8); opacity: 0.75; transition: transform 0.15s ease;
+}
+#screen-deck-builder .fdrop.open .fdrop-caret { transform: rotate(180deg); }
+#screen-deck-builder .fdrop-menu {
+  display: none; position: absolute; top: calc(100% + var(--mfu) * 3); left: 0;
+  min-width: calc(var(--mfu) * 116); max-height: calc(var(--mfu) * 240);
+  overflow-y: auto; z-index: 500;
+  background: var(--ink); border: 1px solid var(--bronze);
+  border-radius: calc(var(--mfu) * 3);
+  box-shadow: 0 calc(var(--mfu) * 6) calc(var(--mfu) * 18) rgba(0, 0, 0, 0.65);
+  padding: calc(var(--mfu) * 4) 0;
+}
+#screen-deck-builder .fdrop.open .fdrop-menu { display: block; }
+#screen-deck-builder .fdrop-menu::-webkit-scrollbar { width: calc(var(--mfu) * 5); }
+#screen-deck-builder .fdrop-menu::-webkit-scrollbar-thumb { background: var(--bronze); }
+#screen-deck-builder .fdrop-opt {
+  display: flex; align-items: center; gap: calc(var(--mfu) * 7);
+  font-family: var(--ui-display); font-size: calc(var(--mfu) * 11.5);
+  color: var(--parch-dim); cursor: pointer; white-space: nowrap;
+  padding: calc(var(--mfu) * 4) calc(var(--mfu) * 11);
+}
+#screen-deck-builder .fdrop-opt:hover { background: rgba(224, 162, 60, 0.08); color: var(--parch); }
+#screen-deck-builder .fdrop-opt:has(input:checked) { color: var(--parch); }
+#screen-deck-builder .fdrop-opt input { position: absolute; opacity: 0; pointer-events: none; }
+#screen-deck-builder .fdrop-box {
+  flex: 0 0 auto; position: relative;
+  width: calc(var(--mfu) * 11); height: calc(var(--mfu) * 11);
+  border: 1px solid var(--bronze); border-radius: calc(var(--mfu) * 2);
+  background: var(--field);
+}
+#screen-deck-builder .fdrop-opt input:checked ~ .fdrop-box {
+  background: var(--gold); border-color: var(--gold-lt);
+}
+#screen-deck-builder .fdrop-opt input:checked ~ .fdrop-box::after {
+  content: '\2713'; position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-size: calc(var(--mfu) * 9); font-weight: 700; color: var(--ink);
+}
+#screen-deck-builder .fdrop-dot {
+  flex: 0 0 auto; width: calc(var(--mfu) * 7); height: calc(var(--mfu) * 7);
+  border-radius: 50%; background: var(--dot, var(--parch-mute));
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.35);
+}
+#screen-deck-builder .fbar-nondeckable {
+  flex: 0 1 auto; min-width: 0; margin-left: auto;
+  font-size: calc(var(--mfu) * 9.5) !important;
+  letter-spacing: 0.02em !important;
+  white-space: nowrap; overflow: hidden;
+}

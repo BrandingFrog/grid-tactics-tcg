@@ -367,10 +367,12 @@ function stripUndeckable(deckObj) {
 }
 let currentSlotIdx = 0;
 let allCardDefs = null;      // set from server on game_start or card_defs event
-let deckFilterType = 'all';     // 'all', 'minion', 'magic', 'react'
-let deckFilterElement = 'all';  // 'all', or element int as string
-let deckFilterMana = 'all';     // 'all', '1', '2', '3', '4', '5+'
-let deckFilterKeyword = 'all';  // 'all', 'tutor', 'promote', etc.
+// Dropdown filters with checkboxes (user 2026-07-05): each group is a
+// multi-select array. Empty array = no filter ("All").
+let deckFilterTypes = [];       // of 'minion', 'magic', 'react'
+let deckFilterElements = [];    // of element ints as strings
+let deckFilterManas = [];       // of '1', '2', '3', '4', '5+'
+let deckFilterKeywords = [];    // of 'tutor', 'promote', etc. (OR match)
 let deckSearchQuery = '';       // search text
 
 // =============================================
@@ -1524,41 +1526,24 @@ function renderCardBrowser() {
         // Hide non-deckable cards unless checkbox is checked
         var showNonDeckable = document.getElementById('show-nondeckable') && document.getElementById('show-nondeckable').checked;
         if (c.deckable === false && !showNonDeckable) return;
-        // Type filter
-        if (deckFilterType !== 'all' && typeMap[c.card_type] !== deckFilterType) return;
+        // Type filter (multi-select; empty = all)
+        if (deckFilterTypes.length && deckFilterTypes.indexOf(typeMap[c.card_type]) === -1) return;
         // Element filter
-        if (deckFilterElement !== 'all') {
+        if (deckFilterElements.length) {
             var cardElem = (c.element !== undefined && c.element !== null) ? String(c.element) : '-1';
-            if (deckFilterElement !== cardElem) return;
+            if (deckFilterElements.indexOf(cardElem) === -1) return;
         }
         // Mana filter
-        if (deckFilterMana !== 'all') {
+        if (deckFilterManas.length) {
             var manaCost = c.mana_cost || 0;
-            if (deckFilterMana === '5+') {
-                if (manaCost < 5) return;
-            } else {
-                if (manaCost !== parseInt(deckFilterMana)) return;
-            }
+            var manaOk = deckFilterManas.some(function(m) {
+                return m === '5+' ? manaCost >= 5 : manaCost === parseInt(m);
+            });
+            if (!manaOk) return;
         }
-        // Keyword filter
-        if (deckFilterKeyword !== 'all') {
-            var hasKeyword = false;
-            var kw = deckFilterKeyword;
-            if (kw === 'tutor' && c.tutor_target) hasKeyword = true;
-            else if (kw === 'promote' && c.promote_target) hasKeyword = true;
-            // 'march' is the current keyword name; 'rally' accepted for
-            // backward compat with any stale data-filter markup.
-            else if ((kw === 'march' || kw === 'rally') && c.effects && c.effects.some(function(e) { return e.type === 6; })) hasKeyword = true;
-            else if (kw === 'transform' && c.transform_options && c.transform_options.length > 0) hasKeyword = true;
-            else if (kw === 'discard' && c.discard_cost_tribe) hasKeyword = true;
-            else if (kw === 'react' && c.react_condition != null) hasKeyword = true;
-            else if (kw === 'unique' && c.unique) hasKeyword = true;
-            else if (kw === 'negate' && c.effects && c.effects.some(function(e) { return e.type === 4; })) hasKeyword = true;
-            else if (kw === 'burn' && c.effects && c.effects.some(function(e) { return e.type === 10; })) hasKeyword = true;
-            else if (kw === 'end' && c.effects && c.effects.some(function(e) { return e.trigger === 5 || e.type === 12; })) hasKeyword = true;
-            else if (kw === 'draw' && c.effects && c.effects.some(function(e) { return e.type === 18; })) hasKeyword = true;
-            else if (kw === 'passive' && c.effects && c.effects.some(function(e) { return e.trigger === 7; })) hasKeyword = true;
-            if (!hasKeyword) return;
+        // Keyword filter (card passes if it has ANY checked keyword)
+        if (deckFilterKeywords.length) {
+            if (!deckFilterKeywords.some(function(kw) { return cardHasKeyword(c, kw); })) return;
         }
         // Search filter
         if (query) {
@@ -1594,6 +1579,24 @@ function renderCardBrowser() {
     });
 }
 
+// One card / one keyword check, shared by the multi-select keyword filter.
+// 'rally' accepted for backward compat with any stale markup.
+function cardHasKeyword(c, kw) {
+    if (kw === 'tutor') return !!c.tutor_target;
+    if (kw === 'promote') return !!c.promote_target;
+    if (kw === 'march' || kw === 'rally') return !!(c.effects && c.effects.some(function(e) { return e.type === 6; }));
+    if (kw === 'transform') return !!(c.transform_options && c.transform_options.length > 0);
+    if (kw === 'discard') return !!c.discard_cost_tribe;
+    if (kw === 'react') return c.react_condition != null;
+    if (kw === 'unique') return !!c.unique;
+    if (kw === 'negate') return !!(c.effects && c.effects.some(function(e) { return e.type === 4; }));
+    if (kw === 'burn') return !!(c.effects && c.effects.some(function(e) { return e.type === 10; }));
+    if (kw === 'end') return !!(c.effects && c.effects.some(function(e) { return e.trigger === 5 || e.type === 12; }));
+    if (kw === 'draw') return !!(c.effects && c.effects.some(function(e) { return e.type === 18; }));
+    if (kw === 'passive') return !!(c.effects && c.effects.some(function(e) { return e.trigger === 7; }));
+    return false;
+}
+
 function setupDeckFilters() {
     var searchInput = document.getElementById('card-search');
     if (searchInput) {
@@ -1602,47 +1605,48 @@ function setupDeckFilters() {
             renderCardBrowser();
         });
     }
-    // Type filters
-    document.querySelectorAll('#type-filters .filter-btn').forEach(function(btn) {
-        btn.addEventListener('click', function() {
-            deckFilterType = btn.dataset.filter;
-            document.querySelectorAll('#type-filters .filter-btn').forEach(function(b) { b.classList.remove('active'); });
-            btn.classList.add('active');
-            renderCardBrowser();
+    // Dropdown filters with checkboxes (user 2026-07-05). Each .fdrop is one
+    // group; checked values collect into the matching deckFilter* array.
+    var applyByGroup = {
+        type:    function(vals) { deckFilterTypes = vals; },
+        element: function(vals) { deckFilterElements = vals; },
+        keyword: function(vals) { deckFilterKeywords = vals; },
+        mana:    function(vals) { deckFilterManas = vals; }
+    };
+    var drops = document.querySelectorAll('#filter-bar .fdrop');
+    function closeAllDrops() {
+        drops.forEach(function(d) { d.classList.remove('open'); });
+    }
+    drops.forEach(function(drop) {
+        var btn = drop.querySelector('.fdrop-btn');
+        btn.addEventListener('click', function(e) {
+            e.stopPropagation();
+            var wasOpen = drop.classList.contains('open');
+            closeAllDrops();
+            if (!wasOpen) drop.classList.add('open');
+        });
+        // Clicks inside the menu (toggling boxes) must not close it
+        drop.addEventListener('click', function(e) { e.stopPropagation(); });
+        drop.querySelectorAll('.fdrop-opt input[type="checkbox"]').forEach(function(cb) {
+            cb.addEventListener('change', function() {
+                var vals = Array.prototype.slice.call(
+                    drop.querySelectorAll('.fdrop-opt input:checked')
+                ).map(function(i) { return i.value; });
+                var apply = applyByGroup[drop.dataset.group];
+                if (apply) apply(vals);
+                var count = drop.querySelector('.fdrop-count');
+                if (count) count.textContent = vals.length ? String(vals.length) : '';
+                drop.classList.toggle('has-active', vals.length > 0);
+                renderCardBrowser();
+            });
         });
     });
-    // Element filters
-    document.querySelectorAll('#element-filters .filter-btn').forEach(function(btn) {
-        btn.addEventListener('click', function() {
-            deckFilterElement = btn.dataset.filter;
-            document.querySelectorAll('#element-filters .filter-btn').forEach(function(b) { b.classList.remove('active'); });
-            btn.classList.add('active');
-            renderCardBrowser();
-        });
-    });
+    document.addEventListener('click', closeAllDrops);
     // Non-deckable checkbox
     var nonDeckCheckbox = document.getElementById('show-nondeckable');
     if (nonDeckCheckbox) {
         nonDeckCheckbox.addEventListener('change', function() { renderCardBrowser(); });
     }
-    // Keyword filters
-    document.querySelectorAll('#keyword-filters .filter-btn').forEach(function(btn) {
-        btn.addEventListener('click', function() {
-            deckFilterKeyword = btn.dataset.filter;
-            document.querySelectorAll('#keyword-filters .filter-btn').forEach(function(b) { b.classList.remove('active'); });
-            btn.classList.add('active');
-            renderCardBrowser();
-        });
-    });
-    // Mana filters
-    document.querySelectorAll('#mana-filters .filter-btn').forEach(function(btn) {
-        btn.addEventListener('click', function() {
-            deckFilterMana = btn.dataset.filter;
-            document.querySelectorAll('#mana-filters .filter-btn').forEach(function(b) { b.classList.remove('active'); });
-            btn.classList.add('active');
-            renderCardBrowser();
-        });
-    });
 }
 
 // Kept in sync with data/GLOSSARY.md (source of truth) — update BOTH when

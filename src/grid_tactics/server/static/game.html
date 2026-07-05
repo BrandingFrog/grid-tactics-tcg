@@ -252,65 +252,57 @@
             <span class="hud-armoury-search-kbd" aria-hidden="true">⏎</span>
           </div>
 
-          <div class="card-browser-filters hud-armoury-filters">
-            <div class="filter-row hud-armoury-filter-row">
-              <span class="filter-label hud-armoury-filter-label">TYPE</span>
-              <div class="filter-btns hud-armoury-chips" id="type-filters">
-                <button class="filter-btn active" data-filter="all">All</button>
-                <button class="filter-btn" data-filter="minion" style="border-color:rgb(180,140,60);color:rgb(180,140,60);">Minion</button>
-                <button class="filter-btn" data-filter="magic" style="border-color:rgb(30,140,120);color:rgb(30,140,120);">Magic</button>
-                <button class="filter-btn" data-filter="react" style="border-color:rgb(160,40,100);color:rgb(160,40,100);">React</button>
+          <!-- dropdown filters with checkboxes (user 2026-07-05); empty group = All -->
+          <div class="card-browser-filters hud-armoury-filters" id="filter-bar">
+            <div class="fdrop" data-group="type">
+              <button class="fdrop-btn" type="button"><span>Type</span><span class="fdrop-count"></span><span class="fdrop-caret" aria-hidden="true">&#9662;</span></button>
+              <div class="fdrop-menu">
+                <label class="fdrop-opt"><input type="checkbox" value="minion"><span class="fdrop-box" aria-hidden="true"></span><span class="fdrop-dot" style="--dot:var(--el-earth)" aria-hidden="true"></span><span>Minion</span></label>
+                <label class="fdrop-opt"><input type="checkbox" value="magic"><span class="fdrop-box" aria-hidden="true"></span><span class="fdrop-dot" style="--dot:#565a86" aria-hidden="true"></span><span>Magic</span></label>
+                <label class="fdrop-opt"><input type="checkbox" value="react"><span class="fdrop-box" aria-hidden="true"></span><span class="fdrop-dot" style="--dot:#b07a2e" aria-hidden="true"></span><span>React</span></label>
               </div>
             </div>
-            <div class="filter-row hud-armoury-filter-row">
-              <span class="filter-label hud-armoury-filter-label">ELEMENT</span>
-              <div class="filter-btns hud-armoury-chips" id="element-filters">
-                <button class="filter-btn active" data-filter="all">All</button>
-                <button class="filter-btn" data-filter="1" style="border-color:rgb(220,40,30);color:rgb(220,40,30);">Fire</button>
-                <button class="filter-btn" data-filter="5" style="border-color:rgb(130,50,180);color:rgb(130,50,180);">Dark</button>
-                <button class="filter-btn" data-filter="6" style="border-color:rgb(240,220,40);color:rgb(240,220,40);">Light</button>
-                <button class="filter-btn" data-filter="2" style="border-color:rgb(140,100,40);color:rgb(140,100,40);">Earth</button>
-                <button class="filter-btn" data-filter="0" style="border-color:rgb(102,187,106);color:rgb(102,187,106);">Wood</button>
-                <button class="filter-btn" data-filter="4" style="border-color:rgb(189,189,189);color:rgb(189,189,189);">Metal</button>
+            <div class="fdrop" data-group="element">
+              <button class="fdrop-btn" type="button"><span>Element</span><span class="fdrop-count"></span><span class="fdrop-caret" aria-hidden="true">&#9662;</span></button>
+              <div class="fdrop-menu">
+                <label class="fdrop-opt"><input type="checkbox" value="0"><span class="fdrop-box" aria-hidden="true"></span><span class="fdrop-dot" style="--dot:var(--el-wood)" aria-hidden="true"></span><span>Wood</span></label>
+                <label class="fdrop-opt"><input type="checkbox" value="1"><span class="fdrop-box" aria-hidden="true"></span><span class="fdrop-dot" style="--dot:var(--el-fire)" aria-hidden="true"></span><span>Fire</span></label>
+                <label class="fdrop-opt"><input type="checkbox" value="2"><span class="fdrop-box" aria-hidden="true"></span><span class="fdrop-dot" style="--dot:var(--el-earth)" aria-hidden="true"></span><span>Earth</span></label>
+                <label class="fdrop-opt"><input type="checkbox" value="3"><span class="fdrop-box" aria-hidden="true"></span><span class="fdrop-dot" style="--dot:var(--el-water)" aria-hidden="true"></span><span>Water</span></label>
+                <label class="fdrop-opt"><input type="checkbox" value="4"><span class="fdrop-box" aria-hidden="true"></span><span class="fdrop-dot" style="--dot:var(--el-metal)" aria-hidden="true"></span><span>Metal</span></label>
+                <label class="fdrop-opt"><input type="checkbox" value="5"><span class="fdrop-box" aria-hidden="true"></span><span class="fdrop-dot" style="--dot:var(--el-dark)" aria-hidden="true"></span><span>Dark</span></label>
+                <label class="fdrop-opt"><input type="checkbox" value="6"><span class="fdrop-box" aria-hidden="true"></span><span class="fdrop-dot" style="--dot:var(--el-light)" aria-hidden="true"></span><span>Light</span></label>
               </div>
             </div>
-            <div class="filter-row hud-armoury-filter-row">
-              <span class="filter-label hud-armoury-filter-label">SHOW</span>
-              <div class="filter-btns hud-armoury-chips" id="deckable-filters">
-                <label class="filter-checkbox hud-armoury-cbox">
-                  <input type="checkbox" id="show-nondeckable">
-                  <span class="hud-armoury-cbox-box" aria-hidden="true"></span>
-                  <span>Non-Deckable</span>
-                </label>
+            <div class="fdrop" data-group="keyword">
+              <button class="fdrop-btn" type="button"><span>Keyword</span><span class="fdrop-count"></span><span class="fdrop-caret" aria-hidden="true">&#9662;</span></button>
+              <div class="fdrop-menu">
+                <label class="fdrop-opt"><input type="checkbox" value="tutor"><span class="fdrop-box" aria-hidden="true"></span><span>Tutor</span></label>
+                <label class="fdrop-opt"><input type="checkbox" value="promote"><span class="fdrop-box" aria-hidden="true"></span><span>Promote</span></label>
+                <label class="fdrop-opt"><input type="checkbox" value="march"><span class="fdrop-box" aria-hidden="true"></span><span>March</span></label>
+                <label class="fdrop-opt"><input type="checkbox" value="transform"><span class="fdrop-box" aria-hidden="true"></span><span>Transform</span></label>
+                <label class="fdrop-opt"><input type="checkbox" value="react"><span class="fdrop-box" aria-hidden="true"></span><span>React</span></label>
+                <label class="fdrop-opt"><input type="checkbox" value="unique"><span class="fdrop-box" aria-hidden="true"></span><span>Unique</span></label>
+                <label class="fdrop-opt"><input type="checkbox" value="negate"><span class="fdrop-box" aria-hidden="true"></span><span>Negate</span></label>
+                <label class="fdrop-opt"><input type="checkbox" value="burn"><span class="fdrop-box" aria-hidden="true"></span><span>Burn</span></label>
+                <label class="fdrop-opt"><input type="checkbox" value="passive"><span class="fdrop-box" aria-hidden="true"></span><span>Passive</span></label>
               </div>
             </div>
-            <div class="filter-row hud-armoury-filter-row">
-              <span class="filter-label hud-armoury-filter-label">KEYWORD</span>
-              <div class="filter-btns hud-armoury-chips" id="keyword-filters">
-                <button class="filter-btn active" data-filter="all">All</button>
-                <button class="filter-btn" data-filter="tutor">Tutor</button>
-                <button class="filter-btn" data-filter="promote">Promote</button>
-                <button class="filter-btn" data-filter="march">March</button>
-                <button class="filter-btn" data-filter="transform">Transform</button>
-                <button class="filter-btn" data-filter="exhaust">Exhaust</button>
-                <button class="filter-btn" data-filter="react">React</button>
-                <button class="filter-btn" data-filter="unique">Unique</button>
-                <button class="filter-btn" data-filter="negate">Negate</button>
-                <button class="filter-btn" data-filter="burn">Burn</button>
-                <button class="filter-btn" data-filter="passive">Passive</button>
+            <div class="fdrop" data-group="mana">
+              <button class="fdrop-btn" type="button"><span>Mana</span><span class="fdrop-count"></span><span class="fdrop-caret" aria-hidden="true">&#9662;</span></button>
+              <div class="fdrop-menu">
+                <label class="fdrop-opt"><input type="checkbox" value="1"><span class="fdrop-box" aria-hidden="true"></span><span>1</span></label>
+                <label class="fdrop-opt"><input type="checkbox" value="2"><span class="fdrop-box" aria-hidden="true"></span><span>2</span></label>
+                <label class="fdrop-opt"><input type="checkbox" value="3"><span class="fdrop-box" aria-hidden="true"></span><span>3</span></label>
+                <label class="fdrop-opt"><input type="checkbox" value="4"><span class="fdrop-box" aria-hidden="true"></span><span>4</span></label>
+                <label class="fdrop-opt"><input type="checkbox" value="5+"><span class="fdrop-box" aria-hidden="true"></span><span>5+</span></label>
               </div>
             </div>
-            <div class="filter-row hud-armoury-filter-row">
-              <span class="filter-label hud-armoury-filter-label">MANA</span>
-              <div class="filter-btns hud-armoury-chips hud-armoury-chips-mana" id="mana-filters">
-                <button class="filter-btn active" data-filter="all">All</button>
-                <button class="filter-btn" data-filter="1">1</button>
-                <button class="filter-btn" data-filter="2">2</button>
-                <button class="filter-btn" data-filter="3">3</button>
-                <button class="filter-btn" data-filter="4">4</button>
-                <button class="filter-btn" data-filter="5+">5+</button>
-              </div>
-            </div>
+            <label class="filter-checkbox hud-armoury-cbox fbar-nondeckable">
+              <input type="checkbox" id="show-nondeckable">
+              <span class="hud-armoury-cbox-box" aria-hidden="true"></span>
+              <span>Non-Deckable</span>
+            </label>
           </div>
 
           <div class="card-browser-grid hud-armoury-grid" id="card-browser-grid">
