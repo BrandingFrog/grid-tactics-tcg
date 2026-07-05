@@ -8701,8 +8701,8 @@ body {
 .cf2 {
   --parch:#e8dcbb; --parch2:#ded0a8; --ink:#241c10;
   --minion:#7a4f28;                                             /* leather brown */
-  --magic:#6f42a0; --magic-dark:#48286e; --magic-tint:#e8def1;  /* purple */
-  --react:#1f7f96; --react-dark:#14535f; --react-tint:#d9eef2;  /* cyan */
+  --magic:#1f7f96; --magic-dark:#14535f; --magic-tint:#d9eef2;  /* cyan */
+  --react:#6f42a0; --react-dark:#48286e; --react-tint:#e8def1;  /* purple */
 }
 
 /* --- neutralise the HUD skin so the parchment frame reads cleanly --- */
@@ -11939,10 +11939,10 @@ body.sbx-hide-side #screen-deck-builder .deck-builder-body {
   opacity: 1 !important; transform: none !important;
 }
 #screen-deck-builder .dli-minion { --dli-a: #9a6b33; --dli-b: #9a6b33; }
-#screen-deck-builder .dli-magic  { --dli-a: #8355b5; --dli-b: #8355b5; }
-#screen-deck-builder .dli-react  { --dli-a: #3fb8cc; --dli-b: #3fb8cc; }
-#screen-deck-builder .dli-minion-react { --dli-a: #9a6b33; --dli-b: #3fb8cc; }
-#screen-deck-builder .dli-magic-react  { --dli-a: #8355b5; --dli-b: #3fb8cc; }
+#screen-deck-builder .dli-magic  { --dli-a: #3fb8cc; --dli-b: #3fb8cc; }
+#screen-deck-builder .dli-react  { --dli-a: #8355b5; --dli-b: #8355b5; }
+#screen-deck-builder .dli-minion-react { --dli-a: #9a6b33; --dli-b: #8355b5; }
+#screen-deck-builder .dli-magic-react  { --dli-a: #3fb8cc; --dli-b: #8355b5; }
 
 /* Related cards in the tooltip are clickable — they jump the tooltip to that
    card (user 2026-07-05). Mana menu is tall (0-10+), keep it scroll-friendly. */
