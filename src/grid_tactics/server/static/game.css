@@ -12525,3 +12525,22 @@ body:has(#screen-deck-builder.active) #sbx-toggles { display: none !important; }
 /* clear the floating Lobby button: the deck column starts below it instead
    of squeezing the name input row */
 #screen-deck-builder .deck-sidebar.hud-loadout { padding-top: calc(var(--mfu) * 30) !important; }
+
+/* Non-Deckable back on the bar (user 2026-07-05 "non-deckable is missing" —
+   the Type-menu spot wasn't discoverable): compact 🚫 icon toggle, gold ring
+   when active. Sits right of the Mana dropdown. */
+#screen-deck-builder .fbar-nd {
+  flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center;
+  width: calc(var(--mfu) * 22); height: calc(var(--mfu) * 20);
+  background: var(--field); border: 1px solid var(--bronze);
+  border-radius: calc(var(--mfu) * 3);
+  cursor: pointer; margin-left: calc(var(--mfu) * 3);
+}
+#screen-deck-builder .fbar-nd input { position: absolute; opacity: 0; pointer-events: none; }
+#screen-deck-builder .fbar-nd-icon {
+  font-size: calc(var(--mfu) * 11); line-height: 1;
+  filter: grayscale(1); opacity: 0.55;
+}
+#screen-deck-builder .fbar-nd:hover { border-color: var(--gold); }
+#screen-deck-builder .fbar-nd:has(input:checked) { border-color: var(--gold); background: rgba(224, 162, 60, 0.14); }
+#screen-deck-builder .fbar-nd:has(input:checked) .fbar-nd-icon { filter: none; opacity: 1; }
