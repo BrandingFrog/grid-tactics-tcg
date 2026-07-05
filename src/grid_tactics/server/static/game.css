@@ -12905,3 +12905,37 @@ body.sbx-hide-bar:has(#screen-sandbox.active) .room-bar {
 #screen-sandbox .card-frame-hand.card-dimmed {
   filter: brightness(0.9) saturate(0.8) !important;
 }
+
+/* ==========================================================================
+   ONE-LAYOUT ENFORCEMENT (user 2026-07-05): the design box is permanently
+   844x390, so the old breakpoint variants (max-height 560 tighten /
+   min-height 720 roomier) must not re-shape the composition by REAL
+   viewport. Freeze the base geometry unconditionally.
+   ========================================================================== */
+#screen-game .duel-stage .board-container, #screen-sandbox .duel-stage .board-container {
+  top: 30px !important; bottom: 74px !important;
+}
+#screen-game .duel-stage .game-board, #screen-sandbox .duel-stage .game-board {
+  gap: 6px !important; padding: 8px !important;
+}
+#screen-game .duel-stage .hand-action-bar, #screen-sandbox .duel-stage .hand-action-bar {
+  bottom: 82px !important;
+}
+
+/* Sub-pixel border fix (user 2026-07-06): at hand-card size the cqw border
+   widths compute to ~0.4px and render unevenly (some edges vanish, some snap
+   to 1px). Floor every structural border/outline at 1px so small cards keep
+   crisp consistent edges; at tooltip size the cqw value dominates unchanged. */
+.cf2 .cf2-chip {
+  border-width: max(0.65cqw, 1px);
+  outline-width: max(0.43cqw, 1px);
+}
+.cf2 .cf2-namebox { border-width: max(0.43cqw, 1px); }
+.cf2 .cf2-tag {
+  border-width: max(0.43cqw, 1px);
+  outline-width: max(0.22cqw, 1px);
+}
+.cf2 .cf2-mode {
+  border-width: max(0.43cqw, 1px);
+  border-left-width: max(1.3cqw, 2px);
+}
