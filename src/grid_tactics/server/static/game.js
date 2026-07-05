@@ -375,6 +375,7 @@ let deckFilterManas = [];       // of '0'..'9', '10+'
 let deckFilterKeywords = [];    // of 'tutor', 'promote', etc. (OR match)
 let deckFilterTribes = [];      // of tribe names, e.g. 'Rat' (OR match)
 let deckTooltipLockId = null;   // card pinned in the tooltip via the ! button (null = follow hover)
+let deckTapPreviewId = null;    // touch only: last card previewed by a tap (first tap previews, next adds)
 let deckSearchQuery = '';       // search text
 // Sort control (user 2026-07-05): field cycles via the fsort button,
 // direction via the chevron buttons (1 = asc, -1 = desc).
@@ -1649,14 +1650,22 @@ function renderCardBrowser() {
             });
         });
         wrapper.appendChild(pin);
-        // Click to add (disabled for non-deckable)
+        // Click to add (disabled for non-deckable). On touch devices (no
+        // hover) the FIRST tap only previews the card in the tooltip;
+        // tapping it again adds it (user 2026-07-05). Desktop unchanged —
+        // hover already previews there.
         if (!isNonDeckable) {
             wrapper.addEventListener('click', function(e) {
                 if (e.shiftKey) {
                     removeCardFromDeck(numId);
-                } else {
-                    addCardToDeck(numId);
+                    return;
                 }
+                if (window.matchMedia('(hover: none)').matches && deckTapPreviewId !== numId) {
+                    deckTapPreviewId = numId;
+                    showCardTooltip(numId);
+                    return;
+                }
+                addCardToDeck(numId);
             });
             // Right-click to remove
             wrapper.addEventListener('contextmenu', function(e) {
