@@ -3117,11 +3117,14 @@ function renderOppHandRow(count, elements) {
 // opponent mirrored top-left). This refreshes every cell's count.
 function _pileLen(p, kind) {
     if (!p) return 0;
+    // live mode hides deck CONTENTS (empty array) but ships deck_count —
+    // a numeric *_count always wins over the possibly-redacted array
+    var n = p[kind + '_count'];
+    if (typeof n === 'number') return n;
     var v = p[kind];
     if (Array.isArray(v)) return v.length;
     if (typeof v === 'number') return v;
-    // live-mode deck is count-only; try the _count convention as fallback
-    return p[kind + '_count'] | 0;
+    return 0;
 }
 function updatePileButtonCounts() {
     if (!gameState || !gameState.players) return;
@@ -3151,7 +3154,7 @@ function setupPileHandlers() {
             var p = gameState.players[idx] || {};
             var ids = Array.isArray(p[kind]) ? p[kind] : [];
             var title = (own ? 'Your ' : "Opponent's ") + PILE_TITLES[kind];
-            if (kind === 'deck' && !Array.isArray(p.deck)) {
+            if (kind === 'deck' && ids.length === 0 && _pileLen(p, 'deck') > 0) {
                 title += ' — ' + _pileLen(p, 'deck') + ' cards (hidden)';
             }
             var inSandbox = typeof sandboxState !== 'undefined' && sandboxState &&

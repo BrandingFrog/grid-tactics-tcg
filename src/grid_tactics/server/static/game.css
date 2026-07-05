@@ -4567,7 +4567,7 @@ body {
       rgba(0, 0, 0, 0.30) 0 6px,
       rgba(0, 0, 0, 0.06) 6px 12px),
     linear-gradient(135deg,
-      color-mix(in srgb, var(--back-tint) 55%, #0a1a30) 0%,
+      color-mix(in srgb, var(--back-tint) 55%, #171008) 0%,
       color-mix(in srgb, var(--back-tint) 22%, #061224) 100%);
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.4),
     inset 0 0 0 1px color-mix(in srgb, var(--back-tint) 40%, transparent);
@@ -4586,7 +4586,7 @@ body {
       rgba(0, 0, 0, 0.30) 0 6px,
       rgba(0, 0, 0, 0.06) 6px 12px),
     linear-gradient(135deg,
-      color-mix(in srgb, var(--back-tint) 55%, #0a1a30) 0%,
+      color-mix(in srgb, var(--back-tint) 55%, #171008) 0%,
       color-mix(in srgb, var(--back-tint) 22%, #061224) 100%);
 }
 
@@ -12938,4 +12938,30 @@ body.sbx-hide-bar:has(#screen-sandbox.active) .room-bar {
 .cf2 .cf2-mode {
   border-width: max(0.43cqw, 1px);
   border-left-width: max(1.3cqw, 2px);
+}
+
+/* ==========================================================================
+   LIVE OPPONENT HAND (user 2026-07-06): the card backs were 52x70 portrait
+   peeking 46% above the stage — straight into the room bar. Backs are now
+   square like every card (58.5 design px), sit fully below the bar, and the
+   default back is warm bronze (element-tinted backs keep their tint rule).
+   ========================================================================== */
+#screen-game .duel-stage .opp-hand-row, #screen-sandbox .duel-stage .opp-hand-row {
+  transform: translateY(0) !important;
+}
+.opp-hand-card-back {
+  width: 58.5px !important;
+  height: 58.5px !important;
+  border-radius: 6px !important;
+  background:
+    repeating-linear-gradient(45deg, rgba(224, 162, 60, 0.13) 0 6px, rgba(58, 46, 24, 0.42) 6px 12px),
+    linear-gradient(135deg, #2a1f10 0%, #171008 100%);
+  border-color: rgba(224, 162, 60, 0.35);
+}
+/* activity log entries: last navy chips in the live sidebar */
+#screen-game .game-sidebar .log-entry, #screen-game .game-sidebar [class*="log-item"],
+#screen-game .game-sidebar [class*="log"] > div {
+  background: #191207 !important;
+  border-color: #3a2e18 !important;
+  color: #cbb98f !important;
 }
