@@ -12165,3 +12165,13 @@ body.sbx-hide-side #screen-deck-builder .deck-builder-body {
 #screen-deck-builder .fdrops { gap: calc(var(--mfu) * 2); }
 #screen-deck-builder .fsort { gap: calc(var(--mfu) * 2); }
 #screen-deck-builder .fsort-dirs { gap: calc(var(--mfu) * 2); }
+
+/* share-row buttons: text was spilling over the button edges at small res —
+   fixed 12px font + 1px letter-spacing vs a 59px-wide button (user 2026-07-05) */
+#screen-deck-builder .btn.hud-loadout-share-btn {
+  font-size: calc(var(--mfu) * 10) !important;
+  letter-spacing: 0.02em !important;
+  gap: calc(var(--mfu) * 3) !important;
+  white-space: nowrap; overflow: hidden;
+}
+#screen-deck-builder .btn.hud-loadout-share-btn .hud-btn-chev { font-size: calc(var(--mfu) * 10) !important; }
