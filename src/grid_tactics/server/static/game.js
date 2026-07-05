@@ -568,8 +568,9 @@ function setupActivityTabs() {
     var btnSend = document.getElementById('btn-chat-send');
     if (btnSend && chatInput) {
         btnSend.addEventListener('click', sendChatMessage);
+        // Multiline box (user 2026-07-06): Enter sends, Shift+Enter = newline
         chatInput.addEventListener('keydown', function(e) {
-            if (e.key === 'Enter') {
+            if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
                 sendChatMessage();
             }
@@ -2294,7 +2295,12 @@ function hideCardTooltip() {
 // =============================================
 // Game Tooltip (hand cards + board minions) — same renderer, no related.
 // =============================================
-function showGameTooltip(numericId, anchorEl, minion) {
+// Clicking a card anywhere pins it in the tooltip (user 2026-07-06); while
+// pinned, hover show/hide is ignored unless the caller forces it.
+let gameTooltipPin = null;   // { nid, el }
+
+function showGameTooltip(numericId, anchorEl, minion, opts) {
+    if (gameTooltipPin && !(opts && opts.force)) return;
     var tooltipId = sandboxMode ? 'sandbox-tooltip' : 'game-tooltip';
     var hintId = sandboxMode ? 'sandbox-tooltip-hint' : 'game-tooltip-hint';
     var tooltipEl = document.getElementById(tooltipId);
@@ -2304,7 +2310,8 @@ function showGameTooltip(numericId, anchorEl, minion) {
     _renderMinionStatusPanels(tooltipEl, minion);
 }
 
-function hideGameTooltip() {
+function hideGameTooltip(opts) {
+    if (gameTooltipPin && !(opts && opts.force)) return;
     var tooltipId = sandboxMode ? 'sandbox-tooltip' : 'game-tooltip';
     var hintId = sandboxMode ? 'sandbox-tooltip-hint' : 'game-tooltip-hint';
     var tooltip = document.getElementById(tooltipId);
@@ -2312,6 +2319,30 @@ function hideGameTooltip() {
     var hint = document.getElementById(hintId);
     if (hint) hint.style.display = '';
     _renderMinionStatusPanels(tooltip, null);
+}
+
+// Delegated: any click on a hand card or board minion pins that card in the
+// tooltip and highlights it; clicking the same one again unpins. Game click
+// actions (select/target) still run — pinning never swallows the event.
+function setupGameTooltipPin() {
+    document.addEventListener('click', function(e) {
+        if (!document.querySelector('#screen-game.active, #screen-sandbox.active')) return;
+        var el = e.target.closest('.card-frame-hand, .board-minion');
+        if (!el) return;
+        var nid = parseInt(el.dataset.numericId, 10);
+        if (isNaN(nid)) return;
+        if (gameTooltipPin && gameTooltipPin.el === el) {
+            gameTooltipPin = null;
+            el.classList.remove('tooltip-pinned-card');
+            return;
+        }
+        document.querySelectorAll('.tooltip-pinned-card').forEach(function(x) {
+            x.classList.remove('tooltip-pinned-card');
+        });
+        gameTooltipPin = { nid: nid, el: el };
+        el.classList.add('tooltip-pinned-card');
+        showGameTooltip(nid, el, el._minionRef || null, { force: true });
+    });
 }
 
 // Hearthstone-style stacked status panels rendered as siblings under
@@ -2997,6 +3028,7 @@ document.addEventListener('DOMContentLoaded', function() {
     setupDeckBuilderHandlers();
     setupDeckFilters();
     setupDeckDragAndDrop();
+    setupGameTooltipPin();
     setupNavHandlers();
     setupActivityTabs();
     setupGameHandlers();
@@ -9389,6 +9421,9 @@ function renderBoard(opts) {
                 (function(m) {
                     cell.addEventListener('mouseenter', function() { showGameTooltip(m.card_numeric_id, this, m); });
                     cell.addEventListener('mouseleave', function() { hideGameTooltip(); });
+                    // click-to-pin (user 2026-07-06): stamp the id + minion ref
+                    var mEl = cell.querySelector('.board-minion');
+                    if (mEl) { mEl.dataset.numericId = m.card_numeric_id; mEl._minionRef = m; }
                 })(minion);
             }
 
