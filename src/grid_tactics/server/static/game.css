@@ -12574,10 +12574,15 @@ body:has(#screen-deck-builder.active) #sbx-toggles { display: none !important; }
   display: block !important;
   position: relative;
   height: calc(var(--mfu) * 8) !important;
-  background: #241a0c;
+  background: #241a0c !important;
+  /* the legacy sci-fi rule still contributed a cyan border + 2px padding —
+     that was the teal streak on phones (user screenshot 2026-07-05) */
+  border: none !important;
+  padding: 0 !important;
+  gap: 0 !important;
   border-radius: calc(var(--mfu) * 4);
   overflow: hidden;
-  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.6);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.6) !important;
 }
 #screen-deck-builder .hud-readiness-cells span { display: none !important; }
 #screen-deck-builder .hud-readiness-cells::before {
