@@ -12621,3 +12621,11 @@ body:has(#screen-deck-builder.active) #sbx-toggles { display: none !important; }
 #screen-deck-builder .deck-list-item:hover .card-info-lock {
   opacity: 1; pointer-events: auto; transform: scale(1);
 }
+
+/* Perf (2026-07-05 audit): offscreen grid cards skip style/layout/paint.
+   auto sizing remembers the real size after first render; the estimate
+   only guides the initial scrollbar. */
+#screen-deck-builder .card-browser-item {
+  content-visibility: auto;
+  contain-intrinsic-size: auto calc(var(--mfu) * 118);
+}

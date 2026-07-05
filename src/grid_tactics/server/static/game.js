@@ -1521,7 +1521,7 @@ function addCardToDeck(numericId) {
     if (count >= MAX_COPIES) return;
     if (getDeckTotal(currentDeck) >= MAX_DECK_SIZE) return;
     currentDeck[numericId] = count + 1;
-    renderDeckBuilder();
+    _deckCountsChanged();
 }
 
 function removeCardFromDeck(numericId) {
@@ -1533,7 +1533,32 @@ function removeCardFromDeck(numericId) {
     } else {
         currentDeck[numericId] = count;
     }
-    renderDeckBuilder();
+    _deckCountsChanged();
+}
+
+// Perf (2026-07-05 audit): add/remove used to full-rebuild the browser grid —
+// ~70-80ms of script re-creating ~1100 nodes per click. Only the badges and
+// selected states change, so patch them in place; the sidebar rebuild is
+// cheap (<3ms). Full renderCardBrowser() remains for filter/sort/def changes.
+function _deckCountsChanged() {
+    updateCardBrowserCounts();
+    renderDeckSidebar();
+}
+
+function updateCardBrowserCounts() {
+    var grid = document.getElementById('card-browser-grid');
+    if (!grid) return;
+    grid.querySelectorAll('.card-browser-item').forEach(function(w) {
+        var numId = parseInt(w.dataset.numericId, 10);
+        if (isNaN(numId) || w.classList.contains('card-nondeckable')) return;
+        var count = currentDeck[numId] || 0;
+        w.classList.toggle('card-selected', count > 0);
+        var badge = w.querySelector('.card-count-badge');
+        if (badge) {
+            badge.textContent = 'x' + count;
+            badge.classList.toggle('empty', count === 0);
+        }
+    });
 }
 
 function renderDeckBuilder() {
