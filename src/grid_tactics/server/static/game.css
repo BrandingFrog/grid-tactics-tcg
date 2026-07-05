@@ -12664,3 +12664,56 @@ body.sbx-show-nav:has(#screen-sandbox.active) .game-layout {
   font-family: 'Alegreya', Georgia, serif !important;
   font-style: italic;
 }
+
+/* ==========================================================================
+   DESIGN PASS (user /design 2026-07-05): close the gaps between duel/sandbox
+   and the lobby/deck-builder vintage. Panels get the deck builder's exact
+   recipe (paper-fibre speckle over dark leather, bronze border, radius 12,
+   inset shadows); the preview panel gets the dossier dog-ear; the floating
+   ☰/⚙ move to the top-left so they stop covering TURN/undo.
+   ========================================================================== */
+#screen-game .tooltip-sidebar, #screen-sandbox .tooltip-sidebar,
+#screen-game .game-sidebar, #screen-sandbox .game-sidebar,
+#screen-game .room-bar, #screen-sandbox .room-bar {
+  background:
+    radial-gradient(rgba(255, 240, 200, 0.03) 1px, transparent 1.6px),
+    linear-gradient(160deg, #1a1409 0%, #140f07 60%, #0b0805 100%) !important;
+  background-size: 5px 5px, 100% 100% !important;
+  border: 1px solid #6b5730 !important;
+  border-radius: 12px !important;
+  box-shadow: inset 0 0 24px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(224, 162, 60, 0.05),
+              0 10px 28px -14px rgba(0, 0, 0, 0.7) !important;
+}
+#screen-game .tooltip-sidebar, #screen-sandbox .tooltip-sidebar { position: relative; }
+#screen-game .tooltip-sidebar::after, #screen-sandbox .tooltip-sidebar::after {
+  content: ''; position: absolute; right: 0; bottom: 0;
+  width: 22px; height: 22px; pointer-events: none; z-index: 2;
+  background: linear-gradient(135deg, transparent 50%, #241a0d 50%);
+  box-shadow: -1px -1px 2px rgba(0, 0, 0, 0.5);
+  border-bottom-right-radius: 12px;
+}
+/* the hint sits ON the panel now — no box of its own */
+#screen-game .tooltip-sidebar-hint, #screen-sandbox .tooltip-sidebar-hint {
+  background: transparent !important;
+  border: none !important;
+}
+/* chrome toggles: top-left over the preview panel corner (viewport chrome,
+   unscaled) — top-right covered the scaled bar's TURN/undo cluster */
+body:has(#screen-sandbox.active) #sbx-toggles {
+  right: auto; left: 8px; top: 8px;
+}
+/* sandbox staged-card slot + sidebar scrollbar were still sci-fi */
+#screen-sandbox .sandbox-staged-card {
+  background: #191207 !important;
+  border-color: #6b5730 !important;
+}
+#screen-sandbox .sandbox-staged-card:hover { box-shadow: 0 0 8px rgba(224, 162, 60, 0.3) !important; }
+#screen-sandbox .sandbox-staged-card .staged-cost { color: #e0a23c !important; }
+#screen-sandbox .game-sidebar { scrollbar-width: thin; scrollbar-color: #6b5730 transparent; }
+#screen-sandbox .game-sidebar::-webkit-scrollbar { width: 8px; }
+#screen-sandbox .game-sidebar::-webkit-scrollbar-thumb { background: #6b5730; border-radius: 4px; }
+#screen-sandbox .game-sidebar::-webkit-scrollbar-track { background: transparent; }
+#screen-sandbox .game-sidebar * { scrollbar-width: thin; scrollbar-color: #6b5730 transparent; }
+#screen-sandbox .game-sidebar *::-webkit-scrollbar { width: 8px; }
+#screen-sandbox .game-sidebar *::-webkit-scrollbar-thumb { background: #6b5730; border-radius: 4px; }
+#screen-sandbox .game-sidebar *::-webkit-scrollbar-track { background: transparent; }
