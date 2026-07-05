@@ -12839,8 +12839,13 @@ body.sbx-show-nav:has(#screen-sandbox.active) .game-layout {
 /* the layout is position:fixed, so the screen div itself was 0-sized and the
    navy body bled through — pin it over the viewport to paint the warm bg */
 #screen-game.active, #screen-sandbox.active { position: fixed; inset: 0; }
-/* third chrome toggle: ▭ hides the sandbox top bar */
-body.sbx-hide-bar:has(#screen-sandbox.active) .room-bar { display: none !important; }
+/* third chrome toggle: ▭ hides the sandbox top bar. visibility (not
+   display) so the stage below never reflows — the board + pile boards are
+   welded to their design position regardless of chrome (user 2026-07-05). */
+body.sbx-hide-bar:has(#screen-sandbox.active) .room-bar {
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
 /* undo/redo status pill — last navy chip in the sandbox bar */
 #screen-sandbox .sandbox-history-status {
   background: #191207 !important;
