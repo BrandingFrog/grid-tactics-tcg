@@ -82,6 +82,9 @@
     document.addEventListener('DOMContentLoaded', function () {
       var nav = document.getElementById('sbx-toggle-nav');
       var side = document.getElementById('sbx-toggle-side');
+      // Sandbox opens CLEAN: dev side panel hidden until ⚙ shows it
+      // (user 2026-07-05 — previews first, dev chrome on demand).
+      document.body.classList.add('sbx-hide-side');
       if (nav)  nav.addEventListener('click',  function () { document.body.classList.toggle('sbx-show-nav'); });
       if (side) side.addEventListener('click', function () { document.body.classList.toggle('sbx-hide-side'); });
     });

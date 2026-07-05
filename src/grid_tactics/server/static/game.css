@@ -12717,3 +12717,32 @@ body:has(#screen-sandbox.active) #sbx-toggles {
 #screen-sandbox .game-sidebar *::-webkit-scrollbar { width: 8px; }
 #screen-sandbox .game-sidebar *::-webkit-scrollbar-thumb { background: #6b5730; border-radius: 4px; }
 #screen-sandbox .game-sidebar *::-webkit-scrollbar-track { background: transparent; }
+
+/* ==========================================================================
+   DESIGN PASS 2 (user 2026-07-05): duel/sandbox gaps vs deck builder.
+   - letterbox + screen bg warm (was navy)
+   - preview column = deck builder width (200 design px)
+   - board ownership + stat colours off neon: self gold / opp rust,
+     atk warm-red / hp leaf
+   ========================================================================== */
+#screen-game, #screen-sandbox {
+  background:
+    radial-gradient(120% 90% at 50% 10%, #2b1f10 0%, #1a1208 55%, #0e0903 100%) !important;
+}
+body:has(#screen-game.active) .game-layout,
+body:has(#screen-sandbox.active):not(.sbx-show-nav) .game-layout,
+body.sbx-show-nav:has(#screen-sandbox.active) .game-layout {
+  grid-template-columns: 200px minmax(0, 1fr) auto !important;
+}
+.board-minion.owner-self { outline-color: rgba(224, 162, 60, 0.9) !important; }
+.board-minion.owner-opp  { outline-color: rgba(181, 98, 58, 0.95) !important; }
+.board-cell.cell-owner-self {
+  box-shadow: 0 0 14px 3px rgba(224, 162, 60, 0.4) !important;
+  border-color: rgba(224, 162, 60, 0.55) !important;
+}
+.board-cell.cell-owner-opp {
+  box-shadow: 0 0 14px 3px rgba(181, 98, 58, 0.45) !important;
+  border-color: rgba(181, 98, 58, 0.6) !important;
+}
+.board-minion-atk { color: #d8695a !important; }
+.board-minion-hp  { color: #9bb85a !important; }
