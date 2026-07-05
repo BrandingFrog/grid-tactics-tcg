@@ -12390,3 +12390,8 @@ body.fs-switching *, body.fs-switching *::before, body.fs-switching *::after {
 #screen-deck-builder .card-info-lock.locked {
   transform: scale(1);
 }
+/* slower pin pop */
+#screen-deck-builder .card-info-lock {
+  transition: opacity 0.35s ease, transform 0.45s cubic-bezier(0.34, 1.45, 0.64, 1),
+              color 0.13s ease, border-color 0.13s ease;
+}
