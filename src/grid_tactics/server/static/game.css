@@ -12146,3 +12146,22 @@ body.sbx-hide-side #screen-deck-builder .deck-builder-body {
   border-radius: calc(var(--mfu) * 4);
 }
 #screen-deck-builder input.hud-armoury-search { border-radius: calc(var(--mfu) * 8) !important; }
+
+/* Zone separators (user 2026-07-05): double vertical rules after the sort
+   control and before Non-Deckable, so sort | filters | show read as three
+   groups at small sizes. Minor trims pay for the separator width. */
+#screen-deck-builder .fsort {
+  border-right: 3px double var(--bronze);
+  padding-right: calc(var(--mfu) * 6);
+  align-self: stretch;
+}
+#screen-deck-builder .fbar-nondeckable {
+  border-left: 3px double var(--bronze);
+  padding: 0 0 0 calc(var(--mfu) * 6) !important;
+  align-self: stretch;
+}
+#screen-deck-builder .card-browser-filters { padding-left: calc(var(--mfu) * 3) !important; padding-right: calc(var(--mfu) * 3) !important; }
+#screen-deck-builder .fdrop-btn { padding-left: calc(var(--mfu) * 4); padding-right: calc(var(--mfu) * 4); }
+#screen-deck-builder .fdrops { gap: calc(var(--mfu) * 2); }
+#screen-deck-builder .fsort { gap: calc(var(--mfu) * 2); }
+#screen-deck-builder .fsort-dirs { gap: calc(var(--mfu) * 2); }
