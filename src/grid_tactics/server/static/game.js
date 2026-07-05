@@ -2982,7 +2982,16 @@ function refreshLoadDropdown() {
 // Section 8: DOMContentLoaded
 // =============================================
 
+// One-layout scaling for the duel/sandbox: the 844x390 design box is scaled
+// by --duel-scale to fit the viewport (see the DUEL SCALE ROOT css block).
+function _fitDuelScale() {
+    document.documentElement.style.setProperty('--duel-scale',
+        String(Math.min(window.innerWidth / 844, window.innerHeight / 390)));
+}
+window.addEventListener('resize', _fitDuelScale);
+
 document.addEventListener('DOMContentLoaded', function() {
+    _fitDuelScale();
     initSocket();
     setupLobbyHandlers();
     setupDeckBuilderHandlers();

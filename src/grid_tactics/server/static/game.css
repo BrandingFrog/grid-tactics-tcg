@@ -12629,3 +12629,38 @@ body:has(#screen-deck-builder.active) #sbx-toggles { display: none !important; }
   content-visibility: auto;
   contain-intrinsic-size: auto calc(var(--mfu) * 118);
 }
+
+/* ==========================================================================
+   DUEL/SANDBOX = ONE LAYOUT, SCALED (user directive, applied 2026-07-05).
+   The whole .game-layout renders at its designed 844x390 and ONE transform
+   scales it to the viewport (JS sets --duel-scale = min(vw/844, vh/390)).
+   Internals keep their tuned px sizes; the lone vh-based size (hand card)
+   is frozen to its design value. Off-aspect viewports letterbox on the
+   warm background — the composition itself never changes.
+   ========================================================================== */
+body:has(#screen-game.active) .game-layout,
+body:has(#screen-sandbox.active):not(.sbx-show-nav) .game-layout,
+body.sbx-show-nav:has(#screen-sandbox.active) .game-layout {
+  width: 844px !important; height: 390px !important;
+  max-width: none !important; min-height: 0 !important;
+  position: fixed !important; left: 50% !important; top: 50% !important;
+  margin: 0 !important; padding: 0 !important;
+  transform: translate(-50%, -50%) scale(var(--duel-scale, 1));
+  transform-origin: 50% 50%;
+}
+#screen-game, #screen-sandbox { overflow: hidden; }
+/* hand card width was clamp(52px,15vh,96px); 15vh of the 390 design = 58.5px */
+.card-frame-full.cf2.card-frame-hand { --cardw: 58.5px !important; }
+
+/* preview panel: last sci-fi navy remnant -> warm vintage */
+#screen-game .tooltip-sidebar, #screen-sandbox .tooltip-sidebar {
+  background: rgba(14, 10, 4, 0.55) !important;
+  border-color: #3a2e18 !important;
+}
+#screen-game .tooltip-sidebar-hint, #screen-sandbox .tooltip-sidebar-hint {
+  background: #191207 !important;
+  color: #9a865c !important;
+  border-color: #3a2e18 !important;
+  font-family: 'Alegreya', Georgia, serif !important;
+  font-style: italic;
+}
