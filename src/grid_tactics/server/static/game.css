@@ -11713,3 +11713,117 @@ body:has(#screen-sandbox.active) .room-bar { padding-right: 84px !important; }
   #screen-deck-builder .btn.hud-loadout-save { padding: 6px 10px !important; font-size: 11px !important; flex-shrink: 0; }
   #screen-deck-builder .btn.hud-loadout-del { padding: 4px 8px !important; flex-shrink: 0; }
 }
+
+
+/* ==========================================================================
+   MOBILE-FIRST = ONE LAYOUT, SCALED (user directive 2026-07-05).
+   Every screen is DESIGNED at 844×390; every other viewport renders the EXACT
+   same composition scaled by --mfu (1 design-px of the baseline, like the
+   lobby's --u). This block makes the DECK BUILDER's mobile composition
+   unconditional — the former desktop layout (nav bar, wide 3-col, unscaled
+   fonts) is retired. Appended last; wins the cascade.
+   ========================================================================== */
+:root { --mfu: min(100vw / 844, 100vh / 390); }
+
+/* --- chrome: nav hidden at every size (☰ restores it); toggles available --- */
+body:has(#screen-deck-builder.active):not(.sbx-show-nav) .hud-header { display: none !important; }
+body:has(#screen-deck-builder.active) #sbx-toggles { display: flex; }
+#screen-deck-builder .deck-builder-layout {
+  height: 100vh !important; max-width: none !important;
+  padding: calc(var(--mfu) * 4) !important;
+}
+body.sbx-show-nav:has(#screen-deck-builder.active) .deck-builder-layout { height: calc(100vh - 54px) !important; }
+#screen-deck-builder .hud-armoury-header { display: none !important; }
+#screen-deck-builder .hud-panel-head,
+#screen-deck-builder .hud-armoury-panel-head { display: none !important; }
+
+/* --- the 844×390 composition, in design units --- */
+#screen-deck-builder .deck-builder-body {
+  grid-template-columns: calc(var(--mfu) * 172) minmax(0, 1fr) calc(var(--mfu) * 185) !important;
+  gap: calc(var(--mfu) * 6) !important;
+}
+#screen-deck-builder .deck-builder-body > .tooltip-sidebar { display: flex !important; }
+body.sbx-hide-side #screen-deck-builder .deck-sidebar { display: none !important; }
+body.sbx-hide-side #screen-deck-builder .deck-builder-body {
+  grid-template-columns: calc(var(--mfu) * 172) minmax(0, 1fr) !important;
+}
+
+/* search */
+#screen-deck-builder .hud-armoury-search-wrap { margin: calc(var(--mfu) * 4) calc(var(--mfu) * 8) !important; padding: 0 !important; }
+#screen-deck-builder input.hud-armoury-search,
+#screen-deck-builder .input.hud-armoury-search {
+  padding: calc(var(--mfu) * 5) calc(var(--mfu) * 40) calc(var(--mfu) * 5) calc(var(--mfu) * 30) !important;
+  font-size: calc(var(--mfu) * 13) !important;
+}
+#screen-deck-builder .card-browser { padding: calc(var(--mfu) * 6) !important; }
+
+/* filters: the single swipeable strip, at every size */
+#screen-deck-builder .card-browser-filters {
+  flex-direction: row !important; flex-wrap: nowrap !important; align-items: center;
+  overflow-x: auto; overflow-y: hidden;
+  gap: 0 !important; padding: 0 calc(var(--mfu) * 8) calc(var(--mfu) * 4) !important;
+  scrollbar-width: none;
+}
+#screen-deck-builder .card-browser-filters::-webkit-scrollbar { display: none; }
+#screen-deck-builder .filter-row.hud-armoury-filter-row {
+  display: flex !important; width: auto !important; flex: 0 0 auto;
+  padding: 0 calc(var(--mfu) * 10) 0 0 !important; margin: 0 calc(var(--mfu) * 10) 0 0 !important;
+  border-right: 1px solid var(--line); gap: calc(var(--mfu) * 6);
+}
+#screen-deck-builder .filter-row.hud-armoury-filter-row:last-child { border-right: none; }
+#screen-deck-builder .filter-label { display: none !important; }
+#screen-deck-builder .hud-armoury-chips {
+  flex-wrap: nowrap !important; overflow: visible !important; flex: 0 0 auto; gap: calc(var(--mfu) * 6) !important;
+}
+#screen-deck-builder .hud-armoury-chips .filter-btn {
+  font-size: calc(var(--mfu) * 10.5) !important;
+  padding: calc(var(--mfu) * 2) calc(var(--mfu) * 8) !important;
+  white-space: nowrap; flex: 0 0 auto;
+}
+#screen-deck-builder .hud-armoury-cbox { font-size: calc(var(--mfu) * 11) !important; }
+
+/* card grid: same track math at every size */
+#screen-deck-builder .card-browser-grid {
+  grid-template-columns: repeat(auto-fill, minmax(calc(var(--mfu) * 118), 1fr)) !important;
+  gap: calc(var(--mfu) * 8) calc(var(--mfu) * 6) !important;
+  justify-content: stretch !important;
+  padding: calc(var(--mfu) * 4) calc(var(--mfu) * 8) calc(var(--mfu) * 8) !important;
+}
+#screen-deck-builder .card-browser-item .card-frame-full { max-width: none !important; }
+
+/* deck column: scaled rows */
+#screen-deck-builder .deck-save-row, #screen-deck-builder .deck-load-row {
+  gap: calc(var(--mfu) * 4) !important; align-items: center; padding: calc(var(--mfu) * 6) calc(var(--mfu) * 8) !important;
+}
+#screen-deck-builder .hud-loadout-prefix { display: none !important; }
+#screen-deck-builder .input.hud-loadout-input,
+#screen-deck-builder select.hud-loadout-select {
+  min-width: 0 !important; flex: 1 1 0 !important;
+  font-size: calc(var(--mfu) * 12) !important; padding: calc(var(--mfu) * 6) calc(var(--mfu) * 8) !important;
+}
+#screen-deck-builder .btn.hud-loadout-save { padding: calc(var(--mfu) * 6) calc(var(--mfu) * 10) !important; font-size: calc(var(--mfu) * 11) !important; flex-shrink: 0; }
+#screen-deck-builder .btn.hud-loadout-del  { padding: calc(var(--mfu) * 4) calc(var(--mfu) * 8) !important; flex-shrink: 0; }
+#screen-deck-builder .btn.hud-loadout-share-btn { font-size: calc(var(--mfu) * 11) !important; padding: calc(var(--mfu) * 6) calc(var(--mfu) * 10) !important; }
+#screen-deck-builder .hud-readiness-wrap { padding: calc(var(--mfu) * 6) calc(var(--mfu) * 8) !important; }
+#screen-deck-builder .hud-readiness-label { font-size: calc(var(--mfu) * 11) !important; }
+#screen-deck-builder .deck-status { font-size: calc(var(--mfu) * 12) !important; }
+#screen-deck-builder .deck-count  { font-size: calc(var(--mfu) * 11) !important; }
+#screen-deck-builder .hud-bay-name { font-size: calc(var(--mfu) * 12.5) !important; }
+#screen-deck-builder .hud-bay-sub  { font-size: calc(var(--mfu) * 10) !important; }
+#screen-deck-builder .deck-list { padding: calc(var(--mfu) * 2) calc(var(--mfu) * 8) calc(var(--mfu) * 6) !important; }
+#screen-deck-builder .deck-list-item { font-size: calc(var(--mfu) * 11.5) !important; padding: calc(var(--mfu) * 5) calc(var(--mfu) * 8) !important; }
+#screen-deck-builder .deck-share-row { padding: calc(var(--mfu) * 6) calc(var(--mfu) * 8) calc(var(--mfu) * 8) !important; }
+#screen-deck-builder .hud-readiness-wrap::before { display: none; }
+
+/* preview tooltip: text scales with the same unit (beats the min-height bump) */
+#screen-deck-builder .card-tooltip.hud-dossier-card { padding: calc(var(--mfu) * 4) !important; }
+#screen-deck-builder .hud-dossier-empty { padding: calc(var(--mfu) * 20) calc(var(--mfu) * 10) !important; min-height: 0 !important; }
+#screen-deck-builder .tooltip-header, #screen-deck-builder .tooltip-name { font-size: calc(var(--mfu) * 15) !important; }
+#screen-deck-builder .tooltip-stats { font-size: calc(var(--mfu) * 12) !important; }
+#screen-deck-builder .tooltip-text { font-size: calc(var(--mfu) * 13) !important; }
+#screen-deck-builder .tooltip-flavour { font-size: calc(var(--mfu) * 12) !important; }
+#screen-deck-builder .tooltip-keyword-name { font-size: calc(var(--mfu) * 11) !important; }
+#screen-deck-builder .tooltip-keyword-desc { font-size: calc(var(--mfu) * 12) !important; }
+#screen-deck-builder .tooltip-related-name { font-size: calc(var(--mfu) * 11) !important; }
+#screen-deck-builder .tooltip-related-stats,
+#screen-deck-builder .tooltip-related-effect { font-size: calc(var(--mfu) * 10.5) !important; }
