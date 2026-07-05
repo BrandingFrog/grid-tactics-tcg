@@ -12132,3 +12132,17 @@ body.sbx-hide-side #screen-deck-builder .deck-builder-body {
 #screen-deck-builder .fbar-nondeckable { padding: 0 !important; }
 #screen-deck-builder .fdrop-btn, #screen-deck-builder .fsort-field { letter-spacing: 0.02em; }
 #screen-deck-builder .fdrop-count { min-width: calc(var(--mfu) * 11); }
+
+/* Search bar adornments scale with --mfu like the input they sit in — the
+   magnifier and the return-key chip were pinned at fixed px (user 2026-07-05) */
+#screen-deck-builder .hud-armoury-search-icon {
+  left: calc(var(--mfu) * 10) !important;
+  font-size: calc(var(--mfu) * 15) !important;
+}
+#screen-deck-builder .hud-armoury-search-kbd {
+  right: calc(var(--mfu) * 8) !important;
+  font-size: calc(var(--mfu) * 12) !important;
+  padding: calc(var(--mfu) * 1) calc(var(--mfu) * 6) !important;
+  border-radius: calc(var(--mfu) * 4);
+}
+#screen-deck-builder input.hud-armoury-search { border-radius: calc(var(--mfu) * 8) !important; }
