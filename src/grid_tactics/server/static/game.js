@@ -2746,6 +2746,14 @@ function renderDeckSidebar() {
             e.stopPropagation();
             addCardToDeck(parseInt(item.numId, 10));
         });
+        // Hovering a deck row previews the card in the tooltip (user
+        // 2026-07-05), same pin-aware rules as the grid.
+        div.addEventListener('mouseenter', function() {
+            if (deckTooltipLockId == null) showCardTooltip(parseInt(item.numId, 10));
+        });
+        div.addEventListener('mouseleave', function() {
+            if (deckTooltipLockId == null) hideCardTooltip();
+        });
         container.appendChild(div);
     });
     container.scrollTop = prevScroll;
