@@ -1753,10 +1753,12 @@ function setupDeckFilters() {
         });
         // Clicks inside the menu (toggling boxes) must not close it
         drop.addEventListener('click', function(e) { e.stopPropagation(); });
-        // Delegated so dynamically-built menus (tribe) work too
+        // Delegated so dynamically-built menus (tribe) work too. [value]
+        // excludes the Non-Deckable toggle living in the Type menu — it has
+        // its own handler and must not leak into the type filter.
         drop.querySelector('.fdrop-menu').addEventListener('change', function() {
             var vals = Array.prototype.slice.call(
-                drop.querySelectorAll('.fdrop-opt input:checked')
+                drop.querySelectorAll('.fdrop-opt input[value]:checked')
             ).map(function(i) { return i.value; });
             var apply = applyByGroup[drop.dataset.group];
             if (apply) apply(vals);

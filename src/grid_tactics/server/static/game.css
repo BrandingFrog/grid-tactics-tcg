@@ -12482,7 +12482,22 @@ body.deck-dragging #screen-deck-builder .deck-sidebar {
   -webkit-user-select: none;
   user-select: none;
 }
-/* 6 cards per row (user 2026-07-05, was 5) */
-#screen-deck-builder .card-browser-grid {
-  grid-template-columns: repeat(6, minmax(0, 1fr)) !important;
+/* (6-per-row trial reverted to 5, user 2026-07-05) */
+
+/* Larger tooltip card (user 2026-07-05): the tooltip column takes the slack
+   around it — 172 -> 200 design px, slimmer inner padding, and no fixed
+   max-width cap so the card scales with the column at every size. */
+#screen-deck-builder .deck-builder-body {
+  grid-template-columns: calc(var(--mfu) * 200) minmax(0, 1fr) calc(var(--mfu) * 185) !important;
+}
+body.sbx-hide-side #screen-deck-builder .deck-builder-body {
+  grid-template-columns: calc(var(--mfu) * 200) minmax(0, 1fr) !important;
+}
+#screen-deck-builder .card-tooltip.hud-dossier-card { padding: calc(var(--mfu) * 2) !important; }
+#screen-deck-builder .tooltip-card-art .card-frame-full { max-width: none !important; }
+/* Non-Deckable moved into the Type menu (freed ~90 design px in the bar
+   after the tooltip column widened); separated by a thin rule */
+#screen-deck-builder .fdrop-sep {
+  height: 1px; margin: calc(var(--mfu) * 3) calc(var(--mfu) * 8);
+  background: var(--bronze-dk);
 }
