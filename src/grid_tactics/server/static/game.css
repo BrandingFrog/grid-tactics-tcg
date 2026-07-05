@@ -12501,3 +12501,27 @@ body.sbx-hide-side #screen-deck-builder .deck-builder-body {
   height: 1px; margin: calc(var(--mfu) * 3) calc(var(--mfu) * 8);
   background: var(--bronze-dk);
 }
+
+/* ==========================================================================
+   DECK BUILDER CHROME (user 2026-07-05): the floating ☰/⚙ toggles are gone
+   from this screen (they remain on sandbox); a Back-to-Lobby button takes
+   the top-right spot. Wired to the existing btn-back-lobby handler.
+   ========================================================================== */
+body:has(#screen-deck-builder.active) #sbx-toggles { display: none !important; }
+#screen-deck-builder .db-back-lobby {
+  position: fixed;
+  top: calc(var(--mfu) * 8); right: calc(var(--mfu) * 8);
+  z-index: 9500;
+  display: inline-flex; align-items: center; gap: calc(var(--mfu) * 5);
+  font-family: var(--ui-display); font-weight: 700;
+  font-size: calc(var(--mfu) * 11); letter-spacing: 0.04em;
+  color: var(--parch-dim); background: rgba(25, 18, 7, 0.9);
+  border: 1px solid var(--bronze); border-radius: calc(var(--mfu) * 5);
+  padding: calc(var(--mfu) * 4) calc(var(--mfu) * 10);
+  cursor: pointer;
+  box-shadow: 0 calc(var(--mfu) * 3) calc(var(--mfu) * 9) rgba(0, 0, 0, 0.5);
+}
+#screen-deck-builder .db-back-lobby:hover { color: var(--gold-lt); border-color: var(--gold); }
+/* clear the floating Lobby button: the deck column starts below it instead
+   of squeezing the name input row */
+#screen-deck-builder .deck-sidebar.hud-loadout { padding-top: calc(var(--mfu) * 30) !important; }
