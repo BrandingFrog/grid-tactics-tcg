@@ -11909,3 +11909,36 @@ body.sbx-hide-side #screen-deck-builder .deck-builder-body {
   letter-spacing: 0.02em !important;
   white-space: nowrap; overflow: hidden;
 }
+
+/* ==========================================================================
+   DECK LIST — flat, colour-coded (user 2026-07-05). Groups removed; each row
+   carries a type stripe + faint tint: minion leaf, magic indigo, react amber.
+   Multi-purpose cards (minion/magic with a react mode) blend two colours.
+   Card browser shows 4 cards per row.
+   ========================================================================== */
+#screen-deck-builder .card-browser-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+}
+
+#screen-deck-builder .deck-list-item {
+  --dli-a: var(--parch-mute); --dli-b: var(--parch-mute);
+  position: relative;
+  padding-left: calc(var(--mfu) * 14) !important;
+  background: linear-gradient(90deg,
+    color-mix(in srgb, var(--dli-a) 16%, transparent),
+    color-mix(in srgb, var(--dli-b) 7%, transparent) 55%,
+    transparent) !important;
+}
+#screen-deck-builder .deck-list-item::before {
+  /* content needs !important: an earlier vintage rule kills this ::before */
+  content: '' !important; position: absolute; left: 0; top: 0; bottom: 0;
+  width: calc(var(--mfu) * 4);
+  background: linear-gradient(180deg, var(--dli-a), var(--dli-b));
+  /* neutralise the legacy hover-chevron ::before (opacity:0 + translate) */
+  opacity: 1 !important; transform: none !important;
+}
+#screen-deck-builder .dli-minion { --dli-a: #7d9a3e; --dli-b: #7d9a3e; }
+#screen-deck-builder .dli-magic  { --dli-a: #565a86; --dli-b: #565a86; }
+#screen-deck-builder .dli-react  { --dli-a: #b07a2e; --dli-b: #b07a2e; }
+#screen-deck-builder .dli-minion-react { --dli-a: #7d9a3e; --dli-b: #b07a2e; }
+#screen-deck-builder .dli-magic-react  { --dli-a: #565a86; --dli-b: #b07a2e; }

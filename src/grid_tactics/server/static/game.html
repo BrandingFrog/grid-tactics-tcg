@@ -257,7 +257,7 @@
             <div class="fdrop" data-group="type">
               <button class="fdrop-btn" type="button"><span>Type</span><span class="fdrop-count"></span><span class="fdrop-caret" aria-hidden="true">&#9662;</span></button>
               <div class="fdrop-menu">
-                <label class="fdrop-opt"><input type="checkbox" value="minion"><span class="fdrop-box" aria-hidden="true"></span><span class="fdrop-dot" style="--dot:var(--el-earth)" aria-hidden="true"></span><span>Minion</span></label>
+                <label class="fdrop-opt"><input type="checkbox" value="minion"><span class="fdrop-box" aria-hidden="true"></span><span class="fdrop-dot" style="--dot:#7d9a3e" aria-hidden="true"></span><span>Minion</span></label>
                 <label class="fdrop-opt"><input type="checkbox" value="magic"><span class="fdrop-box" aria-hidden="true"></span><span class="fdrop-dot" style="--dot:#565a86" aria-hidden="true"></span><span>Magic</span></label>
                 <label class="fdrop-opt"><input type="checkbox" value="react"><span class="fdrop-box" aria-hidden="true"></span><span class="fdrop-dot" style="--dot:#b07a2e" aria-hidden="true"></span><span>React</span></label>
               </div>
@@ -359,32 +359,10 @@
             </div>
           </div>
 
-          <!-- Loadout bays -->
+          <!-- Flat deck list — no type groups; items colour-coded by card type
+               (gradient stripe for multi-purpose cards, user 2026-07-05) -->
           <div class="deck-list hud-loadout-bays" id="deck-list">
-            <div class="deck-group hud-bay hud-bay-minion" data-type="minion">
-              <h4 class="deck-group-title hud-bay-title">
-                <span class="hud-bay-id">M</span>
-                <span class="hud-bay-name">Minions</span>
-                <span class="hud-bay-sub" aria-hidden="true">minions</span>
-              </h4>
-              <div class="deck-group-items hud-bay-items" id="deck-minions"></div>
-            </div>
-            <div class="deck-group hud-bay hud-bay-magic" data-type="magic">
-              <h4 class="deck-group-title hud-bay-title">
-                <span class="hud-bay-id">S</span>
-                <span class="hud-bay-name">Magic</span>
-                <span class="hud-bay-sub" aria-hidden="true">spells</span>
-              </h4>
-              <div class="deck-group-items hud-bay-items" id="deck-magic"></div>
-            </div>
-            <div class="deck-group hud-bay hud-bay-react" data-type="react">
-              <h4 class="deck-group-title hud-bay-title">
-                <span class="hud-bay-id">R</span>
-                <span class="hud-bay-name">React</span>
-                <span class="hud-bay-sub" aria-hidden="true">reacts</span>
-              </h4>
-              <div class="deck-group-items hud-bay-items" id="deck-react"></div>
-            </div>
+            <div class="deck-group-items hud-bay-items" id="deck-flat"></div>
           </div>
 
           <!-- Share row -->

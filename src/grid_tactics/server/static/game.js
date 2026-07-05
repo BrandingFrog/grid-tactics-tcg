@@ -2410,40 +2410,42 @@ function renderDeckSidebar() {
         }
     }
 
-    // Group cards by type
-    var groups = { 0: [], 1: [], 2: [] };
+    // Flat list, no type groups (user 2026-07-05). Sorted by type then name so
+    // the colour coding still reads in blocks; multi-purpose cards (a minion
+    // or magic card with a react mode) get a gradient stripe.
+    var container = document.getElementById('deck-flat');
+    if (!container) return;
     var defs = allCardDefs || cardDefs;
+    var items = [];
     Object.keys(currentDeck).forEach(function(numId) {
         var c = defs[numId];
         if (!c) return;
-        var type = c.card_type;
-        if (groups[type] === undefined) groups[type] = [];
-        groups[type].push({ numId: numId, name: c.name, count: currentDeck[numId] });
+        items.push({ numId: numId, name: c.name, count: currentDeck[numId], card: c });
     });
-
-    // Render each group
-    var containers = {
-        0: document.getElementById('deck-minions'),
-        1: document.getElementById('deck-magic'),
-        2: document.getElementById('deck-react'),
-    };
-    [0, 1, 2].forEach(function(type) {
-        var container = containers[type];
-        if (!container) return;
-        container.innerHTML = '';
-        var items = groups[type] || [];
-        items.sort(function(a, b) { return a.name.localeCompare(b.name); });
-        items.forEach(function(item) {
-            var div = document.createElement('div');
-            div.className = 'deck-list-item';
-            div.innerHTML = '<span class="deck-list-item-name">' + item.name + '</span>'
-                + '<span class="deck-list-item-count">x' + item.count + '</span>';
-            div.addEventListener('click', function() {
-                removeCardFromDeck(parseInt(item.numId, 10));
-            });
-            container.appendChild(div);
+    items.sort(function(a, b) {
+        if (a.card.card_type !== b.card.card_type) return a.card.card_type - b.card.card_type;
+        return a.name.localeCompare(b.name);
+    });
+    container.innerHTML = '';
+    items.forEach(function(item) {
+        var div = document.createElement('div');
+        div.className = 'deck-list-item ' + deckItemTypeClass(item.card);
+        div.innerHTML = '<span class="deck-list-item-name">' + item.name + '</span>'
+            + '<span class="deck-list-item-count">x' + item.count + '</span>';
+        div.addEventListener('click', function() {
+            removeCardFromDeck(parseInt(item.numId, 10));
         });
+        container.appendChild(div);
     });
+}
+
+// Colour-coding class for a deck-list row: base type, or a multi class when a
+// minion/magic card also has a react mode (react_condition set).
+function deckItemTypeClass(c) {
+    var isMulti = c.react_condition != null && c.card_type !== 2;
+    if (c.card_type === 0) return isMulti ? 'dli-minion-react' : 'dli-minion';
+    if (c.card_type === 1) return isMulti ? 'dli-magic-react' : 'dli-magic';
+    return 'dli-react';
 }
 
 // Drive the HUD readiness-cell meter in the Deck Builder Loadout panel.
