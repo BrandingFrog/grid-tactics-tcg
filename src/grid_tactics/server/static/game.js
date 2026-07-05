@@ -371,8 +371,10 @@ let allCardDefs = null;      // set from server on game_start or card_defs event
 // multi-select array. Empty array = no filter ("All").
 let deckFilterTypes = [];       // of 'minion', 'magic', 'react'
 let deckFilterElements = [];    // of element ints as strings
-let deckFilterManas = [];       // of '1', '2', '3', '4', '5+'
+let deckFilterManas = [];       // of '0'..'9', '10+'
 let deckFilterKeywords = [];    // of 'tutor', 'promote', etc. (OR match)
+let deckFilterTribes = [];      // of tribe names, e.g. 'Rat' (OR match)
+let deckTooltipLockId = null;   // card pinned in the tooltip via the ! button (null = follow hover)
 let deckSearchQuery = '';       // search text
 // Sort control (user 2026-07-05): field cycles via the fsort button,
 // direction via the chevron buttons (1 = asc, -1 = desc).
@@ -1606,6 +1608,11 @@ function renderCardBrowser() {
             });
             if (!manaOk) return;
         }
+        // Tribe filter ("Mage Rat" counts as both Mage and Rat)
+        if (deckFilterTribes.length) {
+            var cardTribes = (c.tribe || '').split(/\s+/);
+            if (!deckFilterTribes.some(function(t) { return cardTribes.indexOf(t) !== -1; })) return;
+        }
         // Keyword filter (card passes if it has ANY checked keyword)
         if (deckFilterKeywords.length) {
             if (!deckFilterKeywords.some(function(kw) { return cardHasKeyword(c, kw); })) return;
@@ -1622,6 +1629,26 @@ function renderCardBrowser() {
         if (isNonDeckable) wrapper.classList.add('card-nondeckable');
         if (count > 0) wrapper.classList.add('card-selected');
         wrapper.innerHTML = renderDeckBuilderCard(numId, count);
+        // ! pin (user 2026-07-05): locks this card in the tooltip WITHOUT
+        // adding it to the deck, so stray mouse-overs don't replace it.
+        var pin = document.createElement('button');
+        pin.type = 'button';
+        pin.className = 'card-info-lock' + (deckTooltipLockId === numId ? ' locked' : '');
+        pin.title = 'Pin card details';
+        pin.textContent = '!';
+        pin.addEventListener('click', function(e) {
+            e.stopPropagation();
+            if (deckTooltipLockId === numId) {
+                deckTooltipLockId = null;           // unpin; tooltip follows hover again
+            } else {
+                deckTooltipLockId = numId;
+                showCardTooltip(numId);
+            }
+            grid.querySelectorAll('.card-info-lock').forEach(function(b) {
+                b.classList.toggle('locked', deckTooltipLockId !== null && b === pin);
+            });
+        });
+        wrapper.appendChild(pin);
         // Click to add (disabled for non-deckable)
         if (!isNonDeckable) {
             wrapper.addEventListener('click', function(e) {
@@ -1637,9 +1664,9 @@ function renderCardBrowser() {
                 removeCardFromDeck(numId);
             });
         }
-        // Hover for tooltip
-        wrapper.addEventListener('mouseenter', function() { showCardTooltip(numId); });
-        wrapper.addEventListener('mouseleave', function() { hideCardTooltip(); });
+        // Hover for tooltip — suspended while a card is pinned
+        wrapper.addEventListener('mouseenter', function() { if (deckTooltipLockId == null) showCardTooltip(numId); });
+        wrapper.addEventListener('mouseleave', function() { if (deckTooltipLockId == null) hideCardTooltip(); });
         grid.appendChild(wrapper);
     });
     grid.scrollTop = prevScroll;
@@ -1676,6 +1703,7 @@ function setupDeckFilters() {
     var applyByGroup = {
         type:    function(vals) { deckFilterTypes = vals; },
         element: function(vals) { deckFilterElements = vals; },
+        tribe:   function(vals) { deckFilterTribes = vals; },
         keyword: function(vals) { deckFilterKeywords = vals; },
         mana:    function(vals) { deckFilterManas = vals; }
     };
@@ -1683,28 +1711,48 @@ function setupDeckFilters() {
     function closeAllDrops() {
         drops.forEach(function(d) { d.classList.remove('open'); });
     }
+    // The tribe menu is built from card defs (tribes like "Mage Rat" count as
+    // both tribes) the first time the dropdown opens after defs arrive.
+    function populateTribeMenu(drop) {
+        var menu = drop.querySelector('.fdrop-menu');
+        if (menu.childElementCount > 0) return;
+        var defs = allCardDefs || cardDefs;
+        if (!defs || Object.keys(defs).length === 0) return;
+        var tribes = {};
+        Object.keys(defs).forEach(function(id) {
+            var t = defs[id].tribe;
+            if (t) t.split(/\s+/).forEach(function(x) { if (x) tribes[x] = true; });
+        });
+        Object.keys(tribes).sort().forEach(function(t) {
+            var label = document.createElement('label');
+            label.className = 'fdrop-opt';
+            label.innerHTML = '<input type="checkbox" value="' + t + '">'
+                + '<span class="fdrop-box" aria-hidden="true"></span><span>' + t + '</span>';
+            menu.appendChild(label);
+        });
+    }
     drops.forEach(function(drop) {
         var btn = drop.querySelector('.fdrop-btn');
         btn.addEventListener('click', function(e) {
             e.stopPropagation();
+            if (drop.dataset.group === 'tribe') populateTribeMenu(drop);
             var wasOpen = drop.classList.contains('open');
             closeAllDrops();
             if (!wasOpen) drop.classList.add('open');
         });
         // Clicks inside the menu (toggling boxes) must not close it
         drop.addEventListener('click', function(e) { e.stopPropagation(); });
-        drop.querySelectorAll('.fdrop-opt input[type="checkbox"]').forEach(function(cb) {
-            cb.addEventListener('change', function() {
-                var vals = Array.prototype.slice.call(
-                    drop.querySelectorAll('.fdrop-opt input:checked')
-                ).map(function(i) { return i.value; });
-                var apply = applyByGroup[drop.dataset.group];
-                if (apply) apply(vals);
-                var count = drop.querySelector('.fdrop-count');
-                if (count) count.textContent = vals.length ? String(vals.length) : '';
-                drop.classList.toggle('has-active', vals.length > 0);
-                renderCardBrowser();
-            });
+        // Delegated so dynamically-built menus (tribe) work too
+        drop.querySelector('.fdrop-menu').addEventListener('change', function() {
+            var vals = Array.prototype.slice.call(
+                drop.querySelectorAll('.fdrop-opt input:checked')
+            ).map(function(i) { return i.value; });
+            var apply = applyByGroup[drop.dataset.group];
+            if (apply) apply(vals);
+            var count = drop.querySelector('.fdrop-count');
+            if (count) count.textContent = vals.length ? String(vals.length) : '';
+            drop.classList.toggle('has-active', vals.length > 0);
+            renderCardBrowser();
         });
     });
     document.addEventListener('click', closeAllDrops);
@@ -1786,13 +1834,17 @@ var KEYWORD_GLOSSARY = {
 function buildCardTooltipContent(c) {
     if (!c) return { name: '', statsHtml: '', bodyHtml: '' };
 
-    // Stats chips
+    // Stats chips. Type is coloured by the brown/purple/pink type coding and
+    // carries its emoji; element is plain coloured text + a dot (no highlight).
     var statsHtml = '';
     var typeNames = ['Minion', 'Magic', 'React'];
-    statsHtml += '<span class="ts-type">' + (typeNames[c.card_type] || '') + '</span>';
+    var typeSlugs = ['minion', 'magic', 'react'];
+    var typeEmoji = ['⚔️', '✨', '⚡'];  // ⚔️ ✨ ⚡
+    statsHtml += '<span class="ts-type ts-type-' + (typeSlugs[c.card_type] || 'minion') + '">'
+        + (typeEmoji[c.card_type] || '') + ' ' + (typeNames[c.card_type] || '') + '</span>';
     if (c.tribe) statsHtml += '<span class="ts-tribe">' + c.tribe + '</span>';
     var elem = (c.element !== null && c.element !== undefined) ? ELEMENT_MAP[c.element] : NEUTRAL_ELEMENT;
-    statsHtml += '<span class="ts-elem ' + elem.css + '">' + elem.name + '</span>';
+    statsHtml += '<span class="ts-elem ' + elem.css + '"><span class="ts-dot" aria-hidden="true"></span>' + elem.name + '</span>';
     statsHtml += '<span class="ts-mana">' + c.mana_cost + ' Mana</span>';
     if (c.attack != null) statsHtml += '<span class="ts-atk">' + c.attack + SWORD + '</span>';
     if (c.health != null) statsHtml += '<span class="ts-hp">' + c.health + HEART + '</span>';

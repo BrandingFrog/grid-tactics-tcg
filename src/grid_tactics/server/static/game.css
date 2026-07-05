@@ -12286,3 +12286,82 @@ body.fs-switching *, body.fs-switching *::before, body.fs-switching *::after {
    from the scrolling card layers. Isolate each item so its badge scrolls as
    part of the same layer as the card. */
 #screen-deck-builder .card-browser-item { isolation: isolate; }
+
+/* ==========================================================================
+   TOOLTIP STATS RESTYLE (user 2026-07-05): element loses the highlighter —
+   coloured text + a filter-style colour dot instead. Type word is coloured
+   by the brown/purple/pink type coding and carries its emoji.
+   ========================================================================== */
+.tooltip-stats .ts-elem {
+  background: none !important;
+  padding: 0 !important; border-radius: 0 !important;
+  display: inline-flex; align-items: center; gap: calc(var(--mfu) * 4);
+}
+.tooltip-stats .ts-elem .ts-dot {
+  flex: 0 0 auto; display: inline-block;
+  width: calc(var(--mfu) * 7); height: calc(var(--mfu) * 7);
+  border-radius: 50%; background: currentColor;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.35);
+}
+#screen-deck-builder .tooltip-stats .ts-type.ts-type-minion,
+#screen-game .tooltip-stats .ts-type.ts-type-minion,
+#screen-sandbox .tooltip-stats .ts-type.ts-type-minion { color: #9a6b33 !important; }
+#screen-deck-builder .tooltip-stats .ts-type.ts-type-magic,
+#screen-game .tooltip-stats .ts-type.ts-type-magic,
+#screen-sandbox .tooltip-stats .ts-type.ts-type-magic { color: #8355b5 !important; }
+#screen-deck-builder .tooltip-stats .ts-type.ts-type-react,
+#screen-game .tooltip-stats .ts-type.ts-type-react,
+#screen-sandbox .tooltip-stats .ts-type.ts-type-react { color: #e0509e !important; }
+
+/* ==========================================================================
+   TOOLTIP PIN (!) + TRIBE DROPDOWN SQUEEZE (user 2026-07-05).
+   The ! circle top-left of grid cards pins that card in the tooltip without
+   adding it to the deck. The 5th dropdown (Tribe) needs another width pass.
+   ========================================================================== */
+#screen-deck-builder .card-info-lock {
+  position: absolute;
+  top: calc(var(--mfu) * -4); left: calc(var(--mfu) * -4);
+  width: calc(var(--mfu) * 20); height: calc(var(--mfu) * 20);
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 50%; z-index: 6; padding: 0;
+  font-family: var(--ui-display); font-weight: 800; font-size: calc(var(--mfu) * 12);
+  color: var(--parch-dim); background: var(--ink);
+  border: 1px solid var(--bronze);
+  box-shadow: 0 calc(var(--mfu) * 2) calc(var(--mfu) * 5) rgba(0, 0, 0, 0.5);
+  cursor: pointer;
+  opacity: 0.85;
+}
+#screen-deck-builder .card-info-lock:hover { color: var(--gold-lt); border-color: var(--gold); opacity: 1; }
+#screen-deck-builder .card-info-lock.locked {
+  color: var(--ink); border-color: var(--gold-lt);
+  background: linear-gradient(180deg, var(--gold-lt), var(--gold));
+  opacity: 1;
+}
+
+/* squeeze v3: five dropdowns + sort + Non-Deckable in the 475px bar */
+#screen-deck-builder .fdrop-btn {
+  font-size: calc(var(--mfu) * 9.5); letter-spacing: 0.01em;
+  padding: calc(var(--mfu) * 3) calc(var(--mfu) * 4);
+  gap: calc(var(--mfu) * 3);
+}
+#screen-deck-builder .fdrop-caret { font-size: calc(var(--mfu) * 7); }
+#screen-deck-builder .fdrops { gap: calc(var(--mfu) * 2); }
+#screen-deck-builder .fsort-field {
+  font-size: calc(var(--mfu) * 9.5); letter-spacing: 0.01em;
+  padding: calc(var(--mfu) * 3) calc(var(--mfu) * 4);
+  min-width: calc(var(--mfu) * 48);
+}
+#screen-deck-builder .fsort { gap: calc(var(--mfu) * 2); padding-right: calc(var(--mfu) * 4); }
+#screen-deck-builder .fbar-nondeckable {
+  font-size: calc(var(--mfu) * 9) !important;
+  gap: calc(var(--mfu) * 4) !important;
+  padding-left: calc(var(--mfu) * 4) !important;
+}
+#screen-deck-builder .card-browser-filters { gap: calc(var(--mfu) * 3) !important; }
+#screen-deck-builder .fbar-nondeckable .hud-armoury-cbox-box {
+  width: calc(var(--mfu) * 11) !important; height: calc(var(--mfu) * 11) !important;
+}
+#screen-deck-builder .fsort-dir { width: calc(var(--mfu) * 18); height: calc(var(--mfu) * 18); }
+#screen-deck-builder .card-browser-filters { padding-left: calc(var(--mfu) * 2) !important; padding-right: calc(var(--mfu) * 2) !important; }
+#screen-deck-builder .fsort { padding-right: calc(var(--mfu) * 3); }
+#screen-deck-builder .fbar-nondeckable { padding-left: calc(var(--mfu) * 3) !important; }

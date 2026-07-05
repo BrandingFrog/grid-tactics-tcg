@@ -261,6 +261,7 @@
                button cycles the sort field). Filters sit centered. -->
           <div class="card-browser-filters hud-armoury-filters" id="filter-bar">
             <div class="fsort" id="fsort">
+              <button class="fsort-field" id="fsort-field" type="button" title="Cycle sort field">Name</button>
               <div class="fsort-dirs">
                 <button class="fsort-dir active" id="fsort-up" type="button" aria-label="Sort ascending">
                   <svg viewBox="0 0 24 24" aria-hidden="true"><path class="chev2" d="M5 20 L12 13 L19 20"/><path class="chev1" d="M5 13 L12 6 L19 13"/></svg>
@@ -269,7 +270,6 @@
                   <svg viewBox="0 0 24 24" aria-hidden="true"><path class="chev2" d="M5 4 L12 11 L19 4"/><path class="chev1" d="M5 11 L12 18 L19 11"/></svg>
                 </button>
               </div>
-              <button class="fsort-field" id="fsort-field" type="button" title="Cycle sort field">Name</button>
             </div>
             <div class="fdrops">
             <div class="fdrop" data-group="type">
@@ -291,6 +291,10 @@
                 <label class="fdrop-opt"><input type="checkbox" value="5"><span class="fdrop-box" aria-hidden="true"></span><span class="fdrop-dot" style="--dot:var(--el-dark)" aria-hidden="true"></span><span>Dark</span></label>
                 <label class="fdrop-opt"><input type="checkbox" value="6"><span class="fdrop-box" aria-hidden="true"></span><span class="fdrop-dot" style="--dot:var(--el-light)" aria-hidden="true"></span><span>Light</span></label>
               </div>
+            </div>
+            <div class="fdrop" data-group="tribe">
+              <button class="fdrop-btn" type="button"><span>Tribe</span><span class="fdrop-count"></span><span class="fdrop-caret" aria-hidden="true">&#9662;</span></button>
+              <div class="fdrop-menu"><!-- options filled from card defs by JS --></div>
             </div>
             <div class="fdrop" data-group="keyword">
               <button class="fdrop-btn" type="button"><span>Keyword</span><span class="fdrop-count"></span><span class="fdrop-caret" aria-hidden="true">&#9662;</span></button>
