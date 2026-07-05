@@ -6631,26 +6631,14 @@ function _hideSpellStage() {
 // is still used by the summon animation path.
 
 function _zoneButton(zone) {
-    // In sandbox, each player's piles have their own DOM ids (P1 bottom,
-    // P2 top); pile-modal buttons from live mode render but are zero-sized.
-    // Prefer the sandbox-specific ids when they exist AND have layout.
-    if (sandboxMode) {
-        var sbMap = {
-            'grave_own': 'sandbox-p0-grave',
-            'exhaust_own': 'sandbox-p0-exhaust',
-            'grave_opp': 'sandbox-p1-grave',
-            'exhaust_opp': 'sandbox-p1-exhaust',
-        };
-        var sbEl = document.getElementById(sbMap[zone]);
-        if (sbEl && sbEl.getBoundingClientRect().width > 0) return sbEl;
-    }
-    var liveMap = {
-        'grave_own': 'pileBtnOwnGrave',
-        'exhaust_own': 'pileBtnOwnExhaust',
-        'grave_opp': 'pileBtnOppGrave',
-        'exhaust_opp': 'pileBtnOppExhaust',
-    };
-    return document.getElementById(liveMap[zone]);
+    // Piles live on the pile boards beside the game board (2026-07-05) —
+    // card-fly animations land on the matching pile cell.
+    var own = zone.indexOf('_own') !== -1;
+    var kind = zone.indexOf('grave') === 0 ? 'grave' : 'exhaust';
+    var screen = sandboxMode ? '#screen-sandbox' : '#screen-game';
+    var el = document.querySelector(
+        screen + ' .pile-board-' + (own ? 'own' : 'opp') + ' [data-pile="' + kind + '"]');
+    return (el && el.getBoundingClientRect().width > 0) ? el : null;
 }
 
 // Generic card-to-pile fly animation: ghost starts at fromRect, flies to
