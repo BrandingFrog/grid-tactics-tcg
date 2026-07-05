@@ -1627,6 +1627,7 @@ function renderCardBrowser() {
         var count = isNonDeckable ? -1 : (currentDeck[numId] || 0);
         var wrapper = document.createElement('div');
         wrapper.className = 'card-browser-item';
+        wrapper.dataset.numericId = numId;
         if (isNonDeckable) wrapper.classList.add('card-nondeckable');
         if (count > 0) wrapper.classList.add('card-selected');
         wrapper.innerHTML = renderDeckBuilderCard(numId, count);
@@ -2588,6 +2589,7 @@ function renderDeckSidebar() {
     items.forEach(function(item) {
         var div = document.createElement('div');
         div.className = 'deck-list-item ' + deckItemTypeClass(item.card);
+        div.dataset.numericId = item.numId;
         // Qty stepper on the right: "- n +", or "- 3 =" at max copies
         // (user 2026-07-05). The = marks max; - stays clickable to decrement.
         var atMax = item.count >= MAX_COPIES;

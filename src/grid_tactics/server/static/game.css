@@ -12431,3 +12431,16 @@ body.fs-switching *, body.fs-switching *::before, body.fs-switching *::after {
   min-width: 0 !important; flex: none !important;
   border-radius: calc(var(--mfu) * 1.5) !important;
 }
+
+/* Card effect text readability WITHOUT growing the boxes (user 2026-07-05):
+   bolder ink, fully solid box fills against the busy art, crisper smoothing,
+   and a small size bump paid for by tighter leading. */
+.cf2 .cf2-text {
+  font-size: 3.6cqw;
+  line-height: 1.2;
+  font-weight: 600;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+.cf2 .cf2-mode.cf2-minion { background: #f2e9ce; }  /* was 0.95 alpha */
+.cf2 .cf2-ability b { font-weight: 800; }
