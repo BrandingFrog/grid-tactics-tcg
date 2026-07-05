@@ -12554,3 +12554,12 @@ body:has(#screen-deck-builder.active) #sbx-toggles { display: none !important; }
   grid-auto-rows: calc(var(--mfu) * 8);
   gap: calc(var(--mfu) * 1.5);
 }
+/* 1x40 cells are ~3px wide — 1px borders + subpixel rounding made every few
+   cells read as greyed out. Borderless slivers: solid bronze when empty,
+   the bucket gradient when filled. */
+#screen-deck-builder .hud-readiness-cells span {
+  border: none !important;
+  border-radius: calc(var(--mfu) * 1) !important;
+  background: #3a2e18;
+}
+#screen-deck-builder .hud-readiness-cells span:not(.on) { background: #3a2e18 !important; }
