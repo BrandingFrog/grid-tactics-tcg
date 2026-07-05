@@ -1657,6 +1657,7 @@ function renderCardBrowser() {
         // hover already previews there.
         if (!isNonDeckable) {
             wrapper.addEventListener('click', function(e) {
+                if (deckDragSuppressClick) return;   // this click ended a drag
                 if (e.shiftKey) {
                     removeCardFromDeck(numId);
                     return;
@@ -1791,6 +1792,120 @@ function setupDeckFilters() {
     if (nonDeckCheckbox) {
         nonDeckCheckbox.addEventListener('change', function() { renderCardBrowser(); });
     }
+}
+
+// =============================================
+// Deck builder drag & drop (user 2026-07-05): hold-and-drag a grid card onto
+// the deck panel to add it; drag a deck row out of the panel to remove one.
+// A blank card ghost follows the pointer. Pointer Events cover mouse + touch:
+// mouse starts on hold (220ms) or movement while held; touch needs a
+// long-press (280ms) so normal swipes still scroll.
+// =============================================
+var deckDragSuppressClick = false;
+
+function setupDeckDragAndDrop() {
+    var SLOP = 8, HOLD_MOUSE = 220, HOLD_TOUCH = 280;
+    var pending = null;   // pointer down, drag not yet started
+    var drag = null;      // { numId, from: 'grid'|'deck' }
+    var ghost = null;
+
+    function ghostEl() {
+        if (!ghost) {
+            ghost = document.createElement('div');
+            ghost.id = 'deck-drag-ghost';
+            ghost.setAttribute('aria-hidden', 'true');
+            document.body.appendChild(ghost);
+        }
+        return ghost;
+    }
+    function moveGhost(x, y) {
+        var g = ghostEl();
+        g.style.transform = 'translate(' + x + 'px,' + y + 'px) translate(-50%, -60%) rotate(-4deg)';
+    }
+    function sidebar() { return document.querySelector('#screen-deck-builder .deck-sidebar'); }
+    function overSidebar(x, y) {
+        var sb = sidebar();
+        if (!sb) return false;
+        var r = sb.getBoundingClientRect();
+        return x >= r.left && x <= r.right && y >= r.top && y <= r.bottom;
+    }
+    function begin(x, y) {
+        if (!pending) return;
+        drag = { numId: pending.numId, from: pending.from };
+        pending = null;
+        var g = ghostEl();
+        g.style.display = 'block';
+        moveGhost(x, y);
+        document.body.classList.add('deck-dragging');
+    }
+    function end() {
+        if (ghost) ghost.style.display = 'none';
+        document.body.classList.remove('deck-dragging', 'deck-drop-ok');
+        drag = null;
+    }
+
+    document.addEventListener('pointerdown', function(e) {
+        var screen = document.getElementById('screen-deck-builder');
+        if (!screen || !screen.classList.contains('active')) return;
+        if (e.pointerType === 'mouse' && e.button !== 0) return;
+        if (e.target.closest('.deck-qty-btn, .card-info-lock, button, input, a')) return;
+        var gridItem = e.target.closest('#card-browser-grid .card-browser-item');
+        var deckRow = e.target.closest('#deck-flat .deck-list-item');
+        var el = gridItem || deckRow;
+        if (!el || el.classList.contains('card-nondeckable')) return;
+        var numId = parseInt(el.dataset.numericId, 10);
+        if (isNaN(numId)) return;
+        pending = {
+            numId: numId,
+            from: gridItem ? 'grid' : 'deck',
+            x: e.clientX, y: e.clientY,
+            touch: e.pointerType === 'touch',
+            timer: setTimeout(function() { begin(pending.x, pending.y); },
+                              e.pointerType === 'touch' ? HOLD_TOUCH : HOLD_MOUSE)
+        };
+    });
+
+    document.addEventListener('pointermove', function(e) {
+        if (drag) {
+            moveGhost(e.clientX, e.clientY);
+            var ok = drag.from === 'grid' ? overSidebar(e.clientX, e.clientY)
+                                          : !overSidebar(e.clientX, e.clientY);
+            document.body.classList.toggle('deck-drop-ok', ok);
+            return;
+        }
+        if (pending) {
+            var moved = Math.hypot(e.clientX - pending.x, e.clientY - pending.y) > SLOP;
+            if (!moved) return;
+            clearTimeout(pending.timer);
+            if (pending.touch) {
+                pending = null;                    // touch: early move = scroll
+            } else {
+                begin(e.clientX, e.clientY);       // mouse: drag intent
+            }
+        }
+    });
+
+    // Once a touch drag is live, the finger must drag the ghost, not the page
+    document.addEventListener('touchmove', function(e) {
+        if (drag) e.preventDefault();
+    }, { passive: false });
+
+    document.addEventListener('pointerup', function(e) {
+        if (pending) { clearTimeout(pending.timer); pending = null; }
+        if (!drag) return;
+        var inSidebar = overSidebar(e.clientX, e.clientY);
+        if (drag.from === 'grid' && inSidebar) addCardToDeck(drag.numId);
+        else if (drag.from === 'deck' && !inSidebar) removeCardFromDeck(drag.numId);
+        end();
+        // swallow the click that follows this pointerup
+        deckDragSuppressClick = true;
+        setTimeout(function() { deckDragSuppressClick = false; }, 0);
+    });
+
+    document.addEventListener('pointercancel', function() {
+        if (pending) { clearTimeout(pending.timer); pending = null; }
+        if (drag) end();
+    });
 }
 
 // Kept in sync with data/GLOSSARY.md (source of truth) — update BOTH when
@@ -2801,6 +2916,7 @@ document.addEventListener('DOMContentLoaded', function() {
     setupLobbyHandlers();
     setupDeckBuilderHandlers();
     setupDeckFilters();
+    setupDeckDragAndDrop();
     setupNavHandlers();
     setupActivityTabs();
     setupGameHandlers();

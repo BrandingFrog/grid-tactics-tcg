@@ -12444,3 +12444,30 @@ body.fs-switching *, body.fs-switching *::before, body.fs-switching *::after {
 }
 .cf2 .cf2-mode.cf2-minion { background: #f2e9ce; }  /* was 0.95 alpha */
 .cf2 .cf2-ability b { font-weight: 800; }
+
+/* ==========================================================================
+   DRAG-TO-ADD/REMOVE GHOST (user 2026-07-05): a blank ivory card follows the
+   pointer while dragging; the deck panel shows a dashed drop hint, gold when
+   the drop will land.
+   ========================================================================== */
+#deck-drag-ghost {
+  display: none; position: fixed; left: 0; top: 0;
+  width: calc(var(--mfu) * 74); height: calc(var(--mfu) * 74);
+  z-index: 100000; pointer-events: none;
+  background:
+    radial-gradient(circle at 30% 20%, rgba(255,255,255,0.35), transparent 60%),
+    linear-gradient(148deg, #efe7d1, #e5d9bc, #d7c9a4);
+  border-radius: 6%;
+  box-shadow: 0 calc(var(--mfu) * 10) calc(var(--mfu) * 24) rgba(0, 0, 0, 0.55),
+              inset 0 0 calc(var(--mfu) * 11) rgba(120, 92, 50, 0.3);
+  outline: 1px solid rgba(58, 46, 24, 0.6);
+  will-change: transform;
+}
+body.deck-dragging { cursor: grabbing; user-select: none; }
+body.deck-dragging.deck-drop-ok #deck-drag-ghost {
+  outline: calc(var(--mfu) * 2) solid var(--gold, #e0a23c);
+}
+body.deck-dragging #screen-deck-builder .deck-sidebar {
+  outline: calc(var(--mfu) * 2) dashed rgba(224, 162, 60, 0.45);
+  outline-offset: calc(var(--mfu) * -2);
+}
