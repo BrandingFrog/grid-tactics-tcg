@@ -12544,3 +12544,13 @@ body:has(#screen-deck-builder.active) #sbx-toggles { display: none !important; }
 #screen-deck-builder .fbar-nd:hover { border-color: var(--gold); }
 #screen-deck-builder .fbar-nd:has(input:checked) { border-color: var(--gold); background: rgba(224, 162, 60, 0.14); }
 #screen-deck-builder .fbar-nd:has(input:checked) .fbar-nd-icon { filter: none; opacity: 1; }
+
+/* Readiness readout simplified (user 2026-07-05): the N/40 counter says it
+   all — drop the PROGRESS/NEED-40 text and run the meter as one 1x40 line. */
+#screen-deck-builder .hud-readiness-label,
+#screen-deck-builder #deck-status { display: none !important; }  /* JS rewrites its classes */
+#screen-deck-builder .hud-readiness-cells {
+  grid-template-columns: repeat(40, 1fr);
+  grid-auto-rows: calc(var(--mfu) * 8);
+  gap: calc(var(--mfu) * 1.5);
+}

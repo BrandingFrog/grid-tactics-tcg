@@ -351,16 +351,7 @@
             <span class="hud-panel-dim">list</span>
           </div>
 
-          <!-- Deck name + save -->
-          <div class="deck-save-row hud-loadout-name">
-            <span class="hud-loadout-prefix" aria-hidden="true">Name</span>
-            <input type="text" id="deck-slot-name" class="input input-slot-name hud-loadout-input" placeholder="deck name…" maxlength="20">
-            <button class="btn btn-primary btn-sm hud-loadout-save" id="btn-save-deck">
-              <span class="hud-btn-chev">▸</span><span>SAVE</span>
-            </button>
-          </div>
-
-          <!-- Load slot -->
+          <!-- Load slot (first), then deck name + save (user 2026-07-05) -->
           <div class="deck-load-row hud-loadout-load">
             <span class="hud-loadout-prefix" aria-hidden="true">Load</span>
             <select id="deck-load-select" class="input select select-sm hud-loadout-select">
@@ -368,6 +359,15 @@
               <!-- 5 slots populated by JS -->
             </select>
             <button class="btn btn-danger btn-sm hud-loadout-del" id="btn-delete-slot" title="Delete this deck">✕</button>
+          </div>
+
+          <!-- Deck name + save -->
+          <div class="deck-save-row hud-loadout-name">
+            <span class="hud-loadout-prefix" aria-hidden="true">Name</span>
+            <input type="text" id="deck-slot-name" class="input input-slot-name hud-loadout-input" placeholder="deck name…" maxlength="20">
+            <button class="btn btn-primary btn-sm hud-loadout-save" id="btn-save-deck">
+              <span class="hud-btn-chev">▸</span><span>SAVE</span>
+            </button>
           </div>
 
           <!-- Readiness readout -->
