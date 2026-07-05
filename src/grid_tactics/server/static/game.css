@@ -12205,3 +12205,77 @@ body.fs-switching *, body.fs-switching *::before, body.fs-switching *::after {
   transition: none !important;
   animation-play-state: paused !important;
 }
+
+/* ==========================================================================
+   SCALE AUDIT (user 2026-07-05): elements that were still fixed-px and
+   ignored the one-layout --mfu scale. Count badge also loses the last cyan.
+   ========================================================================== */
+/* card count badge (xN circle on grid cards) — scaled + vintage gold */
+.card-count-badge {
+  top: calc(var(--mfu) * -4) !important; right: calc(var(--mfu) * -4) !important;
+  width: calc(var(--mfu) * 24) !important; height: calc(var(--mfu) * 24) !important;
+  font-size: calc(var(--mfu) * 12) !important;
+  background: linear-gradient(180deg, var(--gold-lt, #ffd873), var(--gold, #e0a23c)) !important;
+  color: #241c10 !important;
+  border: 1px solid #3a2e18;
+  box-shadow: 0 calc(var(--mfu) * 2) calc(var(--mfu) * 5) rgba(0, 0, 0, 0.5);
+}
+.card-count-badge.empty {
+  background: #191207 !important;
+  color: #9a865c !important;
+  border-color: #3a2e18;
+}
+.card-count-badge.prohibited {
+  background: #191207 !important;
+  line-height: calc(var(--mfu) * 24) !important;
+  font-size: calc(var(--mfu) * 12) !important;
+}
+
+/* tooltip related-card rows + thumbnails */
+#screen-deck-builder .tooltip-related-card,
+#screen-game .tooltip-related-card,
+#screen-sandbox .tooltip-related-card {
+  gap: calc(var(--mfu) * 8) !important;
+  padding: calc(var(--mfu) * 6) calc(var(--mfu) * 8) !important;
+  border-radius: calc(var(--mfu) * 6) !important;
+}
+#screen-deck-builder .tooltip-related-art,
+#screen-game .tooltip-related-art,
+#screen-sandbox .tooltip-related-art {
+  width: calc(var(--mfu) * 36) !important;
+  height: calc(var(--mfu) * 36) !important;
+  border-radius: calc(var(--mfu) * 4) !important;
+}
+
+/* NO-CARD-SELECTED empty state */
+#screen-deck-builder .hud-dossier-empty-head {
+  font-size: calc(var(--mfu) * 14) !important;
+  letter-spacing: 0.07em !important;
+}
+#screen-deck-builder .hud-dossier-empty-sub {
+  font-size: calc(var(--mfu) * 13) !important;
+  max-width: calc(var(--mfu) * 220) !important;
+}
+
+/* deck readiness meter cells */
+#screen-deck-builder .hud-readiness-cells span {
+  flex-basis: calc(var(--mfu) * 6) !important;
+  height: calc(var(--mfu) * 8) !important;
+  min-width: calc(var(--mfu) * 6) !important;
+  border-radius: calc(var(--mfu) * 2) !important;
+}
+
+/* floating chrome toggles (☰ / ⚙) */
+#sbx-toggles button {
+  width: calc(var(--mfu) * 30) !important;
+  height: calc(var(--mfu) * 30) !important;
+  border-radius: calc(var(--mfu) * 7) !important;
+  font-size: calc(var(--mfu) * 15) !important;
+}
+
+/* scrollbars in the scaled screens */
+#screen-deck-builder .tooltip-body::-webkit-scrollbar,
+#screen-deck-builder .deck-list::-webkit-scrollbar,
+#screen-deck-builder .card-browser-grid::-webkit-scrollbar {
+  width: calc(var(--mfu) * 6);
+}
