@@ -1806,6 +1806,33 @@ function setupDeckFilters() {
 }
 
 // =============================================
+// Board gap forgiveness (user 2026-07-06): on the tilted board, clicks that
+// land in the 6px gutters (or the projected slop at tile edges) hit the
+// board background instead of the tile the player was visually aiming at.
+// Forward those to the cell whose (slightly inflated) rect contains the
+// point, so every visual part of a tile is clickable.
+// =============================================
+function setupBoardGapForgiveness() {
+    ['game-board', 'sandbox-board'].forEach(function(id) {
+        var board = document.getElementById(id);
+        if (!board) return;
+        board.addEventListener('click', function(e) {
+            if (e.target !== board) return;   // direct cell hits pass through
+            var PAD = 8;
+            var cells = board.querySelectorAll('.board-cell');
+            for (var i = 0; i < cells.length; i++) {
+                var r = cells[i].getBoundingClientRect();
+                if (e.clientX >= r.left - PAD && e.clientX <= r.right + PAD &&
+                    e.clientY >= r.top - PAD && e.clientY <= r.bottom + PAD) {
+                    cells[i].click();
+                    return;
+                }
+            }
+        });
+    });
+}
+
+// =============================================
 // In-game tooltip tabs (user 2026-07-06): the left panel gets Card | Log |
 // Chat tabs and the right activity sidebar disappears, freeing stage width.
 // The log/chat DOM nodes are MOVED (not copied) so every id-based handler
@@ -3140,6 +3167,7 @@ document.addEventListener('DOMContentLoaded', function() {
     setupDeckFilters();
     setupDeckDragAndDrop();
     setupGameTooltipPin();
+    setupBoardGapForgiveness();
     setupTooltipTabs();
     setupLobbyQuickview();
     setupNavHandlers();

@@ -13103,3 +13103,17 @@ body.ttabs-on #screen-game .game-sidebar { display: none !important; }
   font-family: var(--ui-body, serif); font-weight: 400; font-style: italic;
   font-size: calc(var(--u) * 8.5); color: var(--parch-mute, #9a865c); letter-spacing: 0;
 }
+
+/* Board tiles must be clickable everywhere (user 2026-07-06): the hand strip,
+   opponent-hand row and action bar are full-width overlays that ate clicks
+   wherever they overlap the board. The STRIPS pass clicks through; their
+   cards/buttons stay interactive. */
+#screen-game .duel-stage .hand-container, #screen-sandbox .duel-stage .hand-container,
+#screen-game .duel-stage .opp-hand-row, #screen-sandbox .duel-stage .opp-hand-row,
+#screen-game .duel-stage .hand-action-bar, #screen-sandbox .duel-stage .hand-action-bar {
+  pointer-events: none !important;
+}
+#screen-game .duel-stage .hand-container > *, #screen-sandbox .duel-stage .hand-container > *,
+#screen-game .duel-stage .hand-action-bar > *, #screen-sandbox .duel-stage .hand-action-bar > * {
+  pointer-events: auto;
+}
