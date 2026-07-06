@@ -13295,3 +13295,19 @@ body.ttabs-on #screen-game .game-sidebar { display: none !important; }
   position: absolute !important;
   left: 522px !important;
 }
+
+/* REACT WINDOW banner: it's inserted in normal flow before #hand-container,
+   but the hand is absolutely positioned now, so the banner floated to the
+   TOP of the stage (user 2026-07-06). Weld it just above the hand strip,
+   centered on the stage. */
+#screen-game .duel-stage .react-banner,
+#screen-sandbox .duel-stage .react-banner {
+  position: absolute;
+  left: 50%;
+  bottom: 72px;
+  transform: translateX(-50%);
+  margin: 0;
+  z-index: 60;
+  white-space: nowrap;
+  background: rgba(30, 18, 6, 0.88);
+}
