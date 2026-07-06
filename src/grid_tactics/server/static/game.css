@@ -13171,3 +13171,12 @@ body.ttabs-on #screen-game .game-sidebar { display: none !important; }
    card width — 6.5px on the tooltip card but a 1.6px hairline at hand size.
    Floor it so the paper reads at every size (user 2026-07-06). */
 .cf2 .cf2-frame { margin: max(2.7cqw, 3.5px); }
+/* Hand cards were UNEVEN (user 2026-07-06): aspect-ratio 1/1 only sets the
+   preferred height — cards whose name banner wraps or whose effect boxes
+   exceed the square GREW taller than their neighbours. Hard-clamp the
+   square; the frame clips the (unreadable-at-this-size) excess. */
+.card-frame-full.cf2.card-frame-hand {
+  height: var(--cardw) !important;
+  min-height: 0 !important; max-height: var(--cardw) !important;
+}
+.card-frame-full.cf2.card-frame-hand .cf2-frame { overflow: hidden; }
