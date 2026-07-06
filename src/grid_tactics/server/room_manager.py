@@ -195,14 +195,14 @@ class RoomManager:
         # of 10 for the human, so hand layout / overdraw states are easy to
         # eyeball without playing draw turns.
         import dataclasses as _dc
-        p0 = state.players[0]
-        draw_n = max(0, 10 - len(p0.hand))
+
+        def _full_hand(pl):
+            n = max(0, 10 - len(pl.hand))
+            return _dc.replace(pl, hand=pl.hand + pl.deck[:n], deck=pl.deck[n:])
+
         state = _dc.replace(
             state,
-            players=(
-                _dc.replace(p0, hand=p0.hand + p0.deck[:draw_n], deck=p0.deck[draw_n:]),
-                state.players[1],
-            ),
+            players=(_full_hand(state.players[0]), _full_hand(state.players[1])),
         )
         session = GameSession(
             state=state,
