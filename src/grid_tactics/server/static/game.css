@@ -13354,3 +13354,37 @@ body.ttabs-on #screen-game .game-sidebar { display: none !important; }
   margin-right: calc(var(--cardw) * -3) !important;
   margin-bottom: calc(var(--cardw) * -3) !important;
 }
+
+/* Element dot too big on large desktops (user 2026-07-06): the dot was
+   sized in --mfu (viewport-fluid), but #screen-game/#screen-sandbox live
+   inside the scale-locked .game-layout — the transform scales it AGAIN,
+   so it grew quadratically vs the fixed 11px stats text. Design px here;
+   the deck builder (fully fluid, no transform) keeps its mfu sizing. */
+#screen-game .tooltip-stats .ts-elem,
+#screen-sandbox .tooltip-stats .ts-elem { gap: 4px; }
+#screen-game .tooltip-stats .ts-elem .ts-dot,
+#screen-sandbox .tooltip-stats .ts-elem .ts-dot {
+  width: 7px; height: 7px;
+}
+
+/* Stage-debug markers (user 2026-07-06, TESTING AID — remove when done):
+   red corner Ls mark the stage region (x 200->844, full height) and a red
+   cross marks the stage midpoint (design x=522, y=195) that every popup
+   centers on. */
+.game-layout > .stage-debug {
+  position: absolute; top: 0; right: 0; bottom: 0; left: 200px;
+  pointer-events: none; z-index: 9999;
+}
+.stage-debug .sd-corner { position: absolute; width: 16px; height: 16px; }
+.stage-debug .sd-tl { top: 0; left: 0;   border-top: 2px solid #f00; border-left: 2px solid #f00; }
+.stage-debug .sd-tr { top: 0; right: 0;  border-top: 2px solid #f00; border-right: 2px solid #f00; }
+.stage-debug .sd-bl { bottom: 0; left: 0;  border-bottom: 2px solid #f00; border-left: 2px solid #f00; }
+.stage-debug .sd-br { bottom: 0; right: 0; border-bottom: 2px solid #f00; border-right: 2px solid #f00; }
+.stage-debug .sd-cross {
+  position: absolute; left: 50%; top: 50%;
+  width: 22px; height: 22px; transform: translate(-50%, -50%);
+}
+.stage-debug .sd-cross::before,
+.stage-debug .sd-cross::after { content: ''; position: absolute; background: #f00; }
+.stage-debug .sd-cross::before { left: 50%; top: 0; bottom: 0; width: 2px; transform: translateX(-50%); }
+.stage-debug .sd-cross::after { top: 50%; left: 0; right: 0; height: 2px; transform: translateY(-50%); }

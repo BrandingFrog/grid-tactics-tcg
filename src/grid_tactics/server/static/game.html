@@ -435,6 +435,13 @@
 <!-- Screen: Game -->
   <div id="screen-game" class="screen">
     <div class="game-layout">
+      <!-- Stage-debug markers (user 2026-07-06, testing): red corner Ls at
+           the stage bounds + a red cross at the stage midpoint (x=522). -->
+      <div class="stage-debug" aria-hidden="true">
+        <div class="sd-corner sd-tl"></div><div class="sd-corner sd-tr"></div>
+        <div class="sd-corner sd-bl"></div><div class="sd-corner sd-br"></div>
+        <div class="sd-cross"></div>
+      </div>
       <!-- Game Tooltip Sidebar (left) -->
       <div class="tooltip-sidebar game-tooltip-sidebar" id="game-tooltip-sidebar">
         <div class="card-tooltip game-tooltip" id="game-tooltip" style="display:none;">
@@ -652,6 +659,13 @@
   <!-- All IDs are sandbox-prefixed to avoid collision with #screen-game.    -->
   <div id="screen-sandbox" class="screen">
     <div class="game-layout sandbox-layout">
+      <!-- Stage-debug markers (user 2026-07-06, testing): red corner Ls at
+           the stage bounds + a red cross at the stage midpoint (x=522). -->
+      <div class="stage-debug" aria-hidden="true">
+        <div class="sd-corner sd-tl"></div><div class="sd-corner sd-tr"></div>
+        <div class="sd-corner sd-bl"></div><div class="sd-corner sd-br"></div>
+        <div class="sd-cross"></div>
+      </div>
       <!-- Left: empty tooltip sidebar slot (keeps 3-col grid parity with
            #screen-game so the board sizes the same way). Hidden on mobile
            via the existing .game-layout > .tooltip-sidebar media query. -->
