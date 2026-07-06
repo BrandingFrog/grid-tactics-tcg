@@ -7328,6 +7328,21 @@ function submitAction(actionData) {
             && _modalResolutionTypes.indexOf(_at) === -1) {
         return;
     }
+    // Event-queue gate (user 2026-07-06: "its letting me queue moves during
+    // the opponents turns"): while queued engine events are still animating,
+    // the DOM shows an OLDER state than gameState/legalActions (which hold
+    // the final frame — often already the player's next turn). A click mid-
+    // drain validated against that future state, submitted, and appeared to
+    // "queue" an action that resolved after the animations caught up. Block
+    // self-initiated actions until the drain finishes; the same whitelist
+    // as the spell-stage gate keeps react windows + modals responsive.
+    var _queueBusy = (typeof eventRunning !== 'undefined' && eventRunning)
+        || (typeof eventQueue !== 'undefined' && eventQueue.length > 0);
+    if (!sandboxMode && _queueBusy
+            && _at !== 4 && _at !== 5
+            && _modalResolutionTypes.indexOf(_at) === -1) {
+        return;
+    }
     if (socket) {
         // === SANDBOX-EMIT-GATE-START ===
         if (sandboxMode) {
