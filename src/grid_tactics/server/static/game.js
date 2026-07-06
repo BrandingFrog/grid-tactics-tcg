@@ -1806,6 +1806,56 @@ function setupDeckFilters() {
 }
 
 // =============================================
+// In-game tooltip tabs (user 2026-07-06): the left panel gets Card | Log |
+// Chat tabs and the right activity sidebar disappears, freeing stage width.
+// The log/chat DOM nodes are MOVED (not copied) so every id-based handler
+// (chat send, log append, unread badge) keeps working untouched.
+// =============================================
+function setupTooltipTabs() {
+    var sidebar = document.querySelector('#screen-game .game-tooltip-sidebar');
+    var logPane = document.getElementById('tab-log');
+    var chatPane = document.getElementById('tab-chat');
+    var leaveBtn = document.querySelector('#screen-game .game-sidebar .btn.full-width');
+    if (!sidebar || !logPane || !chatPane) return;
+
+    var strip = document.createElement('div');
+    strip.className = 'ttab-strip';
+    strip.innerHTML =
+        '<button class="ttab active" data-t="card" type="button">Card</button>' +
+        '<button class="ttab" data-t="log" type="button">Log</button>' +
+        '<button class="ttab" data-t="chat" type="button">Chat' +
+        '<span class="ttab-unread" id="ttab-chat-unread" style="display:none;"></span></button>';
+
+    // wrap the existing tooltip content into a "card" pane
+    var cardPane = document.createElement('div');
+    cardPane.className = 'ttab-pane ttab-pane-card';
+    while (sidebar.firstChild) cardPane.appendChild(sidebar.firstChild);
+    sidebar.appendChild(strip);
+    sidebar.appendChild(cardPane);
+    sidebar.appendChild(logPane);
+    sidebar.appendChild(chatPane);
+    if (leaveBtn) sidebar.appendChild(leaveBtn);
+    logPane.classList.add('ttab-pane');
+    chatPane.classList.add('ttab-pane');
+    logPane.style.display = 'none';
+    chatPane.style.display = 'none';
+
+    strip.addEventListener('click', function(e) {
+        var b = e.target.closest('.ttab');
+        if (!b) return;
+        strip.querySelectorAll('.ttab').forEach(function(x) { x.classList.toggle('active', x === b); });
+        cardPane.style.display = b.dataset.t === 'card' ? '' : 'none';
+        logPane.style.display = b.dataset.t === 'log' ? '' : 'none';
+        chatPane.style.display = b.dataset.t === 'chat' ? '' : 'none';
+        if (b.dataset.t === 'chat') {
+            var unread = document.getElementById('ttab-chat-unread');
+            if (unread) { unread.style.display = 'none'; unread.textContent = ''; }
+        }
+    });
+    document.body.classList.add('ttabs-on');
+}
+
+// =============================================
 // Lobby quick game view (testing, user 2026-07-06): polls /api/quickview for
 // in-progress games and renders mini live boards — scores, turn, minion dots
 // (gold = P1, rust = P2). Click a snapshot to spectate that room.
@@ -3085,6 +3135,7 @@ document.addEventListener('DOMContentLoaded', function() {
     setupDeckFilters();
     setupDeckDragAndDrop();
     setupGameTooltipPin();
+    setupTooltipTabs();
     setupLobbyQuickview();
     setupNavHandlers();
     setupActivityTabs();

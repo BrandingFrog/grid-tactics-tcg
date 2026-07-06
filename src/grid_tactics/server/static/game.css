@@ -13036,3 +13036,50 @@ body.sbx-hide-bar:has(#screen-sandbox.active) .room-bar {
 #screen-lobby .qv-turn { font-size: calc(var(--u) * 9); color: var(--parch-mute, #9a865c); }
 #screen-lobby .qv-score { font-size: calc(var(--u) * 10); color: var(--parch-dim, #cbb98f); }
 #screen-lobby .qv-score b { color: var(--parch, #f2ead2); }
+
+/* ==========================================================================
+   TOOLTIP TABS (user 2026-07-06): Card | Log | Chat in the left panel; the
+   right activity sidebar is gone in live games — the stage gets its width.
+   ========================================================================== */
+body.ttabs-on:has(#screen-game.active) .game-layout {
+  grid-template-columns: 200px minmax(0, 1fr) !important;
+}
+body.ttabs-on #screen-game .game-sidebar { display: none !important; }
+#screen-game .game-tooltip-sidebar { display: flex; flex-direction: column; min-height: 0; }
+#screen-game .ttab-strip {
+  flex: 0 0 auto;
+  display: flex; gap: 4px;
+  padding: 6px 6px 0;
+}
+#screen-game .ttab {
+  flex: 1 1 0;
+  font-family: 'Alegreya SC', Georgia, serif; font-weight: 700;
+  font-size: 11px; letter-spacing: 0.04em;
+  color: #9a865c; background: transparent;
+  border: 1px solid transparent; border-bottom: 1px solid #3a2e18;
+  border-radius: 6px 6px 0 0;
+  padding: 4px 0; cursor: pointer;
+  position: relative;
+}
+#screen-game .ttab:hover { color: #f2ead2; }
+#screen-game .ttab.active {
+  color: #e0a23c;
+  background: rgba(224, 162, 60, 0.07);
+  border-color: #3a2e18; border-bottom-color: transparent;
+}
+#screen-game .ttab-unread {
+  position: absolute; top: 2px; right: 6px;
+  min-width: 6px; height: 6px; border-radius: 50%;
+  background: #e0a23c;
+}
+#screen-game .ttab-pane { flex: 1 1 auto; min-height: 0; overflow: hidden; display: flex; flex-direction: column; }
+#screen-game .ttab-pane-card { overflow: visible; }
+#screen-game .ttab-pane .log-entries, #screen-game .ttab-pane .chat-messages,
+#screen-game .ttab-pane #log-entries, #screen-game .ttab-pane #chat-messages {
+  flex: 1 1 auto; min-height: 0; overflow-y: auto;
+  scrollbar-width: thin; scrollbar-color: #6b5730 transparent;
+}
+#screen-game .game-tooltip-sidebar .btn.full-width {
+  flex: 0 0 auto; margin: 6px;
+  font-size: 10px !important;
+}
