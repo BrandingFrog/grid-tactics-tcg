@@ -17,6 +17,13 @@ def main():
     room_manager = RoomManager(library)
     register_events(room_manager)
 
+    # Lobby quick view (testing): live-game snapshots, public info only.
+    from flask import jsonify
+
+    @app.route("/api/quickview")
+    def quickview():
+        return jsonify(room_manager.list_live_games())
+
     port = int(os.environ.get("PORT", 5000))
     debug = os.environ.get("RAILWAY_ENVIRONMENT") is None  # debug only locally
     print(f"Grid Tactics PvP Server starting on http://0.0.0.0:{port}")

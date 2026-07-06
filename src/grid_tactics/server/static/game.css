@@ -13000,3 +13000,39 @@ body.sbx-hide-bar:has(#screen-sandbox.active) .room-bar {
   outline-offset: 1px;
   box-shadow: 0 0 12px rgba(255, 216, 115, 0.45) !important;
 }
+
+/* ==========================================================================
+   LOBBY QUICK GAME VIEW (testing, user 2026-07-06): mini live boards of
+   in-progress games under the Open Games list. --u lobby units.
+   ========================================================================== */
+#screen-lobby .lobby2-quickview { margin-top: calc(var(--u) * 8); }
+#screen-lobby .lobby2-qv-tag {
+  font-size: calc(var(--u) * 8); letter-spacing: 0.08em;
+  color: var(--parch-mute, #9a865c);
+  border: 1px solid var(--bronze-dk, #3a2e18); border-radius: calc(var(--u) * 3);
+  padding: 0 calc(var(--u) * 4); margin-left: calc(var(--u) * 5);
+}
+#screen-lobby .lobby2-qv-game {
+  display: flex; align-items: center; gap: calc(var(--u) * 8);
+  padding: calc(var(--u) * 5) calc(var(--u) * 6);
+  margin-top: calc(var(--u) * 4);
+  background: var(--field, #191207);
+  border: 1px solid var(--bronze-dk, #3a2e18); border-radius: calc(var(--u) * 5);
+  cursor: pointer;
+}
+#screen-lobby .lobby2-qv-game:hover { border-color: var(--gold, #e0a23c); }
+#screen-lobby .qv-board {
+  flex: 0 0 auto;
+  display: grid; grid-template-columns: repeat(5, calc(var(--u) * 7));
+  grid-auto-rows: calc(var(--u) * 6); gap: calc(var(--u) * 1.5);
+  padding: calc(var(--u) * 3);
+  background: #241a0e; border: 1px solid #3a2e18; border-radius: calc(var(--u) * 3);
+}
+#screen-lobby .qv-board i { background: rgba(255, 240, 200, 0.06); border-radius: 1px; }
+#screen-lobby .qv-board i.qv-p0 { background: #e0a23c; }
+#screen-lobby .qv-board i.qv-p1 { background: #b5623a; }
+#screen-lobby .qv-meta { display: flex; flex-direction: column; gap: calc(var(--u) * 2); min-width: 0; }
+#screen-lobby .qv-code { font-family: var(--ui-display, serif); font-weight: 700; color: var(--gold, #e0a23c); font-size: calc(var(--u) * 11); letter-spacing: 0.08em; }
+#screen-lobby .qv-turn { font-size: calc(var(--u) * 9); color: var(--parch-mute, #9a865c); }
+#screen-lobby .qv-score { font-size: calc(var(--u) * 10); color: var(--parch-dim, #cbb98f); }
+#screen-lobby .qv-score b { color: var(--parch, #f2ead2); }

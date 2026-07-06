@@ -285,6 +285,40 @@ class RoomManager:
         snapshot.sort(key=lambda r: r["created_at"], reverse=True)
         return snapshot
 
+    def list_live_games(self) -> list[dict]:
+        """Lightweight snapshot of IN-PROGRESS games for the lobby quick
+        view (testing aid): scores, turn and minion positions only — no
+        hidden information (hands/decks stay server-side).
+        """
+        with self._lock:
+            games = list(self._games.items())
+        out = []
+        for code, session in games:
+            try:
+                st = session.state
+                out.append({
+                    "code": code,
+                    "turn": st.turn_number,
+                    "active": st.active_player_idx,
+                    "phase": getattr(st.phase, "name", str(st.phase)),
+                    "players": [
+                        {"name": session.player_names[i], "hp": st.players[i].hp}
+                        for i in (0, 1)
+                    ],
+                    "minions": [
+                        {
+                            "row": m.position[0],
+                            "col": m.position[1],
+                            "owner": int(m.owner),
+                        }
+                        for m in st.minions
+                        if m.is_alive
+                    ],
+                })
+            except Exception:  # noqa: BLE001 — a dying session must not break the lobby
+                continue
+        return out
+
     # ------------------------------------------------------------------
     # Spectator API (Phase 14.4-01)
     # ------------------------------------------------------------------

@@ -1806,6 +1806,62 @@ function setupDeckFilters() {
 }
 
 // =============================================
+// Lobby quick game view (testing, user 2026-07-06): polls /api/quickview for
+// in-progress games and renders mini live boards — scores, turn, minion dots
+// (gold = P1, rust = P2). Click a snapshot to spectate that room.
+// =============================================
+function setupLobbyQuickview() {
+    var wrap = document.getElementById('lobby-quickview');
+    var list = document.getElementById('lobby-quickview-list');
+    if (!wrap || !list) return;
+
+    function renderGames(games) {
+        if (!games.length) { wrap.style.display = 'none'; return; }
+        wrap.style.display = '';
+        list.innerHTML = games.map(function(g) {
+            var cells = '';
+            var occ = {};
+            g.minions.forEach(function(m) { occ[m.row + ',' + m.col] = m.owner; });
+            for (var r = 0; r < 5; r++) {
+                for (var c = 0; c < 5; c++) {
+                    var o = occ[r + ',' + c];
+                    cells += '<i' + (o === 0 ? ' class="qv-p0"' : o === 1 ? ' class="qv-p1"' : '') + '></i>';
+                }
+            }
+            return '<div class="lobby2-qv-game" data-code="' + g.code + '" title="Watch ' + g.code + '">'
+                + '<div class="qv-board">' + cells + '</div>'
+                + '<div class="qv-meta">'
+                + '<span class="qv-code">' + g.code + '</span>'
+                + '<span class="qv-turn">Turn ' + g.turn + ' · ' + (g.phase || '') + '</span>'
+                + '<span class="qv-score">' + g.players[0].name + ' <b>' + g.players[0].hp + '</b>'
+                + ' vs <b>' + g.players[1].hp + '</b> ' + g.players[1].name + '</span>'
+                + '</div></div>';
+        }).join('');
+        list.querySelectorAll('.lobby2-qv-game').forEach(function(el) {
+            el.addEventListener('click', function() {
+                var codeInput = document.querySelector('input[placeholder*="CODE" i], #input-room-code');
+                if (codeInput) {
+                    codeInput.value = el.dataset.code;
+                    codeInput.dispatchEvent(new Event('input', { bubbles: true }));
+                }
+                var watchBtn = document.getElementById('btn-spectate-room');
+                if (watchBtn) watchBtn.click();
+            });
+        });
+    }
+
+    function poll() {
+        if (!document.getElementById('screen-lobby').classList.contains('active')) return;
+        fetch('/api/quickview')
+            .then(function(r) { return r.ok ? r.json() : []; })
+            .then(renderGames)
+            .catch(function() { /* lobby polling must never throw */ });
+    }
+    setInterval(poll, 3000);
+    poll();
+}
+
+// =============================================
 // Deck builder drag & drop (user 2026-07-05): hold-and-drag a grid card onto
 // the deck panel to add it; drag a deck row out of the panel to remove one.
 // A blank card ghost follows the pointer. Pointer Events cover mouse + touch:
@@ -3029,6 +3085,7 @@ document.addEventListener('DOMContentLoaded', function() {
     setupDeckFilters();
     setupDeckDragAndDrop();
     setupGameTooltipPin();
+    setupLobbyQuickview();
     setupNavHandlers();
     setupActivityTabs();
     setupGameHandlers();
