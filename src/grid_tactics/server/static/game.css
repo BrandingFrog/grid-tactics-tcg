@@ -13303,7 +13303,9 @@ body.ttabs-on #screen-game .game-sidebar { display: none !important; }
 #screen-game .duel-stage .react-banner,
 #screen-sandbox .duel-stage .react-banner {
   position: absolute;
-  left: 50%;
+  /* .duel-stage spans 208->844; its 50% is 526. Shift 4px left so the
+     banner centers at the true stage midpoint x=522. */
+  left: calc(50% - 4px);
   bottom: 72px;
   transform: translateX(-50%);
   margin: 0;
