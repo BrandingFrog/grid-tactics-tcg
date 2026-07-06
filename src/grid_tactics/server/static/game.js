@@ -10012,10 +10012,13 @@ function showPlayerPreview(playerIdx) {
             + ' · Grave ' + (p.grave ? p.grave.length : 0)
             + ' · Exhaust ' + (p.exhaust ? p.exhaust.length : 0) + '</div>';
         var panels = [];
-        panels.push('<div class="tooltip-keyword"><span class="tooltip-keyword-name">🌑 Dark Matter ×' + dm
-            + '</span> <span class="tooltip-keyword-desc">— '
-            + (KEYWORD_GLOSSARY['Dark Matter'] || 'A stacking player resource pool, visible to both players.')
-            + '</span></div>');
+        // Only surface Dark Matter once the player has stacks (user 2026-07-06).
+        if (dm > 0) {
+            panels.push('<div class="tooltip-keyword"><span class="tooltip-keyword-name">🌑 Dark Matter ×' + dm
+                + '</span> <span class="tooltip-keyword-desc">— '
+                + (KEYWORD_GLOSSARY['Dark Matter'] || 'A stacking player resource pool, visible to both players.')
+                + '</span></div>');
+        }
         if (p.discarded_last_turn) {
             panels.push('<div class="tooltip-keyword"><span class="tooltip-keyword-name">🗑️ Discarded last turn'
                 + '</span> <span class="tooltip-keyword-desc">— enables cards with the "Discard last turn" play condition.</span></div>');
