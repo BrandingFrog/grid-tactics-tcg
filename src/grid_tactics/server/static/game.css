@@ -13313,3 +13313,20 @@ body.ttabs-on #screen-game .game-sidebar { display: none !important; }
   white-space: nowrap;
   background: rgba(30, 18, 6, 0.88);
 }
+
+/* The spell stage (react-window card stacks) and the Skip React button
+   were viewport-fixed — they centered at design x=422 (tooltip included)
+   and did not scale with the design box. Mounted into .game-layout by JS;
+   center at the stage midpoint x=522. */
+.game-layout > .spell-stage {
+  position: absolute !important;
+  left: 522px !important;
+  top: 50% !important;
+}
+.game-layout > .floating-skip-react-btn {
+  position: absolute !important;
+  left: 522px !important;
+  bottom: 118px !important;
+  top: auto !important;
+  transform: translate(-50%, 0) !important;
+}

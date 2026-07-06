@@ -173,6 +173,10 @@ function _refreshFloatingSkipReact() {
         && gameState.phase === 1
         && Array.isArray(legalActions)
         && legalActions.some(function(a) { return a.action_type === 4; }));
+    if (canSkip && typeof _stageMount === 'function') {
+        var skipMount = _stageMount();
+        if (btn.parentElement !== skipMount) skipMount.appendChild(btn);
+    }
     btn.hidden = !canSkip;
 }
 function _wireFloatingSkipReactOnce() {
@@ -6631,6 +6635,10 @@ function _doShowSpellStage(numericId, sourcePlayerIdx) {
     var stack = goesToLeft ? els.left : els.right;
     var otherStack = goesToLeft ? els.right : els.left;
 
+    // Stage-centered: the react window centers between the tooltip column
+    // and the screen's right edge, and scales with the design box.
+    var stageMount = _stageMount();
+    if (els.root.parentElement !== stageMount) stageMount.appendChild(els.root);
     els.root.hidden = false;
     els.root.classList.remove('exit');
     els.root.classList.remove('enter');
