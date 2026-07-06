@@ -26,8 +26,8 @@
     "rulings": [
         "Activation costs 2 mana. Buff (Step 1) always fires. Conjure (Step 2) only triggers if at least one Common Rat is in the caster's deck.",
         "The buff explicitly excludes the caster (Ratchanter doesn't buff itself).",
-        "Buff magnitude is 1 + YOUR Dark Matter pool (a player resource — pool redesign 2026-07). All three stats (🗡️, max 🤍, current 🤍) increase — the buffed Rats gain usable HP, not just a cap raise. Reading the pool does not consume it.",
+        "Buff magnitude is 1 + YOUR Dark Matter pool (a player resource — pool redesign 2026-07). All three stats (🗡️, max 🤍, current 🤍) increase — the buffed Rats gain usable 🤍, not just a cap raise. Reading the pool does not consume it.",
         "Ratchanter is NOT a [[Dark Mage]]: his tribe is Mage Rat, not exactly Mage. Per-Dark-Mage gains (Shady Trade Deal, Dark Matter Stash, Illicit Shadow Stones, Feed the Shadow, Matter of Time, Dark Matter Barrage) ignore him, and Dark-Mage-targeted buffs skip him.",
-        "Conjure goes through the pending_tutor → conjure_deploy flow: caster picks one Common Rat from their deck, then picks an empty tile on their own side to deploy it. The new Rat starts at base stats (no initial buff). Declining deployment sends the Rat to hand instead — if the hand is full (10 cards), it burns to the Exhaust Pile."
+        "Conjure goes through the pending_tutor → conjure_deploy flow: caster picks one Common Rat from their deck, then picks an empty tile on their own side to deploy it. The new Rat starts at base stats (no initial buff). Declining deployment sends the Rat to hand instead — if the hand is full (10 cards), it is exhausted (sent to the Exhaust Pile)."
     ]
 }

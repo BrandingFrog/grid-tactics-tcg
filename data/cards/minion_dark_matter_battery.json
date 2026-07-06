@@ -30,6 +30,6 @@
         "At pool = 0, the damage is 0 and the effect is skipped entirely (no visible tick).",
         "Reading the pool does not consume it — the same pool also discounts Erebus and scales your Dark spells.",
         "If the Battery dies before its Decay trigger resolves, the trigger fizzles — a dead source deals no damage even if your pool is huge.",
-        "If the opponent's HP reaches 0 from this damage, they lose immediately — the effect checks win condition during passive resolution."
+        "If the opponent reaches 0🤍 from this damage, they lose immediately — the effect checks win condition during passive resolution."
     ]
 }

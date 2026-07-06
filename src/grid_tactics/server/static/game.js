@@ -516,6 +516,24 @@ function initSocket() {
         var txt = document.getElementById('conn-text');
         if (dot) dot.className = 'dot off';
         if (txt) txt.textContent = 'Disconnected';
+        // Compliance audit 2026-07-06: #conn-dot/#conn-text don't exist in
+        // the current DOM — show a stage toast during games instead.
+        try {
+            var gsEl = document.getElementById('screen-game');
+            if (gsEl && gsEl.classList.contains('active')
+                    && !document.getElementById('conn-lost-toast')) {
+                var t = document.createElement('div');
+                t.id = 'conn-lost-toast';
+                t.className = 'tutor-toast';
+                t.style.background = '#6b2a2a';
+                t.textContent = '⚡ Connection lost — reconnecting…';
+                _stageMount().appendChild(t);
+            }
+        } catch (e) { /* defensive */ }
+    });
+    socket.on('connect', function() {
+        var tGone = document.getElementById('conn-lost-toast');
+        if (tGone) tGone.remove();
     });
     // Register all event handlers
     socket.on('room_created', onRoomCreated);
@@ -716,7 +734,7 @@ var NUDGES = {
             var left = Math.floor(Math.random() * 100);
             var delay = (Math.random() * 1.2).toFixed(2);
             var dur = (1.0 + Math.random() * 0.8).toFixed(2);
-            drops += '<div class="rain-drop" style="left:' + left + 'vw;' +
+            drops += '<div class="rain-drop" style="left:' + left + '%;' +
                      'animation-delay:' + delay + 's;' +
                      'animation-duration:' + dur + 's;">💧</div>';
         }
@@ -932,6 +950,23 @@ function _showLobbyHeroCard(host, def, instant) {
 function onError(data) {
     var msg = data && data.msg ? data.msg : 'An error occurred.';
     showLobbyStatus(msg, 'error');
+    // Compliance audit 2026-07-06: during a game the lobby pill is invisible
+    // — surface server rejections as a stage toast so the player sees them.
+    try {
+        var gsEl = document.getElementById('screen-game');
+        if (gsEl && gsEl.classList.contains('active')) {
+            var errToast = document.createElement('div');
+            errToast.className = 'tutor-toast';
+            errToast.style.background = '#6b2a2a';
+            errToast.style.borderColor = '#e05050';
+            errToast.textContent = '⚠ ' + msg;
+            _stageMount().appendChild(errToast);
+            setTimeout(function() {
+                errToast.classList.add('fade-out');
+                setTimeout(function() { errToast.remove(); }, 600);
+            }, 2600);
+        }
+    } catch (e) { /* defensive */ }
     // Phase 14.8 fix: the server now rejects invalid decks in handle_ready
     // with an 'error' frame, but the ready-button click handler already
     // disabled the button and set 'Waiting...' BEFORE emitting. Without a
@@ -1874,7 +1909,24 @@ function setupTooltipTabs() {
         leaveBtn.title = 'Leave game';
         leaveBtn.classList.add('leave-x');
         document.querySelector('#screen-game .game-layout').appendChild(leaveBtn);
+    
+    // Compliance audit 2026-07-06: the game room-bar is display:none, which
+    // orphaned the SFX mute + react-prompt-mode controls and the SPECTATING
+    // badge. Relocate them onto the stage beside the X.
+    var gameLayout = document.querySelector('#screen-game .game-layout');
+    var muteBtn = document.getElementById('sfx-mute-btn');
+    if (muteBtn && gameLayout) {
+        muteBtn.classList.add('stage-corner-btn');
+        gameLayout.appendChild(muteBtn);
     }
+    var reactModeBtn = document.getElementById('react-mode-btn');
+    if (reactModeBtn && gameLayout) {
+        reactModeBtn.classList.add('stage-corner-btn');
+        gameLayout.appendChild(reactModeBtn);
+    }
+    var specBadge = document.getElementById('spectating-badge');
+    if (specBadge && gameLayout) gameLayout.appendChild(specBadge);
+}
     logPane.classList.add('ttab-pane');
     chatPane.classList.add('ttab-pane');
     logPane.style.display = 'none';
@@ -4922,9 +4974,17 @@ function playFizzle(ev, done) {
             puff.style.left = (rect.left + rect.width / 2) + 'px';
             puff.style.top = (rect.top + rect.height / 2) + 'px';
         } else {
-            // Source already dead / off board — center the puff.
-            puff.style.left = '50%';
-            puff.style.top = '50%';
+            // Source already dead / off board — center on the STAGE.
+            var mountEl = _stageMount();
+            if (mountEl !== document.body) {
+                var mrRect = mountEl.getBoundingClientRect();
+                var mrScale = mrRect.width / 844;
+                puff.style.left = (mrRect.left + 522 * mrScale) + 'px';
+                puff.style.top = (mrRect.top + mrRect.height / 2) + 'px';
+            } else {
+                puff.style.left = '50%';
+                puff.style.top = '50%';
+            }
         }
         document.body.appendChild(puff);
         setTimeout(function() {
@@ -5151,11 +5211,9 @@ function playDarkMatterChange(ev, done) {
                 : (typeof payload['new'] === 'number' && typeof payload.prev === 'number')
                     ? payload['new'] - payload.prev
                     : null;
-            var pod = document.getElementById('avatar-' + which);
-            if (pod && delta) {
-                showFloatingPopup(pod, '🌑 ' + (delta > 0 ? '+' : '') + delta,
-                    delta > 0 ? 'buff' : 'debuff');
-            }
+            // Compliance audit 2026-07-06: Dark Matter never surfaces at
+            // the pods — pod-anchored delta popup removed (the player
+            // preview + game log carry the pool change).
         }
     } catch (e) { /* defensive — pulse/popup are purely visual */ }
     setTimeout(done, _evDurationOr(ev, 400));
@@ -7120,7 +7178,7 @@ function logEngineEvent(ev) {
         case 'minion_hp_change':
             text = _logPlayer(p.owner_idx) + ' ' + _logMinionName(p.instance_id) + ' ' + _logPos(p.position)
                  + ' ' + (p.cause || 'hp') + ' ' + (p.delta > 0 ? '+' : '') + p.delta
-                 + ' → ' + p.new_hp + ' HP';
+                 + ' → ' + p.new_hp + '🤍';
             cls = (p.delta < 0) ? 'damage' : 'heal';
             break;
         case 'minion_moved':
@@ -7133,7 +7191,7 @@ function logEngineEvent(ev) {
             text = _logPlayer(p.owner_idx) + ' '
                  + (p.from_card_numeric_id != null ? _logCardName(p.from_card_numeric_id) : oldName)
                  + ' → ' + _logCardName(p.to_card_numeric_id)
-                 + ' at ' + _logPos(p.position) + ', ' + p.new_hp + ' HP';
+                 + ' at ' + _logPos(p.position) + ', ' + p.new_hp + '🤍';
             cls = 'card';
             break;
         case 'minion_sacrificed':
@@ -7148,7 +7206,7 @@ function logEngineEvent(ev) {
             text = (atkInfo ? _logPlayer(atkInfo.owner) + ' ' : '')
                  + _logMinionName(p.attacker_id) + ' attacks ' + _logMinionName(p.defender_id)
                  + ' ' + _logPos(p.target_pos) + ': '
-                 + p.defender_hp_before + '→' + p.defender_hp_after + ' HP'
+                 + p.defender_hp_before + '→' + p.defender_hp_after + '🤍'
                  + (dmg != null ? ' (-' + dmg + ')' : '');
             if (p.attacker_hp_before !== p.attacker_hp_after) {
                 text += '; retaliation: attacker ' + p.attacker_hp_before + '→' + p.attacker_hp_after;
@@ -7203,7 +7261,7 @@ function logEngineEvent(ev) {
                     var o = p.outcomes[i];
                     var r = o.reward === 'mana' ? '+1 mana'
                           : o.reward === 'card_drawn' ? 'draws (full mana)'
-                          : o.reward === 'card_burned' ? 'burns (full hand)'
+                          : o.reward === 'card_burned' ? 'overdraws — card exhausted (hand full)'
                           : 'no reward';
                     parts.push(_logPlayer(o.player_idx) + ': ' + r);
                 }
@@ -7221,10 +7279,10 @@ function logEngineEvent(ev) {
         case 'player_hp_change':
             if (p.cause === 'fatigue') {
                 text = _logPlayer(p.player_idx) + ' FATIGUE ' + p.delta + ': '
-                     + p.prev + '→' + p.new + ' HP (empty deck)';
+                     + p.prev + '→' + p.new + '🤍 (empty deck)';
             } else {
                 var _hd = (p.delta != null) ? p.delta : (p.new - p.prev);
-                text = _logPlayer(p.player_idx) + ' ' + p.prev + '→' + p.new + ' HP'
+                text = _logPlayer(p.player_idx) + ' ' + p.prev + '→' + p.new + '🤍'
                      + ' (' + (_hd > 0 ? '+' : '') + _hd + ')'
                      + (p.cause ? ' [' + p.cause + ']' : '');
             }
@@ -9944,10 +10002,7 @@ function _renderAvatarPod(which, playerIdx) {
     }
     var hpEl = document.getElementById('avatar-' + which + '-hp');
     if (hpEl) hpEl.textContent = p.hp;
-    // Dark Matter chip removed from the pods entirely (user 2026-07-06) —
-    // DM appears only in the player preview, and only when stacks > 0.
-    var dmEl = document.getElementById('avatar-' + which + '-dm-num');
-    if (dmEl) dmEl.textContent = _playerDarkMatter(gameState, playerIdx);
+    // (Dark Matter pod chip removed 2026-07-06 — no DM writes here.)
     if (!pod._gtAvatarBound) {
         pod._gtAvatarBound = true;
         var openPreview = function() {

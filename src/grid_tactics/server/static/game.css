@@ -13524,3 +13524,105 @@ body.ttabs-on #screen-game .game-sidebar { display: none !important; }
   transform: scale(0.25) !important;
   transform-origin: top left !important;
 }
+
+/* ==========================================================================
+   COMPLIANCE PASS (2026-07-06 design audit — 40 confirmed findings)
+   ========================================================================== */
+
+/* C2: 4x/scale(0.25) min-font-floor fix for EVERY small cf2 render context
+   (pile viewer, tutor + trigger pickers, discard picker, spell stage,
+   tooltip art, deck-builder tiles, draw fly-in, card-fly ghost). Percentage
+   margins resolve against the parent's inline size, so -300% collapses the
+   400% layout box back to a 100% footprint in any container. */
+.pile-grid-cell > .card-frame-full.cf2,
+.tutor-modal-card > .card-frame-full.cf2,
+.discard-picker-card > .card-frame-full.cf2,
+.spell-stage-stack-card > .card-frame-full.cf2,
+.tooltip-card-art > .card-frame-full.cf2,
+.card-browser-item > .card-frame-full.cf2,
+.draw-fly-in > .card-frame-full.cf2,
+.card-fly-ghost > .card-frame-full.cf2 {
+  width: 400% !important;
+  max-width: none !important;
+  height: auto !important;
+  aspect-ratio: 1 / 1 !important;
+  min-height: 0 !important;
+  max-height: none !important;
+  transform: scale(0.25) !important;
+  transform-origin: top left !important;
+  margin: 0 -300% -300% 0 !important;
+}
+
+/* C1: real-viewport @media rules must not reshape the scale-locked design
+   box. Re-assert the design values AFTER the offending blocks (equal
+   specificity — file order wins). */
+.pile-modal { max-height: 350px !important; }
+.pile-grid { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)) !important; }
+.pile-grid .card-frame-pile { width: 200px; }
+.tutor-modal { max-height: 340px !important; }
+.sacrifice-picker-modal { max-height: 340px !important; }
+.tutor-modal-cards { flex-direction: row !important; align-items: stretch !important; }
+.tutor-modal-card { width: 200px !important; max-width: 200px !important; }
+.tutor-modal-header { flex-direction: row !important; align-items: baseline !important; }
+.react-banner { flex-direction: row !important; align-items: center !important; }
+.opp-hand-card-back { width: 52.6px !important; height: 52.6px !important; }
+#game-over-overlay .game-over-modal { min-width: 0 !important; width: auto !important; max-width: 540px !important; }
+/* stage gutter frozen at 8px — the x=522 popup anchors assume it */
+body:has(#screen-game.active) .game-layout,
+body:has(#screen-sandbox.active) .game-layout { gap: 8px !important; }
+
+/* Nudge physics in design px (were vw/vh — invisible or overshooting on
+   desktop since the overlays moved inside the scaled stage) */
+@keyframes egg-fly {
+  0%   { left: -80px; transform: translateY(-50%) rotate(-20deg); opacity: 1; }
+  85%  { left: 50%;  transform: translateY(-50%) translateX(-50%) rotate(380deg); opacity: 1; }
+  100% { left: 50%;  transform: translateY(-50%) translateX(-50%) rotate(380deg) scale(0.1); opacity: 0; }
+}
+@keyframes boom-drop {
+  0%   { top: -80px; }
+  100% { top: 50%; transform: translateX(-50%) translateY(-50%) rotate(540deg); }
+}
+.rain-drop { top: -40px; }
+@keyframes rain-fall {
+  0%   { top: -40px; opacity: 1; }
+  90%  { opacity: 1; }
+  100% { top: 430px; opacity: 0; }
+}
+
+/* Event-queue scrim tints the stage, not the viewport (informational) */
+.game-layout > .event-queue-blocking {
+  position: absolute !important;
+  inset: 0 0 0 200px !important;
+}
+
+/* Sandbox pods match the decluttered game pods: HP + bar + mana only */
+#screen-sandbox .pod .pod-name,
+#screen-sandbox .pod .pod-chip { display: none !important; }
+
+/* Relocated controls (the game room-bar is display:none): mute + react-mode
+   live beside the leave ✕ in the stage's top-right corner */
+#screen-game .game-layout > .stage-corner-btn {
+  position: absolute; top: 8px; width: 26px; height: 26px;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(30, 20, 8, 0.85); border: 1px solid var(--bronze);
+  border-radius: 6px; color: var(--parch, #e8dcbb); font-size: 13px;
+  cursor: pointer; z-index: 210; padding: 0;
+}
+#screen-game .game-layout > #sfx-mute-btn.stage-corner-btn { right: 40px; }
+#screen-game .game-layout > #react-mode-btn.stage-corner-btn {
+  right: 72px; width: auto; padding: 0 7px; font-size: 9px;
+  font-weight: 800; letter-spacing: 0.06em;
+}
+/* Spectating badge on the stage top edge */
+#screen-game .game-layout > #spectating-badge {
+  position: absolute; top: 8px; left: 522px; transform: translateX(-50%);
+  z-index: 210; display: none;
+  background: rgba(30, 20, 8, 0.9); border: 1px solid var(--gold);
+  color: var(--gold); border-radius: 6px; padding: 2px 10px;
+  font-size: 10px; font-weight: 800; letter-spacing: 0.12em;
+}
+#screen-game .game-layout > #spectating-badge.visible { display: inline-block; }
+/* The 4x fix needs a DEFINITE parent width — a content-sized grid/flex item
+   makes the 400% circular and collapses to 0. Pin the cells. */
+.pile-grid-cell { width: 200px; }
+.discard-picker-card { width: 200px; }

@@ -35,7 +35,7 @@
     ],
     "rulings": [
         "Normal play: 5 mana to deploy as a 33/33 minion. Triggers Summon: Draw 1 (own deck).",
-        "React play: 1 mana, in the end-of-turn react window of the opponent's Decay Phase (after their automatic Decay effects — Burning ticks, Decay triggers — resolve; react_condition=opponent_ends_turn). Tree Wyrm goes to your graveyard from hand and you tutor 2 Tree Wyrms from your deck to hand (picks are mandatory, capped at the number remaining in deck). If your hand is full (10 cards), a tutored Tree Wyrm burns to your Exhaust Pile revealed — the pick still happens.",
+        "React play: 1 mana, in the end-of-turn react window of the opponent's Decay Phase (after their automatic Decay effects — Burning ticks, Decay triggers — resolve; react_condition=opponent_ends_turn). Tree Wyrm goes to your graveyard from hand and you tutor 2 Tree Wyrms from your deck to hand (picks are mandatory, capped at the number remaining in deck). If your hand is full (10 cards), a tutored Tree Wyrm is exhausted to your Exhaust Pile revealed — the pick still happens.",
         "tutor_target='tree_wyrm' — only Tree Wyrm itself qualifies. If your deck has no Tree Wyrms, the react resolves with 0 picks (no refund of the discarded card).",
         "If your deck has only 1 Tree Wyrm, the picker caps at 1 pick.",
         "Summon: Draw fires once per deploy, not on the react play (the react runs the react_effect only — no Summon triggers, no body deployed)."

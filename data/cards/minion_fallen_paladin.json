@@ -27,7 +27,7 @@
     ],
     "rulings": [
         "The heal fires in the Rally Phase at the start of the Paladin's owner's turn. It heals 2 🤍 unconditionally — no condition check.",
-        "Heals up to the minion's current max HP (base 42 plus any max_health_bonus buffs). Cannot overheal above the cap.",
+        "Heals up to the minion's current max 🤍 (base 42 plus any max_health_bonus buffs). Cannot overheal above the cap.",
         "Only one tick per turn cycle — taking 30 damage and then healing means Paladin is still down 28 that round."
     ]
 }

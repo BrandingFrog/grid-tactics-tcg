@@ -24,7 +24,7 @@
         "At 12/12 for 2 mana, the stats are decent but the real value is deck thinning. Each Diodebot played pulls another card, accelerating your draws.",
         "The tutored Robots fuel White Lasercannon's discard cost (2 Robots). Play a Diodebot to tutor another, then discard both for Lasercannon.",
         "In a Robot deck, lead with whichever Diodebot you draw first — the chain ensures you'll see all three regardless of draw order.",
-        "Watch your hand size: the tutor pick is mandatory, and if your hand is full (10 cards) the tutored Diodebot burns to your Exhaust Pile revealed. Play a card before chaining Diodebots when you're near the cap."
+        "Watch your hand size: the tutor pick is mandatory, and if your hand is full (10 cards) the tutored Diodebot is exhausted to your Exhaust Pile revealed. Play a card before chaining Diodebots when you're near the cap."
     ],
     "rulings": [
         "Summon: Tutor opens a deck search — the caster MUST pick a Green Diodebot from their deck to add to hand. Declining is not possible while a match exists.",
