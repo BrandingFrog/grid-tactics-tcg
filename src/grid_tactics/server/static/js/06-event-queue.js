@@ -1684,8 +1684,8 @@ function playOverdrawBurn(ev, done) {
         setTimeout(done, 1200);  // match the fallback nudge, ignore wire duration
         return;
     }
-    var HOLD_MS = 900;   // reveal hold before the exhaust fly
-    var FLY_MS = 750;    // playCardFlyAnimation's fallback duration
+    var HOLD_MS = 900;    // reveal hold before the burn starts
+    var BURN_MS = 1000;   // Hearthstone-style char-away sweep (css keyframes)
     try {
         var reveal = document.createElement('div');
         reveal.className = 'overdraw-reveal';
@@ -1697,34 +1697,37 @@ function playOverdrawBurn(ev, done) {
                     interactive: false,
                     showReactDeploy: false,
                 }) +
+                '<div class="burn-fire-line"></div>' +
             '</div>' +
             '<div class="overdraw-reveal-label">HAND FULL — EXHAUSTED</div>';
         _stageMount().appendChild(reveal);
         playSfx('burn_tick');
         setTimeout(function() {
-            var fromRect = null;
-            try {
-                var cardEl = reveal.querySelector('.overdraw-reveal-card');
-                fromRect = (cardEl || reveal).getBoundingClientRect();
-            } catch (e) { /* defensive */ }
-            if (reveal.parentNode) reveal.parentNode.removeChild(reveal);
-            if (fromRect && fromRect.width > 0) {
-                enqueueAnimation({
-                    type: 'card_fly',
-                    fromRect: fromRect,
-                    toZone: zone,
-                    cardNumericId: payload.card_numeric_id,
-                    stateApplied: true,
-                    _fromEventQueue: true,
-                });
+            // Hearthstone-style burn: a fire line sweeps down the card,
+            // char-dissolving it top-to-bottom while embers drift up.
+            var cardBox = reveal.querySelector('.overdraw-reveal-card');
+            if (!cardBox) { if (reveal.parentNode) reveal.remove(); return; }
+            cardBox.classList.add('overdraw-burning');
+            playSfx('burn_tick');
+            // Ember particles — spawned on the reveal (not the masked card)
+            // so they survive the dissolve.
+            for (var i = 0; i < 10; i++) {
+                var em = document.createElement('div');
+                em.className = 'burn-ember';
+                em.style.left = (8 + Math.random() * 84) + '%';
+                em.style.animationDelay = (Math.random() * 550) + 'ms';
+                em.style.setProperty('--edx', (Math.random() * 40 - 20) + 'px');
+                cardBox.appendChild(em);
             }
+            setTimeout(function() {
+                if (reveal.parentNode) reveal.remove();
+            }, BURN_MS + 150);
         }, HOLD_MS);
     } catch (e) { /* defensive — worst case the pile count just ticks up */ }
-    // Pace at the handler's own choreography (reveal hold + exhaust fly) —
+    // Pace at the handler's own choreography (reveal hold + burn) —
     // deliberately NOT _evDurationOr: a shorter wire duration would advance
-    // the queue mid-reveal and the card_fly enqueued at HOLD_MS would play
-    // over whatever event came next.
-    setTimeout(done, HOLD_MS + FLY_MS);
+    // the queue mid-reveal.
+    setTimeout(done, HOLD_MS + BURN_MS);
 }
 
 // fatigue — DEFENSIVE ALIAS ONLY. The engine emits fatigue as
