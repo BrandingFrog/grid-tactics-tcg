@@ -13255,3 +13255,18 @@ body.ttabs-on #screen-game .game-sidebar { display: none !important; }
 }
 #screen-lobby .lobby2-play::-webkit-scrollbar { width: 8px; }
 #screen-lobby .lobby2-play::-webkit-scrollbar-thumb { background: #6b5730; border-radius: 4px; }
+/* every stage-mounted overlay greys the board area only (right of the
+   200px tooltip column) and centers within it */
+.game-layout > .tutor-modal-overlay,
+.game-layout > .discard-picker-overlay {
+  position: absolute !important;
+  top: 0 !important; right: 0 !important; bottom: 0 !important; left: 200px !important;
+  width: auto !important; height: auto !important;
+}
+/* the overdraw reveal is a centered animation element, not a flex overlay —
+   pin its anchor to the STAGE midpoint (200 + 644/2 = 522 design px) */
+.game-layout > .overdraw-reveal {
+  position: absolute !important;
+  left: 522px !important; top: 42% !important;
+  right: auto !important; bottom: auto !important;
+}

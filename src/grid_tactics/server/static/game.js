@@ -3194,6 +3194,13 @@ document.addEventListener('DOMContentLoaded', function() {
 // a full YGO-style frame via renderCardFrame(context: 'pile').
 // Phase 14.6-03: Optional third arg `sandboxCtx = { pileType, playerIdx }`
 // injects a "Move to..." button into each card cell when sandboxMode is true.
+// Mount point for in-game popups (user 2026-07-06): inside the active
+// screen's scaled layout, so overlays grey the BOARD AREA (right of the
+// tooltip column) instead of the whole viewport. Falls back to body.
+function _stageMount() {
+    return document.querySelector('.screen.active .game-layout') || document.body;
+}
+
 function showPileModal(title, cardNumericIds, sandboxCtx) {
     var modal = document.getElementById('pileModal');
     var titleEl = document.getElementById('pileModalTitle');
@@ -5037,8 +5044,8 @@ function playOverdrawBurn(ev, done) {
                     showReactDeploy: false,
                 }) +
             '</div>' +
-            '<div class="overdraw-reveal-label">HAND FULL — BURNED</div>';
-        document.body.appendChild(reveal);
+            '<div class="overdraw-reveal-label">HAND FULL — EXHAUSTED</div>';
+        _stageMount().appendChild(reveal);
         playSfx('burn_tick');
         setTimeout(function() {
             var fromRect = null;
@@ -8187,7 +8194,7 @@ function showSacrificePicker(handIdx, deployPos, targetPos, sacChoices) {
     });
     inner.appendChild(cancel);
     modal.appendChild(inner);
-    document.body.appendChild(modal);
+    _stageMount().appendChild(modal);
 }
 
 function hideSacrificePicker() {
@@ -8423,7 +8430,7 @@ function showTutorModal(matches, deckSize, totalCopiesByCardId) {
     overlay.appendChild(modal);
     // Block background clicks (no accidental dismiss — must Skip explicitly).
     overlay.addEventListener('click', function(e) { e.stopPropagation(); });
-    document.body.appendChild(overlay);
+    _stageMount().appendChild(overlay);
 }
 
 function closeTutorModal() {
@@ -8565,7 +8572,7 @@ function showTriggerPickerModal(options) {
     overlay.appendChild(modal);
     // Block background clicks — must Skip explicitly (matches tutor modal UX).
     overlay.addEventListener('click', function(e) { e.stopPropagation(); });
-    document.body.appendChild(overlay);
+    _stageMount().appendChild(overlay);
 }
 
 function closeTriggerPickerModal() {
@@ -8670,7 +8677,7 @@ function showReviveModal() {
     modal.appendChild(footer);
 
     overlay.appendChild(modal);
-    document.body.appendChild(overlay);
+    _stageMount().appendChild(overlay);
 
     // Highlight valid board cells
     highlightReviveCells();
