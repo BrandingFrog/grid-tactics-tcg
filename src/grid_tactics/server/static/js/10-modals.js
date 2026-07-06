@@ -638,6 +638,17 @@ function highlightBoard() {
         cell.classList.remove('cell-valid', 'cell-attack', 'cell-selected',
                               'attack-range-footprint', 'attack-valid-target');
     });
+    // Timing audit (2026-07-06): plain selection/targeting highlights only
+    // paint when the player can act now. Pending-decision modes (post-move
+    // attack pick, death target, conjure deploy, revive) stay live — those
+    // are server-gated decisions awaiting THIS player mid-chain.
+    var _pendingMode = interactionMode === 'post_move_attack_pick'
+        || interactionMode === 'death_target_pick'
+        || interactionMode === 'conjure_deploy'
+        || interactionMode === 'revive_place';
+    if (!_pendingMode && typeof canActNow === 'function' && !canActNow()) {
+        return;
+    }
 
     // Phase 14.1: post-move attack-pick layer (rendered first so the brighter
     // valid-target class can override the footprint visually).
@@ -815,6 +826,16 @@ function highlightBoard() {
 // Highlight playable hand cards
 function updateHandHighlights() {
     if (isReactWindow()) {
+        // Timing audit (2026-07-06): react glow only for the seat that may
+        // actually react (live games; sandbox god-view keeps both).
+        if (!sandboxMode && gameState && myPlayerIdx != null
+                && gameState.react_player_idx != null
+                && gameState.react_player_idx !== myPlayerIdx) {
+            document.querySelectorAll('.card-frame-hand').forEach(function(card) {
+                card.classList.remove('card-playable', 'card-selected-hand', 'card-react-playable');
+            });
+            return;
+        }
         var reactIdxMap = getLegalReactCardIndices();
         // Sandbox: card_index in legalActions refers to react_player's
         // hand only. Restrict the playable glow to that hand's DOM
@@ -844,9 +865,16 @@ function updateHandHighlights() {
         activeContainer = document.getElementById(
             'sandbox-hand-p' + gameState.active_player_idx);
     }
+    // Timing audit (2026-07-06): the playable glow only lights when the
+    // player can genuinely act NOW — queue idle, legal actions held, any
+    // react window ours. Mid-drain renders (draw beats, deferred refreshes,
+    // anim-queue frames) run against the batch's FINAL legalActions and
+    // used to light next-turn affordances during the opponent's animations.
+    var _actNow = (typeof canActNow !== 'function') || canActNow();
     document.querySelectorAll('.card-frame-hand').forEach(function(card) {
         var idx = parseInt(card.dataset.handIdx, 10);
         card.classList.remove('card-playable', 'card-selected-hand', 'card-react-playable', 'card-confirm-armed');
+        if (!_actNow) return;
         var inActiveHand = !activeContainer || activeContainer.contains(card);
         if (inActiveHand && selectedHandIdx === idx && interactionMode === 'confirm') {
             card.classList.add('card-confirm-armed');

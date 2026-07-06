@@ -109,9 +109,38 @@ function resetEventQueue() {
     if (typeof clearGameLog === 'function') clearGameLog();
 }
 
+// Timing audit (2026-07-06): shared gates. isEventQueueBusy — animations
+// still draining, the DOM shows an older state than gameState/legalActions.
+// canActNow — the player may actually act: queue idle, they hold legal
+// actions, and any open react window is THEIRS. Affordance renderers
+// (playable glow, board highlights) and click handlers consult these so
+// nothing lights up or engages until it is genuinely the player's moment.
+function isEventQueueBusy() {
+    return eventRunning || eventQueue.length > 0;
+}
+function canActNow() {
+    if (typeof sandboxMode !== 'undefined' && sandboxMode) return true;
+    if (isEventQueueBusy()) return false;
+    if (!legalActions || legalActions.length === 0) return false;
+    if (gameState && gameState.phase === 1
+            && gameState.react_player_idx != null
+            && myPlayerIdx != null
+            && gameState.react_player_idx !== myPlayerIdx) return false;
+    return true;
+}
+
 function onEngineEvents(payload) {
     if (!payload || !Array.isArray(payload.events)) return;
     var hadEvents = payload.events.length > 0;
+    // Timing audit (2026-07-06): a new batch means the board is about to
+    // animate — any open minion menu / selection / targeting mode was built
+    // against the outgoing state. Tear it down before the drain starts.
+    if (hadEvents && !(typeof sandboxMode !== 'undefined' && sandboxMode)) {
+        try {
+            if (typeof hideMinionActionMenu === 'function') hideMinionActionMenu();
+            if (typeof clearSelection === 'function') clearSelection();
+        } catch (e) { /* defensive */ }
+    }
     payload.events.forEach(function(ev) {
         if (typeof ev.seq !== 'number') return;
         if (ev.seq <= lastSeenSeq) {
@@ -120,12 +149,11 @@ function onEngineEvents(payload) {
             return;
         }
         lastSeenSeq = ev.seq;
-        // Game-log rebuild (2026-07-06): log every engine event at ENQUEUE
-        // time, in authoritative seq order — independent of animation pacing,
-        // the pending-modal gate, and drain reordering. The seq guard above
-        // also dedupes log lines on reconnect replay. Never let a log
-        // formatting bug break the game pipeline.
-        try { logEngineEvent(ev); } catch (e) { console.warn('[gameLog] format error', e); }
+        // Timing audit (2026-07-06): events are logged at DISPATCH time in
+        // drainEventQueue — one line per animation beat, in seq order (the
+        // queue is FIFO) — not here at enqueue, which spoiled the whole
+        // batch seconds ahead of the animations. The seq guard above still
+        // dedupes reconnect replays before anything is queued or logged.
         eventQueue.push(ev);
     });
     // Phase 14.8-05b: stash final_state + arm the post-drain commit. The
@@ -228,6 +256,10 @@ function drainEventQueue() {
     }
     var ev = eventQueue.shift();
     eventRunning = true;
+    // Log at the beat (timing audit 2026-07-06): the line lands as the
+    // animation starts, so log order + timestamps track the visuals. A
+    // throwing formatter must never break the drain.
+    try { logEngineEvent(ev); } catch (e) { console.warn('[gameLog] format error', e); }
     try {
         playEvent(ev, function onSlotDone() {
             eventRunning = false;
@@ -461,11 +493,70 @@ function commitEventToDom(ev) {
             }
             break;
 
+        // Timing audit (2026-07-06): combat HP commits AT the strike beat —
+        // attack_resolved used to leave the defender's badge at its
+        // pre-attack value until drain end.
+        case "attack_resolved":
+            var _hpA = false;
+            if (typeof payload.defender_hp_after === 'number') {
+                _hpA = _commitMinionHp(live, { instance_id: payload.defender_id, new_hp: payload.defender_hp_after }) || _hpA;
+            }
+            if (typeof payload.attacker_hp_after === 'number') {
+                _hpA = _commitMinionHp(live, { instance_id: payload.attacker_id, new_hp: payload.attacker_hp_after }) || _hpA;
+            }
+            if (_hpA) {
+                if (sbMode) gameState = sandboxState;
+                needsBoardRerender = true;
+            }
+            break;
+
+        // Timing audit (2026-07-06): the dead minion leaves the board AT its
+        // death beat — it used to linger at 0 HP until the drain-end commit.
+        case "minion_died":
+            if (live && Array.isArray(live.minions) && payload.instance_id != null) {
+                var _len = live.minions.length;
+                live.minions = live.minions.filter(function(m) {
+                    return !m || m.instance_id !== payload.instance_id;
+                });
+                if (live.minions.length !== _len) {
+                    if (sbMode) gameState = sandboxState;
+                    needsBoardRerender = true;
+                }
+            }
+            break;
+
+        // Timing audit (2026-07-06): pile / deck / hand counters tick at
+        // their beats instead of jumping at drain end.
+        case "card_drawn":
+            if (live && live.players && live.players[payload.player_idx]) {
+                var _pd = live.players[payload.player_idx];
+                if (typeof _pd.deck_count === 'number' && _pd.deck_count > 0) _pd.deck_count--;
+                else if (Array.isArray(_pd.deck) && _pd.deck.length) _pd.deck.pop();
+                needsStatsRerender = true;
+            }
+            break;
+        case "card_discarded":
+            if (live && live.players && live.players[payload.player_idx]) {
+                var _pg = live.players[payload.player_idx];
+                if (Array.isArray(_pg.grave) && payload.card_numeric_id != null) _pg.grave.push(payload.card_numeric_id);
+                else if (typeof _pg.grave_count === 'number') _pg.grave_count++;
+                needsStatsRerender = true;
+            }
+            break;
+        case "card_burned":
+            if (live && live.players && live.players[payload.player_idx]) {
+                var _pe = live.players[payload.player_idx];
+                if (Array.isArray(_pe.exhaust) && payload.card_numeric_id != null) _pe.exhaust.push(payload.card_numeric_id);
+                else if (typeof _pe.exhaust_count === 'number') _pe.exhaust_count++;
+                if (typeof _pe.deck_count === 'number' && _pe.deck_count > 0 && payload.source === 'turn_start') _pe.deck_count--;
+                needsStatsRerender = true;
+            }
+            break;
+
         // Complex events — no incremental commit here. The wholesale
-        // _commitFinalStateSnapshot that runs when the queue drains will
-        // pick up the authoritative post-chain state for these.
-        //   minion_summoned / minion_died / card_drawn / card_played /
-        //   card_discarded / attack_resolved / react_window_opened /
+        // _commitFinalStateSnapshot that runs when the queue drains still
+        // picks up the authoritative post-chain state as the catch-all.
+        //   minion_summoned / card_played / react_window_opened /
         //   react_window_closed / trigger_blip / pending_modal_* /
         //   fizzle / game_over
         default:
@@ -704,8 +795,17 @@ function playMinionSummoned(ev, done) {
                             newMinion = JSON.parse(JSON.stringify(fs.minions[fi]));
                             // The minion may have moved/changed later in the
                             // chain — at THIS beat it stands where the event
-                            // says it was summoned.
+                            // says it was summoned, at its BASE stats
+                            // (timing audit 2026-07-06: end-of-chain HP /
+                            // buffs used to show during the scale-in; later
+                            // hp_change / buff beats commit the changes).
                             newMinion.position = payload.position.slice();
+                            var _def = cardDefs && cardDefs[payload.card_numeric_id];
+                            if (_def) {
+                                if (typeof _def.health === 'number') newMinion.current_health = _def.health;
+                                newMinion.attack_bonus = 0;
+                                newMinion.is_burning = false;
+                            }
                             break;
                         }
                     }
@@ -1094,12 +1194,22 @@ function playCardPlayed(ev, done) {
                     if (typeof fs.phase === 'number') live.phase = fs.phase;
                     if (typeof fs.react_player_idx !== 'undefined') live.react_player_idx = fs.react_player_idx;
                     if (typeof fs.react_context !== 'undefined') live.react_context = fs.react_context;
-                    if (Array.isArray(fs.players)) live.players = fs.players;
+                    // Timing audit (2026-07-06): do NOT wholesale-commit
+                    // fs.players here — it is the END-OF-CHAIN snapshot and
+                    // slammed every pod/pile number to future values mid-
+                    // drain. Only current_mana syncs (react cost checks);
+                    // everything else commits at its own beat / drain end.
+                    if (Array.isArray(fs.players) && Array.isArray(live.players)) {
+                        for (var pi = 0; pi < live.players.length; pi++) {
+                            if (fs.players[pi] && live.players[pi]) {
+                                live.players[pi].current_mana = fs.players[pi].current_mana;
+                            }
+                        }
+                    }
                     if (sandboxMode && gameState) {
                         gameState.phase = live.phase;
                         gameState.react_player_idx = live.react_player_idx;
                         gameState.react_context = live.react_context;
-                        gameState.players = live.players;
                     }
                 }
             }
@@ -1112,10 +1222,15 @@ function playCardPlayed(ev, done) {
             // then the hand collapses afterwards.
             setTimeout(function() {
                 try {
+                    // Timing audit (2026-07-06): targeted refresh only — a
+                    // full renderGame here re-lit future-frame affordances
+                    // and re-synced modal UI mid-drain. The hand collapse
+                    // (what this defer exists for) + react-glow refresh is
+                    // all the counter-react decision needs.
                     if (sandboxMode && typeof renderSandbox === 'function') {
                         renderSandbox();
-                    } else if (!sandboxMode && typeof renderGame === 'function') {
-                        renderGame();
+                    } else if (!sandboxMode && typeof renderHand === 'function') {
+                        renderHand();
                     }
                     if (typeof updateHandHighlights === 'function') updateHandHighlights();
                 } catch (_) { /* defensive */ }
@@ -1485,6 +1600,20 @@ function playPendingModalResolved(ev, done) {
         var scrim = document.getElementById('event-queue-blocking-scrim');
         if (scrim && scrim.parentNode) scrim.parentNode.removeChild(scrim);
     } catch (e) { /* defensive */ }
+    // Timing audit (2026-07-06): the opponent-waiting toasts/banners used to
+    // linger until the drain-end renderGame — tear them down AT this beat so
+    // "Opponent is tutoring…" ends exactly when the pick resolves.
+    try {
+        var kind = (ev && ev.payload && ev.payload.modal_kind) || slotState.pendingModalKind || '';
+        var toasts = document.querySelectorAll('.tutor-toast');
+        toasts.forEach(function(t) {
+            if (t.id === 'conn-lost-toast') return;
+            t.classList.add('fade-out');
+            setTimeout(function() { if (t.parentNode) t.remove(); }, 400);
+        });
+        if (kind === 'tutor_select' && typeof closeTutorModal === 'function') closeTutorModal();
+        if (kind === 'trigger_pick' && typeof closeTriggerPickerModal === 'function') closeTriggerPickerModal();
+    } catch (e) { /* defensive */ }
     setTimeout(done, _evDurationOr(ev, 0));
 }
 
@@ -1565,10 +1694,20 @@ function playFizzle(ev, done) {
 function playGameOver(ev, done) {
     var payload = (ev && ev.payload) || {};
     try {
-        showGameOver({
-            winner: payload.winner,
-            final_state: window.__lastFinalState || gameState,
-        });
+        // Timing audit (2026-07-06): prefer the full socket game_over
+        // payload stashed by onGameOver while the queue was busy — it
+        // carries reason/final_state and runs the complete teardown
+        // (spell-stage reset, SFX) at THIS beat, after the lethal beats.
+        if (window.__pendingGameOverData) {
+            var pgo = window.__pendingGameOverData;
+            window.__pendingGameOverData = null;
+            if (typeof _applyGameOver === 'function') _applyGameOver(pgo);
+        } else {
+            showGameOver({
+                winner: payload.winner,
+                final_state: window.__lastFinalState || gameState,
+            });
+        }
     } catch (e) { /* defensive — overlay is purely visual */ }
     // Game over modal stays up until user dismisses — no queue pacing needed.
     setTimeout(done, _evDurationOr(ev, 0));

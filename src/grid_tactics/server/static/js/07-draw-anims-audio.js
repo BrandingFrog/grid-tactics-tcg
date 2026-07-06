@@ -614,6 +614,16 @@ function playBurnDeathAnimation(prevMinion, done) {
 }
 
 function applyStateFrame(frame, legal) {
+    // Timing audit (2026-07-06): event-queue anim jobs capture
+    // stateAfter=gameState at ENQUEUE. If the drain's final-snapshot commit
+    // has already advanced gameState past that captured object, re-applying
+    // the stale frame would REGRESS state + legalActions (and nothing
+    // re-commits afterwards). Skip the application; the job's visuals have
+    // already played against the right per-beat state.
+    if (frame && gameState && frame !== gameState
+            && window.__lastFinalState && gameState === window.__lastFinalState) {
+        return;
+    }
     var prevState = gameState;
 
     // Detect burn-deaths: minions that were is_burning in prevState and
@@ -731,7 +741,11 @@ function _applyStateFrameImmediate(frame, legal, prevState) {
     // plan 03a but is no longer read by the client (plan 14.8-05 deletes
     // the field write).
 
-    logStateDiff(prevState, gameState);
+    // Timing audit (2026-07-06): logStateDiff call REMOVED — event-driven
+    // anim jobs re-enter this path mid-drain with stale stateAfter frames
+    // and emitted contradictory legacy log lines (reversed prev/next). The
+    // engine-event logger (logEngineEvent at queue dispatch) is the sole
+    // log writer now; game_start/reconnect snapshots diff as empty/benign.
     renderGame();
 }
 

@@ -1431,11 +1431,23 @@ function describeAction(pa, prevState, nextState, actor) {
 }
 
 function onGameOver(data) {
+    // Timing audit (2026-07-06): the game_over socket frame arrives in
+    // parallel with the engine_events batch that carries the lethal beats.
+    // If the queue is still draining, stash the payload — the queued
+    // game_over EVENT (playGameOver) shows the overlay at ITS beat, after
+    // the killing blow has actually played.
+    if (typeof isEventQueueBusy === 'function' && isEventQueueBusy()) {
+        window.__pendingGameOverData = data;
+        return;
+    }
+    _applyGameOver(data);
+}
+
+function _applyGameOver(data) {
     gameState = data.final_state;
     legalActions = [];
-    // Audit fix (2026-07-06): a lethal react can end the game while the
-    // spell stage / Skip React pill are still up — park them under the
-    // game-over overlay.
+    // A lethal react can end the game while the spell stage / Skip React
+    // pill are still up — park them under the game-over overlay.
     if (typeof _resetSpellStageHard === 'function') _resetSpellStageHard();
     renderGame();
     var winner = data.final_state && data.final_state.winner;

@@ -438,7 +438,13 @@ function renderHand(opts) {
     handEl.innerHTML = '';
 
     var myPlayer = state.players[ownerIdx];
+    // Timing audit (2026-07-06): live-game affordance dims track canActNow
+    // (queue idle + my decision), not raw legalActions — which mid-drain
+    // already hold the batch's final frame.
     var isMyTurn = legal && legal.length > 0;
+    if (!sandboxMode && typeof canActNow === 'function' && !canActNow()) {
+        isMyTurn = false;
+    }
 
     function appendHand(playerObj, label) {
         if (!playerObj || !playerObj.hand) return;

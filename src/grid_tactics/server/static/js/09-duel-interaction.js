@@ -88,9 +88,23 @@ function submitAction(actionData) {
     //   13 DECLINE_CONJURE, 14 DEATH_TARGET_PICK, 15 REVIVE_PLACE,
     //   16 DECLINE_REVIVE, 17 TRIGGER_PICK, 18 DECLINE_TRIGGER
     var _modalResolutionTypes = [9, 10, 12, 13, 14, 15, 16, 17, 18];
+    // Timing audit (2026-07-06): PASS(4) / PLAY_REACT(5) bypass the gates
+    // ONLY when a react window actually awaits THIS player — an ACTION-phase
+    // PASS is a normal self-initiated action and must wait for the drain.
+    // The post-move attack pick (ATTACK 2 / DECLINE 8) is a server-gated
+    // pending decision like the modals, so it passes while pending for us.
+    var _reactAwaitsMe = gameState && gameState.phase === 1
+        && (gameState.react_player_idx == null
+            || myPlayerIdx == null
+            || gameState.react_player_idx === myPlayerIdx);
+    var _postMovePending = gameState
+        && gameState.pending_post_move_attacker_id != null
+        && (_at === 2 || _at === 8);
+    var _gateExempt = ((_at === 4 || _at === 5) && _reactAwaitsMe)
+        || _postMovePending
+        || _modalResolutionTypes.indexOf(_at) !== -1;
     if (typeof isSpellStageAnimating === 'function' && isSpellStageAnimating()
-            && _at !== 4 && _at !== 5
-            && _modalResolutionTypes.indexOf(_at) === -1) {
+            && !_gateExempt) {
         return;
     }
     // Event-queue gate (user 2026-07-06: "its letting me queue moves during
@@ -101,11 +115,8 @@ function submitAction(actionData) {
     // "queue" an action that resolved after the animations caught up. Block
     // self-initiated actions until the drain finishes; the same whitelist
     // as the spell-stage gate keeps react windows + modals responsive.
-    var _queueBusy = (typeof eventRunning !== 'undefined' && eventRunning)
-        || (typeof eventQueue !== 'undefined' && eventQueue.length > 0);
-    if (!sandboxMode && _queueBusy
-            && _at !== 4 && _at !== 5
-            && _modalResolutionTypes.indexOf(_at) === -1) {
+    var _queueBusy = (typeof isEventQueueBusy === 'function' && isEventQueueBusy());
+    if (!sandboxMode && _queueBusy && !_gateExempt) {
         return;
     }
     if (socket) {
@@ -116,13 +127,18 @@ function submitAction(actionData) {
             socket.emit('submit_action', actionData);
         }
         // === SANDBOX-EMIT-GATE-END ===
-        // Audit fix (2026-07-06): a PASS sent in a react window makes us no
-        // longer the decision-maker. Clear legalActions optimistically so a
-        // re-entrant renderActionBar (deferred renderGame, drain-end commit)
-        // cannot auto-fire a SECOND stale PASS for the same window; the
-        // server's next frame repopulates the real list.
-        if (!sandboxMode && _at === 4 && gameState && gameState.phase === 1) {
+        // Timing audit (2026-07-06, generalizes the earlier PASS-only fix):
+        // ANY submitted action makes us no longer the decision-maker until
+        // the server replies. Optimistically clear legalActions and strip
+        // every affordance immediately — glow/highlights must not linger on
+        // a hand that can no longer act. The reply repopulates everything.
+        if (!sandboxMode) {
             legalActions = [];
+            try {
+                if (typeof updateHandHighlights === 'function') updateHandHighlights();
+                if (typeof highlightBoard === 'function') highlightBoard();
+                if (typeof renderHand === 'function') renderHand();
+            } catch (e) { /* defensive */ }
         }
     }
     clearSelection();
@@ -408,6 +424,18 @@ function canPlayCard(handIdx) {
 // game passes nothing; own hand is always myPlayerIdx.
 function onHandCardClick(handIdx, ownerIdx) {
     if (isSpectator) return;  // spectators cannot play cards
+    // Timing audit (2026-07-06): while the event queue is draining, the
+    // board on screen is older than gameState — selection/targeting must
+    // not engage. React clicks (my window) and pending-decision modes stay
+    // live; everything else is inert until the drain ends.
+    if (!sandboxMode && typeof isEventQueueBusy === 'function' && isEventQueueBusy()
+            && !isReactWindow()
+            && interactionMode !== 'death_target_pick'
+            && interactionMode !== 'post_move_attack_pick'
+            && interactionMode !== 'conjure_deploy'
+            && interactionMode !== 'revive_place') {
+        return;
+    }
     // Spell-stage gate: if a react window just closed and the stage is
     // still animating, only PLAY_REACT clicks are allowed through (those
     // still resolve against the live phase=REACT if we're somehow still
@@ -540,6 +568,18 @@ function onBoardCellClick(row, col) {
         }
     }
     if (isSpectator) return;  // spectators are read-only
+    // Timing audit (2026-07-06): while the event queue is draining, the
+    // board on screen is older than gameState — selection/targeting must
+    // not engage. React clicks (my window) and pending-decision modes stay
+    // live; everything else is inert until the drain ends.
+    if (!sandboxMode && typeof isEventQueueBusy === 'function' && isEventQueueBusy()
+            && !isReactWindow()
+            && interactionMode !== 'death_target_pick'
+            && interactionMode !== 'post_move_attack_pick'
+            && interactionMode !== 'conjure_deploy'
+            && interactionMode !== 'revive_place') {
+        return;
+    }
     // Spell-stage gate: block board interaction while the spell stage
     // overlay is animating, so the user can't move / attack / target-pick
     // an effect during the visible react-window animation. Death-target
@@ -715,6 +755,18 @@ function onBoardCellClick(row, col) {
 // Handle clicking a board minion
 function onBoardMinionClick(minion) {
     if (isSpectator) return;  // spectators are read-only
+    // Timing audit (2026-07-06): while the event queue is draining, the
+    // board on screen is older than gameState — selection/targeting must
+    // not engage. React clicks (my window) and pending-decision modes stay
+    // live; everything else is inert until the drain ends.
+    if (!sandboxMode && typeof isEventQueueBusy === 'function' && isEventQueueBusy()
+            && !isReactWindow()
+            && interactionMode !== 'death_target_pick'
+            && interactionMode !== 'post_move_attack_pick'
+            && interactionMode !== 'conjure_deploy'
+            && interactionMode !== 'revive_place') {
+        return;
+    }
     // Spell-stage gate: same rationale as onBoardCellClick. Blocks the
     // action-menu open + attack/target routing so a click on a minion
     // during the spell-stage animation is inert (except death-target).
