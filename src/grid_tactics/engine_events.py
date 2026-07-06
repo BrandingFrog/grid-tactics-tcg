@@ -60,6 +60,11 @@ EVT_ATTACK_RESOLVED = "attack_resolved"
 # state snapshot. Payload: {instance_id, from_card_numeric_id,
 # to_card_numeric_id, position, owner_idx, new_hp}.
 EVT_MINION_TRANSFORMED = "minion_transformed"
+# 2026-07 fix: SACRIFICE previously emitted NO board event — the client's
+# sacrifice-transcend animation (jumper/shatter) was wired to the deleted
+# deriveAnimationJob path and went silent after Phase 14.8-05. Payload:
+# {instance_id, card_numeric_id, position, owner_idx, damage}.
+EVT_MINION_SACRIFICED = "minion_sacrificed"
 
 # Card / hand events
 EVT_CARD_DRAWN = "card_drawn"
@@ -106,6 +111,7 @@ ALL_EVENT_TYPES: frozenset[str] = frozenset({
     EVT_MINION_MOVED,
     EVT_ATTACK_RESOLVED,
     EVT_MINION_TRANSFORMED,
+    EVT_MINION_SACRIFICED,
     EVT_CARD_DRAWN,
     EVT_CARD_PLAYED,
     EVT_CARD_DISCARDED,
@@ -143,6 +149,7 @@ DEFAULT_DURATION_MS: dict[str, int] = {
     EVT_MINION_MOVED: 350,
     EVT_ATTACK_RESOLVED: 500,
     EVT_MINION_TRANSFORMED: 600,        # swap flash on the tile (client)
+    EVT_MINION_SACRIFICED: 1150,        # jumper-shatter combo (client)
     EVT_CARD_DRAWN: 350,
     EVT_CARD_PLAYED: 0,                 # covered by spell stage in/out
     EVT_CARD_DISCARDED: 300,
@@ -366,6 +373,7 @@ __all__ = [
     "EVT_MINION_MOVED",
     "EVT_ATTACK_RESOLVED",
     "EVT_MINION_TRANSFORMED",
+    "EVT_MINION_SACRIFICED",
     "EVT_CARD_DRAWN",
     "EVT_CARD_PLAYED",
     "EVT_CARD_DISCARDED",

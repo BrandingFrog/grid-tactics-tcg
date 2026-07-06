@@ -281,11 +281,14 @@ class TestEventTypeCoverage:
         § 'Event types proposed'; the 2026-07 turn-structure redesign
         added EVT_CARD_BURNED (overdraw-burn) and EVT_HANDSHAKE, the
         2026-07 card audit added EVT_MINION_TRANSFORMED (Reanimated
-        Bones transform previously rendered silently), and the 2026-07
-        Dark Matter pool redesign added EVT_DARK_MATTER_CHANGE. Adding a
-        new type requires an explicit roadmap entry, NOT silent expansion.
+        Bones transform previously rendered silently), the 2026-07
+        Dark Matter pool redesign added EVT_DARK_MATTER_CHANGE, and the
+        2026-07 sacrifice-animation fix added EVT_MINION_SACRIFICED
+        (SACRIFICE emitted no board event since the 14.8-05 refactor
+        deleted its deriveAnimationJob wiring). Adding a new type
+        requires an explicit roadmap entry, NOT silent expansion.
         """
-        assert len(ALL_EVENT_TYPES) == 23
+        assert len(ALL_EVENT_TYPES) == 24
 
 
 # ---------------------------------------------------------------------------

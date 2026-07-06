@@ -3963,6 +3963,7 @@ function playEvent(ev, done) {
         case "minion_hp_change":         return playMinionHpChange(ev, done);
         case "minion_moved":             return playMinionMoved(ev, done);
         case "minion_transformed":       return playMinionTransformed(ev, done);
+        case "minion_sacrificed":        return playMinionSacrificed(ev, done);
         case "attack_resolved":          return playAttackResolved(ev, done);
         case "card_drawn":               return playCardDrawn(ev, done);
         case "card_played":              return playCardPlayed(ev, done);
@@ -6118,6 +6119,15 @@ var SACRIFICE_JUMPER_SVG = (
     + '<g transform="translate(170 191) rotate(-30)"><ellipse cx="20" cy="0" rx="32" ry="18"/></g>'
     + '</g></svg>'
 );
+
+// minion_sacrificed — EVT_MINION_SACRIFICED (2026-07 fix): the engine now
+// emits a board event for SACRIFICE; route it into the existing transcend
+// animation. State is NOT yet applied when this plays, so the minion is
+// still on its tile — _sacrificeTileContext hides the sprite for the leap.
+function playMinionSacrificed(ev, done) {
+    var p = (ev && ev.payload) || {};
+    playSacrificeTranscendAnimation({ payload: { pos: p.position || null } }, done);
+}
 
 // Dispatcher — picks a sacrifice animation variant based on
 // window.__sacrificeVariant (set by the Tests tab when a scenario

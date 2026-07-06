@@ -39,6 +39,7 @@ from grid_tactics.engine_events import (
     EVT_PENDING_MODAL_OPENED,
     EVT_PENDING_MODAL_RESOLVED,
     EVT_PHASE_CHANGED,
+    EVT_MINION_SACRIFICED,
     EVT_PLAYER_HP_CHANGE,
     EVT_REACT_WINDOW_OPENED,
     EventStream,
@@ -2522,7 +2523,28 @@ def resolve_action(
                 },
             )
     elif action.action_type == ActionType.SACRIFICE:
+        # Snapshot the minion pre-removal so the event carries its tile.
+        _pre_sac = (
+            state.get_minion(action.minion_id)
+            if action.minion_id is not None else None
+        )
         state = _apply_sacrifice(state, action, library)
+        # 2026-07 fix: emit a board event so the client can play the
+        # sacrifice-transcend animation — the old deriveAnimationJob wiring
+        # was deleted in Phase 14.8-05 and SACRIFICE rendered silently.
+        if event_collector is not None and _pre_sac is not None:
+            _sac_card = library.get_by_id(_pre_sac.card_numeric_id)
+            event_collector.collect(
+                EVT_MINION_SACRIFICED,
+                "action:sacrifice",
+                {
+                    "instance_id": _pre_sac.instance_id,
+                    "card_numeric_id": _pre_sac.card_numeric_id,
+                    "position": list(_pre_sac.position),
+                    "owner_idx": int(_pre_sac.owner),
+                    "damage": _sac_card.attack + _pre_sac.attack_bonus,
+                },
+            )
     elif action.action_type == ActionType.TRANSFORM:
         # Snapshot the pre-transform card so the event carries the swap.
         _pre_transform = (
