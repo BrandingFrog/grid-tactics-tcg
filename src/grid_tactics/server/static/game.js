@@ -9743,8 +9743,11 @@ function renderHand(opts) {
 // the PASS button. Used for BOTH the player hand (#hand-container) and the
 // opponent face-down row (#oppHandRow). Re-run on resize via relayoutHandRows.
 // ==========================================================================
-var HAND_MAXW = 615;          // ~7 cards wide — beyond this the cards overlap
-var HAND_ROW_GAP = 8;         // comfortable spacing when the cards fit
+// 7 cards of the CURRENT 58.5px hand cards + 6 gaps — beyond this the row
+// overlaps (up to the 45% cap). The old 615px value dated from 96px cards
+// and had drifted to "overlap at 10" when the cards shrank (user 2026-07-06).
+var HAND_MAXW = 7 * 58.5 + 6 * 4;   // ≈ 434
+var HAND_ROW_GAP = 4;         // reduced padding (user design): tight but no overlap up to 7
 var HAND_OVERLAP_CAP = 0.45;  // max fraction of a card width they may overlap
 
 function _layoutHandRow(cards, maxW) {
