@@ -87,7 +87,18 @@
       // (user 2026-07-05 — previews first, dev chrome on demand).
       document.body.classList.add('sbx-hide-side');
       if (nav)  nav.addEventListener('click',  function () { document.body.classList.toggle('sbx-show-nav'); });
-      if (side) side.addEventListener('click', function () { document.body.classList.toggle('sbx-hide-side'); });
+      if (side) side.addEventListener('click', function () {
+        // BUG FIX 2026-07-06: sbx-hide-side defaults ON (sandbox dev panel
+        // hidden) but the deck builder reused it for its deck column — the
+        // deck list was hidden for everyone. The deck builder gets its own
+        // class, toggled only while that screen is active.
+        var db = document.getElementById('screen-deck-builder');
+        if (db && db.classList.contains('active')) {
+          document.body.classList.toggle('db-hide-deck');
+        } else {
+          document.body.classList.toggle('sbx-hide-side');
+        }
+      });
       var bar = document.getElementById('sbx-toggle-bar');
       if (bar) bar.addEventListener('click', function () { document.body.classList.toggle('sbx-hide-bar'); });
     });

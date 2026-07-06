@@ -11669,8 +11669,8 @@ body:has(#screen-sandbox.active) .room-bar { padding-right: 84px !important; }
     grid-template-columns: clamp(150px, 20vw, 185px) minmax(0, 1fr) clamp(165px, 21vw, 200px) !important;
   }
   #screen-deck-builder .deck-builder-body > .tooltip-sidebar { display: flex !important; }
-  body.sbx-hide-side #screen-deck-builder .deck-sidebar { display: none !important; }
-  body.sbx-hide-side #screen-deck-builder .deck-builder-body {
+  body.db-hide-deck #screen-deck-builder .deck-sidebar { display: none !important; }
+  body.db-hide-deck #screen-deck-builder .deck-builder-body {
     grid-template-columns: clamp(150px, 20vw, 185px) minmax(0, 1fr) !important;
   }
 
@@ -11748,8 +11748,8 @@ body.sbx-show-nav:has(#screen-deck-builder.active) .deck-builder-layout { height
   gap: calc(var(--mfu) * 6) !important;
 }
 #screen-deck-builder .deck-builder-body > .tooltip-sidebar { display: flex !important; }
-body.sbx-hide-side #screen-deck-builder .deck-sidebar { display: none !important; }
-body.sbx-hide-side #screen-deck-builder .deck-builder-body {
+body.db-hide-deck #screen-deck-builder .deck-sidebar { display: none !important; }
+body.db-hide-deck #screen-deck-builder .deck-builder-body {
   grid-template-columns: calc(var(--mfu) * 172) minmax(0, 1fr) !important;
 }
 
