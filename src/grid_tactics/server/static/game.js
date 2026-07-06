@@ -9942,15 +9942,10 @@ function _renderAvatarPod(which, playerIdx) {
     }
     var hpEl = document.getElementById('avatar-' + which + '-hp');
     if (hpEl) hpEl.textContent = p.hp;
+    // Dark Matter chip removed from the pods entirely (user 2026-07-06) —
+    // DM appears only in the player preview, and only when stacks > 0.
     var dmEl = document.getElementById('avatar-' + which + '-dm-num');
-    if (dmEl) {
-        var dmVal = _playerDarkMatter(gameState, playerIdx);
-        dmEl.textContent = dmVal;
-        // Dark Matter is niche info — the chip only appears once the player
-        // actually has stacks (user 2026-07-06).
-        var dmChip = document.getElementById('avatar-' + which + '-dm');
-        if (dmChip) dmChip.style.display = (dmVal > 0) ? '' : 'none';
-    }
+    if (dmEl) dmEl.textContent = _playerDarkMatter(gameState, playerIdx);
     if (!pod._gtAvatarBound) {
         pod._gtAvatarBound = true;
         var openPreview = function() {
