@@ -3990,8 +3990,12 @@ body {
 /* Fallback nudge when the overdrawn card identity is unavailable. */
 .nudge-overlay.nudge-overdraw-fallback {
   display: flex;
+  /* column: card back above the label, both centered — matches the main
+     .overdraw-reveal composition (row put the label right of center) */
+  flex-direction: column;
   align-items: center;
   justify-content: center;
+  gap: 10px;
 }
 @keyframes overdraw-reveal-pop {
   0%   { transform: translate(-50%, -50%) scale(0.4); opacity: 0; }
