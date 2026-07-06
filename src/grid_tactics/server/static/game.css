@@ -13132,3 +13132,26 @@ body.ttabs-on #screen-game .game-sidebar { display: none !important; }
    turn it is. JS may retoggle the hint's inline display, hence !important. */
 #how-to-play-hint, #screen-game .how-to-play-hint { display: none !important; }
 #screen-game .turn-banner, #screen-sandbox .room-bar .turn-banner { display: none !important; }
+
+/* Top bar removed from the live game for now (user 2026-07-06) — the stage
+   takes the full design-box height; opp backs peek from the screen top edge
+   (the original design). Sandbox keeps its bar (it has the ▭ toggle). */
+#screen-game .room-bar { display: none !important; }
+/* game screen pile geometry: with the bar gone the board grew to 357x286
+   flat (cells 63x47) — retune the pile columns for THIS screen (sandbox
+   keeps its bar and the original 284x227 constants) */
+#screen-game .pile-board {
+  grid-template-columns: 70px;
+  grid-auto-rows: 47px;
+  gap: 6px;
+  padding: 8px 4px;
+}
+#screen-game .pile-board-own { left: calc(50% + 186px); }
+#screen-game .pile-board-opp {
+  right: calc(50% + 186px);
+  transform-origin: center 286px;   /* board pivot in this screen's flat space */
+}
+/* PASS clears the pile column: with the bar gone the deck cell reaches the
+   board's (lower) bottom edge where PASS used to float — tuck PASS into the
+   bottom-right corner beneath the column */
+#screen-game .duel-stage .hand-action-bar { bottom: 12px !important; right: 8px !important; }
