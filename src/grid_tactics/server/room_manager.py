@@ -191,6 +191,19 @@ class RoomManager:
         preset = get_preset_deck(self._library)
         seed = secrets.randbelow(2**31)
         state, rng = GameState.new_game(seed, preset, preset)
+        # Testing aid (user 2026-07-06): preview games open with a FULL hand
+        # of 10 for the human, so hand layout / overdraw states are easy to
+        # eyeball without playing draw turns.
+        import dataclasses as _dc
+        p0 = state.players[0]
+        draw_n = max(0, 10 - len(p0.hand))
+        state = _dc.replace(
+            state,
+            players=(
+                _dc.replace(p0, hand=p0.hand + p0.deck[:draw_n], deck=p0.deck[draw_n:]),
+                state.players[1],
+            ),
+        )
         session = GameSession(
             state=state,
             rng=rng,
