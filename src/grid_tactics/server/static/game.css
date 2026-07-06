@@ -12946,8 +12946,14 @@ body.sbx-hide-bar:has(#screen-sandbox.active) .room-bar {
    square like every card (58.5 design px), sit fully below the bar, and the
    default back is warm bronze (element-tinted backs keep their tint rule).
    ========================================================================== */
+/* restore the approved peek (user 2026-07-06): backs hang ~40% above the
+   stage top, emerging from BEHIND the room bar (which stacks above them) */
 #screen-game .duel-stage .opp-hand-row, #screen-sandbox .duel-stage .opp-hand-row {
-  transform: translateY(0) !important;
+  transform: translateY(-40%) !important;
+}
+#screen-game .room-bar, #screen-sandbox .room-bar {
+  position: relative;
+  z-index: 6;               /* above the opp backs (z-4) so they slide under */
 }
 .opp-hand-card-back {
   /* 90% of the player's 58.5px hand cards, mirroring the approved opp-hand
