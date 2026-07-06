@@ -13239,3 +13239,19 @@ body.ttabs-on #screen-game .game-sidebar { display: none !important; }
 .pile-cell-deck { cursor: default !important; }
 .pile-cell-deck:hover { border-color: #3a2e18 !important; color: #cbb98f !important; }
 .pile-cell-deck:active { background: rgba(12, 8, 3, 0.55) !important; border-color: #3a2e18 !important; }
+
+/* Lobby stays one viewport tall (user 2026-07-06: the quickview content grew
+   the page and pushed the hero card below the fold). The PLAY column scrolls
+   internally; the brand column keeps the hero bottom-anchored on screen. */
+#screen-lobby .lobby2 {
+  height: 100vh !important;
+  max-height: 100vh !important;
+  overflow: hidden !important;
+}
+#screen-lobby .lobby2-play {
+  min-height: 0 !important;
+  overflow-y: auto !important;
+  scrollbar-width: thin; scrollbar-color: #6b5730 transparent;
+}
+#screen-lobby .lobby2-play::-webkit-scrollbar { width: 8px; }
+#screen-lobby .lobby2-play::-webkit-scrollbar-thumb { background: #6b5730; border-radius: 4px; }
