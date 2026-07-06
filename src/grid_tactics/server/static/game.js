@@ -1865,9 +1865,14 @@ function setupLobbyQuickview() {
     var list = document.getElementById('lobby-quickview-list');
     if (!wrap || !list) return;
 
+    // Game preview tile: opens the duel stage (sandbox) from any device
+    var previewBtn = document.getElementById('btn-game-preview');
+    if (previewBtn) previewBtn.addEventListener('click', function() {
+        showScreen('screen-sandbox');
+        if (typeof sandboxActivate === 'function') sandboxActivate();
+    });
+
     function renderGames(games) {
-        if (!games.length) { wrap.style.display = 'none'; return; }
-        wrap.style.display = '';
         list.innerHTML = games.map(function(g) {
             var cells = '';
             var occ = {};

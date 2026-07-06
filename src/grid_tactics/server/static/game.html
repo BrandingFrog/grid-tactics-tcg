@@ -158,8 +158,12 @@
 
           <!-- Quick game view (testing, user 2026-07-06): live snapshots of
                in-progress games — mini board + scores, click to spectate. -->
-          <div class="lobby2-quickview" id="lobby-quickview" style="display:none;">
-            <div class="lobby2-rooms-head"><span>Live games</span><span class="lobby2-qv-tag">testing</span></div>
+          <div class="lobby2-quickview" id="lobby-quickview">
+            <div class="lobby2-rooms-head"><span>Game view</span><span class="lobby2-qv-tag">testing</span></div>
+            <button class="lobby2-qv-preview" id="btn-game-preview" type="button">
+              <span class="qv-prev-ico" aria-hidden="true">▶</span>
+              <span class="qv-prev-txt">Game preview<small>open the duel stage on this device</small></span>
+            </button>
             <div id="lobby-quickview-list"></div>
           </div>
         </div>
