@@ -1861,7 +1861,14 @@ function setupTooltipTabs() {
     sidebar.appendChild(cardPane);
     sidebar.appendChild(logPane);
     sidebar.appendChild(chatPane);
-    if (leaveBtn) sidebar.appendChild(leaveBtn);
+    // LEAVE GAME floats top-right of the stage as a compact ✕ (user
+    // 2026-07-06) — appended to the layout root so nothing clips it.
+    if (leaveBtn) {
+        leaveBtn.textContent = '✕';
+        leaveBtn.title = 'Leave game';
+        leaveBtn.classList.add('leave-x');
+        document.querySelector('#screen-game .game-layout').appendChild(leaveBtn);
+    }
     logPane.classList.add('ttab-pane');
     chatPane.classList.add('ttab-pane');
     logPane.style.display = 'none';
@@ -4946,7 +4953,7 @@ function _handshakeRewardText(reward) {
         case 'mana':        return '+1 mana';
         case 'card_drawn':
         case 'draw':        return 'draws a card (mana full)';
-        case 'card_burned': return 'draws a card (mana full) — hand full, it burns!';
+        case 'card_burned': return 'draws a card (mana full) — hand full, it is exhausted!';
         case 'none':        return 'nothing (mana full, deck empty)';
         default:            return '+1 mana';  // legacy payloads carry no detail
     }
@@ -5001,7 +5008,7 @@ function playOverdrawBurn(ev, done) {
                 (burnTint
                     ? '<div class="overdraw-burn-back" style="--back-tint:' + burnTint.color + '" title="' + burnTint.name + '"></div>'
                     : '') +
-                '<div class="overdraw-reveal-label">HAND FULL — CARD BURNED</div>',
+                '<div class="overdraw-reveal-label">HAND FULL — CARD EXHAUSTED</div>',
                 1200);
         } catch (e) { /* defensive */ }
         setTimeout(done, 1200);  // match the fallback nudge, ignore wire duration
@@ -8323,7 +8330,7 @@ function showTutorModal(matches, deckSize, totalCopiesByCardId) {
     if (!isConjurePick && tutorPickerHandLen() >= TUTOR_MAX_HAND_SIZE) {
         var warnBanner = document.createElement('div');
         warnBanner.className = 'tutor-modal-warning';
-        warnBanner.textContent = 'Hand full — tutored card will be burnt';
+        warnBanner.textContent = 'Hand full — tutored card will be exhausted';
         modal.appendChild(warnBanner);
     }
 

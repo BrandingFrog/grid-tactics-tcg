@@ -13192,3 +13192,18 @@ body.ttabs-on #screen-game .game-sidebar { display: none !important; }
 .spell-stage-stack-card {
   box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6), 0 0 40px rgba(224, 162, 60, 0.25) !important;
 }
+/* LEAVE GAME: an ✕ in the top-right corner of the stage (user 2026-07-06) */
+#screen-game .game-layout > .btn.leave-x {
+  position: absolute; top: 8px; right: 8px; left: auto;
+  width: 26px !important; height: 26px !important; min-width: 0 !important;
+  margin: 0 !important; padding: 0 !important;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 13px !important; line-height: 1 !important;
+  color: #cbb98f !important;
+  background: rgba(25, 18, 7, 0.85) !important;
+  border: 1px solid #6b5730 !important; border-radius: 6px !important;
+  z-index: 50; cursor: pointer;
+}
+#screen-game .game-layout > .btn.leave-x:hover {
+  color: #f2ead2 !important; border-color: #b5623a !important;
+}
