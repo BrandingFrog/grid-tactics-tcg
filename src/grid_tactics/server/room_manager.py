@@ -179,6 +179,35 @@ class RoomManager:
             self._games[room_code] = session
         return session
 
+    def create_preview_game(self, display_name: str, sid: str) -> tuple[str, GameSession]:
+        """Solo PREVIEW game (lobby quick view, user 2026-07-06): a real
+        GameSession on the real duel screen where the requester is P0 and
+        the opponent seat is an inert dummy. For checking the game view on
+        any device — the dummy never acts, so play halts at the first
+        opponent react window. Not listed in the lobby.
+        """
+        token = str(uuid.uuid4())
+        dummy_token = str(uuid.uuid4())
+        preset = get_preset_deck(self._library)
+        seed = secrets.randbelow(2**31)
+        state, rng = GameState.new_game(seed, preset, preset)
+        session = GameSession(
+            state=state,
+            rng=rng,
+            library=self._library,
+            player_tokens=(token, dummy_token),
+            player_names=(display_name or "You", "Preview"),
+            player_sids=[sid, None],
+            player_decks=(preset, preset),
+        )
+        with self._lock:
+            code = self._generate_code()
+            self._games[code] = session
+            self._token_to_room[token] = code
+            self._sid_to_token[sid] = token
+            self._token_role[token] = "player"
+        return code, session
+
     def request_rematch(self, token: str) -> tuple[str, GameSession | None, GameSession | None]:
         """Mark player as wanting a rematch. Returns (status, old_session, new_session).
 

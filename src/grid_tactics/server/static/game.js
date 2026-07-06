@@ -1865,11 +1865,11 @@ function setupLobbyQuickview() {
     var list = document.getElementById('lobby-quickview-list');
     if (!wrap || !list) return;
 
-    // Game preview tile: opens the duel stage (sandbox) from any device
+    // Game preview tile: solo preview game on the REAL duel screen (user
+    // 2026-07-06 — no sandbox). game_start handles the screen switch.
     var previewBtn = document.getElementById('btn-game-preview');
     if (previewBtn) previewBtn.addEventListener('click', function() {
-        showScreen('screen-sandbox');
-        if (typeof sandboxActivate === 'function') sandboxActivate();
+        socket.emit('preview_game', { display_name: getCurrentDisplayName() || 'Preview' });
     });
 
     function renderGames(games) {

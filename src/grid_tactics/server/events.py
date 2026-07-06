@@ -631,6 +631,39 @@ def register_events(room_manager: RoomManager) -> None:
                 )
             _fanout_game_start_to_spectators(session, state_dict, card_defs)
 
+    @socketio.on("preview_game")
+    def handle_preview_game(data=None):
+        """Lobby Game Preview (user 2026-07-06): start a solo preview game on
+        the REAL duel screen (no sandbox). Requester is P0; the opponent seat
+        is an inert dummy."""
+        data = data or {}
+        name = (data.get("display_name") or "Preview").strip() or "Preview"
+        code, session = _room_manager.create_preview_game(name, request.sid)
+        sio_join_room(code)
+        state_dict = session.state.to_dict()
+        enrich_pending_post_move_attack(session.state, state_dict, session.library)
+        card_defs = _build_card_defs(session.library)
+        initial_actions = legal_actions(session.state, session.library)
+        serialized_actions = [serialize_action(a) for a in initial_actions]
+        filtered = filter_state_for_player(state_dict, 0, session.library)
+        enrich_pending_tutor_for_viewer(session.state, filtered, 0, session.library)
+        enrich_pending_conjure_deploy(session.state, filtered, 0, session.library)
+        enrich_pending_death_target(session.state, filtered, 0, session.library)
+        enrich_pending_revive(session.state, filtered, 0, session.library)
+        enrich_pending_trigger_for_viewer(session.state, filtered, 0, session.library)
+        emit(
+            "game_start",
+            {
+                "your_player_idx": 0,
+                "state": filtered,
+                "legal_actions": serialized_actions if session.state.active_player_idx == 0 else [],
+                "opponent_name": session.player_names[1],
+                "card_defs": card_defs,
+                "preview": True,
+            },
+            to=request.sid,
+        )
+
     @socketio.on("spectate_room")
     def handle_spectate_room(data):
         data = data or {}
