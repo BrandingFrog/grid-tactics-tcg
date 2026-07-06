@@ -3200,6 +3200,10 @@ function showPileModal(title, cardNumericIds, sandboxCtx) {
     var grid = document.getElementById('pileModalGrid');
     if (!modal || !titleEl || !grid) return;
     titleEl.textContent = title || 'Pile';
+    // Center over the STAGE (right of the tooltip column): live inside the
+    // active screen's scaled layout so the grey-out skips the tooltip panel.
+    var layout = document.querySelector('.screen.active .game-layout');
+    if (layout && modal.parentElement !== layout) layout.appendChild(modal);
     grid.innerHTML = '';
     var ids = cardNumericIds || [];
     if (ids.length === 0) {
@@ -3217,6 +3221,10 @@ function showPileModal(title, cardNumericIds, sandboxCtx) {
                 context: 'pile',
                 numericId: nid,
                 showReactDeploy: false
+            });
+            // Highlighting a card previews it in the tooltip panel
+            cell.addEventListener('mouseenter', function() {
+                showGameTooltip(nid, cell, null, { force: true });
             });
             // Phase 14.6-03: Move-to button in sandbox mode
             if (sandboxMode && sandboxCtx && typeof makeSandboxMoveButton === 'function') {
@@ -3323,7 +3331,8 @@ function updatePileButtonCounts() {
 function setupPileHandlers() {
     // Pile-board cells (deck / grave / exhaust, own + opponent, both stages)
     var PILE_TITLES = { deck: 'Deck', grave: 'Grave', exhaust: 'Exhaust' };
-    document.querySelectorAll('.pile-board .pile-cell[data-pile]').forEach(function(cell) {
+    // Decks are PRIVATE (user 2026-07-06): count only, never clickable.
+    document.querySelectorAll('.pile-board .pile-cell[data-pile="grave"], .pile-board .pile-cell[data-pile="exhaust"]').forEach(function(cell) {
         cell.addEventListener('click', function() {
             if (!gameState || !gameState.players) return;
             // sandbox god-view has no seat: treat P1 as "own" (matches pods)
@@ -7920,10 +7929,17 @@ function showMinionActionMenu(minion, moves, attacks, transforms, canSac) {
     menu.id = 'minion-action-menu';
     menu.className = 'minion-action-menu';
 
-    function addBtn(label, cls, handler, disabled) {
+    function addBtn(label, cls, handler, disabled, previewNid) {
         var btn = document.createElement('button');
         btn.className = 'minion-action-btn ' + (cls || '');
         btn.textContent = label;
+        // Highlighting an option previews its card in the tooltip panel
+        // (user 2026-07-06), matching the grave/exhaust modals.
+        if (previewNid != null) {
+            btn.addEventListener('mouseenter', function() {
+                showGameTooltip(previewNid, btn, null, { force: true });
+            });
+        }
         if (disabled) {
             btn.disabled = true;
             btn.classList.add('disabled');
@@ -8004,9 +8020,9 @@ function showMinionActionMenu(minion, moves, attacks, transforms, canSac) {
             legalTransformTargets[t.transform_target] = true;
         });
         transformSourceCard.transform_options.forEach(function(opt) {
-            var targetCard = null;
+            var targetCard = null, targetNid = null;
             for (var nid in cardDefs) {
-                if (cardDefs[nid].card_id === opt.target) { targetCard = cardDefs[nid]; break; }
+                if (cardDefs[nid].card_id === opt.target) { targetCard = cardDefs[nid]; targetNid = parseInt(nid, 10); break; }
             }
             var name = targetCard ? targetCard.name : opt.target;
             var cost = opt.mana_cost;
@@ -8018,7 +8034,7 @@ function showMinionActionMenu(minion, moves, attacks, transforms, canSac) {
                     minion_id: minion.instance_id,
                     transform_target: opt.target,
                 });
-            }, !transformLegal);
+            }, !transformLegal, targetNid);
         });
     }
 
@@ -8030,16 +8046,29 @@ function showMinionActionMenu(minion, moves, attacks, transforms, canSac) {
         updateHandHighlights();
     });
 
-    // Append to body and position via fixed coordinates so the menu escapes
-    // .board-cell's overflow:hidden clip.
-    document.body.appendChild(menu);
-    menu.style.left = (rect.left + rect.width / 2) + 'px';
-    menu.style.top = (rect.top - 8) + 'px';
+    // Centered stage modal (user 2026-07-06): grey the board area (right of
+    // the tooltip column) and pop the menu in its middle. Clicking the grey
+    // cancels, mirroring the Cancel button.
+    var backdrop = document.createElement('div');
+    backdrop.id = 'stage-menu-backdrop';
+    backdrop.className = 'stage-modal-backdrop';
+    backdrop.addEventListener('click', function(e) {
+        if (e.target !== backdrop) return;
+        clearSelection();
+        hideMinionActionMenu();
+        highlightBoard();
+        updateHandHighlights();
+    });
+    backdrop.appendChild(menu);
+    (document.querySelector('.screen.active .game-layout') || document.body)
+        .appendChild(backdrop);
 }
 
 function hideMinionActionMenu() {
     var existing = document.getElementById('minion-action-menu');
     if (existing) existing.remove();
+    var bd = document.getElementById('stage-menu-backdrop');
+    if (bd) bd.remove();
 }
 
 // Discard-cost picker — collects one or more hand-index picks (based on

@@ -13207,3 +13207,35 @@ body.ttabs-on #screen-game .game-sidebar { display: none !important; }
 #screen-game .game-layout > .btn.leave-x:hover {
   color: #f2ead2 !important; border-color: #b5623a !important;
 }
+
+/* ==========================================================================
+   STAGE-CENTERED MODALS (user 2026-07-06): popups grey out the BOARD AREA
+   (right of the 200px tooltip column, which stays live for hover previews)
+   and center within it. Decks are private — no pointer affordance.
+   ========================================================================== */
+.game-layout > .stage-modal-backdrop {
+  position: absolute; top: 0; right: 0; bottom: 0; left: 200px;
+  background: rgba(10, 7, 3, 0.62);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 900;
+}
+.stage-modal-backdrop .minion-action-menu {
+  position: static !important;
+  transform: none !important;
+  left: auto !important; top: auto !important;
+}
+.game-layout > #pileModal.pile-modal-overlay {
+  position: absolute !important;
+  top: 0 !important; right: 0 !important; bottom: 0 !important; left: 200px !important;
+  width: auto !important; height: auto !important;
+  background: rgba(10, 7, 3, 0.62) !important;
+  z-index: 900;
+}
+.game-layout > #pileModal .pile-modal {
+  max-width: 560px !important;
+  max-height: 350px !important;
+}
+/* decks: count display only */
+.pile-cell-deck { cursor: default !important; }
+.pile-cell-deck:hover { border-color: #3a2e18 !important; color: #cbb98f !important; }
+.pile-cell-deck:active { background: rgba(12, 8, 3, 0.55) !important; border-color: #3a2e18 !important; }
