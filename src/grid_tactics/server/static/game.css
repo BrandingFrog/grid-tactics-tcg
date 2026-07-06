@@ -12774,9 +12774,9 @@ body.sbx-show-nav:has(#screen-sandbox.active) .game-layout {
 /* anchor to the BOARD (centered in the container): one column of three
    cells, own side aligned to rows 3-5 (exhaust/grave/deck), opponent
    mirrored on rows 1-3 (deck/grave/exhaust) */
-.pile-board-own { left: calc(50% + 153px); bottom: 0; }
+.pile-board-own { left: calc(50% + 146px); bottom: 0; }
 .pile-board-opp {
-  right: calc(50% + 153px); top: 0;
+  right: calc(50% + 146px); top: 0;
   /* rotate about the BOARD's pivot line (its bottom edge, 227px below this
      top-aligned column's own top) so the projection matches the board's */
   transform-origin: center 227px;
@@ -13120,3 +13120,9 @@ body.ttabs-on #screen-game .game-sidebar { display: none !important; }
 #screen-game .duel-stage .hand-action-bar > *, #screen-sandbox .duel-stage .hand-action-bar > * {
   pointer-events: auto;
 }
+
+/* Chrome trims (user 2026-07-06): the how-to-play tip strip and the
+   YOUR TURN banner are gone — the phase pips + pod glow already say whose
+   turn it is. JS may retoggle the hint's inline display, hence !important. */
+#how-to-play-hint, #screen-game .how-to-play-hint { display: none !important; }
+#screen-game .turn-banner, #screen-sandbox .room-bar .turn-banner { display: none !important; }
