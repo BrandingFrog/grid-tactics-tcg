@@ -118,7 +118,9 @@ function showTutorModal(matches, deckSize, totalCopiesByCardId) {
             var nid = match.card_numeric_id;
             var tile = document.createElement('div');
             tile.className = 'tutor-modal-card';
-            tile.innerHTML = renderDeckBuilderCard(nid, -1);
+            // No count badge: -1 renders the deck builder's non-deckable
+            // 🚫 marker, which read as 'blocked' in the picker (user 2026-07-06).
+            tile.innerHTML = renderDeckBuilderCard(nid, undefined);
 
             var key = String(nid);
             var remainingInDeck = remainingByNid[key] || 0;
@@ -268,7 +270,9 @@ function showTriggerPickerModal(options) {
             tile.className = 'tutor-modal-card trigger-picker-card';
             // Reuse renderDeckBuilderCard — same full-face card render
             // the tutor modal uses. count=-1 suppresses the deck count pill.
-            tile.innerHTML = renderDeckBuilderCard(nid, -1);
+            // No count badge: -1 renders the deck builder's non-deckable
+            // 🚫 marker, which read as 'blocked' in the picker (user 2026-07-06).
+            tile.innerHTML = renderDeckBuilderCard(nid, undefined);
 
             // Optional label showing the trigger kind (Start/End/etc.)
             var kindPill = document.createElement('div');

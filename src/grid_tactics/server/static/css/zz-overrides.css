@@ -3881,3 +3881,9 @@ body:has(#screen-sandbox.active) .game-layout { gap: 8px !important; }
 @keyframes overdraw-reveal-fade {
   to { opacity: 0; }
 }
+
+/* HAND FULL — EXHAUSTED label read left-aligned when it wrapped (the reveal
+   box shrink-to-fits against the stage edge) — center the wrapped lines. */
+.overdraw-reveal-label {
+  text-align: center;
+}
