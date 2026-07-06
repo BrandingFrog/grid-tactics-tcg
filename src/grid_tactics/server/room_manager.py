@@ -204,6 +204,26 @@ class RoomManager:
             state,
             players=(_full_hand(state.players[0]), _full_hand(state.players[1])),
         )
+        # Guarantee Reanimated Bones in the human's opening hand (user
+        # 2026-07-06 — transform-mechanic testing).
+        try:
+            bones = self._library.get_numeric_id("reanimated_bones")
+            p0 = state.players[0]
+            if bones not in p0.hand and bones in p0.deck:
+                i = p0.deck.index(bones)
+                state = _dc.replace(
+                    state,
+                    players=(
+                        _dc.replace(
+                            p0,
+                            hand=p0.hand[:-1] + (bones,),
+                            deck=p0.deck[:i] + (p0.hand[-1],) + p0.deck[i + 1:],
+                        ),
+                        state.players[1],
+                    ),
+                )
+        except KeyError:
+            pass  # card renamed/removed — preview still works without it
         session = GameSession(
             state=state,
             rng=rng,
