@@ -680,7 +680,9 @@ function runNudge(id, innerHtml, durationMs) {
     overlay.id = id;
     overlay.className = 'nudge-overlay ' + id;
     overlay.innerHTML = innerHtml;
-    document.body.appendChild(overlay);
+    // Stage-centered: in-game banners center between the tooltip column's
+    // right edge and the screen's right edge (mount inside scaled layout).
+    (document.querySelector('.screen.active .game-layout') || document.body).appendChild(overlay);
     setTimeout(function() {
         if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
     }, durationMs);
@@ -6410,7 +6412,7 @@ function _showTurnBanner(turnNumber, activePlayerIdx) {
             if (banner.parentNode) banner.parentNode.removeChild(banner);
         };
         banner.addEventListener('animationend', remove);
-        document.body.appendChild(banner);
+        (document.querySelector('.screen.active .game-layout') || document.body).appendChild(banner);
         setTimeout(remove, 2000);
     } catch (e) { /* defensive */ }
 }
@@ -6473,7 +6475,7 @@ function _fireTriggerBlipAnimation(blip) {
         var icon = document.createElement('div');
         icon.className = 'trigger-blip-center-icon';
         icon.textContent = _triggerBlipIcon(blip);
-        document.body.appendChild(icon);
+        _stageMount().appendChild(icon);
         setTimeout(function () {
             if (icon.parentNode) icon.parentNode.removeChild(icon);
         }, 900);
@@ -8446,7 +8448,7 @@ function showOpponentTutoringToast() {
     toast.id = 'opponent-tutoring-toast';
     toast.className = 'tutor-toast';
     toast.textContent = 'Opponent is tutoring…';
-    document.body.appendChild(toast);
+    _stageMount().appendChild(toast);
 }
 
 function hideOpponentTutoringToast() {
@@ -8588,7 +8590,7 @@ function showOpponentTriggerPickerToast() {
     // Reuse tutor-toast styling — same "waiting on opponent" visual treatment.
     toast.className = 'tutor-toast';
     toast.textContent = 'Opponent is ordering effects…';
-    document.body.appendChild(toast);
+    _stageMount().appendChild(toast);
 }
 
 function hideOpponentTriggerPickerToast() {
@@ -8779,7 +8781,7 @@ function showConjureDeployUI() {
     });
     banner.appendChild(skipBtn);
 
-    document.body.appendChild(banner);
+    _stageMount().appendChild(banner);
 
     // Highlight valid deploy tiles
     highlightBoard();
@@ -8802,7 +8804,7 @@ function showOpponentConjuringToast() {
     toast.id = 'opponent-conjuring-toast';
     toast.className = 'tutor-toast';
     toast.textContent = 'Opponent is deploying a conjured card\u2026';
-    document.body.appendChild(toast);
+    _stageMount().appendChild(toast);
 }
 
 // =============================================
@@ -8863,7 +8865,7 @@ function showDeathTargetPickerUI() {
         text = 'Pick an enemy to destroy (' + cardName + ' death)';
     }
     banner.textContent = text;
-    document.body.appendChild(banner);
+    _stageMount().appendChild(banner);
 
     highlightBoard();
 }
@@ -8886,7 +8888,7 @@ function showOpponentDeathPickToast() {
     toast.className = 'tutor-toast';
     toast.style.background = '#7a1b1b';
     toast.textContent = 'Opponent is choosing a target for a Death effect\u2026';
-    document.body.appendChild(toast);
+    _stageMount().appendChild(toast);
 }
 
 function findCardNameByNid(nid) {

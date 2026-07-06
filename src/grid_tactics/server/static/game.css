@@ -13270,3 +13270,28 @@ body.ttabs-on #screen-game .game-sidebar { display: none !important; }
   left: 522px !important; top: 42% !important;
   right: auto !important; bottom: auto !important;
 }
+
+/* EVERY in-game popup/banner centers over the STAGE (right of the 200px
+   tooltip column), not the full screen (user 2026-07-06) */
+.game-layout > .nudge-overlay {
+  position: absolute !important;
+  inset: 0 0 0 200px !important;
+}
+.game-layout > .turn-transition-banner {
+  position: absolute !important;
+  left: 522px !important;   /* 200 + (844-200)/2 — stage midpoint */
+  top: 50% !important;
+}
+/* overlay sits 2 levels deep; its position:fixed resolves against the
+   transformed .game-layout, so a descendant selector works */
+.game-layout .game-over-overlay {
+  left: 200px !important;
+}
+.game-layout > .tutor-toast {
+  position: absolute !important;
+  left: 522px !important;   /* stage midpoint; keeps translateX(-50%) */
+}
+.game-layout > .trigger-blip-center-icon {
+  position: absolute !important;
+  left: 522px !important;
+}
