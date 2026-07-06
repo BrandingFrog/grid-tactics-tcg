@@ -3280,6 +3280,9 @@ function _playerHandElements(p) {
 // element is unknown/null. Uses the same ELEMENT_MAP colors as everywhere
 // else in the client so the tint reads consistently.
 function _tintCardBack(backEl, element) {
+    // Element-tinted backs removed (user 2026-07-06) — all opp hand backs
+    // render the neutral warm back. Kept as a no-op so call sites stay.
+    return;
     if (!backEl || element == null || !ELEMENT_MAP[element]) return;
     backEl.classList.add('element-back');
     backEl.style.setProperty('--back-tint', ELEMENT_MAP[element].color);

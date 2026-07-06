@@ -12953,7 +12953,8 @@ body.sbx-hide-bar:has(#screen-sandbox.active) .room-bar {
 /* restore the approved peek (user 2026-07-06): backs hang ~40% above the
    stage top, emerging from BEHIND the room bar (which stacks above them) */
 #screen-game .duel-stage .opp-hand-row, #screen-sandbox .duel-stage .opp-hand-row {
-  transform: translateY(-40%) !important;
+  /* -40% -> -22%: show more of the opponent's backs (user 2026-07-06) */
+  transform: translateY(-22%) !important;
 }
 #screen-game .room-bar, #screen-sandbox .room-bar {
   position: relative;
