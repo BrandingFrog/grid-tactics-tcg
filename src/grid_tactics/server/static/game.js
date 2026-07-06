@@ -9811,7 +9811,12 @@ function _layoutHandRow(cards, maxW) {
     if (!n) return;
     var parent = cards[0].parentElement;
     if (!parent) return;
-    var cardW = cards[0].offsetWidth || cards[0].getBoundingClientRect().width || 0;
+    // Footprint width, not layout width: hand cf2 cards render their DOM at
+    // 4x and scale(0.25) back down (min-font-size fix), collapsing the extra
+    // via a negative margin-right — offsetWidth alone would read the 4x box.
+    var cs0 = getComputedStyle(cards[0]);
+    var cardW = (cards[0].offsetWidth || cards[0].getBoundingClientRect().width || 0)
+        + (parseFloat(cs0.marginRight) || 0);
     var avail = Math.min(parent.clientWidth || Infinity, maxW || Infinity);
     var spacing;
     if (n <= 1 || !cardW) {

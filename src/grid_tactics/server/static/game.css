@@ -13335,3 +13335,22 @@ body.ttabs-on #screen-game .game-sidebar { display: none !important; }
   top: auto !important;
   transform: translate(-50%, 0) !important;
 }
+
+/* HAND CARDS NOT DOWNSCALING (user 2026-07-06): at --cardw=58.5px the cf2
+   cqw type computes to 1.6-3.7px. Browsers with a minimum-font-size floor
+   refuse to paint below ~6px, inflating every text layer — names wrap,
+   effect boxes swallow the art, the square stretches portrait. Render the
+   card DOM at 4x (fonts ~15px, above any floor) and scale it back down;
+   the layout footprint stays exactly --cardw via negative margins. */
+#screen-game .hand-container > .card-frame-full.cf2.card-frame-hand,
+#screen-sandbox .hand-container > .card-frame-full.cf2.card-frame-hand {
+  width: calc(var(--cardw) * 4) !important;
+  max-width: none !important;
+  height: calc(var(--cardw) * 4) !important;
+  min-height: 0 !important;
+  max-height: calc(var(--cardw) * 4) !important;
+  transform: scale(0.25) !important;
+  transform-origin: top left !important;
+  margin-right: calc(var(--cardw) * -3) !important;
+  margin-bottom: calc(var(--cardw) * -3) !important;
+}
