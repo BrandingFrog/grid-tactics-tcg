@@ -3486,6 +3486,9 @@ function resetEventQueue() {
     slotState.pendingModalDeadline = 0;
     slotState.lastOriginator = null;
     _drainFinalApplied = false;
+    // Audit fix (2026-07-06): a stale spell stage (left up by leave-game /
+    // game-over mid-react) must not survive into the next game.
+    if (typeof _resetSpellStageHard === 'function') _resetSpellStageHard();
 }
 
 function onEngineEvents(payload) {
@@ -4683,6 +4686,15 @@ function playReactWindowClosed(ev, done) {
     var chainEmpty = slotState.spellStageChain.length === 0;
     var stageUp = (typeof isSpellStageAnimating === 'function')
         ? isSpellStageAnimating() : false;
+    // Audit fix (2026-07-06): the REACT WINDOW banner + Skip React pill
+    // used to linger until the drain-end renderGame, seconds after the
+    // window actually closed. Clear them the moment the chain empties.
+    if (chainEmpty && typeof document !== 'undefined') {
+        var rbClosed = document.getElementById('react-banner');
+        if (rbClosed) rbClosed.remove();
+        var fsbClosed = document.getElementById('floating-skip-react-btn');
+        if (fsbClosed) fsbClosed.hidden = true;
+    }
     if (chainEmpty && stageUp) {
         setTimeout(_spellStageOnReactClosed, 0);
         // Phase 14.8-05c: the LIFO resolve runs out-of-band via setTimeout
@@ -6604,6 +6616,36 @@ function _spellStageSourceRect(playerIdxOrPos) {
 var _spellStageQueue = [];
 var _spellStageBusy = false;
 var _spellStagePendingResolve = false;
+
+// Audit fix (2026-07-06): hard reset of every spell-stage artifact. The
+// stage was never reset on game over / leave / new game — leaving mid-react
+// kept the previous game's cards stacked (visible at the next game's start)
+// and a stale chain kept isSpellStageAnimating() true, soft-gating inputs.
+// Also parks the react banner + floating Skip React pill.
+function _resetSpellStageHard() {
+    if (_spellStage.exitTimer) {
+        clearTimeout(_spellStage.exitTimer);
+        _spellStage.exitTimer = null;
+    }
+    _spellStage.chain = [];
+    _spellStage.casterIdx = null;
+    _spellStage.resolving = false;
+    _spellStageQueue = [];
+    _spellStageBusy = false;
+    _spellStagePendingResolve = false;
+    var els = _spellStageEls();
+    if (els.left) els.left.innerHTML = '';
+    if (els.right) els.right.innerHTML = '';
+    if (els.root) {
+        els.root.hidden = true;
+        els.root.classList.remove('exit');
+        els.root.classList.remove('enter');
+    }
+    var fsb = document.getElementById('floating-skip-react-btn');
+    if (fsb) fsb.hidden = true;
+    var rb = document.getElementById('react-banner');
+    if (rb) rb.remove();
+}
 var SPELL_STAGE_PER_CARD_MS = 1500;  // 520ms fly-in + 1000ms hold beat ≈ shift starts
 
 function _showSpellStage(numericId, sourcePlayerIdx) {
@@ -7001,6 +7043,10 @@ function describeAction(pa, prevState, nextState, actor) {
 function onGameOver(data) {
     gameState = data.final_state;
     legalActions = [];
+    // Audit fix (2026-07-06): a lethal react can end the game while the
+    // spell stage / Skip React pill are still up — park them under the
+    // game-over overlay.
+    if (typeof _resetSpellStageHard === 'function') _resetSpellStageHard();
     renderGame();
     var winner = data.final_state && data.final_state.winner;
     if (winner != null && myPlayerIdx != null) {
@@ -7103,6 +7149,10 @@ function resetGameClientState() {
     if (reactBanner) reactBanner.remove();
     var actionBar = document.getElementById('action-bar');
     if (actionBar) actionBar.remove();
+    // Audit fix (2026-07-06): leaving mid-react-chain left the spell stage
+    // populated (and queued events could re-show it over the lobby via the
+    // _stageMount() body fallback). Hard-reset the whole react UI.
+    if (typeof resetEventQueue === 'function') resetEventQueue();
 
     // Reset ready button
     var btnReady = document.getElementById('btn-ready');
@@ -7286,6 +7336,14 @@ function submitAction(actionData) {
             socket.emit('submit_action', actionData);
         }
         // === SANDBOX-EMIT-GATE-END ===
+        // Audit fix (2026-07-06): a PASS sent in a react window makes us no
+        // longer the decision-maker. Clear legalActions optimistically so a
+        // re-entrant renderActionBar (deferred renderGame, drain-end commit)
+        // cannot auto-fire a SECOND stale PASS for the same window; the
+        // server's next frame repopulates the real list.
+        if (!sandboxMode && _at === 4 && gameState && gameState.phase === 1) {
+            legalActions = [];
+        }
     }
     clearSelection();
 }
@@ -9169,12 +9227,15 @@ function renderActionBar() {
     var isMyTurn = legalActions && legalActions.length > 0;
     if (!isMyTurn) {
         if (hint) hint.style.display = 'none';
+        // Audit fix (2026-07-06): this early return used to skip the
+        // floating Skip React refresh entirely, so once legalActions went
+        // empty (we stopped being the decision-maker) the pill could NEVER
+        // be re-hidden — it stayed up through the opponent's react window,
+        // their whole turn, and game over. Refresh here too: canSkip is
+        // false with empty legalActions, so this hides it.
+        _refreshFloatingSkipReact();
         return;
     }
-
-    // Always refresh the floating Skip React button visibility — it
-    // tracks phase + legalActions independent of which screen is shown.
-    _refreshFloatingSkipReact();
 
     // Auto-skip behavior gated by the user's react-prompt mode (ON/AUTO/OFF):
     //   OFF  — auto-skip ALWAYS, even if a react card is playable. Useful
@@ -9205,12 +9266,21 @@ function renderActionBar() {
         var mode = _reactPromptMode();
         var onlyPass = legalActions.length === 1 && legalActions[0].action_type === 4;
         if (mode === 'off' || (mode === 'auto' && onlyPass)) {
+            // Audit fix (2026-07-06): hide the floating pill before the
+            // auto-PASS — previously it was shown first, then stranded on
+            // screen for a window that was already auto-closed.
+            var fsbAuto = document.getElementById('floating-skip-react-btn');
+            if (fsbAuto) fsbAuto.hidden = true;
             submitAction({ action_type: 4 });
             return;
         }
         // mode === 'on' OR (mode === 'auto' && hasReactOption): fall through
         // and let renderActionBar / floating button drive the manual click.
     }
+
+    // Show/refresh the floating Skip React button only AFTER the auto-skip
+    // decision above declined to fire (audit fix 2026-07-06).
+    _refreshFloatingSkipReact();
 
     // Action bar: show Pass / Skip React button.
     // Turn-structure redesign (2026-07): DRAW is no longer a legal action —

@@ -985,6 +985,23 @@ def register_events(room_manager: RoomManager) -> None:
                                 event_collector=stream,
                             )
                             continue
+                        # Preview games, audit fix (2026-07-06): the dummy's
+                        # auto-PASS opens an AFTER_ACTION react window for the
+                        # HUMAN in which PASS is the only legal action —
+                        # nothing to react with, but the client parks in a
+                        # react window (Skip React pill + REACT banner) for a
+                        # window that cannot matter. Drain PASS-only react
+                        # windows for ANY seat in preview games (mirrors the
+                        # sandbox drain). Real 2P games are unaffected.
+                        if (None in session.player_sids
+                                and session.state.phase == TurnPhase.REACT
+                                and len(next_actions) == 1
+                                and pass_action() in next_actions):
+                            session.state = resolve_action(
+                                session.state, pass_action(), session.library,
+                                event_collector=stream,
+                            )
+                            continue
                         break
                     # ACTION phase with no legal actions — auto-PASS
                     # failsafe. PASS is free under the 2026-07 turn
