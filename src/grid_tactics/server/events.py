@@ -262,6 +262,8 @@ def _emit_state_to_players(
         enrich_pending_death_target(state, filtered, idx, session.library)
         enrich_pending_revive(state, filtered, idx, session.library)
         enrich_pending_trigger_for_viewer(state, filtered, idx, session.library)
+        if session.player_sids[idx] is None:
+            continue  # preview dummy seat — no socket, and to=None would BROADCAST
         legal_for_viewer = serialized_actions if idx == decision_idx else []
         # Phase 14.8-05: the post-action ``state_update`` Socket.IO emit is
         # DELETED. DOM commits flow exclusively through the ``engine_events``
@@ -357,6 +359,8 @@ def _emit_game_over(session, state):
     state_dict = state.to_dict()
     enrich_pending_post_move_attack(state, state_dict, session.library)
     for idx in (0, 1):
+        if session.player_sids[idx] is None:
+            continue  # preview dummy seat
         filtered = filter_state_for_player(state_dict, idx, session.library)
         enrich_pending_tutor_for_viewer(state, filtered, idx, session.library)
         enrich_pending_conjure_deploy(state, filtered, idx, session.library)
@@ -968,6 +972,19 @@ def register_events(room_manager: RoomManager) -> None:
                         continue
                     next_actions = legal_actions(session.state, session.library)
                     if len(next_actions) > 0:
+                        # Preview games (2026-07-06): the dummy seat (sid
+                        # None) never acts — auto-PASS its decisions (react
+                        # windows, its whole turn) so play flows back to the
+                        # human instead of stalling forever.
+                        _d = _decision_idx(session.state)
+                        if (_d is not None
+                                and session.player_sids[_d] is None
+                                and pass_action() in next_actions):
+                            session.state = resolve_action(
+                                session.state, pass_action(), session.library,
+                                event_collector=stream,
+                            )
+                            continue
                         break
                     # ACTION phase with no legal actions — auto-PASS
                     # failsafe. PASS is free under the 2026-07 turn

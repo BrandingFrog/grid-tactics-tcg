@@ -12950,8 +12950,11 @@ body.sbx-hide-bar:has(#screen-sandbox.active) .room-bar {
   transform: translateY(0) !important;
 }
 .opp-hand-card-back {
-  width: 58.5px !important;
-  height: 58.5px !important;
+  /* 90% of the player's 58.5px hand cards, mirroring the approved opp-hand
+     treatment; transform:none kills the legacy fan rotation */
+  width: 52.6px !important;
+  height: 52.6px !important;
+  transform: none !important;
   border-radius: 6px !important;
   background:
     repeating-linear-gradient(45deg, rgba(224, 162, 60, 0.13) 0 6px, rgba(58, 46, 24, 0.42) 6px 12px),
