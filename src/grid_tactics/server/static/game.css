@@ -13180,3 +13180,15 @@ body.ttabs-on #screen-game .game-sidebar { display: none !important; }
   min-height: 0 !important; max-height: var(--cardw) !important;
 }
 .card-frame-full.cf2.card-frame-hand .cf2-frame { overflow: hidden; }
+
+/* React window (spell stage): the card stacks were still the OLD 2:3
+   portrait boxes — the square cf2 frames rendered stretched to 315x442
+   ("wrong version of the cards", user 2026-07-06). Square stacks sized
+   for the 390-high design box; glow warmed off cyan. */
+.spell-stage-stack {
+  width: 230px !important;
+  aspect-ratio: 1 / 1 !important;
+}
+.spell-stage-stack-card {
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6), 0 0 40px rgba(224, 162, 60, 0.25) !important;
+}
