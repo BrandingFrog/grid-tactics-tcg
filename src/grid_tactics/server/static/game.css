@@ -13487,3 +13487,21 @@ body.ttabs-on #screen-game .game-sidebar { display: none !important; }
   flex: 0 0 auto;
 }
 #screen-game .pod .pod-hidden-meta, #screen-sandbox .pod .pod-hidden-meta { display: none !important; }
+
+/* Board +10% and raised (user 2026-07-06): container top 30->2 grows the
+   height-driven 5:4 board 286->314 (+9.8%) and lifts its visual top edge
+   from y=78 to y=55 — clear of the opp backs (~41) above and the bottom
+   edge stays at 316 so the approved hand kiss is unchanged (no overlap).
+   Pile columns retuned to the wider board (half-width 178->196). */
+#screen-game .duel-stage .board-container {
+  top: 0 !important;
+  bottom: 78px !important;   /* front edge lands at the hand's top (y=312) — touching, not overlapping */
+}
+#screen-game .pile-board {
+  grid-auto-rows: 52px;
+}
+#screen-game .pile-board-own { left: calc(50% + 204px); }
+#screen-game .pile-board-opp {
+  right: calc(50% + 204px);
+  transform-origin: center 312px;  /* new container height = board pivot */
+}
