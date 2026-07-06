@@ -35,19 +35,25 @@ from pathlib import Path
 
 import pytest
 
-GAME_JS = (
-    Path(__file__).resolve().parents[1]
-    / "src"
-    / "grid_tactics"
-    / "server"
-    / "static"
-    / "game.js"
-)
+STATIC_DIR = Path(__file__).resolve().parents[1] / "src" / "grid_tactics" / "server" / "static"
+
+
+def _load_client_js() -> str:
+    """Client JS source. Modular since 2026-07-06: js/NN-*.js sorted by
+    filename (the NN- prefix is the load order) concatenates to exactly the
+    former monolithic game.js. Falls back to game.js if js/ is absent."""
+    js_dir = STATIC_DIR / "js"
+    if js_dir.is_dir():
+        return "".join(
+            p.read_text(encoding="utf-8") for p in sorted(js_dir.glob("*.js"))
+        )
+    return (STATIC_DIR / "game.js").read_text(encoding="utf-8")
+
 NODE = shutil.which("node")
 
 pytestmark = pytest.mark.skipif(NODE is None, reason="node executable not available")
 
-_SRC = GAME_JS.read_text(encoding="utf-8")
+_SRC = _load_client_js()
 
 
 def _balanced_block(start_idx: int) -> str:

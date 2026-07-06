@@ -29,7 +29,24 @@ CARDS_DIR = ROOT / "data" / "cards"
 GLOSSARY_MD = ROOT / "data" / "GLOSSARY.md"
 SPEC_MD = ROOT / "data" / "turn_structure_spec.md"
 TESTS_JSON = ROOT / "data" / "tests" / "tests.json"
-GAME_JS = ROOT / "src" / "grid_tactics" / "server" / "static" / "game.js"
+STATIC_DIR = ROOT / "src" / "grid_tactics" / "server" / "static"
+
+
+def _load_client_js() -> str:
+    """Modular client JS (2026-07-06): js/NN-*.js sorted by filename equals
+    the former monolithic game.js; falls back to game.js if js/ absent."""
+    js_dir = STATIC_DIR / "js"
+    if js_dir.is_dir():
+        return "".join(p.read_text(encoding="utf-8") for p in sorted(js_dir.glob("*.js")))
+    return (STATIC_DIR / "game.js").read_text(encoding="utf-8")
+
+
+def _load_client_css() -> str:
+    css_dir = STATIC_DIR / "css"
+    if css_dir.is_dir():
+        return "".join(p.read_text(encoding="utf-8") for p in sorted(css_dir.glob("*.css")))
+    return (STATIC_DIR / "game.css").read_text(encoding="utf-8")
+
 
 
 def _load_all_cards() -> dict[str, dict]:
@@ -198,7 +215,7 @@ def _glossary_md_rows() -> dict[str, str]:
 
 
 def _game_js_glossary() -> dict[str, str]:
-    src = GAME_JS.read_text(encoding="utf-8")
+    src = _load_client_js()
     block = src[src.index("var KEYWORD_GLOSSARY") :]
     block = block[: block.index("};") + 2]
     entries: dict[str, str] = {}

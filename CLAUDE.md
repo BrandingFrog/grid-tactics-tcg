@@ -156,7 +156,7 @@ A fantasy trading card game on a 5x5 grid with RL-driven strategy discovery. Pla
 
 - **Card definitions**: JSON files in `data/cards/`, one per card. Loaded by `CardLibrary.from_directory()`.
 - **Card text stat notation** (locked 2026-04-08): Use 🗡️ (dagger) for **attack** and 🤍 (heart) for **HP/health** in all player-facing text. Applies uniformly to both minion health and player life pool — one glyph, reads clearer. Examples: `+5🗡️`, `+5🤍`, `+1🗡️/+1🤍`, `3🗡️/8🤍`, `player takes 5🤍 damage`, `0🤍 = defeat`. Do NOT use words like "attack"/"ATK"/"HP" or the shield emoji (🛡️) — shield was used briefly on 2026-04-07 and replaced with 🤍 for clarity. Engine field names (`attack`, `health`, `hp`, `attack_bonus`) stay as-is.
-- **Keyword glossary**: `data/GLOSSARY.md` is the source of truth for all card keywords. When adding/changing/removing keywords, update BOTH `data/GLOSSARY.md` AND the `KEYWORD_GLOSSARY` object in `src/grid_tactics/server/static/game.js`. Always keep them in sync.
+- **Keyword glossary**: `data/GLOSSARY.md` is the source of truth for all card keywords. When adding/changing/removing keywords, update BOTH `data/GLOSSARY.md` AND the `KEYWORD_GLOSSARY` object in `src/grid_tactics/server/static/js/03-deck-builder.js`. Always keep them in sync.
 - **Enums**: IntEnum for all game constants (numpy/tensor compatible). New values append to end.
 - **Immutable state**: Python engine uses frozen dataclasses + `replace()`. Tensor engine mutates in-place.
 - **Action space**: 1262 discrete actions. Layout: PLAY_CARD[0:250], MOVE[250:350], ATTACK[350:975], SACRIFICE[975:1000], DRAW[1000], PASS[1001], REACT[1002:1262]. DRAW is reserved but no longer legal (auto-draw at turn start).

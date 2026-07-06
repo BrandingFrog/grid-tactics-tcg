@@ -1,0 +1,2013 @@
+/* =======================================
+   GAME SCREEN
+   ======================================= */
+
+.game-layout {
+  display: grid;
+  grid-template-columns: 280px 1fr 220px;
+  gap: 8px;
+  width: 100%;
+  height: calc(100vh - 52px);
+  max-width: calc((100vh - 52px) * 16 / 9.5);
+  margin: 0 auto;
+  padding: 8px;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+@media (max-width: 1400px) {
+  .game-layout {
+    grid-template-columns: 1fr 220px;
+  }
+  .game-layout > .tooltip-sidebar { display: none; }
+}
+
+@media (max-width: 900px) {
+  .game-layout {
+    grid-template-columns: 1fr;
+    overflow-y: auto;
+  }
+  .game-layout > .tooltip-sidebar { display: none; }
+}
+
+.game-main {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* Room Bar */
+.room-bar {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 6px 12px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+.room-bar-code {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--cyan);
+  letter-spacing: 4px;
+}
+
+/* Turn Banner */
+.turn-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+}
+
+.turn-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--green);
+}
+
+.turn-text {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--green);
+}
+
+.turn-text.opp-turn {
+  color: var(--muted);
+}
+
+/* Pulse Animation */
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+.pulse-dot {
+  animation: pulse 1.5s infinite;
+}
+
+.pulse-dot.inactive {
+  animation: none;
+  background: var(--dim);
+}
+
+/* Phase Badge */
+.phase-badge-container {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.phase-badge {
+  padding: 4px 10px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.phase-action {
+  background: var(--cyan);
+  color: var(--bg);
+}
+
+.phase-react {
+  background: var(--yellow);
+  color: var(--bg);
+}
+
+/* Phase-LED indicator: 3 dots labelled START / ACTION / END.
+   Active phase glows green; during a REACT window the underlying turn
+   phase glows amber and pulses. Inactive LEDs sit dark like an unlit
+   indicator panel. */
+.phase-led-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  background: rgba(10, 14, 22, 0.7);
+  border: 1px solid #1a1f2c;
+}
+.phase-led {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  min-width: 38px;
+}
+.phase-led-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #2a3040;
+  border: 1px solid #1a1f2c;
+  box-shadow: inset 0 0 4px rgba(0, 0, 0, 0.6);
+  transition: background 200ms ease, box-shadow 200ms ease;
+}
+.phase-led-label {
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  color: #555f72;
+  font-weight: 700;
+  text-transform: uppercase;
+  transition: color 200ms ease;
+}
+.phase-led.active .phase-led-dot {
+  background: #4caf50;
+  box-shadow: 0 0 8px rgba(76, 175, 80, 0.95), 0 0 14px rgba(76, 175, 80, 0.55);
+}
+.phase-led.active .phase-led-label { color: #4caf50; }
+.phase-led.react .phase-led-dot {
+  background: #ffb74d;
+  box-shadow: 0 0 8px rgba(255, 183, 77, 0.95), 0 0 14px rgba(255, 183, 77, 0.55);
+  animation: phase-led-pulse 1.2s ease-in-out infinite;
+}
+.phase-led.react .phase-led-label { color: #ffb74d; }
+/* Flash for transient START_OF_TURN / END_OF_TURN trigger windows.
+   Bright cyan with a strong pulse so it pops against the dim panel —
+   the trigger blip is otherwise the only signal that those phases ran. */
+.phase-led.flash .phase-led-dot {
+  background: #00d4ff;
+  box-shadow: 0 0 12px rgba(0, 212, 255, 1), 0 0 20px rgba(0, 212, 255, 0.7);
+  animation: phase-led-flash 700ms ease-in-out infinite;
+}
+.phase-led.flash .phase-led-label {
+  color: #00d4ff;
+  text-shadow: 0 0 6px rgba(0, 212, 255, 0.8);
+}
+@keyframes phase-led-pulse {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.4; }
+}
+@keyframes phase-led-flash {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%      { opacity: 0.55; transform: scale(1.5); }
+}
+
+/* React-prompt mode toggle: cycles ON / AUTO / OFF on click. Coloured
+   per-mode so the active behavior is at a glance. */
+.react-mode-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 9px;
+  border-radius: 6px;
+  background: rgba(10, 14, 22, 0.7);
+  border: 1px solid #1a1f2c;
+  color: #9aa3b8;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 150ms ease, border-color 150ms ease, color 150ms ease;
+}
+.react-mode-btn:hover { background: rgba(20, 28, 44, 0.85); }
+.react-mode-prefix { color: #555f72; }
+.react-mode-value { color: #00d4ff; text-shadow: 0 0 6px rgba(0, 212, 255, 0.6); }
+.react-mode-btn[data-mode="on"]   .react-mode-value { color: #ffb74d; text-shadow: 0 0 6px rgba(255, 183, 77, 0.6); }
+.react-mode-btn[data-mode="auto"] .react-mode-value { color: #00d4ff; text-shadow: 0 0 6px rgba(0, 212, 255, 0.6); }
+.react-mode-btn[data-mode="off"]  .react-mode-value { color: #ff7b7b; text-shadow: 0 0 6px rgba(255, 123, 123, 0.6); }
+.react-mode-btn[data-mode="on"]   { border-color: rgba(255, 183, 77, 0.5); }
+.react-mode-btn[data-mode="off"]  { border-color: rgba(255, 123, 123, 0.5); }
+
+/* Floating Skip React button — fixed bottom-centre, tucked just above
+   the hand area. Hidden by default, JS toggles .hidden during phases. */
+.floating-skip-react-btn {
+  position: fixed;
+  left: 50%;
+  bottom: 30vh;
+  transform: translate(-50%, 0);
+  z-index: 150;
+  padding: 12px 26px;
+  border-radius: 8px;
+  background: linear-gradient(180deg, #2a3144, #1a1f2c);
+  border: 2px solid var(--cyan);
+  color: var(--cyan);
+  font-size: 16px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  cursor: pointer;
+  font-family: inherit;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.55), 0 0 18px rgba(0, 212, 255, 0.4);
+  transition: transform 120ms ease, box-shadow 120ms ease, background 120ms ease;
+}
+.floating-skip-react-btn:hover {
+  background: linear-gradient(180deg, #324054, #1f2638);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6), 0 0 28px rgba(0, 212, 255, 0.65);
+  transform: translate(-50%, -2px);
+}
+.floating-skip-react-btn[hidden] { display: none !important; }
+
+.turn-number {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+/* ===== Info Bars (Opponent & Self) ===== */
+.info-bar {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 6px 12px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+.player-tag {
+  font-size: 14px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.self-tag {
+  color: var(--cyan);
+}
+
+.opp-tag {
+  color: var(--red);
+}
+
+.stat-group {
+  display: flex;
+  gap: 24px;
+  flex: 1;
+  justify-content: flex-end;
+}
+
+.stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.stat-label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--muted);
+  line-height: 1.2;
+  letter-spacing: 1px;
+}
+
+.stat-value {
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1.0;
+}
+
+.stat-hp-self {
+  color: var(--green);
+}
+
+.stat-hp-opp {
+  color: var(--red);
+}
+
+.stat-mana {
+  color: var(--cyan);
+}
+
+/* ===== 5x5 Board Grid ===== */
+.board-container {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* Positioning context for the player avatar pods (2026-07). */
+  position: relative;
+}
+
+/* =====================================================================
+   Player avatars (2026-07) — one pod at each sacrifice end of the board.
+   Opponent pod sits behind their home row (top-left of the board area),
+   own pod behind your home row (bottom-left). Element-neutral placeholder
+   art: an initial disc + live HP + Dark Matter pool (public info).
+   ===================================================================== */
+.player-avatar {
+  position: absolute;
+  left: 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  z-index: 6;
+  cursor: pointer;
+  user-select: none;
+  padding: 4px;
+  border-radius: 10px;
+  transition: background 0.15s ease;
+}
+.player-avatar:hover,
+.player-avatar:focus-visible {
+  background: rgba(255, 255, 255, 0.06);
+  outline: none;
+}
+.player-avatar.avatar-opp  { top: 10px; }
+.player-avatar.avatar-self { bottom: 10px; }
+.avatar-disc {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  font-weight: 700;
+  color: #eaf6ff;
+  background: linear-gradient(135deg, #223349 0%, #101c2e 100%);
+  border: 2px solid rgba(255, 255, 255, 0.28);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5);
+}
+.avatar-opp .avatar-disc { border-color: rgba(255, 107, 107, 0.55); }
+.avatar-self .avatar-disc { border-color: rgba(0, 212, 255, 0.55); }
+.avatar-hp,
+.avatar-dm {
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 6px;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.45);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  color: #fff;
+}
+.avatar-dm { color: #cfa6f5; border-color: rgba(130, 50, 180, 0.5); }
+.avatar-dm.dm-pulse { animation: avatar-dm-pulse 800ms ease-out; }
+@keyframes avatar-dm-pulse {
+  0%   { transform: scale(1);    box-shadow: 0 0 0 0 rgba(130, 50, 180, 0.7); }
+  40%  { transform: scale(1.25); box-shadow: 0 0 10px 4px rgba(130, 50, 180, 0.55); }
+  100% { transform: scale(1);    box-shadow: 0 0 0 0 rgba(130, 50, 180, 0); }
+}
+
+/* Player preview (avatar click → game-tooltip host): big neutral disc in
+   the art slot where a card render normally goes. */
+.player-preview-disc {
+  width: 110px;
+  height: 110px;
+  margin: 12px auto;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 48px;
+  font-weight: 700;
+  color: #eaf6ff;
+  background: linear-gradient(135deg, #223349 0%, #101c2e 100%);
+  border: 3px solid rgba(255, 255, 255, 0.3);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.5);
+}
+
+@media (max-width: 900px) {
+  .player-avatar { left: 4px; padding: 2px; }
+  .avatar-disc { width: 32px; height: 32px; font-size: 15px; }
+  .avatar-hp, .avatar-dm { font-size: 10px; padding: 1px 4px; }
+}
+
+.game-board {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-rows: repeat(5, minmax(0, 1fr));
+  gap: 8px;
+  height: 100%;
+  max-height: 520px;
+  aspect-ratio: 5/4;
+  margin: 0 auto;
+  overflow: visible;
+}
+
+/* Board Cell */
+.board-cell {
+  aspect-ratio: 4/3;
+  background: var(--card2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  position: relative;
+  transition: border-color 150ms ease, background 150ms ease;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  /* overflow:visible so animations (attack pullback, damage popup,
+     summon scale-in) can escape the cell. Card-art is still clipped
+     by .board-minion which has its own overflow:hidden + border-radius. */
+  overflow: visible;
+}
+
+.board-cell:hover {
+  border-color: var(--cyan);
+  background: #1e1e40;
+}
+
+/* EVT_MINION_TRANSFORMED — brief violet pulse over the tile while the
+   minion swaps to its new form (Reanimated Bones' Transform). Appended
+   by playMinionTransformed and removed after the event beat. */
+.transform-flash {
+  position: absolute;
+  inset: 0;
+  border-radius: 8px;
+  background: radial-gradient(circle,
+    rgba(200, 160, 255, 0.85) 0%,
+    rgba(200, 160, 255, 0) 70%);
+  pointer-events: none;
+  z-index: 5;
+  animation: transform-flash 600ms ease-out forwards;
+}
+
+@keyframes transform-flash {
+  0%   { opacity: 0; transform: scale(0.6); }
+  30%  { opacity: 1; transform: scale(1.05); }
+  100% { opacity: 0; transform: scale(1.2); }
+}
+
+/* Valid deploy/move target */
+.board-cell.cell-valid {
+  border-color: var(--green);
+  background: rgba(76, 175, 80, 0.15);
+  box-shadow: inset 0 0 12px rgba(76, 175, 80, 0.3);
+  cursor: pointer;
+}
+
+.board-cell.cell-valid:hover {
+  background: rgba(76, 175, 80, 0.3);
+  box-shadow: inset 0 0 20px rgba(76, 175, 80, 0.5);
+}
+
+/* Valid attack target */
+.board-cell.cell-attack {
+  border-color: var(--red);
+  background: rgba(244, 67, 54, 0.15);
+  box-shadow: inset 0 0 12px rgba(244, 67, 54, 0.3);
+  cursor: pointer;
+}
+
+.board-cell.cell-attack:hover {
+  background: rgba(244, 67, 54, 0.3);
+  box-shadow: inset 0 0 20px rgba(244, 67, 54, 0.5);
+}
+
+/* Selected minion cell */
+.board-cell.cell-selected {
+  border-color: var(--cyan);
+  box-shadow: inset 0 0 12px rgba(0, 212, 255, 0.4), 0 0 8px rgba(0, 212, 255, 0.3);
+}
+
+/* Board Zone Tints */
+.zone-self {
+  background: #00d4ff08;
+}
+
+.zone-neutral {
+  background: #ff980008;
+}
+
+.zone-opp {
+  background: #f4433608;
+}
+
+/* ===== Board Minion (Compact Card) ===== */
+.board-minion {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 0;
+  position: relative;
+  border-radius: 6px;
+  overflow: hidden;
+  background-size: cover;
+  background-position: center;
+  cursor: pointer;
+}
+
+.board-minion.owner-self {
+  outline: 4px solid rgba(0, 212, 255, 0.9);
+  outline-offset: -4px;
+}
+
+.board-minion.owner-opp {
+  outline: 4px solid rgba(244, 67, 54, 0.9);
+  outline-offset: -4px;
+}
+
+/* Outer glow on the cell (not clipped by minion overflow:hidden) */
+.board-cell.cell-owner-self {
+  box-shadow: 0 0 14px 3px rgba(0, 212, 255, 0.5);
+  border-color: rgba(0, 212, 255, 0.6);
+}
+.board-cell.cell-owner-opp {
+  box-shadow: 0 0 14px 3px rgba(244, 67, 54, 0.5);
+  border-color: rgba(244, 67, 54, 0.6);
+}
+
+/* Dark overlay on board minion for text readability */
+.board-minion-overlay {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 40%;
+  background: linear-gradient(transparent, rgba(0,0,0,0.6));
+  z-index: 1;
+  pointer-events: none;
+}
+
+/* Attribute circle on board minion — same look as deck-builder badge, scaled down */
+.board-minion .attr-circle-sm {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 2px solid rgb(30, 25, 20);
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  aspect-ratio: 1;
+  flex-shrink: 0;
+}
+
+.board-minion .attr-text-sm {
+  font-size: 8px;
+  letter-spacing: 0;
+  font-family: 'Montserrat', sans-serif; font-weight: 900; text-transform: uppercase;
+  font-weight: 400;
+  -webkit-text-stroke: 2px black;
+}
+
+/* Board minion name */
+.board-minion-name {
+  display: none;
+  padding: 0 2px;
+}
+
+/* Board minion stats */
+.board-minion-stats {
+  display: flex;
+  gap: 6px;
+  font-family: 'Montserrat', sans-serif; font-weight: 900; text-transform: uppercase;
+  font-size: 13px;
+  font-weight: 400;
+  -webkit-text-stroke: 1px black;
+  paint-order: stroke fill;
+  line-height: 1.0;
+  z-index: 2;
+  padding-bottom: 2px;
+}
+
+.board-minion-atk {
+  color: rgb(255, 100, 80);
+}
+
+.board-minion-hp {
+  color: rgb(80, 220, 100);
+}
+
+/* ===== Hand Container (fan layout) ===== */
+.hand-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  /* Bottom padding leaves room for the flat-row cards' pulsing drop-shadow
+     halo so .game-main's overflow:hidden doesn't clip the glow's lower arc. */
+  padding: 6px 4px 10px;
+  flex-shrink: 0;
+  min-height: 120px;
+  max-height: 200px;
+  overflow: visible;
+  position: relative;
+}
+
+/* ===== Card Frame (Full / Hand variant) ===== */
+.card-frame {
+  aspect-ratio: 2/3;
+  width: 90px;
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  border-radius: 8px;
+  position: relative;
+  font-family: 'Inter', system-ui, sans-serif;
+  overflow: hidden;
+  cursor: default;
+  transition: transform 150ms ease, box-shadow 150ms ease;
+  flex-shrink: 0;
+  background: var(--card);
+  display: flex;
+  flex-direction: column;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.card-frame:hover {
+  transform: translateY(-6px);
+  box-shadow: 0 8px 24px rgba(0, 212, 255, 0.2);
+}
+
+/* Card Type Backgrounds — now only used for the type badge bar, not the whole card */
+.card-type-minion {
+  background: var(--card);
+}
+
+.card-type-magic {
+  background: var(--card);
+}
+
+.card-type-react {
+  background: var(--card);
+}
+
+/* Card Art Area */
+.card-art {
+  width: 100%;
+  flex: 0 0 55%;
+  background: var(--card2);
+  background-size: cover;
+  background-position: center;
+  border-radius: 0;
+  border: none;
+  position: relative;
+}
+
+/* Attribute Circles (all 7 elements + neutral) */
+.attr-circle {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 1.5px solid rgba(255, 255, 255, 0.3);
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.attr-text, .attr-text-sm {
+  font-family: 'Inter', system-ui, sans-serif;
+  font-size: 7px;
+  font-weight: 900;
+  color: white;
+  -webkit-text-stroke: 0.8px black;
+  paint-order: stroke fill;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  z-index: 2;
+  white-space: nowrap;
+}
+
+.card-frame-full .attr-text,
+.card-frame-hand .attr-text {
+  font-size: 8px;
+  -webkit-text-stroke: 0.8px black;
+}
+
+.attr-wood {
+  background: rgb(102, 187, 106);
+}
+
+.attr-fire {
+  background: rgb(220, 40, 30);
+}
+
+.attr-earth {
+  background: rgb(140, 100, 40);
+}
+
+.attr-water {
+  background: rgb(25, 118, 210);
+}
+
+.attr-metal {
+  background: rgb(120, 120, 135);
+}
+
+.attr-dark {
+  background: rgb(130, 50, 180);
+}
+
+.attr-light {
+  background: rgb(240, 220, 40);
+}
+
+.attr-neutral {
+  background: rgb(128, 128, 128);
+}
+
+/* Mana Badge (top-left) */
+.card-mana {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: rgb(30, 100, 220);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'Inter', system-ui, sans-serif;
+  font-weight: 800;
+  font-size: 13px;
+  -webkit-text-stroke: 0;
+  border: none;
+  z-index: 5;
+}
+
+/* Card Name (legacy fallback — hand/game cards now use card-name-overlay) */
+.card-name {
+  text-align: center;
+  color: white;
+  -webkit-text-stroke: 3px black;
+  paint-order: stroke fill;
+  font-family: 'Source Sans 3', 'Source Sans Pro', sans-serif;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.1;
+  padding: 2px 4%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Card Bottom Section (stats + range) — pinned to card bottom */
+.card-bottom-section {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 2px 6px 4px;
+  z-index: 3;
+  margin-top: auto;
+}
+
+/* Card Stats — clean inline text */
+.card-stat-atk, .card-stat-hp {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  font-family: 'Inter', system-ui, sans-serif;
+  font-weight: 700;
+  font-size: 14px;
+  color: white;
+  -webkit-text-stroke: 0;
+  border: none;
+  background: none;
+  flex-shrink: 0;
+  position: relative;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.stat-emoji-bg {
+  font-size: 1em;
+  opacity: 1;
+  -webkit-text-stroke: 0;
+  filter: none;
+}
+
+.stat-num {
+  position: relative;
+  z-index: 1;
+}
+
+/* SVG stat icons — consistent across all browsers */
+.stat-icon {
+  width: 1em;
+  height: 1em;
+  display: inline-block;
+  vertical-align: -0.1em;
+}
+
+.stat-icon-sword { color: #c83220; }
+.stat-icon-heart { color: #28a03c; }
+
+.card-stat-atk {
+  color: #c83220;
+}
+
+.card-stat-hp {
+  color: #28a03c;
+}
+
+.card-bottom-center {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  min-width: 0;
+}
+
+.card-bottom-tribe {
+  display: none; /* tribe now shown in type badge bar */
+}
+
+.card-bottom-range {
+  font-family: 'Inter', system-ui, sans-serif;
+  font-size: 9px;
+  font-weight: 600;
+  color: var(--muted);
+  -webkit-text-stroke: 0;
+  letter-spacing: 1px;
+  line-height: 1.2;
+}
+
+/* Card Effect Text (legacy fallback — hand cards now use card-effect-full) */
+.card-effect {
+  text-align: center;
+  color: white;
+  -webkit-text-stroke: 3px black;
+  paint-order: stroke fill;
+  font-family: 'Inter', system-ui, sans-serif;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.45;
+  letter-spacing: 0.2px;
+  padding: 3px 3%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+/* ===== Full-Size Card (Deck Builder / YGO CardPreview style) ===== */
+.card-frame-full {
+  width: 100%;
+  max-width: 220px;
+  display: flex;
+  flex-direction: column;
+}
+
+.card-art-full {
+  flex: 0 0 50%;
+}
+
+.card-art-overlay {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 0;
+  background: none;
+  z-index: 1;
+}
+
+.card-name-overlay {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  color: white;
+  font-family: 'Inter', system-ui, sans-serif;
+  font-size: 14px;
+  font-weight: 700;
+  -webkit-text-stroke: 0;
+  paint-order: normal;
+  text-align: center;
+  z-index: 2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  background: rgba(11, 11, 22, 0.65);
+  padding: 6px 8px;
+}
+
+.card-type-badge {
+  text-align: left;
+  font-family: 'Inter', system-ui, sans-serif;
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  color: white;
+  -webkit-text-stroke: 0;
+  paint-order: normal;
+  padding: 3px 8px;
+}
+
+/* Type badge colors — used as the bar background */
+.card-type-minion .card-type-badge { background: rgb(180, 140, 60); }
+.card-type-magic .card-type-badge { background: rgb(30, 140, 120); }
+.card-type-react .card-type-badge { background: rgb(160, 40, 100); }
+
+/* Multi-purpose (minion + react): 50/50 vertical split */
+.card-multi-wrapper {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+.card-multi-half {
+  flex: 1 1 50%;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+.card-multi-half:last-child {
+  width: 90%;
+  margin: 4px auto;
+  background: rgba(160, 40, 100, 0.15);
+  border: 1px solid rgba(160, 40, 100, 0.4);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.card-react-bar {
+  background: rgb(160, 40, 100) !important;
+  width: 100%;
+  text-align: left;
+  position: relative;
+}
+.card-multi-half:last-child .card-effect-full {
+  font-size: 9px;
+  padding: 3px 6px;
+}
+.react-mana-circle {
+  position: absolute;
+  right: 4px;
+  /* Blue to match the main mana circle */
+  top: 50%;
+  transform: translateY(-50%);
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: rgb(30, 100, 220);
+  border: 1.5px solid rgba(255, 255, 255, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 9px;
+  font-weight: 900;
+  color: white;
+  line-height: 1;
+}
+
+.card-effect-full {
+  text-align: left;
+  color: var(--text);
+  -webkit-text-stroke: 0;
+  paint-order: normal;
+  font-family: 'Inter', system-ui, sans-serif;
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 1.4;
+  letter-spacing: 0.2px;
+  padding: 4px 8px;
+  word-wrap: break-word;
+}
+
+/* card-range is no longer used — range shown in card-bottom-center */
+
+/* ===== Card Tooltip (hover preview panel) ===== */
+.card-tooltip {
+  position: relative;
+  width: auto;
+  max-height: 100%;
+  background: var(--card);
+  border: 1px solid var(--cyan);
+  border-radius: 10px;
+  padding: 12px;
+  overflow-y: auto;
+  z-index: 50;
+  box-shadow: 0 0 20px rgba(0, 212, 255, 0.15);
+}
+
+/* Full card art preview at top of tooltip */
+.tooltip-card {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 10px;
+}
+.tooltip-card .card-frame-full {
+  width: 100%;
+  max-width: 420px;
+}
+
+.tooltip-header {
+  font-family: 'Montserrat', sans-serif; font-weight: 900; text-transform: uppercase;
+  font-size: 18px;
+  color: white;
+  -webkit-text-stroke: 1px black;
+  paint-order: stroke fill;
+  margin-bottom: 8px;
+}
+
+.tooltip-stats {
+  font-family: 'Inter', system-ui, sans-serif;
+  font-size: 12px;
+  color: var(--text);
+  margin-bottom: 8px;
+  line-height: 1.6;
+}
+
+.tooltip-stats span {
+  display: inline-block;
+  margin-right: 12px;
+}
+
+.tooltip-section {
+  font-family: 'Inter', system-ui, sans-serif;
+  font-size: 11px;
+  color: var(--text);
+  line-height: 1.5;
+  margin-bottom: 8px;
+}
+
+.tooltip-keyword {
+  margin-bottom: 6px;
+}
+
+.tooltip-keyword-name {
+  color: var(--cyan);
+  font-weight: 700;
+  text-transform: uppercase;
+  font-size: 10px;
+  letter-spacing: 0.5px;
+}
+
+.tooltip-keyword-desc {
+  color: white;
+  font-size: 10px;
+}
+
+.tooltip-related-label {
+  color: var(--cyan);
+  font-weight: 700;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: 4px;
+}
+
+.tooltip-related {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.tooltip-related-card {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--card2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 8px;
+}
+
+.tooltip-related-art {
+  width: 36px;
+  height: 36px;
+  border-radius: 4px;
+  background-size: cover;
+  background-position: center;
+  background-color: rgba(255,255,255,0.1);
+  flex-shrink: 0;
+}
+
+.tooltip-related-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.tooltip-related-name {
+  font-family: 'Montserrat', sans-serif; font-weight: 900; text-transform: uppercase;
+  font-size: 11px;
+  color: white;
+  -webkit-text-stroke: 0.5px black;
+  paint-order: stroke fill;
+}
+
+.tooltip-related-stats {
+  font-size: 9px;
+  color: white;
+}
+
+.tooltip-related-effect {
+  font-size: 9px;
+  color: white;
+  font-weight: 700;
+  margin-top: 2px;
+}
+
+/* Auto-size effect text for long descriptions */
+.card-effect-autosize {
+  font-size: 10px;
+  -webkit-line-clamp: 5;
+}
+
+/* Card Flavour Text — same as effects but italic, slightly dimmer */
+.card-flavour {
+  text-align: left;
+  color: #c0c0c0;
+  font-family: 'Inter', system-ui, sans-serif;
+  font-size: 9px;
+  font-style: italic;
+  font-weight: 400;
+  -webkit-text-stroke: 0;
+  paint-order: normal;
+  line-height: 1.4;
+  letter-spacing: 0.2px;
+  padding: 2px 8px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+/* Non-deckable card */
+.card-nondeckable {
+  cursor: default;
+}
+
+.card-nondeckable:hover {
+  transform: none;
+}
+
+.card-count-badge.prohibited {
+  background: var(--card2);
+  border-color: var(--red);
+  font-size: 12px;
+  line-height: 24px;
+}
+
+/* ===== Hand Card context modifier (fan thumbnail) =====
+ * Hand cards are small art-only thumbnails in an overlapping fan.
+ * CSS custom properties --i (0-based index) and --n (total count)
+ * are set by JS. The fan arc, overlap, and hover lift derive from them. */
+
+.card-frame-hand {
+  /* Thumbnail size */
+  width: 116px !important;
+  max-width: 116px !important;
+  aspect-ratio: 3/4;
+  border-radius: 7px;
+  overflow: hidden;
+  cursor: pointer;
+  flex-shrink: 0;
+
+  /* Fan arc positioning */
+  --offset: calc(var(--i) - (var(--n) - 1) / 2);
+  transform-origin: bottom center;
+  transform: rotate(calc(var(--offset) * 3deg)) translateY(calc(var(--offset) * var(--offset) * 1.2px));
+  margin-left: calc(-28px * min(1, var(--i)));  /* overlap; first card no negative margin */
+  transition: transform 150ms ease, box-shadow 150ms ease, margin-top 150ms ease;
+  position: relative;
+  z-index: calc(var(--i) + 1);
+}
+
+/* Scale down text for hand-size cards */
+.card-frame-hand .card-name-overlay { font-size: 9px; padding: 2px 4px; }
+.card-frame-hand .card-effect-full { font-size: 7px; padding: 1px 4px; line-height: 1.2; }
+.card-frame-hand .card-flavour { font-size: 6px; padding: 0 4px; }
+.card-frame-hand .card-type-badge { font-size: 7px; padding: 0 4px; line-height: 16px; }
+.card-frame-hand .card-mana { font-size: 10px; width: 18px; height: 18px; line-height: 18px; }
+.card-frame-hand .attr-circle { width: 16px; height: 16px; }
+.card-frame-hand .attr-text { font-size: 6px; }
+.card-frame-hand .card-stat-atk,
+.card-frame-hand .card-stat-hp { font-size: 9px; }
+.card-frame-hand .stat-emoji-bg { font-size: 8px; }
+.card-frame-hand .card-bottom-section { padding: 1px 4px 2px; }
+.card-frame-hand .card-bottom-range { font-size: 7px; }
+
+/* Hide sandbox move button in hand cards */
+.card-frame-hand .sandbox-move-btn { display: none; }
+
+/* Hover: lift card out of the fan */
+.card-frame-hand:hover {
+  transform: rotate(calc(var(--offset) * 3deg)) translateY(-14px) !important;
+  z-index: 100;
+  box-shadow: 0 6px 20px rgba(0, 212, 255, 0.35);
+}
+
+/* Pinned (clicked) card in preview — stronger lift + glow */
+.card-frame-hand.card-preview-pinned {
+  transform: rotate(calc(var(--offset) * 3deg)) translateY(-14px) !important;
+  z-index: 101;
+  box-shadow: 0 0 12px rgba(0, 212, 255, 0.6);
+  border-color: var(--cyan);
+}
+
+/* Top hand (sandbox P2 / opponent): inverted fan — cards arc downward */
+.hand-container.sandbox-hand-top {
+  align-items: flex-start;
+  padding: 2px 4px 6px;
+}
+.hand-container.sandbox-hand-top .card-frame-hand {
+  transform-origin: top center !important;
+  transform: rotate(calc(var(--offset) * -3deg)) translateY(calc(var(--offset) * var(--offset) * -1.2px)) !important;
+}
+.hand-container.sandbox-hand-top .card-frame-hand:hover {
+  transform: rotate(calc(var(--offset) * -3deg)) translateY(14px) !important;
+  z-index: 100;
+}
+.hand-container.sandbox-hand-top .card-frame-hand.card-playable:hover,
+.hand-container.sandbox-hand-top .card-frame-hand.card-selected-hand,
+.hand-container.sandbox-hand-top .card-frame-hand.card-react-playable:hover,
+.hand-container.sandbox-hand-top .card-frame-hand.card-preview-pinned {
+  transform: rotate(calc(var(--offset) * -3deg)) translateY(14px) !important;
+}
+
+/* Minion action menu (transform / sacrifice popup on selected minion) */
+.minion-action-menu {
+  position: fixed;
+  /* left/top are set inline by JS via getBoundingClientRect; this transform
+     anchors the menu so it sits above the cell, horizontally centered. */
+  transform: translate(-50%, -100%);
+  background: var(--card);
+  border: 1px solid var(--cyan);
+  border-radius: 6px;
+  padding: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  z-index: 1200;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.6);
+  white-space: nowrap;
+}
+
+.minion-action-btn {
+  background: var(--card2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-family: 'Inter', system-ui, sans-serif;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 6px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background 100ms ease, border-color 100ms ease;
+}
+
+.minion-action-btn:hover {
+  background: var(--cyan);
+  color: var(--bg);
+  border-color: var(--cyan);
+}
+
+.minion-action-btn.sacrifice {
+  border-color: var(--red);
+  color: var(--red);
+}
+
+.minion-action-btn.sacrifice:hover {
+  background: var(--red);
+  color: white;
+}
+
+.minion-action-btn.transform {
+  border-color: var(--yellow);
+  color: var(--yellow);
+}
+
+.minion-action-btn.transform:hover {
+  background: var(--yellow);
+  color: var(--bg);
+}
+
+.minion-action-btn.ability {
+  border-color: var(--purple, #b266ff);
+  color: var(--purple, #b266ff);
+}
+
+.minion-action-btn.ability:hover {
+  background: var(--purple, #b266ff);
+  color: var(--bg);
+}
+
+.minion-action-btn.move {
+  border-color: var(--cyan);
+  color: var(--cyan);
+}
+.minion-action-btn.move:hover {
+  background: var(--cyan);
+  color: var(--bg);
+}
+
+.minion-action-btn.attack {
+  border-color: #ff5050;
+  color: #ff5050;
+}
+.minion-action-btn.attack:hover {
+  background: #ff5050;
+  color: white;
+}
+
+.minion-action-btn.cancel {
+  border-color: var(--border);
+  color: var(--text-dim);
+  margin-top: 2px;
+}
+.minion-action-btn.cancel:hover {
+  background: var(--border);
+  color: var(--text);
+}
+
+.minion-action-btn.disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* Sacrifice picker overlay */
+/* Sacrifice picker — same chrome as the tutor modal (cyan border, header
+   bar, footer) so every picker in the game shares one visual language.
+   Accent colour changes (red vs cyan) are scoped to the button row. */
+.sacrifice-picker-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(5, 10, 20, 0.78);
+  backdrop-filter: blur(3px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 3000;
+  padding: 20px;
+}
+
+.sacrifice-picker-modal {
+  background: var(--card);
+  border: 2px solid var(--cyan);
+  border-radius: 12px;
+  box-shadow: 0 10px 40px rgba(0, 212, 255, 0.35);
+  max-width: 960px;
+  width: 100%;
+  max-height: 92vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  font-family: 'Inter', system-ui, sans-serif;
+}
+
+.sacrifice-picker-title {
+  padding: 16px 20px 6px;
+  font-size: 18px;
+  font-weight: 800;
+  color: white;
+  letter-spacing: 0.3px;
+  background: var(--card2);
+  border-bottom: 1px solid var(--border);
+}
+.sacrifice-picker-progress {
+  background: var(--card2);
+  padding: 0 20px 14px;
+  border-bottom: 1px solid var(--border);
+}
+
+.sacrifice-picker-row {
+  display: flex;
+  gap: 18px;
+  flex-wrap: wrap;
+  justify-content: center;
+  padding: 20px;
+  overflow-y: auto;
+}
+
+.sacrifice-picker-card,
+.discard-picker-card {
+  position: relative;
+  background: transparent;
+  border: none;
+  color: var(--text);
+  padding: 0;
+  border-radius: 8px;
+  cursor: pointer;
+  font-family: 'Inter', system-ui, sans-serif;
+  width: 200px;
+  flex: 0 0 auto;
+  transition: transform 150ms ease, filter 150ms ease;
+}
+
+.sacrifice-picker-card:hover,
+.discard-picker-card:hover {
+  transform: translateY(-4px) scale(1.03);
+  filter: drop-shadow(0 6px 18px rgba(0, 212, 255, 0.45));
+}
+
+/* Dim the card + tint a cyan ring when picked so the viewer can see
+   what's already committed. */
+.discard-picker-card.picked,
+.sacrifice-picker-card.picked {
+  opacity: 0.55;
+  filter: drop-shadow(0 0 8px rgba(0, 212, 255, 0.7));
+}
+
+.sacrifice-picker-modal .btn-secondary {
+  margin: 0 20px 16px;
+  align-self: flex-end;
+}
+
+/* Multi-pick progress line (discard_cost_count > 1). */
+.sacrifice-picker-progress,
+.discard-picker-progress {
+  font-size: 12px;
+  color: var(--cyan);
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  margin: -6px 0 8px;
+}
+
+/* Cyan check badge stamped on picked cards. */
+.sacrifice-picker-card .sp-badge,
+.discard-picker-card .sp-badge {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background: var(--cyan);
+  color: #001018;
+  font-weight: 900;
+  font-size: 14px;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 8px rgba(0, 212, 255, 0.7);
+  z-index: 2;
+}
+
+/* Tutor toast notification */
+.tutor-toast {
+  position: fixed;
+  top: 80px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--card);
+  border: 2px solid var(--cyan);
+  color: white;
+  padding: 12px 24px;
+  border-radius: 8px;
+  font-family: 'Inter', system-ui, sans-serif;
+  font-size: 13px;
+  font-weight: 700;
+  z-index: 2000;
+  box-shadow: 0 4px 20px rgba(0, 212, 255, 0.4);
+  transition: opacity 500ms ease, transform 500ms ease;
+}
+
+.tutor-toast.fade-out {
+  opacity: 0;
+  transform: translateX(-50%) translateY(-20px);
+}
+
+/* Phase 14.2: Tutor-pick modal (caster only). Opponent sees the toast above. */
+.tutor-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(5, 10, 20, 0.78);
+  backdrop-filter: blur(3px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 3000;
+  padding: 20px;
+}
+
+/* Phase 14.7-05: trigger picker modal reuses .tutor-modal-overlay /
+   .tutor-modal styling verbatim — this selector is a hook for any future
+   tweaks that should apply only to the simultaneous-trigger picker. */
+.trigger-picker-modal-overlay .trigger-picker-modal { /* inherits tutor-modal */ }
+
+.tutor-modal {
+  background: var(--card);
+  border: 2px solid var(--cyan);
+  border-radius: 12px;
+  box-shadow: 0 10px 40px rgba(0, 212, 255, 0.35);
+  max-width: 960px;
+  width: 100%;
+  max-height: 92vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  font-family: 'Inter', system-ui, sans-serif;
+}
+
+.tutor-modal-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+  background: var(--card2);
+}
+
+.tutor-modal-title {
+  font-size: 18px;
+  font-weight: 800;
+  color: white;
+  letter-spacing: 0.3px;
+}
+
+.tutor-modal-deckline {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--cyan);
+}
+
+/* Mandatory tutoring (2026-07): full-hand warning banner rendered between
+   the header and the card fan when the picking player's hand is at
+   MAX_HAND_SIZE — the tutored card will overdraw-burn to the Exhaust Pile
+   revealed instead of entering hand. */
+.tutor-modal-warning {
+  padding: 10px 20px;
+  background: rgba(255, 152, 0, 0.12);
+  border-bottom: 1px solid var(--yellow);
+  color: var(--yellow);
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.3px;
+  text-align: center;
+}
+
+.tutor-modal-cards {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px;
+  padding: 20px;
+  justify-content: center;
+  overflow-y: auto;
+}
+
+.tutor-modal-card {
+  position: relative;
+  cursor: pointer;
+  transition: transform 150ms ease, filter 150ms ease;
+  width: 200px;
+  flex: 0 0 auto;
+}
+
+.tutor-modal-card:hover {
+  transform: translateY(-4px) scale(1.03);
+  filter: drop-shadow(0 6px 18px rgba(0, 212, 255, 0.45));
+}
+
+.tutor-modal-empty {
+  color: var(--muted);
+  font-size: 14px;
+  padding: 24px;
+}
+
+.tutor-copy-count {
+  position: absolute;
+  left: 50%;
+  bottom: -10px;
+  transform: translateX(-50%);
+  background: var(--cyan);
+  color: #001018;
+  font-size: 11px;
+  font-weight: 800;
+  padding: 4px 10px;
+  border-radius: 999px;
+  white-space: nowrap;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+  pointer-events: none;
+}
+
+.tutor-modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  padding: 14px 20px;
+  border-top: 1px solid var(--border);
+  background: var(--card2);
+}
+
+.tutor-skip-button {
+  background: transparent;
+  color: white;
+  border: 2px solid var(--muted);
+  border-radius: 6px;
+  padding: 10px 22px;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 150ms ease;
+}
+
+.tutor-skip-button:hover {
+  border-color: var(--cyan);
+  color: var(--cyan);
+  background: rgba(0, 212, 255, 0.08);
+}
+
+@media (max-width: 700px) {
+  .tutor-modal {
+    max-height: 96vh;
+  }
+  .tutor-modal-cards {
+    flex-direction: column;
+    align-items: center;
+    gap: 22px;
+    padding: 16px;
+  }
+  .tutor-modal-card {
+    width: 80%;
+    max-width: 260px;
+  }
+  .tutor-modal-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+  }
+}
+
+/* Saved display name greeting in lobby */
+.name-saved-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--card2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 10px 14px;
+}
+
+.name-saved-greeting {
+  font-size: 13px;
+  color: var(--text);
+}
+
+.name-saved-greeting strong {
+  color: var(--cyan);
+  font-weight: 700;
+}
+
+.btn-sm {
+  padding: 4px 12px;
+  font-size: 11px;
+}
+
+/* Playable hand card glow */
+.card-frame-hand.card-playable {
+  cursor: pointer;
+  box-shadow: 0 0 8px rgba(76, 175, 80, 0.5);
+  border-color: var(--green);
+}
+
+.card-frame-hand.card-playable:hover {
+  box-shadow: 0 0 16px rgba(76, 175, 80, 0.7);
+  transform: rotate(calc(var(--offset) * 3deg)) translateY(-14px) !important;
+}
+
+/* Selected hand card */
+.card-frame-hand.card-selected-hand {
+  cursor: pointer;
+  box-shadow: 0 0 16px rgba(0, 212, 255, 0.7);
+  border-color: var(--cyan);
+  transform: rotate(calc(var(--offset) * 3deg)) translateY(-14px) !important;
+  z-index: 101;
+}
+
+/* Armed-to-confirm state — first click on an untargeted magic arms the
+   card; second click on the same card casts. A pulsing amber border plus
+   a "CLICK TO CAST" ribbon make the confirmation step obvious. */
+.card-frame-hand.card-confirm-armed {
+  cursor: pointer;
+  border-color: var(--yellow);
+  box-shadow: 0 0 24px rgba(255, 152, 0, 0.85);
+  transform: rotate(calc(var(--offset) * 3deg)) translateY(-22px) scale(1.06) !important;
+  z-index: 102;
+  animation: confirm-armed-pulse 1100ms ease-in-out infinite;
+}
+.card-frame-hand.card-confirm-armed::after {
+  content: 'CLICK TO CAST';
+  position: absolute;
+  inset: auto 0 -22px 0;
+  text-align: center;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 2px;
+  color: var(--yellow);
+  text-shadow: 0 0 6px rgba(0, 0, 0, 0.9), 0 1px 2px rgba(0, 0, 0, 0.9);
+  pointer-events: none;
+  white-space: nowrap;
+}
+@keyframes confirm-armed-pulse {
+  0%, 100% { box-shadow: 0 0 18px rgba(255, 152, 0, 0.6); }
+  50%      { box-shadow: 0 0 32px rgba(255, 152, 0, 1); }
+}
+
+/* Action bar (pass/skip buttons) */
+.action-bar {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  padding: 4px 0;
+  flex-shrink: 0;
+}
+
+/* Action bar slot inside the room bar (top of game screen) */
+.action-bar-slot {
+  display: flex;
+  align-items: center;
+  margin-left: auto;
+}
+
+.btn-action {
+  padding: 6px 16px;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  border-radius: 6px;
+  cursor: pointer;
+  border: 1px solid;
+  transition: background 150ms ease, box-shadow 150ms ease;
+}
+
+.btn-pass {
+  background: rgba(255, 152, 0, 0.15);
+  border-color: rgb(255, 152, 0);
+  color: rgb(255, 152, 0);
+}
+
+.btn-pass:hover {
+  background: rgba(255, 152, 0, 0.3);
+  box-shadow: 0 0 12px rgba(255, 152, 0, 0.3);
+}
+
+/* .btn-draw DELETED (turn-structure redesign 2026-07): DRAW is no longer a
+   legal action — cards auto-draw at turn start. The ACTION-phase slot now
+   hosts the free Pass button (.btn-pass.btn-pass-action). */
+.btn-pass-action {
+  background: rgba(111, 232, 168, 0.12);
+  border-color: #6fe8a8;
+  color: #6fe8a8;
+}
+.btn-pass-action:hover {
+  background: rgba(111, 232, 168, 0.28);
+  box-shadow: 0 0 12px rgba(111, 232, 168, 0.35);
+}
+
+/* How-to-play hint banner shown on the player's turn */
+.how-to-play-hint {
+  background: rgba(0, 212, 255, 0.08);
+  border: 1px solid rgba(0, 212, 255, 0.3);
+  border-radius: 6px;
+  padding: 6px 12px;
+  font-family: 'Inter', system-ui, sans-serif;
+  font-size: 11px;
+  color: var(--cyan);
+  text-align: center;
+  flex-shrink: 0;
+  margin: 2px 0;
+}
+
+/* Card Unaffordable State */
+.card-dimmed {
+  filter: brightness(0.7) saturate(0.6);
+}
+
+/* Card selected state (deck builder) */
+.card-selected {
+  border-color: var(--green);
+  box-shadow: 0 0 8px rgba(76, 175, 80, 0.3);
+}
+
+/* ===== Game Sidebar ===== */
+.game-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+  overflow: hidden;
+  position: relative;
+}
+
+.sidebar-section {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px;
+  flex: 1;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+/* Activity tabs (Log / Chat) */
+.activity-tabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 8px;
+  flex-shrink: 0;
+}
+
+.activity-tab {
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--muted);
+  padding: 6px 12px;
+  font-family: 'Inter', system-ui, sans-serif;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  cursor: pointer;
+  transition: color 150ms ease, border-color 150ms ease;
+  position: relative;
+}
+
+.activity-tab:hover {
+  color: var(--text);
+}
+
+.activity-tab.active {
+  color: var(--cyan);
+  border-bottom-color: var(--cyan);
+}
+
+.chat-unread {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  background: var(--red);
+  border-radius: 50%;
+  margin-left: 4px;
+  vertical-align: middle;
+}
+
+.activity-tab-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.log-entries {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
+}
+
+.log-entry {
+  font-size: 11px;
+  color: var(--text);
+  padding: 4px 8px;
+  border-radius: 4px;
+  background: var(--card2);
+  line-height: 1.4;
+}
+
+.log-entry.log-damage {
+  border-left: 2px solid var(--red);
+}
+
+.log-entry.log-heal {
+  border-left: 2px solid var(--green);
+}
+
+.log-time {
+  color: var(--muted);
+  font-size: 9px;
+  margin-right: 4px;
+}
+
+/* Chat messages */
+.chat-messages {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
+  margin-bottom: 8px;
+}
+
+.chat-message {
+  font-size: 12px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  background: var(--card2);
+  word-wrap: break-word;
+  line-height: 1.4;
+}
+
+.chat-message-author {
+  font-weight: 700;
+  margin-right: 6px;
+}
+
+.chat-message.own .chat-message-author {
+  color: var(--cyan);
+}
+
+.chat-message.opp .chat-message-author {
+  color: var(--red);
+}
+
+.chat-message.system {
+  color: var(--muted);
+  font-style: italic;
+  text-align: center;
+  background: transparent;
+}
+
+.chat-message-text {
+  color: var(--text);
+}
+
+.chat-input-row {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.chat-input {
+  flex: 1;
+  background: var(--card2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 10px;
+  color: var(--text);
+  font-family: 'Inter', system-ui, sans-serif;
+  font-size: 12px;
+  min-width: 0;
+}
+
+.chat-input:focus {
+  outline: none;
+  border-color: var(--cyan);
+}
+
+.btn-chat-send {
+  padding: 6px 12px;
+  font-size: 11px;
+  flex-shrink: 0;
+}
+

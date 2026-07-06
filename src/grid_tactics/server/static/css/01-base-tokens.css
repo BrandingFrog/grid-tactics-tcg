@@ -1,0 +1,763 @@
+/* Grid Tactics - Game UI Stylesheet
+   Design system from 13-UI-SPEC.md
+   Matches dashboard dark theme (web-dashboard/index.html) */
+
+@import url('https://fonts.googleapis.com/css2?family=Luckiest+Guy&family=Source+Sans+3:wght@700&display=swap');
+
+/* ===== CSS Variables (from dashboard) ===== */
+:root {
+  --bg: #0b0b16;
+  --card: #141428;
+  --card2: #1a1a33;
+  --border: #252545;
+  --cyan: #00d4ff;
+  --green: #4caf50;
+  --red: #f44336;
+  --yellow: #ff9800;
+  --purple: #ce93d8;
+  --text: #e0e0e0;
+  --muted: #777;
+  --dim: #444;
+  --dm: #d9a8ff;
+}
+
+/* Live Dark Matter number substituted into card rules in active games. */
+.dm-live-num {
+  color: var(--dm);
+  font-weight: 900;
+  text-shadow: 0 0 6px rgba(217, 168, 255, 0.65);
+}
+
+/* Card-fly ghost: clone of a hand card that tweens from its hand slot to
+   the destination pile button (grave or exhaust) when the card leaves
+   hand during an action. Removed on transitionend. */
+.card-fly-ghost {
+  position: fixed;
+  z-index: 9999;
+  pointer-events: none;
+  transition: transform 600ms cubic-bezier(0.3, 0.1, 0.6, 1),
+              opacity 600ms ease-out;
+  transform-origin: center center;
+  will-change: transform, opacity;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.5);
+}
+
+/* Tests overlay: docks to the top of the viewport on top of the sandbox
+   screen and walks the user through a numbered scenario survey. Hidden
+   outside tests mode. */
+.tests-overlay {
+  position: fixed;
+  top: 56px;   /* below the main nav */
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(760px, 96vw);
+  max-height: calc(100vh - 80px);
+  overflow-y: auto;
+  z-index: 100;
+  background: linear-gradient(180deg, var(--card) 0%, var(--card2) 100%);
+  border: 2px solid var(--cyan);
+  border-radius: 10px;
+  box-shadow: 0 8px 32px rgba(0, 212, 255, 0.15), 0 4px 16px rgba(0, 0, 0, 0.6);
+  color: var(--text);
+  font-family: 'Inter', system-ui, sans-serif;
+}
+.tests-overlay-inner {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 18px;
+}
+.tests-overlay-header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border);
+}
+.tests-progress {
+  color: var(--cyan);
+  font-weight: 700;
+  font-size: 0.85em;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  flex-shrink: 0;
+}
+.tests-title {
+  font-size: 1.05em;
+  font-weight: 700;
+  color: var(--text);
+  flex: 1;
+}
+.tests-exit {
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  font-size: 1.4em;
+  cursor: pointer;
+  padding: 0 6px;
+  line-height: 1;
+}
+.tests-exit:hover { color: var(--red); }
+.tests-overlay-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.tests-section-label {
+  font-size: 0.75em;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  color: var(--muted);
+  margin-bottom: 4px;
+}
+.tests-instructions, .tests-expected {
+  background: rgba(0, 0, 0, 0.25);
+  border-left: 3px solid var(--cyan);
+  padding: 8px 12px;
+  border-radius: 4px;
+  white-space: pre-wrap;
+  font-size: 0.95em;
+  line-height: 1.4;
+}
+.tests-expected { border-left-color: var(--green); }
+.tests-overlay-footer {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+.tests-comment {
+  width: 100%;
+  background: rgba(0, 0, 0, 0.3);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 6px 10px;
+  font-family: inherit;
+  font-size: 0.9em;
+  resize: vertical;
+}
+.tests-btn-row {
+  display: flex;
+  gap: 10px;
+}
+.tests-btn {
+  flex: 1;
+  padding: 10px 14px;
+  border: none;
+  border-radius: 6px;
+  font-weight: 700;
+  font-size: 0.95em;
+  cursor: pointer;
+  transition: transform 100ms ease, box-shadow 100ms ease;
+}
+.tests-btn:hover { transform: translateY(-1px); }
+.tests-btn-pass { background: var(--green); color: #0a0a0a; }
+.tests-btn-fail { background: var(--red); color: #fff; }
+.tests-btn-skip { background: var(--border); color: var(--text); }
+.tests-btn-reset { background: var(--cyan); color: #0a0a0a; }
+
+/* Minimized state: collapse everything except the header so the board
+   underneath is fully visible. Click the minimize button again to expand. */
+.tests-overlay.is-minimized .tests-overlay-body,
+.tests-overlay.is-minimized .tests-overlay-footer,
+.tests-overlay.is-minimized .tests-summary {
+  display: none !important;
+}
+.tests-overlay.is-minimized {
+  width: min(420px, 96vw);
+}
+
+/* Spell cast center stage — giant [card] ▶ [? / 👍] overlay that
+   flashes when a magic or react is cast. pointer-events: none so the
+   player can still interact with the board underneath.
+   `display: flex` below would override the browser's default for the
+   `hidden` attribute, so explicitly re-hide it here. */
+.spell-stage[hidden] { display: none !important; }
+.spell-stage {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 200;
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+  gap: 28px;
+}
+/* Each side of the react window is a STACK of cards belonging to ONE
+   player. LEFT stack = the player who started the chain. RIGHT stack =
+   the opposing player. Cards slam into their stack with a slight random
+   rotation so accumulated reacts read like a physical card pile.
+   The placeholder ? pulses over whichever stack is waiting for the next
+   react; it morphs to 👍 when the chain finishes. */
+.spell-stage-stack {
+  width: 280px;
+  aspect-ratio: 2 / 3;
+  position: relative;
+  z-index: 2;
+  /* Cards inside are absolutely positioned; the stack's bounding box
+     sets the size for layout. */
+}
+.spell-stage-stack-card {
+  position: absolute;
+  inset: 0;
+  border-radius: 14px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6), 0 0 40px rgba(0, 212, 255, 0.25);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  will-change: transform, opacity;
+  transform-origin: center center;
+  /* rotation set inline via style.transform */
+}
+.spell-stage-stack-card .card-frame-full {
+  max-width: 100%;
+  height: 100%;
+}
+/* Stage cards already have their own border-radius (14px) + glow box-
+   shadow on the OUTER .spell-stage-stack-card. The inner card-frame's
+   HUD clip-path chamfers (added in the card HUD redesign) compound
+   with the stage's own clip and slice the bottom of multi-purpose
+   cards — the inner REACT box on Acidic Rain / Tree Wyrm / Sparkfed
+   Surgebot sits flush at the card bottom, so the 6px bottom-corner
+   chamfer cuts into its border + last text line. Drop the chamfer
+   here so the stage card reads cleanly all the way to the bottom. */
+.spell-stage-stack-card .card-frame {
+  clip-path: none !important;
+  border-radius: 14px !important;
+}
+/* The card-frame's 14px border-radius eats into the React box (the
+   multi-half last-child) on multi-purpose cards (Acidic Rain, Tree
+   Wyrm, Sparkfed Surgebot) when the box's default 4px bottom margin
+   leaves it flush against the rounded corner. Bump the bottom margin
+   to clear the 14px radius with a comfortable cushion. Spell-stage-
+   scoped only — hand and tooltip cards stay tight. */
+.spell-stage-stack-card .card-multi-half:last-child {
+  margin-bottom: 10px;
+}
+/* Slam-in: card flies from source point (set inline transform initial)
+   to the stack with a brief over-scale punch on landing. */
+.spell-stage-stack-card.slam-in {
+  animation: spell-stack-slam 420ms cubic-bezier(0.25, 1.5, 0.5, 1) forwards;
+}
+@keyframes spell-stack-slam {
+  0%   { transform: var(--slam-from); opacity: 0; }
+  60%  { transform: var(--slam-mid); opacity: 1; }
+  100% { transform: var(--slam-to); opacity: 1; }
+}
+
+.spell-stage-arrow {
+  font-size: 72px;
+  color: var(--cyan);
+  text-shadow: 0 0 16px rgba(0, 212, 255, 0.6);
+  line-height: 1;
+  will-change: transform;
+  position: relative;
+  z-index: 1;
+}
+
+/* Placeholder ? overlay parented inside whichever stack is waiting for
+   the next react. Pulses each time a new card lands so the side that
+   now owes a response draws the eye. Becomes 👍 (.confirmed) when the
+   chain finishes and resolution begins. */
+.spell-stage-placeholder {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 14px;
+  border: 3px dashed rgba(0, 212, 255, 0.5);
+  background: rgba(20, 20, 40, 0.55);
+  color: var(--cyan);
+  font-size: 140px;
+  font-weight: 900;
+  text-shadow: 0 0 20px rgba(0, 212, 255, 0.5);
+  pointer-events: none;
+  opacity: 0;
+  z-index: 100;  /* above stacked cards (cards start at z-index 10) */
+  transition: opacity 200ms ease, color 200ms ease, border-color 200ms ease, background 200ms ease;
+  transform-origin: center center;
+}
+.spell-stage-placeholder.visible { opacity: 1; }
+.spell-stage-placeholder.pulse { animation: spell-placeholder-pulse 700ms ease-in-out 2; }
+@keyframes spell-placeholder-pulse {
+  0%   { opacity: 1; transform: scale(1); }
+  50%  { opacity: 0.55; transform: scale(1.12); }
+  100% { opacity: 1; transform: scale(1); }
+}
+.spell-stage-placeholder.confirmed {
+  color: var(--green);
+  border-color: rgba(76, 175, 80, 0.7);
+  background: rgba(30, 60, 30, 0.55);
+  text-shadow: 0 0 20px rgba(76, 175, 80, 0.6);
+  animation: spell-thumbs-pop 350ms ease-out;
+}
+@keyframes spell-thumbs-pop {
+  0% { transform: scale(0.6); }
+  60% { transform: scale(1.15); }
+  100% { transform: scale(1); }
+}
+
+/* Resolution pop: top card pulses then fades out as it resolves. */
+.spell-stage-stack-card.resolve-pop {
+  animation: spell-stack-resolve 500ms ease-out forwards;
+}
+@keyframes spell-stack-resolve {
+  0%   { opacity: 1; }
+  30%  { opacity: 1; filter: brightness(1.6) drop-shadow(0 0 24px rgba(0, 212, 255, 0.9)); }
+  100% { opacity: 0; filter: brightness(1); }
+}
+.spell-stage.exit {
+  transition: opacity 350ms ease;
+  opacity: 0;
+}
+.spell-stage.enter {
+  animation: spell-stage-root-in 260ms ease-out;
+}
+@keyframes spell-stage-root-in {
+  0%   { opacity: 0; }
+  100% { opacity: 1; }
+}
+
+/* While a card is mounted in the RIGHT slot, hide the "?" /
+   "⚡" typography so the dashed frame doesn't surround the card.
+   JS places a .has-card class on the slot whenever a spell-stage
+   card element is inside it. */
+.spell-stage-react.has-card {
+  background: transparent;
+  border: none;
+  color: transparent;
+  text-shadow: none;
+}
+
+/* Card ghost inside either slot — one child per slot at a time. */
+.spell-stage-card-inner {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  will-change: transform, opacity;
+  transform-origin: center center;
+}
+.spell-stage-card-inner .card-frame-full { max-width: 100%; height: 100%; }
+
+/* Resolution — card slides IN from left off-screen (returning from
+   where it was pushed), then slides OUT to the right after resolving. */
+.spell-stage-card-inner.slide-in-from-left {
+  animation: spell-card-in-from-left 420ms cubic-bezier(0.2, 0.7, 0.3, 1);
+}
+@keyframes spell-card-in-from-left {
+  0%   { transform: translateX(-70vw) rotate(-6deg); opacity: 0; }
+  100% { transform: translateX(0) rotate(0); opacity: 1; }
+}
+.spell-stage-card-inner.slide-off-right {
+  animation: spell-card-off-right 420ms cubic-bezier(0.5, 0, 0.8, 0.3) forwards;
+}
+@keyframes spell-card-off-right {
+  0%   { transform: translateX(0); opacity: 1; }
+  100% { transform: translateX(70vw) rotate(10deg); opacity: 0; }
+}
+/* Chain shift: new card enters the LEFT slot from the RIGHT slot's
+   position. 308px = slot width (280) + flex gap (28). Keyframe
+   animation (vs inline transition) avoids the first-paint stutter that
+   occurs when a freshly-parsed innerHTML subtree races the transition
+   start — same pattern as slide-off-right which is smooth. */
+.spell-stage-card-inner.glide-from-right {
+  animation: spell-card-glide-from-right 440ms cubic-bezier(0.2, 0.7, 0.3, 1) forwards;
+  transform: translate3d(0, 0, 0);
+}
+@keyframes spell-card-glide-from-right {
+  0%   { transform: translate3d(308px, 0, 0); }
+  100% { transform: translate3d(0, 0, 0); }
+}
+/* Resolution mirror of glide-from-right: the LEFT card slides laterally
+   into the RIGHT slot to convey "this card is now resolving against the
+   one below it in the stack." Same 308px offset; same easing. */
+.spell-stage-card-inner.glide-to-right {
+  animation: spell-card-glide-to-right 440ms cubic-bezier(0.2, 0.7, 0.3, 1) forwards;
+  transform: translate3d(0, 0, 0);
+}
+@keyframes spell-card-glide-to-right {
+  0%   { transform: translate3d(0, 0, 0); }
+  100% { transform: translate3d(308px, 0, 0); }
+}
+
+/* Phase 14.7-09: Turn banner overlay.
+   Fires on turn_number advance. Non-blocking — pure CSS keyframe that
+   fades out on its own; DOM node removed by _showTurnBanner's setTimeout.
+   z-index sits above the spell-stage (200) but below modals (~1100) so
+   react/tutor pickers can still open atop it.
+   NOTE: class is `.turn-transition-banner` (NOT `.turn-banner`) because
+   `.turn-banner` is already claimed at line ~1116 for the HUD flex row
+   — both rules applying to the same element caused the TURN X / PLAYER X
+   lines to render side-by-side (display:flex inherited) instead of stacked.
+   See .planning debug notes in 14.7-09-SUMMARY.md. */
+.turn-transition-banner {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 1000;
+  text-align: center;
+  color: #fff;
+  font-family: 'Luckiest Guy', 'Impact', sans-serif;
+  letter-spacing: 0.08em;
+  text-shadow:
+    0 0 24px rgba(0, 212, 255, 0.9),
+    0 0 8px rgba(255, 255, 255, 0.7),
+    0 4px 12px rgba(0, 0, 0, 0.9);
+  pointer-events: none;
+  animation: turn-transition-banner-in 1500ms ease-out forwards;
+  will-change: transform, opacity;
+}
+.turn-transition-banner-line1 {
+  font-size: 5em;
+  line-height: 1.05;
+}
+.turn-transition-banner-line2 {
+  font-size: 3.2em;
+  line-height: 1.1;
+  margin-top: 8px;
+  color: #9ae6ff;
+}
+@keyframes turn-transition-banner-in {
+  0%   { opacity: 0; transform: translate(-50%, -50%) scale(0.4); }
+  18%  { opacity: 1; transform: translate(-50%, -50%) scale(1.12); }
+  32%  { transform: translate(-50%, -50%) scale(1); }
+  80%  { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  100% { opacity: 0; transform: translate(-50%, -50%) scale(0.95); }
+}
+
+/* Phase 14.7-09: Trigger blip animations (Start/End/Death triggers).
+   Source tile pulses yellow, a center icon blooms, then (optionally)
+   the target tile pulses red. Mirrors Phase 14.3-07 floating-popup
+   style so the visual language stays consistent. */
+.anim-trigger-source {
+  animation: trigger-source-pulse 600ms ease-out;
+}
+.anim-trigger-target {
+  animation: trigger-target-pulse 600ms ease-out;
+}
+@keyframes trigger-source-pulse {
+  0%   { box-shadow: 0 0 0 rgba(255, 221, 64, 0); }
+  40%  { box-shadow: 0 0 28px 12px rgba(255, 221, 64, 0.9); }
+  100% { box-shadow: 0 0 0 rgba(255, 221, 64, 0); }
+}
+@keyframes trigger-target-pulse {
+  0%   { box-shadow: 0 0 0 rgba(255, 90, 90, 0); }
+  40%  { box-shadow: 0 0 28px 12px rgba(255, 90, 90, 0.9); }
+  100% { box-shadow: 0 0 0 rgba(255, 90, 90, 0); }
+}
+.trigger-blip-center-icon {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 5em;
+  z-index: 950;  /* below turn-banner (1000), above spell-stage (200) */
+  pointer-events: none;
+  text-shadow:
+    0 0 24px rgba(255, 255, 255, 0.8),
+    0 0 12px rgba(0, 212, 255, 0.6),
+    0 4px 10px rgba(0, 0, 0, 0.8);
+  animation: trigger-blip-in 900ms ease-out forwards;
+  will-change: transform, opacity;
+}
+@keyframes trigger-blip-in {
+  0%   { opacity: 0; transform: translate(-50%, -50%) scale(0.4); }
+  25%  { opacity: 1; transform: translate(-50%, -50%) scale(1.25); }
+  55%  { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  100% { opacity: 0; transform: translate(-50%, -50%) scale(0.9); }
+}
+
+/* Phase 14.8-04b: Fizzle puff. Brief gray smoke poof at the source tile when
+   a trigger fizzles (target invalidated at resolve time per spec §7.3).
+   Matches trigger-blip styling (scale + fade, ~350ms) but uses a 💨 glyph
+   and gray-tone shadow so the visual reads as "nothing happened" instead of
+   "something resolved". */
+.fizzle-puff {
+  position: fixed;
+  pointer-events: none;
+  font-size: 3em;
+  z-index: 940;  /* one below trigger-blip-center-icon */
+  text-shadow:
+    0 0 18px rgba(180, 180, 180, 0.7),
+    0 0 8px rgba(120, 120, 120, 0.5),
+    0 2px 6px rgba(0, 0, 0, 0.7);
+  animation: fizzle-puff-in 350ms ease-out forwards;
+  will-change: transform, opacity;
+}
+@keyframes fizzle-puff-in {
+  0%   { opacity: 0; transform: translate(-50%, -50%) scale(0.5); }
+  30%  { opacity: 0.85; transform: translate(-50%, -55%) scale(1.05); }
+  100% { opacity: 0; transform: translate(-50%, -65%) scale(1.25); }
+}
+
+/* Phase 14.8-04b: pending-modal scrim. While slotState.pendingModalKind is
+   set, drainEventQueue holds — but we also want the user to see *something*
+   indicating "the queue is paused waiting on you". The actual modal already
+   blocks input via its own overlay; this thin tint is purely informational
+   so background animations look clearly suspended. */
+.event-queue-blocking {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background: rgba(0, 0, 0, 0.04);
+  z-index: 5;
+}
+
+.tests-summary {
+  padding: 12px 16px;
+  background: rgba(0, 0, 0, 0.25);
+  border-radius: 6px;
+  font-size: 0.95em;
+  line-height: 1.5;
+}
+
+/* ===== Reset ===== */
+*, *::before, *::after {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+/* ===== Typography ===== */
+body {
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.5;
+}
+
+/* ===== Header (52px, clean minimal style) ===== */
+.header {
+  background: rgba(11, 11, 22, 0.95);
+  border-bottom: 1px solid var(--border);
+  padding: 0 16px;
+  display: flex;
+  align-items: center;
+  height: 52px;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  max-width: 1600px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.logo {
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--cyan);
+  letter-spacing: 2px;
+  margin-right: 32px;
+  white-space: nowrap;
+}
+
+.nav {
+  display: flex;
+  gap: 4px;
+  flex: 1;
+}
+
+.nav-btn {
+  background: none;
+  border: none;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 400;
+  padding: 8px 12px;
+  cursor: pointer;
+  border-radius: 6px;
+  border-bottom: none;
+  transition: all 0.15s;
+}
+
+.nav-btn:hover {
+  color: var(--cyan);
+  background: rgba(0, 212, 255, 0.08);
+}
+
+.nav-btn.active {
+  color: var(--cyan);
+  font-weight: 600;
+  background: rgba(0, 212, 255, 0.12);
+  border-bottom-color: transparent;
+}
+
+.nav-btn.nav-btn-locked {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.nav-btn.nav-btn-locked:hover {
+  color: var(--muted);
+  background: none;
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.conn {
+  font-size: 11px;
+  color: var(--muted);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+}
+
+.dot.on {
+  background: var(--green);
+  box-shadow: 0 0 6px var(--green);
+}
+
+.dot.off {
+  background: var(--red);
+}
+
+/* ===== Screen Management ===== */
+.screen {
+  display: none;
+}
+
+.screen.active {
+  display: block;
+}
+
+/* Game/Sandbox screens: center the layout horizontally on ultra-wide */
+#screen-game.active,
+#screen-sandbox.active {
+  display: block;
+}
+
+/* ===== Buttons ===== */
+.btn {
+  padding: 12px 24px;
+  border: none;
+  border-radius: 8px;
+  font-weight: 700;
+  font-size: 14px;
+  cursor: pointer;
+  transition: transform 150ms ease, box-shadow 150ms ease;
+  font-family: inherit;
+}
+
+.btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+}
+
+.btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.btn-primary {
+  background: var(--cyan);
+  color: var(--bg);
+}
+
+.btn-secondary {
+  background: var(--card2);
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+
+.btn-danger {
+  background: var(--card2);
+  color: var(--red);
+  border: 1px solid var(--red);
+}
+
+.btn-sm {
+  padding: 8px 16px;
+  font-size: 12px;
+}
+
+.full-width {
+  width: 100%;
+}
+
+/* ===== Inputs ===== */
+.input {
+  background: var(--card);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 10px 14px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-family: inherit;
+  outline: none;
+  transition: border-color 150ms ease;
+  width: 100%;
+}
+
+.input:focus {
+  border-color: var(--cyan);
+}
+
+.input-code {
+  font-size: 14px;
+  letter-spacing: 8px;
+  text-transform: uppercase;
+  color: var(--cyan);
+  text-align: center;
+  border-width: 2px;
+}
+
+.select {
+  appearance: none;
+  cursor: pointer;
+  padding-right: 32px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%23777'%3E%3Cpath d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+}
+
+.select-sm {
+  padding: 8px 32px 8px 12px;
+  font-size: 12px;
+}
+
+.input-slot-name {
+  width: 160px;
+}
+
+/* ===== Labels ===== */
+.label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  color: var(--muted);
+  display: block;
+  margin-bottom: 6px;
+  line-height: 1.2;
+}
+
+.section-heading {
+  font-size: 11px;
+  color: var(--cyan);
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  font-weight: 700;
+  margin-bottom: 12px;
+}
+

@@ -23,11 +23,29 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
-GAME_JS = ROOT / "src" / "grid_tactics" / "server" / "static" / "game.js"
+STATIC_DIR = ROOT / "src" / "grid_tactics" / "server" / "static"
+GAME_JS = STATIC_DIR / "game.js"  # legacy fallback path
 GAME_HTML = ROOT / "src" / "grid_tactics" / "server" / "static" / "game.html"
 SYNC_CARDS = ROOT / "wiki" / "sync" / "sync_cards.py"
 
-JS_SRC = GAME_JS.read_text(encoding="utf-8")
+
+
+def _load_client_js() -> str:
+    """Modular client JS (2026-07-06): js/NN-*.js sorted by filename equals
+    the former monolithic game.js; falls back to game.js if js/ absent."""
+    js_dir = STATIC_DIR / "js"
+    if js_dir.is_dir():
+        return "".join(p.read_text(encoding="utf-8") for p in sorted(js_dir.glob("*.js")))
+    return (STATIC_DIR / "game.js").read_text(encoding="utf-8")
+
+
+def _load_client_css() -> str:
+    css_dir = STATIC_DIR / "css"
+    if css_dir.is_dir():
+        return "".join(p.read_text(encoding="utf-8") for p in sorted(css_dir.glob("*.css")))
+    return (STATIC_DIR / "game.css").read_text(encoding="utf-8")
+
+JS_SRC = _load_client_js()
 HTML_SRC = GAME_HTML.read_text(encoding="utf-8")
 SYNC_SRC = SYNC_CARDS.read_text(encoding="utf-8")
 
@@ -309,7 +327,7 @@ def test_playevent_handles_minion_transformed():
     assert "function playMinionTransformed(" in JS_SRC
     # The handler must flash the tile (CSS class lives in game.css).
     assert "transform-flash" in JS_SRC
-    css_src = (GAME_JS.parent / "game.css").read_text(encoding="utf-8")
+    css_src = _load_client_css()
     assert ".transform-flash" in css_src
 
 

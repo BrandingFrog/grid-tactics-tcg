@@ -14,9 +14,33 @@
   <link href="https://fonts.googleapis.com/css2?family=Alegreya+SC:wght@500;700;800&family=Alegreya:ital,wght@0,500;0,700;1,500&display=swap" rel="stylesheet">
   <!-- In-game HUD pod / PASS typography (approved 2026-07 duel layout) -->
   <link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/static/game.css">
+  <!-- Modular client CSS (2026-07-06): sequential chunks of the former
+       game.css — document order preserves the append-only cascade.
+       New override layers go at the END of css/zz-overrides.css. -->
+  <link rel="stylesheet" href="/static/css/01-base-tokens.css">
+  <link rel="stylesheet" href="/static/css/02-lobby-deck-builder.css">
+  <link rel="stylesheet" href="/static/css/03-duel-layout.css">
+  <link rel="stylesheet" href="/static/css/04-animations-overlays.css">
+  <link rel="stylesheet" href="/static/css/05-hud-redesign.css">
+  <link rel="stylesheet" href="/static/css/06-game-hud.css">
+  <link rel="stylesheet" href="/static/css/07-cards-cf2.css">
+  <link rel="stylesheet" href="/static/css/zz-overrides.css">
   <script src="https://cdn.socket.io/4.7.4/socket.io.min.js" defer></script>
-  <script src="/static/game.js" defer></script>
+  <!-- Modular client JS (2026-07-06): classic scripts sharing one global
+       scope — ALL tags must stay `defer` (never async) and in this order;
+       socket.io above must load first. -->
+  <script src="/static/js/01-core-state.js" defer></script>
+  <script src="/static/js/02-net-lobby.js" defer></script>
+  <script src="/static/js/03-deck-builder.js" defer></script>
+  <script src="/static/js/04-card-render.js" defer></script>
+  <script src="/static/js/05-boot.js" defer></script>
+  <script src="/static/js/06-event-queue.js" defer></script>
+  <script src="/static/js/07-draw-anims-audio.js" defer></script>
+  <script src="/static/js/08-state-spell-stage.js" defer></script>
+  <script src="/static/js/09-duel-interaction.js" defer></script>
+  <script src="/static/js/10-modals.js" defer></script>
+  <script src="/static/js/11-hud-board-hand.js" defer></script>
+  <script src="/static/js/12-sandbox.js" defer></script>
 </head>
 <body>
 

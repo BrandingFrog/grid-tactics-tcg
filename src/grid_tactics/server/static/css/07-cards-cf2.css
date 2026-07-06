@@ -1,0 +1,1124 @@
+/* ==========================================================================
+   FULL-ART CARD FRAME  (approved 2026-07-03 — locked reference)
+   Ported from card-frame-REFERENCE.html. Applies to every renderCardFrame()
+   output (they all carry .card-frame-full.cf2). First it NEUTRALISES the
+   cyan HUD skin the older block (~line 8141) stamps on .card-frame, then it
+   rebuilds the parchment full-art frame via the .cf2-* internals. Scoped so
+   board minions (.board-minion) and other .card-* consumers are untouched.
+   ========================================================================== */
+
+/* Element palettes — set on the root as .cf2-<element> (darker + chip shades). */
+.cf2-fire    { --el:#a8332a; --el-dark:#5e1c14; --el-chip:#8c2a20; }
+.cf2-dark    { --el:#5d3a8f; --el-dark:#33204f; --el-chip:#4b2d77; }
+.cf2-earth   { --el:#8a6d2f; --el-dark:#4f3d17; --el-chip:#71581f; }
+.cf2-water   { --el:#2b5f9e; --el-dark:#173a63; --el-chip:#234f86; }
+.cf2-metal   { --el:#5c5c60; --el-dark:#333336; --el-chip:#4a4a4e; }
+.cf2-wood    { --el:#4a7a2e; --el-dark:#2a4a17; --el-chip:#3c6424; }
+.cf2-light   { --el:#b09a34; --el-dark:#6e5e17; --el-chip:#96822a; }
+.cf2-neutral { --el:#6a6a6e; --el-dark:#3a3a3d; --el-chip:#555559; }
+
+.cf2 {
+  --parch:#e8dcbb; --parch2:#ded0a8; --ink:#241c10;
+  --minion:#7a4f28;                                             /* leather brown */
+  --magic:#6f42a0; --magic-dark:#48286e; --magic-tint:#e8def1;  /* purple */
+  --react:#c2367e; --react-dark:#7e1f50; --react-tint:#f6dcea;  /* hot pink */
+}
+
+/* --- neutralise the HUD skin so the parchment frame reads cleanly --- */
+.card-frame-full.cf2 {
+  /* THE query container. 1cqw = 1% of this element's width, so every internal
+     dimension below (declared in cqw) scales with whatever width the context
+     gives the card — hand thumbnail, deck tile, tooltip, spell-stage. */
+  container-type: inline-size;
+  position: relative;                 /* anchor the ::before paper + ::after crease */
+  border: none !important;
+  /* The aged IVORY card stock lives on ::before (below), NOT here, so it can be
+     frayed by the deckle filter AND still transform with the card. This element
+     is transparent; content (.cf2-frame) paints above the paper. */
+  background: transparent !important;
+  border-radius: 4% !important;
+  clip-path: none !important;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.55) !important;   /* drop only; foxing is on ::before */
+  overflow: visible;                  /* let the frayed paper edge extend past the box */
+  aspect-ratio: 1 / 1;
+  color: var(--ink);
+  font-family: 'Alegreya', Georgia, serif;
+}
+/* Aged ivory card stock — a real layer OF the card (not a detached sibling), so
+   its worn/frayed edge moves, tilts and animates WITH the card. The deckle
+   filter displaces only this paper layer; the content above stays crisp. */
+.card-frame-full.cf2::before {
+  content: '' !important; display: block !important;
+  /* Size with container units, NOT inset:0 — inside a container-type card an
+     abs-pos inset:0 pseudo collapses its width (was a 2px left strip) once the
+     filter was removed. 100cqw = the card's width; aspect-ratio 1/1 → square. */
+  position: absolute; top: 0; left: 0; width: 100cqw; height: 100cqw; z-index: 0;
+  border-radius: 4%;
+  background: #e7ddc2;
+  background-image:
+    radial-gradient(rgba(150, 120, 70, 0.06) 1px, transparent 1.6px),
+    radial-gradient(rgba(255, 252, 240, 0.55) 1px, transparent 1.6px),
+    linear-gradient(148deg, #efe7d1 0%, #e5d9bc 58%, #d7c9a4 100%);
+  background-size: 4px 4px, 6px 6px, 100% 100%;
+  box-shadow: inset 0 0 2px rgba(70, 50, 25, 0.55), inset 0 0 11px rgba(120, 92, 50, 0.3);
+  /* DECKLE (frayed edge) DISABLED for now — clean aged-ivory edge instead.
+     12 seeded filters (#card-deckle-N) + .cf2-deckle-N classes + renderCardFrame
+     seeding kept dormant; to re-enable restore: filter: var(--deckle, url(#card-deckle-0)); */
+  filter: none;
+}
+/* 12 seeded deckle variants (dormant — see note above) — each card a different fray. */
+.cf2-deckle-0  { --deckle: url(#card-deckle-0); }
+.cf2-deckle-1  { --deckle: url(#card-deckle-1); }
+.cf2-deckle-2  { --deckle: url(#card-deckle-2); }
+.cf2-deckle-3  { --deckle: url(#card-deckle-3); }
+.cf2-deckle-4  { --deckle: url(#card-deckle-4); }
+.cf2-deckle-5  { --deckle: url(#card-deckle-5); }
+.cf2-deckle-6  { --deckle: url(#card-deckle-6); }
+.cf2-deckle-7  { --deckle: url(#card-deckle-7); }
+.cf2-deckle-8  { --deckle: url(#card-deckle-8); }
+.cf2-deckle-9  { --deckle: url(#card-deckle-9); }
+.cf2-deckle-10 { --deckle: url(#card-deckle-10); }
+.cf2-deckle-11 { --deckle: url(#card-deckle-11); }
+/* .cf2-frame must paint above the paper layer. */
+.cf2 .cf2-frame { z-index: 1; }
+
+/* ---------- SEEDED CREASE (12 variants) ----------
+   renderCardFrame stamps `cf2-crease-<0..11>` on the root from a hash of the
+   card id, so each card gets a stable, distinct worn fold — like a real deck
+   where some cards are folded one way, some another. Embossed fold = a dark
+   shadow line beside a light highlight line; sits above the content and moves
+   with the card. */
+.card-frame-full.cf2::after {
+  content: '' !important; display: block !important;
+  position: absolute; inset: 0; z-index: 4; pointer-events: none; border-radius: 4%;
+  background: var(--crease, none);
+}
+.cf2-crease-0  { --crease: linear-gradient(112deg, transparent 44%, rgba(26,16,4,.46) 49%, rgba(255,250,235,.30) 52%, transparent 58%); }
+.cf2-crease-1  { --crease: linear-gradient(66deg,  transparent 50%, rgba(26,16,4,.42) 55%, rgba(255,250,235,.27) 58%, transparent 64%); }
+.cf2-crease-2  { --crease: linear-gradient(90deg,  transparent 41%, rgba(26,16,4,.40) 45%, rgba(255,250,235,.26) 48%, transparent 53%); }
+.cf2-crease-3  { --crease: linear-gradient(0deg,   transparent 55%, rgba(26,16,4,.40) 60%, rgba(255,250,235,.25) 63%, transparent 68%); }
+.cf2-crease-4  { --crease: linear-gradient(122deg, transparent 30%, rgba(26,16,4,.42) 34%, rgba(255,250,235,.26) 37%, transparent 43%),
+                            linear-gradient(58deg,  transparent 64%, rgba(26,16,4,.34) 68%, rgba(255,250,235,.20) 71%, transparent 77%); }
+.cf2-crease-5  { --crease: linear-gradient(135deg, transparent 60%, rgba(26,16,4,.44) 65%, rgba(255,250,235,.28) 68%, transparent 74%); }
+.cf2-crease-6  { --crease: linear-gradient(148deg, transparent 38%, rgba(26,16,4,.42) 43%, rgba(255,250,235,.26) 46%, transparent 52%); }
+.cf2-crease-7  { --crease: linear-gradient(102deg, transparent 52%, rgba(26,16,4,.42) 57%, rgba(255,250,235,.26) 60%, transparent 66%); }
+.cf2-crease-8  { --crease: linear-gradient(128deg, transparent 52%, rgba(26,16,4,.46) 57%, rgba(255,250,235,.29) 60%, transparent 66%); }
+.cf2-crease-9  { --crease: linear-gradient(118deg, transparent 32%, rgba(26,16,4,.38) 36%, rgba(255,250,235,.23) 39%, transparent 45%),
+                            linear-gradient(118deg, transparent 62%, rgba(26,16,4,.34) 66%, rgba(255,250,235,.20) 69%, transparent 75%); }
+.cf2-crease-10 { --crease: linear-gradient(84deg,  transparent 50%, rgba(26,16,4,.42) 55%, rgba(255,250,235,.26) 58%, transparent 64%),
+                            linear-gradient(158deg, transparent 74%, rgba(26,16,4,.32) 80%, rgba(255,250,235,.19) 84%, transparent 90%); }
+.cf2-crease-11 { --crease: linear-gradient(107deg, transparent 46%, rgba(26,16,4,.40) 51%, rgba(255,250,235,.25) 54%, transparent 60%); }
+.card-frame-full.cf2:hover { box-shadow: 0 8px 30px rgba(0, 0, 0, 0.6) !important; }
+
+/* Every context renders the card SQUARE (1:1) — the full-art design is 1:1.
+   The hand ROW layout is width-driven (negative margins scale off --cardw),
+   so a square card does not disturb it. */
+.card-frame-hand.cf2 { aspect-ratio: 1 / 1; }
+
+/* ==========================================================================
+   PROPORTIONAL INTERNALS — every dimension is a container-query unit so the
+   card renders identically at ANY width (hand ~60-116px, tooltip/deck ~220px,
+   spell-stage). Baseline: the locked 460px reference card (card-frame-REFERENCE
+   .html); each reference px X maps to (X / 460 * 100) cqw = X * 0.2174 cqw.
+   1cqw = 1% of .card-frame-full.cf2's width (the query container above).
+   Cosmetic-only px (box/text-shadow blur, grain) are intentionally left in px
+   as they never cause clipping. ========================================== */
+.cf2 .cf2-frame {
+  /* The ivory card-stock border. Lives here (a descendant of the query
+     container) rather than as padding on the container, so this cqw resolves
+     against the card width — the container's own cqw would not. A touch wider
+     now so the worn cream edge reads like an old playing card. */
+  margin: 2.7cqw;
+  border: 0.65cqw solid var(--el-dark);
+  outline: 0.43cqw solid #0b0906;
+  border-radius: 1.6cqw;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--parch);
+  overflow: hidden;
+  position: relative;
+}
+
+/* full-art background layer — everything else floats above it (z-index 1). */
+.cf2 .cf2-artbg {
+  position: absolute; inset: 0; z-index: 0;
+  background-color: #0d0a07;
+  background-size: cover;
+  background-position: center 20%;
+}
+.cf2 .cf2-artbg::after {
+  content: ''; position: absolute; inset: 0;
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.34), transparent 26%);
+}
+
+/* ---------- header ---------- */
+.cf2 .cf2-head {
+  position: relative; z-index: 1;
+  display: flex; align-items: stretch; gap: 1.52cqw;
+  padding: 1.52cqw 1.52cqw 1.09cqw;
+}
+.cf2 .cf2-chip {
+  width: 11.3cqw; min-width: 11.3cqw; height: 11.3cqw;
+  background: var(--el-chip);
+  border: 0.65cqw solid #17110a;
+  outline: 0.43cqw solid var(--parch2);
+  border-radius: 1.09cqw;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  padding: 0.43cqw 0;
+  color: #f4ead0;
+  font-family: 'Alegreya SC', serif; font-weight: 800; font-size: 7.39cqw;
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.5);
+  box-shadow: inset 0 0 0 2px rgba(0, 0, 0, 0.25),
+              inset 0 2px 4px rgba(255, 255, 255, 0.12),
+              0 2px 7px rgba(0, 0, 0, 0.6);
+}
+.cf2 .cf2-chip-lbl {
+  font-family: 'Alegreya SC', serif; font-weight: 700; font-size: 2.07cqw;
+  letter-spacing: 0.22cqw; line-height: 1;
+}
+.cf2 .cf2-cnum {
+  font-family: 'Alegreya SC', serif; font-weight: 800; font-size: 6.52cqw; line-height: 0.9;
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.5);
+}
+.cf2 .cf2-eico { font-size: 4.35cqw; line-height: 0.9; margin-top: 1.09cqw; }
+
+.cf2 .cf2-namebox {
+  flex: 1; min-width: 0; text-align: center;
+  display: flex; flex-direction: column; justify-content: center;
+  padding: 0.43cqw 0.87cqw;
+  border: 0.43cqw solid var(--el-dark); border-radius: 0.87cqw;
+  background: rgba(240, 230, 200, 0.93);
+  box-shadow: inset 0 0 10px #c9b98d;
+}
+.cf2 .cf2-name {
+  font-family: 'Alegreya SC', serif; font-weight: 800;
+  font-size: 6.3cqw; letter-spacing: 0.22cqw; color: var(--ink); line-height: 1.02;
+}
+.cf2 .cf2-subtype { font-size: 3.15cqw; color: #4a3d24; font-weight: 700; letter-spacing: 0.11cqw; }
+.cf2 .cf2-d { color: var(--el); font-size: 2.39cqw; vertical-align: 0.22cqw; }
+
+/* ---------- static keyword tags ---------- */
+.cf2 .cf2-tags {
+  position: relative; z-index: 1;
+  display: flex; gap: 1.3cqw; justify-content: center; flex-wrap: wrap;
+  padding: 1.3cqw 0 0.43cqw;
+}
+.cf2 .cf2-tag {
+  font-family: 'Alegreya SC', serif; font-weight: 800; font-size: 2.61cqw; letter-spacing: 0.17cqw;
+  color: #f4ead0; background: var(--el-chip);
+  border: 0.43cqw solid #17110a; outline: 0.22cqw solid var(--parch2);
+  border-radius: 0.87cqw; padding: 0.43cqw 2.17cqw;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.55);
+}
+
+.cf2 .cf2-artspace { flex: 1; min-height: 15.2cqw; }
+
+/* ---------- body: floating effect boxes + optional stat rail ---------- */
+.cf2 .cf2-body {
+  position: relative; z-index: 1;
+  display: flex; align-items: flex-end; gap: 1.3cqw;
+  min-height: 0;
+  padding: 0 1.3cqw;
+}
+.cf2 .cf2-text {
+  flex: 1; min-width: 0;
+  color: var(--ink);
+  font-size: 3.37cqw; line-height: 1.3;
+  padding-bottom: 0.43cqw;
+}
+
+.cf2 .cf2-mode {
+  border-radius: 0.87cqw; padding: 1.09cqw 1.74cqw 1.3cqw; margin-bottom: 1.3cqw;
+  border: 0.43cqw solid; border-left-width: 1.3cqw;
+  box-shadow: 0 3px 9px rgba(0, 0, 0, 0.55);
+}
+.cf2 .cf2-mode.cf2-minion { background: rgba(242, 233, 206, 0.95); border-color: var(--minion); }
+.cf2 .cf2-mode.cf2-magic  { background: var(--magic-tint); border-color: var(--magic); }
+.cf2 .cf2-mode.cf2-react  { background: var(--react-tint); border-color: var(--react); }
+.cf2 .cf2-modehead {
+  font-family: 'Alegreya SC', serif; font-weight: 800; font-size: 3.04cqw;
+  letter-spacing: 0.13cqw; display: block; margin-bottom: 0.22cqw;
+}
+.cf2 .cf2-mode.cf2-magic .cf2-modehead { color: var(--magic); }
+.cf2 .cf2-mode.cf2-react .cf2-modehead { color: var(--react-dark); }
+.cf2 .cf2-ability { margin-bottom: 1.09cqw; }
+.cf2 .cf2-ability:last-child { margin-bottom: 0; }
+.cf2 .cf2-bullet { color: var(--minion); margin-right: 0.87cqw; font-size: 2.83cqw; }
+.cf2 .cf2-mode.cf2-magic .cf2-bullet { color: var(--magic); }
+.cf2 .cf2-mode.cf2-react .cf2-bullet { color: var(--react); }
+.cf2 .cf2-ability b { font-family: 'Alegreya SC', serif; font-weight: 800; letter-spacing: 0.09cqw; }
+.cf2 .cf2-flavor { font-style: italic; color: var(--ink); }
+
+.cf2 .cf2-ordiv {
+  text-align: center; font-family: 'Alegreya SC', serif; font-weight: 700;
+  color: #f0e4c4; font-size: 2.61cqw; letter-spacing: 0.65cqw; margin: 0.22cqw 0 1.09cqw;
+  display: flex; align-items: center; gap: 1.74cqw;
+  text-shadow: 0 1px 3px #000;
+}
+.cf2 .cf2-ordiv::before, .cf2 .cf2-ordiv::after {
+  content: ''; flex: 1; border-top: 0.33cqw solid rgba(255, 255, 255, 0.33);
+}
+
+/* floating stat chips (minions only) */
+.cf2 .cf2-rail {
+  display: flex; flex-direction: column; justify-content: flex-end; gap: 1.3cqw;
+  width: 18.7cqw; min-width: 18.7cqw;
+  padding-bottom: 0.43cqw;
+}
+.cf2 .cf2-stat {
+  background: var(--el-chip);
+  border: 0.65cqw solid #17110a; outline: 0.43cqw solid var(--parch2);
+  border-radius: 1.09cqw; text-align: center; color: #f4ead0;
+  padding: 0.87cqw 0.43cqw 1.3cqw;
+  box-shadow: inset 0 0 0 2px rgba(0, 0, 0, 0.25),
+              inset 0 2px 4px rgba(255, 255, 255, 0.12),
+              0 3px 9px rgba(0, 0, 0, 0.62);
+}
+.cf2 .cf2-stat-lbl { font-family: 'Alegreya SC', serif; font-weight: 700; font-size: 2.72cqw; letter-spacing: 0.22cqw; display: block; }
+.cf2 .cf2-stat-val { font-family: 'Alegreya SC', serif; font-weight: 800; font-size: 7.17cqw; line-height: 1; display: block; text-shadow: 0 1px 0 rgba(0, 0, 0, 0.5); }
+
+/* health / attack glyph spans (reference .hp/.atk — harmless if unused) */
+.cf2 .hp  { color: #c0392b; font-weight: 800; }
+.cf2 .atk { color: #b06a15; font-weight: 800; }
+
+/* ---------- footer (floats on the art, every card) ---------- */
+.cf2 .cf2-foot {
+  position: relative; z-index: 1;
+  display: flex; justify-content: space-between; gap: 1.3cqw;
+  padding: 0.43cqw 2.17cqw 1.09cqw;
+  color: #f0e6cc; font-size: 2.5cqw; letter-spacing: 0.09cqw;
+  font-family: 'Alegreya SC', serif; font-weight: 500;
+  text-shadow: 0 1px 3px #000, 0 0 6px rgba(0, 0, 0, 0.6);
+}
+
+/* ==========================================================================
+   HAND LAYOUT — flat overlapping row + state glows  (2026-07-03)
+   Replaces the old fan/arc (rotate + parabolic translateY). Cards stand
+   UPRIGHT in a straight, centred row that overlaps by AT MOST 45% (>=55%
+   of every card stays visible). Overlap starts light and ramps toward the
+   45% cap as the hand grows to 10, so the row never breaks its bounds.
+
+   Every hand card is .card-frame-full.cf2.card-frame-hand — this block's
+   selectors carry that full chain so they out-specify (and, where the old
+   fan used !important, match with !important + later source order) the
+   legacy fan rules above without editing them. --i (0-based index) and --n
+   (hand size) are still stamped per card by renderHand().
+   ========================================================================== */
+.card-frame-full.cf2.card-frame-hand {
+  /* Fluid thumbnail width — scales with viewport height so the whole hand
+     row shrinks to fit a short landscape frame and grows on desktop. */
+  --cardw: clamp(60px, 12vh, 116px);
+  /* Overlap fraction of the 45% cap: ~0.15 at a few cards, 1.0 (full 45%)
+     by 10 cards. clamp keeps it within [0.15, 1] so it never exceeds 45%. */
+  --ovl: clamp(0.15, calc((var(--n) - 3) / 7), 1);
+  width: var(--cardw) !important;
+  max-width: var(--cardw) !important;
+  /* Square like every other context — the full-art design is 1:1. Row overlap
+     below is width-driven, so squaring the card does not disturb the layout. */
+  aspect-ratio: 1 / 1;
+  /* First card (--i:0) keeps a 0 margin; each later card slides left over
+     its neighbour by at most 45% of a card width. */
+  margin-left: calc(var(--cardw) * -0.45 * var(--ovl) * min(1, var(--i)));
+  margin-top: 0;
+  transform: none !important;      /* kill the fan rotation + arc lift */
+  transform-origin: center center;
+  transition: filter 140ms ease, outline-color 120ms ease;
+  z-index: calc(var(--i) + 1);
+  position: relative;
+}
+/* First card never gets a negative margin (guards min() rounding). */
+.card-frame-full.cf2.card-frame-hand:first-child { margin-left: 0; }
+
+/* Neutralise every legacy fan transform (hover lift, sandbox top-hand,
+   playable/selected/react lifts) — flat row means no raise on any state. */
+.card-frame-full.cf2.card-frame-hand:hover,
+.card-frame-full.cf2.card-frame-hand.card-playable,
+.card-frame-full.cf2.card-frame-hand.card-playable:hover,
+.card-frame-full.cf2.card-frame-hand.card-react-playable,
+.card-frame-full.cf2.card-frame-hand.card-react-playable:hover,
+.card-frame-full.cf2.card-frame-hand.card-selected-hand,
+.card-frame-full.cf2.card-frame-hand.card-preview-pinned,
+.hand-container.sandbox-hand-top .card-frame-full.cf2.card-frame-hand,
+.hand-container.sandbox-hand-top .card-frame-full.cf2.card-frame-hand:hover,
+.hand-container.sandbox-hand-top .card-frame-full.cf2.card-frame-hand.card-playable:hover,
+.hand-container.sandbox-hand-top .card-frame-full.cf2.card-frame-hand.card-selected-hand,
+.hand-container.sandbox-hand-top .card-frame-full.cf2.card-frame-hand.card-react-playable:hover,
+.hand-container.sandbox-hand-top .card-frame-full.cf2.card-frame-hand.card-preview-pinned {
+  transform: none !important;
+}
+/* Lift focus/hover cards in STACKING order only (no translate) so their
+   full halo/outline reads above overlapping neighbours. */
+.card-frame-full.cf2.card-frame-hand:hover {
+  z-index: 90;
+}
+
+/* --- PLAYABLE GLOW (task 4) -----------------------------------------------
+   A pulsing halo OUTSIDE the card border. Implemented with animated
+   filter: drop-shadow() rather than box-shadow because the base frame sets
+   box-shadow with !important (which would beat a keyframed box-shadow), and
+   because drop-shadow rings the card's actual silhouette and is NOT clipped
+   by the frame's own overflow:hidden. No lift/raise. */
+@keyframes hand-halo-blue {
+  0%, 100% { filter: drop-shadow(0 0 3px rgba(64, 156, 255, 0.9))
+                     drop-shadow(0 0 6px rgba(64, 156, 255, 0.45)); }
+  50%      { filter: drop-shadow(0 0 8px rgba(80, 170, 255, 1))
+                     drop-shadow(0 0 17px rgba(64, 156, 255, 0.85)); }
+}
+@keyframes hand-halo-amber {
+  0%, 100% { filter: drop-shadow(0 0 3px rgba(255, 170, 45, 0.9))
+                     drop-shadow(0 0 6px rgba(255, 140, 20, 0.45)); }
+  50%      { filter: drop-shadow(0 0 9px rgba(255, 178, 60, 1))
+                     drop-shadow(0 0 19px rgba(255, 140, 20, 0.85)); }
+}
+/* Playable on YOUR turn → blue pulsing halo. */
+.card-frame-full.cf2.card-frame-hand.card-playable {
+  cursor: pointer;
+  animation: hand-halo-blue 1.4s ease-in-out infinite;
+  z-index: 40;
+}
+/* React-playable during an OPEN react window → amber pulsing halo. Nothing
+   else pulses on the opponent's turn (updateHandHighlights only stamps
+   .card-react-playable while a react window is open and the card qualifies). */
+.card-frame-full.cf2.card-frame-hand.card-react-playable {
+  cursor: pointer;
+  animation: hand-halo-amber 1.3s ease-in-out infinite;
+  z-index: 40;
+}
+
+/* --- SELECTED / PINNED (task 3) -------------------------------------------
+   Clicking a hand card marks it selected in the row (bright cyan ring) AND
+   pins its full preview into the left tooltip panel (wired in renderHand →
+   pinHandCardPreview). outline draws OUTSIDE the border box and is not
+   clipped, so the selection ring is always fully visible; a static cyan
+   drop-shadow reinforces it and overrides any lingering playable pulse. */
+.card-frame-full.cf2.card-frame-hand.card-selected-hand,
+.card-frame-full.cf2.card-frame-hand.card-preview-pinned {
+  cursor: pointer;
+  outline: 3px solid var(--cyan);
+  outline-offset: 2px;
+  border-radius: 10px;
+  filter: drop-shadow(0 0 9px rgba(0, 212, 255, 0.9));
+  animation: none !important;   /* selected card holds steady, no pulse */
+  z-index: 120 !important;
+}
+
+/* --- CONFIRM-ARMED (magic awaiting a second click to cast) ----------------
+   Kept meaningful in the flat row: amber ring + amber pulse + a small
+   scale so it clearly reads as "click again to cast" (no fan rotation). */
+.card-frame-full.cf2.card-frame-hand.card-confirm-armed {
+  cursor: pointer;
+  outline: 3px solid var(--yellow);
+  outline-offset: 2px;
+  border-radius: 10px;
+  transform: scale(1.05) !important;
+  animation: hand-halo-amber 1s ease-in-out infinite;
+  z-index: 130 !important;
+}
+
+/* ==========================================================================
+   MOBILE-FIRST LANDSCAPE FIT  (baseline 844x390, iPhone 14/15 landscape)
+   Fit board + avatars + hand with NO vertical scroll, then fluid-scale up.
+   Keyed on short landscape viewports so desktop/portrait are untouched.
+   Placed last so it wins the cascade over the width-based breakpoints that
+   otherwise hide the left preview and let .game-main scroll.
+   ========================================================================== */
+@media (orientation: landscape) and (max-height: 560px) {
+  .game-layout {
+    /* Narrow left preview column + main; drop the right log sidebar to give
+       the board its width back. No horizontal OR vertical scroll. The
+       persistent .hud-header is 54px tall (border-box) at every width, so
+       subtract exactly that to fill the remaining height with no overflow. */
+    grid-template-columns: clamp(150px, 26vw, 250px) minmax(0, 1fr) !important;
+    height: calc(100vh - 54px);
+    /* !important so short-landscape stays edge-to-edge: the duel block's
+       `body:has(#screen-game.active) .game-layout { max-width: calc(100vh*16/9.5) }`
+       has higher specificity (id inside :has) and would otherwise cap this
+       baseline to ~656px and letterbox it. The wide-viewport cap still applies
+       on taller (desktop/tablet) frames where this media query doesn't match. */
+    max-width: none !important;
+    overflow: hidden !important;
+    padding: 4px;
+    gap: 4px;
+  }
+  /* Re-show the left tooltip/preview panel (the width breakpoints hide it)
+     so click-to-preview has somewhere to render at the mobile baseline. */
+  .game-layout > .tooltip-sidebar { display: flex !important; }
+  .game-layout > .game-sidebar    { display: none !important; }
+
+  .game-main { gap: 2px; overflow: hidden !important; }
+
+  /* Compress the surrounding chrome; the board (flex:1) keeps the rest. */
+  .room-bar { padding: 2px 8px; gap: 8px; }
+  .info-bar { padding: 1px 8px; gap: 8px; }
+  .player-tag { font-size: 11px; }
+  .stat-label { font-size: 7px; }
+  .stat-value { font-size: 13px; }
+  .stat-group { gap: 12px; }
+  .how-to-play-hint { display: none !important; }
+  .opp-hand-row { min-height: 0; }
+
+  .board-container { padding: 2px; min-height: 0 !important; }
+  .game-board { max-height: none; gap: 4px; }
+  /* Avatars ride the board corners — shrink so they don't crowd the grid. */
+  .player-avatar { left: 2px; padding: 2px; gap: 1px; }
+  .avatar-disc { width: 30px; height: 30px; font-size: 13px; }
+
+  /* Flat hand row, sized to the short frame; still overlaps + glows. */
+  .hand-container { min-height: 0 !important; max-height: none; padding: 2px 4px 8px; }
+  .card-frame-full.cf2.card-frame-hand { --cardw: clamp(52px, 15vh, 96px); }
+}
+
+/* --------------------------------------------------------------------------
+   DESKTOP / TABLET-LANDSCAPE counterpart of the mobile block above.
+   The redesign makes the left card-preview panel a PERMANENT column at every
+   width ("mobile-first, fluid-scale up" — one layout). But the pre-redesign
+   width breakpoints (`@media (max-width:1400px){ .tooltip-sidebar{display:none} }`)
+   hid it on taller desktop/tablet frames, so click-to-preview had nowhere to
+   render there. Re-show it for BOTH redesigned screens as a 3-column
+   [ preview | stage | right sidebar ] grid. Keeps the game log (#screen-game)
+   and the dev-ops controls (#screen-sandbox) in the right column.
+   Gated to tall landscape so it never overrides the short-landscape mobile
+   baseline (which stays 2-col, sidebar dropped) and never hits portrait.
+   -------------------------------------------------------------------------- */
+@media (orientation: landscape) and (min-height: 561px) {
+  body:has(#screen-game.active) .game-layout,
+  body:has(#screen-sandbox.active) .game-layout {
+    grid-template-columns: clamp(260px, 26vw, 420px) minmax(0, 1fr) 220px;
+  }
+  body:has(#screen-game.active) .game-layout > .tooltip-sidebar,
+  body:has(#screen-sandbox.active) .game-layout > .tooltip-sidebar {
+    display: flex !important;
+  }
+}
+
+
+/* ==========================================================================
+   APPROVED IN-GAME DUEL LAYOUT (2026-07)
+   Mobile-first landscape (baseline 844x390), fluid up to desktop. Replaces the
+   old .info-bar bars + board-embedded .player-avatar pods with hexagonal HUD
+   pods in the corners, a big centered board, the opponent hand peeking from the
+   top edge, and a restyled PASS button. Selectors are dual-scoped to BOTH
+   #screen-game (live duel) and #screen-sandbox (dev god-view) so the sandbox
+   mirrors this layout with the exact same classes — no duplicated declarations.
+   The nav-hide + 100vh reclaim (below) stay #screen-game only: the sandbox
+   keeps the nav visible (its only exit) and uses the default game-layout
+   height (calc(100vh - 52px)), which already bounds the flex duel-stage.
+   ========================================================================== */
+
+/* --- Hide the nav header while in a duel; reclaim the full viewport height --- */
+body:has(#screen-game.active) .hud-header { display: none !important; }
+body:has(#screen-game.active) .game-layout {
+  height: 100vh;
+  max-width: calc(100vh * 16 / 9.5);
+}
+
+/* --- The duel stage: a relative canvas the board + pods + hands float on --- */
+#screen-game .duel-stage, #screen-sandbox .duel-stage {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;   /* clips the opp-hand peek (top) + hand clip (bottom) */
+}
+
+/* --- Board: big, centered, pushed up so the hand only kisses the bottom row.
+       The #screen-game board reclines under a perspective tilt (Approach A);
+       see the PERSPECTIVE TILT block below. --- */
+#screen-game .duel-stage .board-container, #screen-sandbox .duel-stage .board-container {
+  position: absolute;
+  left: 0; right: 0;
+  top: 30px;      /* headroom for the opponent hand peeking from the top */
+  bottom: 74px;   /* footroom for your hand at the bottom */
+  padding: 0;
+  background: none;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1;
+}
+#screen-game .duel-stage .game-board, #screen-sandbox .duel-stage .game-board {
+  height: 100%;
+  width: auto;
+  max-width: 100%;
+  max-height: 100%;
+  aspect-ratio: 5 / 4;
+  margin: 0 auto;
+  gap: 6px;
+  padding: 8px;
+  background: radial-gradient(120% 120% at 50% 60%, #13233f 0%, #0a1526 70%);
+  border: 1px solid #26456e;
+  border-radius: 12px;
+  box-shadow: 0 0 30px -8px rgba(42, 95, 160, 0.67), inset 0 0 24px rgba(0, 0, 0, 0.5);
+}
+
+/* =========================================================================
+   PERSPECTIVE TILT (Approach A, live-verified) — the board reclines ~20deg
+   so the far (opponent) edge recedes to ~90%; minions counter-rotate upright
+   as standees facing the camera. Dual-scoped to BOTH #screen-game (live duel)
+   and #screen-sandbox (dev god-view) so the sandbox board reclines with the
+   same standee look — the task calls for the "big perspective standee board"
+   on the sandbox too, and both reuse the identical, verified transform:
+   getBoundingClientRect reads used by the fly/attack/summon overlays still
+   project through the transform to correct screen rects, and cell clicks /
+   targeting hit-test through the transform natively. In the god-view the
+   near (P1) row stays large and the far (P2) row recedes — the same
+   opponent-edge-recedes read as the live duel.
+
+   The counter-rotation lives on the .board-standee WRAPPER (added by
+   renderBoard around .board-minion) — NOT on .board-minion itself — because
+   the animation layer writes inline transforms straight onto .board-minion.
+   Wrapper + inner compose, so animations are never clobbered.
+   ========================================================================= */
+#screen-game .duel-stage .board-container,
+#screen-sandbox .duel-stage .board-container {
+  perspective: 760px;
+  perspective-origin: 50% 100%;
+}
+#screen-game .duel-stage .game-board,
+#screen-sandbox .duel-stage .game-board {
+  transform: rotateX(20deg);
+  transform-origin: center bottom;
+  transform-style: preserve-3d;
+}
+/* Cells must keep (not flatten) the 3D context so the minion inside genuinely
+   reclines into the board plane instead of rendering as a flat overlay. */
+#screen-game .duel-stage .board-cell,
+#screen-sandbox .duel-stage .board-cell {
+  transform-style: preserve-3d;
+}
+/* Base sizing is UNSCOPED so the wrapper fills its cell everywhere it is
+   rendered. On the tilted stages the minion LIES FLAT in the board plane
+   (user-chosen 2026-07-03 over upright standees): the wrapper carries NO
+   counter-rotation, so the minion inherits the board's rotateX(20deg) and
+   reclines into the perspective — its border/edges follow the tilt, far rows
+   recede smaller, and nothing overflows its cell to cover the row behind it. */
+.board-standee {
+  width: 100%;
+  height: 100%;
+  display: flex;
+}
+#screen-game .duel-stage .board-standee,
+#screen-sandbox .duel-stage .board-standee {
+  transform: none;
+  transform-origin: center bottom;
+  transform-style: preserve-3d;
+}
+
+/* =========================================================================
+   PLAYER PODS -- hexagonal avatar fused into an angular combat-readout plate.
+   Self = cyan (bottom-left), Opponent = red (top-right), fully mirrored.
+   ========================================================================= */
+#screen-game .pod, #screen-sandbox .pod {
+  position: absolute;
+  z-index: 6;
+  font-family: 'Chakra Petch', 'Michroma', sans-serif;
+  display: flex;
+  align-items: center;
+  height: 56px;
+}
+#screen-game .pod.pod-self, #screen-sandbox .pod.pod-self {
+  bottom: 78px; left: 8px;
+  transform: scale(0.76);
+  transform-origin: bottom left;
+  --acc: #3fd0ff; --acc-deep: #0d3a55;
+}
+#screen-game .pod.pod-opp, #screen-sandbox .pod.pod-opp {
+  top: 6px; right: 8px;
+  transform: scale(0.76);
+  transform-origin: top right;
+  flex-direction: row-reverse;
+  --acc: #ff5d6e; --acc-deep: #4a1620;
+}
+
+/* Hex avatar (this element carries id avatar-self / avatar-opp -> click target) */
+#screen-game .pod-ava-wrap, #screen-sandbox .pod-ava-wrap {
+  position: relative;
+  width: 56px; height: 56px;
+  flex: 0 0 56px;
+  z-index: 3;
+  cursor: pointer;
+  filter: drop-shadow(0 0 9px color-mix(in srgb, var(--acc) 55%, transparent));
+}
+#screen-game .pod-ava-ring, #screen-sandbox .pod-ava-ring,
+#screen-game .pod-ava, #screen-sandbox .pod-ava {
+  position: absolute; inset: 0;
+  clip-path: polygon(50% 0%, 100% 27%, 100% 73%, 50% 100%, 0% 73%, 0% 27%);
+}
+#screen-game .pod-ava-ring, #screen-sandbox .pod-ava-ring { background: linear-gradient(160deg, var(--acc), var(--acc-deep)); }
+#screen-game .pod-ava, #screen-sandbox .pod-ava {
+  inset: 3px;
+  background: #0a1322;
+  overflow: hidden;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 22px; font-weight: 700; color: #eaf6ff;
+  text-shadow: 0 0 10px color-mix(in srgb, var(--acc) 55%, #000);
+}
+#screen-game .pod-ava-wrap:hover, #screen-sandbox .pod-ava-wrap:hover { filter: drop-shadow(0 0 12px var(--acc)); }
+#screen-game .pod-ava-wrap:focus-visible, #screen-sandbox .pod-ava-wrap:focus-visible { outline: 2px solid var(--acc); outline-offset: 2px; }
+#screen-game .pod.pod-self .pod-ava-wrap, #screen-sandbox .pod.pod-self .pod-ava-wrap { margin-right: -13px; }
+#screen-game .pod.pod-opp  .pod-ava-wrap, #screen-sandbox .pod.pod-opp  .pod-ava-wrap { margin-left: -13px; }
+
+/* Angular plate */
+#screen-game .pod-plate, #screen-sandbox .pod-plate {
+  position: relative;
+  height: 50px;
+  width: 232px;
+  z-index: 1;
+  padding: 5px 12px 5px 22px;
+  background:
+    linear-gradient(180deg, rgba(22, 41, 70, 0.53) 0%, transparent 30%),
+    linear-gradient(105deg, var(--acc-deep) 0%, #0b1526 46%, #0a1220 100%);
+  clip-path: polygon(0 0, 100% 0, 100% calc(100% - 11px), calc(100% - 11px) 100%, 0 100%);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06), inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 4px 12px rgba(0, 0, 0, 0.5);
+  display: flex; flex-direction: column; justify-content: center; gap: 2px;
+}
+#screen-game .pod.pod-opp .pod-plate, #screen-sandbox .pod.pod-opp .pod-plate {
+  padding: 5px 22px 5px 12px; text-align: right;
+  clip-path: polygon(0 0, 100% 0, 100% 100%, 11px 100%, 0 calc(100% - 11px));
+}
+#screen-game .pod-plate::before, #screen-sandbox .pod-plate::before {
+  content: ''; position: absolute; top: 5px; bottom: 5px; left: 0; width: 3px;
+  background: linear-gradient(var(--acc), transparent);
+  box-shadow: 0 0 8px var(--acc);
+}
+#screen-game .pod.pod-opp .pod-plate::before, #screen-sandbox .pod.pod-opp .pod-plate::before { left: auto; right: 0; }
+
+/* Row 1 -- name + mana */
+#screen-game .pod-row-top, #screen-sandbox .pod-row-top {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+}
+#screen-game .pod-name, #screen-sandbox .pod-name {
+  font-size: 11px; font-weight: 700; letter-spacing: 1.2px; text-transform: uppercase;
+  color: #e8f1ff; white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis; max-width: 130px;
+}
+#screen-game .pod-mana, #screen-sandbox .pod-mana {
+  display: flex; align-items: center; gap: 3px;
+  color: #ffd45a; font-weight: 600; font-size: 11px; white-space: nowrap;
+}
+#screen-game .pod-mana small, #screen-sandbox .pod-mana small { color: #8a97b5; font-weight: 500; }
+#screen-game .pod-pip, #screen-sandbox .pod-pip {
+  width: 7px; height: 7px; transform: rotate(45deg);
+  background: #ffd45a; box-shadow: 0 0 6px rgba(255, 212, 90, 0.6);
+}
+
+/* Row 2 -- big HP number + power bar */
+#screen-game .pod-row-hp, #screen-sandbox .pod-row-hp { display: flex; align-items: center; gap: 8px; }
+#screen-game .pod.pod-opp .pod-row-hp, #screen-sandbox .pod.pod-opp .pod-row-hp { flex-direction: row-reverse; }
+#screen-game .pod-hp-n, #screen-sandbox .pod-hp-n {
+  font-size: 23px; font-weight: 700; line-height: 0.8; color: #fff; letter-spacing: 0.5px;
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 0 11px color-mix(in srgb, var(--acc) 60%, #000);
+  min-width: 30px;
+}
+#screen-game .pod.pod-opp .pod-hp-n, #screen-sandbox .pod.pod-opp .pod-hp-n { text-align: right; }
+#screen-game .pod-bar, #screen-sandbox .pod-bar {
+  position: relative; flex: 1; height: 8px;
+  background: #060c16; border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 2px; overflow: hidden; box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.8);
+}
+#screen-game .pod-fill, #screen-sandbox .pod-fill {
+  position: absolute; inset: 0; width: 100%; border-radius: 1px;
+  background: linear-gradient(180deg, hsl(120,80%,58%), hsl(120,75%,44%));
+  transition: width 0.5s ease, background 0.5s;
+}
+#screen-game .pod-bar::after, #screen-sandbox .pod-bar::after {
+  content: ''; position: absolute; inset: 0; pointer-events: none;
+  background: repeating-linear-gradient(90deg, transparent 0 14px, rgba(0, 0, 0, 0.33) 14px 15px);
+}
+
+/* Row 3 -- compact chips (Hand / Deck / Dark-Matter) + pile buttons */
+#screen-game .pod-row-stats, #screen-sandbox .pod-row-stats {
+  display: flex; gap: 6px; align-items: center;
+}
+#screen-game .pod.pod-opp .pod-row-stats, #screen-sandbox .pod.pod-opp .pod-row-stats { justify-content: flex-end; }
+#screen-game .pod-chip, #screen-sandbox .pod-chip {
+  font-size: 9px; letter-spacing: 0.4px; color: #9fb2d6; text-transform: uppercase;
+  display: flex; align-items: center; gap: 3px; white-space: nowrap;
+}
+#screen-game .pod-chip b, #screen-sandbox .pod-chip b { color: #eaf2ff; font-size: 10.5px; font-weight: 700; }
+#screen-game .pod-chip-dm, #screen-sandbox .pod-chip-dm { color: #cfa6f5; }
+#screen-game .pod-chip-dm b, #screen-sandbox .pod-chip-dm b { color: #e9d6ff; }
+/* Dark-Matter pulse (reuses the existing .dm-pulse hook fired by the JS). */
+#screen-game .pod-chip-dm.dm-pulse, #screen-sandbox .pod-chip-dm.dm-pulse { animation: avatar-dm-pulse 800ms ease-out; }
+
+/* Pile buttons rendered as tight HUD chips inside the stats row. Keep the
+   .pile-count child (JS writes counts into it) and .pile-emoji glyph. */
+#screen-game .pod-pile, #screen-sandbox .pod-pile {
+  display: inline-flex; align-items: center; gap: 3px;
+  padding: 1px 4px; border-radius: 3px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(0, 0, 0, 0.28);
+  color: #9fb2d6; font-family: inherit; cursor: pointer;
+  line-height: 1;
+}
+#screen-game .pod-pile:hover, #screen-sandbox .pod-pile:hover { border-color: var(--acc); background: rgba(255, 255, 255, 0.06); }
+#screen-game .pod-pile .pile-emoji, #screen-sandbox .pod-pile .pile-emoji { font-size: 11px; line-height: 1; }
+#screen-game .pod-pile .pile-count, #screen-sandbox .pod-pile .pile-count { font-size: 10px; font-weight: 700; color: #eaf2ff; min-width: 8px; text-align: center; }
+
+/* =========================================================================
+   OPPONENT FACE-DOWN HAND -- peeks DOWN from the top edge (clipped by the
+   stage overflow). The existing per-card fan transform is preserved.
+   ========================================================================= */
+#screen-game .duel-stage .opp-hand-row, #screen-sandbox .duel-stage .opp-hand-row {
+  position: absolute; top: 0; left: 0; right: 0;
+  transform: translateY(-46%);
+  z-index: 4;
+  pointer-events: none;
+  padding: 0;
+  min-height: 0;
+}
+
+/* =========================================================================
+   YOUR HAND -- anchored to the bottom, nudged toward the bottom edge but with
+   enough footroom that the pulsing glow halo is never clipped.
+   ========================================================================= */
+#screen-game .duel-stage .hand-container, #screen-sandbox .duel-stage .hand-container {
+  position: absolute; left: 0; right: 0; bottom: 0;
+  /* The pulsing playable / selected / react drop-shadow halo (keyframes
+     hand-halo-*) blooms up to ~19px OUTSIDE the card silhouette on every side.
+     The stage's overflow:hidden would swallow the halo's lower arc if the cards
+     sat at the very bottom edge. The previous height-RELATIVE translateY(6%)
+     grew with the container (worst on tall desktop frames) and ate most of the
+     footroom, so the lower arc kept clipping. Fix: a small FIXED downward nudge
+     (keeps the "hand rides the bottom" look, constant at every viewport size)
+     PLUS a bottom padding that comfortably exceeds nudge + halo radius, so the
+     card bottoms sit >=20px above the clip line and the full halo reads. The
+     board-kiss is unaffected — that overlap happens at the hand's TOP edge. */
+  transform: translateY(4px);
+  min-height: 0 !important;
+  max-height: none;
+  padding: 4px 4px 24px;
+  z-index: 5;
+}
+
+/* =========================================================================
+   PASS BUTTON -- tactical cyan HUD action (angular clip, Chakra Petch, cyan
+   skip-chevron, NO handshake emoji). The JS sets textContent 'Pass' + emoji;
+   we hide that text with font-size:0 and render the label + chevron via
+   pseudo-elements, so the emoji never shows and no JS change is needed.
+   ========================================================================= */
+#screen-game .duel-stage .hand-action-bar, #screen-sandbox .duel-stage .hand-action-bar {
+  position: absolute; right: 12px; bottom: 82px;
+  z-index: 7;
+  padding: 0; min-height: 0;
+  justify-content: flex-end; gap: 6px;
+}
+#screen-game .hand-action-bar .btn-pass-action, #screen-sandbox .hand-action-bar .btn-pass-action {
+  position: relative;
+  font-family: 'Chakra Petch', sans-serif !important;
+  font-weight: 700;
+  font-size: 0 !important;               /* hides the JS 'Pass' + handshake emoji */
+  letter-spacing: 2.5px; text-transform: uppercase; color: #e7f4ff !important;
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 8px 15px 8px 17px !important;
+  background: linear-gradient(180deg, #1c3350 0%, #0e1c2f 100%) !important;
+  border: none !important;
+  border-top: 2px solid #3fd0ff !important;
+  border-radius: 0 !important;
+  clip-path: polygon(9px 0, 100% 0, 100% calc(100% - 9px), calc(100% - 9px) 100%, 0 100%, 0 9px) !important;
+  box-shadow: inset 0 0 0 1px rgba(63, 208, 255, 0.27), 0 3px 12px rgba(0, 0, 0, 0.6), 0 0 16px -5px #3fd0ff !important;
+  transition: filter 0.15s, transform 0.05s;
+}
+#screen-game .hand-action-bar .btn-pass-action::before, #screen-sandbox .hand-action-bar .btn-pass-action::before {
+  content: 'Pass'; font-size: 13px; letter-spacing: 2.5px;
+}
+#screen-game .hand-action-bar .btn-pass-action::after, #screen-sandbox .hand-action-bar .btn-pass-action::after {
+  content: '\00BB'; color: #3fd0ff; font-size: 13px; letter-spacing: -3px;
+  text-shadow: 0 0 8px #3fd0ff;
+}
+#screen-game .hand-action-bar .btn-pass-action:hover, #screen-sandbox .hand-action-bar .btn-pass-action:hover { filter: brightness(1.18); }
+#screen-game .hand-action-bar .btn-pass-action:active, #screen-sandbox .hand-action-bar .btn-pass-action:active { transform: translateY(1px); }
+
+/* Keep the room bar + hint compact so the stage owns the vertical budget. */
+#screen-game .room-bar, #screen-sandbox .room-bar { flex-shrink: 0; }
+#screen-game .how-to-play-hint, #screen-sandbox .how-to-play-hint { margin: 1px 0; }
+
+/* =========================================================================
+   MOBILE-FIRST LANDSCAPE FIT (baseline 844x390). Tightens the corners so the
+   whole board + pods + hands fit with no vertical scroll on a phone.
+   ========================================================================= */
+@media (orientation: landscape) and (max-height: 560px) {
+  body:has(#screen-game.active) .game-layout { height: 100vh !important; }
+  #screen-game .duel-stage .board-container, #screen-sandbox .duel-stage .board-container { top: 24px; bottom: 66px; }
+  #screen-game .pod, #screen-sandbox .pod { height: 52px; }
+  #screen-game .pod.pod-self, #screen-sandbox .pod.pod-self { bottom: 68px; transform: scale(0.68); }
+  #screen-game .pod.pod-opp, #screen-sandbox .pod.pod-opp { transform: scale(0.68); }
+  #screen-game .duel-stage .hand-action-bar, #screen-sandbox .duel-stage .hand-action-bar { bottom: 72px; }
+  #screen-game .duel-stage .game-board, #screen-sandbox .duel-stage .game-board { gap: 4px; padding: 5px; }
+}
+
+/* Roomier pods on larger (desktop / tablet-landscape) viewports. */
+@media (min-height: 720px) {
+  #screen-game .pod.pod-self, #screen-sandbox .pod.pod-self { transform: scale(0.9); bottom: 92px; }
+  #screen-game .pod.pod-opp, #screen-sandbox .pod.pod-opp { transform: scale(0.9); }
+  #screen-game .duel-stage .board-container, #screen-sandbox .duel-stage .board-container { top: 40px; bottom: 92px; }
+  #screen-game .duel-stage .hand-action-bar, #screen-sandbox .duel-stage .hand-action-bar { bottom: 100px; }
+}
+
+/* =========================================================================
+   SANDBOX GOD-VIEW OVERRIDES (mirrors #screen-game; dev-only second hand).
+   The sandbox shows BOTH hands face-up inside the shared .duel-stage: P1
+   (#sandbox-hand-p0) at the BOTTOM like the live self-hand, and P2
+   (#sandbox-hand-p1) peeking from the TOP edge. The dual-scoped
+   `.duel-stage .hand-container` rule anchors every hand to the bottom, so the
+   P2 (top) hand is re-anchored to the top here. Its inverted downward fan is
+   already defined for .sandbox-hand-top near line 2483. This is the one piece
+   the live layout has no equivalent for (it peeks a face-DOWN opp row instead),
+   so it lives as a small sandbox-scoped override rather than a shared rule.
+   ========================================================================= */
+#screen-sandbox .duel-stage .hand-container.sandbox-hand-top {
+  top: 0; bottom: auto;
+  transform: translateY(-6%);
+  z-index: 4;               /* under the pods (z6), same layer as the opp peek */
+}
+#screen-sandbox .duel-stage .hand-container.sandbox-hand-bottom {
+  z-index: 5;               /* over the top hand; inherits the bottom anchor */
+}
+
+/* ==========================================================================
+   DUEL LOBBY REDESIGN (2026-07) — replaces the military-ops "slop" lobby.
+   Mobile-first landscape (baseline 844×390), fluid up to desktop. Left =
+   identity + Deck Builder/Wiki nav + hero card; right = play (name, create,
+   join, watch, open games). Scoped to #screen-lobby so it fully overrides the
+   legacy .lobby-hud rules (that markup is gone). All functional IDs preserved
+   (input-name, btn-create-room, input-room-code, btn-join-room,
+   btn-spectate-room, god-mode-checkbox, btn-refresh-rooms, rooms-list,
+   deck-selector, room-panel, room-code-display, player-list, btn-ready).
+   ========================================================================== */
+/* The top nav bar is hidden on the lobby — Deck Builder + Wiki now live as the
+   buttons under the title, and the big "GRID TACTICS" title replaces the logo.
+   (Leaving the lobby to Deck Builder/Wiki/game restores the nav on those screens.) */
+body:has(#screen-lobby.active) .hud-header { display: none !important; }
+
+#screen-lobby {
+  padding: 0 !important;
+  /* WHOLE-COMPOSITION SCALE UNIT.
+     --u is a length equal to "1 baseline pixel" of the 844x390 mobile design,
+     scaled to *contain* in the viewport. Every size in the lobby below is
+     calc(var(--u) * N), so the entire composition scales as one piece instead
+     of each element hitting its own clamp() ceiling.
+       at 844x390  -> --u = min(844/844, 390/390) px = 1px  (pixel-identical to mobile)
+       at 1280x800 -> --u = min(1280/844, 800/390) px = 1.517px (everything ~1.5x)
+       at 1920x1080-> --u = min(1920/844, 1080/390) px = 2.275px (everything ~2.3x)
+     min() picks the smaller of the width/height ratios so the design never
+     overflows either axis. Defined on #screen-lobby (not .lobby2) so it also
+     reaches the #room-panel and #lobby-status siblings. */
+  --u: min(100vw / 844, 100vh / 390);
+}
+#screen-lobby .lobby2 {
+  /* Warm "aged parchment / candlelit table" theme — matches the retro-TCG
+     cards + Alegreya SC title (was a cold sci-fi HUD in blue/cyan). */
+  --parch:     #f2ead2;   /* card banner cream (titles) */
+  --parch-dim: #cbb98f;   /* readable body parchment */
+  --parch-mute:#9a865c;   /* muted labels */
+  --gold:      #e0a23c;   /* deep gold accent */
+  --gold-lt:   #ffd873;   /* bright gold */
+  --bronze:    #6b5730;   /* borders */
+  --bronze-dk: #3a2e18;   /* subtle borders */
+  --field:     #191207;   /* input / row fill */
+  --field-hi:  #221809;
+  --line:      #2c2113;   /* dividers */
+  --panel:     rgba(14, 10, 4, 0.55);
+
+  display: grid;
+  grid-template-columns: 46% 54%;
+  min-height: 100vh;
+  color: var(--parch-dim);
+  font-family: 'Alegreya', Georgia, serif;
+  position: relative;
+  background:
+    radial-gradient(120% 120% at 22% 4%, rgba(224, 162, 60, 0.17) 0%, transparent 46%),
+    radial-gradient(135% 130% at 82% 104%, rgba(120, 60, 130, 0.10) 0%, transparent 52%),
+    radial-gradient(150% 150% at 50% 38%, #251a0e 0%, #160f07 56%, #0b0805 100%);
+  overflow: hidden;
+}
+/* Candlelit vignette so the corners sink into shadow like a card frame. */
+#screen-lobby .lobby2::before {
+  content: ''; position: absolute; inset: 0; z-index: 0; pointer-events: none;
+  background: radial-gradient(120% 120% at 40% 30%, transparent 55%, rgba(0, 0, 0, 0.5) 100%);
+}
+#screen-lobby .lobby2-brand,
+#screen-lobby .lobby2-play { position: relative; z-index: 1; }
+
+/* --- left: identity --- */
+#screen-lobby .lobby2-brand {
+  padding: calc(var(--u) * 20) calc(var(--u) * 25);
+  display: flex;
+  flex-direction: column;
+}
+#screen-lobby .lobby2-title {
+  font-family: 'Alegreya SC', serif; font-weight: 800;
+  font-size: calc(var(--u) * 63); line-height: 0.9;
+  color: var(--parch); letter-spacing: calc(var(--u) * 1);
+  text-shadow: 0 2px 14px #000, 0 0 30px rgba(224, 162, 60, 0.18);
+}
+#screen-lobby .lobby2-rule {
+  width: calc(var(--u) * 72); height: calc(var(--u) * 3); margin: calc(var(--u) * 12) 0 calc(var(--u) * 10);
+  background: linear-gradient(90deg, var(--gold), transparent);
+}
+#screen-lobby .lobby2-tag {
+  font-size: calc(var(--u) * 13); color: var(--parch-mute);
+  max-width: calc(var(--u) * 330); line-height: 1.45;
+}
+#screen-lobby .lobby2-nav {
+  display: flex; flex-direction: column; gap: calc(var(--u) * 8);
+  margin-top: calc(var(--u) * 14); align-items: flex-start; z-index: 2;
+}
+#screen-lobby .lobby2-nav a {
+  display: inline-flex; align-items: center; gap: calc(var(--u) * 10); text-decoration: none;
+  width: calc(var(--u) * 160);
+  font-family: 'Alegreya SC', serif; font-weight: 700; font-size: calc(var(--u) * 15); letter-spacing: calc(var(--u) * 1);
+  color: var(--parch-dim); background: rgba(30, 22, 10, 0.72);
+  border: 1px solid var(--bronze-dk); border-left: calc(var(--u) * 3) solid var(--gold); border-radius: calc(var(--u) * 6);
+  padding: calc(var(--u) * 8) calc(var(--u) * 16); transition: background .15s, color .15s, border-color .15s;
+}
+#screen-lobby .lobby2-nav a:hover { color: var(--parch); background: rgba(48, 36, 16, 0.9); border-left-color: var(--gold-lt); }
+#screen-lobby .lobby2-nav .ico { font-size: calc(var(--u) * 15); }
+#screen-lobby .lobby2-hero {
+  /* One placement at every size (desktop mirrors the mobile look): a modest
+     card sitting to the right of the nav, lifted a bit off the bottom edge. */
+  position: absolute; right: calc(var(--u) * 17);
+  top: auto; bottom: calc(var(--u) * 27);
+  width: calc(var(--u) * 160);
+  transform: none; filter: drop-shadow(0 16px 34px rgba(0,0,0,.72));
+  z-index: 1;
+  opacity: 1; transition: opacity 0.8s ease-in-out;
+}
+/* The per-card tilt + nudge lives on the INNER card (JS randomises it each
+   swap) so the container keeps its responsive centring. Defaults here for the
+   first paint before JS runs. */
+#screen-lobby .lobby2-hero .card-frame-full {
+  width: 100%; max-width: 100%;
+  transform: rotate(-6deg);
+  transition: transform 0.55s ease;
+}
+#screen-lobby .lobby2-hero img { width: 100%; display: block; }
+#screen-lobby .lobby2-foot {
+  margin-top: auto; font-family: 'Alegreya SC', serif; font-size: calc(var(--u) * 12);
+  color: var(--parch-mute); letter-spacing: calc(var(--u) * 0.5); z-index: 2;
+}
+
+/* (Hero placement is unified across sizes — see the single rule above.) */
+
+/* --- right: play --- */
+#screen-lobby .lobby2-play {
+  padding: calc(var(--u) * 18) calc(var(--u) * 25);
+  display: flex; flex-direction: column; gap: calc(var(--u) * 9);
+  justify-content: center;
+  border-left: 1px solid var(--line); background: var(--panel);
+}
+#screen-lobby .lobby2-label {
+  display: block; font-family: 'Alegreya SC', serif; font-size: calc(var(--u) * 12); font-weight: 700;
+  letter-spacing: calc(var(--u) * 1.5); color: var(--parch-mute); margin-bottom: calc(var(--u) * 5);
+}
+#screen-lobby .lobby2-input {
+  width: 100%; background: var(--field); border: 1px solid var(--bronze); border-radius: calc(var(--u) * 8);
+  color: var(--parch); font-family: 'Alegreya', Georgia, serif; font-size: calc(var(--u) * 16);
+  padding: calc(var(--u) * 9) calc(var(--u) * 13); outline: none;
+}
+#screen-lobby .lobby2-input:focus { border-color: var(--gold); box-shadow: 0 0 0 2px rgba(224, 162, 60, 0.22); }
+#screen-lobby .lobby2-input::placeholder { color: #6a5a3a; }
+#screen-lobby .lobby2-select { cursor: pointer; }
+#screen-lobby .lobby2-btn {
+  font-family: 'Alegreya SC', serif; font-weight: 700; letter-spacing: calc(var(--u) * 1);
+  cursor: pointer; border: none;
+  display: flex; align-items: center; justify-content: center; gap: calc(var(--u) * 8); border-radius: calc(var(--u) * 8);
+}
+#screen-lobby .lobby2-chev { font-size: 0.8em; }
+#screen-lobby .lobby2-btn-play {
+  font-size: calc(var(--u) * 18); color: #2a1c07; padding: calc(var(--u) * 11);
+  background: linear-gradient(180deg, var(--gold-lt), var(--gold));
+  box-shadow: 0 4px 16px -4px rgba(224, 162, 60, 0.6), inset 0 1px 0 rgba(255,255,255,.45);
+  text-shadow: 0 1px 0 rgba(255, 240, 200, 0.4);
+}
+#screen-lobby .lobby2-btn-play:hover { filter: brightness(1.06); }
+#screen-lobby .lobby2-or {
+  display: flex; align-items: center; gap: calc(var(--u) * 10); font-family: 'Alegreya SC', serif;
+  color: var(--parch-mute); font-size: calc(var(--u) * 12); letter-spacing: calc(var(--u) * 1.5);
+}
+#screen-lobby .lobby2-or::before, #screen-lobby .lobby2-or::after { content: ''; flex: 1; height: 1px; background: var(--line); }
+#screen-lobby .lobby2-joinrow { display: flex; gap: calc(var(--u) * 8); }
+#screen-lobby .lobby2-joinrow .lobby2-code { flex: 1; text-transform: uppercase; letter-spacing: calc(var(--u) * 3); text-align: center; }
+#screen-lobby .lobby2-btn-join { font-size: calc(var(--u) * 15); color: var(--parch); padding: 0 calc(var(--u) * 18); background: #33260f; border: 1px solid var(--bronze); }
+#screen-lobby .lobby2-btn-join:hover { background: #45330f; border-color: var(--gold); }
+#screen-lobby .lobby2-btn-ghost { font-size: calc(var(--u) * 14); color: var(--parch-mute); padding: 0 calc(var(--u) * 14); background: rgba(30, 22, 10, 0.6); border: 1px solid var(--bronze-dk); }
+#screen-lobby .lobby2-btn-ghost:hover { color: var(--parch-dim); border-color: var(--bronze); }
+#screen-lobby .lobby2-observe {
+  display: flex; align-items: center; gap: calc(var(--u) * 8); font-size: calc(var(--u) * 14); color: var(--parch-mute);
+  cursor: pointer; user-select: none;
+}
+#screen-lobby .lobby2-observe input { accent-color: var(--gold); width: calc(var(--u) * 14); height: calc(var(--u) * 14); }
+#screen-lobby .lobby2-games { margin-top: calc(var(--u) * 2); display: flex; flex-direction: column; min-height: 0; }
+#screen-lobby .lobby2-games-h {
+  display: flex; justify-content: space-between; align-items: center; font-family: 'Alegreya SC', serif;
+  font-size: calc(var(--u) * 12); font-weight: 700; letter-spacing: calc(var(--u) * 1.5); color: var(--parch-mute); margin-bottom: calc(var(--u) * 6);
+}
+#screen-lobby .lobby2-games-h button {
+  background: none; border: none; color: var(--gold); font-family: 'Alegreya SC', serif;
+  font-size: calc(var(--u) * 12); cursor: pointer; letter-spacing: calc(var(--u) * 1);
+}
+#screen-lobby .lobby2-rooms { display: flex; flex-direction: column; gap: calc(var(--u) * 6); overflow-y: auto; max-height: 34vh; }
+#screen-lobby .lobby2-rooms-empty { color: var(--parch-mute); font-size: calc(var(--u) * 14); padding: calc(var(--u) * 8) calc(var(--u) * 2); font-style: italic; }
+#screen-lobby .lobby2-room-row {
+  display: flex; align-items: center; gap: calc(var(--u) * 10); padding: calc(var(--u) * 8) calc(var(--u) * 11); border-radius: calc(var(--u) * 7);
+  background: var(--field); border: 1px solid var(--bronze-dk); font-size: calc(var(--u) * 15); cursor: pointer;
+  transition: background .12s, border-color .12s;
+}
+#screen-lobby .lobby2-room-row:hover { background: var(--field-hi); border-color: var(--bronze); }
+#screen-lobby .lobby2-room-who { flex: 1; color: var(--parch-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#screen-lobby .lobby2-room-rcode { color: var(--parch-mute); letter-spacing: calc(var(--u) * 1.5); font-size: calc(var(--u) * 13); font-family: 'Alegreya SC', serif; }
+#screen-lobby .lobby2-room-age { color: #7a6537; font-size: calc(var(--u) * 12); min-width: calc(var(--u) * 26); text-align: right; }
+#screen-lobby .lobby2-room-go { color: var(--gold); font-family: 'Alegreya SC', serif; font-weight: 700; font-size: calc(var(--u) * 13); letter-spacing: calc(var(--u) * 1); }
+
+/* --- waiting room (after create/join) --- */
+#screen-lobby .lobby2-room {
+  position: relative; z-index: 1;
+  max-width: calc(var(--u) * 560); margin: calc(var(--u) * 24) auto 0; padding: calc(var(--u) * 24);
+  border: 1px solid var(--bronze); border-radius: calc(var(--u) * 12); background: rgba(20, 14, 6, 0.94);
+  color: var(--parch-dim); font-family: 'Alegreya', Georgia, serif;
+  display: flex; flex-direction: column; gap: calc(var(--u) * 16);
+}
+#screen-lobby .lobby2-room-head { display: flex; justify-content: space-between; align-items: flex-start; }
+#screen-lobby .lobby2-room-code { font-family: 'Alegreya SC', serif; font-size: calc(var(--u) * 28); font-weight: 800; letter-spacing: calc(var(--u) * 4); color: var(--gold-lt); }
+#screen-lobby .lobby2-room-tag { font-size: calc(var(--u) * 14); color: var(--parch-mute); font-style: italic; }
+#screen-lobby .lobby2-roster { display: flex; flex-direction: column; gap: calc(var(--u) * 6); }
+#screen-lobby .lobby2-status {
+  position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%);
+  z-index: 40; font-size: calc(var(--u) * 15); padding: calc(var(--u) * 8) calc(var(--u) * 16); border-radius: calc(var(--u) * 8);
+  background: rgba(20, 14, 6, 0.96); border: 1px solid var(--bronze); color: var(--parch-dim);
+  max-width: 90vw; text-align: center; pointer-events: none;
+}
+#screen-lobby .lobby2-status:empty { display: none; }
+#screen-lobby .lobby2-status.error { border-color: #a5502e; color: #f0b48a; }
+
+/* Landscape-only game: the lobby NEVER reflows to a vertical portrait stack.
+   It always renders the horizontal composition (scaled by --u). Portrait phones
+   get the rotate-to-landscape nudge (#rotate-nudge) instead. */
+
+/* ===== ROTATE-TO-LANDSCAPE NUDGE (whole app is landscape-first) ===== */
+#rotate-nudge { display: none; }
+@keyframes rotate-nudge-spin { 0%, 100% { transform: rotate(-12deg); } 50% { transform: rotate(102deg); } }
+@media (orientation: portrait) and (max-width: 820px) {
+  #rotate-nudge {
+    display: flex; position: fixed; inset: 0; z-index: 100000;
+    flex-direction: column; align-items: center; justify-content: center; gap: 16px;
+    text-align: center; padding: 28px;
+    background: radial-gradient(150% 150% at 50% 40%, #251a0e 0%, #0b0805 100%);
+    color: #f2ead2; font-family: 'Alegreya SC', Georgia, serif;
+  }
+  #rotate-nudge .rotate-nudge-icon {
+    font-size: 68px; line-height: 1; color: #e0a23c;
+    text-shadow: 0 0 24px rgba(224, 162, 60, 0.35);
+    animation: rotate-nudge-spin 2.6s ease-in-out infinite;
+  }
+  #rotate-nudge .rotate-nudge-title { font-size: 27px; font-weight: 800; letter-spacing: 1px; }
+  #rotate-nudge .rotate-nudge-sub {
+    font-family: 'Alegreya', Georgia, serif; font-style: italic;
+    color: #9a865c; font-size: 15px;
+  }
+}
+
+

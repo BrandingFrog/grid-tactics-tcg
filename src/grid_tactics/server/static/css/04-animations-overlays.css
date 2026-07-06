@@ -1,0 +1,1761 @@
+/* ===== Animations ===== */
+
+/* Card hover in deck builder */
+.card-browser-item .card-frame:hover {
+  transform: none;
+}
+
+/* ===== Utility Classes ===== */
+.text-cyan { color: var(--cyan); }
+.text-green { color: var(--green); }
+.text-red { color: var(--red); }
+.text-yellow { color: var(--yellow); }
+.text-muted { color: var(--muted); }
+.text-dim { color: var(--dim); }
+.text-center { text-align: center; }
+.mt-8 { margin-top: 8px; }
+.mt-16 { margin-top: 16px; }
+.mb-8 { margin-bottom: 8px; }
+.mb-16 { margin-bottom: 16px; }
+.gap-8 { gap: 8px; }
+.hidden { display: none !important; }
+
+/* ===== Game Tooltip (sidebar hover preview) =====
+   Uses the same inner DOM + class names as #card-tooltip, so the shared
+   .tooltip-* rules above drive its appearance. Only the outer container
+   styling and a few size tweaks are specific to the sidebar context. */
+/* =======================================
+   TOOLTIP SIDEBAR (left panel — duel & deck builder)
+   ======================================= */
+
+.tooltip-sidebar {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+  overflow-x: hidden;
+  position: relative;
+}
+
+.tooltip-sidebar .card-tooltip {
+  position: relative;
+  top: auto;
+  right: auto;
+  width: auto;
+  padding: 6px;
+  max-height: 100%;
+  overflow-y: auto;
+  scrollbar-width: none;          /* Firefox */
+  -ms-overflow-style: none;       /* IE/Edge */
+}
+.tooltip-sidebar .card-tooltip::-webkit-scrollbar {
+  display: none;                  /* Chrome/Safari */
+}
+
+/* Hearthstone-style stacked status panels under the main card tooltip.
+   Surfaces live buffs/debuffs/statuses on the hovered board minion that
+   aren't part of the printed card text. */
+.tooltip-status-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 8px;
+  padding: 0 4px;
+}
+.tooltip-status-panel {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: rgba(15, 25, 40, 0.92);
+  border: 1px solid rgba(0, 212, 255, 0.45);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+  color: #e8f0ff;
+}
+.tooltip-status-panel.tooltip-status-buff {
+  border-color: rgba(80, 220, 120, 0.6);
+}
+.tooltip-status-panel.tooltip-status-debuff {
+  border-color: rgba(255, 110, 90, 0.6);
+}
+.tooltip-status-panel.tooltip-status-aura {
+  border-color: rgba(180, 110, 255, 0.6);
+}
+.tooltip-status-icon {
+  font-size: 1.6em;
+  line-height: 1;
+  flex: 0 0 auto;
+}
+.tooltip-status-body {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.tooltip-status-name {
+  font-weight: 700;
+  font-size: 0.95em;
+  margin-bottom: 2px;
+}
+.tooltip-status-desc {
+  font-size: 0.82em;
+  color: #b8c8dc;
+  line-height: 1.3;
+}
+
+.tooltip-sidebar-hint {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: var(--muted);
+  font-family: 'Inter', system-ui, sans-serif;
+  font-size: 12px;
+  text-align: center;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--card);
+}
+
+.game-tooltip {
+  position: relative;
+  top: auto;
+  left: auto;
+  right: auto;
+  z-index: 10;
+  width: auto;
+  background: var(--card);
+  border: 1px solid var(--cyan);
+  border-radius: 10px;
+  padding: 12px;
+  overflow-y: auto;
+  max-height: 100%;
+  box-shadow: 0 0 20px rgba(0, 212, 255, 0.15);
+}
+
+/* Slightly smaller card preview to fit the sidebar column */
+#game-tooltip .tooltip-card .card-frame-full {
+  max-width: 200px;
+}
+
+/* Shared tooltip content classes (emitted by buildCardTooltipContent).
+   Both #card-tooltip (deck builder) and #game-tooltip (in-game hover)
+   use these classes so the CSS is unified. */
+.tooltip-text {
+  color: white;
+  font-family: 'Inter', system-ui, sans-serif;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.5;
+  margin-bottom: 8px;
+}
+.tooltip-flavour {
+  color: var(--cyan);
+  font-family: 'Inter', system-ui, sans-serif;
+  font-size: 11px;
+  font-style: italic;
+  margin-bottom: 8px;
+}
+
+/* Game tooltip: slightly smaller to fit the sidebar */
+#game-tooltip .tooltip-stats { font-size: 11px; }
+#game-tooltip .tooltip-text { font-size: 11px; margin-bottom: 6px; }
+#game-tooltip .tooltip-flavour { font-size: 10px; margin-bottom: 6px; }
+#game-tooltip .tooltip-keyword { margin-bottom: 3px; }
+#game-tooltip .tooltip-keyword-name { font-size: 9px; letter-spacing: 0.5px; }
+#game-tooltip .tooltip-keyword-desc { font-size: 9px; }
+
+/* ===== Mobile Responsive (max-width 600px) ===== */
+@media (max-width: 600px) {
+  /* Header */
+  .header { padding: 0 8px; height: 44px; }
+  .logo { font-size: 12px; margin-right: 12px; }
+  .nav-btn { padding: 10px 8px; font-size: 11px; }
+
+  /* Lobby */
+  .lobby-container { padding: 16px 8px; }
+  .lobby-heading { font-size: 24px; }
+
+  /* Deck Builder */
+  .deck-builder-layout { padding: 4px 8px; height: calc(100vh - 44px); }
+
+  .deck-builder-body { grid-template-columns: 1fr; }
+  .card-browser { padding: 8px; }
+  .card-browser-filters { gap: 4px; }
+  .filter-label { min-width: 40px; font-size: 8px; }
+  .filter-btn { padding: 3px 6px; font-size: 8px; }
+  .filter-checkbox { font-size: 8px; }
+
+  .card-browser-grid {
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 8px;
+  }
+
+  .card-name-overlay { font-size: 10px; }
+  .card-effect-full { font-size: 8px; }
+  .card-flavour { font-size: 8px; }
+  .card-stat-atk, .card-stat-hp { font-size: 12px; }
+  .card-mana { font-size: 12px; }
+  .card-bottom-tribe { font-size: 9px; }
+  .card-bottom-range { font-size: 9px; }
+
+  /* Deck sidebar on mobile = collapsed below */
+  .deck-sidebar { padding: 8px; max-height: 150px; }
+
+  /* Tooltip sidebar hidden on mobile */
+  .tooltip-sidebar { display: none; }
+
+  /* Game Layout */
+  .game-layout { grid-template-columns: 1fr; height: calc(100vh - 44px); padding: 4px; gap: 4px; }
+  .game-sidebar { display: none; }
+  .room-bar { padding: 4px 8px; }
+  .info-bar { padding: 4px 8px; gap: 8px; }
+  .player-tag { font-size: 10px; }
+  .stat-label { font-size: 8px; }
+  .stat-value { font-size: 14px; }
+  .stat-group { gap: 12px; }
+  .board-container { padding: 4px; }
+  .hand-container { max-height: 100px; min-height: 70px; }
+  .card-frame { width: 70px; }
+  .card-frame-hand { width: 66px !important; max-width: 66px !important; }
+
+  /* Deck builder cards adapt to width — 2 cols at 375px, 1 at 320px */
+  .card-frame-full { width: 100%; max-width: 220px; }
+  .card-frame-full .card-name-overlay { font-size: 14px; }
+  .card-frame-full .card-effect-full { font-size: 10px; }
+  .card-frame-full .card-flavour { font-size: 9px; }
+  .card-frame-full .card-stat-atk,
+  .card-frame-full .card-stat-hp { font-size: 14px; }
+  .card-frame-full .card-mana { font-size: 14px; }
+
+  /* Header: hide patch badge on small screens */
+  .patch-badge { display: none; }
+}
+
+/* ===== Extra-small screens (<=420px) ===== */
+@media (max-width: 420px) {
+  .header { padding: 0 6px; overflow: hidden; }
+  .logo { font-size: 11px; margin-right: 8px; letter-spacing: 1px; }
+  .nav-btn { padding: 10px 6px; font-size: 10px; }
+  .nav { gap: 0; }
+  .header-right { gap: 6px; }
+  .conn { font-size: 9px; }
+
+  .lobby-heading { font-size: 20px; letter-spacing: 2px; }
+  .lobby-container { padding: 12px 6px; }
+
+  .card-browser-grid {
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+    gap: 6px;
+  }
+  .card-frame-full { max-width: 180px; }
+  .filter-label { min-width: 35px; font-size: 7px; }
+  .filter-btn { padding: 2px 5px; font-size: 7px; }
+}
+
+/* ===== Phase 14 PLAY-02: React Window UI ===== */
+.react-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: rgba(255, 152, 0, 0.12);
+  border: 1px solid var(--yellow);
+  border-radius: 6px;
+  padding: 8px 14px;
+  margin: 4px 0;
+  flex-shrink: 0;
+  animation: react-pulse 1.8s ease-in-out infinite;
+}
+
+.react-banner-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  color: var(--yellow);
+  text-transform: uppercase;
+  background: rgba(255, 152, 0, 0.18);
+  padding: 3px 8px;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+
+.react-banner-desc {
+  font-size: 13px;
+  color: var(--text);
+  font-weight: 500;
+}
+
+@keyframes react-pulse {
+  0%, 100% { box-shadow: 0 0 0 rgba(255, 152, 0, 0); }
+  50%      { box-shadow: 0 0 14px rgba(255, 152, 0, 0.4); }
+}
+
+/* React-playable hand card glow (distinct from .card-playable green) */
+.card-frame-hand.card-react-playable {
+  cursor: pointer;
+  box-shadow: 0 0 10px rgba(255, 152, 0, 0.7);
+  border-color: var(--yellow);
+}
+
+.card-frame-hand.card-react-playable:hover {
+  box-shadow: 0 0 18px rgba(255, 152, 0, 0.9);
+  transform: rotate(calc(var(--offset) * 3deg)) translateY(-14px) !important;
+}
+
+@media (max-width: 600px) {
+  .react-banner {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+    padding: 6px 10px;
+  }
+  .react-banner-desc {
+    font-size: 12px;
+  }
+}
+
+/* ===== Phase 14 PLAY-03: Game Over Overlay ===== */
+.game-over-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.78);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  backdrop-filter: blur(2px);
+}
+
+.game-over-modal {
+  background: var(--card);
+  border: 2px solid var(--cyan);
+  border-radius: 12px;
+  padding: 32px 40px;
+  min-width: 360px;
+  max-width: 90vw;
+  box-shadow: 0 0 40px rgba(0, 212, 255, 0.3);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+}
+
+.game-over-result {
+  font-size: 48px;
+  font-weight: 800;
+  letter-spacing: 4px;
+  text-transform: uppercase;
+  text-align: center;
+}
+
+.game-over-result.victory {
+  color: var(--cyan);
+  text-shadow: 0 0 16px rgba(0, 212, 255, 0.6);
+}
+
+.game-over-result.defeat {
+  color: var(--red);
+  text-shadow: 0 0 16px rgba(255, 80, 80, 0.5);
+}
+
+.game-over-result.draw {
+  color: var(--yellow);
+  text-shadow: 0 0 16px rgba(255, 152, 0, 0.5);
+}
+
+.game-over-reason {
+  font-size: 14px;
+  color: var(--muted);
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+
+.game-over-hp-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  margin: 8px 0 4px 0;
+}
+
+.game-over-hp-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  background: var(--card2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.game-over-hp-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.game-over-hp-value {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--cyan);
+  font-variant-numeric: tabular-nums;
+}
+
+.game-over-status {
+  font-size: 12px;
+  color: var(--muted);
+  text-align: center;
+  min-height: 16px;
+  font-style: italic;
+}
+
+.game-over-status.waiting {
+  color: var(--cyan);
+}
+
+.game-over-status.incoming {
+  color: var(--yellow);
+  font-weight: 700;
+  font-style: normal;
+  animation: react-pulse 1.8s ease-in-out infinite;
+}
+
+.game-over-buttons {
+  display: flex;
+  gap: 8px;
+  width: 100%;
+}
+
+.game-over-buttons .btn {
+  flex: 1;
+  padding: 10px;
+}
+
+.game-over-buttons .btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+@media (max-width: 600px) {
+  .game-over-modal {
+    min-width: 0;
+    width: 92vw;
+    padding: 24px 20px;
+  }
+  .game-over-result {
+    font-size: 36px;
+    letter-spacing: 3px;
+  }
+  .game-over-reason {
+    font-size: 12px;
+  }
+}
+
+/* Phase 14.1: Advance-Wars style attack range footprint (educational) */
+.board-cell.attack-range-footprint {
+  box-shadow: inset 0 0 0 3px rgba(255, 80, 80, 0.45);
+  background-color: rgba(255, 80, 80, 0.12);
+}
+
+/* Phase 14.1: Valid attack target tile (clickable) — distinct from range footprint */
+.board-cell.attack-valid-target {
+  box-shadow: inset 0 0 0 4px rgba(255, 30, 30, 0.95);
+  background-color: rgba(255, 30, 30, 0.35);
+  cursor: crosshair;
+  animation: attack-target-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes attack-target-pulse {
+  0%, 100% { box-shadow: inset 0 0 0 4px rgba(255, 30, 30, 0.95); }
+  50%      { box-shadow: inset 0 0 0 4px rgba(255, 120, 120, 1.0); }
+}
+
+/* Phase 14.1: Decline post-move attack button */
+/* MSN-Messenger-style chat nudges. Triggered when opponent types
+   keywords ("egg", "boom", "rain", "kiss") in chat. */
+.nudge-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+/* --- egg --- */
+.nudge-overlay.nudge-egg {
+  animation: egg-screen-shake 600ms cubic-bezier(.36,.07,.19,.97) 700ms 1;
+}
+
+.egg-splat-egg {
+  position: absolute;
+  top: 50%;
+  left: -20vw;
+  font-size: 220px;
+  line-height: 1;
+  transform: translateY(-50%) rotate(-20deg);
+  filter: drop-shadow(0 8px 20px rgba(0,0,0,0.6));
+  animation: egg-fly 700ms cubic-bezier(.45,.05,.55,.95) forwards;
+}
+
+.egg-splat-splat {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  font-size: 260px;
+  line-height: 1;
+  transform: translate(-50%, -50%) scale(0);
+  opacity: 0;
+  filter: drop-shadow(0 6px 16px rgba(0,0,0,0.6));
+  animation: egg-splat-pop 0ms 700ms forwards,
+             egg-splat-fade 1500ms 1700ms forwards;
+}
+
+@keyframes egg-fly {
+  0%   { left: -20vw; transform: translateY(-50%) rotate(-20deg); opacity: 1; }
+  85%  { left: 50vw;  transform: translateY(-50%) translateX(-50%) rotate(380deg); opacity: 1; }
+  100% { left: 50vw;  transform: translateY(-50%) translateX(-50%) rotate(380deg) scale(0.1); opacity: 0; }
+}
+
+@keyframes egg-splat-pop {
+  to { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+}
+
+@keyframes egg-splat-fade {
+  0%   { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  100% { opacity: 0; transform: translate(-50%, -50%) scale(1.15); }
+}
+
+@keyframes egg-screen-shake {
+  10%, 90% { transform: translate(-2px, 1px); }
+  20%, 80% { transform: translate(4px, -2px); }
+  30%, 50%, 70% { transform: translate(-6px, 3px); }
+  40%, 60% { transform: translate(6px, -3px); }
+}
+
+/* --- boom --- bomb drops, flash, burst --- */
+.nudge-overlay.nudge-boom {
+  animation: egg-screen-shake 700ms cubic-bezier(.36,.07,.19,.97) 600ms 1;
+}
+.boom-bomb {
+  position: absolute;
+  top: -20vh;
+  left: 50%;
+  font-size: 180px;
+  line-height: 1;
+  transform: translateX(-50%) rotate(0deg);
+  filter: drop-shadow(0 8px 20px rgba(0,0,0,0.7));
+  animation: boom-drop 600ms cubic-bezier(.55,.05,.85,.45) forwards;
+}
+.boom-flash {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at center, rgba(255,240,180,0.95) 0%, rgba(255,140,40,0.6) 30%, rgba(255,60,20,0) 70%);
+  opacity: 0;
+  animation: boom-flash 250ms 600ms ease-out forwards;
+}
+.boom-burst {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  font-size: 320px;
+  line-height: 1;
+  transform: translate(-50%, -50%) scale(0);
+  opacity: 0;
+  filter: drop-shadow(0 6px 20px rgba(255,80,0,0.7));
+  animation: boom-burst-pop 400ms 600ms cubic-bezier(.16,1.5,.3,1) forwards,
+             boom-burst-fade 1700ms 1000ms ease-out forwards;
+}
+@keyframes boom-drop {
+  0%   { top: -20vh; }
+  100% { top: 50%; transform: translateX(-50%) translateY(-50%) rotate(540deg); }
+}
+@keyframes boom-flash {
+  0%   { opacity: 0; }
+  20%  { opacity: 1; }
+  100% { opacity: 0; }
+}
+@keyframes boom-burst-pop {
+  to { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+}
+@keyframes boom-burst-fade {
+  0%   { opacity: 1; }
+  100% { opacity: 0; transform: translate(-50%, -50%) scale(1.3); }
+}
+
+/* --- rain --- cloud + 40 falling drops --- */
+.nudge-overlay.nudge-rain {
+  background: linear-gradient(to bottom, rgba(20,30,60,0.45), rgba(20,30,60,0.15));
+}
+.rain-cloud {
+  position: absolute;
+  top: 4vh;
+  left: 50%;
+  font-size: 140px;
+  line-height: 1;
+  transform: translateX(-50%);
+  filter: drop-shadow(0 6px 16px rgba(0,0,0,0.6));
+  animation: rain-cloud-sway 2500ms ease-in-out infinite alternate;
+}
+.rain-drop {
+  position: absolute;
+  top: -8vh;
+  font-size: 32px;
+  line-height: 1;
+  animation-name: rain-fall;
+  animation-timing-function: linear;
+  animation-iteration-count: 2;
+  filter: drop-shadow(0 2px 4px rgba(0,0,0,0.5));
+}
+@keyframes rain-cloud-sway {
+  0%   { transform: translateX(-55%); }
+  100% { transform: translateX(-45%); }
+}
+@keyframes rain-fall {
+  0%   { top: -8vh; opacity: 1; }
+  90%  { opacity: 1; }
+  100% { top: 110vh; opacity: 0; }
+}
+
+/* --- no-action fatigue nudge — big skull + -5❤️ + NO ACTION AVAILABLE --- */
+.nudge-overlay.nudge-no-action {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  animation: egg-screen-shake 700ms cubic-bezier(.36,.07,.19,.97) 200ms 1;
+}
+.no-action-skull {
+  font-size: 220px;
+  line-height: 1;
+  filter: drop-shadow(0 8px 20px rgba(0,0,0,0.8));
+  animation: no-action-skull-pop 400ms cubic-bezier(.16,1.5,.3,1) forwards;
+  transform-origin: center;
+}
+.no-action-damage {
+  font-family: 'Montserrat', sans-serif; font-weight: 900; text-transform: uppercase;
+  font-size: 120px;
+  color: #ff3030;
+  line-height: 1;
+  margin-top: 12px;
+  text-shadow:
+    4px 4px 0 #000,
+    -4px 4px 0 #000,
+    4px -4px 0 #000,
+    -4px -4px 0 #000,
+    4px 0 0 #000,
+    -4px 0 0 #000,
+    0 4px 0 #000,
+    0 -4px 0 #000;
+  animation: no-action-pop 400ms 250ms cubic-bezier(.16,1.5,.3,1) backwards;
+}
+.no-action-text {
+  font-family: 'Montserrat', sans-serif; font-weight: 900; text-transform: uppercase;
+  font-size: 80px;
+  color: #ffffff;
+  line-height: 1.1;
+  margin-top: 16px;
+  letter-spacing: 2px;
+  text-shadow:
+    4px 4px 0 #000,
+    -4px 4px 0 #000,
+    4px -4px 0 #000,
+    -4px -4px 0 #000,
+    4px 0 0 #000,
+    -4px 0 0 #000,
+    0 4px 0 #000,
+    0 -4px 0 #000;
+  animation: no-action-pop 400ms 450ms cubic-bezier(.16,1.5,.3,1) backwards;
+}
+@keyframes no-action-skull-pop {
+  0%   { transform: scale(0) rotate(-15deg); opacity: 0; }
+  70%  { transform: scale(1.15) rotate(5deg); opacity: 1; }
+  100% { transform: scale(1) rotate(0deg); opacity: 1; }
+}
+@keyframes no-action-pop {
+  0%   { transform: scale(0); opacity: 0; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+/* --- handshake banner — turn-structure redesign (2026-07) ---
+   Both players passed consecutively: 🤝 + HANDSHAKE! + per-player payout.
+   Rendered by playHandshake via runNudge (id nudge-handshake). */
+.nudge-overlay.nudge-handshake {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: radial-gradient(ellipse at center, rgba(20, 40, 30, 0.45), rgba(0, 0, 0, 0.1));
+}
+.handshake-emoji {
+  font-size: 180px;
+  line-height: 1;
+  filter: drop-shadow(0 8px 20px rgba(0, 0, 0, 0.7));
+  animation: no-action-skull-pop 400ms cubic-bezier(.16,1.5,.3,1) forwards;
+  transform-origin: center;
+}
+.handshake-title {
+  font-family: 'Montserrat', sans-serif; font-weight: 900; text-transform: uppercase;
+  font-size: 84px;
+  color: #6fe8a8;
+  line-height: 1;
+  margin-top: 14px;
+  letter-spacing: 3px;
+  text-shadow:
+    4px 4px 0 #000, -4px 4px 0 #000, 4px -4px 0 #000, -4px -4px 0 #000,
+    4px 0 0 #000, -4px 0 0 #000, 0 4px 0 #000, 0 -4px 0 #000;
+  animation: no-action-pop 400ms 250ms cubic-bezier(.16,1.5,.3,1) backwards;
+}
+.handshake-sub {
+  font-family: 'Montserrat', sans-serif; font-weight: 700;
+  font-size: 34px;
+  color: #ffffff;
+  line-height: 1.2;
+  margin-top: 12px;
+  letter-spacing: 1px;
+  text-shadow:
+    2px 2px 0 #000, -2px 2px 0 #000, 2px -2px 0 #000, -2px -2px 0 #000;
+  animation: no-action-pop 400ms 450ms cubic-bezier(.16,1.5,.3,1) backwards;
+}
+
+/* --- overdraw burn reveal — turn-structure redesign (2026-07) ---
+   A draw with a full hand (10 cards) reveals the card center-screen, then
+   playOverdrawBurn hands off to the card_fly ghost toward the Exhaust pile.
+   Card width matches the hand-card render so renderCardFrame lays out
+   correctly inside. */
+.overdraw-reveal {
+  position: fixed;
+  left: 50%;
+  top: 42%;
+  transform: translate(-50%, -50%);
+  z-index: 9999;
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  animation: overdraw-reveal-pop 300ms cubic-bezier(.16,1.5,.3,1) forwards;
+}
+.overdraw-reveal-card {
+  width: 170px;
+  filter: drop-shadow(0 10px 28px rgba(255, 100, 30, 0.55));
+}
+.overdraw-reveal-card .card-frame,
+.overdraw-reveal-card .card-frame-hand {
+  width: 100%;
+}
+.overdraw-reveal-label {
+  font-family: 'Montserrat', sans-serif; font-weight: 900; text-transform: uppercase;
+  font-size: 28px;
+  color: #ff8030;
+  margin-top: 10px;
+  letter-spacing: 2px;
+  text-shadow:
+    2px 2px 0 #000, -2px 2px 0 #000, 2px -2px 0 #000, -2px -2px 0 #000;
+}
+/* Fallback nudge when the overdrawn card identity is unavailable. */
+.nudge-overlay.nudge-overdraw-fallback {
+  display: flex;
+  /* column: card back above the label, both centered — matches the main
+     .overdraw-reveal composition (row put the label right of center) */
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+@keyframes overdraw-reveal-pop {
+  0%   { transform: translate(-50%, -50%) scale(0.4); opacity: 0; }
+  70%  { transform: translate(-50%, -50%) scale(1.08); opacity: 1; }
+  100% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+}
+
+/* --- kiss --- lipstick mark stamps and lingers --- */
+.kiss-mark {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  font-size: 260px;
+  line-height: 1;
+  transform: translate(-50%, -50%) scale(0) rotate(-25deg);
+  opacity: 0;
+  filter: drop-shadow(0 8px 20px rgba(220,40,80,0.7));
+  animation: kiss-stamp 350ms cubic-bezier(.16,1.5,.3,1) forwards,
+             kiss-fade 1500ms 1500ms ease-out forwards;
+}
+@keyframes kiss-stamp {
+  0%   { transform: translate(-50%, -50%) scale(0) rotate(-25deg); opacity: 0; }
+  60%  { transform: translate(-50%, -50%) scale(1.25) rotate(-12deg); opacity: 1; }
+  100% { transform: translate(-50%, -50%) scale(1) rotate(-15deg); opacity: 1; }
+}
+@keyframes kiss-fade {
+  to { opacity: 0; }
+}
+
+/* Stat emoji wrapper — used around 🗡️ and 🤍 wherever they appear
+   inline with numeric text. Makes the emoji slightly larger than
+   the surrounding font, vertically centered, and adds a four-way
+   drop-shadow halo that works where -webkit-text-stroke doesn't
+   (color-glyph emojis). */
+.stat-emoji {
+  display: inline-flex;
+  align-items: center;
+  line-height: 1;
+  vertical-align: -0.1em;
+}
+
+.stat-emoji .stat-icon {
+  width: 1.1em;
+  height: 1.1em;
+}
+
+/* Patch badge — lives inside .header-right, left of the Connected
+   indicator. Populated from /static/VERSION.json on page load. */
+.patch-badge {
+  font-family: 'Inter', system-ui, sans-serif;
+  font-size: 10px;
+  line-height: 1.25;
+  color: rgba(255, 255, 255, 0.72);
+  text-align: right;
+  pointer-events: none;
+}
+.patch-badge .patch-version {
+  font-weight: 700;
+  font-size: 11px;
+  color: #ffd84a;
+  letter-spacing: 0.5px;
+}
+.patch-badge .patch-updated {
+  opacity: 0.8;
+}
+
+/* Deck code export/import modal */
+.deck-code-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+}
+.deck-code-modal {
+  background: var(--card);
+  border: 2px solid var(--cyan);
+  border-radius: 10px;
+  padding: 20px 24px;
+  box-shadow: 0 8px 32px rgba(0, 212, 255, 0.25);
+  min-width: 420px;
+  max-width: 90vw;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.deck-code-modal-title {
+  font-family: 'Montserrat', sans-serif; font-weight: 900; text-transform: uppercase;
+  font-size: 22px;
+  color: var(--cyan);
+  letter-spacing: 1px;
+}
+.deck-code-modal-hint {
+  font-size: 12px;
+  color: var(--text-dim);
+  margin-bottom: 4px;
+}
+.deck-code-modal-textarea {
+  width: 100%;
+  min-height: 90px;
+  padding: 10px;
+  background: var(--card2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-family: 'Courier New', monospace;
+  font-size: 12px;
+  word-break: break-all;
+  resize: vertical;
+  box-sizing: border-box;
+}
+.deck-code-modal-textarea:focus {
+  border-color: var(--cyan);
+  outline: none;
+}
+.deck-code-modal-error {
+  color: #ff6060;
+  font-size: 12px;
+  padding: 6px 10px;
+  background: rgba(255, 60, 60, 0.1);
+  border: 1px solid rgba(255, 60, 60, 0.4);
+  border-radius: 4px;
+}
+.deck-code-modal-row {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-top: 4px;
+}
+
+/* SFX mute toggle in the room bar */
+.sfx-mute-btn {
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text);
+  font-size: 18px;
+  line-height: 1;
+  padding: 4px 8px;
+  cursor: pointer;
+  margin-left: 8px;
+}
+.sfx-mute-btn:hover {
+  background: var(--card2);
+  border-color: var(--cyan);
+}
+
+/* Hand action bar — groups Pass / Skip React / Decline Attack
+   directly above the hand so all player actions live in one place. */
+.hand-action-bar {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 6px 0;
+  min-height: 0;
+}
+.hand-action-bar:empty {
+  display: none;
+}
+
+#decline-post-move-attack-btn {
+  padding: 10px 20px;
+  background: rgba(40, 0, 0, 0.85);
+  color: #ffdcdc;
+  border: 2px solid rgba(255, 60, 60, 0.95);
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: bold;
+  letter-spacing: 1px;
+  cursor: pointer;
+  box-shadow: 0 2px 10px rgba(255, 30, 30, 0.35);
+}
+#decline-post-move-attack-btn:hover {
+  background: rgba(80, 0, 0, 0.95);
+  border-color: #ff6060;
+}
+
+/* =============================================
+ * Phase 14.3 Animations
+ * =============================================
+ * Wave 2: summon scale-in + grid shake.
+ * .anim-summon is applied to a .board-cell (containing a freshly-summoned
+ * minion) by the AnimationQueue via the animatingTiles registry.
+ * .anim-grid-shake is applied transiently to #game-board.
+ */
+
+@keyframes summon-scale-in {
+  0%   { transform: scale(2.0); opacity: 0; }
+  20%  { opacity: 1; }
+  100% { transform: scale(1.0); opacity: 1; }
+}
+.anim-summon {
+  animation: summon-scale-in 600ms cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  transform-origin: center center;
+  z-index: 10;
+}
+
+/* Applied only to the tilted #game-board (playSummonAnimation, game.js).
+   The base board carries transform: rotateX(20deg); the shake keeps that
+   rotateX baked into every keyframe so the board never snaps FLAT mid-shake
+   (which would over-rotate the rotateX(-20deg) standees forward). The
+   translate rides OUTSIDE the tilt for a true screen-space jitter. */
+@keyframes grid-shake {
+  0%, 100% { transform: translate(0, 0) rotateX(20deg); }
+  20% { transform: translate(-3px, 2px) rotateX(20deg); }
+  40% { transform: translate(3px, -2px) rotateX(20deg); }
+  60% { transform: translate(-2px, -2px) rotateX(20deg); }
+  80% { transform: translate(2px, 1px) rotateX(20deg); }
+}
+.anim-grid-shake {
+  animation: grid-shake 350ms ease-in-out;
+}
+
+/* ---------------------------------------------------------------- */
+/* Phase 14.3-04: Attack animation (rubber-band + impact + popup)   */
+/* ---------------------------------------------------------------- */
+.anim-attack-windup {
+  transition: transform 180ms ease-out;
+  z-index: 30;
+  position: relative;
+}
+.anim-attack-strike {
+  transition: transform 120ms cubic-bezier(0.7, 0.0, 0.9, 0.5);
+  z-index: 30;
+  position: relative;
+}
+@keyframes target-hit {
+  0%   { background-color: transparent; transform: translate(0,0); }
+  20%  { background-color: rgba(255,40,40,0.6); transform: translate(-4px,2px); }
+  40%  { background-color: rgba(255,40,40,0.4); transform: translate(4px,-2px); }
+  60%  { transform: translate(-2px,-2px); }
+  80%  { transform: translate(2px,1px); }
+  100% { background-color: transparent; transform: translate(0,0); }
+}
+.anim-target-hit { animation: target-hit 400ms ease-out; }
+
+@keyframes damage-float {
+  0%   { transform: translate(-50%, 0)    scale(0.7); opacity: 0; }
+  15%  { transform: translate(-50%, -10px) scale(1.2); opacity: 1; }
+  100% { transform: translate(-50%, -60px) scale(1.0); opacity: 0; }
+}
+.damage-popup {
+  position: absolute;
+  left: 50%;
+  top: 20%;
+  font-size: 28px;
+  font-weight: 900;
+  color: #ff3030;
+  text-shadow: 0 2px 4px rgba(0,0,0,0.8), 0 0 8px rgba(255,0,0,0.6);
+  pointer-events: none;
+  z-index: 50;
+  animation: damage-float 900ms ease-out forwards;
+}
+
+/* Sacrifice portal variant — flickers the ring's dash pattern while
+   the JS transition handles scale + opacity independently. */
+@keyframes sac-portal-spin {
+  0%   { border-style: solid; }
+  50%  { border-style: dashed; }
+  100% { border-style: solid; }
+}
+
+/* HP life-total popups — same float animation as minion damage, but
+   positioned absolutely by the runtime and escalated to fixed z-index
+   so they ride over pile buttons and the sandbox toolbar. */
+.hp-damage-popup {
+  position: fixed;
+  font-size: 42px;
+  color: #ff4040;
+  text-shadow: 0 3px 6px rgba(0,0,0,0.9), 0 0 16px rgba(255,64,64,0.8);
+  z-index: 9998;
+}
+
+/* Brief red flash on the HP stat number whose value just dropped. */
+.hp-flash {
+  animation: hp-flash-pulse 600ms ease-out;
+}
+@keyframes hp-flash-pulse {
+  0%   { color: #ff4040; transform: scale(1.4); text-shadow: 0 0 16px rgba(255,64,64,1); }
+  100% { color: inherit; transform: scale(1); text-shadow: none; }
+}
+
+/* ---------------------------------------------------------------- */
+/* Phase 14.3-03: Move animation (lift -> translate -> drop)        */
+/* ---------------------------------------------------------------- */
+/* The actual translate distance is set inline via style.transform   */
+/* by playMoveAnimation; these classes provide the easing/stacking. */
+.anim-move-lift {
+  transform: scale(1.15);
+  filter: drop-shadow(0 8px 12px rgba(0,0,0,0.5));
+  transition: transform 120ms ease-out, filter 120ms ease-out;
+  z-index: 20;
+  position: relative;
+}
+.anim-move-translate {
+  transition: transform 350ms cubic-bezier(0.4, 0.0, 0.2, 1),
+              filter 350ms ease-out;
+  z-index: 20;
+  position: relative;
+  pointer-events: none;
+}
+.anim-move-drop {
+  animation: move-drop 120ms ease-in both;
+  transform-origin: center center;
+}
+@keyframes move-drop {
+  0%   { transform: scale(1.15); filter: drop-shadow(0 8px 12px rgba(0,0,0,0.5)); }
+  100% { transform: scale(1.0);  filter: none; }
+}
+
+/* ---------------------------------------------------------------- */
+/* Phase 14.3 Wave 7 — Floating popups & status badges              */
+/* ---------------------------------------------------------------- */
+/* Reusable popup system: showFloatingPopup(tile, text, variant)    */
+/* in game.js appends a .floating-popup.<variant> to a .board-cell. */
+/* Five variants: combat-damage, heal, burn-tick, buff, debuff.     */
+
+.floating-popup {
+  position: absolute;
+  left: 50%;
+  top: 30%;
+  transform: translate(-50%, 0);
+  font-family: 'Montserrat', sans-serif;
+  font-size: 26px;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  -webkit-text-stroke: 4px #000;
+  paint-order: stroke fill;
+  pointer-events: none;
+  z-index: 60;
+  white-space: nowrap;
+  animation: popup-rise 2200ms ease-out forwards;
+}
+
+.floating-popup.combat-damage { color: #ff3030; }
+.floating-popup.heal          { color: #3aff70; }
+.floating-popup.burn-tick     { color: #ff8030; }
+.floating-popup.buff          { color: #30dfff; }
+.floating-popup.debuff        { color: #c060ff; }
+
+/* Popups live inside a .board-cell, which sits in the rotateX(20deg) board
+   under preserve-3d — so without help they render foreshortened ~20deg and
+   their rise drifts up the receding board plane. rotateX(-20deg) counter-
+   rotates each frame (matching the .board-standee billboard), standing the
+   number up to face the camera so the -72px rise travels screen-vertical.
+   popup-rise is used only by .floating-popup, which only ever appears in a
+   tilted board cell, so the counter-rotation is universally correct. */
+@keyframes popup-rise {
+  0%   { transform: translate(-50%, 0)    scale(0.6)  rotateX(-20deg); opacity: 0; }
+  12%  { transform: translate(-50%, -8px) scale(1.15) rotateX(-20deg); opacity: 1; }
+  70%  { transform: translate(-50%, -48px) scale(1.0) rotateX(-20deg); opacity: 1; }
+  100% { transform: translate(-50%, -72px) scale(0.95) rotateX(-20deg); opacity: 0; }
+}
+
+/* Persistent status badges, rendered inside renderBoardMinion. */
+.minion-badges {
+  position: absolute;
+  left: 2px;
+  bottom: 2px;
+  display: flex;
+  gap: 2px;
+  z-index: 5;
+  pointer-events: none;
+}
+.minion-badge {
+  font-size: 14px;
+  line-height: 1;
+  padding: 1px 3px;
+  border-radius: 3px;
+  background: rgba(0,0,0,0.55);
+  color: #fff;
+  font-weight: bold;
+}
+.badge-burning { /* emoji-only, no border */ }
+.badge-buff   { border: 1px solid #3aff70; color: #3aff70; }
+.badge-debuff { border: 1px solid #ff5050; color: #ff5050; }
+
+/* ---------------------------------------------------------------- */
+/* Cinder death (burn-kill): paper-burn curl from bottom upward.    */
+/* Sequenced by playBurnDeathAnimation in game.js. ~1000ms total.   */
+/* ---------------------------------------------------------------- */
+@keyframes cinder-death {
+  0% {
+    -webkit-mask-image: linear-gradient(to top, transparent 0%, black 0%, black 100%);
+            mask-image: linear-gradient(to top, transparent 0%, black 0%, black 100%);
+    filter: sepia(0) brightness(1) contrast(1);
+    opacity: 1;
+  }
+  20% {
+    -webkit-mask-image: linear-gradient(to top, transparent 15%, rgba(0,0,0,0.4) 18%, black 24%, black 100%);
+            mask-image: linear-gradient(to top, transparent 15%, rgba(0,0,0,0.4) 18%, black 24%, black 100%);
+    filter: sepia(0.6) brightness(1.05) contrast(1.1)
+            drop-shadow(0 -2px 6px rgba(255,140,40,0.85));
+    opacity: 1;
+  }
+  60% {
+    -webkit-mask-image: linear-gradient(to top, transparent 55%, rgba(0,0,0,0.4) 60%, black 68%, black 100%);
+            mask-image: linear-gradient(to top, transparent 55%, rgba(0,0,0,0.4) 60%, black 68%, black 100%);
+    filter: sepia(0.95) brightness(0.85) contrast(1.2)
+            drop-shadow(0 -3px 10px rgba(255,120,30,0.95));
+    opacity: 0.9;
+  }
+  100% {
+    -webkit-mask-image: linear-gradient(to top, transparent 100%, rgba(0,0,0,0.2) 102%, black 110%, black 100%);
+            mask-image: linear-gradient(to top, transparent 100%, rgba(0,0,0,0.2) 102%, black 110%, black 100%);
+    filter: sepia(1) brightness(0.4) contrast(1.3)
+            drop-shadow(0 -4px 12px rgba(255,80,10,0.6));
+    opacity: 0;
+  }
+}
+.anim-cinder-death {
+  animation: cinder-death 1000ms ease-in forwards;
+  pointer-events: none;
+  z-index: 25;
+  position: relative;
+  will-change: mask-image, filter, opacity;
+}
+
+@keyframes cinder-ember-rise {
+  0%   { transform: translate(var(--ex, 0px), 0) scale(1);   opacity: 0; }
+  15%  { opacity: 1; }
+  100% { transform: translate(var(--ex, 0px), -48px) scale(0.4); opacity: 0; }
+}
+.cinder-ember {
+  position: absolute;
+  bottom: 20%;
+  left: 50%;
+  width: 6px;
+  height: 6px;
+  margin-left: -3px;
+  border-radius: 50%;
+  background: radial-gradient(circle, #ffd07a 0%, #ff7a1a 55%, rgba(255,80,10,0) 100%);
+  box-shadow: 0 0 8px rgba(255,140,40,0.9);
+  pointer-events: none;
+  z-index: 26;
+  animation: cinder-ember-rise 950ms ease-out forwards;
+}
+
+/* ============================================================
+   Phase 14.4: Spectator Mode
+   ============================================================ */
+#spectating-badge {
+  display: none;
+  background: #ffd700;
+  color: #1a1a1a;
+  font-weight: bold;
+  padding: 4px 10px;
+  border-radius: 4px;
+  margin-left: 12px;
+  letter-spacing: 0.05em;
+  font-size: 0.85em;
+}
+#spectating-badge.visible { display: inline-block; }
+
+.god-mode-label {
+  display: block;
+  margin-top: 8px;
+  font-size: 0.9em;
+  color: #aaa;
+  cursor: pointer;
+}
+.god-mode-label input { margin-right: 6px; vertical-align: middle; }
+
+.spectator-hand-label {
+  width: 100%;
+  font-size: 0.75em;
+  font-weight: bold;
+  letter-spacing: 0.1em;
+  color: #ffd700;
+  text-transform: uppercase;
+  padding: 4px 8px;
+  opacity: 0.8;
+}
+
+/* =====================================================================
+   Game layout — medium / small viewport overrides
+   Must come AFTER base .game-sidebar / .hand-container / .board-container
+   definitions so cascade order wins at equal specificity.
+   ===================================================================== */
+
+@media (max-width: 900px) {
+  .game-sidebar { display: none; }
+  .game-main { overflow-y: auto; }
+  .board-container { min-height: 200px; }
+  .hand-container { min-height: 80px; }
+}
+
+/* =====================================================================
+   Phase 14.5 Wave 5: Pile buttons (grave / exhaust) + Pile modal
+   + Opponent face-down hand row.
+   ===================================================================== */
+
+/* Pile buttons live inline at the end of each info-bar stat-group. */
+.pile-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 4px 8px;
+  cursor: pointer;
+  color: white;
+  font-family: inherit;
+  transition: background 150ms ease, border-color 150ms ease, transform 100ms ease;
+}
+.pile-btn:hover {
+  background: rgba(0, 212, 255, 0.08);
+  border-color: var(--cyan);
+}
+.pile-btn:active {
+  transform: scale(0.96);
+}
+.pile-emoji {
+  font-size: 22px;
+  line-height: 1;
+}
+.pile-count {
+  font-size: 15px;
+  font-weight: 800;
+  color: white;
+  min-width: 14px;
+  text-align: center;
+}
+
+/* Opponent face-down hand row — inverted fan (arcs downward). */
+.opp-hand-row {
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding: 2px 4px 6px;
+  min-height: 0;
+  overflow: visible;
+  position: relative;
+}
+.opp-hand-card-back {
+  width: 52px;
+  height: 70px;
+  border-radius: 5px;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  background:
+    repeating-linear-gradient(45deg,
+      rgba(0, 212, 255, 0.18) 0 6px,
+      rgba(0, 60, 100, 0.35) 6px 12px),
+    linear-gradient(135deg, #0a1a30 0%, #061224 100%);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.4), inset 0 0 0 1px rgba(0, 212, 255, 0.12);
+  pointer-events: none;
+  flex: 0 0 auto;
+  /* Fan arc (inverted — cards fan downward at top) */
+  --offset: calc(var(--i) - (var(--n) - 1) / 2);
+  transform-origin: top center;
+  transform: rotate(calc(var(--offset) * -3deg)) translateY(calc(var(--offset) * var(--offset) * -1px));
+  margin-left: calc(-14px * min(1, var(--i)));
+  position: relative;
+  z-index: calc(var(--i) + 1);
+}
+
+/* Element-tinted card backs (2026-07) — DESIGNED information leak: the
+   server exposes each opponent hand card's ELEMENT (only), and the back is
+   tinted with the matching element color (--back-tint set from JS via
+   ELEMENT_MAP). The face-down DECK pile stays neutral — only HAND backs
+   tint. Falls back to the neutral back above if color-mix is unsupported. */
+.opp-hand-card-back.element-back {
+  --back-tint: rgb(128, 128, 128);
+  border-color: color-mix(in srgb, var(--back-tint) 65%, #ffffff 10%);
+  background:
+    repeating-linear-gradient(45deg,
+      rgba(0, 0, 0, 0.30) 0 6px,
+      rgba(0, 0, 0, 0.06) 6px 12px),
+    linear-gradient(135deg,
+      color-mix(in srgb, var(--back-tint) 55%, #171008) 0%,
+      color-mix(in srgb, var(--back-tint) 22%, #061224) 100%);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.4),
+    inset 0 0 0 1px color-mix(in srgb, var(--back-tint) 40%, transparent);
+}
+
+/* Mini tinted back used by the redacted overdraw-burn fallback nudge. */
+.overdraw-burn-back {
+  --back-tint: rgb(128, 128, 128);
+  width: 52px;
+  height: 70px;
+  margin: 0 auto 6px;
+  border-radius: 5px;
+  border: 1px solid color-mix(in srgb, var(--back-tint) 65%, #ffffff 10%);
+  background:
+    repeating-linear-gradient(45deg,
+      rgba(0, 0, 0, 0.30) 0 6px,
+      rgba(0, 0, 0, 0.06) 6px 12px),
+    linear-gradient(135deg,
+      color-mix(in srgb, var(--back-tint) 55%, #171008) 0%,
+      color-mix(in srgb, var(--back-tint) 22%, #061224) 100%);
+}
+
+/* Pile modal overlay — reuses the tutor-modal aesthetic. */
+.pile-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(5, 10, 20, 0.82);
+  backdrop-filter: blur(3px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 3000;
+  padding: 20px;
+}
+.pile-modal {
+  background: var(--card);
+  border: 2px solid var(--cyan);
+  border-radius: 12px;
+  box-shadow: 0 10px 40px rgba(0, 212, 255, 0.35);
+  max-width: 1100px;
+  width: 100%;
+  max-height: 92vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  font-family: 'Inter', system-ui, sans-serif;
+}
+.pile-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--border);
+  background: var(--card2);
+}
+.pile-modal-title {
+  font-size: 18px;
+  font-weight: 800;
+  color: white;
+  letter-spacing: 0.3px;
+}
+.pile-modal-close {
+  background: transparent;
+  border: 1px solid var(--muted);
+  color: white;
+  border-radius: 6px;
+  width: 32px;
+  height: 32px;
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+  transition: border-color 150ms ease, color 150ms ease;
+}
+.pile-modal-close:hover {
+  border-color: var(--cyan);
+  color: var(--cyan);
+}
+.pile-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 18px;
+  padding: 20px;
+  overflow-y: auto;
+  justify-items: center;
+}
+.pile-grid .card-frame-pile {
+  width: 200px;
+}
+.pile-grid-empty {
+  color: var(--muted);
+  font-size: 14px;
+  padding: 24px;
+  text-align: center;
+  grid-column: 1 / -1;
+}
+
+@media (max-width: 700px) {
+  .pile-modal { max-height: 96vh; }
+  .pile-grid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 12px; padding: 14px; }
+  .pile-grid .card-frame-pile { width: 140px; }
+  .opp-hand-card-back { width: 30px; height: 44px; }
+  .pile-emoji { font-size: 18px; }
+  .pile-count { font-size: 13px; }
+}
+
+/* =============================================
+   Phase 14.5 Wave 6: Card-draw animations
+   ============================================= */
+
+/* Own-hand draw: card flies from source → settles into hand slot.
+   --draw-fly-dx / --draw-fly-dy are set inline per-instance to
+   carry the (source - target) pixel delta. */
+@keyframes draw-fly-in {
+  0% {
+    transform: translate(var(--draw-fly-dx, 0px), var(--draw-fly-dy, 0px)) scale(0.3);
+    opacity: 0;
+  }
+  30% {
+    opacity: 1;
+  }
+  100% {
+    transform: translate(0, 0) scale(1);
+    opacity: 1;
+  }
+}
+
+.draw-fly-in {
+  position: fixed;
+  z-index: 1000;
+  pointer-events: none;
+  animation: draw-fly-in 600ms ease-out forwards;
+  transform-origin: center center;
+  will-change: transform, opacity;
+}
+
+/* Opponent hand: face-down card back pops into the row. */
+@keyframes opp-back-pop {
+  0%   { transform: scale(0);   opacity: 0; }
+  60%  { transform: scale(1.1); opacity: 1; }
+  100% { transform: scale(1);   opacity: 1; }
+}
+
+.opp-hand-card-back.pop-in {
+  animation: opp-back-pop 400ms ease-out;
+}
+
+/* ============================================================ */
+/* Phase 14.6: Sandbox screen layout                              */
+/* Mirrors #screen-game (.game-layout > tooltip + main + sidebar) */
+/* so renderBoard/renderHand reuse all live-game CSS. Only the    */
+/* right-hand sidebar content differs: sandbox controls replace   */
+/* the Log/Chat panel.                                            */
+/* ============================================================ */
+
+/* Sandbox sidebar panel (replaces .sidebar-section activity-panel) */
+#sandbox-control-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  overflow-y: auto;
+}
+#sandbox-control-panel .sandbox-ctrl-title {
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--cyan);
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 6px;
+  flex-shrink: 0;
+}
+#sandbox-control-panel .sandbox-ctrl-subtitle {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--muted);
+  margin-bottom: 4px;
+}
+#sandbox-control-panel .sandbox-ctrl-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+}
+#sandbox-control-panel .sandbox-ctrl-group:last-child {
+  border-bottom: none;
+}
+#sandbox-control-panel .sandbox-ctrl-slots {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+#sandbox-control-panel .sandbox-inline-row {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+#sandbox-control-panel .sandbox-inline-label {
+  font-size: 11px;
+  color: var(--muted);
+  margin-right: 2px;
+}
+#sandbox-control-panel .btn-sm {
+  padding: 4px 8px;
+  font-size: 11px;
+}
+#sandbox-control-panel .input {
+  padding: 6px 8px;
+  font-size: 12px;
+  width: 100%;
+  box-sizing: border-box;
+}
+#sandbox-control-panel .sandbox-search-wrap {
+  position: relative;
+  width: 100%;
+}
+#sandbox-control-panel .sandbox-search-results {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  max-height: 160px;
+  overflow-y: auto;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  z-index: 100;
+  margin-top: 4px;
+}
+.sandbox-search-result {
+  padding: 5px 8px;
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  gap: 6px;
+  border-bottom: 1px solid var(--border);
+  font-size: 11px;
+}
+.sandbox-search-result:hover { background: var(--card2); }
+.sandbox-search-result-name { font-weight: 600; }
+.sandbox-search-result-meta { color: var(--muted); font-size: 0.9em; }
+#sandbox-control-panel .sandbox-target-btn.active,
+#sandbox-control-panel .sandbox-control-btn.active,
+#sandbox-control-panel .sandbox-zone-btn.active {
+  background: var(--cyan);
+  color: #000;
+}
+#sandbox-control-panel .sandbox-zone-btn {
+  font-size: 10px;
+  padding: 3px 6px;
+}
+.sandbox-zone-btns {
+  flex-wrap: wrap;
+}
+#sandbox-control-panel .sandbox-cheat-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+#sandbox-control-panel .sandbox-cheat-col {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 6px;
+  background: var(--card2);
+  border-radius: 6px;
+}
+#sandbox-control-panel .sandbox-cheat-col strong {
+  font-size: 10px;
+  color: var(--muted);
+}
+#sandbox-control-panel .sandbox-cheat-col label {
+  display: flex;
+  gap: 3px;
+  align-items: center;
+  font-size: 10px;
+}
+#sandbox-control-panel .sandbox-cheat-input {
+  width: 100%;
+  padding: 3px 4px;
+  font-size: 11px;
+}
+#sandbox-control-panel .sandbox-btn-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+}
+#sandbox-control-panel .sandbox-slots-header {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 4px;
+  align-items: center;
+}
+#sandbox-control-panel .sandbox-slots-list {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin-top: 6px;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+}
+.sandbox-slot-row {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 4px;
+  align-items: center;
+  padding: 4px 6px;
+  background: var(--card2);
+  border-radius: 4px;
+  font-size: 11px;
+}
+.sandbox-slot-name {
+  font-family: monospace;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sandbox-slots-empty {
+  color: var(--muted);
+  font-style: italic;
+  padding: 4px;
+  font-size: 11px;
+}
+/* History status pill (top room-bar) */
+#screen-sandbox .sandbox-history-status {
+  font-family: monospace;
+  font-size: 11px;
+  color: var(--muted);
+  padding: 2px 8px;
+  background: var(--card2);
+  border-radius: 4px;
+}
+/* "Move to..." popover for cards in pile modals + hand rows */
+#screen-sandbox .sandbox-move-popover,
+.pile-modal .sandbox-move-popover,
+.sandbox-move-popover {
+  position: absolute;
+  background: #14142a;
+  border: 1px solid #444;
+  border-radius: 6px;
+  padding: 4px;
+  z-index: 200;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.sandbox-move-btn {
+  font-size: 0.8em;
+  padding: 2px 6px;
+  background: transparent;
+  border: 1px solid #444;
+  color: #ddd;
+  cursor: pointer;
+  border-radius: 3px;
+}
+.sandbox-move-btn:hover { background: #2a2a3e; }
+
+/* Staged card preview (draggable chip after search) */
+.sandbox-staged-card {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px;
+  background: var(--card2);
+  border: 1px solid var(--cyan);
+  border-radius: 6px;
+  cursor: grab;
+  user-select: none;
+  transition: box-shadow 150ms ease;
+}
+.sandbox-staged-card:hover {
+  box-shadow: 0 0 8px rgba(0, 212, 255, 0.3);
+}
+.sandbox-staged-card:active { cursor: grabbing; }
+.sandbox-staged-card .staged-art {
+  width: 32px;
+  height: 42px;
+  border-radius: 4px;
+  background-size: cover;
+  background-position: center;
+  background-color: var(--card);
+  flex-shrink: 0;
+  border: 1px solid var(--border);
+}
+.sandbox-staged-card .staged-name {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text);
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.sandbox-staged-card .staged-cost {
+  font-size: 10px;
+  color: var(--cyan);
+  font-weight: 700;
+  flex-shrink: 0;
+}
+.sandbox-staged-card .staged-drag-hint {
+  font-size: 9px;
+  color: var(--muted);
+  letter-spacing: 0.5px;
+}
+
+/* Drop target highlight while dragging a staged card */
+.drop-target-active {
+  outline: 2px dashed var(--cyan) !important;
+  outline-offset: -2px;
+  background: rgba(0, 212, 255, 0.08) !important;
+  transition: background 100ms ease, outline 100ms ease;
+}
+.drop-target-hover {
+  background: rgba(0, 212, 255, 0.2) !important;
+  outline-color: var(--green) !important;
+}
+
+

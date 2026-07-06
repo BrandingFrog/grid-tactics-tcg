@@ -8,7 +8,7 @@
 set -o pipefail
 
 # Watched path patterns
-WATCHED_PATTERNS="data/cards/|data/GLOSSARY.md|src/grid_tactics/enums.py|wiki/sync/|src/grid_tactics/server/static/game.js"
+WATCHED_PATTERNS="data/cards/|data/GLOSSARY.md|src/grid_tactics/enums.py|wiki/sync/|src/grid_tactics/server/static/js/"
 
 # Check if this commit touches any watched files
 CHANGED_FILES=$(git diff-tree --no-commit-id -r --name-only HEAD 2>/dev/null)
