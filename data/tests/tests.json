@@ -210,7 +210,7 @@
       "id": "acidic-rain-burns-metal-and-robots",
       "title": "Acidic Rain burns all Metal/Robot/Machine minions — and nothing else",
       "instructions": "1. Click Acidic Rain in P1's hand.\n2. Click any valid play indicator to cast it (it's 5 mana; P1 has 20).",
-      "expected": "All three Diodebots, the RGB Lasercannon, and the Sparkbot on P2's side should light up as BURNING (look for the fire glow/border). The Common Rat on P2 must NOT be burning.",
+      "expected": "All three Diodebots, the White Lasercannon, and the Sparkbot on P2's side should light up as BURNING (look for the fire glow/border). The Common Rat on P2 must NOT be burning.",
       "setup": [
         {
           "op": "reset"

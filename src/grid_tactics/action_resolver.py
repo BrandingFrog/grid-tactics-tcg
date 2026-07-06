@@ -1016,7 +1016,7 @@ def _cast_magic(
         # Phase 14.8 bugfix: route the destroyed ally through the STANDARD
         # death pipeline instead of deleting it from the board directly.
         # Direct deletion skipped the minion's ON_DEATH triggers (Giant
-        # Rat's promote, RGB Lasercannon's destroy) and never emitted
+        # Rat's promote, White Lasercannon's destroy) and never emitted
         # EVT_MINION_DIED. Zero its health and run _cleanup_dead_minions
         # in enqueue-only mode (_cleanup_skip_drain) so the on_death
         # PendingTriggers queue up WITHOUT opening a react window here —

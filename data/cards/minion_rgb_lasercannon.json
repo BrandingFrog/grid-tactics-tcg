@@ -1,7 +1,7 @@
 {
     "card_id": "rgb_lasercannon",
     "stable_id": 28,
-    "name": "RGB Lasercannon",
+    "name": "White Lasercannon",
     "card_type": "minion",
     "mana_cost": 3,
     "attack": 25,
@@ -20,7 +20,7 @@
         }
     ],
     "tips": [
-        "RGB Lasercannon requires discarding 2 Robots from hand to play. The Diodebot chain (Red → Green → Blue) is the primary way to stockpile Robots.",
+        "White Lasercannon requires discarding 2 Robots from hand to play. The Diodebot chain (Red → Green → Blue) is the primary way to stockpile Robots.",
         "The on-death destroy effect takes an enemy minion with it. This makes Lasercannon a 2-for-1 — the opponent loses their attacker AND the target of the destroy.",
         "At range 1, Lasercannon can attack from the second row while staying behind a blocker. Its 25🗡️ hits hard enough to threaten most minions.",
         "The discard cost means you lose 2 Robots from hand. Be aware that the 2-Robot discard can force you to pitch playable Robots — including a Sparkfed Surgebot or a second Lasercannon sitting in your hand. Plan which Robots are fodder before you commit.",

@@ -22,7 +22,7 @@
         "Red Diodebot tutors Green Diodebot on play, starting the Diodebot chain. Playing any one Diodebot lets you search the next one out of your deck.",
         "The chain cycle is Red → Green → Blue → Red. Each one tutors the next, ensuring you never run out of Robots in hand.",
         "At 12/12 for 2 mana, the stats are decent but the real value is deck thinning. Each Diodebot played pulls another card, accelerating your draws.",
-        "The tutored Robots fuel RGB Lasercannon's discard cost (2 Robots). Play a Diodebot to tutor another, then discard both for Lasercannon.",
+        "The tutored Robots fuel White Lasercannon's discard cost (2 Robots). Play a Diodebot to tutor another, then discard both for Lasercannon.",
         "In a Robot deck, lead with whichever Diodebot you draw first — the chain ensures you'll see all three regardless of draw order.",
         "Watch your hand size: the tutor pick is mandatory, and if your hand is full (10 cards) the tutored Diodebot burns to your Exhaust Pile revealed. Play a card before chaining Diodebots when you're near the cap."
     ],

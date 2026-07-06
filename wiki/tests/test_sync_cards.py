@@ -98,7 +98,7 @@ class TestDeriveKeywords:
         assert "Promote" in kws
 
     def test_derive_keywords_exhaust_cost(self):
-        """RGB Lasercannon: summon_sacrifice_tribe -> Cost, Exhaust."""
+        """White Lasercannon: summon_sacrifice_tribe -> Cost, Exhaust."""
         card = _load("minion_rgb_lasercannon.json")
         kws = derive_keywords(card)
         assert "Cost" in kws
@@ -295,3 +295,62 @@ class TestBuildCardNameMap:
         assert nm["rat"] == "Common Rat"
         assert nm["blue_diodebot"] == "Blue Diodebot"
         assert nm["counter_spell"] == "Counter Spell"
+
+
+# ---------------------------------------------------------------------------
+# 2026-07 fixups: player_dark_matter scaling, March/Rally keyword split,
+# Rally/Decay phase prefixes
+# ---------------------------------------------------------------------------
+
+
+class TestTurnStructureFixups:
+    def test_gargoyle_player_dark_matter_renders_dm_scaling(self, name_map):
+        """Gargoyle Sorceress uses scale_with='player_dark_matter' (pooled
+        DM). Rules text must carry the DM scaling + the ×3 placement clause,
+        never '+0🗡️' / '+0🤍'."""
+        card = _load("minion_gargoyle_sorceress.json")
+        rules = build_rules_text(card, name_map)
+        assert "Gain ([[Dark Matter]])🗡️🤍" in rules
+        assert "×3 if placed in front of a [[Dark]] [[Ranged]] ally" in rules
+        assert "+0🗡️" not in rules
+        assert "+0🤍" not in rules
+
+    def test_gargoyle_keywords_include_dark_matter(self):
+        card = _load("minion_gargoyle_sorceress.json")
+        kws = derive_keywords(card)
+        assert "Dark Matter" in kws
+
+    def test_march_forward_renders_march_not_rally(self, name_map):
+        """Furryroach's march_forward must link [[March]] — [[Rally]] now
+        names the start-of-turn phase (2026-07 keyword rename)."""
+        card = _load("minion_furryroach.json")
+        rules = build_rules_text(card, name_map)
+        assert "Move: [[March]] friendly Furryroach" in rules
+        assert "[[Rally]] friendly" not in rules
+
+    def test_march_forward_keyword_is_march(self):
+        card = _load("minion_furryroach.json")
+        kws = derive_keywords(card)
+        assert "March" in kws
+        assert "Rally" not in kws
+
+    def test_decay_phase_prefix_on_end_of_turn_effects(self, name_map):
+        """Dark Matter Battery's on_end_of_turn damage must render with a
+        [[Decay]] prefix so the wiki matches the in-game 'Decay:' text."""
+        card = _load("minion_dark_matter_battery.json")
+        rules = build_rules_text(card, name_map)
+        assert "[[Decay]]: " in rules
+
+    def test_dark_matter_battery_keywords_include_decay(self):
+        card = _load("minion_dark_matter_battery.json")
+        kws = derive_keywords(card)
+        assert "Decay" in kws
+
+    def test_fallen_paladin_rally_heal_and_keyword(self, name_map):
+        """Fallen Paladin's passive_heal fires ON_START_OF_TURN — wiki text
+        says [[Rally]]: [[Heal]] N and the keyword list carries Rally."""
+        card = _load("minion_fallen_paladin.json")
+        rules = build_rules_text(card, name_map)
+        assert "[[Rally]]: [[Heal]]" in rules
+        kws = derive_keywords(card)
+        assert "Rally" in kws

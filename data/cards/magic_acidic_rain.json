@@ -37,7 +37,7 @@
         "amount": 1
     },
     "tips": [
-        "A hard counter to Robot/Metal decks. Every Diodebot, RGB Lasercannon, Surgefed Sparkbot, and Dark Matter Battery on the board becomes burning simultaneously — each then takes burn tick damage in its owner's Decay Phase.",
+        "A hard counter to Robot/Metal decks. Every Diodebot, White Lasercannon, Surgefed Sparkbot, and Dark Matter Battery on the board becomes burning simultaneously — each then takes burn tick damage in its owner's Decay Phase.",
         "Burn is a boolean, not a stack — re-applying to an already-burning minion does nothing. Cast when several Metal/Robot targets are fresh.",
         "Paired with Flame Wyrm, each burning ENEMY Robot/Machine/Metal minion ticks for 6🤍 in its owner's Decay Phase instead of 5🤍. The aura never boosts burns on your own minions — your own burned Robots still tick for 5🤍.",
         "Burns your OWN Robots too — don't cast it if you're the Metal deck. Water vs Metal is the intended matchup.",
