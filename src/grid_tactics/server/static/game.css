@@ -13155,3 +13155,15 @@ body.ttabs-on #screen-game .game-sidebar { display: none !important; }
    board's (lower) bottom edge where PASS used to float — tuck PASS into the
    bottom-right corner beneath the column */
 #screen-game .duel-stage .hand-action-bar { bottom: 12px !important; right: 8px !important; }
+
+/* Playable/react-playable cards overlap like everyone else (user 2026-07-06):
+   the persistent z-lift (z-index:40, meant to show the full halo) painted
+   them ON TOP of their right neighbour, breaking the row rhythm. They keep
+   their slot order; hovering still lifts a card for inspection. */
+.card-frame-full.cf2.card-frame-hand.card-playable,
+.card-frame-full.cf2.card-frame-hand.card-react-playable {
+  z-index: calc(var(--i) + 1) !important;
+}
+.card-frame-full.cf2.card-frame-hand:hover {
+  z-index: 60 !important;
+}
