@@ -7080,7 +7080,7 @@ function _logMinionName(instanceId) {
 }
 
 function _logBurnSource(src) {
-    if (src === 'turn_start') return 'overdraw at full hand';
+    if (src === 'turn_start') return 'overdraw, hand full';
     if (src === 'tutor') return 'tutor';
     if (src === 'decline_conjure') return 'declined conjure';
     if (src === 'card_effect') return 'card effect';
@@ -7189,8 +7189,10 @@ function logEngineEvent(ev) {
         case 'overdraw_burn':
         case 'card_overdrawn':
         case 'card_exhausted':
-            text = _logPlayer(p.player_idx) + ' BURN ' + _logCardName(p.card_numeric_id)
-                 + ' → exhaust pile (' + _logBurnSource(p.source) + ')';
+            text = _logPlayer(p.player_idx)
+                 + (p.source === 'turn_start' ? ' OVERDRAWS — ' : ' ')
+                 + _logCardName(p.card_numeric_id)
+                 + ' EXHAUSTED (' + _logBurnSource(p.source) + ')';
             cls = 'burn';
             break;
         case 'handshake':

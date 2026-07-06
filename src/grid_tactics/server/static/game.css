@@ -13505,3 +13505,22 @@ body.ttabs-on #screen-game .game-sidebar { display: none !important; }
   right: calc(50% + 204px);
   transform-origin: center 312px;  /* new container height = board pivot */
 }
+
+/* Overdraw reveal card (user 2026-07-06): same min-font-size breakage as
+   the hand cards — at 170px the cf2 effect text computes ~4.8px and browser
+   font floors inflate the layout. Same fix: 4x DOM, scale(0.25) back down;
+   the .overdraw-reveal-card box stays 170px so the exhaust-fly rect and the
+   label position are unchanged. */
+.overdraw-reveal-card {
+  width: 170px;
+  height: 170px;
+  overflow: visible;
+}
+.overdraw-reveal-card .card-frame-full.cf2 {
+  width: 680px !important;
+  max-width: none !important;
+  height: 680px !important;
+  max-height: none !important;
+  transform: scale(0.25) !important;
+  transform-origin: top left !important;
+}
