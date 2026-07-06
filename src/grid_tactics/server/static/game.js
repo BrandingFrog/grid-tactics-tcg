@@ -1891,6 +1891,12 @@ function setupTooltipTabs() {
             var unread = document.getElementById('ttab-chat-unread');
             if (unread) { unread.style.display = 'none'; unread.textContent = ''; }
         }
+        if (b.dataset.t === 'log') {
+            // Entries appended while the pane was display:none can't scroll
+            // (zero scrollHeight) — jump to the newest entry on open.
+            var le = document.getElementById('log-entries');
+            if (le) le.scrollTop = le.scrollHeight;
+        }
     });
     document.body.classList.add('ttabs-on');
 }
@@ -3182,6 +3188,7 @@ document.addEventListener('DOMContentLoaded', function() {
     setupGameTooltipPin();
     setupBoardGapForgiveness();
     setupTooltipTabs();
+    setupLogToolbar();
     setupLobbyQuickview();
     setupNavHandlers();
     setupActivityTabs();
@@ -3489,6 +3496,10 @@ function resetEventQueue() {
     // Audit fix (2026-07-06): a stale spell stage (left up by leave-game /
     // game-over mid-react) must not survive into the next game.
     if (typeof _resetSpellStageHard === 'function') _resetSpellStageHard();
+    // Log lifecycle matches the queue lifecycle (game_start, sandbox open/
+    // reset/load): stale turn counter + minion-name registry from a prior
+    // game must not poison the new session's log.
+    if (typeof clearGameLog === 'function') clearGameLog();
 }
 
 function onEngineEvents(payload) {
@@ -3502,6 +3513,12 @@ function onEngineEvents(payload) {
             return;
         }
         lastSeenSeq = ev.seq;
+        // Game-log rebuild (2026-07-06): log every engine event at ENQUEUE
+        // time, in authoritative seq order — independent of animation pacing,
+        // the pending-modal gate, and drain reordering. The seq guard above
+        // also dedupes log lines on reconnect replay. Never let a log
+        // formatting bug break the game pipeline.
+        try { logEngineEvent(ev); } catch (e) { console.warn('[gameLog] format error', e); }
         eventQueue.push(ev);
     });
     // Phase 14.8-05b: stash final_state + arm the post-drain commit. The
@@ -6955,25 +6972,413 @@ function playCardFlyAnimation(job, done) {
 // The eventQueue pipeline consumes engine events directly — no snapshot
 // diff needed.
 
-// Game log helpers
+// =============================================
+// Game log (rebuilt 2026-07-06) — event-driven, copyable, debug-grade.
+//
+// The old writer, logStateDiff, sat on the legacy state_update wire format
+// that Phase 14.8-05 deleted server-side, so the log showed only the
+// "Game started." line. The live pipeline is engine_events → onEngineEvents;
+// logEngineEvent() below is called there per event, at enqueue time, in seq
+// order. Plain-text lines accumulate unbounded in window.__gameLog (also
+// copyable from the console); the DOM view is capped at LOG_DOM_CAP entries.
+// =============================================
+var LOG_DOM_CAP = 400;
+var _logTurn = null;                 // maintained from turn_flipped events
+var _logMinions = {};                // instance_id -> {name, owner}
+window.__gameLog = window.__gameLog || [];
+
 function clearGameLog() {
     var entries = document.getElementById('log-entries');
     if (entries) entries.innerHTML = '';
+    window.__gameLog = [];
+    _logTurn = null;
+    _logMinions = {};
 }
 
-function addLogEntry(text, type) {
+// opts (all optional): {plain: export-line override, title: hover tooltip,
+// detail: true → dimmed tier hidden unless Verbose is on}
+function addLogEntry(text, type, opts) {
+    opts = opts || {};
+    window.__gameLog.push(opts.plain != null ? opts.plain : ('[----] [T' + (_logTurn == null ? '?' : _logTurn) + '] ' + text));
     var entries = document.getElementById('log-entries');
     if (!entries) return;
     var entry = document.createElement('div');
-    entry.className = 'log-entry' + (type ? ' log-' + type : '');
+    entry.className = 'log-entry' + (type ? ' log-' + type : '') + (opts.detail ? ' log-detail' : '');
+    if (opts.title) entry.title = opts.title;
     var time = new Date();
     var timeStr = String(time.getHours()).padStart(2, '0') + ':' + String(time.getMinutes()).padStart(2, '0') + ':' + String(time.getSeconds()).padStart(2, '0');
-    entry.innerHTML = '<span class="log-time">' + timeStr + '</span> ' + text;
+    var timeEl = document.createElement('span');
+    timeEl.className = 'log-time';
+    timeEl.textContent = timeStr;
+    entry.appendChild(timeEl);
+    // textContent (not innerHTML) — chat-parity XSS safety: opponentName and
+    // card names must never be parsed as markup.
+    entry.appendChild(document.createTextNode(' ' + text));
+    // Only autoscroll when the user is already at the bottom, so an
+    // in-progress text selection (copy!) isn't yanked away mid-drag.
+    var nearBottom = (entries.scrollHeight - entries.scrollTop - entries.clientHeight) < 40;
     entries.appendChild(entry);
-    entries.scrollTop = entries.scrollHeight;
+    while (entries.children.length > LOG_DOM_CAP) {
+        entries.removeChild(entries.firstChild);
+    }
+    if (nearBottom) entries.scrollTop = entries.scrollHeight;
 }
 
-// Log differences between previous and new state
+// ---- formatting helpers ----------------------------------------------
+
+function _logCardName(id) {
+    if (id == null) return 'a card';
+    var d = cardDefs && cardDefs[id];
+    return (d && d.name) ? d.name : ('card#' + id);
+}
+
+function _logPos(pos) {
+    return (pos && pos.length >= 2) ? '(' + pos[0] + ',' + pos[1] + ')' : '(?,?)';
+}
+
+function _logPlayer(idx) {
+    if (idx == null) return '[P?]';
+    // Spectators get a real seat idx from the server (your_player_idx: 0),
+    // so gate on isSpectator explicitly — not on a null seat.
+    if (typeof isSpectator !== 'undefined' && isSpectator) return '[P' + idx + ']';
+    if (myPlayerIdx != null && idx === myPlayerIdx) return '[P' + idx + '·You]';
+    if (myPlayerIdx != null) return '[P' + idx + '·' + (opponentName || 'Opp') + ']';
+    return '[P' + idx + ']';
+}
+
+// attack_resolved / trigger_blip carry only instance_ids — resolve names via
+// a registry fed by minion_summoned/transformed, falling back to live state
+// and the last final_state snapshot.
+function _logMinionInfo(instanceId) {
+    if (instanceId == null) return null;
+    if (_logMinions[instanceId]) return _logMinions[instanceId];
+    var pools = [];
+    var live = (typeof sandboxMode !== 'undefined' && sandboxMode) ? sandboxState : gameState;
+    if (live && live.minions) pools.push(live.minions);
+    if (window.__lastFinalState && window.__lastFinalState.minions) {
+        pools.push(window.__lastFinalState.minions);
+    }
+    for (var pi = 0; pi < pools.length; pi++) {
+        for (var mi = 0; mi < pools[pi].length; mi++) {
+            var m = pools[pi][mi];
+            if (m && m.instance_id === instanceId) {
+                var info = {
+                    name: _logCardName(m.card_numeric_id),
+                    owner: (m.owner != null ? m.owner : m.owner_idx),
+                };
+                _logMinions[instanceId] = info;
+                return info;
+            }
+        }
+    }
+    return null;
+}
+
+function _logMinionName(instanceId) {
+    var info = _logMinionInfo(instanceId);
+    return info ? info.name : ('m#' + instanceId);
+}
+
+function _logBurnSource(src) {
+    if (src === 'turn_start') return 'overdraw at full hand';
+    if (src === 'tutor') return 'tutor';
+    if (src === 'decline_conjure') return 'declined conjure';
+    if (src === 'card_effect') return 'card effect';
+    return src || 'unknown';
+}
+
+// ---- per-event formatter ---------------------------------------------
+// Payload schemas: src/grid_tactics/engine_events.py (~line 190).
+// KNOWN ENGINE GAP: minion_hp_change is currently emitted only for burn
+// ticks — spell damage/heals to minions produce no event, so they appear
+// in the log only via their card_played/trigger_blip lines.
+function logEngineEvent(ev) {
+    if (!ev || !ev.type) return;
+    var p = ev.payload || {};
+    if (_logTurn == null) {
+        var live = (typeof sandboxMode !== 'undefined' && sandboxMode) ? sandboxState : gameState;
+        _logTurn = (live && typeof live.turn_number === 'number') ? live.turn_number : 1;
+    }
+    var text = null;
+    var cls = '';          // '' | damage | heal | react | turn | card | trigger | burn | over | debug
+    var detail = false;    // detail tier: dimmed, hidden unless Verbose; always exported
+    var i, parts;
+
+    switch (ev.type) {
+        case 'minion_summoned':
+            _logMinions[p.instance_id] = { name: _logCardName(p.card_numeric_id), owner: p.owner_idx };
+            text = _logPlayer(p.owner_idx) + ' summons ' + _logCardName(p.card_numeric_id)
+                 + ' at ' + _logPos(p.position) + ' [m#' + p.instance_id + ']';
+            cls = 'card';
+            break;
+        case 'minion_died':
+            text = _logPlayer(p.owner_idx) + ' ' + _logCardName(p.card_numeric_id)
+                 + ' dies at ' + _logPos(p.position)
+                 + (p.from_deck ? ' (from deck)' : '') + ' [m#' + p.instance_id + ']';
+            cls = 'damage';
+            break;
+        case 'minion_hp_change':
+            text = _logPlayer(p.owner_idx) + ' ' + _logMinionName(p.instance_id) + ' ' + _logPos(p.position)
+                 + ' ' + (p.cause || 'hp') + ' ' + (p.delta > 0 ? '+' : '') + p.delta
+                 + ' → ' + p.new_hp + ' HP';
+            cls = (p.delta < 0) ? 'damage' : 'heal';
+            break;
+        case 'minion_moved':
+            text = _logPlayer(p.owner_idx) + ' ' + _logMinionName(p.instance_id)
+                 + ' moves ' + _logPos(p.from) + '→' + _logPos(p.to);
+            break;
+        case 'minion_transformed':
+            var oldName = _logMinionName(p.instance_id);
+            _logMinions[p.instance_id] = { name: _logCardName(p.to_card_numeric_id), owner: p.owner_idx };
+            text = _logPlayer(p.owner_idx) + ' '
+                 + (p.from_card_numeric_id != null ? _logCardName(p.from_card_numeric_id) : oldName)
+                 + ' → ' + _logCardName(p.to_card_numeric_id)
+                 + ' at ' + _logPos(p.position) + ', ' + p.new_hp + ' HP';
+            cls = 'card';
+            break;
+        case 'minion_sacrificed':
+            text = _logPlayer(p.owner_idx) + ' SACRIFICE ' + _logCardName(p.card_numeric_id)
+                 + ' at ' + _logPos(p.position) + ': ' + p.damage + ' dmg to opponent';
+            cls = 'damage';
+            break;
+        case 'attack_resolved':
+            var atkInfo = _logMinionInfo(p.attacker_id);
+            var dmg = (p.defender_hp_before != null && p.defender_hp_after != null)
+                ? (p.defender_hp_before - p.defender_hp_after) : null;
+            text = (atkInfo ? _logPlayer(atkInfo.owner) + ' ' : '')
+                 + _logMinionName(p.attacker_id) + ' attacks ' + _logMinionName(p.defender_id)
+                 + ' ' + _logPos(p.target_pos) + ': '
+                 + p.defender_hp_before + '→' + p.defender_hp_after + ' HP'
+                 + (dmg != null ? ' (-' + dmg + ')' : '');
+            if (p.attacker_hp_before !== p.attacker_hp_after) {
+                text += '; retaliation: attacker ' + p.attacker_hp_before + '→' + p.attacker_hp_after;
+            }
+            if (p.defender_killed) text += ' — ' + _logMinionName(p.defender_id) + ' DIES';
+            if (p.attacker_killed) text += ' — attacker DIES';
+            cls = 'damage';
+            break;
+        case 'card_drawn':
+            if (p.card_numeric_id != null) {
+                text = _logPlayer(p.player_idx) + ' draws ' + _logCardName(p.card_numeric_id)
+                     + (p.source ? ' (' + p.source + ')' : '');
+                cls = 'card';
+            } else {
+                // opponent draw — card id redacted by view_filter
+                var elem = p.element || p.card_element;
+                text = _logPlayer(p.player_idx) + ' draws a card'
+                     + (elem ? ' (' + elem + ')' : '')
+                     + (p.source ? ' (' + p.source + ')' : '');
+                detail = true;
+            }
+            break;
+        case 'card_played':
+            var def = cardDefs && cardDefs[p.card_numeric_id];
+            text = _logPlayer(p.owner_idx) + ' plays ' + _logCardName(p.card_numeric_id)
+                 + (def && def.cost != null ? ' (' + def.cost + ' mana)' : '')
+                 + (p.position ? ' at ' + _logPos(p.position) : '')
+                 + (p.target_pos ? ' → target ' + _logPos(p.target_pos) : '')
+                 + (p.is_react ? ' [REACT]' : '');
+            cls = p.is_react ? 'react' : 'card';
+            break;
+        case 'card_discarded':
+            text = _logPlayer(p.player_idx) + ' discards ' + _logCardName(p.card_numeric_id)
+                 + ' → graveyard';
+            cls = 'card';
+            break;
+        case 'card_burned':
+        case 'overdraw_burn':
+        case 'card_overdrawn':
+        case 'card_exhausted':
+            text = _logPlayer(p.player_idx) + ' BURN ' + _logCardName(p.card_numeric_id)
+                 + ' → exhaust pile (' + _logBurnSource(p.source) + ')';
+            cls = 'burn';
+            break;
+        case 'handshake':
+        case 'handshake_resolved':
+            parts = [];
+            if (Array.isArray(p.outcomes)) {
+                for (i = 0; i < p.outcomes.length; i++) {
+                    var o = p.outcomes[i];
+                    var r = o.reward === 'mana' ? '+1 mana'
+                          : o.reward === 'card_drawn' ? 'draws (full mana)'
+                          : o.reward === 'card_burned' ? 'burns (full hand)'
+                          : 'no reward';
+                    parts.push(_logPlayer(o.player_idx) + ': ' + r);
+                }
+            }
+            text = '🤝 HANDSHAKE' + (parts.length ? ' — ' + parts.join('; ') : '');
+            cls = 'heal';
+            break;
+        case 'mana_change':
+            // Sandbox cheat edits omit `delta` — derive it.
+            var _md = (p.delta != null) ? p.delta : (p.new - p.prev);
+            text = _logPlayer(p.player_idx) + ' mana ' + p.prev + '→' + p.new
+                 + ' (' + (_md > 0 ? '+' : '') + _md + ')';
+            detail = true;
+            break;
+        case 'player_hp_change':
+            if (p.cause === 'fatigue') {
+                text = _logPlayer(p.player_idx) + ' FATIGUE ' + p.delta + ': '
+                     + p.prev + '→' + p.new + ' HP (empty deck)';
+            } else {
+                var _hd = (p.delta != null) ? p.delta : (p.new - p.prev);
+                text = _logPlayer(p.player_idx) + ' ' + p.prev + '→' + p.new + ' HP'
+                     + ' (' + (_hd > 0 ? '+' : '') + _hd + ')'
+                     + (p.cause ? ' [' + p.cause + ']' : '');
+            }
+            cls = (((p.delta != null) ? p.delta : (p.new - p.prev)) < 0) ? 'damage' : 'heal';
+            break;
+        case 'dark_matter_change':
+            text = _logPlayer(p.player_idx) + ' Dark Matter ' + p.prev + '→' + p.new
+                 + ' (' + (p.delta > 0 ? '+' : '') + p.delta + ')';
+            break;
+        case 'react_window_opened':
+            // react_context typing is inconsistent server-side (int enum from
+            // action_resolver, string name from react_stack) — show either.
+            text = '⚡ react window: ' + _logPlayer(p.react_player_idx) + ' may react'
+                 + ' (' + String(p.react_context)
+                 + (p.return_phase != null ? ', return→' + String(p.return_phase) : '') + ')';
+            cls = 'react';
+            detail = true;
+            break;
+        case 'react_window_closed':
+            text = '⚡ react window closed → ' + String(p.return_phase)
+                 + (p.shortcut ? ' [shortcut]' : '');
+            cls = 'react';
+            detail = true;
+            break;
+        case 'phase_changed':
+            text = 'phase ' + String(p.prev) + '→' + String(p.new);
+            detail = true;
+            break;
+        case 'turn_flipped':
+            if (typeof p.new_turn === 'number') _logTurn = p.new_turn;
+            var _spec = (typeof isSpectator !== 'undefined' && isSpectator);
+            var whoseTurn = (!_spec && myPlayerIdx != null && p.new_active_idx === myPlayerIdx)
+                ? 'You' : ((!_spec && myPlayerIdx != null) ? (opponentName || 'Opponent') : 'P' + p.new_active_idx);
+            text = '— Turn ' + p.new_turn + ': ' + whoseTurn + ' —';
+            cls = 'turn';
+            break;
+        case 'trigger_blip':
+            text = 'trigger ' + p.trigger_kind + ': ' + _logMinionName(p.source_minion_id)
+                 + ' ' + _logPos(p.source_position) + ' → ' + p.effect_kind
+                 + (p.target_position ? ' @ ' + _logPos(p.target_position) : '');
+            cls = 'trigger';
+            break;
+        case 'pending_modal_opened':
+            text = _logPlayer(p.owner_idx) + ' must choose: ' + p.modal_kind
+                 + ' (' + p.options_count + ' options'
+                 + (p.remaining != null ? ', ' + p.remaining + ' remaining' : '') + ')';
+            detail = true;
+            break;
+        case 'pending_modal_resolved':
+            text = 'choice resolved: ' + p.modal_kind
+                 + (p.picked_position ? ' → ' + _logPos(p.picked_position) : '');
+            detail = true;
+            break;
+        case 'fizzle':
+            text = '✗ FIZZLE ' + p.trigger_kind
+                 + ' (' + _logCardName(p.source_card_numeric_id) + '): '
+                 + (p.reason || 'unknown reason');
+            cls = 'burn';
+            break;
+        case 'game_over':
+            text = '★ GAME OVER — ' + _logPlayer(p.winner) + ' wins ('
+                 + (p.reason || 'unknown') + ')';
+            cls = 'over';
+            break;
+        default:
+            // never silently drop unknown events — they matter most for debugging
+            var pj = '';
+            try { pj = JSON.stringify(p); } catch (e2) { pj = '<unserializable>'; }
+            text = ev.type + ' ' + pj.slice(0, 120);
+            cls = 'debug';
+            detail = true;
+            break;
+    }
+    if (text == null) return;
+
+    var nested = (ev.triggered_by_seq != null);
+    if (nested && cls !== 'turn') text = '↳ ' + text;
+    var tPrefix = 'T' + _logTurn + ' ';
+    var domText = (cls === 'turn') ? text : (tPrefix + text);
+
+    // Plain-text export line: "[seq] [T<turn>] message" + debug suffixes
+    var seqStr = String(ev.seq);
+    while (seqStr.length < 4) seqStr = '0' + seqStr;
+    var plain = '[' + seqStr + '] [T' + _logTurn + '] ' + text
+        + (ev.contract_source ? ' | src=' + ev.contract_source : '')
+        + (nested ? ' by=' + ev.triggered_by_seq : '');
+
+    // Hover tooltip: raw type + seq + truncated JSON payload
+    var rawJson = '';
+    try { rawJson = JSON.stringify(p); } catch (e3) { rawJson = '<unserializable>'; }
+    var title = ev.type + ' seq=' + ev.seq
+        + (nested ? ' by=' + ev.triggered_by_seq : '')
+        + ' ' + rawJson.slice(0, 200);
+
+    addLogEntry(domText, cls || null, { plain: plain, title: title, detail: detail });
+}
+
+// ---- Log toolbar: Copy button + Verbose toggle ------------------------
+
+function setupLogToolbar() {
+    var copyBtn = document.getElementById('btn-log-copy');
+    var verbose = document.getElementById('log-verbose-toggle');
+    var entries = document.getElementById('log-entries');
+    if (verbose && entries) {
+        verbose.addEventListener('change', function() {
+            entries.classList.toggle('log-verbose-on', verbose.checked);
+            entries.scrollTop = entries.scrollHeight;
+        });
+    }
+    if (copyBtn) {
+        copyBtn.addEventListener('click', function() {
+            var header = [
+                'Grid Tactics game log',
+                'room=' + (typeof roomCode !== 'undefined' && roomCode ? roomCode : '?')
+                    + ' seat=' + ((myPlayerIdx != null && !(typeof isSpectator !== 'undefined' && isSpectator)) ? 'P' + myPlayerIdx : 'spectator')
+                    + ' opponent=' + (opponentName || '?'),
+                'exported ' + new Date().toISOString() + ' lastSeenSeq=' + lastSeenSeq,
+                '',
+            ].join('\n');
+            var full = header + (window.__gameLog || []).join('\n');
+            function feedback(ok) {
+                copyBtn.textContent = ok ? 'Copied ✓' : 'Copy failed';
+                setTimeout(function() { copyBtn.textContent = 'Copy'; }, 1200);
+            }
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(full).then(
+                    function() { feedback(true); },
+                    function() { feedback(_logCopyFallback(full)); }
+                );
+            } else {
+                feedback(_logCopyFallback(full));
+            }
+        });
+    }
+}
+
+function _logCopyFallback(text) {
+    // execCommand path for non-secure contexts (http:// LAN testing)
+    var ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.left = '-9999px';
+    document.body.appendChild(ta);
+    ta.select();
+    var ok = false;
+    try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+    document.body.removeChild(ta);
+    return ok;
+}
+
+// Log differences between previous and new state.
+// NOTE (2026-07-06): CONFIRMED DEAD during live play — its only call site is
+// _applyStateFrameImmediate on the legacy state_update path, and post-action
+// state_update emits were deleted server-side in Phase 14.8-05. It can still
+// fire on game_start/reconnect snapshots, where the diff is empty or benign.
+// Superseded by logEngineEvent() above; kept per no-delete policy.
 function logStateDiff(prev, next) {
     if (!prev || !next) return;
     var myName = (gameState && myPlayerIdx != null && gameState.players && gameState.players[myPlayerIdx]) ? 'You' : 'You';
@@ -9538,7 +9943,14 @@ function _renderAvatarPod(which, playerIdx) {
     var hpEl = document.getElementById('avatar-' + which + '-hp');
     if (hpEl) hpEl.textContent = p.hp;
     var dmEl = document.getElementById('avatar-' + which + '-dm-num');
-    if (dmEl) dmEl.textContent = _playerDarkMatter(gameState, playerIdx);
+    if (dmEl) {
+        var dmVal = _playerDarkMatter(gameState, playerIdx);
+        dmEl.textContent = dmVal;
+        // Dark Matter is niche info — the chip only appears once the player
+        // actually has stacks (user 2026-07-06).
+        var dmChip = document.getElementById('avatar-' + which + '-dm');
+        if (dmChip) dmChip.style.display = (dmVal > 0) ? '' : 'none';
+    }
     if (!pod._gtAvatarBound) {
         pod._gtAvatarBound = true;
         var openPreview = function() {
@@ -9588,7 +10000,8 @@ function showPlayerPreview(playerIdx) {
         var chips = '';
         chips += '<span class="ts-hp">' + (p.hp | 0) + HEART + '</span>';
         chips += '<span class="ts-mana">' + (p.current_mana | 0) + ' Mana</span>';
-        chips += '<span class="ts-dm">🌑 ' + dm + ' Dark Matter</span>';
+        // Only surface Dark Matter once the player has stacks (user 2026-07-06).
+        if (dm > 0) chips += '<span class="ts-dm">🌑 ' + dm + ' Dark Matter</span>';
         statsEl.innerHTML = chips;
     }
 

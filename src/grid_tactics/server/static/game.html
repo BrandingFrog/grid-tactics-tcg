@@ -549,19 +549,18 @@
               <div class="pod-ava" id="avatar-opp-disc">P2</div>
             </div>
             <div class="pod-plate">
-              <div class="pod-row-top">
-                <span class="pod-mana"><span class="pod-pip"></span><span id="opp-mana">0</span><small>/10</small></span>
-                <span class="pod-name" id="opp-name">PLAYER 2 (Opponent)</span>
-              </div>
+              <!-- Decluttered (user 2026-07-06): name + HAND/DECK chips gone
+                   (pile boards carry the counts); mana promoted. Hidden
+                   name/deck/hand ids kept for the JS writers. -->
               <div class="pod-row-hp">
                 <span class="pod-hp-n stat-hp-opp" id="opp-hp">20</span>
                 <div class="pod-bar"><div class="pod-fill" id="opp-hp-bar"></div></div>
               </div>
               <div class="pod-row-stats">
+                <span class="pod-mana"><span class="pod-pip"></span><span id="opp-mana">0</span><small>/10</small></span>
                 <span class="pod-chip pod-chip-dm" id="avatar-opp-dm">🌑<b id="avatar-opp-dm-num">0</b></span>
-                <span class="pod-chip">DECK <b id="opp-deck">0</b></span>
-                <span class="pod-chip">HAND <b id="opp-hand">0</b></span>
               </div>
+              <span class="pod-hidden-meta" hidden><span id="opp-name"></span><b id="opp-deck">0</b><b id="opp-hand">0</b></span>
             </div>
           </div>
 
@@ -572,19 +571,15 @@
               <div class="pod-ava" id="avatar-self-disc">P1</div>
             </div>
             <div class="pod-plate">
-              <div class="pod-row-top">
-                <span class="pod-name" id="self-name">PLAYER 1 (You)</span>
-                <span class="pod-mana"><span id="self-mana">0</span><small>/10</small><span class="pod-pip"></span></span>
-              </div>
               <div class="pod-row-hp">
                 <span class="pod-hp-n stat-hp-self" id="self-hp">20</span>
                 <div class="pod-bar"><div class="pod-fill" id="self-hp-bar"></div></div>
               </div>
               <div class="pod-row-stats">
-                <span class="pod-chip">HAND <b id="self-hand">0</b></span>
-                <span class="pod-chip">DECK <b id="self-deck">0</b></span>
+                <span class="pod-mana"><span class="pod-pip"></span><span id="self-mana">0</span><small>/10</small></span>
                 <span class="pod-chip pod-chip-dm" id="avatar-self-dm">🌑<b id="avatar-self-dm-num">0</b></span>
               </div>
+              <span class="pod-hidden-meta" hidden><span id="self-name"></span><b id="self-deck">0</b><b id="self-hand">0</b></span>
             </div>
           </div>
 
@@ -608,6 +603,10 @@
             <button class="activity-tab" data-tab="chat">Chat<span class="chat-unread" id="chat-unread" style="display:none;"></span></button>
           </div>
           <div class="activity-tab-content" id="tab-log">
+            <div class="log-toolbar" id="log-toolbar">
+              <label class="log-verbose-label" for="log-verbose-toggle"><input type="checkbox" id="log-verbose-toggle"> Verbose</label>
+              <button class="log-copy-btn" id="btn-log-copy" type="button" title="Copy full log as plain text">Copy</button>
+            </div>
             <div class="log-entries" id="log-entries">
               <!-- Log entries populated by JS -->
             </div>

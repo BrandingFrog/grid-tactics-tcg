@@ -13388,3 +13388,102 @@ body.ttabs-on #screen-game .game-sidebar { display: none !important; }
 .stage-debug .sd-cross::after { content: ''; position: absolute; background: #f00; }
 .stage-debug .sd-cross::before { left: 50%; top: 0; bottom: 0; width: 2px; transform: translateX(-50%); }
 .stage-debug .sd-cross::after { top: 50%; left: 0; right: 0; height: 2px; transform: translateY(-50%); }
+
+/* =============================================
+   Game log rebuild (2026-07-06): event-driven log — copyable, tiered,
+   color-coded. Design px (sidebar is 200 design px inside the 844x390
+   scale-locked layout). APPEND-ONLY: these rules live at file end.
+   ============================================= */
+
+/* Copyability: the log must be selectable text everywhere it renders. */
+#log-entries, #log-entries * {
+  user-select: text;
+  -webkit-user-select: text;
+  cursor: text;
+}
+
+/* Toolbar row pinned above the scrolling entries (flex column parent). */
+.log-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  flex: 0 0 auto;
+  padding: 2px 4px 4px 4px;
+}
+.log-verbose-label {
+  font-size: 10px;
+  color: var(--muted);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  user-select: none;
+}
+.log-verbose-label input {
+  width: 10px;
+  height: 10px;
+  margin: 0;
+  accent-color: var(--accent, #c9a227);
+  cursor: pointer;
+}
+.log-copy-btn {
+  font-size: 10px;
+  line-height: 1;
+  padding: 3px 8px;
+  border: 1px solid var(--muted);
+  border-radius: 4px;
+  background: var(--card2);
+  color: var(--text);
+  cursor: pointer;
+}
+.log-copy-btn:hover { border-color: var(--text); }
+
+/* Detail tier (mana ticks, phase changes, react windows, modal opens):
+   hidden by default, shown dimmed+smaller when Verbose is checked.
+   Always present in the plain-text export regardless. */
+#log-entries .log-entry.log-detail { display: none; }
+#log-entries.log-verbose-on .log-entry.log-detail {
+  display: block;
+  opacity: 0.65;
+  font-size: 10px;
+  padding: 2px 8px;
+}
+
+/* Type color coding (left-border chips; log-damage red / log-heal green
+   already exist in the base block). */
+.log-entry.log-card    { border-left: 2px solid #4a90d9; }
+.log-entry.log-react   { border-left: 2px solid #d9a441; }
+.log-entry.log-trigger { border-left: 2px solid #9b6dd9; }
+.log-entry.log-burn    { border-left: 2px solid #d97a2b; }
+.log-entry.log-over    { border-left: 2px solid #c9a227; font-weight: 700; }
+.log-entry.log-debug   { border-left: 2px dashed var(--muted); opacity: 0.8; }
+
+/* Turn separator: visually distinct divider line. */
+.log-entry.log-turn {
+  font-weight: 700;
+  text-align: center;
+  border-left: none;
+  border-top: 1px solid var(--muted);
+  border-bottom: 1px solid var(--muted);
+  background: transparent;
+  margin-top: 4px;
+}
+
+/* Pod declutter (user 2026-07-06): name + HAND/DECK chips removed from the
+   plates (pile boards carry the counts); mana promoted to a prominent gold
+   readout beside the HP bar. */
+#screen-game .pod .pod-mana, #screen-sandbox .pod .pod-mana {
+  font-size: 13px !important; font-weight: 800 !important;
+  display: inline-flex; align-items: center; gap: 3px;
+}
+#screen-game .pod .pod-mana small, #screen-sandbox .pod .pod-mana small {
+  font-size: 9px !important; font-weight: 600 !important;
+}
+#screen-game .pod .pod-pip, #screen-sandbox .pod .pod-pip {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #9fd8ff, #2e7fd4 60%, #123a66);
+  box-shadow: 0 0 5px rgba(80, 160, 255, 0.8);
+  flex: 0 0 auto;
+}
+#screen-game .pod .pod-hidden-meta, #screen-sandbox .pod .pod-hidden-meta { display: none !important; }
