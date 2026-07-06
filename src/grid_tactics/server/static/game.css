@@ -13167,3 +13167,7 @@ body.ttabs-on #screen-game .game-sidebar { display: none !important; }
 .card-frame-full.cf2.card-frame-hand:hover {
   z-index: 60 !important;
 }
+/* The aged-paper edge vanished on small cards: the ivory band is 2.7cqw of
+   card width — 6.5px on the tooltip card but a 1.6px hairline at hand size.
+   Floor it so the paper reads at every size (user 2026-07-06). */
+.cf2 .cf2-frame { margin: max(2.7cqw, 3.5px); }
