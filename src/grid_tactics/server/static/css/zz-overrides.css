@@ -4330,3 +4330,27 @@ body.sbx-show-nav:has(#screen-sandbox.active) .game-layout {
 .pile-cell-deck .deck-stack-top {
   border-radius: 0 !important;
 }
+
+/* Deck pile FINAL (user 2026-07-07): SVG screen-space extrusion. The CSS
+   stack + in-cell labels are hidden — the overlay draws the base outline
+   on the cell's projected corners, verticals straight up from them, and
+   the top face as the same shape raised by the count. */
+.pile-cell-deck .deck-stack { display: none !important; }
+.pile-cell-deck:not(.deck-empty) .pile-cell-n,
+.pile-cell-deck:not(.deck-empty) .pile-cell-lbl { display: none !important; }
+svg.deck-extrude {
+  position: absolute; inset: 0;
+  width: 100%; height: 100%;
+  pointer-events: none;
+  z-index: 55;
+}
+svg.deck-extrude .dx-n {
+  fill: #f2ead2; font-family: 'Alegreya SC', Georgia, serif;
+  font-size: 13px; font-weight: 800; text-anchor: middle;
+  paint-order: stroke; stroke: rgba(0,0,0,0.85); stroke-width: 2px;
+}
+svg.deck-extrude .dx-lbl {
+  fill: #cbb98f; font-family: 'Alegreya SC', Georgia, serif;
+  font-size: 8px; letter-spacing: 0.12em; text-anchor: middle;
+  paint-order: stroke; stroke: rgba(0,0,0,0.85); stroke-width: 2px;
+}

@@ -175,42 +175,83 @@ function _pileLen(p, kind) {
     if (typeof v === 'number') return v;
     return 0;
 }
-// 3D-esque deck pile (user 2026-07-07): the deck cell renders a stack of
-// card-back layers whose thickness tracks the remaining count — a fat
-// block at 30+ cards thinning to a single card, empty = dashed outline.
-function _renderDeckStack(cell, count) {
-    var stack = cell.querySelector('.deck-stack');
-    if (!stack) {
-        stack = document.createElement('div');
-        stack.className = 'deck-stack';
-        cell.insertBefore(stack, cell.firstChild);
+// Deck pile extrusion (user 2026-07-07, final): drawn in FLAT layout
+// space as an SVG overlay anchored to the cell's PROJECTED corners. The
+// base is the cell's real outline (in the tilted plane); the top face is
+// that same projected quad translated STRAIGHT UP on screen by the
+// count-driven rise; connectors join corresponding corners — so the
+// connector lines are screen-vertical by construction, exactly like
+// extruding a drawn shape in a technical drawing.
+function _projectedQuad(cell, layoutRect, scale) {
+    var pts = [];
+    var anchors = [
+        { left: '0', top: '0' }, { right: '0', top: '0' },
+        { right: '0', bottom: '0' }, { left: '0', bottom: '0' },
+    ];
+    for (var i = 0; i < 4; i++) {
+        var probe = document.createElement('div');
+        probe.style.cssText = 'position:absolute;width:0;height:0;pointer-events:none;';
+        var a = anchors[i];
+        for (var k in a) probe.style[k] = a[k];
+        cell.appendChild(probe);
+        var r = probe.getBoundingClientRect();
+        pts.push([(r.left - layoutRect.left) / scale, (r.top - layoutRect.top) / scale]);
+        probe.remove();
     }
+    return pts;   // [tl, tr, br, bl] in 844x390 design coords
+}
+
+function _renderDeckStack(cell, count) {
     var layers = count <= 0 ? 0 : Math.max(1, Math.min(10, Math.ceil(count / 3)));
     cell.classList.toggle('deck-empty', layers === 0);
-    if (parseInt(stack.dataset.layers || '-1', 10) === layers) return;
-    stack.dataset.layers = String(layers);
-    // vertical rise of the top face — the count/label ride it (CSS --rise)
-    cell.style.setProperty('--rise', ((Math.max(layers, 1) - 1) * 2.2) + 'px');
-    stack.innerHTML = '';
-    // Technical-extrusion mode (user 2026-07-07): ONE raised top face; the
-    // base rectangle + corner connector lines are drawn by CSS on the
-    // stack itself — like extruding a rect in a technical drawing.
-    var nEl = cell.querySelector('.pile-cell-n');
-    var lblEl = cell.querySelector('.pile-cell-lbl');
-    if (layers > 0) {
-        var face = document.createElement('div');
-        face.className = 'deck-stack-layer deck-stack-top';
-        face.style.setProperty('--si', layers - 1);
-        face.style.setProperty('--sr', 0);
-        stack.appendChild(face);
-        // count + label ride ON the billboarded face (depth ordering would
-        // otherwise hide them behind it)
-        if (nEl) face.appendChild(nEl);
-        if (lblEl) face.appendChild(lblEl);
-    } else {
-        if (nEl) cell.appendChild(nEl);
-        if (lblEl) cell.appendChild(lblEl);
+    var layout = cell.closest('.game-layout');
+    if (!layout) return;
+    var key = (cell.closest('.pile-board') || {}).dataset
+        ? cell.closest('.pile-board').dataset.side : 'x';
+    var screenEl = cell.closest('.screen');
+    var svgId = 'deck-extrude-' + (screenEl ? screenEl.id : 's') + '-' + key;
+    var svg = document.getElementById(svgId);
+    if (layers === 0) { if (svg) svg.remove(); return; }
+    var lr = layout.getBoundingClientRect();
+    if (!lr.width) return;
+    var scale = lr.width / 844;
+    var q = _projectedQuad(cell, lr, scale);
+    var rise = 4 + (layers - 1) * 2.2;
+    var top = q.map(function(p) { return [p[0], p[1] - rise]; });
+    var P = function(pts) {
+        return pts.map(function(p) { return p[0].toFixed(1) + ',' + p[1].toFixed(1); }).join(' ');
+    };
+    var cx = (top[0][0] + top[1][0] + top[2][0] + top[3][0]) / 4;
+    var cy = (top[0][1] + top[1][1] + top[2][1] + top[3][1]) / 4;
+    var NS = 'http://www.w3.org/2000/svg';
+    if (!svg) {
+        svg = document.createElementNS(NS, 'svg');
+        svg.setAttribute('id', svgId);
+        svg.setAttribute('class', 'deck-extrude');
+        svg.setAttribute('viewBox', '0 0 844 390');
+        layout.appendChild(svg);
     }
+    var stripes =
+        '<defs><pattern id="' + svgId + '-w" width="8" height="8"'
+        + ' patternTransform="rotate(45)" patternUnits="userSpaceOnUse">'
+        + '<rect width="8" height="8" fill="#20170b"/>'
+        + '<rect width="4" height="8" fill="#2c2010"/></pattern></defs>';
+    var lines = '';
+    for (var i = 0; i < 4; i++) {
+        lines += '<line x1="' + q[i][0].toFixed(1) + '" y1="' + q[i][1].toFixed(1)
+            + '" x2="' + top[i][0].toFixed(1) + '" y2="' + top[i][1].toFixed(1)
+            + '" stroke="rgba(224,162,60,0.75)" stroke-width="1"/>';
+    }
+    svg.innerHTML = stripes
+        // base outline (the cell's projected quad)
+        + '<polygon points="' + P(q) + '" fill="none" stroke="rgba(224,162,60,0.45)" stroke-width="1"/>'
+        // corner connectors — screen-vertical by construction
+        + lines
+        // top face: same projected shape, straight up
+        + '<polygon points="' + P(top) + '" fill="url(#' + svgId + '-w)"'
+        + ' stroke="rgba(224,162,60,0.8)" stroke-width="1.2"/>'
+        + '<text x="' + cx.toFixed(1) + '" y="' + (cy - 1).toFixed(1) + '" class="dx-n">' + count + '</text>'
+        + '<text x="' + cx.toFixed(1) + '" y="' + (cy + 9).toFixed(1) + '" class="dx-lbl">DECK</text>';
 }
 
 function updatePileButtonCounts() {
