@@ -10,7 +10,7 @@ function showGameTooltip(numericId, anchorEl, minion, opts) {
     var tooltipId = sandboxMode ? 'sandbox-tooltip' : 'game-tooltip';
     var hintId = sandboxMode ? 'sandbox-tooltip-hint' : 'game-tooltip-hint';
     var tooltipEl = document.getElementById(tooltipId);
-    populateTooltip(tooltipEl, numericId, { showRelated: false });
+    populateTooltip(tooltipEl, numericId, { showRelated: true });
     var hint = document.getElementById(hintId);
     if (hint) hint.style.display = 'none';
     _renderMinionStatusPanels(tooltipEl, minion);
