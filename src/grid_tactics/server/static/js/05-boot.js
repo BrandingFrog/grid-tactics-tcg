@@ -175,6 +175,29 @@ function _pileLen(p, kind) {
     if (typeof v === 'number') return v;
     return 0;
 }
+// 3D-esque deck pile (user 2026-07-07): the deck cell renders a stack of
+// card-back layers whose thickness tracks the remaining count — a fat
+// block at 30+ cards thinning to a single card, empty = dashed outline.
+function _renderDeckStack(cell, count) {
+    var stack = cell.querySelector('.deck-stack');
+    if (!stack) {
+        stack = document.createElement('div');
+        stack.className = 'deck-stack';
+        cell.insertBefore(stack, cell.firstChild);
+    }
+    var layers = count <= 0 ? 0 : Math.max(1, Math.min(9, Math.ceil(count / 4)));
+    cell.classList.toggle('deck-empty', layers === 0);
+    if (parseInt(stack.dataset.layers || '-1', 10) === layers) return;
+    stack.dataset.layers = String(layers);
+    stack.innerHTML = '';
+    for (var i = 0; i < layers; i++) {
+        var layer = document.createElement('div');
+        layer.className = 'deck-stack-layer' + (i === layers - 1 ? ' deck-stack-top' : '');
+        layer.style.setProperty('--si', i);
+        stack.appendChild(layer);
+    }
+}
+
 function updatePileButtonCounts() {
     if (!gameState || !gameState.players) return;
     var meIdx = myPlayerIdx != null ? myPlayerIdx : 0;  // sandbox: P1 = own
@@ -183,8 +206,10 @@ function updatePileButtonCounts() {
     document.querySelectorAll('.pile-board').forEach(function(board) {
         var p = board.dataset.side === 'own' ? me : opp;
         board.querySelectorAll('.pile-cell[data-pile]').forEach(function(cell) {
+            var count = _pileLen(p, cell.dataset.pile);
             var n = cell.querySelector('.pile-cell-n');
-            if (n) n.textContent = _pileLen(p, cell.dataset.pile);
+            if (n) n.textContent = count;
+            if (cell.dataset.pile === 'deck') _renderDeckStack(cell, count);
         });
     });
 }

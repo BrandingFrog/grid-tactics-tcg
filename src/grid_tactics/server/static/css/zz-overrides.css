@@ -4098,3 +4098,45 @@ body.sbx-show-nav:has(#screen-sandbox.active) .game-layout {
 .discard-picker-card:hover > .card-frame-full.cf2 {
   transform: translate(-10px, -10px) scale(0.275) !important;
 }
+
+/* ==========================================================================
+   3D-ESQUE DECK PILE (user 2026-07-07): the deck cell's 🎴 icon becomes a
+   stack of card-back layers. Each layer sits 1.4px above the last, so the
+   pile's thickness tracks the remaining cards (9 layers at 33+, one thin
+   card near empty). Lower layers darken like a paper block edge; the top
+   face carries the warm card-back weave. Lives in the tilted pile plane,
+   so the vertical offsets read as depth.
+   ========================================================================== */
+.pile-cell-deck .pile-cell-ico { display: none !important; }
+.deck-stack {
+  position: relative;
+  width: 30px;
+  height: 34px;            /* room for base face + max stack rise */
+  margin: 1px auto 0;
+  pointer-events: none;
+}
+.deck-stack-layer {
+  position: absolute; left: 0; right: 0;
+  height: 22px;
+  bottom: calc(var(--si) * 1.4px);
+  border-radius: 3px;
+  background: linear-gradient(135deg,
+    hsl(35, 45%, calc(8% + var(--si) * 1%)) 0%,
+    hsl(35, 40%, calc(5% + var(--si) * 1%)) 100%);
+  border: 1px solid rgba(224, 162, 60, calc(0.18 + var(--si) * 0.03));
+  box-shadow: 0 1px 1px rgba(0, 0, 0, 0.55);
+}
+.deck-stack-top {
+  background:
+    repeating-linear-gradient(45deg, rgba(224, 162, 60, 0.14) 0 4px, rgba(58, 46, 24, 0.45) 4px 8px),
+    linear-gradient(135deg, #2a1f10 0%, #171008 100%);
+  border-color: rgba(224, 162, 60, 0.55);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.7), inset 0 0 0 1px rgba(224, 162, 60, 0.08);
+}
+/* empty deck: a dashed footprint where the pile used to be */
+.pile-cell-deck.deck-empty .deck-stack {
+  border: 1px dashed rgba(224, 162, 60, 0.3);
+  border-radius: 3px;
+  height: 22px;
+  margin-top: 7px;
+}
