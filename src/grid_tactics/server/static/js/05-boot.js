@@ -218,8 +218,24 @@ function _renderDeckStack(cell, count) {
     var q = _projectedQuad(cell, lr, scale);
     var rise = 4 + (layers - 1) * 2.2;
     var top = q.map(function(p) { return [p[0], p[1] - rise]; });
-    var P = function(pts) {
-        return pts.map(function(p) { return p[0].toFixed(1) + ',' + p[1].toFixed(1); }).join(' ');
+    // rounded-corner path for an arbitrary quad (SVG polygons can't round)
+    var R = function(pts, r) {
+        var d = '';
+        for (var i = 0; i < pts.length; i++) {
+            var p0 = pts[(i + pts.length - 1) % pts.length];
+            var p1 = pts[i];
+            var p2 = pts[(i + 1) % pts.length];
+            var v1 = [p1[0] - p0[0], p1[1] - p0[1]];
+            var v2 = [p2[0] - p1[0], p2[1] - p1[1]];
+            var l1 = Math.hypot(v1[0], v1[1]) || 1;
+            var l2 = Math.hypot(v2[0], v2[1]) || 1;
+            var a = [p1[0] - v1[0] / l1 * r, p1[1] - v1[1] / l1 * r];
+            var b = [p1[0] + v2[0] / l2 * r, p1[1] + v2[1] / l2 * r];
+            d += (i === 0 ? 'M' : 'L') + a[0].toFixed(1) + ' ' + a[1].toFixed(1);
+            d += 'Q' + p1[0].toFixed(1) + ' ' + p1[1].toFixed(1) + ' '
+               + b[0].toFixed(1) + ' ' + b[1].toFixed(1);
+        }
+        return d + 'Z';
     };
     var cx = (top[0][0] + top[1][0] + top[2][0] + top[3][0]) / 4;
     var cy = (top[0][1] + top[1][1] + top[2][1] + top[3][1]) / 4;
@@ -236,19 +252,20 @@ function _renderDeckStack(cell, count) {
         + ' patternTransform="rotate(45)" patternUnits="userSpaceOnUse">'
         + '<rect width="8" height="8" fill="#20170b"/>'
         + '<rect width="4" height="8" fill="#2c2010"/></pattern></defs>';
+    // only the far-back-LEFT (tl) and front-forward-RIGHT (br) connectors
     var lines = '';
-    for (var i = 0; i < 4; i++) {
+    [0, 2].forEach(function(i) {
         lines += '<line x1="' + q[i][0].toFixed(1) + '" y1="' + q[i][1].toFixed(1)
             + '" x2="' + top[i][0].toFixed(1) + '" y2="' + top[i][1].toFixed(1)
             + '" stroke="rgba(224,162,60,0.75)" stroke-width="1"/>';
-    }
+    });
     svg.innerHTML = stripes
         // base outline (the cell's projected quad)
-        + '<polygon points="' + P(q) + '" fill="none" stroke="rgba(224,162,60,0.45)" stroke-width="1"/>'
+        + '<path d="' + R(q, 5) + '" fill="none" stroke="rgba(224,162,60,0.45)" stroke-width="1"/>'
         // corner connectors — screen-vertical by construction
         + lines
-        // top face: same projected shape, straight up
-        + '<polygon points="' + P(top) + '" fill="url(#' + svgId + '-w)"'
+        // top face: same projected shape, straight up, rounded corners
+        + '<path d="' + R(top, 5) + '" fill="url(#' + svgId + '-w)"'
         + ' stroke="rgba(224,162,60,0.8)" stroke-width="1.2"/>'
         + '<text x="' + cx.toFixed(1) + '" y="' + (cy - 1).toFixed(1) + '" class="dx-n">' + count + '</text>'
         + '<text x="' + cx.toFixed(1) + '" y="' + (cy + 9).toFixed(1) + '" class="dx-lbl">DECK</text>';
