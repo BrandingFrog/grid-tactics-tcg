@@ -4372,3 +4372,17 @@ svg.deck-extrude .dx-lbl {
 /* bm-art 4x layer RETIRED (made board art worse — double-filtering in the
    3D compositor). Board minions carry the full-res art directly. */
 .board-minion .bm-art { display: none !important; }
+
+/* Tutor picker scrolls HORIZONTALLY (user 2026-07-07): one row of cards,
+   swipe/scroll sideways — no vertical scrolling. */
+.tutor-modal-cards {
+  flex-wrap: nowrap !important;
+  overflow-x: auto !important;
+  overflow-y: hidden !important;
+  justify-content: flex-start !important;
+  scrollbar-width: thin;
+}
+.tutor-modal-cards::-webkit-scrollbar { height: 6px; }
+.tutor-modal-cards::-webkit-scrollbar-thumb {
+  background: var(--bronze, #6b5730); border-radius: 3px;
+}
