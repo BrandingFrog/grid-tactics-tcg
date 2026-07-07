@@ -192,14 +192,15 @@ function _renderDeckStack(cell, count) {
     // vertical rise of the top face — the count/label ride it (CSS --rise)
     cell.style.setProperty('--rise', ((Math.max(layers, 1) - 1) * 2.2) + 'px');
     stack.innerHTML = '';
-    for (var i = 0; i < layers; i++) {
-        var layer = document.createElement('div');
-        layer.className = 'deck-stack-layer' + (i === layers - 1 ? ' deck-stack-top' : '');
-        layer.style.setProperty('--si', i);
-        // reverse index: how far DOWN the pile this layer sits (top = 0) —
-        // drives the diagonal-axis depth offset in CSS.
-        layer.style.setProperty('--sr', layers - 1 - i);
-        stack.appendChild(layer);
+    // Technical-extrusion mode (user 2026-07-07): ONE raised top face; the
+    // base rectangle + corner connector lines are drawn by CSS on the
+    // stack itself — like extruding a rect in a technical drawing.
+    if (layers > 0) {
+        var face = document.createElement('div');
+        face.className = 'deck-stack-layer deck-stack-top';
+        face.style.setProperty('--si', layers - 1);
+        face.style.setProperty('--sr', 0);
+        stack.appendChild(face);
     }
 }
 

@@ -4250,3 +4250,18 @@ body.sbx-show-nav:has(#screen-sandbox.active) .game-layout {
 .pile-cell-deck .deck-stack::after { right: 0; }
 .pile-cell-deck.deck-empty .deck-stack::before,
 .pile-cell-deck.deck-empty .deck-stack::after { content: none; }
+
+/* Deck pile v7 — TECHNICAL EXTRUSION (user 2026-07-07): same vertical
+   axis, drawn like a tech graphics extrusion — the BASE rectangle sits
+   outlined at the cell footprint, the top face rises by the count, and
+   straight connector lines join their corners. The solid sliver wedge is
+   gone; the extrusion body is open with a faint paper hint. */
+.pile-cell-deck .deck-stack {
+  border: 1px solid rgba(224, 162, 60, 0.4);   /* the BASE rect outline */
+  border-radius: 4px;
+  background: rgba(232, 220, 187, 0.05);        /* faint interior */
+}
+.pile-cell-deck .deck-stack-top {
+  transform: translateY(calc(var(--rise, 0px) * -1));
+}
+.pile-cell-deck.deck-empty .deck-stack { background: transparent; }
