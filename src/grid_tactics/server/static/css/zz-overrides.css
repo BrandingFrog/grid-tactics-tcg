@@ -3887,3 +3887,8 @@ body:has(#screen-sandbox.active) .game-layout { gap: 8px !important; }
 .overdraw-reveal-label {
   text-align: center;
 }
+
+/* Deck builder hugs the screen edges (user 2026-07-07): outer padding now
+   equals the tooltip↔browse column gap (6 design units) instead of 18. */
+#screen-deck-builder .deck-builder-layout { padding: 0 !important; }
+#screen-deck-builder .deck-builder-body { padding: calc(var(--mfu) * 6) !important; }
