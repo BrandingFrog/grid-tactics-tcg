@@ -4140,3 +4140,23 @@ body.sbx-show-nav:has(#screen-sandbox.active) .game-layout {
   height: 22px;
   margin-top: 7px;
 }
+
+/* Deck pile v2 (user 2026-07-07): the stack fills the WHOLE cell; the
+   count + DECK label sit ON the top face. */
+.pile-cell-deck { position: relative; }
+.pile-cell-deck .deck-stack {
+  position: absolute; inset: 3px;
+  width: auto; height: auto; margin: 0;
+}
+.pile-cell-deck .deck-stack-layer {
+  height: calc(100% - 12px);      /* headroom for the max 8-layer rise */
+}
+.pile-cell-deck .pile-cell-n,
+.pile-cell-deck .pile-cell-lbl {
+  position: relative; z-index: 3;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.95), 0 0 4px rgba(0, 0, 0, 0.7);
+}
+.pile-cell-deck .pile-cell-n { color: #f2ead2; font-weight: 800; }
+.pile-cell-deck.deck-empty .deck-stack {
+  inset: 3px; height: auto; margin: 0;
+}
