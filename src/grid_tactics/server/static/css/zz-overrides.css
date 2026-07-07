@@ -4001,3 +4001,19 @@ body.sbx-show-nav:has(#screen-sandbox.active) .game-layout {
 #screen-sandbox .tooltip-sidebar-hint .hint-sub {
   font-style: italic; font-size: 11px; color: var(--parch-mute, #9a865c);
 }
+
+/* Tooltip panel = flat column (user 2026-07-07): no rounded box, no
+   dog-ear — just the full-height RIGHT border splitting tooltip from
+   stage. Texture + dashed empty-state frame stay. */
+#screen-game .game-tooltip-sidebar,
+#screen-sandbox .game-tooltip-sidebar {
+  border: none !important;
+  border-right: 1.5px solid var(--bronze, #6b5730) !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  height: 100% !important;
+}
+#screen-game .game-tooltip-sidebar::after,
+#screen-sandbox .game-tooltip-sidebar::after {
+  content: none !important;
+}
