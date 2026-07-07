@@ -4463,3 +4463,25 @@ svg.deck-extrude .dx-lbl {
 .board-cell.cell-selected .board-minion {
   outline-color: var(--gold, #e0a23c) !important;
 }
+
+/* ============================================================
+   Grave/exhaust extruded piles (user 2026-07-07): reuse the deck
+   extrusion; top face = last card face-up. While the SVG stack is
+   present (non-empty) the in-cell emoji/count/label hide — the
+   empty state keeps the flat cell chrome.
+   ============================================================ */
+.pile-board .pile-cell[data-pile="grave"]:not(.deck-empty) .pile-cell-ico,
+.pile-board .pile-cell[data-pile="grave"]:not(.deck-empty) .pile-cell-n,
+.pile-board .pile-cell[data-pile="grave"]:not(.deck-empty) .pile-cell-lbl,
+.pile-board .pile-cell[data-pile="exhaust"]:not(.deck-empty) .pile-cell-ico,
+.pile-board .pile-cell[data-pile="exhaust"]:not(.deck-empty) .pile-cell-n,
+.pile-board .pile-cell[data-pile="exhaust"]:not(.deck-empty) .pile-cell-lbl { display: none !important; }
+svg.deck-extrude .dx-badge {
+  fill: #f2ead2; font-family: 'Alegreya SC', Georgia, serif;
+  font-size: 9px; font-weight: 800; text-anchor: middle;
+}
+
+/* _projectedQuad measures corner probes with position:absolute — every
+   pile cell must be its own containing block or the probes anchor to the
+   pile-board column and the grave/exhaust extrusion inflates. */
+.pile-board .pile-cell { position: relative; }

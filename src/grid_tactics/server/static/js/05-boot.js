@@ -201,7 +201,10 @@ function _projectedQuad(cell, layoutRect, scale) {
     return pts;   // [tl, tr, br, bl] in 844x390 design coords
 }
 
-function _renderDeckStack(cell, count) {
+function _renderDeckStack(cell, count, topCardId) {
+    // Grave/exhaust reuse the deck extrusion (user 2026-07-07) EXCEPT the
+    // top face shows the pile's last card face-up instead of the card back.
+    var kind = cell.dataset.pile || 'deck';
     var layers = count <= 0 ? 0 : Math.max(1, Math.min(10, Math.ceil(count / 3)));
     cell.classList.toggle('deck-empty', layers === 0);
     var layout = cell.closest('.game-layout');
@@ -209,7 +212,7 @@ function _renderDeckStack(cell, count) {
     var key = (cell.closest('.pile-board') || {}).dataset
         ? cell.closest('.pile-board').dataset.side : 'x';
     var screenEl = cell.closest('.screen');
-    var svgId = 'deck-extrude-' + (screenEl ? screenEl.id : 's') + '-' + key;
+    var svgId = 'deck-extrude-' + (screenEl ? screenEl.id : 's') + '-' + key + '-' + kind;
     var svg = document.getElementById(svgId);
     if (layers === 0) { if (svg) svg.remove(); return; }
     var lr = layout.getBoundingClientRect();
@@ -295,6 +298,36 @@ function _renderDeckStack(cell, count) {
             + '" x2="' + b[0].toFixed(1) + '" y2="' + b[1].toFixed(1)
             + '" stroke="rgba(224,162,60,0.75)" stroke-width="1"/>';
     });
+    var topFace, topTexts;
+    if (kind === 'deck') {
+        topFace = '<path d="' + R(top, 5) + '" fill="url(#' + svgId + '-w)"'
+            + ' stroke="rgba(224,162,60,0.8)" stroke-width="1.2"/>';
+        topTexts = '<text x="' + cx.toFixed(1) + '" y="' + (cy - 1).toFixed(1) + '" class="dx-n">' + count + '</text>'
+            + '<text x="' + cx.toFixed(1) + '" y="' + (cy + 9).toFixed(1) + '" class="dx-lbl">DECK</text>';
+    } else {
+        // face-up last card: cover-crop its full PNG onto the top quad via an
+        // affine map of a 100x100 box onto (tl, tr, bl) — same crop treatment
+        // as board minions, clipped to the rounded top face.
+        var def = (typeof cardDefs !== 'undefined' && cardDefs) ? cardDefs[topCardId] : null;
+        var art = (def && def.card_id) ? _cardArtUrl(def.card_id, true) : '';
+        var mu = [(top[1][0] - top[0][0]) / 100, (top[1][1] - top[0][1]) / 100];
+        var mv = [(top[3][0] - top[0][0]) / 100, (top[3][1] - top[0][1]) / 100];
+        var mat = [mu[0], mu[1], mv[0], mv[1], top[0][0], top[0][1]]
+            .map(function(x) { return x.toFixed(4); }).join(' ');
+        topFace = '<clipPath id="' + svgId + '-clip"><path d="' + R(top, 5) + '"/></clipPath>'
+            + '<g clip-path="url(#' + svgId + '-clip)">'
+            + (art
+                ? '<g transform="matrix(' + mat + ')"><image href="' + art
+                    + '" x="0" y="0" width="100" height="100" preserveAspectRatio="xMidYMid slice"/></g>'
+                : '<path d="' + R(top, 5) + '" fill="url(#' + svgId + '-p)"/>')
+            + '</g>'
+            + '<path d="' + R(top, 5) + '" fill="none" stroke="rgba(224,162,60,0.8)" stroke-width="1.2"/>';
+        // small count badge toward the front-right of the top face
+        var bx = cx + (top[2][0] - cx) * 0.62, by = cy + (top[2][1] - cy) * 0.62;
+        topTexts = '<circle cx="' + bx.toFixed(1) + '" cy="' + by.toFixed(1)
+            + '" r="7" fill="rgba(24,17,8,0.88)" stroke="rgba(224,162,60,0.7)" stroke-width="1"/>'
+            + '<text x="' + bx.toFixed(1) + '" y="' + (by + 3.2).toFixed(1) + '" class="dx-badge">' + count + '</text>';
+    }
     svg.innerHTML = stripes
         // base outline (the cell's projected quad)
         + '<path d="' + R(q, 5) + '" fill="none" stroke="rgba(224,162,60,0.45)" stroke-width="1"/>'
@@ -310,10 +343,7 @@ function _renderDeckStack(cell, count) {
         // corner connectors — screen-vertical by construction
         + lines
         // top face: same projected shape, straight up, rounded corners
-        + '<path d="' + R(top, 5) + '" fill="url(#' + svgId + '-w)"'
-        + ' stroke="rgba(224,162,60,0.8)" stroke-width="1.2"/>'
-        + '<text x="' + cx.toFixed(1) + '" y="' + (cy - 1).toFixed(1) + '" class="dx-n">' + count + '</text>'
-        + '<text x="' + cx.toFixed(1) + '" y="' + (cy + 9).toFixed(1) + '" class="dx-lbl">DECK</text>';
+        + topFace + topTexts;
 }
 
 function updatePileButtonCounts() {
@@ -327,7 +357,12 @@ function updatePileButtonCounts() {
             var count = _pileLen(p, cell.dataset.pile);
             var n = cell.querySelector('.pile-cell-n');
             if (n) n.textContent = count;
-            if (cell.dataset.pile === 'deck') _renderDeckStack(cell, count);
+            if (cell.dataset.pile === 'deck') {
+                _renderDeckStack(cell, count);
+            } else {
+                var _arr = Array.isArray(p[cell.dataset.pile]) ? p[cell.dataset.pile] : [];
+                _renderDeckStack(cell, count, _arr.length ? _arr[_arr.length - 1] : null);
+            }
         });
     });
 }
