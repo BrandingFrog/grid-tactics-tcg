@@ -244,6 +244,8 @@ function _renderDeckStack(cell, count) {
     var _eL = Math.atan2(q[3][1] - q[0][1], q[3][0] - q[0][0]);
     var _eR = Math.atan2(q[2][1] - q[1][1], q[2][0] - q[1][0]);
     var stripeDeg = (((_eL + _eR) / 2) * 180 / Math.PI - 90).toFixed(1);
+    // the FRONT band's card-seam lines follow the cell's front edge
+    var frontDeg = (Math.atan2(q[2][1] - q[3][1], q[2][0] - q[3][0]) * 180 / Math.PI).toFixed(1);
     var NS = 'http://www.w3.org/2000/svg';
     if (!svg) {
         svg = document.createElementNS(NS, 'svg');
@@ -264,6 +266,13 @@ function _renderDeckStack(cell, count) {
         + '<rect x="2" y="2" width="1" height="1" fill="#c9b98d"/>'
         + '<rect x="3" y="1" width="1" height="1" fill="#cfc09a"/>'
         + '<rect x="1" y="3" width="1" height="1" fill="#cfc09a"/>'
+        + '</pattern>'
+        // front band: horizontal card-seam lines along the cell's front edge
+        + '<pattern id="' + svgId + '-pf" width="4" height="3" patternUnits="userSpaceOnUse"'
+        + ' patternTransform="rotate(' + frontDeg + ')">'
+        + '<rect width="4" height="3" fill="#e0d3ae"/>'
+        + '<rect y="0" width="4" height="0.9" fill="#c3b183"/>'
+        + '<rect x="1" y="1.8" width="1" height="0.6" fill="#cfc09a"/>'
         + '</pattern></defs>';
     // only the far-back-LEFT (tl) and front-forward-RIGHT (br) connectors
     var lines = '';
@@ -283,7 +292,7 @@ function _renderDeckStack(cell, count) {
         + '<path d="' + R([top[1], top[2], q[2], q[1]], 2)
         + '" fill="url(#' + svgId + '-p)" stroke="rgba(60,44,20,0.4)" stroke-width="0.6"/>'
         + '<path d="' + R([top[3], top[2], q[2], q[3]], 3)
-        + '" fill="url(#' + svgId + '-p)" stroke="rgba(60,44,20,0.5)" stroke-width="0.8"/>'
+        + '" fill="url(#' + svgId + '-pf)" stroke="rgba(60,44,20,0.5)" stroke-width="0.8"/>'
         // corner connectors — screen-vertical by construction
         + lines
         // top face: same projected shape, straight up, rounded corners
