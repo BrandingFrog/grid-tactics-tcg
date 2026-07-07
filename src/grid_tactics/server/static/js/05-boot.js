@@ -239,6 +239,11 @@ function _renderDeckStack(cell, count) {
     };
     var cx = (top[0][0] + top[1][0] + top[2][0] + top[3][0]) / 4;
     var cy = (top[0][1] + top[1][1] + top[2][1] + top[3][1]) / 4;
+    // stripe angle follows the cell's SIDE edges (average of the two
+    // projected flanks) instead of a fixed 45deg
+    var _eL = Math.atan2(q[3][1] - q[0][1], q[3][0] - q[0][0]);
+    var _eR = Math.atan2(q[2][1] - q[1][1], q[2][0] - q[1][0]);
+    var stripeDeg = (((_eL + _eR) / 2) * 180 / Math.PI - 90).toFixed(1);
     var NS = 'http://www.w3.org/2000/svg';
     if (!svg) {
         svg = document.createElementNS(NS, 'svg');
@@ -249,7 +254,7 @@ function _renderDeckStack(cell, count) {
     }
     var stripes =
         '<defs><pattern id="' + svgId + '-w" width="8" height="8"'
-        + ' patternTransform="rotate(45)" patternUnits="userSpaceOnUse">'
+        + ' patternTransform="rotate(' + stripeDeg + ')" patternUnits="userSpaceOnUse">'
         + '<rect width="8" height="8" fill="#20170b"/>'
         + '<rect width="4" height="8" fill="#2c2010"/></pattern>'
         // card paper-edge color + dither for the deck's visible side
