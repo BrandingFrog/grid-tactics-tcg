@@ -3892,3 +3892,16 @@ body:has(#screen-sandbox.active) .game-layout { gap: 8px !important; }
    equals the tooltip↔browse column gap (6 design units) instead of 18. */
 #screen-deck-builder .deck-builder-layout { padding: 0 !important; }
 #screen-deck-builder .deck-builder-body { padding: calc(var(--mfu) * 6) !important; }
+
+/* Tooltip load artifact (user 2026-07-07): the inline-hide guard above only
+   matched the JS-serialized form "display: none" (with space). The HTML's
+   initial attribute is "display:none" (no space), so on first load the
+   split-scroll display:flex !important won and the empty tooltip skeleton
+   rendered as a ~23px bar above the NO-CARD hint. Match both spellings. */
+#screen-deck-builder .card-tooltip[style*="display:none"],
+#screen-game .card-tooltip[style*="display:none"],
+#screen-game .game-tooltip[style*="display:none"],
+#screen-sandbox .card-tooltip[style*="display:none"],
+#screen-sandbox .game-tooltip[style*="display:none"] {
+  display: none !important;
+}
