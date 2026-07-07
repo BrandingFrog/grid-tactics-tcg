@@ -4368,3 +4368,7 @@ svg.deck-extrude .dx-lbl {
   pointer-events: none;
 }
 .board-minion > *:not(.bm-art) { position: relative; z-index: 1; }
+
+/* bm-art 4x layer RETIRED (made board art worse — double-filtering in the
+   3D compositor). Board minions carry the full-res art directly. */
+.board-minion .bm-art { display: none !important; }

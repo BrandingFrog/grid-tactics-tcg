@@ -379,14 +379,13 @@ function renderBoardMinion(minion) {
     var atk = (cardDef.attack || 0) + (minion.attack_bonus || 0);
     var hp = minion.current_health;
 
-    // Art on a 4x child layer (user 2026-07-07 'low res on the grid'):
-    // inside the board's preserve-3d subtree Chrome rasterizes at LAYOUT
-    // size and the desktop --duel-scale then blows the texture up blurry.
-    // A 4x-sized art layer scaled back down rasterizes crisp — same trick
-    // as the hand cards. Kept OFF .board-minion itself because the anim
-    // layer writes inline transforms onto it.
-    var boardArtLayer = cardDef.card_id
-        ? '<div class="bm-art" style="background-image:url(' + _cardArtUrl(cardDef.card_id) + ')"></div>'
+    // Board art uses the FULL 1024px PNG (user 2026-07-07 'low res on the
+    // grid'): the 4x-layer trick double-filters inside the 3D compositor
+    // and thumbs blur under the desktop scale. The board holds at most 25
+    // minions, so full-res textures are affordable here (the thumb
+    // rationale was the 50-card hand/browse surfaces).
+    var boardArtStyle = cardDef.card_id
+        ? 'background-image:url(' + _cardArtUrl(cardDef.card_id, true) + ');background-size:cover;background-position:center;'
         : '';
 
     // Phase 14.3 Wave 7: persistent status badges (burning / buff / debuff).
@@ -406,8 +405,7 @@ function renderBoardMinion(minion) {
         ? '<div class="minion-badges">' + badges.join('') + '</div>'
         : '';
 
-    return '<div class="board-minion ' + ownerClass + ' ' + typeClass + '" data-numeric-id="' + minion.card_numeric_id + '">'
-        + boardArtLayer
+    return '<div class="board-minion ' + ownerClass + ' ' + typeClass + '" data-numeric-id="' + minion.card_numeric_id + '" style="' + boardArtStyle + '">'
         + '<div class="board-minion-overlay"></div>'
         /* element pill removed from board minions (user 2026-07-04) — the
            element reads from the card art/frame + tooltip; the label was
