@@ -274,11 +274,23 @@ function _renderDeckStack(cell, count) {
         + '<rect y="0" width="4" height="0.9" fill="#c3b183"/>'
         + '<rect x="1" y="1.8" width="1" height="0.6" fill="#cfc09a"/>'
         + '</pattern></defs>';
-    // only the far-back-LEFT (tl) and front-forward-RIGHT (br) connectors
+    // only the far-back-LEFT (tl) and front-forward-RIGHT (br) connectors.
+    // Endpoints sit at the ROUNDED-CORNER tangent points (user 2026-07-07):
+    //   TL: where the arc begins on the LEFT edge (r below the corner);
+    //   BR: where the arc begins on the RIGHT edge (r above the corner).
+    var _tang = function(pts, i, r) {
+        var toward = (i === 0) ? pts[3] : pts[1];   // tl->bl edge / br->tr edge
+        var pC = pts[i];
+        var v = [toward[0] - pC[0], toward[1] - pC[1]];
+        var l = Math.hypot(v[0], v[1]) || 1;
+        return [pC[0] + v[0] / l * r, pC[1] + v[1] / l * r];
+    };
     var lines = '';
     [0, 2].forEach(function(i) {
-        lines += '<line x1="' + q[i][0].toFixed(1) + '" y1="' + q[i][1].toFixed(1)
-            + '" x2="' + top[i][0].toFixed(1) + '" y2="' + top[i][1].toFixed(1)
+        var a = _tang(q, i, 5);
+        var b = _tang(top, i, 5);
+        lines += '<line x1="' + a[0].toFixed(1) + '" y1="' + a[1].toFixed(1)
+            + '" x2="' + b[0].toFixed(1) + '" y2="' + b[1].toFixed(1)
             + '" stroke="rgba(224,162,60,0.75)" stroke-width="1"/>';
     });
     svg.innerHTML = stripes
