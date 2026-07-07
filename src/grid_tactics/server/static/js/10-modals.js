@@ -122,14 +122,7 @@ function showTutorModal(matches, deckSize, totalCopiesByCardId) {
             // 🚫 marker, which read as 'blocked' in the picker (user 2026-07-06).
             tile.innerHTML = renderDeckBuilderCard(nid, undefined);
 
-            var key = String(nid);
-            var remainingInDeck = remainingByNid[key] || 0;
-            var totalOwned = (totalCopiesByCardId && totalCopiesByCardId[key]) || remainingInDeck;
-            var pill = document.createElement('div');
-            pill.className = 'tutor-copy-count';
-            pill.textContent = remainingInDeck + ' of ' + totalOwned + ' copies remaining';
-            tile.appendChild(pill);
-
+            // copies-remaining pill removed (user 2026-07-07)
             tile.addEventListener('click', function(e) {
                 e.stopPropagation();
                 // ActionType.TUTOR_SELECT = 9 (Phase 14.2). card_index reused as match index.
