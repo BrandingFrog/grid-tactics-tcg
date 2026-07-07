@@ -4265,3 +4265,37 @@ body.sbx-show-nav:has(#screen-sandbox.active) .game-layout {
   transform: translateY(calc(var(--rise, 0px) * -1));
 }
 .pile-cell-deck.deck-empty .deck-stack { background: transparent; }
+
+/* Deck pile v8 (user 2026-07-07): SHARP corners (the rounded edges broke
+   the line joins) and connectors that span ONLY the exposed extrusion —
+   from the face's bottom corners down to the base's bottom corners. */
+.pile-cell-deck .deck-stack,
+.pile-cell-deck .deck-stack-layer,
+.pile-cell-deck .deck-stack-top {
+  border-radius: 0 !important;
+}
+.pile-cell-deck .deck-stack::before,
+.pile-cell-deck .deck-stack::after {
+  top: auto !important;
+  bottom: 0 !important;
+  height: var(--rise, 0px) !important;
+}
+
+/* Deck pile v9 — SCREEN-STRAIGHT extrusion (user 2026-07-07). The pile
+   column stays welded in the board's tilted plane, but the non-empty DECK
+   cell billboards out of it (floating-popup precedent): preserve-3d
+   threads the .board-container perspective through .pile-board, and the
+   cell counter-rotates the board's -20deg about its own bottom edge.
+   Composed rotation = identity, so the cell's plane is EXACTLY screen-
+   parallel at its hinge depth — the 760px perspective then applies a
+   uniform scale only: connector verticals truly vertical, base rect and
+   top face true rectangles, on both screens, own and opp. deck-empty is
+   EXCLUDED so the dashed footprint keeps lying in the column plane.
+   WARNING: never add filter / clip-path / overflow:hidden / opacity<1 to
+   .pile-board in later appends — any of them kills preserve-3d and
+   re-slants the extrusion. */
+.pile-board { transform-style: preserve-3d; }
+.pile-cell-deck:not(.deck-empty) {
+  transform: rotateX(-20deg);
+  transform-origin: center bottom;   /* hinge on the front edge */
+}
