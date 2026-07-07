@@ -4386,3 +4386,56 @@ svg.deck-extrude .dx-lbl {
 .tutor-modal-cards::-webkit-scrollbar-thumb {
   background: var(--bronze, #6b5730); border-radius: 3px;
 }
+
+/* Tutor minimise (user 2026-07-07) */
+.tutor-min-btn {
+  margin-left: auto; flex: 0 0 auto;
+  width: 26px; height: 26px;
+  background: rgba(30, 20, 8, 0.85); border: 1px solid var(--bronze, #6b5730);
+  border-radius: 6px; color: var(--parch, #e8dcbb);
+  font-size: 13px; cursor: pointer; line-height: 1;
+}
+.tutor-min-btn:hover { border-color: var(--gold, #e0a23c); color: #fff; }
+.game-layout > .tutor-restore-pill {
+  position: absolute; left: 522px; bottom: 84px; transform: translateX(-50%);
+  z-index: 920; padding: 6px 14px;
+  background: rgba(30, 20, 8, 0.92); border: 1.5px solid var(--gold, #e0a23c);
+  border-radius: 8px; color: var(--gold, #e0a23c);
+  font-family: 'Alegreya SC', Georgia, serif; font-weight: 700;
+  font-size: 12px; letter-spacing: 0.08em; cursor: pointer;
+  animation: react-pulse 1.8s ease-in-out infinite;
+}
+
+/* Related cards in the GAME/SANDBOX tooltip wear the vintage type too
+   (user 2026-07-07 — the deck-builder reskin was screen-scoped and the
+   in-game section kept the old Montserrat/cyan look). */
+#screen-game .tooltip-related-label, #screen-sandbox .tooltip-related-label {
+  font-family: var(--ui-display) !important;
+  font-weight: 700 !important;
+  font-size: 11px !important;
+  letter-spacing: 0.5px !important;
+  text-transform: none !important;
+  color: var(--parch-mute) !important;
+}
+#screen-game .tooltip-related-name, #screen-sandbox .tooltip-related-name {
+  font-family: var(--ui-display) !important;
+  font-weight: 700 !important;
+  font-size: 11px !important;
+  letter-spacing: 0.2px !important;
+  color: var(--parch) !important;
+  -webkit-text-stroke: 0 !important;
+  text-shadow: none !important;
+  text-transform: none !important;
+}
+#screen-game .tooltip-related-stats, #screen-sandbox .tooltip-related-stats,
+#screen-game .tooltip-related-effect, #screen-sandbox .tooltip-related-effect {
+  font-family: var(--ui-body) !important;
+  font-weight: 400 !important;
+  font-size: 10.5px !important;
+  line-height: 1.3 !important;
+  color: var(--parch-dim) !important;
+}
+#screen-game .tooltip-related-card, #screen-sandbox .tooltip-related-card {
+  background: rgba(20, 14, 6, 0.6) !important;
+  border-color: var(--bronze-dk, #3a2e18) !important;
+}

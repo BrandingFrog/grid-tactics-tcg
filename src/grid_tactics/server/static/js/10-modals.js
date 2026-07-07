@@ -83,11 +83,28 @@ function showTutorModal(matches, deckSize, totalCopiesByCardId) {
     var title = document.createElement('div');
     title.className = 'tutor-modal-title';
     title.textContent = 'Choose a card to tutor';
-    var deckLine = document.createElement('div');
-    deckLine.className = 'tutor-modal-deckline';
-    deckLine.textContent = 'Deck: ' + deckSize + ' cards remaining';
     header.appendChild(title);
-    header.appendChild(deckLine);
+    // Minimise (user 2026-07-07): peek at the board mid-pick. The pick is
+    // MANDATORY — while minimised only the restore pill acts (all other
+    // inputs stay illegal server-side and gate-blocked client-side).
+    var minBtn = document.createElement('button');
+    minBtn.className = 'tutor-min-btn';
+    minBtn.textContent = '▾';
+    minBtn.title = 'Minimise — peek at the board';
+    minBtn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        overlay.style.display = 'none';
+        var pill = document.createElement('button');
+        pill.id = 'tutor-restore-pill';
+        pill.className = 'tutor-restore-pill';
+        pill.textContent = '▴ Resume card pick';
+        pill.addEventListener('click', function() {
+            pill.remove();
+            overlay.style.display = '';
+        });
+        _stageMount().appendChild(pill);
+    });
+    header.appendChild(minBtn);
     modal.appendChild(header);
 
     // Mandatory tutoring (2026-07): a full hand does NOT exempt the pick —
@@ -164,6 +181,8 @@ function showTutorModal(matches, deckSize, totalCopiesByCardId) {
 }
 
 function closeTutorModal() {
+    var _pill = document.getElementById('tutor-restore-pill');
+    if (_pill) _pill.remove();
     var existing = document.getElementById('tutor-modal-overlay');
     if (existing) existing.remove();
     tutorModalOpen = false;
