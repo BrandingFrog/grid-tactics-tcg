@@ -110,6 +110,23 @@ if not data["last_updated"].endswith(("Z",)) and "+" not in data["last_updated"]
 vf.parent.mkdir(parents=True, exist_ok=True)
 vf.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
 print(f"[VERSION] bumped to {data['version']} @ {data['last_updated']}")
+
+# Cache-bust the modular client assets (2026-07-07): stamp every
+# /static/js|css URL in game.html with ?v=<version> so a page can never
+# mix chunks from two different builds (the html and all 20 assets
+# upgrade atomically).
+import re as _re
+gh = Path("src/grid_tactics/server/static/game.html")
+if gh.exists():
+    _html = gh.read_text(encoding="utf-8")
+    _stamped = _re.sub(
+        r'(/static/(?:js|css)/[^"?]+)(?:\?v=[^"]*)?',
+        lambda m: m.group(1) + "?v=" + data["version"],
+        _html,
+    )
+    if _stamped != _html:
+        gh.write_text(_stamped, encoding="utf-8")
+        print(f"[VERSION] stamped game.html assets ?v={data['version']}")
 PYEOF
 
-git add src/grid_tactics/server/static/VERSION.json
+git add src/grid_tactics/server/static/VERSION.json src/grid_tactics/server/static/game.html
