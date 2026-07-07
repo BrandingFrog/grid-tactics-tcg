@@ -4485,3 +4485,9 @@ svg.deck-extrude .dx-badge {
    pile cell must be its own containing block or the probes anchor to the
    pile-board column and the grave/exhaust extrusion inflates. */
 .pile-board .pile-cell { position: relative; }
+
+/* Tooltip text needs breathing room from the screen edge (user 2026-07-07)
+   — pads only the text body, the card art keeps its existing inset. */
+#screen-game #game-tooltip .tooltip-body,
+#screen-sandbox #sandbox-tooltip .tooltip-body,
+#screen-sandbox .game-tooltip .tooltip-body { padding-left: 8px; }
