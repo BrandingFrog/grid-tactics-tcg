@@ -251,7 +251,15 @@ function _renderDeckStack(cell, count) {
         '<defs><pattern id="' + svgId + '-w" width="8" height="8"'
         + ' patternTransform="rotate(45)" patternUnits="userSpaceOnUse">'
         + '<rect width="8" height="8" fill="#20170b"/>'
-        + '<rect width="4" height="8" fill="#2c2010"/></pattern></defs>';
+        + '<rect width="4" height="8" fill="#2c2010"/></pattern>'
+        // card paper-edge color + dither for the deck's visible side
+        + '<pattern id="' + svgId + '-p" width="4" height="4" patternUnits="userSpaceOnUse">'
+        + '<rect width="4" height="4" fill="#e0d3ae"/>'
+        + '<rect x="0" y="0" width="1" height="1" fill="#c9b98d"/>'
+        + '<rect x="2" y="2" width="1" height="1" fill="#c9b98d"/>'
+        + '<rect x="3" y="1" width="1" height="1" fill="#cfc09a"/>'
+        + '<rect x="1" y="3" width="1" height="1" fill="#cfc09a"/>'
+        + '</pattern></defs>';
     // only the far-back-LEFT (tl) and front-forward-RIGHT (br) connectors
     var lines = '';
     [0, 2].forEach(function(i) {
@@ -262,6 +270,10 @@ function _renderDeckStack(cell, count) {
     svg.innerHTML = stripes
         // base outline (the cell's projected quad)
         + '<path d="' + R(q, 5) + '" fill="none" stroke="rgba(224,162,60,0.45)" stroke-width="1"/>'
+        // the deck's visible SIDE: face bottom edge down to base bottom
+        // edge, filled with the card paper-edge color + dither
+        + '<path d="' + R([top[3], top[2], q[2], q[3]], 3)
+        + '" fill="url(#' + svgId + '-p)" stroke="rgba(60,44,20,0.5)" stroke-width="0.8"/>'
         // corner connectors — screen-vertical by construction
         + lines
         // top face: same projected shape, straight up, rounded corners
