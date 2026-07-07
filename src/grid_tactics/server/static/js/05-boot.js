@@ -270,8 +270,13 @@ function _renderDeckStack(cell, count) {
     svg.innerHTML = stripes
         // base outline (the cell's projected quad)
         + '<path d="' + R(q, 5) + '" fill="none" stroke="rgba(224,162,60,0.45)" stroke-width="1"/>'
-        // the deck's visible SIDE: face bottom edge down to base bottom
-        // edge, filled with the card paper-edge color + dither
+        // the deck's visible SIDES: left + right flanks (between the face
+        // edges and the wider base edges) and the front band, all in the
+        // card paper-edge color + dither
+        + '<path d="' + R([top[0], top[3], q[3], q[0]], 2)
+        + '" fill="url(#' + svgId + '-p)" stroke="rgba(60,44,20,0.4)" stroke-width="0.6"/>'
+        + '<path d="' + R([top[1], top[2], q[2], q[1]], 2)
+        + '" fill="url(#' + svgId + '-p)" stroke="rgba(60,44,20,0.4)" stroke-width="0.6"/>'
         + '<path d="' + R([top[3], top[2], q[2], q[3]], 3)
         + '" fill="url(#' + svgId + '-p)" stroke="rgba(60,44,20,0.5)" stroke-width="0.8"/>'
         // corner connectors — screen-vertical by construction
