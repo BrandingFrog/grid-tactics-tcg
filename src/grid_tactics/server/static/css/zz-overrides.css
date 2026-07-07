@@ -4017,3 +4017,31 @@ body.sbx-show-nav:has(#screen-sandbox.active) .game-layout {
 #screen-sandbox .game-tooltip-sidebar::after {
   content: none !important;
 }
+
+/* ==========================================================================
+   PLAYABLE GLOW REWORK (user 2026-07-07): the halo hugs the PAPER EDGE
+   (drop-shadow follows the card silhouette incl. the frayed ivory margin,
+   never a rectangle) and cycles blue -> purple -> red. Values are in the
+   4x layout space (scale 0.25 renders them at a quarter).
+   ========================================================================== */
+@keyframes hand-halo-arcane {
+  0%   { filter: drop-shadow(0 0 8px rgba(90, 160, 255, 1)) drop-shadow(0 0 22px rgba(70, 150, 255, 0.95)) drop-shadow(0 0 52px rgba(70, 150, 255, 0.6)); }
+  33%  { filter: drop-shadow(0 0 8px rgba(175, 100, 255, 1)) drop-shadow(0 0 22px rgba(155, 80, 255, 0.95)) drop-shadow(0 0 52px rgba(155, 80, 255, 0.6)); }
+  66%  { filter: drop-shadow(0 0 8px rgba(255, 90, 110, 1)) drop-shadow(0 0 22px rgba(255, 70, 95, 0.95)) drop-shadow(0 0 52px rgba(255, 70, 95, 0.6)); }
+  100% { filter: drop-shadow(0 0 8px rgba(90, 160, 255, 1)) drop-shadow(0 0 22px rgba(70, 150, 255, 0.95)) drop-shadow(0 0 52px rgba(70, 150, 255, 0.6)); }
+}
+.card-frame-full.cf2.card-frame-hand.card-playable {
+  animation: hand-halo-arcane 3.2s ease-in-out infinite;
+  box-shadow: none !important;          /* kill the legacy rectangular bloom */
+  border-color: transparent !important;
+}
+/* react window keeps its amber identity, but paper-edged + rectangle-free
+   and rescaled for the 4x layout space */
+@keyframes hand-halo-amber-4x {
+  0%, 100% { filter: drop-shadow(0 0 10px rgba(255, 170, 45, 0.95)) drop-shadow(0 0 24px rgba(255, 140, 20, 0.5)); }
+  50%      { filter: drop-shadow(0 0 16px rgba(255, 178, 60, 1)) drop-shadow(0 0 40px rgba(255, 140, 20, 0.8)); }
+}
+.card-frame-full.cf2.card-frame-hand.card-react-playable {
+  animation: hand-halo-amber-4x 1.3s ease-in-out infinite;
+  box-shadow: none !important;
+}
