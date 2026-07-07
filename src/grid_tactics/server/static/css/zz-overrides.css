@@ -4313,3 +4313,20 @@ body.sbx-show-nav:has(#screen-sandbox.active) .game-layout {
 .pile-cell-deck .deck-stack-top .pile-cell-lbl {
   transform: none !important;
 }
+
+/* Deck pile v10 (user 2026-07-07): SIMPLE AND ALIGNED. The billboard pop
+   is gone — the extrusion lies in the column plane like everything else,
+   square-edged, and the base FILLS the cell exactly. The face still rises
+   with the count past the cell top. */
+.pile-board, .pile-cell-deck { transform-style: flat !important; }
+.pile-cell-deck:not(.deck-empty) .deck-stack {
+  transform: none !important;
+}
+.pile-cell-deck .deck-stack {
+  inset: 0 !important;               /* base = the whole cell */
+  border-radius: 0 !important;
+}
+.pile-cell-deck .deck-stack-layer,
+.pile-cell-deck .deck-stack-top {
+  border-radius: 0 !important;
+}
