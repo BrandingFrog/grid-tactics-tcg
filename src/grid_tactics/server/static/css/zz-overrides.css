@@ -3927,8 +3927,77 @@ body:has(#screen-sandbox.active) .game-layout { gap: 8px !important; }
 }
 #screen-game .game-tooltip-sidebar::after,
 #screen-sandbox .game-tooltip-sidebar::after {
+  /* the deck builder's folded-paper dog-ear, exactly (audit 2026-07-07) */
   content: ''; position: absolute; right: 0; bottom: 0;
-  width: 22px; height: 22px; pointer-events: none;
-  background: linear-gradient(315deg, rgba(224,162,60,0.18) 0%, rgba(224,162,60,0.05) 45%, transparent 50%);
+  width: 22px; height: 22px; pointer-events: none; z-index: 2;
+  background: linear-gradient(135deg, transparent 50%, #241a0d 50%);
+  box-shadow: -1px -1px 2px rgba(0,0,0,0.5);
   border-bottom-right-radius: 12px;
+}
+
+/* ==========================================================================
+   SIDEBAR PARITY PASS (ultracode audit 2026-07-07): the panel chrome was
+   already right — the INTERIOR wasn't. Align every inner element with the
+   deck builder dossier.
+   ========================================================================== */
+/* 1. The dashed inset "grid frame" — the dossier's signature empty state.
+   The game hint becomes the same full-height dashed box. */
+#screen-game .tooltip-sidebar-hint, #screen-sandbox .tooltip-sidebar-hint {
+  flex: 1 1 auto !important;
+  margin: 12px !important;
+  border: 1px dashed rgba(224, 162, 60, 0.25) !important;
+  border-radius: 8px !important;
+  background: rgba(224, 162, 60, 0.02) !important;
+  display: flex; align-items: center; justify-content: center;
+  text-align: center; padding: 10px;
+}
+/* 2. The hovered/pinned tooltip sits ON the panel — no opaque box hiding
+   the parchment (the deck builder's dossier card is transparent too). */
+#screen-game .game-tooltip, #screen-game .card-tooltip,
+#screen-sandbox .game-tooltip, #screen-sandbox .card-tooltip {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+/* 3. Log entries: warm chips (the old override targeted the retired
+   .game-sidebar; the log lives in the tooltip panel now). */
+#screen-game .game-tooltip-sidebar .log-entry {
+  background: #191207 !important;
+  border-color: #3a2e18 !important;
+  color: #cbb98f !important;
+}
+/* 4. Chat: warm chips + gold/parch author names (was navy + cyan/red). */
+#screen-game .game-tooltip-sidebar .chat-message {
+  background: #191207 !important;
+  border: 1px solid #3a2e18 !important;
+  color: #cbb98f !important;
+}
+#screen-game .game-tooltip-sidebar .chat-message.own .chat-author { color: var(--gold, #e0a23c) !important; }
+#screen-game .game-tooltip-sidebar .chat-message.opp .chat-author { color: var(--parch, #e8dcbb) !important; }
+/* 5. Minion status panels (buffs / Burning / Dark Matter): warm chrome. */
+#screen-game .tooltip-status-panel, #screen-sandbox .tooltip-status-panel {
+  background: rgba(26, 20, 9, 0.92) !important;
+  border-color: rgba(224, 162, 60, 0.35) !important;
+  color: var(--parch-dim, #cbb98f) !important;
+}
+#screen-game .tooltip-status-panel.buff, #screen-sandbox .tooltip-status-panel.buff { border-color: rgba(110, 160, 80, 0.5) !important; }
+#screen-game .tooltip-status-panel.debuff, #screen-sandbox .tooltip-status-panel.debuff { border-color: rgba(180, 70, 50, 0.5) !important; }
+/* 6. Corner geometry: rounded 12px is canonical — drop the deck builder's
+   leftover 10px chamfer so both panels share the same silhouette. */
+#screen-deck-builder .hud-armoury-panel { clip-path: none !important; }
+/* 7. Sandbox nav bar: the design box now scales against the REMAINING
+   height (JS sets --duel-nav-h) and shifts down by half the bar. */
+body.sbx-show-nav:has(#screen-sandbox.active) .game-layout {
+  top: calc(50% + var(--duel-nav-h, 0px) / 2) !important;
+}
+/* dossier-style head/sub for the game hint */
+#screen-game .tooltip-sidebar-hint .hint-head,
+#screen-sandbox .tooltip-sidebar-hint .hint-head {
+  font-family: var(--ui-display, serif); font-weight: 700;
+  font-size: 13px; letter-spacing: 0.14em; text-transform: uppercase;
+  color: var(--parch-dim, #cbb98f); margin-bottom: 6px;
+}
+#screen-game .tooltip-sidebar-hint .hint-sub,
+#screen-sandbox .tooltip-sidebar-hint .hint-sub {
+  font-style: italic; font-size: 11px; color: var(--parch-mute, #9a865c);
 }

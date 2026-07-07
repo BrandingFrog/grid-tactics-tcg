@@ -1582,7 +1582,7 @@ function playPendingModalOpened(ev, done) {
             var scrim = document.createElement('div');
             scrim.id = 'event-queue-blocking-scrim';
             scrim.className = 'event-queue-blocking';
-            document.body.appendChild(scrim);
+            _stageMount().appendChild(scrim);
         }
     } catch (e) { /* defensive */ }
     // Call done() immediately — the gate is set, drainEventQueue's early

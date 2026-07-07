@@ -725,6 +725,13 @@ function _doShowSpellStage(numericId, sourcePlayerIdx) {
     var src = _spellStageSourceRect(sourcePlayerIdx);
     var dx = (src.left + src.width / 2) - (stackRect.left + stackRect.width / 2);
     var dy = (src.top + src.height / 2) - (stackRect.top + stackRect.height / 2);
+    // Audit fix (2026-07-07): rects are viewport px but the transform runs
+    // INSIDE the scaled .game-layout — divide by the scale or the slam-in
+    // overshoots by the --duel-scale factor on desktop (read as "chopped").
+    var _sc = parseFloat(getComputedStyle(document.documentElement)
+        .getPropertyValue('--duel-scale')) || 1;
+    dx /= _sc;
+    dy /= _sc;
     var restTransform = 'translate(' + offX + 'px, ' + offY + 'px) rotate(' + rotation + 'deg)';
     card.style.setProperty('--slam-from', 'translate(' + dx + 'px, ' + dy + 'px) scale(0.4) rotate(0deg)');
     card.style.setProperty('--slam-mid', restTransform.replace('rotate(', 'scale(1.06) rotate('));

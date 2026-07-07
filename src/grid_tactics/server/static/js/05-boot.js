@@ -5,8 +5,14 @@
 // One-layout scaling for the duel/sandbox: the 844x390 design box is scaled
 // by --duel-scale to fit the viewport (see the DUEL SCALE ROOT css block).
 function _fitDuelScale() {
+    // Audit fix (2026-07-07): when the sandbox nav bar is shown it eats
+    // 54px of height — scale against the REMAINING space or the bar
+    // overlays and chops the stage top.
+    var navH = document.body.classList.contains('sbx-show-nav') ? 54 : 0;
+    var h = Math.max(1, window.innerHeight - navH);
     document.documentElement.style.setProperty('--duel-scale',
-        String(Math.min(window.innerWidth / 844, window.innerHeight / 390)));
+        String(Math.min(window.innerWidth / 844, h / 390)));
+    document.documentElement.style.setProperty('--duel-nav-h', navH + 'px');
 }
 window.addEventListener('resize', _fitDuelScale);
 
