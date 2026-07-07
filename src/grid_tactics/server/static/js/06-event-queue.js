@@ -525,6 +525,36 @@ function commitEventToDom(ev) {
             }
             break;
 
+        // Timing audit (2026-07-07): the PLAYED card leaves the hand at its
+        // beat — the wholesale players-commit that used to refresh it
+        // incidentally was removed (it slammed pod numbers to end-of-chain
+        // values), which left the card sitting in hand until drain end.
+        case "card_played":
+            if (live && live.players && live.players[payload.owner_idx]) {
+                var _pp = live.players[payload.owner_idx];
+                if (Array.isArray(_pp.hand) && typeof payload.card_index === 'number'
+                        && _pp.hand[payload.card_index] === payload.card_numeric_id) {
+                    _pp.hand.splice(payload.card_index, 1);
+                } else if (Array.isArray(_pp.hand)) {
+                    var _hi = _pp.hand.indexOf(payload.card_numeric_id);
+                    if (_hi !== -1) _pp.hand.splice(_hi, 1);
+                } else if (typeof _pp.hand_count === 'number' && _pp.hand_count > 0) {
+                    _pp.hand_count--;
+                }
+                try {
+                    if (!sbMode && payload.owner_idx === myPlayerIdx
+                            && typeof renderHand === 'function') renderHand();
+                    if (!sbMode && payload.owner_idx !== myPlayerIdx
+                            && typeof renderOppHandRow === 'function') {
+                        var _oc = (_pp.hand_count != null) ? _pp.hand_count
+                            : (_pp.hand ? _pp.hand.length : 0);
+                        renderOppHandRow(_oc, _pp.hand_elements || null);
+                    }
+                } catch (e) { /* defensive */ }
+                needsStatsRerender = true;
+            }
+            break;
+
         // Timing audit (2026-07-06): pile / deck / hand counters tick at
         // their beats instead of jumping at drain end.
         case "card_drawn":
