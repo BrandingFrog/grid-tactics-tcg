@@ -195,12 +195,21 @@ function _renderDeckStack(cell, count) {
     // Technical-extrusion mode (user 2026-07-07): ONE raised top face; the
     // base rectangle + corner connector lines are drawn by CSS on the
     // stack itself — like extruding a rect in a technical drawing.
+    var nEl = cell.querySelector('.pile-cell-n');
+    var lblEl = cell.querySelector('.pile-cell-lbl');
     if (layers > 0) {
         var face = document.createElement('div');
         face.className = 'deck-stack-layer deck-stack-top';
         face.style.setProperty('--si', layers - 1);
         face.style.setProperty('--sr', 0);
         stack.appendChild(face);
+        // count + label ride ON the billboarded face (depth ordering would
+        // otherwise hide them behind it)
+        if (nEl) face.appendChild(nEl);
+        if (lblEl) face.appendChild(lblEl);
+    } else {
+        if (nEl) cell.appendChild(nEl);
+        if (lblEl) cell.appendChild(lblEl);
     }
 }
 
