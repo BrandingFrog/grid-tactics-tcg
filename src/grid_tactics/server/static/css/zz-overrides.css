@@ -4024,24 +4024,35 @@ body.sbx-show-nav:has(#screen-sandbox.active) .game-layout {
    never a rectangle) and cycles blue -> purple -> red. Values are in the
    4x layout space (scale 0.25 renders them at a quarter).
    ========================================================================== */
-@keyframes hand-halo-arcane {
-  0%   { filter: drop-shadow(0 0 8px rgba(90, 160, 255, 1)) drop-shadow(0 0 22px rgba(70, 150, 255, 0.95)) drop-shadow(0 0 52px rgba(70, 150, 255, 0.6)); }
-  33%  { filter: drop-shadow(0 0 8px rgba(175, 100, 255, 1)) drop-shadow(0 0 22px rgba(155, 80, 255, 0.95)) drop-shadow(0 0 52px rgba(155, 80, 255, 0.6)); }
-  66%  { filter: drop-shadow(0 0 8px rgba(255, 90, 110, 1)) drop-shadow(0 0 22px rgba(255, 70, 95, 0.95)) drop-shadow(0 0 52px rgba(255, 70, 95, 0.6)); }
-  100% { filter: drop-shadow(0 0 8px rgba(90, 160, 255, 1)) drop-shadow(0 0 22px rgba(70, 150, 255, 0.95)) drop-shadow(0 0 52px rgba(70, 150, 255, 0.6)); }
+/* ROPE ring, not a glow (user 2026-07-07 v2): a solid band the thickness
+   of the paper edge, wrapped around the card silhouette, cycling
+   blue -> purple -> red. No blur, no bloom. 12px in the 4x layout space
+   = a crisp ~3px band on screen. */
+@keyframes hand-rope-arcane {
+  0%, 100% { outline-color: rgb(85, 155, 255); }
+  33%      { outline-color: rgb(165, 90, 255); }
+  66%      { outline-color: rgb(255, 80, 100); }
 }
 .card-frame-full.cf2.card-frame-hand.card-playable {
-  animation: hand-halo-arcane 3.2s ease-in-out infinite;
+  animation: hand-rope-arcane 3.2s ease-in-out infinite;
+  outline: 12px solid rgb(85, 155, 255);
+  outline-offset: -6px;                 /* rides ON the paper edge */
+  border-radius: 4%;
+  filter: none !important;              /* no glow */
   box-shadow: none !important;          /* kill the legacy rectangular bloom */
   border-color: transparent !important;
 }
 /* react window keeps its amber identity, but paper-edged + rectangle-free
    and rescaled for the 4x layout space */
-@keyframes hand-halo-amber-4x {
-  0%, 100% { filter: drop-shadow(0 0 10px rgba(255, 170, 45, 0.95)) drop-shadow(0 0 24px rgba(255, 140, 20, 0.5)); }
-  50%      { filter: drop-shadow(0 0 16px rgba(255, 178, 60, 1)) drop-shadow(0 0 40px rgba(255, 140, 20, 0.8)); }
+@keyframes hand-rope-amber {
+  0%, 100% { outline-color: rgb(255, 170, 45); }
+  50%      { outline-color: rgb(255, 128, 20); }
 }
 .card-frame-full.cf2.card-frame-hand.card-react-playable {
-  animation: hand-halo-amber-4x 1.3s ease-in-out infinite;
+  animation: hand-rope-amber 1.3s ease-in-out infinite;
+  outline: 12px solid rgb(255, 170, 45);
+  outline-offset: -6px;
+  border-radius: 4%;
+  filter: none !important;
   box-shadow: none !important;
 }
