@@ -4056,3 +4056,45 @@ body.sbx-show-nav:has(#screen-sandbox.active) .game-layout {
   filter: none !important;
   box-shadow: none !important;
 }
+
+/* ==========================================================================
+   HOVER = +10% SIZE, IN PLACE (user 2026-07-07): hand cards, opponent
+   backs and modal picker cards grow 10% centered on hover. NOT on the
+   board grid, the tooltip, or the grave/exhaust viewer. The old hover
+   bring-to-front is removed — cards keep their slot stacking.
+   ========================================================================== */
+/* hand cards: base is scale(0.25) of the 4x box, origin top-left — grow to
+   0.275 and recentre by 5% of the footprint so it expands all around */
+.card-frame-full.cf2.card-frame-hand {
+  transition: transform 120ms ease;
+}
+#screen-game .hand-container > .card-frame-full.cf2.card-frame-hand:hover,
+#screen-sandbox .hand-container > .card-frame-full.cf2.card-frame-hand:hover {
+  transform: translate(calc(var(--cardw) * -0.05), calc(var(--cardw) * -0.05)) scale(0.275) !important;
+}
+/* no bring-to-front: hover keeps the card's own slot z-order */
+.card-frame-full.cf2.card-frame-hand:hover {
+  z-index: calc(var(--i) + 1) !important;
+}
+/* opponent backs: enable hover + grow in place */
+#screen-game .duel-stage .opp-hand-row > *,
+#screen-sandbox .duel-stage .opp-hand-row > * {
+  pointer-events: auto;
+}
+.opp-hand-card-back {
+  transition: transform 120ms ease;
+}
+#screen-game .opp-hand-card-back:hover,
+#screen-sandbox .opp-hand-card-back:hover {
+  transform: scale(1.1) !important;
+}
+/* modal picker cards (tutor / trigger / discard / revive): tiles are 200px,
+   cards 4x at scale(0.25) — same centered growth */
+.tutor-modal-card > .card-frame-full.cf2,
+.discard-picker-card > .card-frame-full.cf2 {
+  transition: transform 120ms ease;
+}
+.tutor-modal-card:hover > .card-frame-full.cf2,
+.discard-picker-card:hover > .card-frame-full.cf2 {
+  transform: translate(-10px, -10px) scale(0.275) !important;
+}
