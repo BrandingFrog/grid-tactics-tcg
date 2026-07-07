@@ -4209,3 +4209,26 @@ body.sbx-show-nav:has(#screen-sandbox.active) .game-layout {
 .pile-cell-deck .deck-stack-layer:nth-child(even):not(.deck-stack-top) {
   filter: brightness(0.93);   /* alternating card-edge slivers */
 }
+
+/* Deck pile v5 (user 2026-07-07): VERTICAL stack. Every layer is the full
+   cell size; each rides 2.2px higher than the one below, so the top face
+   rises past the cell's top edge at a full deck and settles flat as it
+   empties. The lower layers' pale paper-edge slivers show along the
+   BOTTOM — the visible side of the pile. Count + DECK ride the top face. */
+.pile-board, .pile-cell-deck { overflow: visible; }
+.pile-cell-deck .deck-stack {
+  inset: 2px;
+}
+.pile-cell-deck .deck-stack-layer {
+  height: 100%; top: 0; bottom: auto;
+  transform: translateY(calc(var(--si, 0) * -2.2px));
+  border-radius: 4px;
+}
+.pile-cell-deck .deck-stack-layer:not(.deck-stack-top) {
+  border: none;
+  border-bottom: 1px solid rgba(60, 44, 20, 0.75);
+}
+.pile-cell-deck .pile-cell-n,
+.pile-cell-deck .pile-cell-lbl {
+  transform: translateY(calc(var(--rise, 0px) * -1));
+}

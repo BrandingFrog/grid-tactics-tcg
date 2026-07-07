@@ -189,6 +189,8 @@ function _renderDeckStack(cell, count) {
     cell.classList.toggle('deck-empty', layers === 0);
     if (parseInt(stack.dataset.layers || '-1', 10) === layers) return;
     stack.dataset.layers = String(layers);
+    // vertical rise of the top face — the count/label ride it (CSS --rise)
+    cell.style.setProperty('--rise', ((Math.max(layers, 1) - 1) * 2.2) + 'px');
     stack.innerHTML = '';
     for (var i = 0; i < layers; i++) {
         var layer = document.createElement('div');
