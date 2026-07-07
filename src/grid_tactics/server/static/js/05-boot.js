@@ -185,7 +185,7 @@ function _renderDeckStack(cell, count) {
         stack.className = 'deck-stack';
         cell.insertBefore(stack, cell.firstChild);
     }
-    var layers = count <= 0 ? 0 : Math.max(1, Math.min(9, Math.ceil(count / 4)));
+    var layers = count <= 0 ? 0 : Math.max(1, Math.min(10, Math.ceil(count / 3)));
     cell.classList.toggle('deck-empty', layers === 0);
     if (parseInt(stack.dataset.layers || '-1', 10) === layers) return;
     stack.dataset.layers = String(layers);
@@ -194,6 +194,9 @@ function _renderDeckStack(cell, count) {
         var layer = document.createElement('div');
         layer.className = 'deck-stack-layer' + (i === layers - 1 ? ' deck-stack-top' : '');
         layer.style.setProperty('--si', i);
+        // reverse index: how far DOWN the pile this layer sits (top = 0) —
+        // drives the diagonal-axis depth offset in CSS.
+        layer.style.setProperty('--sr', layers - 1 - i);
         stack.appendChild(layer);
     }
 }

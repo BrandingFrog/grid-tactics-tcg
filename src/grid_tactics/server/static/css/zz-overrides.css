@@ -4160,3 +4160,52 @@ body.sbx-show-nav:has(#screen-sandbox.active) .game-layout {
 .pile-cell-deck.deck-empty .deck-stack {
   inset: 3px; height: auto; margin: 0;
 }
+
+/* Deck pile v3 (user 2026-07-07): FAKE DEPTH ON THE AXIS — every layer
+   below the top face steps down-right along the diagonal, so a full deck
+   reads as a chunky isometric block (~18px of visible side at 10 layers)
+   and flattens as it depletes. */
+.pile-cell-deck .deck-stack { inset: 2px 14px 16px 2px; }
+.pile-cell-deck .deck-stack-layer {
+  height: 100%;
+  bottom: auto; top: 0;
+  transform: translate(calc(var(--sr, 0) * 1.4px), calc(var(--sr, 0) * 1.8px));
+  border-radius: 3px;
+}
+.pile-cell-deck .deck-stack-layer:not(.deck-stack-top) {
+  /* the block's side = stacked PAPER EDGES: pale ivory slivers with a
+     dark seam per card, darkening slightly toward the table */
+  background: hsl(44, 38%, calc(72% - var(--sr) * 2.2%));
+  border: none;
+  border-bottom: 1px solid rgba(60, 44, 20, 0.55);
+  border-right: 1px solid rgba(60, 44, 20, 0.45);
+  box-shadow: none;
+}
+.pile-cell-deck .deck-stack-top {
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.6), inset 0 0 0 1px rgba(224, 162, 60, 0.1);
+}
+
+/* Deck pile v4 lighting (user 2026-07-07): light falls from the top-left —
+   the top face gets a sheen fading to shade, its top/left rims catch the
+   light; the side is stacked PAPER EDGES with visible per-card seams,
+   alternating slivers, and a shading gradient toward the table. */
+.pile-cell-deck .deck-stack-top {
+  background:
+    linear-gradient(160deg, rgba(255, 246, 214, 0.16) 0%, transparent 45%, rgba(0, 0, 0, 0.30) 100%),
+    repeating-linear-gradient(45deg, rgba(224, 162, 60, 0.14) 0 4px, rgba(58, 46, 24, 0.45) 4px 8px),
+    linear-gradient(135deg, #2a1f10 0%, #171008 100%);
+  border: 1px solid rgba(224, 162, 60, 0.6);
+  border-top-color: rgba(255, 230, 170, 0.6);
+  border-left-color: rgba(255, 230, 170, 0.35);
+}
+.pile-cell-deck .deck-stack-layer:not(.deck-stack-top) {
+  background:
+    linear-gradient(160deg, rgba(255, 255, 255, 0.16) 0%, transparent 40%, rgba(0, 0, 0, 0.26) 100%),
+    hsl(44, 38%, calc(72% - var(--sr) * 2.2%));
+  border: none;
+  border-bottom: 1px solid rgba(60, 44, 20, 0.75);
+  border-right: 1px solid rgba(60, 44, 20, 0.55);
+}
+.pile-cell-deck .deck-stack-layer:nth-child(even):not(.deck-stack-top) {
+  filter: brightness(0.93);   /* alternating card-edge slivers */
+}
