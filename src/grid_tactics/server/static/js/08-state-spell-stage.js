@@ -1023,7 +1023,12 @@ function _logCardName(id) {
 }
 
 function _logPos(pos) {
-    return (pos && pos.length >= 2) ? '(' + pos[0] + ',' + pos[1] + ')' : '(?,?)';
+    // Chess-style tiles (user 2026-07-07): columns A-E, rows 1-5 — [B,1]
+    // instead of raw engine (row,col).
+    if (!pos || pos.length < 2) return '[?,?]';
+    var col = 'ABCDE'.charAt(pos[1]) || '?';
+    var row = (typeof pos[0] === 'number') ? pos[0] + 1 : '?';
+    return '[' + col + ',' + row + ']';
 }
 
 function _logPlayer(idx) {
