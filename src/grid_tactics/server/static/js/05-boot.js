@@ -279,14 +279,16 @@ function _renderDeckStack(cell, count) {
     //   TL: where the arc begins on the LEFT edge (r below the corner);
     //   BR: where the arc begins on the RIGHT edge (r above the corner).
     var _tang = function(pts, i, r) {
-        var toward = (i === 0) ? pts[3] : pts[1];   // tl->bl edge / br->tr edge
+        var toward = pts[3 - i];   // tl->bl, tr->br, br->tr, bl->tl (side edges)
         var pC = pts[i];
         var v = [toward[0] - pC[0], toward[1] - pC[1]];
         var l = Math.hypot(v[0], v[1]) || 1;
         return [pC[0] + v[0] / l * r, pC[1] + v[1] / l * r];
     };
+    // OWN deck: back-left (tl) + front-right (br) edges visible.
+    // OPP deck (mirrored plane): front-left (bl) + back-right (tr).
     var lines = '';
-    [0, 2].forEach(function(i) {
+    (key === 'opp' ? [1, 3] : [0, 2]).forEach(function(i) {
         var a = _tang(q, i, 5);
         var b = _tang(top, i, 5);
         lines += '<line x1="' + a[0].toFixed(1) + '" y1="' + a[1].toFixed(1)

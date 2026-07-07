@@ -379,7 +379,15 @@ function renderBoardMinion(minion) {
     var atk = (cardDef.attack || 0) + (minion.attack_bonus || 0);
     var hp = minion.current_health;
 
-    var boardArtStyle = cardDef.card_id ? 'background-image:url(' + _cardArtUrl(cardDef.card_id) + ');background-size:cover;background-position:center;' : '';
+    // Art on a 4x child layer (user 2026-07-07 'low res on the grid'):
+    // inside the board's preserve-3d subtree Chrome rasterizes at LAYOUT
+    // size and the desktop --duel-scale then blows the texture up blurry.
+    // A 4x-sized art layer scaled back down rasterizes crisp — same trick
+    // as the hand cards. Kept OFF .board-minion itself because the anim
+    // layer writes inline transforms onto it.
+    var boardArtLayer = cardDef.card_id
+        ? '<div class="bm-art" style="background-image:url(' + _cardArtUrl(cardDef.card_id) + ')"></div>'
+        : '';
 
     // Phase 14.3 Wave 7: persistent status badges (burning / buff / debuff).
     var badges = [];
@@ -398,7 +406,8 @@ function renderBoardMinion(minion) {
         ? '<div class="minion-badges">' + badges.join('') + '</div>'
         : '';
 
-    return '<div class="board-minion ' + ownerClass + ' ' + typeClass + '" data-numeric-id="' + minion.card_numeric_id + '" style="' + boardArtStyle + '">'
+    return '<div class="board-minion ' + ownerClass + ' ' + typeClass + '" data-numeric-id="' + minion.card_numeric_id + '">'
+        + boardArtLayer
         + '<div class="board-minion-overlay"></div>'
         /* element pill removed from board minions (user 2026-07-04) — the
            element reads from the card art/frame + tooltip; the label was

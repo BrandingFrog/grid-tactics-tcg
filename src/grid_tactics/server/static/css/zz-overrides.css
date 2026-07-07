@@ -4354,3 +4354,17 @@ svg.deck-extrude .dx-lbl {
   font-size: 8px; letter-spacing: 0.12em; text-anchor: middle;
   paint-order: stroke; stroke: rgba(0,0,0,0.85); stroke-width: 2px;
 }
+
+/* Board minion art at 4x (user 2026-07-07): inside the board's 3D subtree
+   Chrome rasterizes at layout size and the desktop scale blurs it. The art
+   lives on a 4x child layer scaled back down, so the texture is crisp. */
+.board-minion { position: relative; overflow: hidden; }
+.board-minion .bm-art {
+  position: absolute; top: 0; left: 0;
+  width: 400%; height: 400%;
+  transform: scale(0.25); transform-origin: top left;
+  background-size: cover; background-position: center;
+  z-index: 0; border-radius: inherit;
+  pointer-events: none;
+}
+.board-minion > *:not(.bm-art) { position: relative; z-index: 1; }
