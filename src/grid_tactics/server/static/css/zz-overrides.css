@@ -4439,3 +4439,27 @@ svg.deck-extrude .dx-lbl {
   background: rgba(20, 14, 6, 0.6) !important;
   border-color: var(--bronze-dk, #3a2e18) !important;
 }
+
+/* Board occupancy vs selection (user 2026-07-07: 'multiple look glowing
+   all the time instead of highlighted'): occupied cells keep only a quiet
+   border tint — the strong gold treatment is reserved for the SELECTED
+   minion's cell. */
+.board-cell.cell-owner-self {
+  box-shadow: none !important;
+  border-color: rgba(224, 162, 60, 0.35) !important;
+}
+.board-cell.cell-owner-opp {
+  box-shadow: none !important;
+  border-color: rgba(181, 98, 58, 0.4) !important;
+}
+.board-minion.owner-self { outline-color: rgba(224, 162, 60, 0.35) !important; }
+.board-minion.owner-opp  { outline-color: rgba(181, 98, 58, 0.4) !important; }
+/* selected = the one that pops (vintage gold, not the legacy navy) */
+.board-cell.cell-selected {
+  background: rgba(224, 162, 60, 0.16) !important;
+  border-color: var(--gold, #e0a23c) !important;
+  box-shadow: 0 0 12px 2px rgba(224, 162, 60, 0.55), inset 0 0 8px rgba(224, 162, 60, 0.3) !important;
+}
+.board-cell.cell-selected .board-minion {
+  outline-color: var(--gold, #e0a23c) !important;
+}
