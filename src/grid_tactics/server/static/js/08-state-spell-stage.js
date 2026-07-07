@@ -1035,10 +1035,12 @@ function _logPlayer(idx) {
     if (idx == null) return '[P?]';
     // Spectators get a real seat idx from the server (your_player_idx: 0),
     // so gate on isSpectator explicitly — not on a null seat.
-    if (typeof isSpectator !== 'undefined' && isSpectator) return '[P' + idx + ']';
-    if (myPlayerIdx != null && idx === myPlayerIdx) return '[P' + idx + '·You]';
-    if (myPlayerIdx != null) return '[P' + idx + '·' + (opponentName || 'Opp') + ']';
-    return '[P' + idx + ']';
+    // P1 = the player who went first (engine idx 0), P2 = second (user 2026-07-07).
+    var n = idx + 1;
+    if (typeof isSpectator !== 'undefined' && isSpectator) return '[P' + n + ']';
+    if (myPlayerIdx != null && idx === myPlayerIdx) return '[P' + n + '·You]';
+    if (myPlayerIdx != null) return '[P' + n + '·' + (opponentName || 'Opp') + ']';
+    return '[P' + n + ']';
 }
 
 // attack_resolved / trigger_blip carry only instance_ids — resolve names via
@@ -1252,7 +1254,7 @@ function logEngineEvent(ev) {
             if (typeof p.new_turn === 'number') _logTurn = p.new_turn;
             var _spec = (typeof isSpectator !== 'undefined' && isSpectator);
             var whoseTurn = (!_spec && myPlayerIdx != null && p.new_active_idx === myPlayerIdx)
-                ? 'You' : ((!_spec && myPlayerIdx != null) ? (opponentName || 'Opponent') : 'P' + p.new_active_idx);
+                ? 'You' : ((!_spec && myPlayerIdx != null) ? (opponentName || 'Opponent') : 'P' + (p.new_active_idx + 1));
             text = '— Turn ' + p.new_turn + ': ' + whoseTurn + ' —';
             cls = 'turn';
             break;
@@ -1334,7 +1336,7 @@ function setupLogToolbar() {
             var header = [
                 'Grid Tactics game log',
                 'room=' + (typeof roomCode !== 'undefined' && roomCode ? roomCode : '?')
-                    + ' seat=' + ((myPlayerIdx != null && !(typeof isSpectator !== 'undefined' && isSpectator)) ? 'P' + myPlayerIdx : 'spectator')
+                    + ' seat=' + ((myPlayerIdx != null && !(typeof isSpectator !== 'undefined' && isSpectator)) ? 'P' + (myPlayerIdx + 1) : 'spectator')
                     + ' opponent=' + (opponentName || '?'),
                 'exported ' + new Date().toISOString() + ' lastSeenSeq=' + lastSeenSeq,
                 '',
