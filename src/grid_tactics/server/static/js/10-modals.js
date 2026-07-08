@@ -1018,6 +1018,17 @@ function updateHandHighlights() {
 
 // Render action bar (pass / draw buttons) — lives ABOVE the hand so all
 // player actions (cards, draw, skip, decline) are grouped together.
+// Clear the Pass/Skip/Cancel buttons immediately (e.g. when a drain starts)
+// so they don't linger through animations; renderActionBar rebuilds them at
+// drain-end. Preserves the separately-managed decline-post-move button.
+function hideActionBarButtons() {
+    var slot = document.getElementById('hand-action-bar');
+    if (!slot) return;
+    var keep = document.getElementById('decline-post-move-attack-btn');
+    slot.innerHTML = '';
+    if (keep) slot.appendChild(keep);
+}
+
 function renderActionBar() {
     var slot = document.getElementById('hand-action-bar');
     // Phase 14.4: spectators have no action bar whatsoever.
@@ -1100,9 +1111,19 @@ function renderActionBar() {
     // GONE. In its place, ACTION phase shows a free "Pass" button (PASS no
     // longer deals fatigue damage; two consecutive passes seal a Handshake).
     if (slot) {
+        // Turn ownership (user 2026-07-08): show Pass/Skip ONLY when it is
+        // actually THIS player's turn to act — not merely when a PASS action
+        // exists in legalActions. In preview/god-view legalActions reflects
+        // the ACTIVE player (the dummy), which kept the Pass button up through
+        // the opponent's whole turn. Sandbox (no seat) keeps god-view.
+        var _myTurnToAct = (typeof myPlayerIdx !== 'number')
+            ? true
+            : (gameState.phase === 1
+                ? gameState.react_player_idx === myPlayerIdx
+                : gameState.active_player_idx === myPlayerIdx);
         if (gameState.phase === 1) {
             // REACT phase: show Skip React button (only when player has react cards available)
-            var canPass = legalActions.some(function(a) { return a.action_type === 4; });
+            var canPass = _myTurnToAct && legalActions.some(function(a) { return a.action_type === 4; });
             if (canPass) {
                 var skipBtn = document.createElement('button');
                 skipBtn.className = 'btn btn-action btn-pass';
@@ -1114,7 +1135,7 @@ function renderActionBar() {
             }
         } else {
             // ACTION phase: show the free Pass button with the Handshake hint.
-            var canPassAction = legalActions.some(function(a) { return a.action_type === 4; });
+            var canPassAction = _myTurnToAct && legalActions.some(function(a) { return a.action_type === 4; });
             if (canPassAction) {
                 var passBtn = document.createElement('button');
                 passBtn.className = 'btn btn-action btn-pass btn-pass-action';

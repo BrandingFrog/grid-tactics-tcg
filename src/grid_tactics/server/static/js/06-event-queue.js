@@ -158,6 +158,9 @@ function onEngineEvents(payload) {
         try {
             if (typeof hideMinionActionMenu === 'function') hideMinionActionMenu();
             if (typeof clearSelection === 'function') clearSelection();
+            // Pass/Skip button must not linger through the drain (user
+            // 2026-07-08) — hide it now; renderActionBar rebuilds at drain-end.
+            if (typeof hideActionBarButtons === 'function') hideActionBarButtons();
         } catch (e) { /* defensive */ }
     }
     payload.events.forEach(function(ev) {
