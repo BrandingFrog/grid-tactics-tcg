@@ -4531,3 +4531,21 @@ svg.deck-extrude image.dx-art { filter: grayscale(0.55) brightness(0.72); }
   0%   { transform: scale(1.1); filter: drop-shadow(0 5px 8px rgba(0,0,0,0.48)); }
   100% { transform: scale(1.0);  filter: none; }
 }
+
+/* Related cards in GAME/SANDBOX (user 2026-07-08: 'recent change fucked up
+   the related cards view'): the --mfu sizing above is for the deck builder,
+   which lays out in real viewport px. The game tooltip sits INSIDE the
+   scaled 844x390 layout, so mfu-based sizes double-scale (36px art -> 54
+   design px, text squeezed into a wrapping sliver). Fixed design px here. */
+#screen-game .tooltip-related-card,
+#screen-sandbox .tooltip-related-card {
+  gap: 8px !important;
+  padding: 6px 8px !important;
+  border-radius: 6px !important;
+}
+#screen-game .tooltip-related-art,
+#screen-sandbox .tooltip-related-art {
+  width: 36px !important;
+  height: 36px !important;
+  border-radius: 4px !important;
+}
