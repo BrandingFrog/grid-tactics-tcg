@@ -15,6 +15,7 @@ from grid_tactics.phase_contracts import OutOfPhaseError
 from grid_tactics.legal_actions import legal_actions
 from grid_tactics.server.action_codec import reconstruct_action, serialize_action
 from grid_tactics.server.app import socketio
+from grid_tactics.server.auth_discord import current_user
 from grid_tactics.server.event_reconcile import reconcile_react_window_events
 from grid_tactics.server.room_manager import RoomManager
 from grid_tactics.server.view_filter import (
@@ -152,6 +153,25 @@ def _build_card_defs(library):
     return defs
 
 
+def _inject_avatars(session, state_dict):
+    """Stamp each seat's Discord avatar_url onto the serialized players[].
+
+    Sourced from the session (captured at join from the Flask session) so
+    the OTHER player (and spectators) sees your PFP. Index == engine player
+    idx, exactly like player_names. Guests have None -> avatar_url:null ->
+    the client falls back to a letter disc. Called on the base state_dict
+    BEFORE the per-viewer filters (which deep-copy) so every viewer's dict
+    inherits it.
+    """
+    avatars = getattr(session, 'player_avatars', (None, None))
+    players = state_dict.get('players')
+    if not players:
+        return
+    for i in (0, 1):
+        if i < len(players):
+            players[i]['avatar_url'] = avatars[i]
+
+
 def _decision_idx(state):
     """Return the player index the server should accept actions from.
 
@@ -257,6 +277,7 @@ def _emit_state_to_players(
     clients consume ``engine_events``.
     """
     state_dict = state.to_dict()
+    _inject_avatars(session, state_dict)
     enrich_pending_post_move_attack(state, state_dict, session.library)
     enrich_last_action(state_dict, prev_state, state, resolved_action)
     actions = legal_actions(state, session.library) if not state.is_game_over else ()
@@ -370,6 +391,7 @@ def _fanout_state_to_spectators(
 def _emit_game_over(session, state):
     """Emit game_over event with filtered final state to both players."""
     state_dict = state.to_dict()
+    _inject_avatars(session, state_dict)
     enrich_pending_post_move_attack(state, state_dict, session.library)
     for idx in (0, 1):
         if session.player_sids[idx] is None:
@@ -550,6 +572,7 @@ def _finish_pregame(room_code, pregame):
     )
 
     state_dict = display_state.to_dict()
+    _inject_avatars(session, state_dict)
     enrich_pending_post_move_attack(session.state, state_dict, session.library)
     card_defs = _build_card_defs(session.library)
     initial_actions = legal_actions(session.state, session.library)
@@ -681,7 +704,9 @@ def register_events(room_manager: RoomManager) -> None:
         if not display_name:
             emit("error", {"msg": "display_name is required"})
             return
-        code, token = _room_manager.create_room(display_name, request.sid)
+        u = current_user()
+        avatar = u['avatar_url'] if u else None
+        code, token = _room_manager.create_room(display_name, request.sid, avatar=avatar)
         sio_join_room(code)
         emit("room_created", {
             "room_code": code,
@@ -699,9 +724,11 @@ def register_events(room_manager: RoomManager) -> None:
         if not room_code:
             emit("error", {"msg": "room_code is required"})
             return
+        u = current_user()
+        avatar = u['avatar_url'] if u else None
         try:
             token, room = _room_manager.join_room(
-                room_code, display_name, request.sid
+                room_code, display_name, request.sid, avatar=avatar
             )
         except ValueError as e:
             emit("error", {"msg": str(e)})
@@ -795,6 +822,7 @@ def register_events(room_manager: RoomManager) -> None:
                 return
             session = _room_manager.start_game(room_code)
             state_dict = session.state.to_dict()
+            _inject_avatars(session, state_dict)
             enrich_pending_post_move_attack(session.state, state_dict, session.library)
             card_defs = _build_card_defs(session.library)
             initial_actions = legal_actions(session.state, session.library)
@@ -828,16 +856,19 @@ def register_events(room_manager: RoomManager) -> None:
         is an inert dummy."""
         data = data or {}
         name = (data.get("display_name") or "Preview").strip() or "Preview"
+        u = current_user()
+        avatar = u['avatar_url'] if u else None
         # PREGAME (user 2026-07-08): previews run the same RPS + mulligan
         # flow so the human sees the pregame UI; the dummy seat auto-plays.
         if PREGAME_ENABLED:
-            code, pregame = _room_manager.begin_preview_pregame(name, request.sid)
+            code, pregame = _room_manager.begin_preview_pregame(name, request.sid, avatar=avatar)
             sio_join_room(code)
             _start_pregame_rps(code, pregame)
             return
-        code, session = _room_manager.create_preview_game(name, request.sid)
+        code, session = _room_manager.create_preview_game(name, request.sid, avatar=avatar)
         sio_join_room(code)
         state_dict = session.state.to_dict()
+        _inject_avatars(session, state_dict)
         enrich_pending_post_move_attack(session.state, state_dict, session.library)
         card_defs = _build_card_defs(session.library)
         initial_actions = legal_actions(session.state, session.library)
@@ -1010,6 +1041,7 @@ def register_events(room_manager: RoomManager) -> None:
         session = _room_manager.get_game(room_code)
         if session is not None:
             state_dict = session.state.to_dict()
+            _inject_avatars(session, state_dict)
             enrich_pending_post_move_attack(session.state, state_dict, session.library)
             spec_state = filter_state_for_spectator(
                 state_dict, god_mode=god_mode, perspective_idx=0,
@@ -1075,6 +1107,7 @@ def register_events(room_manager: RoomManager) -> None:
 
         # status == 'started' -- emit game_start to both players with the fresh state
         state_dict = new_session.state.to_dict()
+        _inject_avatars(new_session, state_dict)
         enrich_pending_post_move_attack(new_session.state, state_dict, new_session.library)
         card_defs = _build_card_defs(new_session.library)
         initial_actions = legal_actions(new_session.state, new_session.library)

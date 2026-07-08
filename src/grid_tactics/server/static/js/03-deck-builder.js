@@ -323,6 +323,7 @@ function renderDeckBuilder() {
     renderDeckSidebar();
     fitCardNames();
     fitCardEffects();
+    try { if (typeof _renderCloudBadge === 'function') _renderCloudBadge(); } catch (e) {}
 }
 
 function fitCardEffects() {

@@ -30,6 +30,7 @@ class PlayerSlot:
     token: str
     name: str
     sid: str
+    avatar: str | None = None  # Discord avatar URL (None = guest → letter disc)
     ready: bool = False
     deck: tuple[int, ...] | None = None  # None = use preset
 
@@ -66,6 +67,7 @@ class PregameSeat:
     name: str
     sid: str | None
     deck: tuple[int, ...] | None = None
+    avatar: str | None = None  # Discord avatar URL (None = guest/dummy)
 
 
 @dataclass
@@ -128,12 +130,14 @@ class RoomManager:
             ):
                 return code
 
-    def create_room(self, display_name: str, sid: str) -> tuple[str, str]:
+    def create_room(
+        self, display_name: str, sid: str, avatar: str | None = None
+    ) -> tuple[str, str]:
         """Create a new room. Returns (room_code, session_token)."""
         token = str(uuid.uuid4())
         with self._lock:
             code = self._generate_code()
-            slot = PlayerSlot(token=token, name=display_name, sid=sid)
+            slot = PlayerSlot(token=token, name=display_name, sid=sid, avatar=avatar)
             room = WaitingRoom(code=code, creator=slot)
             self._rooms[code] = room
             self._token_to_room[token] = code
@@ -142,7 +146,7 @@ class RoomManager:
         return code, token
 
     def join_room(
-        self, room_code: str, display_name: str, sid: str
+        self, room_code: str, display_name: str, sid: str, avatar: str | None = None
     ) -> tuple[str, WaitingRoom]:
         """Join an existing room. Returns (session_token, room).
 
@@ -159,7 +163,7 @@ class RoomManager:
         with room.lock:
             if room.joiner is not None:
                 raise ValueError(f"Room '{room_code}' is full")
-            slot = PlayerSlot(token=token, name=display_name, sid=sid)
+            slot = PlayerSlot(token=token, name=display_name, sid=sid, avatar=avatar)
             room.joiner = slot
         with self._lock:
             self._token_to_room[token] = room_code
@@ -224,13 +228,16 @@ class RoomManager:
             player_names=(p0_slot.name, p1_slot.name),
             player_sids=[p0_slot.sid, p1_slot.sid],
             player_decks=(deck_p0, deck_p1),
+            player_avatars=(p0_slot.avatar, p1_slot.avatar),
         )
 
         with self._lock:
             self._games[room_code] = session
         return session
 
-    def create_preview_game(self, display_name: str, sid: str) -> tuple[str, GameSession]:
+    def create_preview_game(
+        self, display_name: str, sid: str, avatar: str | None = None
+    ) -> tuple[str, GameSession]:
         """Solo PREVIEW game (lobby quick view, user 2026-07-06): a real
         GameSession on the real duel screen where the requester is P0 and
         the opponent seat is an inert dummy. For checking the game view on
@@ -273,6 +280,7 @@ class RoomManager:
             player_names=(display_name or "You", "Preview"),
             player_sids=[sid, None],
             player_decks=(preset, preset),
+            player_avatars=(avatar, None),  # dummy opponent has no avatar
         )
         with self._lock:
             code = self._generate_code()
@@ -304,10 +312,12 @@ class RoomManager:
                 PregameSeat(
                     token=room.creator.token, name=room.creator.name,
                     sid=room.creator.sid, deck=room.creator.deck,
+                    avatar=room.creator.avatar,
                 ),
                 PregameSeat(
                     token=room.joiner.token, name=room.joiner.name,
                     sid=room.joiner.sid, deck=room.joiner.deck,
+                    avatar=room.joiner.avatar,
                 ),
             ],
         )
@@ -316,7 +326,7 @@ class RoomManager:
         return pregame
 
     def begin_preview_pregame(
-        self, display_name: str, sid: str
+        self, display_name: str, sid: str, avatar: str | None = None
     ) -> tuple[str, Pregame]:
         """Preview-game pregame: human seat + inert dummy seat (sid None)."""
         token = str(uuid.uuid4())
@@ -324,7 +334,7 @@ class RoomManager:
         pregame = Pregame(
             code="",  # assigned under the lock below
             seats=[
-                PregameSeat(token=token, name=display_name or "You", sid=sid),
+                PregameSeat(token=token, name=display_name or "You", sid=sid, avatar=avatar),
                 PregameSeat(token=dummy_token, name="Preview", sid=None),
             ],
             preview=True,
@@ -378,6 +388,7 @@ class RoomManager:
             player_names=(s0.name, s1.name),
             player_sids=[s0.sid, s1.sid],
             player_decks=(deck_p0, deck_p1),
+            player_avatars=(s0.avatar, s1.avatar),
         )
         pregame.session = session
         # Dummy seats (preview) keep their hand instantly.
@@ -454,6 +465,7 @@ class RoomManager:
         p0_name, p1_name = session.player_names
         p0_sid, p1_sid = session.player_sids
         p0_deck, p1_deck = session.player_decks
+        p0_av, p1_av = getattr(session, 'player_avatars', (None, None))
 
         # Re-flip: with 50% chance, swap who is P1 vs P2
         if coin == 0:
@@ -461,11 +473,13 @@ class RoomManager:
             new_names  = (p0_name, p1_name)
             new_sids   = [p0_sid, p1_sid]
             new_decks  = (p0_deck, p1_deck)
+            new_avatars = (p0_av, p1_av)
         else:
             new_tokens = (p1_token, p0_token)
             new_names  = (p1_name, p0_name)
             new_sids   = [p1_sid, p0_sid]
             new_decks  = (p1_deck, p0_deck)
+            new_avatars = (p1_av, p0_av)
 
         preset = get_preset_deck(self._library)
         d0 = new_decks[0] if new_decks[0] else preset
@@ -481,6 +495,7 @@ class RoomManager:
             player_names=new_names,
             player_sids=new_sids,
             player_decks=new_decks,
+            player_avatars=new_avatars,
         )
 
         with self._lock:

@@ -47,6 +47,15 @@ function _renderAccountChip() {
     }
 }
 
+// Show the small "☁ synced" badge in the deck builder only when logged in
+// AND cloud-deck sync is available. Guests / logged-out see nothing.
+function _renderCloudBadge() {
+    var el = document.getElementById('deck-cloud-badge');
+    if (!el) return;
+    var a = window.__account;
+    el.style.display = (a && a.loggedIn && a.cloudDecks) ? '' : 'none';
+}
+
 // ---- cloud deck sync -------------------------------------------------
 
 function _localDeckSlots() {
@@ -177,6 +186,7 @@ function bootstrapAccount() {
                 user: data.user || null,
             };
             _renderAccountChip();
+            _renderCloudBadge();
             if (window.__account.loggedIn) {
                 // Adopt the Discord display name if the player hasn't set one.
                 try {

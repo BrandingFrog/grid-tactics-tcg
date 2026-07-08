@@ -18,12 +18,17 @@ class GameSession:
         player_names: tuple[str, str],     # (p0_name, p1_name)
         player_sids: list[str | None],     # [p0_sid, p1_sid] -- mutable for reconnect
         player_decks: tuple[tuple[int, ...] | None, tuple[int, ...] | None] = (None, None),
+        # (p0_avatar, p1_avatar) — parallel to player_names; index == engine idx.
+        # Placed after the last defaulted param so its own default is valid
+        # (a defaulted param cannot precede the non-defaulted player_sids).
+        player_avatars: tuple[str | None, str | None] = (None, None),
     ):
         self.state = state
         self.rng = rng
         self.library = library
         self.player_tokens = player_tokens
         self.player_names = player_names
+        self.player_avatars = player_avatars
         self.player_sids = player_sids
         self.player_decks = player_decks  # original decks for rematch
         self.rematch_requested = [False, False]  # per-player rematch flag

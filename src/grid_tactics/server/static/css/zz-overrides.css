@@ -5580,3 +5580,23 @@ input::selection, textarea::selection { background: rgba(224, 162, 60, 0.45); co
   background: #3a2e18; color: #e8dcbe; border: 1px solid var(--bronze, #6b5730);
 }
 .account-btn-secondary:hover { border-color: var(--gold, #e0a23c); color: var(--gold, #e0a23c); }
+
+/* ---------------------------------------------------------------------------
+   "☁ synced" badge — deck-builder loadout panel head (Discord cloud decks).
+   Shown only when logged in + cloud sync available (13-account.js toggles it).
+   Small worn accent pill, mirrors the vintage HUD "DECK" ghost-pill; uses the
+   theme tokens so it reads correctly under the parchment palette.
+   --------------------------------------------------------------------------- */
+.deck-cloud-badge {
+  display: inline-flex; align-items: center; gap: 4px;
+  margin-left: 8px;
+  font-family: var(--ui-display, 'Alegreya SC', Georgia, serif);
+  font-weight: 700; font-size: 0.62rem; letter-spacing: 1px;
+  line-height: 1;
+  color: var(--gold, #e0a23c);
+  background: color-mix(in srgb, var(--gold, #e0a23c) 14%, var(--field, #191207));
+  border: 1px solid color-mix(in srgb, var(--gold, #e0a23c) 45%, var(--bronze-dk, #3a2e18));
+  border-radius: 999px;
+  padding: 3px 9px;
+  white-space: nowrap;
+}
