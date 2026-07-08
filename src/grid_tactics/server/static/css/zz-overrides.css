@@ -4519,3 +4519,15 @@ svg.deck-extrude image.dx-art { filter: grayscale(0.55) brightness(0.72); }
 }
 #pileModal .pile-grid > * { flex: 0 0 auto; }
 #pileModal .pile-grid::-webkit-scrollbar { height: 6px; width: auto; }
+
+/* Move pickup was too high (user 2026-07-08): scale 1.15 + deep shadow read
+   as the card leaping off the table. Subtle 1.07 lift with a close shadow. */
+.anim-move-lift {
+  /* no !important — the slide phase overrides transform via inline style */
+  transform: scale(1.07);
+  filter: drop-shadow(0 4px 6px rgba(0,0,0,0.45));
+}
+@keyframes move-drop {
+  0%   { transform: scale(1.07); filter: drop-shadow(0 4px 6px rgba(0,0,0,0.45)); }
+  100% { transform: scale(1.0);  filter: none; }
+}

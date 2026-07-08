@@ -444,7 +444,7 @@ function getTileDelta(fromPos, toPos) {
 // Wave 3 (Phase 14.3-03): Move animation.
 // PHASE A — lift   (0ms):    add .anim-move-lift to source minion (scale + shadow)
 // PHASE B — translate (120ms): add .anim-move-translate, set inline transform
-//                              translate(dx,dy) scale(1.15). Wait 350ms.
+//                              translate(dx,dy) scale(1.07). Wait 350ms.
 // PHASE C — apply state + drop (470ms): applyStateFrame so the board re-renders
 //   with the minion at the destination tile. The animatingTiles registry causes
 //   renderBoard to tag the destination .board-cell with .anim-move-drop, which
@@ -497,7 +497,7 @@ function playMoveAnimation(job, done) {
         // PHASE B — translate. The lift transform (scale 1.15) is preserved
         // explicitly because setting style.transform overrides the class rule.
         minionEl.classList.add('anim-move-translate');
-        minionEl.style.transform = 'translate(' + dx + 'px,' + dy + 'px) scale(1.15)';
+        minionEl.style.transform = 'translate(' + dx + 'px,' + dy + 'px) scale(1.07)';
 
         setTimeout(function () {
             // PHASE C — apply state + drop. The board re-renders; the source
