@@ -4502,3 +4502,7 @@ svg.deck-extrude[id*="-own-deck"]    { z-index: 55; }
 svg.deck-extrude[id*="-opp-deck"]    { z-index: 53; }
 svg.deck-extrude[id*="-opp-grave"]   { z-index: 54; }
 svg.deck-extrude[id*="-opp-exhaust"] { z-index: 55; }
+
+/* Grave/exhaust top card: slightly greyed so the pile reads as spent
+   cards, and the centered count/title stays legible over the art. */
+svg.deck-extrude image.dx-art { filter: grayscale(0.55) brightness(0.72); }

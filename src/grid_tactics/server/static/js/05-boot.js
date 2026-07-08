@@ -258,10 +258,10 @@ function _renderDeckStack(cell, count, topCardId) {
         layout.appendChild(svg);
     }
     var stripes =
-        '<defs><pattern id="' + svgId + '-w" width="8" height="8"'
-        + ' patternTransform="rotate(' + stripeDeg + ')" patternUnits="userSpaceOnUse">'
-        + '<rect width="8" height="8" fill="#20170b"/>'
-        + '<rect width="4" height="8" fill="#2c2010"/></pattern>'
+        '<defs><pattern id="' + svgId + '-w" width="12" height="12"'
+        + ' patternTransform="rotate(45)" patternUnits="userSpaceOnUse">'
+        + '<rect width="12" height="12" fill="#251b0d"/>'
+        + '<rect width="6" height="12" fill="#41301a"/></pattern>'
         // card paper-edge color + dither for the deck's visible side
         + '<pattern id="' + svgId + '-p" width="4" height="4" patternUnits="userSpaceOnUse">'
         + '<rect width="4" height="4" fill="#e0d3ae"/>'
@@ -317,16 +317,15 @@ function _renderDeckStack(cell, count, topCardId) {
         topFace = '<clipPath id="' + svgId + '-clip"><path d="' + R(top, 5) + '"/></clipPath>'
             + '<g clip-path="url(#' + svgId + '-clip)">'
             + (art
-                ? '<g transform="matrix(' + mat + ')"><image href="' + art
+                ? '<g transform="matrix(' + mat + ')"><image class="dx-art" href="' + art
                     + '" x="0" y="0" width="100" height="100" preserveAspectRatio="xMidYMid slice"/></g>'
                 : '<path d="' + R(top, 5) + '" fill="url(#' + svgId + '-p)"/>')
             + '</g>'
             + '<path d="' + R(top, 5) + '" fill="none" stroke="rgba(224,162,60,0.8)" stroke-width="1.2"/>';
-        // small count badge toward the front-right of the top face
-        var bx = cx + (top[2][0] - cx) * 0.62, by = cy + (top[2][1] - cy) * 0.62;
-        topTexts = '<circle cx="' + bx.toFixed(1) + '" cy="' + by.toFixed(1)
-            + '" r="7" fill="rgba(24,17,8,0.88)" stroke="rgba(224,162,60,0.7)" stroke-width="1"/>'
-            + '<text x="' + bx.toFixed(1) + '" y="' + (by + 3.2).toFixed(1) + '" class="dx-badge">' + count + '</text>';
+        // count + pile title centered on the face, same set as the deck
+        topTexts = '<text x="' + cx.toFixed(1) + '" y="' + (cy - 1).toFixed(1) + '" class="dx-n">' + count + '</text>'
+            + '<text x="' + cx.toFixed(1) + '" y="' + (cy + 9).toFixed(1) + '" class="dx-lbl">'
+            + kind.toUpperCase() + '</text>';
     }
     svg.innerHTML = stripes
         // base outline (the cell's projected quad)
