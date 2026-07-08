@@ -4506,3 +4506,16 @@ svg.deck-extrude[id*="-opp-exhaust"] { z-index: 55; }
 /* Grave/exhaust top card: slightly greyed so the pile reads as spent
    cards, and the centered count/title stays legible over the art. */
 svg.deck-extrude image.dx-art { filter: grayscale(0.55) brightness(0.72); }
+
+/* Pile browser (grave/exhaust/deck) scrolls HORIZONTALLY (user 2026-07-08):
+   one row of cards, swipe/scroll sideways — same pattern as the tutor picker. */
+#pileModal .pile-grid {
+  display: flex !important;
+  flex-wrap: nowrap !important;
+  align-items: center;
+  justify-content: flex-start;
+  overflow-x: auto !important;
+  overflow-y: hidden !important;
+}
+#pileModal .pile-grid > * { flex: 0 0 auto; }
+#pileModal .pile-grid::-webkit-scrollbar { height: 6px; width: auto; }
