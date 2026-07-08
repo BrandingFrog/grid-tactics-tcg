@@ -59,6 +59,40 @@ function renderRoomBar() {
 // opponent answers (pass -> handshake banner, anything else -> flag drops).
 // consecutive_passes === 1 means exactly one unanswered pass, and the
 // passer is whoever is NOT the active player.
+
+// Waiting indicator (user 2026-07-08): a flipping hourglass over the
+// avatar of whoever the game is waiting on — a pending pick first, then
+// the react player during a react window, else the active player.
+function _waitingOnIdx() {
+    var g = gameState;
+    if (!g) return null;
+    if (g.pending_tutor_player_idx != null) return g.pending_tutor_player_idx;
+    if (g.pending_conjure_deploy_player_idx != null) return g.pending_conjure_deploy_player_idx;
+    if (g.pending_revive_player_idx != null) return g.pending_revive_player_idx;
+    if (g.pending_death_target_owner_idx != null) return g.pending_death_target_owner_idx;
+    if (g.phase === 1 && g.react_player_idx != null) return g.react_player_idx;
+    return g.active_player_idx;
+}
+
+function _updateWaitBadge(which, playerIdx) {
+    var wrap = document.querySelector('#screen-game .pod-' + which + ' .pod-ava-wrap');
+    if (!wrap) return;
+    var badge = wrap.querySelector('.pod-wait-badge');
+    var waiting = _waitingOnIdx() === playerIdx
+        && !(gameState && gameState.game_over);
+    if (waiting) {
+        if (!badge) {
+            badge = document.createElement('span');
+            badge.className = 'pod-wait-badge';
+            badge.textContent = '⌛';
+            badge.title = 'Waiting for this player';
+            wrap.appendChild(badge);
+        }
+    } else if (badge) {
+        badge.remove();
+    }
+}
+
 function _updatePassFlag(which, playerIdx) {
     var row = document.querySelector('#screen-game .pod-' + which + ' .pod-row-stats');
     if (!row) return;
@@ -121,6 +155,7 @@ function renderOpponentInfo() {
     }
 
     _updatePassFlag('opp', oppIdx);
+    _updateWaitBadge('opp', oppIdx);
 }
 
 // =============================================
@@ -162,6 +197,7 @@ function renderSelfInfo() {
         selfDeck.textContent = myPlayer.deck_count;
     }
     _updatePassFlag('self', myPlayerIdx);
+    _updateWaitBadge('self', myPlayerIdx);
 }
 
 // =============================================
