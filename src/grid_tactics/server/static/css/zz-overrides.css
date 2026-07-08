@@ -4524,10 +4524,10 @@ svg.deck-extrude image.dx-art { filter: grayscale(0.55) brightness(0.72); }
    as the card leaping off the table. Subtle 1.07 lift with a close shadow. */
 .anim-move-lift {
   /* no !important — the slide phase overrides transform via inline style */
-  transform: scale(1.07);
-  filter: drop-shadow(0 4px 6px rgba(0,0,0,0.45));
+  transform: scale(1.1);
+  filter: drop-shadow(0 5px 8px rgba(0,0,0,0.48));
 }
 @keyframes move-drop {
-  0%   { transform: scale(1.07); filter: drop-shadow(0 4px 6px rgba(0,0,0,0.45)); }
+  0%   { transform: scale(1.1); filter: drop-shadow(0 5px 8px rgba(0,0,0,0.48)); }
   100% { transform: scale(1.0);  filter: none; }
 }
