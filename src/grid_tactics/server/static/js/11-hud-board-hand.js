@@ -78,8 +78,35 @@ function _updateWaitBadge(which, playerIdx) {
     var wrap = document.querySelector('#screen-game .pod-' + which + ' .pod-ava-wrap');
     if (!wrap) return;
     var badge = wrap.querySelector('.pod-wait-badge');
-    var waiting = _waitingOnIdx() === playerIdx
+    // Only show when the game is actually WAITING on a human: never while
+    // the event queue / animations are draining (user 2026-07-08 — it was
+    // reading raw state at beats and flagged "your turn" while input was
+    // still blocked). For the local seat, additionally require that input
+    // would be accepted (a board action via canActNow, or a pending pick
+    // that owns a modal).
+    var busy = (typeof isEventQueueBusy === 'function') && isEventQueueBusy();
+    var waiting = !busy && _waitingOnIdx() === playerIdx
         && !(gameState && gameState.game_over);
+    if (waiting && myPlayerIdx != null && playerIdx === myPlayerIdx) {
+        var g = gameState;
+        var pendingMine = g && (g.pending_tutor_player_idx === playerIdx
+            || g.pending_conjure_deploy_player_idx === playerIdx
+            || g.pending_revive_player_idx === playerIdx
+            || g.pending_death_target_owner_idx === playerIdx);
+        if (!pendingMine && typeof canActNow === 'function' && !canActNow()) {
+            waiting = false;
+        }
+    }
+    // Beats render while busy — re-check shortly so the badge appears the
+    // moment the drain settles even if no further render fires.
+    if (busy && !window.__waitBadgeTimer) {
+        window.__waitBadgeTimer = setTimeout(function() {
+            window.__waitBadgeTimer = null;
+            try {
+                if (gameState && gameState.players) { renderSelfInfo(); renderOpponentInfo(); }
+            } catch (e) { /* defensive */ }
+        }, 500);
+    }
     if (waiting) {
         if (!badge) {
             badge = document.createElement('span');
