@@ -1556,7 +1556,7 @@ function resetGameClientState() {
     var lobbyStatus = document.getElementById('lobby-status');
     if (lobbyStatus) {
         lobbyStatus.textContent = '';
-        lobbyStatus.className = 'lobby-status';
+        lobbyStatus.className = 'lobby2-status';
     }
     var gameRoomCode = document.getElementById('game-room-code');
     if (gameRoomCode) gameRoomCode.textContent = '';

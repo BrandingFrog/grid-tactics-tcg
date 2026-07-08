@@ -361,7 +361,7 @@ function playRangedAttackAnimation(attackerCell, targetCell, damage, done) {
     marker.setAttribute('orient', 'auto-start-reverse');
     var arrowPath = document.createElementNS(SVG_NS, 'path');
     arrowPath.setAttribute('d', 'M 0 0 L 10 5 L 0 10 z');
-    arrowPath.setAttribute('fill', '#ffd84a');
+    arrowPath.setAttribute('fill', '#f0b64e');
     marker.appendChild(arrowPath);
     defs.appendChild(marker);
     svg.appendChild(defs);
@@ -376,7 +376,7 @@ function playRangedAttackAnimation(attackerCell, targetCell, damage, done) {
     var line = document.createElementNS(SVG_NS, 'line');
     line.setAttribute('x1', ax); line.setAttribute('y1', ay);
     line.setAttribute('x2', tx); line.setAttribute('y2', ty);
-    line.setAttribute('stroke', '#ffd84a');
+    line.setAttribute('stroke', '#f0b64e');
     line.setAttribute('stroke-width', '4');
     line.setAttribute('stroke-linecap', 'round');
     line.setAttribute('marker-end', 'url(#ranged-arrowhead)');

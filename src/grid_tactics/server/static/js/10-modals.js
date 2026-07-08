@@ -401,7 +401,7 @@ function showReviveModal() {
 
     var modal = document.createElement('div');
     modal.className = 'tutor-modal';
-    modal.style.cssText = 'pointer-events:auto;max-width:480px;background:rgba(20,25,45,0.95);border:2px solid #1b5a7a;border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.6);';
+    modal.style.cssText = 'pointer-events:auto;max-width:480px;background:rgba(23,16,6,0.95);border:2px solid #6b5730;border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.6);';
 
     var header = document.createElement('div');
     header.className = 'tutor-modal-header';
@@ -412,7 +412,7 @@ function showReviveModal() {
     modal.appendChild(header);
 
     var body = document.createElement('div');
-    body.style.cssText = 'padding:16px;text-align:center;color:var(--muted);font-size:14px;';
+    body.style.cssText = 'padding:16px;text-align:center;color:#cbb98f;font-size:14px;';
     body.textContent = 'Click a highlighted cell on the board to place the revived minion.';
     modal.appendChild(body);
 
@@ -510,7 +510,7 @@ function showConjureDeployUI() {
     var banner = document.createElement('div');
     banner.id = 'conjure-deploy-banner';
     banner.className = 'tutor-toast';
-    banner.style.background = '#2a6b3a';
+    banner.style.background = '#4e5d28';
     banner.style.top = '60px';
 
     var cardNid = gameState.pending_conjure_deploy_card;
@@ -601,14 +601,14 @@ function showDeathTargetPickerUI() {
     var banner = document.createElement('div');
     banner.id = 'death-target-banner';
     banner.className = 'tutor-toast';
-    banner.style.background = '#7a1b1b';
+    banner.style.background = '#6e2a18';
     banner.style.top = '60px';
 
     var cardName = gameState.pending_death_card_name || 'Death effect';
     var filter = gameState.pending_death_filter || 'enemy_minion';
     var text;
     if (filter === 'friendly_promote') {
-        banner.style.background = '#1b5a7a';
+        banner.style.background = '#3a2e18';
         text = 'Pick an ally to promote (' + cardName + ' death)';
     } else {
         text = 'Pick an enemy to destroy (' + cardName + ' death)';
@@ -635,7 +635,7 @@ function showOpponentDeathPickToast() {
     var toast = document.createElement('div');
     toast.id = 'opponent-death-pick-toast';
     toast.className = 'tutor-toast';
-    toast.style.background = '#7a1b1b';
+    toast.style.background = '#6e2a18';
     toast.textContent = 'Opponent is choosing a target for a Death effect\u2026';
     _stageMount().appendChild(toast);
 }

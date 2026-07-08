@@ -3972,8 +3972,8 @@ body:has(#screen-sandbox.active) .game-layout { gap: 8px !important; }
   border: 1px solid #3a2e18 !important;
   color: #cbb98f !important;
 }
-#screen-game .game-tooltip-sidebar .chat-message.own .chat-author { color: var(--gold, #e0a23c) !important; }
-#screen-game .game-tooltip-sidebar .chat-message.opp .chat-author { color: var(--parch, #e8dcbb) !important; }
+#screen-game .game-tooltip-sidebar .chat-message.own .chat-message-author { color: var(--gold, #e0a23c) !important; }
+#screen-game .game-tooltip-sidebar .chat-message.opp .chat-message-author { color: var(--parch, #e8dcbb) !important; }
 /* 5. Minion status panels (buffs / Burning / Dark Matter): warm chrome. */
 #screen-game .tooltip-status-panel, #screen-sandbox .tooltip-status-panel {
   background: rgba(26, 20, 9, 0.92) !important;
@@ -4651,4 +4651,378 @@ svg.deck-extrude image.dx-art { filter: grayscale(0.55) brightness(0.72); }
 .minion-action-btn.disabled, .minion-action-btn:disabled {
   opacity: 0.45 !important;
   background: transparent !important;
+}
+
+/* ==========================================================================
+   VINTAGE SWEEP (2026-07-08 ultracode audit — 50 confirmed legacy leaks).
+   Everything below retires remaining navy/cyan/arcade chrome in favour of
+   the vintage kit: gold #e0a23c, bronze #6b5730/#3a2e18, parchment
+   #e8dcbe/#f2ead2/#cbb98f, warm darks #201709/#171006/#140e06, rust #a5442e.
+   ========================================================================== */
+
+/* [0] board minion stat numbers — most-viewed text in a duel */
+.board-minion-stats {
+  font-family: var(--ui-display) !important;
+  text-transform: none !important;
+}
+
+/* [34] page base: body was still cold navy + system sans */
+body {
+  /* the per-screen candlelit vignettes paint over this; body itself was
+     still the cold navy var(--bg) — give the page the same warm table */
+  font-family: var(--ui-body) !important;
+  color: #e8dcbe !important;
+  background: radial-gradient(150% 150% at 50% 38%, #251a0e 0%, #160f07 56%, #0b0805 100%) !important;
+}
+.damage-popup, .hp-damage-popup { font-family: var(--ui-display) !important; }
+
+/* [1/4/8/13] tutor / trigger-picker / revive modal chrome (shared classes) */
+.tutor-modal {
+  background: linear-gradient(180deg, #201709, #171006) !important;
+  border: 2px solid var(--bronze, #6b5730) !important;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6), 0 0 24px rgba(224, 162, 60, 0.12) !important;
+  font-family: var(--ui-body) !important;
+}
+.tutor-modal-overlay { background: rgba(12, 8, 3, 0.72) !important; }
+.tutor-modal-header, .tutor-modal-footer {
+  background: #171006 !important;
+  border-color: var(--bronze-dk, #3a2e18) !important;
+}
+.tutor-modal-title {
+  font-family: var(--ui-display) !important;
+  color: var(--parch, #e8dcbe) !important;
+}
+.tutor-modal-deckline { color: var(--gold, #e0a23c) !important; }
+.tutor-modal-warning {
+  color: var(--gold, #e0a23c) !important;
+  background: rgba(224, 162, 60, 0.10) !important;
+  border-color: rgba(224, 162, 60, 0.5) !important;
+  font-family: var(--ui-display) !important;
+}
+.tutor-modal-card:hover { filter: drop-shadow(0 6px 18px rgba(224, 162, 60, 0.45)) !important; }
+.tutor-copy-count { background: var(--gold, #e0a23c) !important; color: #201709 !important; }
+.tutor-skip-button {
+  font-family: var(--ui-display) !important;
+  color: var(--parch, #e8dcbe) !important;
+  border-color: var(--bronze, #6b5730) !important;
+}
+.tutor-skip-button:hover {
+  border-color: var(--gold, #e0a23c) !important;
+  color: var(--gold, #e0a23c) !important;
+}
+.tutor-modal .btn-secondary {
+  background: #3a2e18 !important;
+  color: #e8dcbe !important;
+  border: 1px solid #6b5730 !important;
+  font-family: var(--ui-display) !important;
+}
+
+/* [2/5/10] discard-cost / sacrifice picker */
+.discard-picker-modal, .sacrifice-picker-modal {
+  background: linear-gradient(180deg, #201709, #171006) !important;
+  border: 2px solid var(--bronze, #6b5730) !important;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6), 0 0 24px rgba(224, 162, 60, 0.12) !important;
+  font-family: var(--ui-body) !important;
+}
+.discard-picker-title, .sacrifice-picker-title {
+  font-family: var(--ui-display) !important;
+  color: var(--parch, #e8dcbe) !important;
+  background: #171006 !important;
+  border-color: var(--bronze-dk, #3a2e18) !important;
+}
+.discard-picker-progress, .sacrifice-picker-progress {
+  color: var(--gold, #e0a23c) !important;
+  background: #171006 !important;
+  font-family: var(--ui-body) !important;
+}
+.discard-picker-card, .sacrifice-picker-card { font-family: var(--ui-body) !important; }
+.discard-picker-card:hover, .sacrifice-picker-card:hover {
+  filter: drop-shadow(0 6px 18px rgba(224, 162, 60, 0.45)) !important;
+}
+.discard-picker-card.picked, .sacrifice-picker-card.picked {
+  box-shadow: 0 0 0 3px var(--gold, #e0a23c), 0 0 18px rgba(224, 162, 60, 0.55) !important;
+}
+.sp-badge {
+  background: var(--gold, #e0a23c) !important;
+  color: #201709 !important;
+  box-shadow: 0 0 10px rgba(224, 162, 60, 0.7) !important;
+}
+
+/* [3/15] spell-cast stage: arrow, react placeholder, resolve flash */
+.spell-stage-arrow {
+  color: var(--gold, #e0a23c) !important;
+  text-shadow: 0 0 16px rgba(224, 162, 60, 0.55) !important;
+}
+.spell-stage-placeholder {
+  border-color: rgba(224, 162, 60, 0.5) !important;
+  background: rgba(32, 23, 9, 0.6) !important;
+  color: var(--gold, #e0a23c) !important;
+  text-shadow: 0 0 20px rgba(224, 162, 60, 0.45) !important;
+  font-family: var(--ui-display) !important;
+}
+.spell-stage-placeholder.confirmed {
+  color: var(--parch, #e8dcbe) !important;
+  border-color: rgba(224, 162, 60, 0.8) !important;
+  background: rgba(58, 46, 24, 0.6) !important;
+  text-shadow: 0 0 20px rgba(224, 162, 60, 0.6) !important;
+}
+@keyframes spell-stack-resolve {
+  0%   { transform: scale(1); filter: none; }
+  30%  { transform: scale(1.08); filter: drop-shadow(0 0 24px rgba(224, 162, 60, 0.9)); }
+  100% { transform: scale(1); filter: none; }
+}
+
+/* [16] board targeting: olive-gold for deploy/move, rust for attack */
+.board-cell.cell-valid {
+  background: rgba(125, 154, 62, 0.16) !important;
+  border-color: rgba(125, 154, 62, 0.6) !important;
+  box-shadow: inset 0 0 12px rgba(125, 154, 62, 0.3) !important;
+}
+.board-cell.cell-valid:hover {
+  background: rgba(125, 154, 62, 0.28) !important;
+  box-shadow: inset 0 0 16px rgba(125, 154, 62, 0.45) !important;
+}
+.board-cell.cell-attack {
+  background: rgba(165, 68, 46, 0.18) !important;
+  border-color: rgba(181, 98, 58, 0.65) !important;
+  box-shadow: inset 0 0 12px rgba(165, 68, 46, 0.35) !important;
+}
+.attack-range-footprint { box-shadow: inset 0 0 0 3px rgba(181, 98, 58, 0.45) !important; }
+.attack-valid-target {
+  box-shadow: inset 0 0 0 4px rgba(181, 98, 58, 0.9) !important;
+  background-color: rgba(165, 68, 46, 0.3) !important;
+}
+@keyframes attack-target-pulse {
+  0%, 100% { box-shadow: inset 0 0 0 4px rgba(181, 98, 58, 0.9); }
+  50%      { box-shadow: inset 0 0 0 4px rgba(224, 162, 60, 0.8); }
+}
+
+/* [7] board tiles + container: warm the fills, retire the cyan zone wash */
+.board-container { background: rgba(23, 16, 6, 0.85) !important; }
+.board-cell { background: rgba(32, 23, 9, 0.72) !important; }
+.board-cell.zone-self { background: rgba(224, 162, 60, 0.05) !important; }
+.board-cell.zone-neutral { background: rgba(32, 23, 9, 0.72) !important; }
+.board-cell.zone-opp { background: rgba(165, 68, 46, 0.05) !important; }
+
+/* [6/19/20] hand card states: selected, confirm-armed, pinned */
+.card-frame-full.cf2.card-frame-hand.card-selected-hand,
+.card-frame-full.cf2.card-frame-hand.card-preview-pinned {
+  outline: 12px solid var(--gold, #e0a23c) !important;
+  outline-offset: -6px !important;
+  box-shadow: none !important;
+  filter: none !important;
+  animation: none !important;
+  border-color: transparent !important;
+}
+.card-frame-full.cf2.card-frame-hand.card-confirm-armed {
+  outline: 12px solid #f0b64e !important;
+  outline-offset: -6px !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+}
+.card-frame-hand.card-confirm-armed::after {
+  color: var(--gold, #e0a23c) !important;
+  font-family: var(--ui-display) !important;
+}
+
+/* [24/32] hand action bar buttons */
+#screen-game .hand-action-bar .btn-pass:not(.btn-pass-action),
+#screen-sandbox .hand-action-bar .btn-pass:not(.btn-pass-action) {
+  background: rgba(224, 162, 60, 0.12) !important;
+  border: 1px solid var(--gold, #e0a23c) !important;
+  color: var(--gold, #e0a23c) !important;
+}
+#screen-game .hand-action-bar button:not(.btn-pass):not(.btn-pass-action),
+#screen-sandbox .hand-action-bar button:not(.btn-pass):not(.btn-pass-action) {
+  background: rgba(32, 23, 9, 0.9) !important;
+  border: 1px solid var(--bronze, #6b5730) !important;
+  color: var(--parch, #e8dcbe) !important;
+}
+#screen-game #decline-post-move-attack-btn, #screen-sandbox #decline-post-move-attack-btn {
+  background: rgba(32, 23, 9, 0.9) !important;
+  color: var(--parch, #e8dcbe) !important;
+  border: 1px solid #a5442e !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5) !important;
+}
+#screen-game #decline-post-move-attack-btn:hover, #screen-sandbox #decline-post-move-attack-btn:hover {
+  border-color: var(--gold, #e0a23c) !important;
+  color: var(--gold, #e0a23c) !important;
+}
+
+/* [25] tutor-toast base: warm chrome under the (now warm) inline variants */
+.tutor-toast {
+  background: #201709;
+  border: 2px solid var(--bronze, #6b5730) !important;
+  color: #f2ead2 !important;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5) !important;
+}
+
+/* [14] lobby status pills (JS now keeps the lobby2-status class) */
+#screen-lobby .lobby2-status.info { color: var(--gold, #e0a23c); }
+#screen-lobby .lobby2-status.error { color: #f0b48a; }
+
+/* [12/22/36] deck-code share/import modal */
+.deck-code-modal {
+  background: linear-gradient(180deg, #201709, #171006) !important;
+  border: 1px solid var(--bronze, #6b5730) !important;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6) !important;
+}
+.deck-code-modal-hint { font-family: var(--ui-body) !important; color: #cbb98f !important; }
+.deck-code-modal-error { font-family: var(--ui-body) !important; color: #f0b48a !important; }
+.deck-code-modal-textarea {
+  background: #140e06 !important;
+  color: #e8dcbe !important;
+  border: 1px solid var(--bronze-dk, #3a2e18) !important;
+}
+.deck-code-modal-textarea:focus { border-color: var(--gold, #e0a23c) !important; }
+.deck-code-modal .btn-primary {
+  background: var(--gold, #e0a23c) !important;
+  color: #201709 !important;
+  border: 1px solid var(--gold, #e0a23c) !important;
+  font-family: var(--ui-display) !important;
+}
+.deck-code-modal .btn-secondary {
+  background: #3a2e18 !important;
+  color: #e8dcbe !important;
+  border: 1px solid var(--bronze, #6b5730) !important;
+  font-family: var(--ui-display) !important;
+}
+
+/* [17] pile modal body text */
+#pileModal .pile-modal { font-family: var(--ui-body) !important; }
+#pileModal .pile-grid-empty { font-family: var(--ui-body) !important; color: #9a865c !important; }
+
+/* [18/31/35/40] global header nav + patch badge */
+.hud-nav .nav-btn::before { font-family: var(--ui-display) !important; }
+.hud-nav .nav-btn:hover { background: linear-gradient(180deg, rgba(224, 162, 60, 0.07), transparent) !important; }
+.hud-nav .nav-btn.active {
+  background: linear-gradient(180deg, rgba(224, 162, 60, 0.12), rgba(224, 162, 60, 0.02)) !important;
+  text-shadow: none !important;
+}
+.hud-nav-ext-arrow { color: #9a865c !important; }
+.hud-nav-toggle { border-color: rgba(107, 87, 48, 0.6) !important; }
+.hud-nav-toggle:hover { border-color: var(--gold, #e0a23c) !important; background: rgba(224, 162, 60, 0.08) !important; }
+.patch-badge.hud-patch .patch-version { font-family: var(--ui-display) !important; text-shadow: none !important; }
+.patch-badge.hud-patch::before { color: var(--bronze, #6b5730) !important; }
+
+/* [21] game-over HP summary row */
+#game-over-overlay .game-over-hp-row {
+  background: rgba(0, 0, 0, 0.3) !important;
+  border: 1px solid var(--bronze-dk, #3a2e18) !important;
+}
+
+/* [26] spectator hand labels */
+.spectator-hand-label { color: var(--gold, #e0a23c) !important; font-family: var(--ui-display) !important; }
+
+/* [28] waiting-room roster rows + ready dots */
+#screen-lobby .player-item {
+  border-bottom-color: rgba(107, 87, 48, 0.55) !important;
+  font-family: var(--ui-display);
+  color: var(--parch, #e8dcbe);
+}
+#screen-lobby .player-item .dot.on { background: #7d9a3e !important; box-shadow: 0 0 6px rgba(125, 154, 62, 0.6) !important; }
+#screen-lobby .player-item .dot.off { background: #a5442e !important; box-shadow: none !important; }
+
+/* [23] sandbox drag-drop targets */
+.drop-target-active {
+  outline: 2px dashed var(--gold, #e0a23c) !important;
+  background: rgba(224, 162, 60, 0.10) !important;
+}
+.drop-target-hover { background: rgba(224, 162, 60, 0.22) !important; }
+
+/* [27/29] sandbox Move-to popover */
+.sandbox-move-popover { background: #201709 !important; border: 1px solid var(--bronze, #6b5730) !important; }
+.sandbox-move-btn {
+  font-family: var(--ui-display) !important;
+  color: var(--parch, #e8dcbe) !important;
+  border: 1px solid var(--bronze, #6b5730) !important;
+  background: transparent !important;
+}
+.sandbox-move-btn:hover { background: #3a2e18 !important; color: var(--gold, #e0a23c) !important; }
+
+/* [30/38] sandbox server-saves slot rows */
+#screen-sandbox .sandbox-slot-row {
+  background: rgba(224, 162, 60, 0.06) !important;
+  border: 1px solid var(--bronze-dk, #3a2e18) !important;
+}
+#screen-sandbox .sandbox-slot-name { font-family: var(--ui-body) !important; color: #cbb98f !important; }
+#screen-sandbox .sandbox-slots-empty { color: #9a865c !important; }
+
+/* [43/45] sandbox card-search rows */
+#screen-sandbox .sandbox-search-result { border-bottom-color: var(--bronze-dk, #3a2e18) !important; }
+#screen-sandbox .sandbox-search-result:hover { background: rgba(224, 162, 60, 0.12) !important; }
+#screen-sandbox .sandbox-search-result-meta { color: #9a865c !important; }
+
+/* [33] player preview disc */
+.player-preview-disc {
+  font-family: var(--ui-display) !important;
+  color: var(--gold, #e0a23c) !important;
+  background: linear-gradient(135deg, #3a2e18 0%, #201709 60%, #140e06 100%) !important;
+  border: 3px solid var(--bronze, #6b5730) !important;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.5) !important;
+}
+
+/* [39/41] trigger blip: swap the cyan halo layer for gold */
+.trigger-blip-center-icon {
+  text-shadow: 0 0 24px rgba(255, 255, 255, 0.8), 0 0 12px rgba(224, 162, 60, 0.6),
+               0 4px 10px rgba(0, 0, 0, 0.8) !important;
+}
+
+/* [44] pod HP bar: kill the inline neon glow ring */
+#screen-game .pod-fill, #screen-sandbox .pod-fill { box-shadow: none !important; }
+
+/* [46] chat unread dot */
+.chat-unread { background: #a5442e !important; }
+
+/* [48] log timestamps */
+#screen-game .game-tooltip-sidebar .log-time,
+#screen-sandbox .game-tooltip-sidebar .log-time { color: #9a865c !important; }
+
+/* [37] Firefox scrollbars in the deck builder */
+#screen-deck-builder .tooltip-sidebar.hud-dossier { scrollbar-color: #6b5730 transparent; }
+#screen-deck-builder .card-browser-filters.hud-armoury-filters { scrollbar-color: #6b5730 transparent; }
+
+/* [47] retire the legacy HUD font tokens (Michroma/Space Mono no longer load) */
+:root, .duel-scope {
+  --hud-display: var(--ui-display) !important;
+  --hud-g-display: var(--ui-display) !important;
+  --hud-mono: var(--ui-body) !important;
+}
+
+/* [49] text selection */
+::selection { background: rgba(224, 162, 60, 0.45); color: #171006; }
+input::selection, textarea::selection { background: rgba(224, 162, 60, 0.45); color: #171006; }
+
+/* The vintage tokens were scoped to screen roots, so rules on body/:root
+   (and any element outside a screen) resolved var(--ui-*) as invalid and
+   fell back to Times. Promote the core kit to :root — screen-scoped
+   redefinitions are identical, so nothing changes inside the screens. */
+:root {
+  --parch:      #f2ead2;
+  --parch-dim:  #cbb98f;
+  --parch-mute: #9a865c;
+  --gold:       #e0a23c;
+  --gold-lt:    #ffd873;
+  --bronze:     #6b5730;
+  --bronze-dk:  #3a2e18;
+  --field:      #191207;
+  --field-hi:   #221809;
+  --rust:       #b5623a;
+  --leaf:       #7d9a3e;
+  --ui-display: 'Alegreya SC', Georgia, serif;
+  --ui-body:    'Alegreya', Georgia, serif;
+  --hud-display: var(--ui-display);
+  --hud-g-display: var(--ui-display);
+  --hud-mono: var(--ui-body);
+}
+
+/* targeting must beat the zone washes (same specificity — order decides) */
+.board-cell.cell-valid {
+  background: rgba(125, 154, 62, 0.16) !important;
+  border-color: rgba(125, 154, 62, 0.6) !important;
+}
+.board-cell.cell-valid:hover { background: rgba(125, 154, 62, 0.28) !important; }
+.board-cell.cell-attack {
+  background: rgba(165, 68, 46, 0.18) !important;
+  border-color: rgba(181, 98, 58, 0.65) !important;
 }

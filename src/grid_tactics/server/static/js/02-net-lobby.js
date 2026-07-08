@@ -26,7 +26,7 @@ function initSocket() {
                 var t = document.createElement('div');
                 t.id = 'conn-lost-toast';
                 t.className = 'tutor-toast';
-                t.style.background = '#6b2a2a';
+                t.style.background = '#6e2a18';
                 t.textContent = '⚡ Connection lost — reconnecting…';
                 _stageMount().appendChild(t);
             }
@@ -458,8 +458,8 @@ function onError(data) {
         if (gsEl && gsEl.classList.contains('active')) {
             var errToast = document.createElement('div');
             errToast.className = 'tutor-toast';
-            errToast.style.background = '#6b2a2a';
-            errToast.style.borderColor = '#e05050';
+            errToast.style.background = '#6e2a18';
+            errToast.style.borderColor = '#b5623a';
             errToast.textContent = '⚠ ' + msg;
             _stageMount().appendChild(errToast);
             setTimeout(function() {
@@ -749,7 +749,7 @@ function showLobbyStatus(message, type) {
     var statusEl = document.getElementById('lobby-status');
     if (!statusEl) return;
     statusEl.textContent = message;
-    statusEl.className = 'lobby-status ' + (type || '');
+    statusEl.className = 'lobby2-status ' + (type || '');
 }
 
 function populateDeckSelector() {

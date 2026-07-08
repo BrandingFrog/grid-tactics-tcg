@@ -4,12 +4,10 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>Grid Tactics - Play</title>
-  <!-- Montserrat Black: existing blocky bold (matches Roblox GothamBlack).
-       Michroma + Space Mono: HUD / tactical display + monospaced telemetry
-       for the redesigned lobby. Other screens keep Montserrat. -->
+  <!-- Legacy font payload (Michroma/Montserrat/Space Mono) removed 2026-07-08
+       with the vintage reskin — Alegreya below is the only display family. -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Michroma&family=Montserrat:wght@900&family=Source+Sans+3:wght@700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
   <!-- Card-frame typography (approved 2026-07-03 full-art frame) -->
   <link href="https://fonts.googleapis.com/css2?family=Alegreya+SC:wght@500;700;800&family=Alegreya:ital,wght@0,500;0,700;1,500&display=swap" rel="stylesheet">
   <!-- In-game HUD pod / PASS typography (approved 2026-07 duel layout) -->
@@ -20,30 +18,30 @@
   <!-- Inline emoji favicon — kills the perpetual /favicon.ico 404 (the only
        console error on live and local). -->
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>&#128481;</text></svg>">
-  <link rel="stylesheet" href="/static/css/01-base-tokens.css?v=0.24.8">
-  <link rel="stylesheet" href="/static/css/02-lobby-deck-builder.css?v=0.24.8">
-  <link rel="stylesheet" href="/static/css/03-duel-layout.css?v=0.24.8">
-  <link rel="stylesheet" href="/static/css/04-animations-overlays.css?v=0.24.8">
-  <link rel="stylesheet" href="/static/css/05-hud-redesign.css?v=0.24.8">
-  <link rel="stylesheet" href="/static/css/06-game-hud.css?v=0.24.8">
-  <link rel="stylesheet" href="/static/css/07-cards-cf2.css?v=0.24.8">
-  <link rel="stylesheet" href="/static/css/zz-overrides.css?v=0.24.8">
+  <link rel="stylesheet" href="/static/css/01-base-tokens.css?v=0.24.9">
+  <link rel="stylesheet" href="/static/css/02-lobby-deck-builder.css?v=0.24.9">
+  <link rel="stylesheet" href="/static/css/03-duel-layout.css?v=0.24.9">
+  <link rel="stylesheet" href="/static/css/04-animations-overlays.css?v=0.24.9">
+  <link rel="stylesheet" href="/static/css/05-hud-redesign.css?v=0.24.9">
+  <link rel="stylesheet" href="/static/css/06-game-hud.css?v=0.24.9">
+  <link rel="stylesheet" href="/static/css/07-cards-cf2.css?v=0.24.9">
+  <link rel="stylesheet" href="/static/css/zz-overrides.css?v=0.24.9">
   <script src="https://cdn.socket.io/4.7.4/socket.io.min.js" defer></script>
   <!-- Modular client JS (2026-07-06): classic scripts sharing one global
        scope — ALL tags must stay `defer` (never async) and in this order;
        socket.io above must load first. -->
-  <script src="/static/js/01-core-state.js?v=0.24.8" defer></script>
-  <script src="/static/js/02-net-lobby.js?v=0.24.8" defer></script>
-  <script src="/static/js/03-deck-builder.js?v=0.24.8" defer></script>
-  <script src="/static/js/04-card-render.js?v=0.24.8" defer></script>
-  <script src="/static/js/05-boot.js?v=0.24.8" defer></script>
-  <script src="/static/js/06-event-queue.js?v=0.24.8" defer></script>
-  <script src="/static/js/07-draw-anims-audio.js?v=0.24.8" defer></script>
-  <script src="/static/js/08-state-spell-stage.js?v=0.24.8" defer></script>
-  <script src="/static/js/09-duel-interaction.js?v=0.24.8" defer></script>
-  <script src="/static/js/10-modals.js?v=0.24.8" defer></script>
-  <script src="/static/js/11-hud-board-hand.js?v=0.24.8" defer></script>
-  <script src="/static/js/12-sandbox.js?v=0.24.8" defer></script>
+  <script src="/static/js/01-core-state.js?v=0.24.9" defer></script>
+  <script src="/static/js/02-net-lobby.js?v=0.24.9" defer></script>
+  <script src="/static/js/03-deck-builder.js?v=0.24.9" defer></script>
+  <script src="/static/js/04-card-render.js?v=0.24.9" defer></script>
+  <script src="/static/js/05-boot.js?v=0.24.9" defer></script>
+  <script src="/static/js/06-event-queue.js?v=0.24.9" defer></script>
+  <script src="/static/js/07-draw-anims-audio.js?v=0.24.9" defer></script>
+  <script src="/static/js/08-state-spell-stage.js?v=0.24.9" defer></script>
+  <script src="/static/js/09-duel-interaction.js?v=0.24.9" defer></script>
+  <script src="/static/js/10-modals.js?v=0.24.9" defer></script>
+  <script src="/static/js/11-hud-board-hand.js?v=0.24.9" defer></script>
+  <script src="/static/js/12-sandbox.js?v=0.24.9" defer></script>
 </head>
 <body>
 
