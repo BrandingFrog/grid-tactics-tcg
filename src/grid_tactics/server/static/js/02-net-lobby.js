@@ -35,6 +35,12 @@ function initSocket() {
     socket.on('connect', function() {
         var tGone = document.getElementById('conn-lost-toast');
         if (tGone) tGone.remove();
+        // PREGAME (2026-07-08): if the socket dropped mid-pregame, ask the
+        // server to re-emit the current stage. (Full token-based reconnect
+        // is Phase 15 — this covers same-sid transport recoveries.)
+        try {
+            if (window._pregameActive) socket.emit('pregame_resync', {});
+        } catch (e) { /* defensive */ }
     });
     // Register all event handlers
     socket.on('room_created', onRoomCreated);
@@ -43,6 +49,12 @@ function initSocket() {
     socket.on('player_joined', onPlayerJoined);
     socket.on('player_ready', onPlayerReady);
     socket.on('game_start', onGameStart);
+    // PREGAME (user 2026-07-08): RPS decides who goes first, then mulligan,
+    // then the normal game_start arrives. Handlers live in 10-modals.js.
+    socket.on('pregame_rps', onPregameRps);
+    socket.on('rps_result', onRpsResult);
+    socket.on('pregame_mulligan', onPregameMulligan);
+    socket.on('pregame_status', onPregameStatus);
     socket.on('state_update', onStateUpdate);
     // Phase 14.8-04a: subscribe to the new engine_events stream from live PvP.
     // Handler enqueues each event into the eventQueue; the legacy state_update

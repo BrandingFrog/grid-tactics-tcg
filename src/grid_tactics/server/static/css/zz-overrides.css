@@ -5224,3 +5224,180 @@ input::selection, textarea::selection { background: rgba(224, 162, 60, 0.45); co
   outline: 12px solid var(--gold, #e0a23c) !important;
   outline-offset: -6px !important;
 }
+
+/* =========================================================================
+   PREGAME (user 2026-07-08) — Rock-Paper-Scissors + Mulligan.
+   Modals ride the .tutor-modal vintage chrome; everything below is the
+   pregame-specific layer: RPS tiles, reveal clash, waiting body, banner.
+   ========================================================================= */
+
+/* RPS pick modal: three LARGE selectable tiles styled like vintage card
+   backs (warm darks, bronze border, faint parchment inner line). */
+.pregame-rps-modal { max-width: 560px !important; }
+.rps-tile-row {
+  display: flex;
+  gap: 18px;
+  justify-content: center;
+  padding: 26px 22px;
+}
+.rps-tile {
+  width: 128px;
+  height: 172px;
+  border-radius: 10px;
+  border: 2px solid #6b5730;
+  background:
+    radial-gradient(ellipse at 50% 30%, #2a1e0d 0%, #201709 55%, #171006 100%);
+  box-shadow:
+    inset 0 0 0 3px rgba(232, 220, 190, 0.08),
+    inset 0 0 22px rgba(0, 0, 0, 0.55),
+    0 4px 14px rgba(0, 0, 0, 0.5);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  cursor: pointer;
+  transition: transform 150ms ease, border-color 150ms ease, filter 150ms ease;
+}
+.rps-tile:hover {
+  transform: translateY(-4px);
+  border-color: var(--gold, #e0a23c);
+}
+.rps-tile-glyph {
+  font-size: 52px;
+  line-height: 1;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.7));
+}
+.rps-tile-label {
+  font-family: var(--ui-display, 'Alegreya SC'), serif;
+  font-size: 15px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--gold, #e0a23c);
+}
+.rps-tile.rps-tile-selected {
+  outline: 3px solid var(--gold, #e0a23c);
+  outline-offset: -1px;
+  border-color: var(--gold, #e0a23c);
+  filter: drop-shadow(0 0 14px rgba(224, 162, 60, 0.55));
+  transform: translateY(-4px);
+}
+.rps-tile.rps-tile-static,
+.rps-tile.rps-tile-static:hover { cursor: default; transform: none; }
+
+/* Waiting body after Accept (your locked pick + pulsing wait line) */
+.rps-waiting {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  padding: 24px 20px 28px;
+}
+.rps-waiting-text {
+  font-family: var(--ui-display, 'Alegreya SC'), serif;
+  font-size: 14px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--parch-mute, #cbbb95);
+  animation: rps-wait-pulse 1.6s ease-in-out infinite;
+}
+@keyframes rps-wait-pulse {
+  0%, 100% { opacity: 0.55; }
+  50%      { opacity: 1; }
+}
+
+/* Reveal clash: yours flies in from the left, theirs from the right, brief
+   hold, then the winner blooms gold while the loser dims (both shake on a
+   tie). Verdict uses the INDEPENDENT scale/rotate properties so it composes
+   with the fly-in's landed transform instead of clobbering it. Total beat
+   stays under ~1.6s (well inside the 2.5s budget). */
+.rps-clash-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 3200;
+  pointer-events: none;
+  background: rgba(12, 8, 3, 0.55);
+}
+.rps-clash-tile {
+  position: absolute;
+  top: 50%;
+  cursor: default;
+}
+.rps-clash-mine {
+  left: 50%;
+  transform: translate(-118%, -50%);
+  animation: rps-clash-in-left 450ms cubic-bezier(0.2, 0.8, 0.3, 1) both;
+}
+.rps-clash-theirs {
+  left: 50%;
+  transform: translate(18%, -50%);
+  animation: rps-clash-in-right 450ms cubic-bezier(0.2, 0.8, 0.3, 1) both;
+}
+@keyframes rps-clash-in-left {
+  0%   { transform: translate(-118%, -50%) translateX(-60vw) rotate(-14deg); opacity: 0; }
+  100% { transform: translate(-118%, -50%); opacity: 1; }
+}
+@keyframes rps-clash-in-right {
+  0%   { transform: translate(18%, -50%) translateX(60vw) rotate(14deg); opacity: 0; }
+  100% { transform: translate(18%, -50%); opacity: 1; }
+}
+.rps-clash-tile.rps-clash-winner {
+  animation: rps-clash-winner-bloom 700ms ease-out both;
+  border-color: var(--gold, #e0a23c);
+  z-index: 2;
+}
+@keyframes rps-clash-winner-bloom {
+  0%   { scale: 1;    filter: none; }
+  45%  { scale: 1.28; filter: drop-shadow(0 0 26px rgba(224, 162, 60, 0.95)); }
+  100% { scale: 1.18; filter: drop-shadow(0 0 16px rgba(224, 162, 60, 0.75)); }
+}
+.rps-clash-tile.rps-clash-loser {
+  animation: rps-clash-loser-dim 700ms ease-out both;
+}
+@keyframes rps-clash-loser-dim {
+  0%   { scale: 1; opacity: 1; }
+  100% { scale: 0.86; opacity: 0.35; filter: grayscale(0.8); }
+}
+.rps-clash-tile.rps-clash-tie {
+  animation: rps-clash-tie-shake 500ms ease-in-out both;
+}
+@keyframes rps-clash-tie-shake {
+  0%, 100% { rotate: 0deg; }
+  25%      { rotate: -6deg; }
+  75%      { rotate: 6deg; }
+}
+
+/* Pregame banner ('You go first!' / 'Tie — go again!') rides the vintage
+   turn-transition-banner chrome; shorter type so the longer strings fit. */
+.pregame-banner .turn-transition-banner-line1 { font-size: 3em; }
+.pregame-banner .turn-transition-banner-line2 { font-size: 1.8em; }
+
+/* Mulligan modal: a hair taller than the tutor picker so a 4-card opening
+   hand (or the 10-card preview hand, horizontally scrolling) plus the
+   Keep hand / Mulligan (N) footer fit without clipping. */
+.pregame-mull-modal { max-height: 420px !important; }
+
+/* Pregame overlays mount on <body> (no game stage exists yet) — center
+   them on the viewport and scale with the same min(vw/844, vh/390) unit
+   the design box uses, or they render design-size-tiny on big windows. */
+.pregame-rps-overlay, .pregame-mull-overlay, .rps-clash-overlay {
+  position: fixed !important;
+  inset: 0 !important;
+  left: 0 !important; top: 0 !important; right: 0 !important; bottom: 0 !important;
+  width: auto !important; height: auto !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  background: rgba(12, 8, 3, 0.82) !important;
+  z-index: 4000 !important;
+}
+.pregame-rps-overlay > .tutor-modal,
+.pregame-mull-overlay > .tutor-modal {
+  transform: scale(var(--mfu, 1));
+  transform-origin: center center;
+  position: static !important;
+}
+.rps-clash-overlay > * {
+  transform: scale(var(--mfu, 1));
+  transform-origin: center center;
+}

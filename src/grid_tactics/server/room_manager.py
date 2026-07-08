@@ -55,6 +55,52 @@ class WaitingRoom:
     lock: threading.Lock = field(default_factory=threading.Lock)
 
 
+@dataclass
+class PregameSeat:
+    """One seat in a pregame (RPS + mulligan) stage.
+
+    ``sid is None`` marks a preview dummy seat — the server auto-plays it.
+    """
+
+    token: str
+    name: str
+    sid: str | None
+    deck: tuple[int, ...] | None = None
+
+
+@dataclass
+class Pregame:
+    """PREGAME stage (user 2026-07-08): sits between "both players ready"
+    and the GameState broadcast. Rock-paper-scissors decides who goes
+    first (winner becomes ENGINE PLAYER INDEX 0 — P1 = whoever goes first
+    is a locked project convention), then both players may mulligan.
+
+    Lifecycle: ``begin_pregame`` / ``begin_preview_pregame`` create it
+    (the WaitingRoom is already popped), ``create_session_from_pregame``
+    builds the GameSession once RPS resolves (seats reordered winner-
+    first so seat idx == engine player idx from then on), and
+    ``finish_pregame`` promotes the session into ``_games`` when both
+    mulligans resolve. Tests that call ``start_game`` directly never
+    touch this path.
+    """
+
+    code: str
+    seats: list[PregameSeat]
+    preview: bool = False
+    stage: str = "rps"                         # 'rps' | 'mulligan'
+    rps_picks: list = field(default_factory=lambda: [None, None])
+    session: GameSession | None = None         # created when RPS resolves
+    mulligan_done: list = field(default_factory=lambda: [False, False])
+    mulligan_drawn: list = field(default_factory=lambda: [(), ()])
+    lock: threading.Lock = field(default_factory=threading.Lock)
+
+    def seat_idx(self, token: str) -> int | None:
+        for i, seat in enumerate(self.seats):
+            if seat.token == token:
+                return i
+        return None
+
+
 class RoomManager:
     """Manages room lifecycle: create, join, ready, start game."""
 
@@ -67,6 +113,7 @@ class RoomManager:
         self._token_role: dict[str, str] = {}              # token -> 'player' | 'spectator'
         self._room_spectators: dict[str, dict[str, SpectatorSlot]] = {}  # room_code -> token -> slot
         self._sandboxes: dict[str, SandboxSession] = {}    # sid -> SandboxSession (Phase 14.6)
+        self._pregames: dict[str, Pregame] = {}            # code -> Pregame (PREGAME 2026-07-08)
         self._lock = threading.Lock()
 
     def _generate_code(self) -> str:
@@ -74,7 +121,11 @@ class RoomManager:
         chars = string.ascii_uppercase + string.digits
         while True:
             code = "".join(secrets.choice(chars) for _ in range(6))
-            if code not in self._rooms and code not in self._games:
+            if (
+                code not in self._rooms
+                and code not in self._games
+                and code not in self._pregames
+            ):
                 return code
 
     def create_room(self, display_name: str, sid: str) -> tuple[str, str]:
@@ -191,19 +242,9 @@ class RoomManager:
         preset = get_preset_deck(self._library)
         seed = secrets.randbelow(2**31)
         state, rng = GameState.new_game(seed, preset, preset)
-        # Testing aid (user 2026-07-06): preview games open with a FULL hand
-        # of 10 for the human, so hand layout / overdraw states are easy to
-        # eyeball without playing draw turns.
+        # Preview hands are the NORMAL 3/4 opening deal (user 2026-07-08 —
+        # the 2026-07-06 full-hand-of-10 testing aid is retired).
         import dataclasses as _dc
-
-        def _full_hand(pl):
-            n = max(0, 10 - len(pl.hand))
-            return _dc.replace(pl, hand=pl.hand + pl.deck[:n], deck=pl.deck[n:])
-
-        state = _dc.replace(
-            state,
-            players=(_full_hand(state.players[0]), _full_hand(state.players[1])),
-        )
         # Guarantee Reanimated Bones in the human's opening hand (user
         # 2026-07-06 — transform-mechanic testing).
         try:
@@ -240,6 +281,142 @@ class RoomManager:
             self._sid_to_token[sid] = token
             self._token_role[token] = "player"
         return code, session
+
+    # ------------------------------------------------------------------
+    # PREGAME stage (user 2026-07-08): RPS + mulligan before game_start
+    # ------------------------------------------------------------------
+    # Only the socket start paths (handle_ready both_ready / preview_game)
+    # enter pregame — start_game / create_preview_game above are untouched
+    # so tests and any direct callers keep the old instant-start behavior.
+
+    def begin_pregame(self, room_code: str) -> Pregame:
+        """Promote a WaitingRoom to a Pregame (both players ready).
+
+        Pops the WaitingRoom just like ``start_game`` but defers GameState
+        creation until RPS resolves (seat order = who goes first).
+        """
+        with self._lock:
+            room = self._rooms.pop(room_code)
+        assert room.joiner is not None
+        pregame = Pregame(
+            code=room_code,
+            seats=[
+                PregameSeat(
+                    token=room.creator.token, name=room.creator.name,
+                    sid=room.creator.sid, deck=room.creator.deck,
+                ),
+                PregameSeat(
+                    token=room.joiner.token, name=room.joiner.name,
+                    sid=room.joiner.sid, deck=room.joiner.deck,
+                ),
+            ],
+        )
+        with self._lock:
+            self._pregames[room_code] = pregame
+        return pregame
+
+    def begin_preview_pregame(
+        self, display_name: str, sid: str
+    ) -> tuple[str, Pregame]:
+        """Preview-game pregame: human seat + inert dummy seat (sid None)."""
+        token = str(uuid.uuid4())
+        dummy_token = str(uuid.uuid4())
+        pregame = Pregame(
+            code="",  # assigned under the lock below
+            seats=[
+                PregameSeat(token=token, name=display_name or "You", sid=sid),
+                PregameSeat(token=dummy_token, name="Preview", sid=None),
+            ],
+            preview=True,
+        )
+        with self._lock:
+            code = self._generate_code()
+            pregame.code = code
+            self._pregames[code] = pregame
+            self._token_to_room[token] = code
+            self._sid_to_token[sid] = token
+            self._token_role[token] = "player"
+        return code, pregame
+
+    def get_pregame(self, room_code: str) -> Pregame | None:
+        """Look up an in-progress pregame by room code."""
+        return self._pregames.get(room_code)
+
+    def create_session_from_pregame(
+        self, pregame: Pregame, first_seat_idx: int
+    ) -> GameSession:
+        """Build the GameSession once RPS resolves.
+
+        THE RPS WINNER MUST BECOME ENGINE PLAYER INDEX 0 (P1 = whoever
+        goes first — locked project convention). Seats/decks/tokens/sids
+        are reordered winner-first BEFORE GameState creation so all
+        downstream code (view filters, spectator fanout keyed on
+        player_tokens[0], submit_action routing) is untouched. After this
+        call, pregame seat idx == engine player idx.
+        """
+        if first_seat_idx == 1:
+            pregame.seats = [pregame.seats[1], pregame.seats[0]]
+        s0, s1 = pregame.seats
+
+        preset = get_preset_deck(self._library)
+        deck_p0 = s0.deck if s0.deck else preset
+        deck_p1 = s1.deck if s1.deck else preset
+
+        seed = secrets.randbelow(2**31)
+        state, rng = GameState.new_game(seed, deck_p0, deck_p1)
+
+        if pregame.preview:
+            state = self._apply_preview_hand_tweaks(
+                state, human_idx=0 if s0.sid is not None else 1
+            )
+
+        session = GameSession(
+            state=state,
+            rng=rng,
+            library=self._library,
+            player_tokens=(s0.token, s1.token),
+            player_names=(s0.name, s1.name),
+            player_sids=[s0.sid, s1.sid],
+            player_decks=(deck_p0, deck_p1),
+        )
+        pregame.session = session
+        # Dummy seats (preview) keep their hand instantly.
+        for i, seat in enumerate(pregame.seats):
+            if seat.sid is None:
+                pregame.mulligan_done[i] = True
+        pregame.stage = "mulligan"
+        return session
+
+    def _apply_preview_hand_tweaks(self, state: GameState, human_idx: int) -> GameState:
+        """Preview testing aid: Reanimated Bones is guaranteed in the
+        HUMAN's opening hand (transform-mechanic testing). The full-hand-
+        of-10 aid was retired 2026-07-08 — previews deal the normal 3/4.
+        """
+        import dataclasses as _dc
+        try:
+            bones = self._library.get_numeric_id("reanimated_bones")
+            ph = state.players[human_idx]
+            if bones not in ph.hand and bones in ph.deck:
+                i = ph.deck.index(bones)
+                new_ph = _dc.replace(
+                    ph,
+                    hand=ph.hand[:-1] + (bones,),
+                    deck=ph.deck[:i] + (ph.hand[-1],) + ph.deck[i + 1:],
+                )
+                players = list(state.players)
+                players[human_idx] = new_ph
+                state = _dc.replace(state, players=tuple(players))
+        except KeyError:
+            pass  # card renamed/removed — preview still works without it
+        return state
+
+    def finish_pregame(self, room_code: str) -> GameSession:
+        """Promote the pregame's session into the live-games dict."""
+        with self._lock:
+            pregame = self._pregames.pop(room_code)
+            assert pregame.session is not None
+            self._games[room_code] = pregame.session
+            return pregame.session
 
     def request_rematch(self, token: str) -> tuple[str, GameSession | None, GameSession | None]:
         """Mark player as wanting a rematch. Returns (status, old_session, new_session).
@@ -391,8 +568,8 @@ class RoomManager:
 
     def join_as_spectator(
         self, room_code: str, display_name: str, sid: str, god_mode: bool = False
-    ) -> tuple[str, WaitingRoom | GameSession]:
-        """Attach a spectator to an existing room (waiting or in-game).
+    ) -> tuple[str, "WaitingRoom | GameSession | Pregame"]:
+        """Attach a spectator to an existing room (waiting, pregame, or in-game).
 
         Returns (session_token, room_or_session). Raises ValueError if neither
         a waiting room nor an active game with that code exists. Spectators can
@@ -403,6 +580,11 @@ class RoomManager:
             room: WaitingRoom | GameSession | None = self._rooms.get(room_code)
             if room is None:
                 room = self._games.get(room_code)
+            if room is None:
+                # PREGAME (2026-07-08): rooms mid-RPS/mulligan are neither
+                # waiting nor in-game — spectators may still join and get
+                # a status toast until game_start fires.
+                room = self._pregames.get(room_code)
             if room is None:
                 raise ValueError(f"Room '{room_code}' not found")
             slot = SpectatorSlot(

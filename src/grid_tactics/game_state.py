@@ -691,3 +691,64 @@ class GameState:
             # explicit named-arg construction, so unknown keys in ``d``
             # are simply ignored (m3 verified).
         )
+
+
+def apply_mulligan(
+    state: GameState,
+    player_idx: int,
+    hand_indices,
+    rng: Optional[GameRNG] = None,
+) -> tuple[GameState, tuple[int, ...]]:
+    """PREGAME mulligan (user 2026-07-08): redraw part of the opening hand.
+
+    Pure engine helper in the immutable-dataclass style: removes the cards
+    at ``hand_indices`` from the player's hand, shuffles them back into the
+    deck, then draws the same number of replacements off the top (fewer if
+    the deck is somehow short — defensive, cannot happen after the shuffle-
+    in unless the helper is called with a pathological state).
+
+    Called by the server's pregame stage BEFORE the first turn is taken —
+    never from action resolution, so no phase contract / event emission
+    lives here. The server emits EVT_CARD_DRAWN(source='mulligan') for each
+    replacement itself.
+
+    Args:
+        state: The freshly-dealt GameState (no actions taken yet).
+        player_idx: 0 or 1 — whose hand to mulligan.
+        hand_indices: Iterable of hand indices to redraw. Empty = keep
+            (no-op; the SAME state object is returned).
+        rng: The game's GameRNG (the server passes ``session.rng``).
+            Defaults to a fresh ``GameRNG(state.seed)`` for pure callers.
+
+    Returns:
+        (new_state, drawn) — ``drawn`` is the tuple of replacement card
+        numeric ids, appended at the END of the hand in draw order.
+
+    Raises:
+        ValueError: on duplicate or out-of-range indices.
+    """
+    player = state.players[player_idx]
+    indices = [int(i) for i in hand_indices]
+    if len(set(indices)) != len(indices):
+        raise ValueError("duplicate hand indices")
+    for i in indices:
+        if i < 0 or i >= len(player.hand):
+            raise ValueError(f"hand index out of range: {i}")
+    if not indices:
+        return state, ()
+
+    idx_set = set(indices)
+    returned = tuple(player.hand[i] for i in sorted(idx_set))
+    kept = tuple(c for i, c in enumerate(player.hand) if i not in idx_set)
+
+    if rng is None:
+        rng = GameRNG(state.seed)
+    new_deck = rng.shuffle(player.deck + returned)
+    draw_n = min(len(returned), len(new_deck))
+    drawn = new_deck[:draw_n]
+    new_deck = new_deck[draw_n:]
+
+    new_player = replace(player, hand=kept + drawn, deck=new_deck)
+    players = list(state.players)
+    players[player_idx] = new_player
+    return replace(state, players=tuple(players)), drawn

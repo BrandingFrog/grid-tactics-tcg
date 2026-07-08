@@ -29,6 +29,16 @@ import pytest
 # ---------------------------------------------------------------------------
 os.environ.setdefault("CONTRACT_ENFORCEMENT_MODE", "strict")
 
+# ---------------------------------------------------------------------------
+# PREGAME (user 2026-07-08): the RPS + mulligan stage only triggers in the
+# socket start paths (handle_ready / preview_game). Default it OFF for the
+# test suite so every existing socket-flow test (ready/ready -> game_start)
+# keeps its instant-start behavior. Dedicated pregame tests re-enable by
+# monkeypatching grid_tactics.server.events.PREGAME_ENABLED = True.
+# setdefault so a shell that explicitly sets the var wins.
+# ---------------------------------------------------------------------------
+os.environ.setdefault("GRID_TACTICS_PREGAME", "0")
+
 from grid_tactics.enums import PlayerSide, TurnPhase
 
 

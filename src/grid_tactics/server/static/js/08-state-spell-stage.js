@@ -3,6 +3,9 @@
 // =============================================
 
 function onGameStart(data) {
+    // PREGAME (2026-07-08): tear down any lingering RPS / mulligan UI —
+    // the game proper is starting.
+    try { if (typeof cleanupPregameUI === 'function') cleanupPregameUI(); } catch (e) { /* defensive */ }
     // Phase 14.8-04a: a fresh game means the engine event seq counter
     // restarts at 0; reset lastSeenSeq so the first event isn't dropped.
     if (typeof resetEventQueue === 'function') resetEventQueue();

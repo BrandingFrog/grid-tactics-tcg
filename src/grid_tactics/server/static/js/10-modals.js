@@ -1164,3 +1164,434 @@ function renderActionBar() {
     }
 }
 
+
+// =============================================
+// PREGAME (user 2026-07-08): Rock-Paper-Scissors + Mulligan
+// =============================================
+// Server flow: pregame_rps -> rps_pick -> rps_result (tie replays the
+// round) -> pregame_mulligan -> mulligan_pick -> the normal game_start,
+// followed by one engine_events batch of card_drawn(source:'mulligan')
+// so the replacement cards fly into the hand via the existing draw path.
+// All modals reuse the .tutor-modal chrome (vintage restyle lives in
+// zz-overrides.css) and mount via _stageMount() -- on the lobby screen
+// that resolves to document.body, where .tutor-modal-overlay is a fixed
+// fullscreen overlay. Spectators only ever see pregame_status toasts.
+
+var RPS_GLYPHS = { rock: '🪨', paper: '📄', scissors: '✂️' };
+var RPS_LABELS = { rock: 'Rock', paper: 'Paper', scissors: 'Scissors' };
+var _pregameClashRunning = false;
+var _pregamePendingMulligan = null;
+
+function onPregameRps(data) {
+    window._pregameActive = true;
+    // Bring up the duel stage NOW (user 2026-07-08: 'the mulligan is showing
+    // in the lobby') — the empty board skeleton backs the pregame modals
+    // instead of the lobby form. game_start re-runs the full setup later.
+    try {
+        if (typeof showScreen === 'function') {
+            showScreen('screen-game');
+            if (typeof _fitDuelScale === 'function') _fitDuelScale();
+        }
+    } catch (e) { /* defensive */ }
+    try { showRpsPickModal(data || {}); } catch (e) { /* defensive */ }
+}
+
+// Pregame overlays mount on <body> (no scaled game stage exists yet) —
+// size them to the viewport with the same min(vw/844, vh/390) ratio the
+// design box uses. CSS can't do this (scale() needs a unitless number,
+// --mfu is a px length), so it's set here.
+function _pregameScaleEl(el) {
+    try {
+        var sc = Math.min(window.innerWidth / 844, window.innerHeight / 390);
+        if (sc > 1.05) {
+            el.style.transform = 'scale(' + sc.toFixed(3) + ')';
+            el.style.transformOrigin = 'center center';
+        }
+    } catch (e) { /* defensive */ }
+}
+
+function showRpsPickModal(data) {
+    closeRpsModal();
+    closeMulliganModal();
+
+    var overlay = document.createElement('div');
+    overlay.className = 'tutor-modal-overlay pregame-rps-overlay';
+    overlay.id = 'pregame-rps-overlay';
+
+    var modal = document.createElement('div');
+    modal.className = 'tutor-modal pregame-rps-modal';
+
+    var header = document.createElement('div');
+    header.className = 'tutor-modal-header';
+    var title = document.createElement('div');
+    title.className = 'tutor-modal-title';
+    title.textContent = 'Rock, Paper, Scissors';
+    header.appendChild(title);
+    var sub = document.createElement('div');
+    sub.className = 'tutor-modal-deckline';
+    sub.textContent = 'Winner goes first';
+    header.appendChild(sub);
+    modal.appendChild(header);
+
+    var selectedPick = null;
+    var row = document.createElement('div');
+    row.className = 'rps-tile-row';
+
+    var footer = document.createElement('div');
+    footer.className = 'tutor-modal-footer';
+    var acceptBtn = document.createElement('button');
+    acceptBtn.className = 'tutor-accept-button';
+    acceptBtn.textContent = 'Accept';
+    acceptBtn.disabled = true;
+    acceptBtn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        if (!selectedPick) return;
+        socket.emit('rps_pick', { pick: selectedPick });
+        _rpsShowWaiting(modal, selectedPick);
+    });
+    footer.appendChild(acceptBtn);
+
+    ['rock', 'paper', 'scissors'].forEach(function(pick) {
+        var tile = document.createElement('div');
+        tile.className = 'rps-tile';
+        tile.setAttribute('data-pick', pick);
+        tile.innerHTML =
+            '<div class="rps-tile-glyph">' + RPS_GLYPHS[pick] + '</div>' +
+            '<div class="rps-tile-label">' + RPS_LABELS[pick] + '</div>';
+        tile.addEventListener('click', function(e) {
+            e.stopPropagation();
+            var all = row.querySelectorAll('.rps-tile-selected');
+            for (var i = 0; i < all.length; i++) all[i].classList.remove('rps-tile-selected');
+            tile.classList.add('rps-tile-selected');
+            selectedPick = pick;
+            acceptBtn.disabled = false;
+        });
+        row.appendChild(tile);
+    });
+    modal.appendChild(row);
+    modal.appendChild(footer);
+
+    overlay.appendChild(modal);
+    _pregameScaleEl(modal);
+    // Block background clicks -- the pick is mandatory.
+    overlay.addEventListener('click', function(e) { e.stopPropagation(); });
+    _stageMount().appendChild(overlay);
+
+    // Reconnect resync: the server echoes an already-recorded pick.
+    if (data && data.already_picked) {
+        selectedPick = data.already_picked;
+        _rpsShowWaiting(modal, selectedPick);
+    }
+}
+
+// Swap the pick modal body to a waiting state: your pick + a wait line.
+function _rpsShowWaiting(modal, pick) {
+    var row = modal.querySelector('.rps-tile-row');
+    if (row && row.parentNode) row.parentNode.removeChild(row);
+    var foot = modal.querySelector('.tutor-modal-footer');
+    if (foot && foot.parentNode) foot.parentNode.removeChild(foot);
+    if (modal.querySelector('.rps-waiting')) return;
+    var wait = document.createElement('div');
+    wait.className = 'rps-waiting';
+    wait.innerHTML =
+        '<div class="rps-tile rps-tile-selected rps-tile-static">' +
+            '<div class="rps-tile-glyph">' + (RPS_GLYPHS[pick] || '') + '</div>' +
+            '<div class="rps-tile-label">' + (RPS_LABELS[pick] || '') + '</div>' +
+        '</div>' +
+        '<div class="rps-waiting-text">Waiting for opponent…</div>';
+    modal.appendChild(wait);
+}
+
+function closeRpsModal() {
+    var existing = document.getElementById('pregame-rps-overlay');
+    if (existing && existing.parentNode) existing.parentNode.removeChild(existing);
+}
+
+function onRpsResult(data) {
+    data = data || {};
+    closeRpsModal();
+    _pregameClashRunning = true;
+    var afterClash = function() {
+        _pregameClashRunning = false;
+        if (data.tie) {
+            _pregameBanner('TIE', 'GO AGAIN!');
+            try { showRpsPickModal({}); } catch (e) { /* defensive */ }
+            return;
+        }
+        _pregameBanner(data.you_go_first ? 'YOU GO FIRST!' : 'OPPONENT GOES FIRST', '');
+        if (_pregamePendingMulligan) {
+            var m = _pregamePendingMulligan;
+            _pregamePendingMulligan = null;
+            setTimeout(function() {
+                try { showMulliganModal(m); } catch (e) { /* defensive */ }
+            }, 900);
+        }
+    };
+    try {
+        _runRpsClash(data, afterClash);
+    } catch (e) {
+        // Visuals must never wedge the pregame flow.
+        afterClash();
+    }
+}
+
+// Reveal clash: your glyph flies in from the left, theirs from the right,
+// brief pause, then the winner scales up with a gold glow while the loser
+// dims (both pulse on a tie). Pure CSS keyframes (zz-overrides.css);
+// whole beat stays under ~1.6s.
+function _runRpsClash(data, done) {
+    var prior = document.getElementById('rps-clash-overlay');
+    if (prior && prior.parentNode) prior.parentNode.removeChild(prior);
+    var overlay = document.createElement('div');
+    overlay.id = 'rps-clash-overlay';
+    overlay.className = 'rps-clash-overlay';
+
+    var mine = document.createElement('div');
+    mine.className = 'rps-tile rps-clash-tile rps-clash-mine';
+    mine.innerHTML =
+        '<div class="rps-tile-glyph">' + (RPS_GLYPHS[data.your_pick] || '?') + '</div>' +
+        '<div class="rps-tile-label">You</div>';
+    var theirs = document.createElement('div');
+    theirs.className = 'rps-tile rps-clash-tile rps-clash-theirs';
+    theirs.innerHTML =
+        '<div class="rps-tile-glyph">' + (RPS_GLYPHS[data.opp_pick] || '?') + '</div>' +
+        '<div class="rps-tile-label">Opponent</div>';
+    overlay.appendChild(mine);
+    _pregameScaleEl(mine);
+    overlay.appendChild(theirs);
+    document.body.appendChild(overlay);
+
+    var finished = false;
+    function finish() {
+        if (finished) return;
+        finished = true;
+        if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+        done();
+    }
+    // Beat 1: fly-in (450ms CSS) + hold -> Beat 2: verdict (800ms) -> done.
+    setTimeout(function() {
+        try {
+            if (data.tie) {
+                mine.classList.add('rps-clash-tie');
+                theirs.classList.add('rps-clash-tie');
+            } else {
+                (data.you_go_first ? mine : theirs).classList.add('rps-clash-winner');
+                (data.you_go_first ? theirs : mine).classList.add('rps-clash-loser');
+            }
+        } catch (e) { /* defensive */ }
+        setTimeout(finish, 800);
+    }, 750);
+    setTimeout(finish, 3000); // safety cap
+}
+
+// Short banner in the turn-banner vintage style ('You go first!' etc.).
+function _pregameBanner(line1, line2) {
+    try {
+        var priorB = document.querySelector('.turn-transition-banner');
+        if (priorB && priorB.parentNode) priorB.parentNode.removeChild(priorB);
+        var banner = document.createElement('div');
+        banner.className = 'turn-transition-banner pregame-banner';
+        banner.innerHTML =
+            '<div class="turn-transition-banner-line1"></div>' +
+            (line2 ? '<div class="turn-transition-banner-line2"></div>' : '');
+        banner.querySelector('.turn-transition-banner-line1').textContent = line1;
+        if (line2) banner.querySelector('.turn-transition-banner-line2').textContent = line2;
+        var removed = false;
+        var remove = function() {
+            if (removed) return;
+            removed = true;
+            if (banner.parentNode) banner.parentNode.removeChild(banner);
+        };
+        banner.addEventListener('animationend', remove);
+        _stageMount().appendChild(banner);
+        setTimeout(remove, 2000);
+    } catch (e) { /* defensive */ }
+}
+
+function onPregameMulligan(data) {
+    window._pregameActive = true;
+    if (_pregameClashRunning) {
+        // Server sends this right behind rps_result -- hold it until the
+        // reveal clash finishes so the modal doesn't stomp the animation.
+        _pregamePendingMulligan = data || {};
+        return;
+    }
+    try { showMulliganModal(data || {}); } catch (e) { /* defensive */ }
+}
+
+function showMulliganModal(data) {
+    closeMulliganModal();
+    closeRpsModal();
+    var hand = (data && data.hand) || [];
+    var selected = [];   // [{idx, nid, tile}]
+
+    var overlay = document.createElement('div');
+    overlay.className = 'tutor-modal-overlay pregame-mull-overlay';
+    overlay.id = 'pregame-mull-overlay';
+
+    var modal = document.createElement('div');
+    modal.className = 'tutor-modal pregame-mull-modal';
+
+    var header = document.createElement('div');
+    header.className = 'tutor-modal-header';
+    var title = document.createElement('div');
+    title.className = 'tutor-modal-title';
+    title.textContent = 'Mulligan — select cards to redraw';
+    header.appendChild(title);
+    var counter = document.createElement('div');
+    counter.className = 'tutor-modal-deckline';
+    counter.textContent = 'Redraw 0';
+    header.appendChild(counter);
+    modal.appendChild(header);
+
+    var fan = document.createElement('div');
+    fan.className = 'tutor-modal-cards';
+
+    var footer = document.createElement('div');
+    footer.className = 'tutor-modal-footer';
+    var acceptBtn = document.createElement('button');
+    acceptBtn.className = 'tutor-accept-button';
+    acceptBtn.textContent = 'Keep hand';
+
+    function _updateMullAccept() {
+        counter.textContent = 'Redraw ' + selected.length;
+        acceptBtn.textContent = selected.length
+            ? 'Mulligan (' + selected.length + ')' : 'Keep hand';
+    }
+
+    hand.forEach(function(nid, idx) {
+        var tile = document.createElement('div');
+        tile.className = 'tutor-modal-card';
+        tile.innerHTML = renderDeckBuilderCard(nid, undefined);
+        tile.addEventListener('click', function(e) {
+            e.stopPropagation();
+            var at = -1;
+            for (var si = 0; si < selected.length; si++) {
+                if (selected[si].tile === tile) { at = si; break; }
+            }
+            if (at !== -1) {
+                selected.splice(at, 1);
+                tile.classList.remove('tutor-card-selected');
+            } else {
+                selected.push({ idx: idx, nid: nid, tile: tile });
+                tile.classList.add('tutor-card-selected');
+                try { showGameTooltip(nid, tile, null, { force: true }); } catch (e2) { /* defensive */ }
+            }
+            _updateMullAccept();
+        });
+        fan.appendChild(tile);
+    });
+    modal.appendChild(fan);
+
+    acceptBtn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        var indices = selected.map(function(s) { return s.idx; });
+        // Decorative: the picked cards fly to the deck pile as ghosts.
+        try {
+            selected.forEach(function(s) { _mullFlyToDeck(s.tile, s.nid); });
+        } catch (e2) { /* defensive */ }
+        if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+        socket.emit('mulligan_pick', { hand_indices: indices });
+        if (!(data && data.opponent_resolved)) {
+            _pregameToast('Waiting for opponent…');
+        }
+    });
+    footer.appendChild(acceptBtn);
+    modal.appendChild(footer);
+
+    overlay.appendChild(modal);
+    _pregameScaleEl(modal);
+    overlay.addEventListener('click', function(e) { e.stopPropagation(); });
+    _stageMount().appendChild(overlay);
+}
+
+function closeMulliganModal() {
+    var existing = document.getElementById('pregame-mull-overlay');
+    if (existing && existing.parentNode) existing.parentNode.removeChild(existing);
+}
+
+// card_fly-style ghost from a mulliganed tile to the own deck pile.
+// Decorative only -- the authoritative shuffle happens server-side.
+function _mullFlyToDeck(tile, nid) {
+    var from = tile.getBoundingClientRect();
+    if (!from || !from.width) return;
+    var def = (typeof allCardDefs !== 'undefined' && allCardDefs && allCardDefs[nid])
+        || (typeof cardDefs !== 'undefined' && cardDefs && cardDefs[nid]);
+    if (!def) return;
+    // Destination: the own deck pile cell when the duel screen is live;
+    // pregame runs over the lobby, so fall back to the bottom-left corner
+    // (where the deck sits once the game renders).
+    var to = null;
+    try {
+        var cell = document.querySelector(
+            '.screen.active .pile-board[data-side="own"] .pile-cell[data-pile="deck"]');
+        if (cell) {
+            var r = cell.getBoundingClientRect();
+            if (r.width > 0) to = { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+        }
+    } catch (e) { /* defensive */ }
+    if (!to) to = { x: window.innerWidth * 0.10, y: window.innerHeight * 0.85 };
+
+    var ghost = document.createElement('div');
+    ghost.className = 'card-fly-ghost';
+    ghost.style.left = from.left + 'px';
+    ghost.style.top = from.top + 'px';
+    ghost.style.width = from.width + 'px';
+    ghost.style.height = from.height + 'px';
+    ghost.innerHTML = renderCardFrame(def, {
+        context: 'hand',
+        numericId: nid,
+        interactive: false,
+        showReactDeploy: false,
+    });
+    document.body.appendChild(ghost);
+
+    var dx = to.x - (from.left + from.width / 2);
+    var dy = to.y - (from.top + from.height / 2);
+    void ghost.offsetWidth;
+    ghost.style.transform = 'translate(' + dx + 'px, ' + dy + 'px) scale(0.18)';
+    ghost.style.opacity = '0';
+
+    var finished = false;
+    function finish() {
+        if (finished) return;
+        finished = true;
+        if (ghost.parentNode) ghost.parentNode.removeChild(ghost);
+    }
+    ghost.addEventListener('transitionend', finish);
+    setTimeout(finish, 800);
+}
+
+// Spectator / waiting status line. Persists until replaced or cleaned up
+// by cleanupPregameUI on game_start.
+function onPregameStatus(data) {
+    var msg = (data && data.msg) || '';
+    if (!msg) return;
+    _pregameToast(msg);
+}
+
+function _pregameToast(msg) {
+    try {
+        var t = document.getElementById('pregame-status-toast');
+        if (!t) {
+            t = document.createElement('div');
+            t.id = 'pregame-status-toast';
+            t.className = 'tutor-toast';
+            _stageMount().appendChild(t);
+        }
+        t.textContent = msg;
+    } catch (e) { /* defensive */ }
+}
+
+// Called from onGameStart: the game proper is starting -- tear down every
+// pregame artifact so nothing lingers over the duel screen.
+function cleanupPregameUI() {
+    window._pregameActive = false;
+    _pregameClashRunning = false;
+    _pregamePendingMulligan = null;
+    ['pregame-rps-overlay', 'pregame-mull-overlay', 'rps-clash-overlay',
+     'pregame-status-toast'].forEach(function(id) {
+        var el = document.getElementById(id);
+        if (el && el.parentNode) el.parentNode.removeChild(el);
+    });
+}

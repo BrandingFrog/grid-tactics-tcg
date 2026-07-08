@@ -620,8 +620,13 @@ function commitEventToDom(ev) {
                 // decrement for those sources or the pile under-counts
                 // until drain end. Old payloads carry no source and keep
                 // the decrement (turn-start / tutor draws all deck-sourced).
+                // PREGAME (2026-07-08): mulligan replacement draws arrive
+                // AFTER a game_start whose state already reflects the
+                // post-mulligan deck — decrementing again would under-count
+                // the pile, so gate 'mulligan' like the conjure sources.
                 var _fromDeck = (payload.source !== 'conjure'
-                    && payload.source !== 'decline_conjure');
+                    && payload.source !== 'decline_conjure'
+                    && payload.source !== 'mulligan');
                 if (_fromDeck) {
                     if (typeof _pd.deck_count === 'number' && _pd.deck_count > 0) _pd.deck_count--;
                     else if (Array.isArray(_pd.deck) && _pd.deck.length) _pd.deck.pop();

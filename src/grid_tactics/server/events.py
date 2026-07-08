@@ -1,4 +1,5 @@
 """Socket.IO event handlers for PvP room system and game flow."""
+import os as _os
 from dataclasses import fields as _dc_fields
 from enum import IntEnum as _IntEnum
 
@@ -7,8 +8,9 @@ from flask_socketio import emit, join_room as sio_join_room
 
 from grid_tactics.actions import pass_action
 from grid_tactics.action_resolver import resolve_action
-from grid_tactics.engine_events import EventStream
+from grid_tactics.engine_events import EVT_CARD_DRAWN, EventStream
 from grid_tactics.enums import TurnPhase
+from grid_tactics.game_state import apply_mulligan
 from grid_tactics.phase_contracts import OutOfPhaseError
 from grid_tactics.legal_actions import legal_actions
 from grid_tactics.server.action_codec import reconstruct_action, serialize_action
@@ -29,6 +31,17 @@ from grid_tactics.server.view_filter import (
 )
 
 _room_manager: RoomManager | None = None
+
+# PREGAME feature flag (user 2026-07-08): rock-paper-scissors for who goes
+# first + mulligan, run in the SOCKET start paths only (handle_ready /
+# preview_game) — never inside the engine or GameSession construction, so
+# tests that build sessions directly are unaffected. The test suite opts
+# out wholesale via GRID_TACTICS_PREGAME=0 (tests/conftest.py); dedicated
+# pregame tests re-enable by monkeypatching this module attribute.
+PREGAME_ENABLED = _os.environ.get("GRID_TACTICS_PREGAME", "1") != "0"
+
+# RPS resolution table: key beats value.
+_RPS_BEATS = {"rock": "scissors", "scissors": "paper", "paper": "rock"}
 
 
 # Field-name remap for the client: the engine uses clearer names, the
@@ -415,6 +428,172 @@ def _fanout_game_start_to_spectators(session, base_state_dict, card_defs):
         )
 
 
+# ---------------------------------------------------------------------------
+# PREGAME stage (user 2026-07-08): RPS for who goes first + mulligan.
+# ---------------------------------------------------------------------------
+# Flow: both_ready/preview_game -> begin_pregame -> 'pregame_rps' to each
+# seated player -> 'rps_pick' x2 -> tie? replay : winner becomes ENGINE
+# PLAYER INDEX 0 (seats reordered BEFORE GameState creation) ->
+# 'pregame_mulligan' with each player's own dealt hand -> 'mulligan_pick'
+# x2 -> the EXISTING game_start broadcast, followed by one engine_events
+# batch of EVT_CARD_DRAWN(source='mulligan') so replacements animate in.
+
+
+def _pregame_spectator_status(room_code, msg):
+    """Emit a pregame status line to every spectator of the room."""
+    if _room_manager is None:
+        return
+    for spec_token in _room_manager.get_spectator_tokens(room_code):
+        slot = _room_manager.get_spectator(spec_token)
+        if slot is None:
+            continue
+        emit("pregame_status", {"msg": msg}, to=slot.sid)
+
+
+def _start_pregame_rps(room_code, pregame):
+    """Emit 'pregame_rps' to each seated human; spectators get a status."""
+    for i, seat in enumerate(pregame.seats):
+        if seat.sid is None:
+            continue
+        emit("pregame_rps", {
+            "opponent_name": pregame.seats[1 - i].name,
+            "already_picked": pregame.rps_picks[i],
+        }, to=seat.sid)
+    _pregame_spectator_status(
+        room_code, "Players are choosing who goes first…")
+
+
+def _resolve_rps(room_code, pregame):
+    """Both seats picked. Tie -> replay round; win -> build the session
+    (winner = engine idx 0) and enter the mulligan stage.
+
+    Caller holds ``pregame.lock``.
+    """
+    p0, p1 = pregame.rps_picks
+    if p0 == p1:
+        for i, seat in enumerate(pregame.seats):
+            if seat.sid is None:
+                continue
+            emit("rps_result", {
+                "tie": True,
+                "your_pick": pregame.rps_picks[i],
+                "opp_pick": pregame.rps_picks[1 - i],
+            }, to=seat.sid)
+        pregame.rps_picks = [None, None]
+        return
+    winner = 0 if _RPS_BEATS[p0] == p1 else 1
+    for i, seat in enumerate(pregame.seats):
+        if seat.sid is None:
+            continue
+        emit("rps_result", {
+            "tie": False,
+            "your_pick": pregame.rps_picks[i],
+            "opp_pick": pregame.rps_picks[1 - i],
+            "you_go_first": i == winner,
+        }, to=seat.sid)
+    # Winner becomes ENGINE PLAYER INDEX 0 — seats/decks/tokens/sids are
+    # reordered inside create_session_from_pregame BEFORE GameState
+    # creation, so downstream code needs no seat translation. After this
+    # call, pregame seat idx == engine player idx.
+    _room_manager.create_session_from_pregame(pregame, winner)
+    _emit_pregame_mulligan(room_code, pregame)
+    _pregame_spectator_status(
+        room_code, "Players are choosing their opening hands…")
+
+
+def _emit_pregame_mulligan(room_code, pregame, only_idx=None):
+    """Emit 'pregame_mulligan' with each player's OWN dealt hand (numeric
+    ids) + how many cards the opponent got. Dummy / already-resolved seats
+    are skipped."""
+    session = pregame.session
+    for idx in (0, 1):
+        if only_idx is not None and idx != only_idx:
+            continue
+        seat = pregame.seats[idx]
+        if seat.sid is None or pregame.mulligan_done[idx]:
+            continue
+        me = session.state.players[idx]
+        opp = session.state.players[1 - idx]
+        emit("pregame_mulligan", {
+            "hand": [int(c) for c in me.hand],
+            "opponent_count": len(opp.hand),
+            "your_player_idx": idx,
+            "opponent_resolved": bool(pregame.mulligan_done[1 - idx]),
+        }, to=seat.sid)
+
+
+def _finish_pregame(room_code, pregame):
+    """Both mulligans resolved: run the EXISTING game_start broadcast path,
+    then one engine_events batch of EVT_CARD_DRAWN(source='mulligan') per
+    replacement card so the client's draw animation flies them in.
+
+    The game_start state ships with each hand's trailing replacement cards
+    TRIMMED (they were appended at the end by apply_mulligan) — deck/grave
+    counts are the real post-mulligan values, so the client must not
+    decrement deck_count again for source='mulligan' draws (gated in
+    commitEventToDom). The engine_events final_state carries the full
+    authoritative hand.
+    """
+    import dataclasses as _dc
+
+    session = _room_manager.finish_pregame(room_code)
+
+    display_players = []
+    for idx in (0, 1):
+        pl = session.state.players[idx]
+        n = len(pregame.mulligan_drawn[idx])
+        display_players.append(
+            _dc.replace(pl, hand=pl.hand[:len(pl.hand) - n]) if n else pl
+        )
+    display_state = _dc.replace(
+        session.state, players=(display_players[0], display_players[1])
+    )
+
+    state_dict = display_state.to_dict()
+    enrich_pending_post_move_attack(session.state, state_dict, session.library)
+    card_defs = _build_card_defs(session.library)
+    initial_actions = legal_actions(session.state, session.library)
+    serialized_actions = [serialize_action(a) for a in initial_actions]
+    for idx in (0, 1):
+        if session.player_sids[idx] is None:
+            continue  # preview dummy seat
+        filtered = filter_state_for_player(state_dict, idx, session.library)
+        enrich_pending_tutor_for_viewer(session.state, filtered, idx, session.library)
+        enrich_pending_conjure_deploy(session.state, filtered, idx, session.library)
+        enrich_pending_death_target(session.state, filtered, idx, session.library)
+        enrich_pending_revive(session.state, filtered, idx, session.library)
+        enrich_pending_trigger_for_viewer(session.state, filtered, idx, session.library)
+        payload = {
+            "your_player_idx": idx,
+            "state": filtered,
+            "legal_actions": (
+                serialized_actions
+                if idx == session.state.active_player_idx else []
+            ),
+            "opponent_name": session.player_names[1 - idx],
+            "card_defs": card_defs,
+        }
+        if pregame.preview:
+            payload["preview"] = True
+        emit("game_start", payload, to=session.player_sids[idx])
+    _fanout_game_start_to_spectators(session, state_dict, card_defs)
+
+    # Mulligan replacement draws: one EVT_CARD_DRAWN per new card, in a
+    # single seq-ordered batch. filter_engine_events_for_viewer redacts
+    # the card identity for the opponent exactly like every other draw.
+    stream = EventStream(next_seq=session.next_event_seq)
+    for idx in (0, 1):
+        for nid in pregame.mulligan_drawn[idx]:
+            stream.collect(EVT_CARD_DRAWN, "system:mulligan", {
+                "player_idx": idx,
+                "card_numeric_id": int(nid),
+                "source": "mulligan",
+            })
+    session.next_event_seq = stream.next_seq
+    if stream.events:
+        _emit_state_to_players(session, session.state, events=list(stream.events))
+
+
 def _tests_results_path():
     """Resolve the filesystem path the test results log writes to.
 
@@ -607,6 +786,13 @@ def register_events(room_manager: RoomManager) -> None:
         emit("player_ready", {"player_name": player_name}, to=room_code)
 
         if both_ready:
+            # PREGAME (user 2026-07-08): RPS decides who goes first, then
+            # mulligan — the game_start broadcast happens in
+            # _finish_pregame once both players resolve their mulligan.
+            if PREGAME_ENABLED:
+                pregame = _room_manager.begin_pregame(room_code)
+                _start_pregame_rps(room_code, pregame)
+                return
             session = _room_manager.start_game(room_code)
             state_dict = session.state.to_dict()
             enrich_pending_post_move_attack(session.state, state_dict, session.library)
@@ -642,6 +828,13 @@ def register_events(room_manager: RoomManager) -> None:
         is an inert dummy."""
         data = data or {}
         name = (data.get("display_name") or "Preview").strip() or "Preview"
+        # PREGAME (user 2026-07-08): previews run the same RPS + mulligan
+        # flow so the human sees the pregame UI; the dummy seat auto-plays.
+        if PREGAME_ENABLED:
+            code, pregame = _room_manager.begin_preview_pregame(name, request.sid)
+            sio_join_room(code)
+            _start_pregame_rps(code, pregame)
+            return
         code, session = _room_manager.create_preview_game(name, request.sid)
         sio_join_room(code)
         state_dict = session.state.to_dict()
@@ -668,6 +861,115 @@ def register_events(room_manager: RoomManager) -> None:
             to=request.sid,
         )
 
+    def _pregame_for_sid():
+        """Resolve (room_code, pregame, token) for the requesting socket,
+        or (None, None, None) when no pregame is in progress."""
+        token = _room_manager.get_token_by_sid(request.sid)
+        if token is None:
+            return None, None, None
+        room_code = _room_manager.get_room_code_by_token(token)
+        if room_code is None:
+            return None, None, None
+        pregame = _room_manager.get_pregame(room_code)
+        if pregame is None:
+            return None, None, None
+        return room_code, pregame, token
+
+    @socketio.on("rps_pick")
+    def handle_rps_pick(data):
+        room_code, pregame, token = _pregame_for_sid()
+        if pregame is None:
+            emit("error", {"msg": "No pregame in progress"})
+            return
+        pick = (data or {}).get("pick")
+        if pick not in ("rock", "paper", "scissors"):
+            emit("error", {"msg": "Invalid pick"})
+            return
+        with pregame.lock:
+            idx = pregame.seat_idx(token)
+            if idx is None or pregame.stage != "rps":
+                return
+            if pregame.rps_picks[idx] is not None:
+                return  # once per seat
+            pregame.rps_picks[idx] = pick
+            # Dummy seat (preview): auto-pick server-side. Deliberately the
+            # LOSING pick — the human must go first, because an inert dummy
+            # holding the opening turn would stall the preview (the auto-
+            # PASS drain only runs inside handle_submit_action).
+            other = 1 - idx
+            if (pregame.seats[other].sid is None
+                    and pregame.rps_picks[other] is None):
+                pregame.rps_picks[other] = _RPS_BEATS[pick]
+            if None in pregame.rps_picks:
+                return  # waiting on the other seat
+            _resolve_rps(room_code, pregame)
+
+    @socketio.on("mulligan_pick")
+    def handle_mulligan_pick(data):
+        room_code, pregame, token = _pregame_for_sid()
+        if pregame is None:
+            emit("error", {"msg": "No pregame in progress"})
+            return
+        raw = (data or {}).get("hand_indices", [])
+        if not isinstance(raw, list):
+            emit("error", {"msg": "hand_indices must be a list"})
+            return
+        try:
+            indices = [int(i) for i in raw]
+        except (TypeError, ValueError):
+            emit("error", {"msg": "hand_indices must be integers"})
+            return
+        with pregame.lock:
+            # After RPS resolution, seat idx == engine player idx.
+            idx = pregame.seat_idx(token)
+            if (idx is None or pregame.stage != "mulligan"
+                    or pregame.session is None):
+                return
+            if pregame.mulligan_done[idx]:
+                return  # once per seat
+            session = pregame.session
+            try:
+                new_state, drawn = apply_mulligan(
+                    session.state, idx, indices, session.rng,
+                )
+            except ValueError as e:
+                emit("error", {"msg": f"Invalid mulligan: {e}"})
+                return
+            session.state = new_state
+            pregame.mulligan_drawn[idx] = tuple(drawn)
+            pregame.mulligan_done[idx] = True
+            if all(pregame.mulligan_done):
+                _finish_pregame(room_code, pregame)
+            else:
+                # Acknowledge; the opponent is still choosing.
+                emit("pregame_status", {"msg": "Waiting for opponent…"})
+
+    @socketio.on("pregame_resync")
+    def handle_pregame_resync(_data=None):
+        """Reconnect support: re-emit the current pregame stage to this
+        client (same-token socket refresh; full reconnect lands in Phase 15)."""
+        room_code, pregame, token = _pregame_for_sid()
+        if pregame is None:
+            return
+        with pregame.lock:
+            idx = pregame.seat_idx(token)
+            if idx is None:
+                return
+            # Refresh the seat's sid (and the session's, if it exists).
+            pregame.seats[idx].sid = request.sid
+            if pregame.session is not None:
+                pregame.session.player_sids[idx] = request.sid
+            if pregame.stage == "rps":
+                emit("pregame_rps", {
+                    "opponent_name": pregame.seats[1 - idx].name,
+                    "already_picked": pregame.rps_picks[idx],
+                }, to=request.sid)
+            elif pregame.mulligan_done[idx]:
+                emit("pregame_status", {"msg": "Waiting for opponent…"},
+                     to=request.sid)
+            else:
+                _emit_pregame_mulligan(room_code, pregame, only_idx=idx)
+
     @socketio.on("spectate_room")
     def handle_spectate_room(data):
         data = data or {}
@@ -693,6 +995,17 @@ def register_events(room_manager: RoomManager) -> None:
             "session_token": token,
             "god_mode": god_mode,
         })
+        # PREGAME (2026-07-08): mid-pregame spectators get a status toast;
+        # the normal game_start fanout reaches them when the game begins.
+        pregame_now = _room_manager.get_pregame(room_code)
+        if pregame_now is not None:
+            emit("pregame_status", {
+                "msg": (
+                    "Players are choosing who goes first…"
+                    if pregame_now.stage == "rps"
+                    else "Players are choosing their opening hands…"
+                ),
+            })
         # If a game is already underway, immediately push current state.
         session = _room_manager.get_game(room_code)
         if session is not None:
@@ -827,6 +1140,14 @@ def register_events(room_manager: RoomManager) -> None:
                         sender_name = room.creator.name
                     elif room.joiner and room.joiner.token == token:
                         sender_name = room.joiner.name
+                else:
+                    # PREGAME (2026-07-08): mid-RPS/mulligan the room is
+                    # neither waiting nor in-game — resolve from the seats.
+                    pregame = _room_manager.get_pregame(room_code)
+                    if pregame is not None:
+                        seat_i = pregame.seat_idx(token)
+                        if seat_i is not None:
+                            sender_name = pregame.seats[seat_i].name
         emit(
             "chat_message",
             {"author": sender_name, "text": text},
