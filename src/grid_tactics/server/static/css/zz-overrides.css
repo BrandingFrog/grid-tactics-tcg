@@ -4491,3 +4491,14 @@ svg.deck-extrude .dx-badge {
 #screen-game #game-tooltip .tooltip-body,
 #screen-sandbox #sandbox-tooltip .tooltip-body,
 #screen-sandbox .game-tooltip .tooltip-body { padding-left: 8px; }
+
+/* Pile stack depth order (user 2026-07-08): the extruded stacks rise above
+   their cells, so the pile nearer the viewer must paint OVER the one
+   behind it. Own column front-to-back: deck > grave > exhaust; the
+   opponent's mirrored column is the reverse: exhaust > grave > deck. */
+svg.deck-extrude[id*="-own-exhaust"] { z-index: 53; }
+svg.deck-extrude[id*="-own-grave"]   { z-index: 54; }
+svg.deck-extrude[id*="-own-deck"]    { z-index: 55; }
+svg.deck-extrude[id*="-opp-deck"]    { z-index: 53; }
+svg.deck-extrude[id*="-opp-grave"]   { z-index: 54; }
+svg.deck-extrude[id*="-opp-exhaust"] { z-index: 55; }
