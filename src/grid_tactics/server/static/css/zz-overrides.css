@@ -5206,3 +5206,11 @@ input::selection, textarea::selection { background: rgba(224, 162, 60, 0.45); co
   font-size: 17px;
   text-shadow: 0 0 6px rgba(224, 162, 60, 0.9), 0 1px 3px rgba(0, 0, 0, 0.9);
 }
+
+/* Tutor/trigger picker: the new Accept footer squeezed the card fan under
+   the 340px cap and clipped card bottoms (user 2026-07-08). Taller modal +
+   slightly smaller tiles so full cards AND the footer fit. */
+.tutor-modal { max-height: 380px !important; }
+.tutor-modal-card { width: 170px !important; max-width: 170px !important; }
+.tutor-modal-cards { align-items: flex-start !important; padding-bottom: 2px !important; }
+.tutor-modal-footer { flex: 0 0 auto !important; }
