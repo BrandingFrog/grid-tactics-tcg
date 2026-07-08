@@ -4549,3 +4549,52 @@ svg.deck-extrude image.dx-art { filter: grayscale(0.55) brightness(0.72); }
   height: 36px !important;
   border-radius: 4px !important;
 }
+
+/* ============================================================
+   Popups & notifications -> vintage type (user 2026-07-08).
+   These overlays still declared their own display faces
+   (Montserrat / Luckiest Guy) and skipped the reskin.
+   ============================================================ */
+/* TURN N / PLAYER banner — also retire the cyan arcade glow */
+.turn-transition-banner {
+  font-family: var(--ui-display) !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.06em !important;
+  color: #f2ead2 !important;
+  text-shadow:
+    0 0 24px rgba(224, 162, 60, 0.75),
+    0 0 8px rgba(242, 234, 210, 0.5),
+    0 4px 12px rgba(0, 0, 0, 0.9) !important;
+}
+.turn-transition-banner-line2 { color: #e0c68a !important; }
+
+/* floating damage / heal / buff numbers over tiles */
+.floating-popup {
+  font-family: var(--ui-display) !important;
+  font-weight: 700 !important;
+}
+
+/* free-strike / no-action, handshake, overdraw banners */
+.no-action-damage, .no-action-text,
+.handshake-title, .overdraw-reveal-label {
+  font-family: var(--ui-display) !important;
+  font-weight: 700 !important;
+  text-transform: none !important;
+  letter-spacing: 0.05em !important;
+}
+.handshake-sub {
+  font-family: var(--ui-body) !important;
+  font-weight: 400 !important;
+}
+
+/* toasts + react banner text */
+.tutor-toast { font-family: var(--ui-display) !important; }
+.react-banner-label { font-family: var(--ui-display) !important; }
+.react-banner-desc  { font-family: var(--ui-body) !important; }
+
+/* deck-code modal title */
+.deck-code-modal-title {
+  font-family: var(--ui-display) !important;
+  font-weight: 700 !important;
+  text-transform: none !important;
+}
