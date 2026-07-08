@@ -5161,3 +5161,48 @@ input::selection, textarea::selection { background: rgba(224, 162, 60, 0.45); co
   50%, 88% { transform: rotate(180deg); }
   100%     { transform: rotate(360deg); }
 }
+
+/* Tutor/trigger picker select-then-Accept (user 2026-07-08) */
+.tutor-modal-card.tutor-card-selected {
+  outline: 3px solid var(--gold, #e0a23c);
+  outline-offset: -1px;
+  border-radius: 6px;
+  filter: drop-shadow(0 0 12px rgba(224, 162, 60, 0.55));
+  transform: translateY(-4px);
+}
+.tutor-accept-button {
+  font-family: var(--ui-display);
+  font-weight: 700;
+  font-size: 13px;
+  letter-spacing: 0.05em;
+  background: var(--gold, #e0a23c);
+  color: #201709;
+  border: 1px solid var(--gold, #e0a23c);
+  border-radius: 6px;
+  padding: 7px 22px;
+  cursor: pointer;
+}
+.tutor-accept-button:hover:not(:disabled) {
+  background: var(--gold-lt, #ffd873);
+  border-color: var(--gold-lt, #ffd873);
+}
+.tutor-accept-button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+/* Hourglass badge: follow the avatar's hex — the square scrim was an
+   artifact (the wrap has no radius; the hex is a clip-path on the disc). */
+.pod-wait-badge {
+  clip-path: polygon(50% 0%, 100% 27%, 100% 73%, 50% 100%, 0% 73%, 0% 27%);
+  border-radius: 0;
+}
+
+/* Hourglass: fully transparent over the avatar (user 2026-07-08) — no
+   scrim box at all; the glow keeps it legible over any art. */
+.pod-wait-badge {
+  background: transparent;
+  clip-path: none;
+  font-size: 17px;
+  text-shadow: 0 0 6px rgba(224, 162, 60, 0.9), 0 1px 3px rgba(0, 0, 0, 0.9);
+}

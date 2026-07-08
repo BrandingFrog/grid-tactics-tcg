@@ -46,6 +46,25 @@ function syncPendingTutorUI() {
         var matches = gameState.pending_tutor_matches || [];
         var key = tutorModalStateKey(matches);
         if (!tutorModalOpen || key !== tutorModalKey) {
+            // Multi-pick queue (user 2026-07-08): the player selected several
+            // cards in ONE modal; the engine steps picks one at a time, so
+            // consume the queued picks silently as each fresh match list
+            // arrives instead of re-showing the modal per pick.
+            if (window._tutorPickQueue && window._tutorPickQueue.length) {
+                var wantNid = window._tutorPickQueue[0];
+                var qm = null;
+                for (var qi = 0; qi < matches.length; qi++) {
+                    if (matches[qi].card_numeric_id === wantNid) { qm = matches[qi]; break; }
+                }
+                if (qm) {
+                    window._tutorPickQueue.shift();
+                    tutorModalKey = key;   // mark this state consumed
+                    tutorModalOpen = true; // stay in "modal owns the flow" mode
+                    submitAction({ action_type: 9, card_index: qm.match_idx });
+                    return;
+                }
+                window._tutorPickQueue = [];   // unfulfillable — fall through to the modal
+            }
             var deckSize = (gameState.players && gameState.players[myPlayerIdx])
                 ? (gameState.players[myPlayerIdx].deck_count || 0)
                 : 0;
@@ -63,6 +82,16 @@ function syncPendingTutorUI() {
 function showTutorModal(matches, deckSize, totalCopiesByCardId) {
     closeTutorModal();
     tutorModalOpen = true;
+    window._tutorPickQueue = [];   // a freshly-rendered modal owns the flow
+
+    // Select-then-Accept (user 2026-07-08): clicking a card SELECTS it
+    // (and previews it in the tooltip); Accept submits. Multi-pick tutors
+    // (pending_tutor_remaining > 1, e.g. Ratmobile) select all picks in
+    // this one modal — the extras queue and auto-submit as the engine
+    // steps through them.
+    var pickTarget = Math.max(1, (gameState && gameState.pending_tutor_remaining) || 1);
+    var maxPick = Math.min(pickTarget, (matches || []).length || 1);
+    var selectedPicks = [];   // [{nid, matchIdx, tile}]
 
     // Count remaining-in-deck per card_numeric_id (matches come from deck only).
     var remainingByNid = {};
@@ -82,8 +111,14 @@ function showTutorModal(matches, deckSize, totalCopiesByCardId) {
     header.className = 'tutor-modal-header';
     var title = document.createElement('div');
     title.className = 'tutor-modal-title';
-    title.textContent = 'Choose a card to tutor';
+    title.textContent = maxPick > 1
+        ? 'Choose cards to tutor \u2014 pick ' + maxPick
+        : 'Choose a card to tutor';
     header.appendChild(title);
+    var pickCounter = document.createElement('div');
+    pickCounter.className = 'tutor-modal-deckline';
+    pickCounter.textContent = 'Selected 0/' + maxPick;
+    header.appendChild(pickCounter);
     // Minimise (user 2026-07-07): peek at the board mid-pick. The pick is
     // MANDATORY — while minimised only the restore pill acts (all other
     // inputs stay illegal server-side and gate-blocked client-side).
@@ -142,23 +177,69 @@ function showTutorModal(matches, deckSize, totalCopiesByCardId) {
             // copies-remaining pill removed (user 2026-07-07)
             tile.addEventListener('click', function(e) {
                 e.stopPropagation();
-                // ActionType.TUTOR_SELECT = 9 (Phase 14.2). card_index reused as match index.
-                submitAction({ action_type: 9, card_index: match.match_idx });
+                var at = -1;
+                for (var si = 0; si < selectedPicks.length; si++) {
+                    if (selectedPicks[si].tile === tile) { at = si; break; }
+                }
+                if (at !== -1) {
+                    // second click unselects
+                    selectedPicks.splice(at, 1);
+                    tile.classList.remove('tutor-card-selected');
+                } else {
+                    if (maxPick === 1 && selectedPicks.length === 1) {
+                        // single-pick: clicking another card switches selection
+                        selectedPicks[0].tile.classList.remove('tutor-card-selected');
+                        selectedPicks.length = 0;
+                    }
+                    if (selectedPicks.length >= maxPick) return;
+                    selectedPicks.push({ nid: nid, matchIdx: match.match_idx, tile: tile });
+                    tile.classList.add('tutor-card-selected');
+                    try { showGameTooltip(nid, tile, null, { force: true }); } catch (e2) { /* defensive */ }
+                }
+                _updateTutorAccept();
             });
             fan.appendChild(tile);
         });
     }
     modal.appendChild(fan);
 
-    // Mandatory tutoring (2026-07): while matching picks remain, declining
-    // is ILLEGAL for TUTORS — the Skip button only renders at zero matches
-    // (defensive escape hatch; the engine auto-resolves zero-match tutors
-    // so that footer should never appear in normal play). Conjure deck-
-    // picks (pending_tutor_is_conjure — Ratchanter) keep their decline:
-    // DECLINE_TUTOR leaves the card in the deck, so always offer Skip.
+    // Footer: Accept confirms the selection (user 2026-07-08). Skip keeps
+    // its old rules — zero matches (escape hatch) or conjure picks
+    // (DECLINE_TUTOR leaves the card in the deck); mandatory tutors with
+    // matches get no Skip.
+    var footer = document.createElement('div');
+    footer.className = 'tutor-modal-footer';
+    var acceptBtn = null;
+    if (matches && matches.length > 0) {
+        acceptBtn = document.createElement('button');
+        acceptBtn.className = 'tutor-accept-button';
+        acceptBtn.textContent = 'Accept';
+        acceptBtn.disabled = true;
+        acceptBtn.addEventListener('click', function(e) {
+            e.stopPropagation();
+            if (!selectedPicks.length) return;
+            // Queue the extras; submit the first. Hide the modal NOW so the
+            // deck->hand fly plays over the board, not over the picker.
+            window._tutorPickQueue = [];
+            for (var pi = 1; pi < selectedPicks.length; pi++) {
+                window._tutorPickQueue.push(selectedPicks[pi].nid);
+            }
+            var first = selectedPicks[0];
+            _hideTutorModalForSubmit();
+            // ActionType.TUTOR_SELECT = 9 (Phase 14.2). card_index = match index.
+            submitAction({ action_type: 9, card_index: first.matchIdx });
+        });
+        footer.appendChild(acceptBtn);
+    }
+    function _updateTutorAccept() {
+        pickCounter.textContent = 'Selected ' + selectedPicks.length + '/' + maxPick;
+        if (acceptBtn) {
+            acceptBtn.disabled = selectedPicks.length === 0;
+            acceptBtn.textContent = selectedPicks.length > 1
+                ? 'Accept (' + selectedPicks.length + ')' : 'Accept';
+        }
+    }
     if (!matches || matches.length === 0 || isConjurePick) {
-        var footer = document.createElement('div');
-        footer.className = 'tutor-modal-footer';
         var skipBtn = document.createElement('button');
         skipBtn.className = 'tutor-skip-button';
         skipBtn.textContent = 'Skip';
@@ -171,13 +252,23 @@ function showTutorModal(matches, deckSize, totalCopiesByCardId) {
             submitAction({ action_type: 10 });
         });
         footer.appendChild(skipBtn);
-        modal.appendChild(footer);
     }
+    if (footer.children.length) modal.appendChild(footer);
 
     overlay.appendChild(modal);
     // Block background clicks (no accidental dismiss — must Skip explicitly).
     overlay.addEventListener('click', function(e) { e.stopPropagation(); });
     _stageMount().appendChild(overlay);
+}
+
+// Hide the picker for a submitted pick WITHOUT resetting tutorModalOpen/
+// tutorModalKey — syncPendingTutorUI then won't re-show the same pending
+// state while the pick round-trips (and the deck->hand fly stays visible).
+function _hideTutorModalForSubmit() {
+    var _pill = document.getElementById('tutor-restore-pill');
+    if (_pill) _pill.remove();
+    var existing = document.getElementById('tutor-modal-overlay');
+    if (existing) existing.remove();
 }
 
 function closeTutorModal() {
@@ -297,9 +388,17 @@ function showTriggerPickerModal(options) {
 
             tile.addEventListener('click', function(e) {
                 e.stopPropagation();
-                // ActionType.TRIGGER_PICK = 17 (Phase 14.7-05).
-                // card_index reused as queue_idx.
-                submitAction({ action_type: 17, card_index: queueIdx });
+                var was = tile.classList.contains('tutor-card-selected');
+                var all = fan.querySelectorAll('.tutor-card-selected');
+                for (var ci = 0; ci < all.length; ci++) all[ci].classList.remove('tutor-card-selected');
+                window._triggerPickIdx = null;
+                if (!was) {
+                    tile.classList.add('tutor-card-selected');
+                    window._triggerPickIdx = queueIdx;
+                    try { showGameTooltip(nid, tile, null, { force: true }); } catch (e2) { /* defensive */ }
+                }
+                var ab = document.getElementById('trigger-accept-btn');
+                if (ab) ab.disabled = window._triggerPickIdx == null;
             });
             fan.appendChild(tile);
         });
@@ -308,6 +407,21 @@ function showTriggerPickerModal(options) {
 
     var footer = document.createElement('div');
     footer.className = 'tutor-modal-footer';
+    window._triggerPickIdx = null;
+    var trigAccept = document.createElement('button');
+    trigAccept.id = 'trigger-accept-btn';
+    trigAccept.className = 'tutor-accept-button';
+    trigAccept.textContent = 'Accept';
+    trigAccept.disabled = true;
+    trigAccept.addEventListener('click', function(e) {
+        e.stopPropagation();
+        if (window._triggerPickIdx == null) return;
+        var pick = window._triggerPickIdx;
+        window._triggerPickIdx = null;
+        // ActionType.TRIGGER_PICK = 17 (Phase 14.7-05). card_index = queue_idx.
+        submitAction({ action_type: 17, card_index: pick });
+    });
+    footer.appendChild(trigAccept);
     var skipBtn = document.createElement('button');
     skipBtn.className = 'tutor-skip-button';
     skipBtn.textContent = 'Skip remaining';
