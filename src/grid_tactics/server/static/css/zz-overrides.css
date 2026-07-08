@@ -5411,3 +5411,46 @@ input::selection, textarea::selection { background: rgba(224, 162, 60, 0.45); co
 .game-layout .rps-clash-overlay {
   position: absolute !important;
 }
+
+/* Discard/sacrifice picker matches the tutor window (user 2026-07-08):
+   one horizontal row (no vertical scroll) + compact footer button. */
+.discard-picker-row, .sacrifice-picker-row {
+  flex-wrap: nowrap !important;
+  overflow-x: auto !important;
+  overflow-y: hidden !important;
+  justify-content: flex-start !important;
+  align-items: flex-start !important;
+  gap: 12px !important;
+  padding: 10px 12px !important;
+  scrollbar-width: thin;
+  scrollbar-color: #6b5730 transparent;
+}
+.discard-picker-row::-webkit-scrollbar, .sacrifice-picker-row::-webkit-scrollbar { height: 6px; }
+.discard-picker-row::-webkit-scrollbar-thumb, .sacrifice-picker-row::-webkit-scrollbar-thumb {
+  background: var(--bronze, #6b5730); border-radius: 3px;
+}
+.discard-picker-card, .sacrifice-picker-card {
+  flex: 0 0 auto;
+  width: 170px !important;
+  max-width: 170px !important;
+}
+.discard-picker-modal, .sacrifice-picker-modal { max-height: 360px !important; }
+/* Cancel: compact right-aligned footer button, tutor-style */
+.discard-picker-modal > .btn-secondary, .sacrifice-picker-modal > .btn-secondary {
+  align-self: flex-end !important;
+  width: auto !important;
+  margin: 4px 12px 10px !important;
+  padding: 7px 22px !important;
+  font-family: var(--ui-display) !important;
+  font-weight: 700 !important;
+  font-size: 13px !important;
+  letter-spacing: 0.05em !important;
+  background: #3a2e18 !important;
+  color: #e8dcbe !important;
+  border: 1px solid var(--bronze, #6b5730) !important;
+  border-radius: 6px !important;
+}
+.discard-picker-modal > .btn-secondary:hover, .sacrifice-picker-modal > .btn-secondary:hover {
+  border-color: var(--gold, #e0a23c) !important;
+  color: var(--gold, #e0a23c) !important;
+}
