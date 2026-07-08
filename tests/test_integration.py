@@ -79,22 +79,22 @@ def _make_state(
 
 
 def _close_decay_window(state, library):
-    """PASS through the mandatory Decay (BEFORE_END_OF_TURN) react window.
+    """PASS through the Decay (BEFORE_END_OF_TURN) react window, if it opened.
 
     Turn-structure redesign 2026-07 (+ Phase 14.8-05c): every turn's Decay
     phase closes with a react window even when no End triggers exist.
-    Closing it flips the turn and runs the new active player's turn-start
-    sequence (mandatory draw or empty-deck fatigue; +1 mana from turn 3
-    onward).
+    2026-07-08 timing audit (F6): a PASS-only Decay window (react player
+    holds no playable react) is SHORTCUT by the engine — zero-duration
+    open/close pair, turn flips directly. When shortcut, the state has
+    already advanced; return it unchanged so tests cover both flavours.
     """
     from grid_tactics.enums import ReactContext
 
-    assert state.phase == TurnPhase.REACT, (
-        f"expected the Decay react window, got phase={state.phase}"
-    )
-    assert state.react_context == ReactContext.BEFORE_END_OF_TURN, (
-        f"expected BEFORE_END_OF_TURN context, got {state.react_context}"
-    )
+    if not (
+        state.phase == TurnPhase.REACT
+        and state.react_context == ReactContext.BEFORE_END_OF_TURN
+    ):
+        return state
     return resolve_action(state, pass_action(), library)
 
 

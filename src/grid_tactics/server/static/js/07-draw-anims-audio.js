@@ -23,12 +23,20 @@ function _resolveDrawFromPoint(fromPos) {
         return { x: fromPos.x, y: fromPos.y };
     }
     if (fromPos === 'deck') {
-        // No dedicated deck pile DOM yet; use the own grave pile button
-        // as a proxy origin (sits on the self info bar, visually "off-board").
-        var btn = document.getElementById('pileBtnOwnGrave');
-        if (btn) {
-            var r = btn.getBoundingClientRect();
-            return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+        // Timing overhaul (2026-07-08, F9a): the old #pileBtnOwnGrave id is
+        // dead DOM (zero matches) so draws always flew from viewport
+        // center. Use the own DECK pile CELL on the active screen — the
+        // real deck visual next to the board. (The deck-extrude SVG is a
+        // full-viewBox overlay, so its own bounding rect is useless.)
+        var screenSel = (typeof sandboxMode !== 'undefined' && sandboxMode)
+            ? '#screen-sandbox' : '#screen-game';
+        var cell = document.querySelector(
+            screenSel + ' .pile-board[data-side="own"] .pile-cell[data-pile="deck"]');
+        if (cell) {
+            var r = cell.getBoundingClientRect();
+            if (r.width > 0) {
+                return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+            }
         }
     }
     // Default: viewport center.
@@ -79,6 +87,16 @@ function playDrawOwnAnimation(job, done) {
     document.body.appendChild(floater);
 
     // Hide the real slot until the floater lands, so we don't double-render.
+    // Timing overhaul (2026-07-08, F9c): register the hidden slot in the
+    // in-flight registry keyed by numeric id (index fallback). Any
+    // renderHand rebuild detaches the captured node — renderHand re-hides
+    // registered slots on rebuild, and finish() re-resolves by key, so
+    // multi-draws no longer leave a visible duplicate mid-flight.
+    if (!window.__inFlightHandSlots) window.__inFlightHandSlots = {};
+    var slotKey = (job && job.cardNumericId != null)
+        ? ('nid:' + job.cardNumericId)
+        : ('idx:' + slotIdx);
+    window.__inFlightHandSlots[slotKey] = (window.__inFlightHandSlots[slotKey] | 0) + 1;
     slotEl.style.visibility = 'hidden';
 
     playSfx('card_play');
@@ -88,12 +106,37 @@ function playDrawOwnAnimation(job, done) {
         if (finished) return;
         finished = true;
         if (floater.parentNode) floater.parentNode.removeChild(floater);
+        try {
+            var reg = window.__inFlightHandSlots;
+            if (reg && reg[slotKey]) {
+                reg[slotKey] = reg[slotKey] - 1;
+                if (reg[slotKey] <= 0) delete reg[slotKey];
+            }
+        } catch (e) { /* defensive */ }
+        // Re-resolve by key — a rebuild may have replaced the captured node.
+        var liveSlot = _resolveInFlightSlot(handEl, slotKey);
+        if (liveSlot) liveSlot.style.visibility = '';
         slotEl.style.visibility = '';
         done();
     }
     floater.addEventListener('animationend', finish);
     // Fallback timeout in case animationend is swallowed (e.g. tab hidden).
     setTimeout(finish, 800);
+}
+
+// F9c helper: find the (hidden, preferably) hand slot matching an in-flight
+// registry key inside the given hand container.
+function _resolveInFlightSlot(handEl, key) {
+    if (!handEl || !key) return null;
+    var sel = key.indexOf('nid:') === 0
+        ? '.card-frame-hand[data-numeric-id="' + key.slice(4) + '"]'
+        : '.card-frame-hand[data-hand-idx="' + key.slice(4) + '"]';
+    var els;
+    try { els = handEl.querySelectorAll(sel); } catch (e) { return null; }
+    for (var i = 0; i < els.length; i++) {
+        if (els[i].style.visibility === 'hidden') return els[i];
+    }
+    return els.length ? els[els.length - 1] : null;
 }
 
 function playDrawOppAnimation(job, done) {
@@ -245,6 +288,10 @@ function playAttackAnimation(job, done) {
     // gets the rubber-band rush. Look up the attacker's CardDef via the .board-minion
     // element's data-numeric-id (set by renderBoardMinion).
     var attackerMinionEl = attackerCell.querySelector('.board-minion');
+    // Timing overhaul (2026-07-08, F1): mirror playMoveAnimation's guard —
+    // if the attacker sprite isn't in the DOM (race / reconnection), skip
+    // the visual instead of lunging the bare tile.
+    if (!attackerMinionEl) { setTimeout(done, 0); return; }
     var atkRange = 0;
     if (attackerMinionEl) {
         var nid = parseInt(attackerMinionEl.getAttribute('data-numeric-id'), 10);
@@ -533,7 +580,11 @@ function playSummonAnimation(job, done) {
     var key = pos[0] + ',' + pos[1];
 
     // 1. Mark the tile so the next renderBoard tags it with .anim-summon.
+    //    Stamp the start time (F10f) so renderBoard can apply a negative
+    //    animation-delay — mid-summon re-renders resume the scale-in
+    //    instead of restarting it.
     animatingTiles[key] = 'summon';
+    if (typeof _animTileStart !== 'undefined') _animTileStart[key] = Date.now();
 
     // 2. Apply the post-summon state NOW (minion appears) and prevent the
     //    queue's default post-animation applyStateFrame.
@@ -564,6 +615,7 @@ function playSummonAnimation(job, done) {
     //    the board so the .anim-summon class falls off, and signal done.
     setTimeout(function() {
         delete animatingTiles[key];
+        if (typeof _animTileStart !== 'undefined') delete _animTileStart[key];
         try {
             if (typeof sandboxMode !== 'undefined' && sandboxMode
                 && typeof renderSandbox === 'function') {

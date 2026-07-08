@@ -21,9 +21,11 @@ from grid_tactics.engine_events import (
     EVT_CARD_BURNED,
     EVT_CARD_DRAWN,
     EVT_DARK_MATTER_CHANGE,
+    EVT_MINION_HP_CHANGE,
     EVT_MINION_MOVED,
     EVT_PENDING_MODAL_OPENED,
     EVT_PENDING_MODAL_RESOLVED,
+    EVT_PLAYER_HP_CHANGE,
     EventStream,
 )
 from grid_tactics.enums import EffectType, Element, PlayerSide, TargetType, TriggerType
@@ -337,6 +339,7 @@ def _apply_effect_to_minion(
     library: CardLibrary,
     *,
     contract_source: Optional[str] = None,
+    event_collector: Optional[EventStream] = None,
 ) -> GameState:
     """Apply an effect to a single minion based on effect_type.
 
@@ -347,9 +350,44 @@ def _apply_effect_to_minion(
     is handled by ``_apply_promote_on_death`` dispatched from
     ``resolve_effects_for_trigger``; it transforms a friendly minion
     rather than mutating the dying one, so it doesn't fit this helper.
+
+    2026-07-08 timing audit (F4): emits EVT_MINION_HP_CHANGE at the
+    mutation site whenever the minion's current_health changed, so HP
+    deltas render at their causal beat instead of snapping a phase late
+    on the final-state commit.
     """
     if contract_source is not None:
         assert_phase_contract(state, contract_source)
+    new_state = _apply_effect_to_minion_dispatch(state, effect, minion, library)
+    if event_collector is not None and new_state is not state:
+        new_m = new_state.get_minion(minion.instance_id)
+        if new_m is not None and new_m.current_health != minion.current_health:
+            event_collector.collect(
+                EVT_MINION_HP_CHANGE,
+                contract_source or "trigger:on_play",
+                {
+                    "instance_id": minion.instance_id,
+                    "new_hp": new_m.current_health,
+                    "delta": new_m.current_health - minion.current_health,
+                    "owner_idx": _player_index_for_side(new_m.owner),
+                    "position": list(new_m.position),
+                    "cause": getattr(
+                        effect.effect_type, "name", str(effect.effect_type)
+                    ).lower(),
+                },
+            )
+    return new_state
+
+
+def _apply_effect_to_minion_dispatch(
+    state: GameState,
+    effect: EffectDefinition,
+    minion: MinionInstance,
+    library: CardLibrary,
+) -> GameState:
+    """EffectType dispatch body of ``_apply_effect_to_minion`` (split out
+    so the wrapper can diff HP and emit the event — 2026-07-08 timing
+    audit F4)."""
     if effect.effect_type == EffectType.DAMAGE:
         return _apply_damage_to_minion(state, minion, effect.amount)
     elif effect.effect_type == EffectType.HEAL:
@@ -402,8 +440,14 @@ def _apply_effect_to_player(
     player_idx: int,
     *,
     contract_source: Optional[str] = None,
+    event_collector: Optional[EventStream] = None,
 ) -> GameState:
-    """Apply an effect to a player (DAMAGE or HEAL only)."""
+    """Apply an effect to a player (DAMAGE or HEAL only).
+
+    2026-07-08 timing audit (F4): emits EVT_PLAYER_HP_CHANGE at the
+    mutation site whenever the player's hp changed (no event on a
+    full-HP heal that clamps to no-op).
+    """
     if contract_source is not None:
         assert_phase_contract(state, contract_source)
     player = state.players[player_idx]
@@ -415,6 +459,20 @@ def _apply_effect_to_player(
     else:
         raise ValueError(
             f"Cannot apply {effect.effect_type.name} to a player"
+        )
+    if event_collector is not None and new_player.hp != player.hp:
+        event_collector.collect(
+            EVT_PLAYER_HP_CHANGE,
+            contract_source or "trigger:on_play",
+            {
+                "player_idx": player_idx,
+                "prev": player.hp,
+                "new": new_player.hp,
+                "delta": new_player.hp - player.hp,
+                "cause": getattr(
+                    effect.effect_type, "name", str(effect.effect_type)
+                ).lower(),
+            },
         )
     new_players = _replace_player(state.players, player_idx, new_player)
     return replace(state, players=new_players)
@@ -430,6 +488,9 @@ def _resolve_single_target(
     effect: EffectDefinition,
     library: CardLibrary,
     target_pos: Optional[tuple[int, int]],
+    *,
+    contract_source: Optional[str] = None,
+    event_collector: Optional[EventStream] = None,
 ) -> GameState:
     """Resolve effect on a single target at target_pos."""
     if target_pos is None:
@@ -438,7 +499,11 @@ def _resolve_single_target(
     minion = _find_minion_at_pos(state.minions, target_pos)
     if minion is None:
         return state  # no minion at position, state unchanged
-    return _apply_effect_to_minion(state, effect, minion, library)
+    return _apply_effect_to_minion(
+        state, effect, minion, library,
+        contract_source=contract_source,
+        event_collector=event_collector,
+    )
 
 
 def _resolve_all_enemies(
@@ -446,11 +511,18 @@ def _resolve_all_enemies(
     effect: EffectDefinition,
     caster_owner: PlayerSide,
     library: CardLibrary,
+    *,
+    contract_source: Optional[str] = None,
+    event_collector: Optional[EventStream] = None,
 ) -> GameState:
     """Resolve effect on all enemy minions."""
     for minion in state.minions:
         if minion.owner != caster_owner:
-            state = _apply_effect_to_minion(state, effect, minion, library)
+            state = _apply_effect_to_minion(
+                state, effect, minion, library,
+                contract_source=contract_source,
+                event_collector=event_collector,
+            )
     return state
 
 
@@ -460,6 +532,9 @@ def _resolve_adjacent(
     caster_pos: tuple[int, int],
     library: CardLibrary,
     caster_owner: Optional[PlayerSide] = None,
+    *,
+    contract_source: Optional[str] = None,
+    event_collector: Optional[EventStream] = None,
 ) -> GameState:
     """Resolve effect on all minions orthogonally adjacent to caster_pos.
 
@@ -478,7 +553,11 @@ def _resolve_adjacent(
             and minion.owner == caster_owner
         ):
             continue
-        state = _apply_effect_to_minion(state, effect, minion, library)
+        state = _apply_effect_to_minion(
+            state, effect, minion, library,
+            contract_source=contract_source,
+            event_collector=event_collector,
+        )
     return state
 
 
@@ -526,13 +605,21 @@ def _resolve_self_owner(
     elif effect.effect_type in (EffectType.DAMAGE, EffectType.HEAL):
         # Target the owning player
         player_idx = _player_index_for_side(caster_owner)
-        return _apply_effect_to_player(state, effect, player_idx)
+        return _apply_effect_to_player(
+            state, effect, player_idx,
+            contract_source=contract_source,
+            event_collector=event_collector,
+        )
     else:
         # Target the caster's minion at caster_pos
         minion = _find_minion_at_pos(state.minions, caster_pos)
         if minion is None:
             return state  # no minion at caster_pos, unchanged
-        return _apply_effect_to_minion(state, effect, minion, library)
+        return _apply_effect_to_minion(
+            state, effect, minion, library,
+            contract_source=contract_source,
+            event_collector=event_collector,
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -781,11 +868,23 @@ def resolve_effect(
         return state
 
     if scaled_effect.target == TargetType.SINGLE_TARGET:
-        return _resolve_single_target(state, scaled_effect, library, target_pos)
+        return _resolve_single_target(
+            state, scaled_effect, library, target_pos,
+            contract_source=contract_source,
+            event_collector=event_collector,
+        )
     elif scaled_effect.target == TargetType.ALL_ENEMIES:
-        return _resolve_all_enemies(state, scaled_effect, caster_owner, library)
+        return _resolve_all_enemies(
+            state, scaled_effect, caster_owner, library,
+            contract_source=contract_source,
+            event_collector=event_collector,
+        )
     elif scaled_effect.target == TargetType.ADJACENT:
-        return _resolve_adjacent(state, scaled_effect, caster_pos, library, caster_owner)
+        return _resolve_adjacent(
+            state, scaled_effect, caster_pos, library, caster_owner,
+            contract_source=contract_source,
+            event_collector=event_collector,
+        )
     elif scaled_effect.target == TargetType.SELF_OWNER:
         return _resolve_self_owner(
             state, scaled_effect, caster_pos, caster_owner, library,
@@ -794,7 +893,11 @@ def resolve_effect(
         )
     elif scaled_effect.target == TargetType.OPPONENT_PLAYER:
         opp_idx = 1 - _player_index_for_side(caster_owner)
-        return _apply_effect_to_player(state, scaled_effect, opp_idx)
+        return _apply_effect_to_player(
+            state, scaled_effect, opp_idx,
+            contract_source=contract_source,
+            event_collector=event_collector,
+        )
     elif scaled_effect.target == TargetType.OWNER_PLAYER:
         # Dark Matter pool redesign 2026-07: direct-to-caster-player
         # target. GRANT_DARK_MATTER was already intercepted above; the
@@ -802,6 +905,8 @@ def resolve_effect(
         # casting player.
         return _apply_effect_to_player(
             state, scaled_effect, _player_index_for_side(caster_owner),
+            contract_source=contract_source,
+            event_collector=event_collector,
         )
     elif scaled_effect.target == TargetType.ALL_MINIONS:
         for minion in state.minions:
@@ -819,7 +924,11 @@ def resolve_effect(
                 )
                 if not (tribe_match or element_match):
                     continue
-            state = _apply_effect_to_minion(state, scaled_effect, minion, library)
+            state = _apply_effect_to_minion(
+                state, scaled_effect, minion, library,
+                contract_source=contract_source,
+                event_collector=event_collector,
+            )
         return state
     elif scaled_effect.target == TargetType.ALL_ALLIES:
         for minion in state.minions:
@@ -829,7 +938,11 @@ def resolve_effect(
                 card_def = library.get_by_id(minion.card_numeric_id)
                 if not _effect_tribe_matches(card_def, scaled_effect.target_tribe):
                     continue
-            state = _apply_effect_to_minion(state, scaled_effect, minion, library)
+            state = _apply_effect_to_minion(
+                state, scaled_effect, minion, library,
+                contract_source=contract_source,
+                event_collector=event_collector,
+            )
         return state
     else:
         raise ValueError(f"Unknown target type: {scaled_effect.target}")
@@ -1371,9 +1484,14 @@ def _resolve_conjure(
     # (MAX_HAND_SIZE) sends the conjured card to the exhaust pile
     # (revealed) instead of skipping the conjure.
     new_player, _burned = player.add_to_hand_with_overdraw(target_numeric_id)
-    if _burned and event_collector is not None:
+    if event_collector is not None:
+        # 2026-07-08 timing audit (F2): the non-burn branch previously
+        # emitted NOTHING — the conjured card appeared in hand only at
+        # the drain-end snapshot. Emit EVT_CARD_DRAWN so the client
+        # animates the hand add at its causal beat. Burns stay on
+        # EVT_CARD_BURNED (public, never redacted).
         event_collector.collect(
-            EVT_CARD_BURNED,
+            EVT_CARD_BURNED if _burned else EVT_CARD_DRAWN,
             contract_source or "trigger:on_play",
             {
                 "player_idx": player_idx,

@@ -404,11 +404,16 @@ function _playSacPortal(job, done) {
 // expected order falls out of queue discipline without any ad-hoc
 // deferral machinery.
 function _runTurnFlipVisuals(turnNumber, activePlayerIdx) {
+    // Timing overhaul (2026-07-08, F7d): END-LED pre-delay shortened
+    // 900→300ms and the banner keyframe to ~1200ms (appended override in
+    // zz-overrides.css) so the whole choreography fits inside
+    // playTurnFlipped's 1500ms gate — no more banner blooming over the
+    // next turn's draw.
     _flashPhaseLed('end', 900);
     setTimeout(function() {
         _showTurnBanner(turnNumber, activePlayerIdx);
         _flashPhaseLed('start', 900);
-    }, 900);
+    }, 300);
 }
 
 function _showTurnBanner(turnNumber, activePlayerIdx) {

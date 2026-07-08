@@ -5052,3 +5052,90 @@ input::selection, textarea::selection { background: rgba(224, 162, 60, 0.45); co
   text-align: center;
   animation: pass-flag-pulse 1.6s ease-in-out infinite;
 }
+
+/* ============================================================
+   Timing overhaul (2026-07-08) — appended per zz-overrides convention.
+   ============================================================ */
+
+/* F7d: turn banner keyframe shortened 1500 -> 1200ms so the whole
+   END-LED (300ms pre-delay, see _runTurnFlipVisuals) + banner choreography
+   fits inside playTurnFlipped's 1500ms queue gate. Same keyframe name as
+   01-base-tokens.css:427 — this later declaration wins. */
+.turn-transition-banner {
+  animation: turn-transition-banner-in 1200ms ease-out forwards;
+}
+
+/* F7e: compact RALLY / DECAY chip announced by playPhaseChanged when the
+   Rally/Decay phase actually has queued work (trigger blip / burn tick).
+   Vintage gold pill, Alegreya SC. position:fixed inside the scaled
+   .game-layout behaves as absolute-to-layout (transformed ancestor), same
+   as the turn banner. */
+.phase-flow-chip {
+  position: fixed;
+  left: 50%;
+  top: 40%;
+  transform: translate(-50%, -50%);
+  z-index: 990;
+  pointer-events: none;
+  font-family: var(--ui-display, 'Alegreya SC', Georgia, serif);
+  font-weight: 700;
+  font-size: 22px;
+  letter-spacing: 0.16em;
+  color: #201709;
+  background: linear-gradient(180deg, #f0c96a, var(--gold, #e0a23c));
+  border: 1px solid var(--bronze, #6b5730);
+  border-radius: 999px;
+  padding: 4px 20px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.55), 0 0 18px rgba(224, 162, 60, 0.35);
+  animation: phase-flow-chip-in 600ms ease-out forwards;
+}
+@keyframes phase-flow-chip-in {
+  0%   { opacity: 0; transform: translate(-50%, -50%) scale(0.6); }
+  20%  { opacity: 1; transform: translate(-50%, -50%) scale(1.06); }
+  35%  { transform: translate(-50%, -50%) scale(1); }
+  80%  { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  100% { opacity: 0; transform: translate(-50%, -50%) scale(0.96); }
+}
+
+/* F10a: mana pod pulse fired by playManaChange (mirrors the dm-pulse badge
+   treatment — no pod popup). Applied to the .pod-mana pill (inline-flex,
+   transformable) or the bare sandbox mana span. */
+.mana-pulse {
+  animation: mana-pip-pulse 300ms ease-out;
+}
+@keyframes mana-pip-pulse {
+  0%   { transform: scale(1);    filter: none; }
+  40%  { transform: scale(1.22); filter: drop-shadow(0 0 6px rgba(224, 162, 60, 0.85)); }
+  100% { transform: scale(1);    filter: none; }
+}
+
+/* F10d: HP damage popup scales with the duel stage instead of a fixed 42px
+   (override of 04-animations-overlays.css:1032 — the popup is placed via
+   getBoundingClientRect so position already scales; only the type needed
+   the var). */
+.hp-damage-popup {
+  font-size: calc(42px * var(--duel-scale, 1));
+}
+
+/* F10e: opponent draw pop-in. The original keyframes (04:1475) animate
+   `transform`, which (a) is dead under this sheet's
+   `.opp-hand-card-back { transform: none !important; }` (important beats
+   keyframes) and (b) would wipe any fan rotate/translate if that base
+   rule is ever relaxed. Re-declare the same keyframe name using the
+   independent `scale` property, which composes with — and so preserves —
+   whatever transform the back carries. Later same-name keyframes win. */
+@keyframes opp-back-pop {
+  0%   { scale: 0;   opacity: 0; }
+  60%  { scale: 1.1; opacity: 1; }
+  100% { scale: 1;   opacity: 1; }
+}
+.opp-hand-card-back.pop-in {
+  animation: opp-back-pop 400ms ease-out;
+}
+
+/* F10b: Countered! toast for fizzle{reason:'negated'} (playFizzle). Rides
+   the .tutor-toast base styling; just a hair more emphasis. */
+.fizzle-negated-toast {
+  font-weight: 700;
+  letter-spacing: 0.06em;
+}

@@ -20,11 +20,13 @@ from grid_tactics.actions import Action
 from grid_tactics.card_library import CardLibrary
 from grid_tactics.engine_events import (
     EVT_CARD_BURNED,
+    EVT_CARD_DISCARDED,
     EVT_CARD_DRAWN,
     EVT_FIZZLE,
     EVT_HANDSHAKE,
     EVT_MANA_CHANGE,
     EVT_MINION_HP_CHANGE,
+    EVT_MINION_SUMMONED,
     EVT_PENDING_MODAL_OPENED,
     EVT_PHASE_CHANGED,
     EVT_PLAYER_HP_CHANGE,
@@ -46,7 +48,7 @@ from grid_tactics.enums import (
 from grid_tactics.game_state import GameState, PendingTrigger
 from grid_tactics.minion import BURN_DAMAGE, MinionInstance
 from grid_tactics.phase_contracts import assert_phase_contract
-from grid_tactics.types import MAX_MANA_CAP, MAX_REACT_STACK_DEPTH
+from grid_tactics.types import MAX_HAND_SIZE, MAX_MANA_CAP, MAX_REACT_STACK_DEPTH
 
 
 @dataclass(frozen=True, slots=True)
@@ -813,10 +815,14 @@ def _resolve_trigger_and_open_react_window(
             # the drain after the window we open below closes.
             _ar._cleanup_skip_drain = True
             try:
-                state = _cleanup_dead_minions(state, library)
+                # 2026-07-08 timing audit (F4): thread the collector so
+                # chain-reaction deaths / game-over emit their events.
+                state = _cleanup_dead_minions(
+                    state, library, event_collector=event_collector,
+                )
             finally:
                 _ar._cleanup_skip_drain = False
-            state = _check_game_over(state)
+            state = _check_game_over(state, event_collector=event_collector)
             if state.is_game_over:
                 return state
             # If chain-cleanup opened a picker modal or death-target
@@ -880,6 +886,17 @@ def _resolve_trigger_and_open_react_window(
         fizzle_source_id: Optional[int] = None
     else:
         fizzle_source_id = trigger.source_minion_id
+    # 2026-07-08 timing audit (F5): the blip is the trigger's ANNOUNCEMENT
+    # — collect it BEFORE resolve_effect so its consequence events
+    # (hp changes, draws, deaths) sequence after it instead of before.
+    # _build_trigger_blip_payload is pure and both inputs are in hand.
+    # Side effect (accepted): a fizzled trigger now blips AND puffs.
+    if event_collector is not None:
+        event_collector.collect(
+            EVT_TRIGGER_BLIP,
+            _trigger_source,
+            _build_trigger_blip_payload(trigger, effect),
+        )
     prev_state = state
     state = resolve_effect(
         state, effect, trigger.captured_position, caster_owner, library,
@@ -931,10 +948,14 @@ def _resolve_trigger_and_open_react_window(
     # we open below closes.
     _ar._cleanup_skip_drain = True
     try:
-        state = _cleanup_dead_minions(state, library)
+        # 2026-07-08 timing audit (F4): thread the collector so trigger-
+        # effect kills emit EVT_MINION_DIED / EVT_GAME_OVER causally.
+        state = _cleanup_dead_minions(
+            state, library, event_collector=event_collector,
+        )
     finally:
         _ar._cleanup_skip_drain = False
-    state = _check_game_over(state)
+    state = _check_game_over(state, event_collector=event_collector)
     if state.is_game_over:
         return state
 
@@ -990,25 +1011,13 @@ def _resolve_trigger_and_open_react_window(
     # START_OF_TURN). Otherwise use the trigger-kind default.
     new_return_phase = state.react_return_phase or default_return
 
-    # Phase 14.8-05: trigger-blip animation payload flows exclusively
-    # through EVT_TRIGGER_BLIP in the event stream — the legacy
-    # last_trigger_blip field was deleted. Client consumes via the
-    # playTriggerBlip slot handler (game.js) which drives the
-    # source-tile pulse → center icon → optional target-tile pulse
-    # animation via _fireTriggerBlipAnimation.
-    blip_payload = _build_trigger_blip_payload(trigger, effect)
-
-    # Emit EVT_TRIGGER_BLIP + EVT_REACT_WINDOW_OPENED so the client's
-    # eventQueue gets both the animation cue and the spell-stage open
-    # signal. The client's playReactWindowOpened (plan 14.8-05) consumes
-    # the preceding trigger_blip's originator to slam the source minion's
+    # Emit EVT_REACT_WINDOW_OPENED so the client's eventQueue gets the
+    # spell-stage open signal. The EVT_TRIGGER_BLIP announcement was
+    # already collected BEFORE resolve_effect (2026-07-08 timing audit
+    # F5) — the client's playReactWindowOpened still consumes the
+    # preceding trigger_blip's originator to slam the source minion's
     # card onto the spell stage LEFT slot.
     if event_collector is not None:
-        event_collector.collect(
-            EVT_TRIGGER_BLIP,
-            _trigger_source,
-            blip_payload,
-        )
         event_collector.collect(
             EVT_REACT_WINDOW_OPENED,
             "system:enter_react",
@@ -1109,7 +1118,35 @@ def _resolve_handshake_payout(
     Called from ``_close_end_of_turn_and_flip`` under the
     ``system:turn_flip`` contract (already asserted by the caller).
     """
-    outcomes: list[dict] = []
+    # 2026-07-08 timing audit (F5): EVT_HANDSHAKE (the announcement /
+    # banner) is emitted BEFORE the per-player payout events so the
+    # banner explains the mana/draw beats that follow. Outcomes are
+    # predicted with the exact rules the payout loop below applies
+    # (full mana → draw, full hand → burn, empty deck → none).
+    if event_collector is not None:
+        _predicted: list[dict] = []
+        for idx in (0, 1):
+            player = state.players[idx]
+            if player.current_mana >= MAX_MANA_CAP:
+                if player.deck:
+                    _predicted.append({
+                        "player_idx": idx,
+                        "reward": (
+                            "card_burned"
+                            if len(player.hand) >= MAX_HAND_SIZE
+                            else "card_drawn"
+                        ),
+                    })
+                else:
+                    _predicted.append({"player_idx": idx, "reward": "none"})
+            else:
+                _predicted.append({"player_idx": idx, "reward": "mana"})
+        event_collector.collect(
+            EVT_HANDSHAKE,
+            "system:turn_flip",
+            {"outcomes": _predicted},
+        )
+
     for idx in (0, 1):
         player = state.players[idx]
         if player.current_mana >= MAX_MANA_CAP:
@@ -1120,10 +1157,6 @@ def _resolve_handshake_payout(
                     state,
                     players=_replace_player(state.players, idx, new_player),
                 )
-                outcomes.append({
-                    "player_idx": idx,
-                    "reward": "card_burned" if burned else "card_drawn",
-                })
                 if event_collector is not None:
                     event_collector.collect(
                         EVT_CARD_BURNED if burned else EVT_CARD_DRAWN,
@@ -1141,7 +1174,7 @@ def _resolve_handshake_payout(
                     )
             else:
                 # Full mana AND empty deck → no payout (never fatigue).
-                outcomes.append({"player_idx": idx, "reward": "none"})
+                pass
         else:
             prev_mana = player.current_mana
             new_player = replace(player, current_mana=prev_mana + 1)
@@ -1149,7 +1182,6 @@ def _resolve_handshake_payout(
                 state,
                 players=_replace_player(state.players, idx, new_player),
             )
-            outcomes.append({"player_idx": idx, "reward": "mana"})
             if event_collector is not None:
                 event_collector.collect(
                     EVT_MANA_CHANGE,
@@ -1163,12 +1195,6 @@ def _resolve_handshake_payout(
                     },
                 )
     state = replace(state, handshake_pending=False, consecutive_passes=0)
-    if event_collector is not None:
-        event_collector.collect(
-            EVT_HANDSHAKE,
-            "system:turn_flip",
-            {"outcomes": outcomes},
-        )
     return state
 
 
@@ -1267,9 +1293,27 @@ def _close_end_of_turn_and_flip(
     # STARTING_MANA to match P1's first action. The turn-start draw
     # below is NOT skipped on turn 2.
     if state.turn_number > 2:
+        _pre_regen_mana = state.players[new_active_idx].current_mana
         new_active_player = state.players[new_active_idx].regenerate_mana()
         new_players = _replace_player(state.players, new_active_idx, new_active_player)
         state = replace(state, players=new_players)
+        # 2026-07-08 timing audit (F4): turn-start mana regen previously
+        # emitted nothing — the mana badge only updated at drain end.
+        if (
+            event_collector is not None
+            and new_active_player.current_mana != _pre_regen_mana
+        ):
+            event_collector.collect(
+                EVT_MANA_CHANGE,
+                "system:turn_flip",
+                {
+                    "player_idx": new_active_idx,
+                    "prev": _pre_regen_mana,
+                    "new": new_active_player.current_mana,
+                    "delta": new_active_player.current_mana - _pre_regen_mana,
+                    "cause": "turn_start",
+                },
+            )
 
     # Turn-structure redesign 2026-07: UNCONDITIONAL turn-start draw for
     # the new active player (AFTER mana regen). Empty deck → escalating
@@ -1376,12 +1420,22 @@ def enter_start_of_turn(
 
     # 3. Fire ON_START_OF_TURN triggers (if any).
     had_triggers = _has_triggers_for(state, library, TriggerType.ON_START_OF_TURN)
+    _drain_opened_window = False
+    _drain_opened_modal = False
     if had_triggers:
         state = fire_start_of_turn_triggers(
             state, library, event_collector=event_collector,
         )
         if state.is_game_over:
             return state
+        # 2026-07-08 timing audit (F5): detect whether the drain already
+        # opened a react window (it emits its own EVT_REACT_WINDOW_OPENED)
+        # or deferred to a picker / death-target modal.
+        _drain_opened_window = state.phase == TurnPhase.REACT
+        _drain_opened_modal = (
+            state.pending_trigger_picker_idx is not None
+            or state.pending_death_target is not None
+        )
 
     # 4. Open react window if triggers fired; else shortcut to ACTION.
     if had_triggers:
@@ -1392,6 +1446,27 @@ def enter_start_of_turn(
             react_context=ReactContext.AFTER_START_TRIGGER,
             react_return_phase=TurnPhase.START_OF_TURN,
         )
+        # 2026-07-08 timing audit (F5): when EVERY queued trigger fizzled,
+        # the drain emitted no EVT_REACT_WINDOW_OPENED — yet this block
+        # still opens a real window, which the client couldn't see (the
+        # game looked frozen). Emit the missing open ONLY in that case;
+        # emitting when the drain already opened (or a modal gates the
+        # flow) would double-open and leak a spellStageChain entry (cf.
+        # the 2026-04-20 guard in _fire_decay_triggers_and_open_window).
+        if (
+            event_collector is not None
+            and not _drain_opened_window
+            and not _drain_opened_modal
+        ):
+            event_collector.collect(
+                EVT_REACT_WINDOW_OPENED,
+                "system:enter_react",
+                {
+                    "react_context": ReactContext.AFTER_START_TRIGGER.name,
+                    "react_player_idx": state.react_player_idx,
+                    "return_phase": TurnPhase.START_OF_TURN.name,
+                },
+            )
         return state
 
     # No Start triggers → shortcut straight to ACTION.
@@ -1593,13 +1668,56 @@ def _fire_decay_triggers_and_open_window(
         # default_return for end_of_turn kind (line 814).
         return state
 
-    state = replace(
+    window_state = replace(
         state,
         phase=TurnPhase.REACT,
         react_player_idx=1 - state.active_player_idx,  # opponent reacts
         react_context=ReactContext.BEFORE_END_OF_TURN,
         react_return_phase=TurnPhase.END_OF_TURN,
     )
+
+    # 2026-07-08 timing audit (F6): PASS-only Decay window shortcut.
+    # When the would-be BEFORE_END_OF_TURN window offers the react player
+    # NOTHING but PASS (no playable react, no pending modal), don't open
+    # a real window at all — emit the zero-duration shortcut open/close
+    # pair (mirroring enter_start_of_turn's Rally shortcut) and advance
+    # the turn directly. Removes the per-turn dead time (window gates +
+    # opponent round trip) for windows in which nothing can ever happen.
+    # Deferred import: legal_actions imports action_resolver at module
+    # level, so a top-level import here would create a cycle.
+    from grid_tactics.legal_actions import legal_actions as _legal_actions
+    _legal = _legal_actions(window_state, library)
+    if len(_legal) == 1 and _legal[0].action_type == ActionType.PASS:
+        if event_collector is not None:
+            event_collector.collect(
+                EVT_REACT_WINDOW_OPENED,
+                "system:enter_react",
+                {
+                    "react_context": ReactContext.BEFORE_END_OF_TURN.name,
+                    "react_player_idx": window_state.react_player_idx,
+                    "shortcut": True,
+                },
+                animation_duration_ms=0,
+            )
+            event_collector.collect(
+                EVT_REACT_WINDOW_CLOSED,
+                "system:close_react_window",
+                {
+                    "return_phase": "turn_flip",
+                    "shortcut": True,
+                },
+                animation_duration_ms=0,
+            )
+        state = _close_end_of_turn_and_flip(
+            state, library, event_collector=event_collector,
+        )
+        if state.is_game_over:
+            return state
+        return enter_start_of_turn(
+            state, library, event_collector=event_collector,
+        )
+
+    state = window_state
     if event_collector is not None:
         event_collector.collect(
             EVT_REACT_WINDOW_OPENED,
@@ -1830,9 +1948,20 @@ def resolve_summon_declaration_originator(
         return state
 
     row, col = pos
-    # Edge case: cell occupied mid-chain → summon fizzles silently (no
-    # refund). Proper fizzle handling lands in 14.7-06.
+    # Edge case: cell occupied mid-chain → summon fizzles (no refund).
+    # 2026-07-08 timing audit (F10b): emit EVT_FIZZLE so the client can
+    # show a puff/toast — previously the paid summon vanished silently.
     if state.board.get(row, col) is not None:
+        if event_collector is not None:
+            event_collector.collect(
+                EVT_FIZZLE,
+                "system:resolve_summon_declaration",
+                {
+                    "reason": "deploy_cell_occupied",
+                    "card_numeric_id": entry.card_numeric_id,
+                    "position": [row, col],
+                },
+            )
         return state
 
     minion = MinionInstance(
@@ -1855,7 +1984,6 @@ def resolve_summon_declaration_originator(
     # actually lands (post Window A negate window). Plan-04a's animation
     # path uses this for the deploy-from-hand → board-tile animation.
     if event_collector is not None:
-        from grid_tactics.engine_events import EVT_MINION_SUMMONED
         event_collector.collect(
             EVT_MINION_SUMMONED,
             "system:resolve_summon_declaration",
@@ -1890,6 +2018,27 @@ def resolve_summon_declaration_originator(
         source_minion_id=minion.instance_id,
         effect_payload=effects_payload,
     )
+    # 2026-07-08 timing audit (F5): Window B previously opened SILENTLY
+    # mid-LIFO — no events at all — so the client froze on an invisible
+    # window. Emit a CLOSED for Window A first (its open was emitted at
+    # declaration time and its only eventual close otherwise belongs to
+    # Window B, leaking a spellStageChain entry), then the Window B OPENED.
+    if event_collector is not None:
+        event_collector.collect(
+            EVT_REACT_WINDOW_CLOSED,
+            "system:close_react_window",
+            {"return_phase": "summon_effect_window"},
+        )
+        event_collector.collect(
+            EVT_REACT_WINDOW_OPENED,
+            "system:enter_react",
+            {
+                "react_context": ReactContext.AFTER_SUMMON_EFFECT.name,
+                "react_player_idx": 1 - state.active_player_idx,
+                "return_phase": TurnPhase.ACTION.name,
+            },
+        )
+
     # RESET stack (not append): the LIFO loop has already consumed the
     # Window A entries. Window B starts with a fresh single-entry stack.
     return replace(
@@ -2173,6 +2322,19 @@ def _play_react(
                     "delta": -mana_cost,
                 },
             )
+        # 2026-07-08 timing audit (F2): the react card's hand→grave move
+        # previously emitted nothing (the react path never runs the
+        # action-level grave diff), so the hand slot lingered until the
+        # drain-end snapshot. Emit the discard at its causal beat.
+        event_collector.collect(
+            EVT_CARD_DISCARDED,
+            "action:play_react",
+            {
+                "player_idx": react_idx,
+                "card_numeric_id": card_numeric_id,
+                "cause": "react",
+            },
+        )
 
     # Create ReactEntry and push onto stack
     entry = ReactEntry(
@@ -2325,6 +2487,19 @@ def resolve_react_stack(
                 # NEGATE cancels the next entry in the stack (the action being countered)
                 if i + 1 < len(stack_list):
                     negated_indices.add(i + 1)
+                    # 2026-07-08 timing audit (F10b): countered plays
+                    # previously resolved into silent nothing — emit
+                    # EVT_FIZZLE so the client can toast "Countered!".
+                    if event_collector is not None:
+                        event_collector.collect(
+                            EVT_FIZZLE,
+                            "trigger:on_play",
+                            {
+                                "reason": "negated",
+                                "card_numeric_id": stack_list[i + 1].card_numeric_id,
+                                "negated_by_card_numeric_id": entry.card_numeric_id,
+                            },
+                        )
                 # Non-negate effects on the same card still resolve
                 for effect in card_def.effects:
                     if effect.trigger == TriggerType.ON_PLAY and effect.effect_type != EffectType.NEGATE:
@@ -2385,6 +2560,21 @@ def resolve_react_stack(
                                 minions=state.minions + (new_minion,),
                                 next_minion_id=state.next_minion_id + 1,
                             )
+                            # 2026-07-08 timing audit (F4): DEPLOY_SELF
+                            # reacts previously landed silently — emit
+                            # the summon so the client animates it.
+                            if event_collector is not None:
+                                event_collector.collect(
+                                    EVT_MINION_SUMMONED,
+                                    "trigger:on_play",
+                                    {
+                                        "instance_id": new_minion.instance_id,
+                                        "card_numeric_id": entry.card_numeric_id,
+                                        "owner_idx": entry.player_idx,
+                                        "position": list(entry.target_pos),
+                                        "source": "deploy_self",
+                                    },
+                                )
                         elif state.board.get(
                             entry.target_pos[0], entry.target_pos[1],
                         ) is not None:
@@ -2561,6 +2751,16 @@ def resolve_react_stack(
         # the modal clears — nulling it made the post-tutor resume fall
         # into the legacy ACTION path, re-entering END_OF_TURN and
         # double-firing end-of-turn triggers.
+        # 2026-07-08 timing audit (F5): emit the CLOSED at the real close
+        # site instead of relying on event_reconcile's end-of-batch
+        # synthetic append — the spell stage otherwise stayed visually
+        # open across the modal's beats.
+        if event_collector is not None:
+            event_collector.collect(
+                EVT_REACT_WINDOW_CLOSED,
+                "system:close_react_window",
+                {"return_phase": "pending_modal"},
+            )
         return replace(
             state,
             phase=TurnPhase.ACTION,
@@ -2593,6 +2793,16 @@ def resolve_react_stack(
     ):
         # Clear react bookkeeping from the closing window; the drain will
         # open a NEW window (with its own context) for the next trigger.
+        # 2026-07-08 timing audit (F5): emit the CLOSED for the window
+        # being torn down here — the drain emits a fresh OPENED for the
+        # next trigger's window, and without this real close the client's
+        # spell stage stayed open until the reconciler's synthetic append.
+        if event_collector is not None:
+            event_collector.collect(
+                EVT_REACT_WINDOW_CLOSED,
+                "system:close_react_window",
+                {"return_phase": "trigger_drain"},
+            )
         state = replace(
             state,
             react_stack=(),
@@ -2629,6 +2839,15 @@ def resolve_react_stack(
         # windows, and this is the gap between them. Clear the react
         # bookkeeping for the closing window but keep pending intact.
         if state.pending_post_move_attacker_id is not None:
+            # 2026-07-08 timing audit (F5): emit the CLOSED at the real
+            # close site (the gap between the melee chain's two windows)
+            # instead of relying on the reconciler's synthetic append.
+            if event_collector is not None:
+                event_collector.collect(
+                    EVT_REACT_WINDOW_CLOSED,
+                    "system:close_react_window",
+                    {"return_phase": "post_move_attack"},
+                )
             return replace(
                 state,
                 phase=TurnPhase.ACTION,

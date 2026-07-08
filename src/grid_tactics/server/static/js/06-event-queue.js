@@ -24,6 +24,11 @@ var animRunning = false;
 // Read by renderBoard() to apply the matching .anim-* class to .board-cell.
 // Wave 3/4 (move/attack) will reuse this same registry.
 var animatingTiles = {};
+// Timing overhaul (2026-07-08, F10f): wall-clock start time per animating
+// tile ("<row>,<col>" -> Date.now()). renderBoard applies a NEGATIVE
+// animation-delay from this so a mid-animation re-render resumes the
+// keyframe instead of restarting it (summon scale-in used to replay).
+var _animTileStart = {};
 
 // ============================================================
 // Phase 14.8-04a/04b: Unified Event Queue. The 4 ad-hoc defer/buffer
@@ -80,6 +85,12 @@ var slotState = {
     // the window opens. Cleared after consumption so a stale originator
     // never leaks into a later unrelated react window.
     lastOriginator: null,     // {numericId, playerIdx} or null
+    // Timing overhaul (2026-07-08, F8): the event dispatched immediately
+    // BEFORE the one currently playing. playMinionDied consults it to skip
+    // the death animation when the preceding attack_resolved's lunge
+    // already covered the kill (attacker/defender_killed on the same id).
+    prevDispatchedEvent: null,
+    lastDispatchedEvent: null,
 };
 
 // Phase 14.8-05b: guard so the post-drain wholesale commit of
@@ -99,6 +110,8 @@ function resetEventQueue() {
     slotState.pendingModalKind = null;
     slotState.pendingModalDeadline = 0;
     slotState.lastOriginator = null;
+    slotState.prevDispatchedEvent = null;
+    slotState.lastDispatchedEvent = null;
     _drainFinalApplied = false;
     // Audit fix (2026-07-06): a stale spell stage (left up by leave-game /
     // game-over mid-react) must not survive into the next game.
@@ -116,7 +129,13 @@ function resetEventQueue() {
 // (playable glow, board highlights) and click handlers consult these so
 // nothing lights up or engages until it is genuinely the player's moment.
 function isEventQueueBusy() {
-    return eventRunning || eventQueue.length > 0;
+    // Timing overhaul (2026-07-08, F1): also report busy while the
+    // AnimationQueue is mid-flight — board animations (move/attack/summon)
+    // run through animQueue and the DOM lags gameState until they finish.
+    var animBusy = (typeof isAnimating === 'function')
+        ? isAnimating()
+        : (animRunning || animQueue.length > 0);
+    return eventRunning || eventQueue.length > 0 || animBusy;
 }
 function canActNow() {
     if (typeof sandboxMode !== 'undefined' && sandboxMode) return true;
@@ -256,6 +275,8 @@ function drainEventQueue() {
     }
     var ev = eventQueue.shift();
     eventRunning = true;
+    slotState.prevDispatchedEvent = slotState.lastDispatchedEvent || null;
+    slotState.lastDispatchedEvent = ev;
     // Log at the beat (timing audit 2026-07-06): the line lands as the
     // animation starts, so log order + timestamps track the visuals. A
     // throwing formatter must never break the drain.
@@ -594,8 +615,17 @@ function commitEventToDom(ev) {
         case "card_drawn":
             if (live && live.players && live.players[payload.player_idx]) {
                 var _pd = live.players[payload.player_idx];
-                if (typeof _pd.deck_count === 'number' && _pd.deck_count > 0) _pd.deck_count--;
-                else if (Array.isArray(_pd.deck) && _pd.deck.length) _pd.deck.pop();
+                // Timing overhaul (2026-07-08, F3): conjured / declined-
+                // conjure cards do NOT come from the deck — skip the deck
+                // decrement for those sources or the pile under-counts
+                // until drain end. Old payloads carry no source and keep
+                // the decrement (turn-start / tutor draws all deck-sourced).
+                var _fromDeck = (payload.source !== 'conjure'
+                    && payload.source !== 'decline_conjure');
+                if (_fromDeck) {
+                    if (typeof _pd.deck_count === 'number' && _pd.deck_count > 0) _pd.deck_count--;
+                    else if (Array.isArray(_pd.deck) && _pd.deck.length) _pd.deck.pop();
+                }
                 needsStatsRerender = true;
             }
             break;
@@ -604,6 +634,35 @@ function commitEventToDom(ev) {
                 var _pg = live.players[payload.player_idx];
                 if (Array.isArray(_pg.grave) && payload.card_numeric_id != null) _pg.grave.push(payload.card_numeric_id);
                 else if (typeof _pg.grave_count === 'number') _pg.grave_count++;
+                // Timing overhaul (2026-07-08, F3): the discarded card also
+                // leaves the HAND at this beat — but ONLY when it is
+                // actually found in the hand array. This event fires for
+                // grave adds that never touched the hand (magic-to-grave
+                // already spliced at card_played, minion deaths,
+                // sacrifice), so a blind hand_count decrement is unsafe.
+                // A tagged death/sacrifice grave add must ALSO never eat an
+                // unrelated hand COPY of the same card — skip the splice
+                // outright for those causes (new optional engine field;
+                // old payloads carry no cause and rely on the in-hand check).
+                var _pileOnly = (payload.cause === 'death'
+                    || payload.cause === 'sacrifice');
+                if (!_pileOnly
+                        && Array.isArray(_pg.hand) && payload.card_numeric_id != null) {
+                    var _di = _pg.hand.indexOf(payload.card_numeric_id);
+                    if (_di !== -1) {
+                        _pg.hand.splice(_di, 1);
+                        try {
+                            if (!sbMode && payload.player_idx === myPlayerIdx
+                                    && typeof renderHand === 'function') renderHand();
+                            if (!sbMode && payload.player_idx !== myPlayerIdx
+                                    && typeof renderOppHandRow === 'function') {
+                                var _dc = (_pg.hand_count != null) ? _pg.hand_count
+                                    : (_pg.hand ? _pg.hand.length : 0);
+                                renderOppHandRow(_dc, _pg.hand_elements || null);
+                            }
+                        } catch (e) { /* defensive */ }
+                    }
+                }
                 needsStatsRerender = true;
             }
             break;
@@ -612,7 +671,37 @@ function commitEventToDom(ev) {
                 var _pe = live.players[payload.player_idx];
                 if (Array.isArray(_pe.exhaust) && payload.card_numeric_id != null) _pe.exhaust.push(payload.card_numeric_id);
                 else if (typeof _pe.exhaust_count === 'number') _pe.exhaust_count++;
-                if (typeof _pe.deck_count === 'number' && _pe.deck_count > 0 && payload.source === 'turn_start') _pe.deck_count--;
+                // Timing overhaul (2026-07-08, F3): every from-deck burn
+                // source ticks the deck pile at its beat, not just the
+                // turn-start overdraw. discard_cost / conjure burns come
+                // from the hand, not the deck — excluded.
+                var _burnFromDeck = (payload.source === 'turn_start'
+                    || payload.source === 'handshake'
+                    || payload.source === 'card_effect'
+                    || payload.source === 'tutor');
+                if (typeof _pe.deck_count === 'number' && _pe.deck_count > 0 && _burnFromDeck) _pe.deck_count--;
+                // discard_cost burns exhaust a card FROM THE HAND (paid cost
+                // of playing another card, new engine payload 2026-07-08).
+                // Splice only on an exact in-hand match — never blind, and
+                // never for other sources (a turn-start overdraw burn must
+                // not eat an unrelated hand copy of the same card).
+                if (payload.source === 'discard_cost'
+                        && Array.isArray(_pe.hand) && payload.card_numeric_id != null) {
+                    var _bi = _pe.hand.indexOf(payload.card_numeric_id);
+                    if (_bi !== -1) {
+                        _pe.hand.splice(_bi, 1);
+                        try {
+                            if (!sbMode && payload.player_idx === myPlayerIdx
+                                    && typeof renderHand === 'function') renderHand();
+                            if (!sbMode && payload.player_idx !== myPlayerIdx
+                                    && typeof renderOppHandRow === 'function') {
+                                var _bc = (_pe.hand_count != null) ? _pe.hand_count
+                                    : (_pe.hand ? _pe.hand.length : 0);
+                                renderOppHandRow(_bc, _pe.hand_elements || null);
+                            }
+                        } catch (e) { /* defensive */ }
+                    }
+                }
                 needsStatsRerender = true;
             }
             break;
@@ -643,6 +732,12 @@ function commitEventToDom(ev) {
         }
     }
     if (needsStatsRerender) {
+        // Timing overhaul (2026-07-08, F3): the visible pile cells + deck
+        // extrusion tick at each draw/discard/burn beat instead of jumping
+        // wholesale at drain end.
+        try {
+            if (typeof updatePileButtonCounts === 'function') updatePileButtonCounts();
+        } catch (e) { /* defensive */ }
         if (sbMode) {
             if (typeof renderSandboxStats === 'function') {
                 try { renderSandboxStats(); } catch (e) { /* defensive */ }
@@ -752,7 +847,7 @@ function playEvent(ev, done) {
         case "card_drawn":               return playCardDrawn(ev, done);
         case "card_played":              return playCardPlayed(ev, done);
         case "card_discarded":           return playCardDiscarded(ev, done);
-        case "mana_change":              return playInstant(ev, done);
+        case "mana_change":              return playManaChange(ev, done);
         case "player_hp_change":         return playPlayerHpChange(ev, done);
         // Dark Matter pool redesign (2026-07): a player's DM pool changed.
         case "dark_matter_change":       return playDarkMatterChange(ev, done);
@@ -942,13 +1037,87 @@ function playMinionSummoned(ev, done) {
 }
 
 function playMinionDied(ev, done) {
-    // Payload: {instance_id, card_numeric_id, owner_idx, position, from_deck}
-    // Snapshot path's applyStateFrame burn-death detection already handles
-    // the cinder animation for burn deaths. For combat deaths the minion
-    // vanishes via the next render. 04a: zero-duration — visual is covered
-    // by trigger_blip (04b) + hp_popup (playMinionHpChange). Default
-    // duration in engine_events.py = 0 for this type.
-    setTimeout(done, _evDurationOr(ev, 0));
+    // Payload: {instance_id, card_numeric_id, owner_idx, position, from_deck,
+    //           cause?}  (cause is a new optional engine field — old payloads
+    //           carry no cause; the is_burning fallback covers them.)
+    // Timing overhaul (2026-07-08, F8): deaths get a real visual beat.
+    //   * burn deaths → cinder animation on the still-rendered tile (the
+    //     live-state minion + its DOM node are both still present here —
+    //     commitEventToDom removes them only at done()).
+    //   * other deaths → quick fade on the .board-minion + a card_fly ghost
+    //     from the tile to the owner's grave pile cell.
+    //   * 0ms fast path when the immediately-preceding attack_resolved
+    //     already killed this minion — the lunge impact covered it.
+    var payload = (ev && ev.payload) || {};
+    var iid = payload.instance_id;
+    try {
+        var pe = slotState.prevDispatchedEvent;
+        if (pe && pe.type === 'attack_resolved' && pe.payload && iid != null) {
+            var pp = pe.payload;
+            if ((pp.defender_killed && pp.defender_id === iid)
+                || (pp.attacker_killed && pp.attacker_id === iid)) {
+                setTimeout(done, 0);
+                return;
+            }
+        }
+    } catch (e) { /* defensive — fall through to the full animation */ }
+
+    // Look up the live minion (still in state during this handler).
+    var minion = null;
+    try {
+        var live = (typeof sandboxMode !== 'undefined' && sandboxMode)
+            ? sandboxState : gameState;
+        if (live && live.minions && iid != null) {
+            for (var mi = 0; mi < live.minions.length; mi++) {
+                if (live.minions[mi] && live.minions[mi].instance_id === iid) {
+                    minion = live.minions[mi];
+                    break;
+                }
+            }
+        }
+    } catch (e) { /* defensive */ }
+
+    var isBurn = payload.cause === 'burn' || !!(minion && minion.is_burning);
+    if (isBurn && minion) {
+        var burnSettled = false;
+        var burnSettle = function() {
+            if (burnSettled) return;
+            burnSettled = true;
+            done();
+        };
+        try {
+            playBurnDeathAnimation(minion, burnSettle);
+        } catch (e) { burnSettle(); }
+        // Safety cap so a swallowed animation can never wedge the queue.
+        setTimeout(burnSettle, 1500);
+        return;
+    }
+
+    // Non-burn death: fade the sprite + fly a ghost to the grave pile cell.
+    try {
+        var pos = payload.position || (minion && minion.position) || null;
+        var tile = _evTileForPos(pos);
+        var minionEl = tile && tile.querySelector('.board-minion');
+        if (minionEl) {
+            var rect = minionEl.getBoundingClientRect();
+            minionEl.style.transition = 'opacity 400ms ease, transform 400ms ease';
+            minionEl.style.opacity = '0';
+            minionEl.style.transform = 'scale(0.7)';
+            if (payload.card_numeric_id != null) {
+                var ownIdx = (typeof sandboxMode !== 'undefined' && sandboxMode)
+                    ? 0 : myPlayerIdx;
+                enqueueAnimation({
+                    type: 'card_fly',
+                    fromRect: rect,
+                    toZone: (payload.owner_idx === ownIdx) ? 'grave_own' : 'grave_opp',
+                    cardNumericId: payload.card_numeric_id,
+                    stateApplied: true,
+                    _fromEventQueue: true,
+                });
+            }
+        }
+    } catch (e) { /* defensive — worst case the minion just disappears */ }
+    setTimeout(done, Math.max(_evDurationOr(ev, 650), 650));
 }
 
 function playMinionHpChange(ev, done) {
@@ -978,6 +1147,30 @@ function playMinionMoved(ev, done) {
     // Payload: {instance_id, from, to, owner_idx}
     var payload = ev && ev.payload;
     if (!payload || !payload.from || !payload.to) { setTimeout(done, 0); return; }
+    // Timing overhaul (2026-07-08, F1): commit the new position into the
+    // live state BEFORE enqueueing (mirrors playMinionSummoned's up-front
+    // commit). playMoveAnimation's Phase C calls applyStateFrame(gameState)
+    // to render the minion at the DESTINATION for the drop keyframe — with
+    // done() now gated on the actual animation end (onDone bridge below),
+    // commitEventToDom's position write would land too late and Phase C
+    // would re-render the minion still at the SOURCE.
+    try {
+        var live = (typeof sandboxMode !== 'undefined' && sandboxMode)
+            ? sandboxState : gameState;
+        if (_commitMinionPos(live, payload)
+                && typeof sandboxMode !== 'undefined' && sandboxMode) {
+            gameState = sandboxState;  // keep sandbox alias in sync
+        }
+    } catch (e) { /* defensive — worst case the drop plays on a bare tile */ }
+    // Single-clock pacing (F1): done() fires when the move job's visual
+    // actually completes, not on a fixed wire guess — earlier animQueue
+    // jobs can delay this job's start.
+    var settled = false;
+    var settle = function() {
+        if (settled) return;
+        settled = true;
+        done();
+    };
     enqueueAnimation({
         type: 'move',
         payload: {
@@ -987,8 +1180,10 @@ function playMinionMoved(ev, done) {
         stateAfter: gameState,
         legalActionsAfter: legalActions,
         _fromEventQueue: true,
+        onDone: settle,
     });
-    setTimeout(done, _evDurationOr(ev, 350));
+    // Safety cap: a wedged animQueue must never freeze the eventQueue.
+    setTimeout(settle, Math.max(_evDurationOr(ev, 350), 3000));
 }
 
 // minion_transformed — EVT_MINION_TRANSFORMED (2026-07 card audit,
@@ -1030,7 +1225,9 @@ function playMinionTransformed(ev, done) {
     try {
         var tile = _evTileForPos(payload.position);
         if (tile) {
-            playSfx('summon');
+            // 'summon' is a phantom SFX key (not in SFX_FILES) — use the
+            // real card_play cue (timing overhaul 2026-07-08, F10c).
+            playSfx('card_play');
             var flash = document.createElement('div');
             flash.className = 'transform-flash';
             tile.appendChild(flash);
@@ -1059,15 +1256,24 @@ function playAttackResolved(ev, done) {
             }
         }
     }
-    // Fallback: read the DOM for any minion at target_pos (attacker usually
-    // visible pre-animation from snapshot path).
+    // No attacker on the board (already dead / off-board): no visual —
+    // fast-bail at 0ms (timing overhaul 2026-07-08, F1 — this path used
+    // to burn a full 500ms doing nothing).
     if (!attackerPos) {
-        setTimeout(done, _evDurationOr(ev, 500));
+        setTimeout(done, 0);
         return;
     }
     var damage = (payload.defender_hp_before != null && payload.defender_hp_after != null)
         ? Math.max(0, payload.defender_hp_before - payload.defender_hp_after)
         : 0;
+    // Single-clock pacing (F1): gate done() on the attack job's actual
+    // completion (onDone bridge), with a safety-cap timeout.
+    var settled = false;
+    var settle = function() {
+        if (settled) return;
+        settled = true;
+        done();
+    };
     enqueueAnimation({
         type: 'attack',
         payload: {
@@ -1079,8 +1285,9 @@ function playAttackResolved(ev, done) {
         stateAfter: gameState,
         legalActionsAfter: legalActions,
         _fromEventQueue: true,
+        onDone: settle,
     });
-    setTimeout(done, _evDurationOr(ev, 500));
+    setTimeout(settle, Math.max(_evDurationOr(ev, 500), 3000));
 }
 
 function playCardDrawn(ev, done) {
@@ -1088,6 +1295,15 @@ function playCardDrawn(ev, done) {
     // drawer per view_filter redaction).
     var payload = ev && ev.payload;
     if (!payload) { setTimeout(done, 0); return; }
+    // Single-clock pacing (F1): gate done() on the draw job's actual
+    // completion (onDone bridge) with a safety cap, mirroring
+    // playMinionSummoned.
+    var settled = false;
+    var settle = function() {
+        if (settled) return;
+        settled = true;
+        done();
+    };
     var playerIdx = payload.player_idx;
     var isOwn = sandboxMode
         ? true  // sandbox sees both hands
@@ -1137,6 +1353,7 @@ function playCardDrawn(ev, done) {
             toSlotIndex: newSlotIdx,  // -1 falls back to last hand child
             stateApplied: true,
             _fromEventQueue: true,
+            onDone: settle,
         });
     } else {
         // Element card backs (2026-07): the view filter attaches the drawn
@@ -1176,9 +1393,11 @@ function playCardDrawn(ev, done) {
             element: (elVal != null) ? elVal : null,
             stateApplied: true,
             _fromEventQueue: true,
+            onDone: settle,
         });
     }
-    setTimeout(done, _evDurationOr(ev, 350));
+    // Safety cap: never let a wedged animQueue freeze the eventQueue.
+    setTimeout(settle, Math.max(_evDurationOr(ev, 350), 3000));
 }
 
 function playCardPlayed(ev, done) {
@@ -1308,13 +1527,63 @@ function playCardPlayed(ev, done) {
 }
 
 function playCardDiscarded(ev, done) {
-    // Payload: {player_idx, card_numeric_id}
-    // The existing deriveCardFlyJobs in the snapshot path builds a
-    // card-fly ghost from the hand slot rect BEFORE render replaces it.
-    // From event-driven data we no longer have the source hand slot
-    // (render already happened). 04a: zero-duration — snapshot path's
-    // derived job handles the visual; event just paces the queue.
-    setTimeout(done, _evDurationOr(ev, 0));
+    // Payload: {player_idx, card_numeric_id, cause?}
+    // Timing overhaul (2026-07-08, F9b): when the discarded card is visibly
+    // in the viewer's hand, capture its slot rect NOW (BEFORE the F3 beat
+    // commit splices the hand at done()) and fly a ghost hand→grave. The
+    // event also fires for non-hand grave adds (magic resolution, deaths,
+    // sacrifice) — those find no hand slot and pass through at 0ms.
+    var payload = (ev && ev.payload) || {};
+    if (payload.card_numeric_id == null) { setTimeout(done, 0); return; }
+    // Death / sacrifice grave adds are pile-only — the card was on the
+    // BOARD, so flying a matching hand copy would be wrong (F8 risk note).
+    // Their visuals are owned by playMinionDied / the transcend animation.
+    if (payload.cause === 'death' || payload.cause === 'sacrifice') {
+        setTimeout(done, 0);
+        return;
+    }
+    var slotEl = null;
+    try {
+        var containerId = sandboxMode
+            ? ('sandbox-hand-p' + payload.player_idx)
+            : ((payload.player_idx === myPlayerIdx) ? 'hand-container' : null);
+        var container = containerId && document.getElementById(containerId);
+        if (container) {
+            var matches = container.querySelectorAll(
+                '.card-frame[data-numeric-id="' + payload.card_numeric_id + '"]');
+            for (var si = 0; si < matches.length; si++) {
+                if (matches[si].style.visibility !== 'hidden') {
+                    slotEl = matches[si];
+                    break;
+                }
+            }
+        }
+    } catch (e) { /* defensive */ }
+    if (!slotEl) { setTimeout(done, 0); return; }
+    var settled = false;
+    var settle = function() {
+        if (settled) return;
+        settled = true;
+        done();
+    };
+    try {
+        var rect = slotEl.getBoundingClientRect();
+        // Hide the source slot so the user doesn't see the card in hand AND
+        // the flying ghost. The F3 commit + renderHand at done() collapses
+        // the gap cleanly.
+        slotEl.style.visibility = 'hidden';
+        var ownIdx = sandboxMode ? 0 : myPlayerIdx;
+        enqueueAnimation({
+            type: 'card_fly',
+            fromRect: rect,
+            toZone: (payload.player_idx === ownIdx) ? 'grave_own' : 'grave_opp',
+            cardNumericId: payload.card_numeric_id,
+            stateApplied: true,
+            _fromEventQueue: true,
+            onDone: settle,
+        });
+    } catch (e) { settle(); return; }
+    setTimeout(settle, Math.max(_evDurationOr(ev, 0), 3000));
 }
 
 function playPlayerHpChange(ev, done) {
@@ -1416,9 +1685,20 @@ function playReactWindowOpened(ev, done) {
     // still increments so close_react_window pops the right entry.
     var origin = slotState.lastOriginator;
     slotState.lastOriginator = null;  // consume
-    if (origin && origin.numericId != null) {
+    // Timing overhaul (2026-07-08, F6/F7): three-way branch on the
+    // originator. Trigger-sourced windows skip the spell-stage ceremony
+    // entirely — the ~500ms blip + effect popup ARE the visual, and the
+    // stage now slams a card only when a player actually PLAYS a react
+    // (playCardPlayed's is_react branch opens it independently, so
+    // counter-play is unaffected). Only a real slam earns the 1500ms gate.
+    var slammed = false;
+    if (origin && origin.numericId != null
+            && origin.source === 'trigger_blip') {
+        // No stage for passive triggers — fall through to done(0) below.
+    } else if (origin && origin.numericId != null) {
         try {
             _showSpellStage(origin.numericId, origin.playerIdx);
+            slammed = true;
         } catch (e) {
             // Defensive — a broken render must not crash the eventQueue.
             console.warn('playReactWindowOpened: _showSpellStage threw', e);
@@ -1470,10 +1750,17 @@ function playReactWindowOpened(ev, done) {
         // cards. updateHandHighlights() reads legalActions + gameState.
         if (typeof updateHandHighlights === 'function') updateHandHighlights();
     } catch (e) { /* defensive */ }
-    // Pace so the slam-in (520ms fly + 1000ms hold per SPELL_STAGE_PER_CARD_MS)
-    // completes before the next event (typically a minion-HP or player-HP
-    // change) starts animating. 1500ms matches the stage-per-card beat.
-    setTimeout(done, _evDurationOr(ev, 1500));
+    // Pacing (F6/F7b): a real slam paces at the stage-per-card beat
+    // (520ms fly + 1000ms hold) — deliberately IGNORING the wire duration
+    // (playHandshake pattern: the wire says 600ms, which would advance the
+    // queue mid-slam). No slam → nothing to watch → 0ms pass-through.
+    if (slammed) {
+        var _perCard = (typeof SPELL_STAGE_PER_CARD_MS === 'number')
+            ? SPELL_STAGE_PER_CARD_MS : 1500;
+        setTimeout(done, _perCard);
+    } else {
+        setTimeout(done, 0);
+    }
 }
 
 // react_window_closed — pop the topmost chain entry. When the chain drains
@@ -1485,6 +1772,13 @@ function playReactWindowClosed(ev, done) {
     // triggers fired — chain may already be empty).
     if (slotState.spellStageChain.length > 0) {
         slotState.spellStageChain.pop();
+    }
+    // Timing overhaul (2026-07-08): a shortcut pair never slammed anything —
+    // never wait on a stage resolve here (a previous window's resolve may
+    // still be animating and would otherwise re-gate this close ~1.5s).
+    if ((ev && ev.payload && ev.payload.shortcut) === true) {
+        setTimeout(done, 0);
+        return;
     }
     // Only close the stage if the chain is empty AND the stage is visibly
     // up. Otherwise the next react_window_closed in the chain is about to
@@ -1547,6 +1841,40 @@ function playPhaseChanged(ev, done) {
         // ACTION / REACT: no extra flash needed — commitEventToDom's
         // _setPhaseLeds call updates the indicator from current state.
     } catch (e) { /* defensive — phase LED is purely visual */ }
+    // Timing overhaul (2026-07-08, F7e): when this Rally/Decay phase will
+    // actually DO something (a trigger blip or a burn tick is queued before
+    // the next phase_changed), announce it with a compact 600ms chip so the
+    // upcoming beats read as "RALLY" / "DECAY" instead of unexplained
+    // popups. Empty phases keep the 0ms pass-through.
+    if (nextPhase === 'START_OF_TURN' || nextPhase === 'END_OF_TURN') {
+        var hasWork = false;
+        try {
+            for (var qi = 0; qi < eventQueue.length; qi++) {
+                var qe = eventQueue[qi];
+                if (!qe) continue;
+                if (qe.type === 'phase_changed') break;
+                if (qe.type === 'trigger_blip'
+                        || (qe.type === 'minion_hp_change'
+                            && qe.payload && qe.payload.cause === 'burn')) {
+                    hasWork = true;
+                    break;
+                }
+            }
+        } catch (e) { /* defensive */ }
+        if (hasWork) {
+            try {
+                var chip = document.createElement('div');
+                chip.className = 'phase-flow-chip';
+                chip.textContent = (nextPhase === 'START_OF_TURN') ? 'RALLY' : 'DECAY';
+                _stageMount().appendChild(chip);
+                setTimeout(function() {
+                    if (chip.parentNode) chip.parentNode.removeChild(chip);
+                }, 700);
+            } catch (e) { /* defensive — chip is purely visual */ }
+            setTimeout(done, 600);
+            return;
+        }
+    }
     setTimeout(done, _evDurationOr(ev, 0));
 }
 
@@ -1695,6 +2023,26 @@ function playPendingModalResolved(ev, done) {
 // Payload: {trigger_kind, source_minion_id, source_card_numeric_id, reason}
 function playFizzle(ev, done) {
     var payload = ev && ev.payload;
+    // Timing overhaul (2026-07-08, F10b): a NEGATE-countered card gets a
+    // brief "Countered!" toast — today countered spells resolve into silent
+    // nothing. Old payloads carry no reason and keep the plain puff.
+    var isNegated = !!(payload && payload.reason === 'negated');
+    if (isNegated) {
+        try {
+            var counteredName = (payload.card_numeric_id != null
+                && cardDefs && cardDefs[payload.card_numeric_id])
+                ? cardDefs[payload.card_numeric_id].name : null;
+            var negToast = document.createElement('div');
+            negToast.className = 'tutor-toast fizzle-negated-toast';
+            negToast.textContent = '🚫 ' + (counteredName
+                ? (counteredName + ' — Countered!') : 'Countered!');
+            _stageMount().appendChild(negToast);
+            setTimeout(function() {
+                negToast.classList.add('fade-out');
+                setTimeout(function() { negToast.remove(); }, 600);
+            }, 1200);
+        } catch (e) { /* defensive — toast is purely visual */ }
+    }
     try {
         var puff = document.createElement('div');
         puff.className = 'fizzle-puff';
@@ -1742,7 +2090,10 @@ function playFizzle(ev, done) {
             if (puff.parentNode) puff.parentNode.removeChild(puff);
         }, 400);
     } catch (e) { /* defensive — fizzle is purely visual */ }
-    setTimeout(done, _evDurationOr(ev, 350));
+    // Negated fizzles hold a touch longer so the Countered! toast registers.
+    setTimeout(done, isNegated
+        ? Math.max(_evDurationOr(ev, 350), 800)
+        : _evDurationOr(ev, 350));
 }
 
 // game_over — show the game-over overlay. Reuses showGameOver() from
@@ -1895,6 +2246,54 @@ function playOverdrawBurn(ev, done) {
     var payload = (ev && ev.payload) || {};
     var ownIdx = sandboxMode ? 0 : myPlayerIdx;
     var zone = (payload.player_idx === ownIdx) ? 'exhaust_own' : 'exhaust_opp';
+    // Timing overhaul (2026-07-08, F10): a discard-cost burn is a PAID cost
+    // of playing another card, not an overdraw — no 1900ms "HAND FULL"
+    // center-reveal ceremony. Short hand→exhaust fly instead. Old payloads
+    // carry no source and keep the full overdraw treatment.
+    if (payload.source === 'discard_cost') {
+        var dcSlot = null;
+        try {
+            var dcContainerId = sandboxMode
+                ? ('sandbox-hand-p' + payload.player_idx)
+                : ((payload.player_idx === myPlayerIdx) ? 'hand-container' : null);
+            var dcContainer = dcContainerId && document.getElementById(dcContainerId);
+            if (dcContainer && payload.card_numeric_id != null) {
+                var dcMatches = dcContainer.querySelectorAll(
+                    '.card-frame[data-numeric-id="' + payload.card_numeric_id + '"]');
+                for (var di = 0; di < dcMatches.length; di++) {
+                    if (dcMatches[di].style.visibility !== 'hidden') {
+                        dcSlot = dcMatches[di];
+                        break;
+                    }
+                }
+            }
+        } catch (e) { /* defensive */ }
+        if (!dcSlot || payload.card_numeric_id == null) {
+            setTimeout(done, 0);
+            return;
+        }
+        var dcSettled = false;
+        var dcSettle = function() {
+            if (dcSettled) return;
+            dcSettled = true;
+            done();
+        };
+        try {
+            var dcRect = dcSlot.getBoundingClientRect();
+            dcSlot.style.visibility = 'hidden';
+            enqueueAnimation({
+                type: 'card_fly',
+                fromRect: dcRect,
+                toZone: zone,
+                cardNumericId: payload.card_numeric_id,
+                stateApplied: true,
+                _fromEventQueue: true,
+                onDone: dcSettle,
+            });
+        } catch (e) { dcSettle(); return; }
+        setTimeout(dcSettle, 3000);
+        return;
+    }
     var def = (payload.card_numeric_id != null && cardDefs)
         ? cardDefs[payload.card_numeric_id] : null;
     if (!def) {
@@ -1974,6 +2373,36 @@ function playFatigueDamage(ev, done) {
         triggerFatigueNudge(dmg, payload.player_idx);
     } catch (e) { /* defensive — nudge is purely visual */ }
     setTimeout(done, _evDurationOr(ev, 1200));
+}
+
+// mana_change — timing overhaul (2026-07-08, F10a). A player's mana pool
+// changed. State commit stays in commitEventToDom; this handler pulses the
+// pod's mana value (mirrors the dm-pulse badge treatment — no pod popup)
+// and paces ~300ms so coalesced same-frame mana beats read as distinct.
+// Payload: {player_idx, prev, new, delta, cause?}.
+function playManaChange(ev, done) {
+    var payload = (ev && ev.payload) || {};
+    try {
+        if (typeof payload.player_idx === 'number') {
+            var manaEl = null;
+            if (sandboxMode) {
+                manaEl = document.getElementById('sandbox-p' + payload.player_idx + '-mana');
+            } else if (myPlayerIdx != null) {
+                manaEl = document.getElementById(
+                    payload.player_idx === myPlayerIdx ? 'self-mana' : 'opp-mana');
+            }
+            // Pulse the whole .pod-mana pill when present (reads better than
+            // the bare number span); fall back to the number element.
+            var pulseEl = manaEl && (manaEl.closest ? (manaEl.closest('.pod-mana') || manaEl) : manaEl);
+            if (pulseEl) {
+                pulseEl.classList.remove('mana-pulse');
+                void pulseEl.offsetWidth;  // restart the CSS animation
+                pulseEl.classList.add('mana-pulse');
+                setTimeout(function() { pulseEl.classList.remove('mana-pulse'); }, 900);
+            }
+        }
+    } catch (e) { /* defensive — pulse is purely visual */ }
+    setTimeout(done, 300);
 }
 
 // dark_matter_change — Dark Matter pool redesign (2026-07). A player's

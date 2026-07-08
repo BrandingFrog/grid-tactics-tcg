@@ -148,7 +148,9 @@ ALL_EVENT_TYPES: frozenset[str] = frozenset({
 
 DEFAULT_DURATION_MS: dict[str, int] = {
     EVT_MINION_SUMMONED: 600,
-    EVT_MINION_DIED: 0,                 # covered by trigger_blip / hp_popup
+    EVT_MINION_DIED: 650,               # 2026-07-08 timing audit (F8): death
+                                        # gets a real board→grave beat
+                                        # (dissolve + fly) instead of 0ms
     EVT_MINION_HP_CHANGE: 400,          # floating popup
     EVT_MINION_MOVED: 350,
     EVT_ATTACK_RESOLVED: 500,
@@ -168,7 +170,9 @@ DEFAULT_DURATION_MS: dict[str, int] = {
     EVT_REACT_WINDOW_CLOSED: 400,       # spell stage out
     EVT_PHASE_CHANGED: 0,
     EVT_TURN_FLIPPED: 1500,             # turn banner duration (matches game.css)
-    EVT_TRIGGER_BLIP: 900,              # source pulse + center icon + target pulse
+    EVT_TRIGGER_BLIP: 500,              # source pulse + center icon + target pulse
+                                        # (2026-07-08 timing audit F7c: 900→500;
+                                        # the glyph CSS can run longer, non-blocking)
     EVT_PENDING_MODAL_OPENED: 0,        # gates queue, no fixed duration
     EVT_PENDING_MODAL_RESOLVED: 0,
     EVT_FIZZLE: 350,                    # optional puff

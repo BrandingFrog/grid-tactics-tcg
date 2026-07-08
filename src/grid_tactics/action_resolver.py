@@ -33,6 +33,7 @@ from grid_tactics.engine_events import (
     EVT_GAME_OVER,
     EVT_MANA_CHANGE,
     EVT_MINION_DIED,
+    EVT_MINION_HP_CHANGE,
     EVT_MINION_MOVED,
     EVT_MINION_SUMMONED,
     EVT_MINION_TRANSFORMED,
@@ -495,6 +496,20 @@ def _apply_play_card(
                 )
             # Discard: send from hand to exhaust pile.
             new_player = new_player.exhaust_from_hand(discard_id)
+            # 2026-07-08 timing audit (F2): a paid discard cost previously
+            # emitted NOTHING — the card vanished from hand at drain end.
+            # Emit EVT_CARD_BURNED with source='discard_cost' per card so
+            # the client can play a hand→exhaust fly at the causal beat.
+            if event_collector is not None:
+                event_collector.collect(
+                    EVT_CARD_BURNED,
+                    "action:play_card",
+                    {
+                        "player_idx": active_idx,
+                        "card_numeric_id": discard_id,
+                        "source": "discard_cost",
+                    },
+                )
             # Fire ON_DISCARD effects on the discarded card
             discarded_def = library.get_by_id(discard_id)
             discard_effects = [e for e in discarded_def.effects if e.trigger == TriggerType.ON_DISCARD]
@@ -696,12 +711,18 @@ def _apply_revive_place(
     state: GameState,
     action: Action,
     library: CardLibrary,
+    *,
+    event_collector: Optional[EventStream] = None,
 ) -> GameState:
     """Place one revived minion from grave to the board at action.position.
 
     Removes one matching card from grave, creates a MinionInstance,
     decrements pending_revive_remaining. If remaining hits 0 or no more
     grave copies, clears the pending state.
+
+    2026-07-08 timing audit (F4): emits EVT_MINION_SUMMONED with
+    source='revive' — this creation path previously rendered silently
+    on the final-state snapshot.
     """
     assert_phase_contract(state, "action:revive_place")
     player_idx = state.pending_revive_player_idx
@@ -740,6 +761,21 @@ def _apply_revive_place(
         current_health=revive_def.health,
     )
     new_board = state.board.place(row, col, minion.instance_id)
+
+    # 2026-07-08 timing audit (F4): summon event for the revive path so
+    # the client's playMinionSummoned animates it (grave → board).
+    if event_collector is not None:
+        event_collector.collect(
+            EVT_MINION_SUMMONED,
+            "action:revive_place",
+            {
+                "instance_id": minion.instance_id,
+                "card_numeric_id": revive_numeric_id,
+                "owner_idx": player_idx,
+                "position": list(pos),
+                "source": "revive",
+            },
+        )
 
     # Update player grave
     new_player = replace(player, grave=tuple(grave))
@@ -1255,6 +1291,8 @@ def _apply_transform(
 
 def _apply_activate_ability(
     state: GameState, action: Action, library: CardLibrary,
+    *,
+    event_collector: Optional[EventStream] = None,
 ) -> GameState:
     """Apply ACTIVATE_ABILITY: pay mana, resolve effect, counts as turn action.
 
@@ -1350,9 +1388,24 @@ def _apply_activate_ability(
             minions=new_minions,
             next_minion_id=state.next_minion_id + 1,
         )
+        # 2026-07-08 timing audit (F4): ability-token summons previously
+        # rendered silently on the final snapshot — emit the board event.
+        if event_collector is not None:
+            event_collector.collect(
+                EVT_MINION_SUMMONED,
+                "action:activate_ability",
+                {
+                    "instance_id": token.instance_id,
+                    "card_numeric_id": token_numeric_id,
+                    "owner_idx": active_idx,
+                    "position": list(target_pos),
+                    "source": "ability",
+                },
+            )
     elif ability.effect_type == "conjure_rat_and_buff":
         state = _apply_conjure_rat_and_buff(
             state, active_idx, active_side, minion, ability, library,
+            event_collector=event_collector,
         )
     elif ability.effect_type == "dark_matter_buff":
         # Dispatch through standard effect resolver with scale_with
@@ -1370,6 +1423,7 @@ def _apply_activate_ability(
             state, buff_effect, minion.position, active_side, library,
             target_pos=target_pos,
             contract_source="action:activate_ability",
+            event_collector=event_collector,
         )
     else:
         raise ValueError(f"Unsupported activated_ability effect_type '{ability.effect_type}'")
@@ -1400,6 +1454,8 @@ def _apply_conjure_rat_and_buff(
     caster: MinionInstance,
     ability,
     library: CardLibrary,
+    *,
+    event_collector: Optional[EventStream] = None,
 ) -> GameState:
     """Rework v2: flat stacking buff + optional tutor-from-deck.
 
@@ -1435,6 +1491,21 @@ def _apply_conjure_rat_and_buff(
             max_health_bonus=m.max_health_bonus + magnitude,
             current_health=m.current_health + magnitude,
         )
+        # 2026-07-08 timing audit (F4): per-rat buff previously rendered
+        # silently — emit the HP delta so badges tick at the causal beat.
+        if event_collector is not None:
+            event_collector.collect(
+                EVT_MINION_HP_CHANGE,
+                "action:activate_ability",
+                {
+                    "instance_id": m.instance_id,
+                    "new_hp": m.current_health + magnitude,
+                    "delta": magnitude,
+                    "owner_idx": active_idx,
+                    "position": list(m.position),
+                    "cause": "buff",
+                },
+            )
     state = replace(state, minions=tuple(new_minions_list))
 
     # ---- Step 2: pending_tutor for common rat from deck ---------------
@@ -1455,6 +1526,24 @@ def _apply_conjure_rat_and_buff(
     assert state.pending_tutor_player_idx is None
     assert state.pending_post_move_attacker_id is None
 
+    # 2026-07-08 timing audit (F4): Ratchanter's conjure pick sets
+    # pending_tutor DIRECTLY (bypassing _enter_pending_tutor, whose
+    # filter-based match computation doesn't fit the summon_card_id
+    # match) — emit EVT_PENDING_MODAL_OPENED here so the client's
+    # eventQueue gates on the modal like every other tutor.
+    if event_collector is not None:
+        event_collector.collect(
+            EVT_PENDING_MODAL_OPENED,
+            "action:activate_ability",
+            {
+                "modal_kind": "tutor_select",
+                "owner_idx": active_idx,
+                "options_count": len(matches),
+                "remaining": 1,
+            },
+            requires_decision=True,
+        )
+
     return replace(
         state,
         pending_tutor_player_idx=active_idx,
@@ -1465,6 +1554,8 @@ def _apply_conjure_rat_and_buff(
 
 def _apply_attack(
     state: GameState, action: Action, library: CardLibrary,
+    *,
+    event_collector: Optional[EventStream] = None,
 ) -> GameState:
     """Apply ATTACK action. Simultaneous damage exchange (D-01).
 
@@ -1552,6 +1643,7 @@ def _apply_attack(
             state, TriggerType.ON_ATTACK, updated_attacker, library,
             target_pos=defender.position,
             contract_source="trigger:on_attack",
+            event_collector=event_collector,
         )
 
     # Trigger ON_DAMAGED for both if they took damage
@@ -1561,6 +1653,7 @@ def _apply_attack(
             state = resolve_effects_for_trigger(
                 state, TriggerType.ON_DAMAGED, updated_attacker, library,
                 contract_source="trigger:on_damaged",
+                event_collector=event_collector,
             )
     if attacker_effective > 0:
         updated_defender = state.get_minion(defender.instance_id)
@@ -1568,8 +1661,76 @@ def _apply_attack(
             state = resolve_effects_for_trigger(
                 state, TriggerType.ON_DAMAGED, updated_defender, library,
                 contract_source="trigger:on_damaged",
+                event_collector=event_collector,
             )
 
+    return state
+
+
+def _apply_attack_with_event(
+    state: GameState,
+    action: Action,
+    library: CardLibrary,
+    *,
+    event_collector: Optional[EventStream] = None,
+) -> GameState:
+    """Run ``_apply_attack`` and emit EVT_ATTACK_RESOLVED.
+
+    2026-07-08 timing audit (F4): shared by the main ATTACK dispatch and
+    the post-move-attack gate — the latter previously emitted NOTHING, so
+    post-move melee attacks were invisible to the client eventQueue.
+    """
+    _atk_id = action.minion_id
+    _def_id: Optional[int] = None
+    _atk_hp_before = 0
+    _def_hp_before = 0
+    if _atk_id is not None:
+        _src_atk = state.get_minion(_atk_id)
+        if _src_atk is not None:
+            _atk_hp_before = _src_atk.current_health
+    # Defender: prefer the explicit target_id (what _apply_attack uses),
+    # fall back to a position scan for callers that only set target_pos.
+    if action.target_id is not None:
+        _src_def = state.get_minion(action.target_id)
+        if _src_def is not None:
+            _def_id = _src_def.instance_id
+            _def_hp_before = _src_def.current_health
+    elif action.target_pos is not None:
+        for _m in state.minions:
+            if _m.position == action.target_pos and _m.is_alive:
+                _def_id = _m.instance_id
+                _def_hp_before = _m.current_health
+                break
+    _def_pos = None
+    if action.target_pos is not None:
+        _def_pos = list(action.target_pos)
+    elif _def_id is not None:
+        _d = state.get_minion(_def_id)
+        if _d is not None:
+            _def_pos = list(_d.position)
+
+    state = _apply_attack(
+        state, action, library, event_collector=event_collector,
+    )
+
+    if event_collector is not None:
+        _atk_after = state.get_minion(_atk_id) if _atk_id is not None else None
+        _def_after = state.get_minion(_def_id) if _def_id is not None else None
+        event_collector.collect(
+            EVT_ATTACK_RESOLVED,
+            "action:attack",
+            {
+                "attacker_id": _atk_id,
+                "defender_id": _def_id,
+                "target_pos": _def_pos,
+                "attacker_hp_before": _atk_hp_before,
+                "attacker_hp_after": _atk_after.current_health if _atk_after else 0,
+                "defender_hp_before": _def_hp_before,
+                "defender_hp_after": _def_after.current_health if _def_after else 0,
+                "attacker_killed": _atk_after is None or not _atk_after.is_alive,
+                "defender_killed": _def_after is None or not _def_after.is_alive,
+            },
+        )
     return state
 
 
@@ -1929,7 +2090,9 @@ def resolve_action(
     # ACTION phase and got a free second action).
     if state.pending_revive_player_idx is not None:
         if action.action_type == ActionType.REVIVE_PLACE:
-            state = _apply_revive_place(state, action, library)
+            state = _apply_revive_place(
+                state, action, library, event_collector=event_collector,
+            )
             if state.pending_revive_player_idx is not None:
                 # Mid-chain — more placements to make; keep the modal open.
                 return state
@@ -2040,6 +2203,21 @@ def resolve_action(
                 pending_conjure_deploy_card=None,
                 pending_conjure_deploy_player_idx=None,
             )
+            # 2026-07-08 timing audit (F4): conjure-deploy summons
+            # previously rendered silently — emit the board event so
+            # playMinionSummoned animates the landing.
+            if event_collector is not None:
+                event_collector.collect(
+                    EVT_MINION_SUMMONED,
+                    "action:conjure_deploy",
+                    {
+                        "instance_id": new_minion.instance_id,
+                        "card_numeric_id": card_numeric_id,
+                        "owner_idx": deployer_idx,
+                        "position": list(target_pos),
+                        "source": "conjure_deploy",
+                    },
+                )
         elif action.action_type == ActionType.DECLINE_CONJURE:
             assert_phase_contract(state, "action:decline_conjure")
             # Decline deployment — card goes to hand instead. Overdraw
@@ -2049,9 +2227,14 @@ def resolve_action(
             new_deployer, _burned = deployer.add_to_hand_with_overdraw(
                 card_numeric_id,
             )
-            if _burned and event_collector is not None:
+            # 2026-07-08 timing audit (F2): non-burn branch previously
+            # emitted nothing — the declined card appeared in hand only
+            # at drain end. Emit EVT_CARD_DRAWN so the hand add renders
+            # at its causal beat (view_filter redacts identity for the
+            # opponent; burns are public).
+            if event_collector is not None:
                 event_collector.collect(
-                    EVT_CARD_BURNED,
+                    EVT_CARD_BURNED if _burned else EVT_CARD_DRAWN,
                     "action:decline_conjure",
                     {
                         "player_idx": deployer_idx,
@@ -2073,9 +2256,11 @@ def resolve_action(
 
         # React window fires after conjure deployment resolves.
         # Record pending_action before cleanup so a death modal can defer.
+        # 2026-07-08 timing audit (F4): thread event_collector so deaths /
+        # game-over on this resume path reach the client.
         state = replace(state, pending_action=action)
-        state = _cleanup_dead_minions(state, library)
-        state = _check_game_over(state)
+        state = _cleanup_dead_minions(state, library, event_collector=event_collector)
+        state = _check_game_over(state, event_collector=event_collector)
         if state.is_game_over:
             return state
         if state.pending_death_target is not None:
@@ -2168,9 +2353,14 @@ def resolve_action(
                 new_caster, _burned = new_caster.add_to_hand_with_overdraw(
                     chosen_card,
                 )
-                if _burned and event_collector is not None:
+                # 2026-07-08 timing audit (F2): non-burn branch previously
+                # emitted nothing — the tutored card appeared in hand only
+                # at drain end. Emit EVT_CARD_DRAWN so the hand add renders
+                # at its causal beat (view_filter redacts identity for the
+                # opponent; burns are public).
+                if event_collector is not None:
                     event_collector.collect(
-                        EVT_CARD_BURNED,
+                        EVT_CARD_BURNED if _burned else EVT_CARD_DRAWN,
                         "action:tutor_select",
                         {
                             "player_idx": caster_idx,
@@ -2275,9 +2465,11 @@ def resolve_action(
             return state
 
         # Single react window for the original on_play fires now.
+        # 2026-07-08 timing audit (F4): thread event_collector so deaths /
+        # game-over on this resume path reach the client.
         state = replace(state, pending_action=action)
-        state = _cleanup_dead_minions(state, library)
-        state = _check_game_over(state)
+        state = _cleanup_dead_minions(state, library, event_collector=event_collector)
+        state = _check_game_over(state, event_collector=event_collector)
         if state.is_game_over:
             return state
         if state.pending_death_target is not None:
@@ -2335,7 +2527,9 @@ def resolve_action(
     # Player picks a deploy cell for each revived minion, or declines.
     if state.pending_revive_player_idx is not None:
         if action.action_type == ActionType.REVIVE_PLACE:
-            state = _apply_revive_place(state, action, library)
+            state = _apply_revive_place(
+                state, action, library, event_collector=event_collector,
+            )
             if state.pending_revive_player_idx is not None:
                 return state
             return _resume_after_pending_revive(
@@ -2376,7 +2570,12 @@ def resolve_action(
                 raise ValueError(
                     "Pending post-move attack: must ATTACK with the moved minion or DECLINE"
                 )
-            state = _apply_attack(state, action, library)
+            # 2026-07-08 timing audit (F4): route through the shared
+            # emit wrapper — this gate previously emitted NO
+            # attack_resolved at all, making post-move attacks invisible.
+            state = _apply_attack_with_event(
+                state, action, library, event_collector=event_collector,
+            )
             state = replace(state, pending_post_move_attacker_id=None)
         elif is_decline:
             assert_phase_contract(state, "action:decline_post_move_attack")
@@ -2426,6 +2625,10 @@ def resolve_action(
             react_context=ReactContext.AFTER_ACTION,
             react_return_phase=TurnPhase.ACTION,
         )
+        # 2026-07-08 timing audit (F5): this window previously opened
+        # WITHOUT an event — the game looked frozen waiting on an
+        # invisible react window.
+        _emit_after_action_react_window_opened(state, event_collector)
         return state
 
     # Not in pending state: DECLINE is illegal
@@ -2438,6 +2641,10 @@ def resolve_action(
     _prev_mana = tuple(p.current_mana for p in state.players) if event_collector else None
     _prev_hp = tuple(p.hp for p in state.players) if event_collector else None
     _prev_grave_lens = tuple(len(p.grave) for p in state.players) if event_collector else None
+    # 2026-07-08 timing audit (F4 dedup): remember where this action's
+    # events start so the post-handler HP diff can skip deltas the
+    # handlers already emitted causally (inline effect emissions).
+    _events_start = len(event_collector.events) if event_collector else 0
 
     # Turn-structure redesign 2026-07: any non-PASS main-phase action
     # breaks the consecutive-pass streak (Handshake tracking).
@@ -2504,40 +2711,12 @@ def resolve_action(
             state, action, library, event_collector=event_collector,
         )
     elif action.action_type == ActionType.ATTACK:
-        # Capture both combatants for ATTACK_RESOLVED payload.
-        _atk_id = action.minion_id
-        _def_id: Optional[int] = None
-        _atk_hp_before = 0
-        _def_hp_before = 0
-        if _atk_id is not None:
-            _src_atk = state.get_minion(_atk_id)
-            if _src_atk is not None:
-                _atk_hp_before = _src_atk.current_health
-        if action.target_pos is not None:
-            for _m in state.minions:
-                if _m.position == action.target_pos and _m.is_alive:
-                    _def_id = _m.instance_id
-                    _def_hp_before = _m.current_health
-                    break
-        state = _apply_attack(state, action, library)
-        if event_collector is not None:
-            _atk_after = state.get_minion(_atk_id) if _atk_id is not None else None
-            _def_after = state.get_minion(_def_id) if _def_id is not None else None
-            event_collector.collect(
-                EVT_ATTACK_RESOLVED,
-                "action:attack",
-                {
-                    "attacker_id": _atk_id,
-                    "defender_id": _def_id,
-                    "target_pos": list(action.target_pos) if action.target_pos else None,
-                    "attacker_hp_before": _atk_hp_before,
-                    "attacker_hp_after": _atk_after.current_health if _atk_after else 0,
-                    "defender_hp_before": _def_hp_before,
-                    "defender_hp_after": _def_after.current_health if _def_after else 0,
-                    "attacker_killed": _atk_after is None or not _atk_after.is_alive,
-                    "defender_killed": _def_after is None or not _def_after.is_alive,
-                },
-            )
+        # 2026-07-08 timing audit (F4): capture + EVT_ATTACK_RESOLVED
+        # emission moved into _apply_attack_with_event, shared with the
+        # post-move-attack gate.
+        state = _apply_attack_with_event(
+            state, action, library, event_collector=event_collector,
+        )
     elif action.action_type == ActionType.SACRIFICE:
         # Snapshot the minion pre-removal so the event carries its tile.
         _pre_sac = (
@@ -2593,15 +2772,25 @@ def resolve_action(
                 },
             )
     elif action.action_type == ActionType.ACTIVATE_ABILITY:
-        state = _apply_activate_ability(state, action, library)
+        # 2026-07-08 timing audit (F4): thread the collector so the token
+        # summon / rat buffs / pending-tutor modal emit at their beats.
+        state = _apply_activate_ability(
+            state, action, library, event_collector=event_collector,
+        )
     else:
         raise ValueError(f"Unsupported action type for main phase: {action.action_type}")
 
-    # Phase 14.8-03a: emit mana / hp / discard diff events for any side
-    # that changed. CARD_DISCARDED fires once per card added to grave —
-    # covers magic-played-to-grave and discard-cost cards uniformly,
-    # without threading through every discard helper.
+    # Phase 14.8-03a: emit mana / hp diff events for any side that
+    # changed. 2026-07-08 timing audit (F4 dedup): the HP diff skips
+    # deltas the handlers already emitted causally during this action
+    # (inline _apply_effect_to_player emissions) so the client never
+    # renders the same HP change twice.
     if event_collector is not None and _prev_mana is not None and _prev_hp is not None:
+        _emitted_hp = {
+            (e.payload.get("player_idx"), e.payload.get("new"))
+            for e in event_collector.events[_events_start:]
+            if e.type == EVT_PLAYER_HP_CHANGE
+        }
         for _idx, (_pm, _ph) in enumerate(zip(_prev_mana, _prev_hp)):
             _now_mana = state.players[_idx].current_mana
             _now_hp = state.players[_idx].hp
@@ -2616,7 +2805,7 @@ def resolve_action(
                         "delta": _now_mana - _pm,
                     },
                 )
-            if _now_hp != _ph:
+            if _now_hp != _ph and (_idx, _now_hp) not in _emitted_hp:
                 event_collector.collect(
                     EVT_PLAYER_HP_CHANGE,
                     f"action:{action.action_type.name.lower()}",
@@ -2627,11 +2816,38 @@ def resolve_action(
                         "delta": _now_hp - _ph,
                     },
                 )
-        if _prev_grave_lens is not None:
-            for _idx, _prev_len in enumerate(_prev_grave_lens):
-                _now_grave = state.players[_idx].grave
-                _added = _now_grave[_prev_len:]
-                for _card_id in _added:
+
+    # Snapshot post-handler grave lengths so the post-cleanup diff below
+    # can distinguish action-window adds (magic-to-grave) from
+    # death-sourced adds (2026-07-08 timing audit F8).
+    _post_action_grave_lens = (
+        tuple(len(p.grave) for p in state.players) if event_collector else None
+    )
+
+    # Record the pending_action BEFORE cleanup so that a death modal can
+    # defer the react window without losing the triggering action.
+    state = replace(state, pending_action=action)
+
+    # Dead minion cleanup (D-02)
+    state = _cleanup_dead_minions(state, library, event_collector=event_collector)
+
+    # 2026-07-08 timing audit (F8): the CARD_DISCARDED grave diff now runs
+    # AFTER _cleanup_dead_minions so death-sourced grave adds emit at the
+    # death beat (tagged cause='death') instead of never. Action-window
+    # adds (magic-played-to-grave) keep the legacy payload shape.
+    # 2026-07-08 timing audit (F10g): SACRIFICE grave adds are EXCLUDED
+    # from the action-window diff — EVT_MINION_SACRIFICED already drives
+    # the transcend animation and a discard beat would render over it.
+    if (
+        event_collector is not None
+        and _prev_grave_lens is not None
+        and _post_action_grave_lens is not None
+    ):
+        for _idx, _prev_len in enumerate(_prev_grave_lens):
+            _now_grave = state.players[_idx].grave
+            _post_len = _post_action_grave_lens[_idx]
+            if action.action_type != ActionType.SACRIFICE:
+                for _card_id in _now_grave[_prev_len:_post_len]:
                     event_collector.collect(
                         EVT_CARD_DISCARDED,
                         f"action:{action.action_type.name.lower()}",
@@ -2640,13 +2856,16 @@ def resolve_action(
                             "card_numeric_id": _card_id,
                         },
                     )
-
-    # Record the pending_action BEFORE cleanup so that a death modal can
-    # defer the react window without losing the triggering action.
-    state = replace(state, pending_action=action)
-
-    # Dead minion cleanup (D-02)
-    state = _cleanup_dead_minions(state, library, event_collector=event_collector)
+            for _card_id in _now_grave[_post_len:]:
+                event_collector.collect(
+                    EVT_CARD_DISCARDED,
+                    "system:cleanup_dead_minions",
+                    {
+                        "player_idx": _idx,
+                        "card_numeric_id": _card_id,
+                        "cause": "death",
+                    },
+                )
 
     # Win/draw detection (Phase 4) -- after cleanup, before react transition
     state = _check_game_over(state, event_collector=event_collector)

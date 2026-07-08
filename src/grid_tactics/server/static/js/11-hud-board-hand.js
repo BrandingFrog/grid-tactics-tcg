@@ -360,6 +360,20 @@ function renderBoard(opts) {
             var animKind = animatingTiles[row + ',' + col];
             if (animKind) {
                 cell.classList.add('anim-' + animKind);
+                // Timing overhaul (2026-07-08, F10f): a re-render mid-
+                // animation rebuilds the cell, which would RESTART the
+                // keyframe from 0. Apply a negative animation-delay from
+                // the stamped start time so the animation resumes where
+                // it was instead of replaying.
+                try {
+                    if (typeof _animTileStart !== 'undefined'
+                            && _animTileStart[row + ',' + col]) {
+                        var _elapsed = Date.now() - _animTileStart[row + ',' + col];
+                        if (_elapsed > 0) {
+                            cell.style.animationDelay = (-_elapsed) + 'ms';
+                        }
+                    }
+                } catch (e) { /* defensive — purely visual */ }
             }
 
             // Check for minion at this position
@@ -560,6 +574,36 @@ function renderHand(opts) {
             HAND_MAXW
         );
     }
+
+    // Timing overhaul (2026-07-08, F9c): re-hide slots whose draw fly-in is
+    // still mid-flight. This rebuild just detached the nodes that
+    // playDrawOwnAnimation hid — without re-applying visibility:hidden the
+    // user sees the card in hand AND its flying duplicate. The registry is
+    // keyed 'nid:<numeric-id>' (fallback 'idx:<hand-idx>') with a count of
+    // concurrent flights per key.
+    try {
+        var _reg = window.__inFlightHandSlots;
+        if (_reg) {
+            for (var _k in _reg) {
+                if (!Object.prototype.hasOwnProperty.call(_reg, _k)) continue;
+                var _want = _reg[_k] | 0;
+                if (_want <= 0) continue;
+                var _sel = _k.indexOf('nid:') === 0
+                    ? '.card-frame-hand[data-numeric-id="' + _k.slice(4) + '"]'
+                    : '.card-frame-hand[data-hand-idx="' + _k.slice(4) + '"]';
+                var _cand = handEl.querySelectorAll(_sel);
+                var _hidden = 0;
+                // Hide from the END of the fan (newest slots) first — the
+                // in-flight cards are the most recently appended.
+                for (var _ci = _cand.length - 1; _ci >= 0 && _hidden < _want; _ci--) {
+                    if (_cand[_ci].style.visibility !== 'hidden') {
+                        _cand[_ci].style.visibility = 'hidden';
+                    }
+                    _hidden++;
+                }
+            }
+        }
+    } catch (e) { /* defensive — worst case a brief duplicate */ }
 }
 
 // ==========================================================================

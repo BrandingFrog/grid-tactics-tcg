@@ -547,8 +547,17 @@ class TestEventCollectorThreading:
             "enter_end_of_turn ran without the event collector — "
             "phase-change events dropped"
         )
+        # 2026-07-08 timing audit (F6): the react player holds no playable
+        # end-of-turn react, so the PASS-only Decay window is SHORTCUT —
+        # the zero-duration open/close pair is still emitted (collector
+        # threading intact) but the turn flips directly.
         assert EVT_REACT_WINDOW_OPENED in types
-        assert result.phase == TurnPhase.REACT
+        opened = [
+            ev for ev in stream.events if ev.type == EVT_REACT_WINDOW_OPENED
+        ]
+        assert any(ev.payload.get("shortcut") for ev in opened)
+        assert result.phase == TurnPhase.ACTION
+        assert result.active_player_idx == 1  # turn flipped
 
     def test_decline_trigger_emits_react_window_opened(self, library):
         giant_id = library.get_numeric_id("giant_rat")

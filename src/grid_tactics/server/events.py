@@ -990,11 +990,15 @@ def register_events(room_manager: RoomManager) -> None:
                         # HUMAN in which PASS is the only legal action —
                         # nothing to react with, but the client parks in a
                         # react window (Skip React pill + REACT banner) for a
-                        # window that cannot matter. Drain PASS-only react
-                        # windows for ANY seat in preview games (mirrors the
-                        # sandbox drain). Real 2P games are unaffected.
-                        if (None in session.player_sids
-                                and session.state.phase == TurnPhase.REACT
+                        # window that cannot matter.
+                        # 2026-07-08 timing audit (F6): generalized from
+                        # preview-only to ALL games — when a react window's
+                        # only legal action is PASS there is nothing to
+                        # prompt for, so drain it server-side instead of
+                        # burning a round trip on the reacting player. The
+                        # condition is strict (exactly one legal action AND
+                        # it is PASS): any playable react keeps the window.
+                        if (session.state.phase == TurnPhase.REACT
                                 and len(next_actions) == 1
                                 and pass_action() in next_actions):
                             session.state = resolve_action(

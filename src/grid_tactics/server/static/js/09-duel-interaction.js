@@ -235,6 +235,22 @@ function renderReactBanner() {
     var existing = document.getElementById('react-banner');
     if (existing) existing.remove();
     if (!isReactWindow()) return;
+    // Timing overhaul (2026-07-08, F6): suppress the phantom REACT WINDOW
+    // flash when the window belongs to the OTHER player and it's the
+    // PASS-only turn-end Decay window (BEFORE_END_OF_TURN with an empty
+    // react stack) — nothing for the viewer to do or watch. Note
+    // gameState.react_context is the wire INT (5 = BEFORE_END_OF_TURN);
+    // some event paths stash the enum NAME string, so accept both.
+    try {
+        var _rc = gameState ? gameState.react_context : null;
+        var _isDecayCtx = (_rc === 5 || _rc === 'BEFORE_END_OF_TURN');
+        var _stackEmpty = !gameState || !gameState.react_stack
+            || gameState.react_stack.length === 0;
+        var _othersWindow = gameState && gameState.react_player_idx != null
+            && myPlayerIdx != null
+            && gameState.react_player_idx !== myPlayerIdx;
+        if (_othersWindow && _isDecayCtx && _stackEmpty) return;
+    } catch (e) { /* defensive — fall through to the normal banner */ }
 
     var banner = document.createElement('div');
     banner.id = 'react-banner';
