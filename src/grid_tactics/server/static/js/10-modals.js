@@ -1201,13 +1201,25 @@ function onPregameRps(data) {
 // design box uses. CSS can't do this (scale() needs a unitless number,
 // --mfu is a px length), so it's set here.
 function _pregameScaleEl(el) {
-    try {
-        var sc = Math.min(window.innerWidth / 844, window.innerHeight / 390);
-        if (sc > 1.05) {
-            el.style.transform = 'scale(' + sc.toFixed(3) + ')';
-            el.style.transformOrigin = 'center center';
-        }
-    } catch (e) { /* defensive */ }
+    // Deferred: the caller scales BEFORE the overlay is mounted, so the
+    // ancestor check must wait a tick. Inside the scaled .game-layout (the
+    // normal case — pregame switches to the duel screen first) the design
+    // box already scales everything; adding a transform here DOUBLE-scaled
+    // (user 2026-07-08). Only scale on a genuine body-mount fallback.
+    setTimeout(function() {
+        try {
+            if (!el.isConnected) return;
+            if (el.closest && el.closest('.game-layout')) {
+                el.style.transform = '';
+                return;
+            }
+            var sc = Math.min(window.innerWidth / 844, window.innerHeight / 390);
+            if (sc > 1.05) {
+                el.style.transform = 'scale(' + sc.toFixed(3) + ')';
+                el.style.transformOrigin = 'center center';
+            }
+        } catch (e) { /* defensive */ }
+    }, 0);
 }
 
 function showRpsPickModal(data) {

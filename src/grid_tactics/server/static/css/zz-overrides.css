@@ -5401,3 +5401,13 @@ input::selection, textarea::selection { background: rgba(224, 162, 60, 0.45); co
   transform: scale(var(--mfu, 1));
   transform-origin: center center;
 }
+
+/* Pregame modals must fit the 844x390 design box (mobile-first baseline) */
+.pregame-mull-modal { max-height: 360px !important; }
+.pregame-rps-modal { max-height: 360px !important; }
+/* overlays inside the scaled layout position against it, not the viewport */
+.game-layout .pregame-rps-overlay,
+.game-layout .pregame-mull-overlay,
+.game-layout .rps-clash-overlay {
+  position: absolute !important;
+}
