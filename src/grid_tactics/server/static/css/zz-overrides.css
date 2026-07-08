@@ -4598,3 +4598,57 @@ svg.deck-extrude image.dx-art { filter: grayscale(0.55) brightness(0.72); }
   font-weight: 700 !important;
   text-transform: none !important;
 }
+
+/* ============================================================
+   Minion action menu (Move/Attack/…/Cancel) -> vintage theme
+   (user 2026-07-08): it still wore the legacy navy/cyan chrome.
+   ============================================================ */
+.minion-action-menu {
+  background: linear-gradient(180deg, #201709, #171006) !important;
+  border: 1px solid var(--bronze, #6b5730) !important;
+  border-radius: 8px !important;
+  padding: 6px !important;
+  gap: 5px !important;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.65), inset 0 0 0 1px rgba(224, 162, 60, 0.12) !important;
+}
+.minion-action-btn {
+  font-family: var(--ui-display) !important;
+  font-weight: 700 !important;
+  font-size: 12px !important;
+  letter-spacing: 0.05em !important;
+  background: rgba(224, 162, 60, 0.08) !important;
+  border: 1px solid var(--bronze-dk, #3a2e18) !important;
+  border-radius: 6px !important;
+  color: var(--parch, #e8dcbe) !important;
+}
+.minion-action-btn:hover:not(.disabled):not(:disabled) {
+  background: var(--gold, #e0a23c) !important;
+  border-color: var(--gold, #e0a23c) !important;
+  color: #1c1408 !important;
+}
+.minion-action-btn.sacrifice {
+  border-color: rgba(181, 74, 58, 0.7) !important;
+  color: #d98a72 !important;
+}
+.minion-action-btn.sacrifice:hover:not(.disabled):not(:disabled) {
+  background: #a5442e !important;
+  border-color: #a5442e !important;
+  color: #f5e9d8 !important;
+}
+.minion-action-btn.transform {
+  border-color: rgba(224, 162, 60, 0.55) !important;
+  color: #e0c68a !important;
+}
+.minion-action-btn.cancel {
+  background: transparent !important;
+  border-color: transparent !important;
+  color: var(--parch-dim, #b7a77e) !important;
+}
+.minion-action-btn.cancel:hover {
+  background: rgba(224, 162, 60, 0.12) !important;
+  color: var(--parch, #e8dcbe) !important;
+}
+.minion-action-btn.disabled, .minion-action-btn:disabled {
+  opacity: 0.45 !important;
+  background: transparent !important;
+}
