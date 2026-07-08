@@ -257,8 +257,22 @@ function _renderAvatarPod(which, playerIdx) {
     if (!p || !pod) return;
     var disc = document.getElementById('avatar-' + which + '-disc');
     if (disc) {
-        var nm = _avatarDisplayName(playerIdx);
-        disc.textContent = nm ? nm.charAt(0).toUpperCase() : ('P' + (playerIdx + 1));
+        // Discord PFP (user 2026-07-08): show the avatar image when we have
+        // one for this seat (self = my login; opp = server-relayed), else the
+        // initial letter.
+        var avatarUrl = (typeof _podAvatarUrl === 'function')
+            ? _podAvatarUrl(which, playerIdx, p) : null;
+        if (avatarUrl) {
+            if (disc.getAttribute('data-av') !== avatarUrl) {
+                disc.setAttribute('data-av', avatarUrl);
+                disc.innerHTML = '<img class="pod-ava-img" src="'
+                    + avatarUrl.replace(/"/g, '&quot;') + '" alt="">';
+            }
+        } else {
+            disc.removeAttribute('data-av');
+            var nm = _avatarDisplayName(playerIdx);
+            disc.textContent = nm ? nm.charAt(0).toUpperCase() : ('P' + (playerIdx + 1));
+        }
     }
     var hpEl = document.getElementById('avatar-' + which + '-hp');
     if (hpEl) hpEl.textContent = p.hp;

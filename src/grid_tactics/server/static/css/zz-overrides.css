@@ -5488,3 +5488,95 @@ input::selection, textarea::selection { background: rgba(224, 162, 60, 0.45); co
 .discard-picker-card.picked, .sacrifice-picker-card.picked {
   box-shadow: none !important;
 }
+
+/* ============================================================
+   Discord login + account chip + PFP (user 2026-07-08)
+   ============================================================ */
+.discord-login-btn {
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  width: 100%;
+  margin-top: 6px;
+  padding: 10px 14px;
+  font-family: var(--ui-display);
+  font-weight: 700;
+  font-size: 14px;
+  letter-spacing: 0.04em;
+  color: #f2ead2;
+  background: linear-gradient(180deg, #5865F2, #4752c4);
+  border: 1px solid #3b45a5;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.discord-login-btn:hover { filter: brightness(1.08); }
+.discord-login-btn .discord-glyph { font-size: 16px; }
+
+.account-chip {
+  display: flex; align-items: center; gap: 10px;
+  margin-top: 6px;
+  padding: 7px 10px;
+  background: rgba(224, 162, 60, 0.08);
+  border: 1px solid var(--bronze, #6b5730);
+  border-radius: 8px;
+}
+.account-chip-avatar {
+  width: 30px; height: 30px; border-radius: 50%;
+  border: 1px solid var(--gold, #e0a23c);
+  object-fit: cover; flex: 0 0 auto;
+}
+.account-chip-name {
+  flex: 1 1 auto; min-width: 0;
+  font-family: var(--ui-display); font-weight: 700; font-size: 13px;
+  color: var(--parch, #e8dcbe);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.account-logout-btn {
+  flex: 0 0 auto;
+  font-family: var(--ui-body); font-size: 11px;
+  color: var(--parch-dim, #cbb98f);
+  background: transparent;
+  border: 1px solid var(--bronze-dk, #3a2e18);
+  border-radius: 5px;
+  padding: 4px 8px; cursor: pointer;
+}
+.account-logout-btn:hover { color: var(--gold, #e0a23c); border-color: var(--gold, #e0a23c); }
+
+/* Pod PFP image fills the hex disc */
+.pod-ava .pod-ava-img {
+  width: 100%; height: 100%; object-fit: cover; display: block;
+}
+
+/* First-login deck migration modal */
+.account-modal-overlay {
+  position: fixed; inset: 0; z-index: 5000;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(12, 8, 3, 0.78);
+}
+.account-modal {
+  width: min(420px, 86vw);
+  background: linear-gradient(180deg, #201709, #171006);
+  border: 1px solid var(--bronze, #6b5730);
+  border-radius: 10px;
+  box-shadow: 0 10px 40px rgba(0,0,0,0.6);
+  padding: 18px 20px;
+}
+.account-modal-title {
+  font-family: var(--ui-display); font-weight: 700; font-size: 17px;
+  color: var(--gold, #e0a23c); margin-bottom: 8px;
+}
+.account-modal-body {
+  font-family: var(--ui-body); font-size: 13.5px; line-height: 1.4;
+  color: var(--parch-dim, #cbb98f); margin-bottom: 16px;
+}
+.account-modal-actions { display: flex; justify-content: flex-end; gap: 10px; }
+.account-btn-primary, .account-btn-secondary {
+  font-family: var(--ui-display); font-weight: 700; font-size: 13px;
+  padding: 8px 18px; border-radius: 6px; cursor: pointer;
+}
+.account-btn-primary {
+  background: var(--gold, #e0a23c); color: #201709; border: 1px solid var(--gold, #e0a23c);
+}
+.account-btn-primary:hover { background: var(--gold-lt, #ffd873); }
+.account-btn-secondary {
+  background: #3a2e18; color: #e8dcbe; border: 1px solid var(--bronze, #6b5730);
+}
+.account-btn-secondary:hover { border-color: var(--gold, #e0a23c); color: var(--gold, #e0a23c); }
