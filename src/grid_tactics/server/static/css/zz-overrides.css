@@ -5214,3 +5214,13 @@ input::selection, textarea::selection { background: rgba(224, 162, 60, 0.45); co
 .tutor-modal-card { width: 170px !important; max-width: 170px !important; }
 .tutor-modal-cards { align-items: flex-start !important; padding-bottom: 2px !important; }
 .tutor-modal-footer { flex: 0 0 auto !important; }
+
+/* Selection ring rides the INNER card so it scales with the hover growth
+   (user 2026-07-08 — the tile-level outline stayed put while the card grew). */
+.tutor-modal-card.tutor-card-selected {
+  outline: none !important;
+}
+.tutor-modal-card.tutor-card-selected > .card-frame-full.cf2 {
+  outline: 12px solid var(--gold, #e0a23c) !important;
+  outline-offset: -6px !important;
+}

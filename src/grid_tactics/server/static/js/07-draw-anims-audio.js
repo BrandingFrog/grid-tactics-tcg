@@ -307,8 +307,9 @@ function playAttackAnimation(job, done) {
 
     var aRect = attackerCell.getBoundingClientRect();
     var tRect = targetCell.getBoundingClientRect();
-    var dx = (tRect.left + tRect.width / 2) - (aRect.left + aRect.width / 2);
-    var dy = (tRect.top + tRect.height / 2) - (aRect.top + aRect.height / 2);
+    var _asc = _duelScaleFor(attackerCell);
+    var dx = ((tRect.left + tRect.width / 2) - (aRect.left + aRect.width / 2)) / _asc;
+    var dy = ((tRect.top + tRect.height / 2) - (aRect.top + aRect.height / 2)) / _asc;
 
     var pullX = -0.3 * dx, pullY = -0.3 * dy;
     var strikeX = 0.7 * dx, strikeY = 0.7 * dy;
@@ -471,6 +472,17 @@ function playRangedAttackAnimation(attackerCell, targetCell, damage, done) {
 // Tile-rect measurement helper. Returns the pixel delta between the centers
 // of two board tiles, or null if either tile is missing from the DOM.
 // Shared by move (Wave 3) and available for future animations.
+// Rects are VIEWPORT px, but board transforms apply INSIDE the scaled
+// 844x390 layout — divide deltas by the effective duel scale or slides
+// overshoot proportionally to window size (user 2026-07-08).
+function _duelScaleFor(el) {
+    var layout = el && el.closest ? el.closest('.game-layout') : null;
+    if (!layout) layout = document.querySelector('.screen.active .game-layout');
+    if (!layout) return 1;
+    var w = layout.getBoundingClientRect().width;
+    return w > 0 ? w / 844 : 1;
+}
+
 function getTileDelta(fromPos, toPos) {
     if (!fromPos || !toPos) return null;
     var fromCell = document.querySelector(
@@ -480,9 +492,10 @@ function getTileDelta(fromPos, toPos) {
     if (!fromCell || !toCell) return null;
     var fr = fromCell.getBoundingClientRect();
     var tr = toCell.getBoundingClientRect();
+    var sc = _duelScaleFor(fromCell);
     return {
-        dx: (tr.left + tr.width / 2) - (fr.left + fr.width / 2),
-        dy: (tr.top + tr.height / 2) - (fr.top + fr.height / 2),
+        dx: ((tr.left + tr.width / 2) - (fr.left + fr.width / 2)) / sc,
+        dy: ((tr.top + tr.height / 2) - (fr.top + fr.height / 2)) / sc,
         fromCell: fromCell,
         toCell: toCell,
     };
