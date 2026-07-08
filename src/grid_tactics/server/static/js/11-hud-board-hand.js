@@ -53,6 +53,34 @@ function renderRoomBar() {
 // Section 12: renderOpponentInfo() (UI-03)
 // =============================================
 
+
+// Handshake offer flag (user 2026-07-08): after the FIRST pass of a
+// potential handshake, the passer's pill shows a palm-up hand until the
+// opponent answers (pass -> handshake banner, anything else -> flag drops).
+// consecutive_passes === 1 means exactly one unanswered pass, and the
+// passer is whoever is NOT the active player.
+function _updatePassFlag(which, playerIdx) {
+    var row = document.querySelector('#screen-game .pod-' + which + ' .pod-row-stats');
+    if (!row) return;
+    var flag = row.querySelector('.pod-pass-flag');
+    // Event-driven (EVT_PASS_DECLARED sets _passOfferedBy at its beat; any
+    // answering action clears it) — the raw state field is coalesced away
+    // by the time frames land, so it can't be read off gameState.
+    var offered = (typeof _passOfferedBy !== 'undefined')
+        && _passOfferedBy === playerIdx;
+    if (offered) {
+        if (!flag) {
+            flag = document.createElement('span');
+            flag.className = 'pod-pass-flag';
+            flag.textContent = '🫴';
+            flag.title = 'Passed — handshake offered';
+            row.appendChild(flag);
+        }
+    } else if (flag) {
+        flag.remove();
+    }
+}
+
 function renderOpponentInfo() {
     var oppIdx = 1 - myPlayerIdx;
     var oppPlayer = gameState.players[oppIdx];
@@ -91,6 +119,8 @@ function renderOpponentInfo() {
     if (oppDeck) {
         oppDeck.textContent = oppPlayer.deck_count;
     }
+
+    _updatePassFlag('opp', oppIdx);
 }
 
 // =============================================
@@ -131,6 +161,7 @@ function renderSelfInfo() {
     if (selfDeck) {
         selfDeck.textContent = myPlayer.deck_count;
     }
+    _updatePassFlag('self', myPlayerIdx);
 }
 
 // =============================================

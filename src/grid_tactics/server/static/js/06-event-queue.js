@@ -375,6 +375,34 @@ function _commitFinalStateSnapshot(finalState) {
     } catch (e) { /* defensive — recovery must never break the commit */ }
 }
 
+// Handshake-offer surfaces (user 2026-07-08): pod palm flag + a banner at
+// the top of the tooltip sidebar so players not watching the board see it.
+function _setPassOffer(idx) {
+    _passOfferedBy = idx;
+    try {
+        if (typeof renderSelfInfo === 'function' && gameState && gameState.players) {
+            renderSelfInfo();
+            renderOpponentInfo();
+        }
+    } catch (e) { /* defensive */ }
+    var sidebar = document.querySelector('#screen-game .game-tooltip-sidebar');
+    var note = document.getElementById('pass-offer-note');
+    if (idx == null || !sidebar) {
+        if (note) note.remove();
+        return;
+    }
+    var mine = (myPlayerIdx != null && idx === myPlayerIdx);
+    var txt = mine
+        ? '🫴 You passed — Handshake offered'
+        : '🫴 ' + (opponentName || 'Opponent') + ' passed — pass to Handshake 🤝';
+    if (!note) {
+        note = document.createElement('div');
+        note.id = 'pass-offer-note';
+        sidebar.insertBefore(note, sidebar.firstChild);
+    }
+    note.textContent = txt;
+}
+
 function commitEventToDom(ev) {
     // Per-event state-commit + re-render hook. Plan 04a kept this a no-op
     // because the snapshot path (state_update / sandbox_state) committed
@@ -486,6 +514,7 @@ function commitEventToDom(ev) {
             break;
 
         case "minion_moved":
+            if (_passOfferedBy != null) _setPassOffer(null);
             // Payload: {instance_id, from, to, owner_idx}
             if (_commitMinionPos(live, payload)) {
                 if (sbMode) gameState = sandboxState;
@@ -497,6 +526,7 @@ function commitEventToDom(ev) {
         // attack_resolved used to leave the defender's badge at its
         // pre-attack value until drain end.
         case "attack_resolved":
+            if (_passOfferedBy != null) _setPassOffer(null);
             var _hpA = false;
             if (typeof payload.defender_hp_after === 'number') {
                 _hpA = _commitMinionHp(live, { instance_id: payload.defender_id, new_hp: payload.defender_hp_after }) || _hpA;
@@ -529,7 +559,11 @@ function commitEventToDom(ev) {
         // beat — the wholesale players-commit that used to refresh it
         // incidentally was removed (it slammed pod numbers to end-of-chain
         // values), which left the card sitting in hand until drain end.
+        case "pass_declared":
+            _setPassOffer(payload.streak === 1 ? payload.player_idx : null);
+            break;
         case "card_played":
+            if (_passOfferedBy != null) _setPassOffer(null);
             if (live && live.players && live.players[payload.owner_idx]) {
                 var _pp = live.players[payload.owner_idx];
                 if (Array.isArray(_pp.hand) && typeof payload.card_index === 'number'
@@ -711,7 +745,9 @@ function playEvent(ev, done) {
         case "minion_hp_change":         return playMinionHpChange(ev, done);
         case "minion_moved":             return playMinionMoved(ev, done);
         case "minion_transformed":       return playMinionTransformed(ev, done);
-        case "minion_sacrificed":        return playMinionSacrificed(ev, done);
+        case "minion_sacrificed":
+            if (_passOfferedBy != null) _setPassOffer(null);
+            return playMinionSacrificed(ev, done);
         case "attack_resolved":          return playAttackResolved(ev, done);
         case "card_drawn":               return playCardDrawn(ev, done);
         case "card_played":              return playCardPlayed(ev, done);
@@ -733,6 +769,7 @@ function playEvent(ev, done) {
         // Turn-structure redesign (2026-07): new engine events. Aliases are
         // accepted defensively so the client renders them regardless of the
         // final EVT_* wire name the engine lane settles on.
+        case "pass_declared":            return playPassDeclared(ev, done);
         case "handshake":
         case "handshake_resolved":       return playHandshake(ev, done);
         case "card_burned":              // EVT_CARD_BURNED — the real wire name
@@ -1722,6 +1759,7 @@ function playFizzle(ev, done) {
 // there is no onGameOver socket path, so this handler is the primary
 // trigger for the overlay.
 function playGameOver(ev, done) {
+    if (_passOfferedBy != null) _setPassOffer(null);
     var payload = (ev && ev.payload) || {};
     try {
         // Timing audit (2026-07-06): prefer the full socket game_over
@@ -1801,7 +1839,30 @@ function _handshakeRewardText(reward) {
 // handshake — full-screen 🤝 banner naming both players' payout. The
 // mana/draw payout events that follow animate the actual numbers.
 // Payload (best-effort): per-player rewards, see _handshakeRewardFor.
+// pass_declared: brief toast so a pass is actually announced (user
+// 2026-07-08 - there was NO notification for passing at all). The lasting
+// indicators (pod palm flag + tooltip banner) are set at the beat commit.
+function playPassDeclared(ev, done) {
+    var payload = (ev && ev.payload) || {};
+    try {
+        var mine = (myPlayerIdx != null && payload.player_idx === myPlayerIdx);
+        var who = mine ? 'You' : (opponentName || 'Opponent');
+        var toast = document.createElement('div');
+        toast.className = 'tutor-toast pass-toast';
+        toast.textContent = payload.streak === 1
+            ? ('🫴 ' + who + (mine ? ' pass' : ' passes') + ' — Handshake offered')
+            : ('🤝 ' + who + (mine ? ' pass' : ' passes') + ' — Handshake!');
+        _stageMount().appendChild(toast);
+        setTimeout(function() {
+            toast.classList.add('fade-out');
+            setTimeout(function() { toast.remove(); }, 600);
+        }, 1400);
+    } catch (e) { /* defensive */ }
+    setTimeout(done, _evDurationOr(ev, 700));
+}
+
 function playHandshake(ev, done) {
+    if (_passOfferedBy != null) _setPassOffer(null);
     var payload = (ev && ev.payload) || {};
     try {
         var ownIdx = sandboxMode ? 0 : (myPlayerIdx != null ? myPlayerIdx : 0);

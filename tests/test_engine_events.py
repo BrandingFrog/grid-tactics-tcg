@@ -285,10 +285,12 @@ class TestEventTypeCoverage:
         Dark Matter pool redesign added EVT_DARK_MATTER_CHANGE, and the
         2026-07 sacrifice-animation fix added EVT_MINION_SACRIFICED
         (SACRIFICE emitted no board event since the 14.8-05 refactor
-        deleted its deriveAnimationJob wiring). Adding a new type
+        deleted its deriveAnimationJob wiring), and the 2026-07-08
+        handshake-visibility feature added EVT_PASS_DECLARED (passes
+        previously produced NO notification at all). Adding a new type
         requires an explicit roadmap entry, NOT silent expansion.
         """
-        assert len(ALL_EVENT_TYPES) == 24
+        assert len(ALL_EVENT_TYPES) == 25
 
 
 # ---------------------------------------------------------------------------

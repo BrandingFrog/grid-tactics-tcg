@@ -5026,3 +5026,29 @@ input::selection, textarea::selection { background: rgba(224, 162, 60, 0.45); co
   background: rgba(165, 68, 46, 0.18) !important;
   border-color: rgba(181, 98, 58, 0.65) !important;
 }
+
+/* Handshake offer flag on the passer's pill (user 2026-07-08) */
+.pod-pass-flag {
+  font-size: 13px;
+  margin-left: 6px;
+  line-height: 1;
+  filter: drop-shadow(0 0 5px rgba(224, 162, 60, 0.6));
+  animation: pass-flag-pulse 1.6s ease-in-out infinite;
+}
+@keyframes pass-flag-pulse {
+  0%, 100% { transform: translateY(0); opacity: 0.85; }
+  50%      { transform: translateY(-1.5px); opacity: 1; }
+}
+
+/* Handshake-offer banner at the top of the game tooltip sidebar */
+#pass-offer-note {
+  font-family: var(--ui-display);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: #201709;
+  background: linear-gradient(180deg, #f0c96a, var(--gold, #e0a23c));
+  border-bottom: 1px solid var(--bronze, #6b5730);
+  padding: 5px 8px;
+  text-align: center;
+  animation: pass-flag-pulse 1.6s ease-in-out infinite;
+}

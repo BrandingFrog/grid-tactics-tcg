@@ -1250,6 +1250,11 @@ function logEngineEvent(ev) {
             text = 'phase ' + String(p.prev) + '→' + String(p.new);
             detail = true;
             break;
+        case 'pass_declared':
+            text = _logPlayer(p.player_idx) + ' passes'
+                 + (p.streak === 1 ? ' (Handshake offered 🫴)'
+                    : (p.handshake_pending ? ' (Handshake! 🤝)' : ''));
+            break;
         case 'turn_flipped':
             if (typeof p.new_turn === 'number') _logTurn = p.new_turn;
             var _spec = (typeof isSpectator !== 'undefined' && isSpectator);

@@ -43,6 +43,7 @@ from grid_tactics.engine_events import (
     EVT_PLAYER_HP_CHANGE,
     EVT_REACT_WINDOW_OPENED,
     EventStream,
+    EVT_PASS_DECLARED,
 )
 from grid_tactics.enums import (
     ActionType,
@@ -2445,7 +2446,22 @@ def resolve_action(
 
     # Dispatch to action handler
     if action.action_type == ActionType.PASS:
+        _passer_idx = state.active_player_idx
         state = _apply_pass(state)
+        # 2026-07-08: surface the pass on the wire. streak==1 means an
+        # unanswered Handshake offer (client shows the palm-up flag);
+        # streak==0 with handshake_pending means this pass COMPLETED the
+        # Handshake (EVT_HANDSHAKE follows at payout).
+        if event_collector is not None:
+            event_collector.collect(
+                EVT_PASS_DECLARED,
+                "action:pass_action",
+                {
+                    "player_idx": _passer_idx,
+                    "streak": state.consecutive_passes,
+                    "handshake_pending": state.handshake_pending,
+                },
+            )
     elif action.action_type == ActionType.DRAW:
         state = _apply_draw(state)
         # Phase 14.8-03a: emit EVT_CARD_DRAWN so the client can animate

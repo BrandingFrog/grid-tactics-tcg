@@ -102,6 +102,9 @@ EVT_PENDING_MODAL_RESOLVED = "pending_modal_resolved"
 # Edge events
 EVT_FIZZLE = "fizzle"
 EVT_GAME_OVER = "game_over"
+# 2026-07-08: first PASS of a potential Handshake — lets the client flag
+# the passer (palm-up on their pod pill + tooltip banner) until answered.
+EVT_PASS_DECLARED = "pass_declared"
 
 
 ALL_EVENT_TYPES: frozenset[str] = frozenset({
@@ -129,6 +132,7 @@ ALL_EVENT_TYPES: frozenset[str] = frozenset({
     EVT_PENDING_MODAL_RESOLVED,
     EVT_FIZZLE,
     EVT_GAME_OVER,
+    EVT_PASS_DECLARED,
 })
 
 
@@ -169,6 +173,7 @@ DEFAULT_DURATION_MS: dict[str, int] = {
     EVT_PENDING_MODAL_RESOLVED: 0,
     EVT_FIZZLE: 350,                    # optional puff
     EVT_GAME_OVER: 0,                   # game-over modal handles its own timing
+    EVT_PASS_DECLARED: 700,             # brief pass toast
 }
 
 

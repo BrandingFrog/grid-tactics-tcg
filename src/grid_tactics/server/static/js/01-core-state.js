@@ -308,6 +308,9 @@ const NAME_STORAGE_KEY = 'gt_display_name';
 
 let socket = null;
 let cardDefs = {};           // numeric_id -> CardInfo (from game_start or get_card_defs)
+// Handshake offer tracking (2026-07-08): player idx whose PASS is awaiting
+// an answer, or null. Set/cleared at event beats in 06-event-queue.
+let _passOfferedBy = null;
 let gameState = null;        // latest filtered state
 let myPlayerIdx = null;      // 0 or 1
 let legalActions = [];       // current legal actions
