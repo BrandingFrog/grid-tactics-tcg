@@ -5454,3 +5454,37 @@ input::selection, textarea::selection { background: rgba(224, 162, 60, 0.45); co
   border-color: var(--gold, #e0a23c) !important;
   color: var(--gold, #e0a23c) !important;
 }
+
+/* Discard picker footer: Accept + Cancel side by side, tutor-style */
+.discard-picker-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 4px 12px 10px;
+  flex: 0 0 auto;
+}
+.discard-picker-footer .btn-secondary {
+  width: auto !important;
+  padding: 7px 22px !important;
+  font-family: var(--ui-display) !important;
+  font-weight: 700 !important;
+  font-size: 13px !important;
+  letter-spacing: 0.05em !important;
+  background: #3a2e18 !important;
+  color: #e8dcbe !important;
+  border: 1px solid var(--bronze, #6b5730) !important;
+  border-radius: 6px !important;
+}
+.discard-picker-footer .btn-secondary:hover {
+  border-color: var(--gold, #e0a23c) !important;
+  color: var(--gold, #e0a23c) !important;
+}
+/* picked ring rides the inner card like the tutor selection */
+.discard-picker-card.picked > .card-frame-full.cf2,
+.sacrifice-picker-card.picked > .card-frame-full.cf2 {
+  outline: 12px solid var(--gold, #e0a23c) !important;
+  outline-offset: -6px !important;
+}
+.discard-picker-card.picked, .sacrifice-picker-card.picked {
+  box-shadow: none !important;
+}

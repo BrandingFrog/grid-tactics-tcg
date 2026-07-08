@@ -1066,51 +1066,68 @@ function showSacrificePicker(handIdx, deployPos, targetPos, sacChoices) {
             }) + (picked ? '<div class="sp-badge">✓</div>' : '');
             btn.addEventListener('click', function() {
                 if (picked) {
-                    // Unpick
+                    // second click unselects (tutor-style, user 2026-07-08)
                     picks = picks.filter(function(i) { return i !== sacIdx; });
                     refresh();
                     return;
                 }
+                if (discardCount === 1 && picks.length === 1) {
+                    picks.length = 0;   // single-pick: switch selection
+                }
+                if (picks.length >= discardCount) return;   // cap reached
                 picks.push(sacIdx);
-                if (picks.length < discardCount) {
-                    refresh();
-                    return;
-                }
-                // All picks collected — match the legal action.
-                var sortedPicks = picks.slice().sort(function(a, b) { return a - b; });
-                var matched = null;
-                for (var mi = 0; mi < legalActions.length; mi++) {
-                    var la = legalActions[mi];
-                    if (la.action_type !== 0 || la.card_index !== handIdx) continue;
-                    if (deployPos) {
-                        if (!la.position || la.position[0] !== deployPos[0] || la.position[1] !== deployPos[1]) continue;
-                    } else if (la.position) continue;
-                    if (targetPos) {
-                        if (!la.target_pos || la.target_pos[0] !== targetPos[0] || la.target_pos[1] !== targetPos[1]) continue;
-                    } else if (la.target_pos) continue;
-                    var laIndices = la.discard_card_indices || (la.discard_card_index != null ? [la.discard_card_index] : []);
-                    if (laIndices.length !== sortedPicks.length) continue;
-                    var sorted = laIndices.slice().sort(function(a, b) { return a - b; });
-                    var same = sorted.every(function(v, i) { return v === sortedPicks[i]; });
-                    if (same) { matched = la; break; }
-                }
-                var payload;
-                if (matched) {
-                    payload = _playCardPayload(matched);
-                } else {
-                    payload = { action_type: 0, card_index: handIdx };
-                    if (deployPos) payload.position = deployPos;
-                    if (targetPos) payload.target_pos = targetPos;
-                    payload.discard_card_index = sortedPicks[0];
-                    payload.discard_card_indices = sortedPicks;
-                }
-                hideSacrificePicker();
-                submitAction(payload);
+                try { showGameTooltip(cardId, btn, null, { force: true }); } catch (e2) { /* defensive */ }
+                refresh();
             });
             row.appendChild(btn);
         });
+        if (acceptBtn) {
+            acceptBtn.disabled = picks.length !== discardCount;
+            acceptBtn.textContent = (discardCount > 1 && picks.length)
+                ? 'Accept (' + picks.length + '/' + discardCount + ')'
+                : 'Accept';
+        }
     }
-    refresh();
+
+    // Accept submits the collected picks (tutor-style; no auto-submit).
+    function acceptPicks() {
+        if (picks.length !== discardCount) return;
+        var sortedPicks = picks.slice().sort(function(a, b) { return a - b; });
+        var matched = null;
+        for (var mi = 0; mi < legalActions.length; mi++) {
+            var la = legalActions[mi];
+            if (la.action_type !== 0 || la.card_index !== handIdx) continue;
+            if (deployPos) {
+            if (!la.position || la.position[0] !== deployPos[0] || la.position[1] !== deployPos[1]) continue;
+            } else if (la.position) continue;
+            if (targetPos) {
+                if (!la.target_pos || la.target_pos[0] !== targetPos[0] || la.target_pos[1] !== targetPos[1]) continue;
+            } else if (la.target_pos) continue;
+            var laIndices = la.discard_card_indices || (la.discard_card_index != null ? [la.discard_card_index] : []);
+            if (laIndices.length !== sortedPicks.length) continue;
+            var sorted = laIndices.slice().sort(function(a, b) { return a - b; });
+            var same = sorted.every(function(v, i) { return v === sortedPicks[i]; });
+            if (same) { matched = la; break; }
+        }
+        var payload;
+        if (matched) {
+            payload = _playCardPayload(matched);
+        } else {
+            payload = { action_type: 0, card_index: handIdx };
+            if (deployPos) payload.position = deployPos;
+            if (targetPos) payload.target_pos = targetPos;
+            payload.discard_card_index = sortedPicks[0];
+            payload.discard_card_indices = sortedPicks;
+        }
+        hideSacrificePicker();
+        submitAction(payload);
+    }
+
+    var acceptBtn = document.createElement('button');
+    acceptBtn.className = 'tutor-accept-button';
+    acceptBtn.textContent = 'Accept';
+    acceptBtn.disabled = true;
+    acceptBtn.addEventListener('click', function() { acceptPicks(); });
 
     var cancel = document.createElement('button');
     cancel.className = 'btn btn-secondary';
@@ -1121,7 +1138,12 @@ function showSacrificePicker(handIdx, deployPos, targetPos, sacChoices) {
         highlightBoard();
         updateHandHighlights();
     });
-    inner.appendChild(cancel);
+    var footer = document.createElement('div');
+    footer.className = 'discard-picker-footer';
+    footer.appendChild(acceptBtn);
+    footer.appendChild(cancel);
+    inner.appendChild(footer);
+    refresh();
     modal.appendChild(inner);
     _stageMount().appendChild(modal);
 }
