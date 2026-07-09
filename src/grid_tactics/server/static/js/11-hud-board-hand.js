@@ -937,14 +937,19 @@ function getEffectDescription(effects, cardData, opts) {
                 desc = prefix + 'Promote';
             }
         } else if (type === 8) { // Tutor
-            // A tutor lets you pick UP TO `amount` from the deck (capped at
-            // what's there), so read "up to N" when it's more than one.
-            var tutorCount = amount > 1 ? 'up to ' + amount + ' ' : '';
+            var tutorCount = amount > 1 ? amount + ' ' : '';
             if (cardData && cardData.tutor_target) {
                 var tt = cardData.tutor_target;
                 if (typeof tt === 'string') {
-                    var tutorName = findCardNameById(tt);
-                    if (amount > 1) tutorName += 's';  // "Tree Wyrms"
+                    // A self-tutor (Tree Wyrm tutors Tree Wyrm) reads as its
+                    // pluralised tribe — "2 Wyrms" — not the full card name
+                    // (user 2026-07-09).
+                    var tutorName;
+                    if (tt === cardData.card_id && cardData.tribe) {
+                        tutorName = cardData.tribe + (amount > 1 ? 's' : '');
+                    } else {
+                        tutorName = findCardNameById(tt);
+                    }
                     desc = prefix + 'Tutor ' + tutorCount + tutorName;
                 } else if (typeof tt === 'object') {
                     // Selector dict: {tribe: "Rat"} etc.
