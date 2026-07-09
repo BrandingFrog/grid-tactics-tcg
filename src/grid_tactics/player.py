@@ -48,6 +48,12 @@ class Player:
     # MinionInstance.dark_matter_stacks field is deprecated, always 0).
     # PUBLIC information — both players see both pools.
     dark_matter: int = 0
+    # Set when this player opens a tutor this turn (effect_resolver
+    # _enter_pending_tutor). Read by ReactCondition.OPPONENT_TUTORS so a
+    # react like Tree Wyrm can answer the opponent's tutor. Reset for the
+    # player STARTING their turn (react_stack turn flip). Appended field —
+    # keep at end for positional-construction stability. (2026-07-09)
+    tutored_this_turn: bool = False
 
     # -- Construction -------------------------------------------------------
 

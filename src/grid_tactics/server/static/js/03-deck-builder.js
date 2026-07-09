@@ -975,7 +975,7 @@ function buildCardTooltipContent(c) {
             5: 'Wood', 6: 'Fire', 7: 'Earth',
             8: 'Water', 9: 'Metal', 10: 'Dark',
             11: 'Light', 12: 'Sacrifice', 13: 'Discard',
-            14: 'End of turn'
+            14: 'End of turn', 18: 'Tutor'
         };
         var condText = condMap[c.react_condition] || 'Enemy acts';
         var extraCond = c.react_requires_no_friendly_minions ? ' while no allies' : '';

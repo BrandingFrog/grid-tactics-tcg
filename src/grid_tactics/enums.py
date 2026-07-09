@@ -136,6 +136,7 @@ class ReactCondition(IntEnum):
     OPPONENT_SUMMONS_MINION = 15   # Opponent deployed a minion (AFTER_SUMMON_DECLARATION)
     OPPONENT_START_OF_TURN = 16    # Opponent's start-of-turn trigger fired (AFTER_START_TRIGGER)
     OPPONENT_END_OF_TURN = 17      # Opponent's end-of-turn trigger fired (BEFORE_END_OF_TURN)
+    OPPONENT_TUTORS = 18           # Opponent tutored a card this turn (Player.tutored_this_turn); matches in any post-action/post-summon react window (Tree Wyrm, 2026-07-09)
 
 
 class TriggerType(IntEnum):

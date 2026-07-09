@@ -791,6 +791,22 @@ def _check_react_condition(
     if condition == ReactCondition.ANY_ACTION:
         return True
 
+    # OPPONENT_TUTORS (2026-07-09): fires in any post-action / post-summon
+    # react window once the active (turn-owning) player has tutored this turn.
+    # The flag is set when their tutor MODAL opens (effect_resolver), which
+    # resolves BEFORE the react window opens — so a summoned tutor (Diodebot,
+    # a summon window) or a magic tutor (AFTER_ACTION) both surface here.
+    # Start/End/Death windows are their own trigger semantics and excluded.
+    if condition == ReactCondition.OPPONENT_TUTORS:
+        if ctx in (
+            ReactContext.AFTER_ACTION,
+            ReactContext.AFTER_SUMMON_DECLARATION,
+            ReactContext.AFTER_SUMMON_EFFECT,
+            None,
+        ):
+            return state.players[state.active_player_idx].tutored_this_turn
+        return False
+
     # ------------- 14.7-07: context-tagged conditions -------------
     # These are driven purely by react_context and fire even during
     # counter-react chains inside the same window. They're checked

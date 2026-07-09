@@ -222,6 +222,7 @@ var _CF2_REACT_TIMING = {
     12: "opponent sacrifices",
     13: "a card is discarded",
     14: "opponent's Decay Phase",
+    18: "opponent tutors",
 };
 
 function renderCardFrame(c, opts) {

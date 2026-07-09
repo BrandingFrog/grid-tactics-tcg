@@ -1262,11 +1262,21 @@ def _close_end_of_turn_and_flip(
     # (enter_start_of_turn will reset phase to START_OF_TURN when called.)
     new_active_idx = 1 - old_active_idx
     prev_turn = state.turn_number
+    # Clear tutored_this_turn for the player STARTING their turn. The flag is
+    # per-turn; a tutor they fired reactively on the opponent's turn (Tree
+    # Wyrm's react tutors) would otherwise linger and read as "they tutored
+    # this turn" (ReactCondition.OPPONENT_TUTORS). Resetting the incoming
+    # active player is sufficient: the flag is only ever checked against the
+    # active player. (2026-07-09)
     state = replace(
         state,
         phase=TurnPhase.ACTION,
         active_player_idx=new_active_idx,
         turn_number=state.turn_number + 1,
+        players=_replace_player(
+            state.players, new_active_idx,
+            replace(state.players[new_active_idx], tutored_this_turn=False),
+        ),
     )
 
     # Phase 14.8-03a: emit EVT_TURN_FLIPPED — drives the turn banner on

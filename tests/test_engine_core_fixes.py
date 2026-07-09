@@ -32,6 +32,8 @@ from grid_tactics.actions import (
     pass_action,
     play_react_action,
 )
+from dataclasses import replace
+
 from grid_tactics.board import Board
 from grid_tactics.card_library import CardLibrary
 from grid_tactics.engine_events import (
@@ -772,25 +774,25 @@ class TestTreeWyrmReactTutor:
         wyrm_id = library.get_numeric_id("tree_wyrm")
         rat_id = library.get_numeric_id("rat")
 
-        p1 = _player(PlayerSide.PLAYER_1)
+        # P1 (active) tutored this turn → opens the OPPONENT_TUTORS window.
+        p1 = replace(_player(PlayerSide.PLAYER_1), tutored_this_turn=True)
         p2 = _player(
             PlayerSide.PLAYER_2,
             hand=(wyrm_id,),
             deck=(wyrm_id, rat_id, wyrm_id),
             mana=1,
         )
-        # BEFORE_END_OF_TURN window: P1 is ending their turn, P2 reacts.
+        # AFTER_ACTION window: P1 just tutored, P2 answers with Tree Wyrm.
         state = _state_with_minions(
             [],
             (p1, p2),
             phase=TurnPhase.REACT,
             active_player_idx=0,
             react_player_idx=1,
-            react_context=ReactContext.BEFORE_END_OF_TURN,
-            react_return_phase=TurnPhase.END_OF_TURN,
+            react_context=ReactContext.AFTER_ACTION,
+            react_return_phase=TurnPhase.ACTION,
             react_stack=(),
         )
-        start_turn = state.turn_number
 
         # P2 react-plays Tree Wyrm (1 mana, discard from hand).
         state = resolve_action(state, play_react_action(card_index=0), library)
@@ -805,7 +807,7 @@ class TestTreeWyrmReactTutor:
         assert state.pending_tutor_remaining == 2
         assert len(state.pending_tutor_matches) == 2
         # The turn-flow bookmark survives the modal hand-off.
-        assert state.react_return_phase == TurnPhase.END_OF_TURN
+        assert state.react_return_phase == TurnPhase.ACTION
 
         # Pick both Tree Wyrms.
         state = resolve_action(
@@ -823,10 +825,70 @@ class TestTreeWyrmReactTutor:
         assert p2_after.grave.count(wyrm_id) == 1  # the react-played copy
         assert p2_after.current_mana == 0
 
-        # The post-tutor react window returns to END_OF_TURN — the turn
-        # advances without re-firing end-of-turn triggers.
+        # The post-tutor react window returns to its bookmark (ACTION).
         assert state.phase == TurnPhase.REACT
-        assert state.react_return_phase == TurnPhase.END_OF_TURN
-        state = resolve_action(state, pass_action(), library)
-        assert state.turn_number == start_turn + 1
-        assert state.active_player_idx == 1
+        assert state.react_return_phase == TurnPhase.ACTION
+
+
+# ---------------------------------------------------------------------------
+# ReactCondition.OPPONENT_TUTORS plumbing (2026-07-09): tutored_this_turn flag
+# ---------------------------------------------------------------------------
+
+
+class TestOpponentTutorsFlag:
+    """The flag is set on the caster when a tutor opens, and cleared for the
+    player STARTING their turn so a reactive tutor (Tree Wyrm's react) does
+    not linger and read as 'they tutored this turn'."""
+
+    def test_enter_pending_tutor_sets_flag_on_caster(self, library):
+        from grid_tactics.effect_resolver import _enter_pending_tutor
+        wyrm_id = library.get_numeric_id("tree_wyrm")
+        wyrm_def = library.get_by_id(wyrm_id)
+        p1 = _player(PlayerSide.PLAYER_1, deck=(wyrm_id, wyrm_id))
+        p2 = _player(PlayerSide.PLAYER_2)
+        state = _state_with_minions([], (p1, p2), active_player_idx=0)
+        assert state.players[0].tutored_this_turn is False
+        state = _enter_pending_tutor(
+            state, wyrm_def, PlayerSide.PLAYER_1, library, amount=2,
+        )
+        assert state.players[0].tutored_this_turn is True
+        assert state.players[1].tutored_this_turn is False  # only the caster
+
+    def test_no_matches_does_not_set_flag(self, library):
+        from grid_tactics.effect_resolver import _enter_pending_tutor
+        wyrm_id = library.get_numeric_id("tree_wyrm")
+        wyrm_def = library.get_by_id(wyrm_id)
+        p1 = _player(PlayerSide.PLAYER_1, deck=())  # nothing to tutor
+        p2 = _player(PlayerSide.PLAYER_2)
+        state = _state_with_minions([], (p1, p2), active_player_idx=0)
+        state = _enter_pending_tutor(
+            state, wyrm_def, PlayerSide.PLAYER_1, library, amount=2,
+        )
+        assert state.players[0].tutored_this_turn is False  # fizzled, no tutor
+
+    def test_flip_clears_flag_for_incoming_player(self, library):
+        from grid_tactics.effect_resolver import _enter_pending_tutor
+        from grid_tactics.react_stack import _close_end_of_turn_and_flip
+        wyrm_id = library.get_numeric_id("tree_wyrm")
+        rat_id = library.get_numeric_id("rat")
+        wyrm_def = library.get_by_id(wyrm_id)
+        # P2 reactively tutors on P1's turn -> P2 (non-active) flag set.
+        p1 = _player(PlayerSide.PLAYER_1, deck=(rat_id,))
+        p2 = _player(PlayerSide.PLAYER_2, deck=(wyrm_id, rat_id))
+        state = _state_with_minions(
+            [], (p1, p2), active_player_idx=0, turn_number=5,
+            phase=TurnPhase.END_OF_TURN,
+        )
+        state = _enter_pending_tutor(
+            state, wyrm_def, PlayerSide.PLAYER_2, library, amount=1,
+        )
+        assert state.players[1].tutored_this_turn is True
+        # Clear the modal so the flip runs cleanly, then advance to P2's turn.
+        state = replace(
+            state, pending_tutor_player_idx=None,
+            pending_tutor_matches=(), pending_tutor_remaining=0,
+        )
+        flipped = _close_end_of_turn_and_flip(state, library)
+        assert flipped.active_player_idx == 1  # P2's turn now
+        # The stale reactive-tutor flag must be cleared for the incoming player.
+        assert flipped.players[1].tutored_this_turn is False

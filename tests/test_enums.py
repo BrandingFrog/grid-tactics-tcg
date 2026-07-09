@@ -371,8 +371,9 @@ class TestReactConditionPhase14_7_07:
         assert ReactCondition.OPPONENT_ENDS_TURN == 14
 
     def test_member_count(self) -> None:
-        # 15 original (0..14) + 3 new (15..17) = 18 total
-        assert len(ReactCondition) == 18
+        # 15 original (0..14) + 3 (15..17) + OPPONENT_TUTORS (18) = 19 total
+        assert len(ReactCondition) == 19
+        assert ReactCondition.OPPONENT_TUTORS == 18
 
 
 class TestActionTypePhase14_7_05:

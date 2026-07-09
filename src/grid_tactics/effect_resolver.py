@@ -706,6 +706,7 @@ def _enter_pending_tutor(
                 state.pending_tutor_remaining + max(1, amount),
                 len(matches),
             )
+            # Flag already set by the first tutor in the chain; keep it.
             return replace(state, pending_tutor_remaining=new_remaining)
         return state
 
@@ -713,9 +714,18 @@ def _enter_pending_tutor(
         # No candidates -- silently no-op (caller proceeds to react window).
         return state
 
+    # Mark the caster as having tutored this turn — ReactCondition
+    # OPPONENT_TUTORS (Tree Wyrm) reads this in the react window that opens
+    # once this tutor resolves. Set at modal-open (a tutor is happening),
+    # before the caster picks. (2026-07-09)
+    tutoring_players = _replace_player(
+        state.players, player_idx,
+        replace(state.players[player_idx], tutored_this_turn=True),
+    )
     remaining = max(1, min(amount, len(matches)))
     new_state = replace(
         state,
+        players=tutoring_players,
         pending_tutor_player_idx=player_idx,
         pending_tutor_matches=tuple(matches),
         pending_tutor_remaining=remaining,
