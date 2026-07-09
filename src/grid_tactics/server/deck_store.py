@@ -49,12 +49,22 @@ def _get_client():
     if not url or not key:
         return None
     try:
-        from supabase import create_client
+        import httpx
+        from postgrest import SyncPostgrestClient
 
-        _client = create_client(url, key)
+        # Force HTTP/1.1 (user 2026-07-09): Railway's egress resets Supabase's
+        # HTTP/2 streams (RemoteProtocolError: StreamReset), so the full
+        # supabase client fails every write there while working locally.
+        # deck_store only does table ops (pure PostgREST), so a direct
+        # postgrest client over HTTP/1.1 is sufficient and reliable.
+        _client = SyncPostgrestClient(
+            url.rstrip("/") + "/rest/v1",
+            headers={"apikey": key, "Authorization": "Bearer " + key},
+            http_client=httpx.Client(http2=False, timeout=30),
+        )
     except Exception as e:
         global _last_error
-        _last_error = 'create_client: ' + type(e).__name__ + ': ' + str(e)
+        _last_error = "create_client: " + type(e).__name__ + ": " + str(e)
         _client = None
     return _client
 
