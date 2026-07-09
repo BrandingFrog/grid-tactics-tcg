@@ -2817,13 +2817,12 @@ body:has(#screen-deck-builder.active) #sbx-toggles { display: none !important; }
   opacity: 1; pointer-events: auto; transform: scale(1);
 }
 
-/* Perf (2026-07-05 audit): offscreen grid cards skip style/layout/paint.
-   auto sizing remembers the real size after first render; the estimate
-   only guides the initial scrollbar. */
-#screen-deck-builder .card-browser-item {
-  content-visibility: auto;
-  contain-intrinsic-size: auto calc(var(--mfu) * 118);
-}
+/* NOTE: content-visibility:auto was removed here (user 2026-07-09). It
+   implies `contain: paint`, which clips each card's painting to its own box —
+   and that silently sliced off the count badge (xN) and ! pin, which are
+   SUPPOSED to overhang OUTSIDE the card corners. With only ~33 cards in the
+   browser the perf win was negligible, so correctness wins: no paint
+   containment, badges overhang freely. */
 
 /* ==========================================================================
    DUEL/SANDBOX = ONE LAYOUT, SCALED (user directive, applied 2026-07-05).
