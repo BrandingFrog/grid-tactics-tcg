@@ -968,7 +968,7 @@ function buildCardTooltipContent(c) {
         });
         cardTextLines.push('Transform: ' + tLines.join(', '));
     }
-    if (c.react_condition != null && c.react_mana_cost != null) {
+    if (c.react_condition != null) {
         var condMap = {
             0: 'Magic or React', 1: 'Summon', 2: 'Attack',
             3: 'Magic or React', 4: 'Any action',
@@ -979,7 +979,11 @@ function buildCardTooltipContent(c) {
         };
         var condText = condMap[c.react_condition] || 'Enemy acts';
         var extraCond = c.react_requires_no_friendly_minions ? ' while no allies' : '';
-        var costText = c.react_mana_cost > 0 ? ' (' + c.react_mana_cost + ')' : '';
+        // Pure react cards (e.g. Prohibition) have no separate react_mana_cost —
+        // their cost IS mana_cost. Fall back so the react line still renders
+        // (the old gate required react_mana_cost != null and dropped it).
+        var reactCost = (c.react_mana_cost != null) ? c.react_mana_cost : c.mana_cost;
+        var costText = reactCost > 0 ? ' (' + reactCost + ')' : '';
         var reactEffectTooltip = '';
         if (c.react_effect && c.react_effect.type === 5) {
             reactEffectTooltip = ' ▶ Summon';
