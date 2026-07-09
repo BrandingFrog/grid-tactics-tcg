@@ -3073,8 +3073,17 @@ body.sbx-hide-bar:has(#screen-sandbox.active) .room-bar {
   right: 12px !important; top: 54px !important; bottom: auto !important; left: auto !important;
   transform-origin: top right !important;
 }
-#screen-game .pod .pod-plate, #screen-sandbox .pod .pod-plate {
-  padding: 4px 8px !important;
+/* Asymmetric plate padding on the avatar side (user 2026-07-09): the hex
+   avatar overlaps the plate by -13px (pod-ava-wrap margin), so the plate needs
+   ~22px clearance on that side or the HP number + mana readout tuck UNDER the
+   profile pic. The earlier condense pass flattened this to a symmetric 8px,
+   which reintroduced the overlap. Self = avatar on the left; opp = on the
+   right (row-reverse). */
+#screen-game .pod.pod-self .pod-plate, #screen-sandbox .pod.pod-self .pod-plate {
+  padding: 4px 8px 4px 22px !important;
+}
+#screen-game .pod.pod-opp .pod-plate, #screen-sandbox .pod.pod-opp .pod-plate {
+  padding: 4px 22px 4px 8px !important;
 }
 #screen-game .pod .pod-name, #screen-sandbox .pod .pod-name { font-size: 11px !important; letter-spacing: 0.04em !important; }
 #screen-game .pod .pod-hp-n, #screen-sandbox .pod .pod-hp-n { font-size: 19px !important; }
