@@ -937,13 +937,14 @@ function getEffectDescription(effects, cardData, opts) {
                 desc = prefix + 'Promote';
             }
         } else if (type === 8) { // Tutor
-            var tutorCount = amount > 1 ? amount + ' ' : '';
+            // Soft-cap tutors (eff.up_to, e.g. Tree Wyrm) read "up to N"; a
+            // committed tutor (Ratmobile) reads the flat count (user 2026-07-09).
+            var tutorCount = amount > 1 ? ((eff.up_to ? 'up to ' : '') + amount + ' ') : '';
             if (cardData && cardData.tutor_target) {
                 var tt = cardData.tutor_target;
                 if (typeof tt === 'string') {
                     // A self-tutor (Tree Wyrm tutors Tree Wyrm) reads as its
-                    // pluralised tribe — "2 Wyrms" — not the full card name
-                    // (user 2026-07-09).
+                    // pluralised tribe — "2 Wyrms" — not the full card name.
                     var tutorName;
                     if (tt === cardData.card_id && cardData.tribe) {
                         tutorName = cardData.tribe + (amount > 1 ? 's' : '');

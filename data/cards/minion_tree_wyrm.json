@@ -24,7 +24,8 @@
         "type": "tutor",
         "trigger": "on_play",
         "target": "self_owner",
-        "amount": 2
+        "amount": 2,
+        "up_to": true
     },
     "tips": [
         "5 mana for a 33🗡️/33🤍 body that draws a card on Summon — same chassis as Flame Wyrm. The free react tutor on top is what makes it a chain piece.",

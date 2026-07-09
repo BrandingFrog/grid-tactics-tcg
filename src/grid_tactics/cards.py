@@ -72,6 +72,12 @@ class EffectDefinition:
     # keyword default ("owner" — spec §7.1: ticks in the minion OWNER's
     # Decay phase) is applied at burn-application time in effect_resolver.
     scope: Optional[str] = None
+    # Tutor display nuance (2026-07-09): a "soft cap" tutor lets the owner
+    # pick UP TO `amount` (Tree Wyrm), vs a committed tutor that reads as
+    # exactly `amount` (To The Ratmobile). Purely a wording flag — the engine
+    # already caps every tutor at the number of matches in deck; this only
+    # drives whether the card text says "up to N".
+    up_to: bool = False
 
     _VALID_SCOPES = ("owner", "opponent", "every")
 

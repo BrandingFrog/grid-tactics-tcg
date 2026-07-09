@@ -221,6 +221,7 @@ class CardLoader:
             placement_condition=data.get("placement_condition"),
             condition_multiplier=data.get("condition_multiplier", 1),
             scope=scope,
+            up_to=bool(data.get("up_to", False)),
         )
 
     _TUTOR_SELECTOR_KEYS = frozenset({"tribe", "element", "card_type"})
