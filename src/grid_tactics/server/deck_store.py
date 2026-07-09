@@ -24,16 +24,24 @@ def last_error():
     return _last_error
 
 
+def _clean(v: str) -> str:
+    # Strip ALL whitespace incl. embedded newlines. A stray line break from a
+    # paste into a Railway/env var yields an "Illegal header value" on the
+    # Authorization header (user 2026-07-09). API keys/URLs never contain
+    # internal whitespace, so this is always safe.
+    return "".join((v or "").split())
+
+
 def _env_url() -> str:
-    return os.environ.get("SUPABASE_URL", "").strip()
+    return _clean(os.environ.get("SUPABASE_URL", ""))
 
 
 def _env_key() -> str:
     # Prefer the service/secret key for server-side writes; fall back to anon.
     return (
-        os.environ.get("SUPABASE_SECRET_KEY", "").strip()
-        or os.environ.get("SUPABASE_SERVICE_KEY", "").strip()
-        or os.environ.get("SUPABASE_ANON_KEY", "").strip()
+        _clean(os.environ.get("SUPABASE_SECRET_KEY", ""))
+        or _clean(os.environ.get("SUPABASE_SERVICE_KEY", ""))
+        or _clean(os.environ.get("SUPABASE_ANON_KEY", ""))
     )
 
 
