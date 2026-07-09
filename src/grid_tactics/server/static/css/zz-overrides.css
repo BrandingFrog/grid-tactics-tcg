@@ -5615,3 +5615,18 @@ input::selection, textarea::selection { background: rgba(224, 162, 60, 0.45); co
 #screen-sandbox .duel-stage .opp-hand-row {
   flex-direction: row-reverse !important;
 }
+
+/* Board minion atk/hp: stronger outline for legibility over busy card art
+   (user 2026-07-09). The base 1px stroke vanished against similar-coloured
+   art (green HP over green backgrounds). 2px stroke + paint-order keeps the
+   number's colour on top, plus a tight shadow for extra separation. */
+#screen-game .board-minion-stats,
+#screen-game .board-minion-atk,
+#screen-game .board-minion-hp,
+#screen-sandbox .board-minion-stats,
+#screen-sandbox .board-minion-atk,
+#screen-sandbox .board-minion-hp {
+  -webkit-text-stroke: 2px #000 !important;
+  paint-order: stroke fill !important;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9), 0 0 2px rgba(0, 0, 0, 0.8) !important;
+}
