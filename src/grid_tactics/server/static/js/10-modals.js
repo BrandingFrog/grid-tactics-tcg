@@ -1389,12 +1389,21 @@ function _runRpsClash(data, done) {
     theirs.innerHTML =
         '<div class="rps-tile-glyph">' + (RPS_GLYPHS[data.opp_pick] || '?') + '</div>' +
         '<div class="rps-tile-label">Opponent</div>';
-    overlay.appendChild(mine);
-    overlay.appendChild(theirs);
-    // Tiles scale uniformly via CSS (.rps-clash-overlay > * { scale: --mfu }).
-    // The old per-tile _pregameScaleEl(mine) set an inline transform:scale that
-    // clobbered the centring translate and only touched 'mine' (user 2026-07-09).
+    // Both tiles live in a zero-size arena pinned at the overlay centre; each
+    // tile straddles that centre via its own transform: translate. Scaling the
+    // ARENA (not each tile) grows the pair AND the gap between them uniformly,
+    // so the clash reads the same size relative to the window on phone and
+    // desktop. Per-tile scaling can't do this: `scale: var(--mfu)` is invalid
+    // (--mfu is a length, not a number, so it's silently ignored — the reason
+    // the clash rendered design-size-tiny on desktop) and a per-tile
+    // transform:scale clobbers the centring translate (user 2026-07-09).
+    var arena = document.createElement('div');
+    arena.className = 'rps-clash-arena';
+    arena.appendChild(mine);
+    arena.appendChild(theirs);
+    overlay.appendChild(arena);
     document.body.appendChild(overlay);
+    _pregameScaleEl(arena);
 
     var finished = false;
     function finish() {

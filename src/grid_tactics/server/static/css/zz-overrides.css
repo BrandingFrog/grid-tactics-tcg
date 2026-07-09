@@ -5333,12 +5333,15 @@ input::selection, textarea::selection { background: rgba(224, 162, 60, 0.45); co
   transform: translate(18%, -50%);
   animation: rps-clash-in-right 450ms cubic-bezier(0.2, 0.8, 0.3, 1) both;
 }
+/* Fly-in offset is tile-relative (%), not viewport (vw): the arena scales the
+   whole group on desktop, which would multiply a vw offset into an off-by-3x
+   overshoot. A tile-% swoosh stays proportional at every scale. */
 @keyframes rps-clash-in-left {
-  0%   { transform: translate(-118%, -50%) translateX(-60vw) rotate(-14deg); opacity: 0; }
+  0%   { transform: translate(-118%, -50%) translateX(-220%) rotate(-14deg); opacity: 0; }
   100% { transform: translate(-118%, -50%); opacity: 1; }
 }
 @keyframes rps-clash-in-right {
-  0%   { transform: translate(18%, -50%) translateX(60vw) rotate(14deg); opacity: 0; }
+  0%   { transform: translate(18%, -50%) translateX(220%) rotate(14deg); opacity: 0; }
   100% { transform: translate(18%, -50%); opacity: 1; }
 }
 .rps-clash-tile.rps-clash-winner {
@@ -5397,13 +5400,16 @@ input::selection, textarea::selection { background: rgba(224, 162, 60, 0.45); co
   transform-origin: center center;
   position: static !important;
 }
-.rps-clash-overlay > * {
-  /* Use the composable `scale:` property, NOT transform: scale — the clash
-     tiles are centred via transform: translate(...) and the winner-bloom
-     animates `scale:`. A transform:scale here clobbered the translate when
-     the winner-bloom replaced the fly-in animation, throwing the winning
-     card offscreen (user 2026-07-09). scale composes with translate. */
-  scale: var(--mfu, 1);
+/* Zero-size arena pinned at the overlay centre. Both clash tiles are absolute
+   children that straddle this centre via their own transform: translate, so
+   the arena's box collapses to a point at the middle of the viewport. The JS
+   (_runRpsClash -> _pregameScaleEl) applies a numeric transform:scale here on
+   desktop, which grows the whole pair — tiles AND the gap — about that centre
+   point uniformly. CSS `scale: var(--mfu)` can't do the scaling: --mfu is a
+   length (100vw/844), which is invalid for scale/transform and silently
+   ignored, so the clash used to render tiny on desktop (user 2026-07-09). */
+.rps-clash-arena {
+  position: relative;
   transform-origin: center center;
 }
 
