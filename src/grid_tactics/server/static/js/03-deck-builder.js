@@ -983,7 +983,9 @@ function buildCardTooltipContent(c) {
         // their cost IS mana_cost. Fall back so the react line still renders
         // (the old gate required react_mana_cost != null and dropped it).
         var reactCost = (c.react_mana_cost != null) ? c.react_mana_cost : c.mana_cost;
-        var costText = reactCost > 0 ? ' (' + reactCost + ')' : '';
+        // Always show the cost — including 0 — so a 0-mana react reads
+        // "React (0):" consistently with how mana is shown everywhere else.
+        var costText = ' (' + reactCost + ')';
         var reactEffectTooltip = '';
         if (c.react_effect && c.react_effect.type === 5) {
             reactEffectTooltip = ' ▶ Summon';
