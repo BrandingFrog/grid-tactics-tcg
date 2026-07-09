@@ -5644,3 +5644,14 @@ input::selection, textarea::selection { background: rgba(224, 162, 60, 0.45); co
   paint-order: stroke fill !important;
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9), 0 0 2px rgba(0, 0, 0, 0.8) !important;
 }
+
+/* Card-browser grid: pack rows at the top (user 2026-07-09). The grid
+   defaults to align-content:stretch, so when a filter (e.g. Keyword=React)
+   leaves a single row, that row stretched to the browser's full height —
+   blowing each card tile up to ~5x its card height. Since the whole tile is
+   the clickable "add to deck" target, the click area leaked far below the
+   visible card. align-content:start keeps tiles at their real card height and
+   is a no-op once the grid scrolls (many rows). */
+#screen-deck-builder .card-browser-grid {
+  align-content: start !important;
+}
