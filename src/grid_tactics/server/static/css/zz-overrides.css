@@ -5398,7 +5398,12 @@ input::selection, textarea::selection { background: rgba(224, 162, 60, 0.45); co
   position: static !important;
 }
 .rps-clash-overlay > * {
-  transform: scale(var(--mfu, 1));
+  /* Use the composable `scale:` property, NOT transform: scale — the clash
+     tiles are centred via transform: translate(...) and the winner-bloom
+     animates `scale:`. A transform:scale here clobbered the translate when
+     the winner-bloom replaced the fly-in animation, throwing the winning
+     card offscreen (user 2026-07-09). scale composes with translate. */
+  scale: var(--mfu, 1);
   transform-origin: center center;
 }
 
