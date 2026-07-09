@@ -5600,3 +5600,13 @@ input::selection, textarea::selection { background: rgba(224, 162, 60, 0.45); co
   padding: 3px 9px;
   white-space: nowrap;
 }
+
+/* Opponent (P2) hand grows to the LEFT as they draw/tutor (user 2026-07-09).
+   The row is rebuilt from count and cards are appended left->right, so with
+   center justification new cards landed on the right. row-reverse makes the
+   newest (last-appended) card sit at the LEFT edge; the draw pop-in (which
+   targets the last back) then animates in on the left. No card-back mirroring. */
+#screen-game .duel-stage .opp-hand-row,
+#screen-sandbox .duel-stage .opp-hand-row {
+  flex-direction: row-reverse !important;
+}
