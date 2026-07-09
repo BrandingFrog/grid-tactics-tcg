@@ -17,11 +17,6 @@ from typing import List, Optional
 
 _client = None
 _init_tried = False
-_last_error = None  # DIAG (temp 2026-07-09): last swallowed exception
-
-
-def last_error():
-    return _last_error
 
 
 def _clean(v: str) -> str:
@@ -70,9 +65,7 @@ def _get_client():
             headers={"apikey": key, "Authorization": "Bearer " + key},
             http_client=httpx.Client(http2=False, timeout=30),
         )
-    except Exception as e:
-        global _last_error
-        _last_error = "create_client: " + type(e).__name__ + ": " + str(e)
+    except Exception:
         _client = None
     return _client
 
@@ -96,9 +89,8 @@ def upsert_user(user: dict) -> None:
                 "avatar_url": user.get("avatar_url", ""),
             }
         ).execute()
-    except Exception as e:
-        global _last_error
-        _last_error = 'upsert_user: ' + type(e).__name__ + ': ' + str(e)
+    except Exception:
+        pass
 
 
 def get_decks(discord_id: str) -> List[dict]:
@@ -145,9 +137,7 @@ def save_deck(discord_id: str, slot: int, name: str, cards: dict) -> bool:
             }
         ).execute()
         return True
-    except Exception as e:
-        global _last_error
-        _last_error = 'save_deck: ' + type(e).__name__ + ': ' + str(e)
+    except Exception:
         return False
 
 

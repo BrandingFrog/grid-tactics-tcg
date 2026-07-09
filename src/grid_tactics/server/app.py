@@ -94,7 +94,7 @@ def create_app(testing: bool = False) -> Flask:
         ok = deck_store.save_deck(
             u["discord_id"], slot, data.get("name", ""), data.get("cards", {})
         )
-        return jsonify({"ok": ok, "error": None if ok else deck_store.last_error()})
+        return jsonify({"ok": ok})
 
     @app.route("/api/decks/<int:slot>", methods=["DELETE"])
     def api_delete_deck(slot):
