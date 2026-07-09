@@ -835,8 +835,13 @@ function _isDmScale(s) {
     return s === 'dark_matter' || s === 'player_dark_matter';
 }
 
-function getEffectDescription(effects, cardData) {
+function getEffectDescription(effects, cardData, opts) {
     if (!effects || effects.length === 0) return '';
+    // opts.noTrigger: drop the leading trigger label (e.g. "Summon: "). Used
+    // when the effect is rendered inside a React box — the react header already
+    // states the trigger, so a react_effect that happens to carry trigger
+    // on_summon must NOT read "Summon: ..." (user 2026-07-09, Tree Wyrm).
+    var noTrigger = !!(opts && opts.noTrigger);
     var isMinion = cardData && cardData.card_type === 0;
     var DM = _dmTokenLive();
     var triggerMap = {0: isMinion ? 'Summon' : '', 1: 'Death', 2: 'Attack', 3: 'Damaged', 4: 'Move', 5: 'End', 6: 'Discarded', 9: 'Rally', 10: 'Decay'};
@@ -867,7 +872,7 @@ function getEffectDescription(effects, cardData) {
     effects.forEach(function(eff) {
         var trigger = triggerMap[eff.trigger];
         if (trigger === undefined) trigger = '';
-        var prefix = trigger ? trigger + ': ' : '';
+        var prefix = (noTrigger || !trigger) ? '' : trigger + ': ';
         var amount = eff.amount || 0;
         var type = eff.type;
         var desc = '';
@@ -932,11 +937,14 @@ function getEffectDescription(effects, cardData) {
                 desc = prefix + 'Promote';
             }
         } else if (type === 8) { // Tutor
-            var tutorCount = amount > 1 ? amount + ' ' : '';
+            // A tutor lets you pick UP TO `amount` from the deck (capped at
+            // what's there), so read "up to N" when it's more than one.
+            var tutorCount = amount > 1 ? 'up to ' + amount + ' ' : '';
             if (cardData && cardData.tutor_target) {
                 var tt = cardData.tutor_target;
                 if (typeof tt === 'string') {
                     var tutorName = findCardNameById(tt);
+                    if (amount > 1) tutorName += 's';  // "Tree Wyrms"
                     desc = prefix + 'Tutor ' + tutorCount + tutorName;
                 } else if (typeof tt === 'object') {
                     // Selector dict: {tribe: "Rat"} etc.

@@ -297,9 +297,11 @@ function renderCardFrame(c, opts) {
         if (c.react_effect && c.react_effect.type === 5) {
             reactEffectText = 'Summon';
         } else if (c.react_effect) {
-            reactEffectText = getEffectDescription([c.react_effect], c);
+            // noTrigger: inside a React box the trigger label is redundant —
+            // and a react_effect tagged on_summon must not read "Summon: ...".
+            reactEffectText = getEffectDescription([c.react_effect], c, { noTrigger: true });
         } else if (c.effects && c.effects.length > 0) {
-            reactEffectText = getEffectDescription(c.effects, c);
+            reactEffectText = getEffectDescription(c.effects, c, { noTrigger: true });
         }
         var body = '';
         (reactEffectText || '').split('. ').forEach(function(line) {

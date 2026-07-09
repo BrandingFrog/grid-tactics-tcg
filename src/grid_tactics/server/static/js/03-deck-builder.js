@@ -988,9 +988,11 @@ function buildCardTooltipContent(c) {
         if (c.react_effect && c.react_effect.type === 5) {
             reactEffectTooltip = ' ▶ Summon';
         } else if (c.react_effect) {
-            reactEffectTooltip = ' ▶ ' + getEffectDescription([c.react_effect], c);
+            // noTrigger: react box already states the trigger — don't prefix
+            // "Summon:" on a react_effect tagged on_summon (Tree Wyrm).
+            reactEffectTooltip = ' ▶ ' + getEffectDescription([c.react_effect], c, { noTrigger: true });
         } else if (c.effects && c.effects.length > 0) {
-            reactEffectTooltip = ' ▶ ' + getEffectDescription(c.effects, c);
+            reactEffectTooltip = ' ▶ ' + getEffectDescription(c.effects, c, { noTrigger: true });
         }
         cardTextLines.push('React' + costText + ': ' + condText + extraCond + reactEffectTooltip);
     }
