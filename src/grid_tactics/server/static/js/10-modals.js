@@ -1123,7 +1123,7 @@ function renderActionBar() {
                 : gameState.active_player_idx === myPlayerIdx);
         if (gameState.phase === 1) {
             // REACT phase: show Skip React button (only when player has react cards available)
-            var canPass = _myTurnToAct && legalActions.some(function(a) { return a.action_type === 4; });
+            var canPass = canShowPassButton();
             if (canPass) {
                 var skipBtn = document.createElement('button');
                 skipBtn.className = 'btn btn-action btn-pass';
@@ -1135,7 +1135,7 @@ function renderActionBar() {
             }
         } else {
             // ACTION phase: show the free Pass button with the Handshake hint.
-            var canPassAction = _myTurnToAct && legalActions.some(function(a) { return a.action_type === 4; });
+            var canPassAction = canShowPassButton();
             if (canPassAction) {
                 var passBtn = document.createElement('button');
                 passBtn.className = 'btn btn-action btn-pass btn-pass-action';
@@ -1390,8 +1390,10 @@ function _runRpsClash(data, done) {
         '<div class="rps-tile-glyph">' + (RPS_GLYPHS[data.opp_pick] || '?') + '</div>' +
         '<div class="rps-tile-label">Opponent</div>';
     overlay.appendChild(mine);
-    _pregameScaleEl(mine);
     overlay.appendChild(theirs);
+    // Tiles scale uniformly via CSS (.rps-clash-overlay > * { scale: --mfu }).
+    // The old per-tile _pregameScaleEl(mine) set an inline transform:scale that
+    // clobbered the centring translate and only touched 'mine' (user 2026-07-09).
     document.body.appendChild(overlay);
 
     var finished = false;

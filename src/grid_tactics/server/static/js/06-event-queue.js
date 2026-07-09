@@ -141,11 +141,55 @@ function canActNow() {
     if (typeof sandboxMode !== 'undefined' && sandboxMode) return true;
     if (isEventQueueBusy()) return false;
     if (!legalActions || legalActions.length === 0) return false;
-    if (gameState && gameState.phase === 1
-            && gameState.react_player_idx != null
-            && myPlayerIdx != null
-            && gameState.react_player_idx !== myPlayerIdx) return false;
+    if (!gameState) return false;
+    if (typeof myPlayerIdx === 'number') {
+        if (gameState.phase === 1) {
+            // REACT: the open window must be MINE.
+            if (gameState.react_player_idx !== myPlayerIdx) return false;
+        } else {
+            // Only ACTION(0) is actionable; START_OF_TURN(2)/END_OF_TURN(3)
+            // auto-advance. The active seat must be MINE.
+            if (gameState.phase !== 0) return false;
+            if (gameState.active_player_idx !== myPlayerIdx) return false;
+        }
+    }
     return true;
+}
+
+// Single source of truth for the free Pass (ACTION) / Skip React (REACT)
+// button. Reuses canActNow() (busy + seat/phase + react-ownership) and adds
+// the button-specific gates: a legal PASS must exist, no pending-decision
+// modal the player OWNS may be open, and no client-only action overlay /
+// in-progress selection may be up. Sandbox god-view: canActNow() returns true
+// and the seat-keyed pending check is a no-op (myPlayerIdx not a number).
+function canShowPassButton() {
+    if (!canActNow()) return false;
+    if (!legalActions.some(function(a) { return a.action_type === 4; })) return false;
+    if (_iOwnAPendingDecision()) return false;
+    if (_clientActionOverlayOpen()) return false;
+    return true;
+}
+
+function _iOwnAPendingDecision() {
+    if (!gameState || typeof myPlayerIdx !== 'number') return false;
+    var me = myPlayerIdx;
+    if (gameState.pending_tutor_player_idx === me) return true;
+    if (gameState.pending_conjure_deploy_player_idx === me) return true;
+    if (gameState.pending_revive_player_idx === me) return true;
+    if (gameState.pending_trigger_picker_idx === me) return true;
+    if (gameState.pending_death_target_owner_idx === me) return true;
+    // Post-move attack blocks Pass ONLY in ACTION; the intervening REACT
+    // window's Skip is valid.
+    if (gameState.pending_post_move_attacker_id != null && gameState.phase === 0) return true;
+    return false;
+}
+
+function _clientActionOverlayOpen() {
+    if (typeof document === 'undefined') return false;
+    if (document.getElementById('sacrifice-picker')) return true;
+    if (document.getElementById('minion-action-menu')) return true;
+    if (typeof interactionMode !== 'undefined' && interactionMode !== null) return true;
+    return false;
 }
 
 function onEngineEvents(payload) {
