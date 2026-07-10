@@ -119,15 +119,18 @@ const PHASE_DISPLAY = {
     1: { label: 'REACT',  cssClass: 'phase-react',  bg: 'var(--yellow)' },
 };
 
-// React-prompt mode: 'on' | 'auto' | 'off'. Persisted to localStorage so
+// React-prompt mode: 'auto' | 'off'. Persisted to localStorage so
 // the choice survives reloads. The auto-skip in renderActionBar reads
 // _reactPromptMode() to decide whether to fire PASS automatically.
+// 'on' (never auto-skip) REMOVED per user 2026-07-10 — the fake
+// response-wait hourglass made it redundant; legacy stored 'on'
+// values fall back to 'auto'.
 var REACT_MODE_KEY = 'gridtactics.reactMode';
-var REACT_MODE_CYCLE = { 'on': 'auto', 'auto': 'off', 'off': 'on' };
+var REACT_MODE_CYCLE = { 'auto': 'off', 'off': 'auto' };
 function _reactPromptMode() {
     try {
         var v = localStorage.getItem(REACT_MODE_KEY);
-        if (v === 'on' || v === 'auto' || v === 'off') return v;
+        if (v === 'auto' || v === 'off') return v;
     } catch (e) { /* localStorage unavailable */ }
     return 'auto';
 }

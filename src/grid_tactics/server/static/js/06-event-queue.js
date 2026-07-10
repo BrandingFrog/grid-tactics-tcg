@@ -85,6 +85,13 @@ var slotState = {
     // the window opens. Cleared after consumption so a stale originator
     // never leaks into a later unrelated react window.
     lastOriginator: null,     // {numericId, playerIdx} or null
+    // React rework (user 2026-07-10): the spell stage no longer slams the
+    // originating card when a react window merely OPENS — it shows only
+    // when a react is actually played. The originator is parked here at
+    // window-open; playCardPlayed's is_react branch slams it (LEFT slot)
+    // right before the react card, and react_window_closed discards it
+    // when the window resolves without a response.
+    pendingStageOriginator: null,  // {numericId, playerIdx} or null
     // Timing overhaul (2026-07-08, F8): the event dispatched immediately
     // BEFORE the one currently playing. playMinionDied consults it to skip
     // the death animation when the preceding attack_resolved's lunge
@@ -110,6 +117,7 @@ function resetEventQueue() {
     slotState.pendingModalKind = null;
     slotState.pendingModalDeadline = 0;
     slotState.lastOriginator = null;
+    slotState.pendingStageOriginator = null;
     slotState.prevDispatchedEvent = null;
     slotState.lastDispatchedEvent = null;
     _drainFinalApplied = false;
@@ -1508,7 +1516,17 @@ function playCardPlayed(ev, done) {
             // hand container, so we MUST do this BEFORE re-rendering the
             // hand — otherwise the rect of an empty hand makes the slam
             // animation read like the card flies from nowhere.
+            // React rework (user 2026-07-10): a react is ACTUALLY being
+            // played — this is now the moment the stage ceremony starts.
+            // Slam the parked originator first (caster's LEFT stack) so
+            // the chain shows what the react is answering, then the
+            // react card itself.
             if (typeof _showSpellStage === 'function') {
+                var pending = slotState.pendingStageOriginator;
+                if (pending && pending.numericId != null) {
+                    slotState.pendingStageOriginator = null;  // consumed
+                    _showSpellStage(pending.numericId, pending.playerIdx);
+                }
                 _showSpellStage(payload.card_numeric_id, ownerIdx);
             }
             // Phase 14.8-05c: consume the originator we just stashed above
@@ -1731,30 +1749,23 @@ function playReactWindowOpened(ev, done) {
         return;
     }
     // Consume the stashed originator from the preceding card_played /
-    // trigger_blip and slam it onto the spell stage LEFT slot. If no
-    // originator is stashed (engine path that doesn't emit one, or out-
-    // of-order delivery somehow), log but continue — the chain tracker
-    // still increments so close_react_window pops the right entry.
+    // trigger_blip. React rework (user 2026-07-10): the stage NO LONGER
+    // slams the originator just because a window opened — the ceremony
+    // plays only when a react is actually played. The originator is
+    // parked on slotState.pendingStageOriginator; playCardPlayed's
+    // is_react branch slams it right before the react card. One
+    // exception below: when this window pauses for THE LOCAL PLAYER's
+    // react decision, the stage shows the originator immediately —
+    // they need to see what they're reacting to.
     var origin = slotState.lastOriginator;
     slotState.lastOriginator = null;  // consume
-    // Timing overhaul (2026-07-08, F6/F7): three-way branch on the
-    // originator. Trigger-sourced windows skip the spell-stage ceremony
-    // entirely — the ~500ms blip + effect popup ARE the visual, and the
-    // stage now slams a card only when a player actually PLAYS a react
-    // (playCardPlayed's is_react branch opens it independently, so
-    // counter-play is unaffected). Only a real slam earns the 1500ms gate.
     var slammed = false;
     if (origin && origin.numericId != null
             && origin.source === 'trigger_blip') {
-        // No stage for passive triggers — fall through to done(0) below.
+        // No stage for passive triggers — the ~500ms blip + effect popup
+        // ARE the visual (timing overhaul 2026-07-08, F6/F7).
     } else if (origin && origin.numericId != null) {
-        try {
-            _showSpellStage(origin.numericId, origin.playerIdx);
-            slammed = true;
-        } catch (e) {
-            // Defensive — a broken render must not crash the eventQueue.
-            console.warn('playReactWindowOpened: _showSpellStage threw', e);
-        }
+        slotState.pendingStageOriginator = origin;
     } else {
         // Debug hint — helpful when chasing "spell stage didn't show"
         // regressions. Single-line console log (no scary warnings for
@@ -1802,17 +1813,88 @@ function playReactWindowOpened(ev, done) {
         // cards. updateHandHighlights() reads legalActions + gameState.
         if (typeof updateHandHighlights === 'function') updateHandHighlights();
     } catch (e) { /* defensive */ }
+    // React rework (user 2026-07-10): if this window pauses for the LOCAL
+    // player's decision (they hold a playable react and their mode isn't
+    // OFF), slam the originator now — the stage is how they see what
+    // they're reacting to. Checked AFTER the legalActions re-sync above
+    // so the PLAY_REACT entries are current.
+    if (!sandboxMode
+            && slotState.pendingStageOriginator
+            && typeof myPlayerIdx === 'number'
+            && payload.react_player_idx === myPlayerIdx
+            && Array.isArray(legalActions)
+            && legalActions.some(function(a) { return a.action_type === 5; })
+            && (typeof _reactPromptMode !== 'function' || _reactPromptMode() !== 'off')) {
+        try {
+            var pOrigin = slotState.pendingStageOriginator;
+            slotState.pendingStageOriginator = null;  // consumed
+            _showSpellStage(pOrigin.numericId, pOrigin.playerIdx);
+            slammed = true;
+        } catch (e) {
+            // Defensive — a broken render must not crash the eventQueue.
+            console.warn('playReactWindowOpened: _showSpellStage threw', e);
+        }
+    }
     // Pacing (F6/F7b): a real slam paces at the stage-per-card beat
     // (520ms fly + 1000ms hold) — deliberately IGNORING the wire duration
     // (playHandshake pattern: the wire says 600ms, which would advance the
-    // queue mid-slam). No slam → nothing to watch → 0ms pass-through.
+    // queue mid-slam). No slam → 0ms pass-through; the fake response wait
+    // (user 2026-07-10) happens at the CLOSE event instead, so events
+    // between open and close (e.g. the minion landing on the grid) play
+    // BEFORE the wait.
     if (slammed) {
         var _perCard = (typeof SPELL_STAGE_PER_CARD_MS === 'number')
             ? SPELL_STAGE_PER_CARD_MS : 1500;
         setTimeout(done, _perCard);
-    } else {
-        setTimeout(done, 0);
+        return;
     }
+    setTimeout(done, 0);
+}
+
+// "Waiting…" mouse-follower (user 2026-07-10): shown while a react window
+// is held open 0.5–1.5s to mask whether the opponent had any response.
+// Small text that rides the cursor with animated trailing dots; with no
+// mouse yet (touch devices), it parks below the board center.
+var _reactWaitMouse = { x: null, y: null };
+if (typeof document !== 'undefined') {
+    document.addEventListener('mousemove', function(e) {
+        _reactWaitMouse.x = e.clientX;
+        _reactWaitMouse.y = e.clientY;
+        var f = document.getElementById('react-wait-follower');
+        if (f) {
+            f.style.left = (e.clientX + 14) + 'px';
+            f.style.top = (e.clientY + 18) + 'px';
+        }
+    });
+}
+function _showReactWaitFollower(ms) {
+    try {
+        var f = document.getElementById('react-wait-follower');
+        if (!f) {
+            f = document.createElement('div');
+            f.id = 'react-wait-follower';
+            f.className = 'react-wait-follower';
+            f.textContent = 'Waiting';
+            document.body.appendChild(f);
+        }
+        if (_reactWaitMouse.x != null) {
+            f.style.left = (_reactWaitMouse.x + 14) + 'px';
+            f.style.top = (_reactWaitMouse.y + 18) + 'px';
+        } else {
+            f.style.left = '50%';
+            f.style.top = '58%';
+        }
+        // Chained windows extend the deadline instead of stacking timers.
+        var until = Date.now() + ms;
+        f.dataset.until = String(until);
+        setTimeout(function() {
+            var live = document.getElementById('react-wait-follower');
+            if (live && Number(live.dataset.until || 0) <= Date.now()
+                    && live.parentNode) {
+                live.parentNode.removeChild(live);
+            }
+        }, ms + 30);
+    } catch (e) { /* defensive — purely visual */ }
 }
 
 // react_window_closed — pop the topmost chain entry. When the chain drains
@@ -1822,8 +1904,9 @@ function playReactWindowClosed(ev, done) {
     // Pop chain entry. Defensive against underflow (server emits an
     // EVT_REACT_WINDOW_CLOSED even for shortcut-path symmetry when no
     // triggers fired — chain may already be empty).
+    var poppedWindow = null;
     if (slotState.spellStageChain.length > 0) {
-        slotState.spellStageChain.pop();
+        poppedWindow = slotState.spellStageChain.pop();
     }
     // Timing overhaul (2026-07-08): a shortcut pair never slammed anything —
     // never wait on a stage resolve here (a previous window's resolve may
@@ -1838,6 +1921,16 @@ function playReactWindowClosed(ev, done) {
     var chainEmpty = slotState.spellStageChain.length === 0;
     var stageUp = (typeof isSpellStageAnimating === 'function')
         ? isSpellStageAnimating() : false;
+    // React rework (user 2026-07-10): window resolved — if no react ever
+    // consumed the parked originator, this window closed with NO response.
+    // Consume it here: it must not leak onto a later unrelated window's
+    // stage, and its survival is the trigger for the fake response wait
+    // below (only action-sourced windows park one).
+    var unansweredOriginator = null;
+    if (chainEmpty) {
+        unansweredOriginator = slotState.pendingStageOriginator;
+        slotState.pendingStageOriginator = null;
+    }
     // Audit fix (2026-07-06): the REACT WINDOW banner + Skip React pill
     // used to linger until the drain-end renderGame, seconds after the
     // window actually closed. Clear them the moment the chain empties.
@@ -1868,6 +1961,26 @@ function playReactWindowClosed(ev, done) {
         var resolveDur = (pendingIn * SPELL_STAGE_PER_CARD_MS)
             + 700 + (totalCards * 550) + 250;
         setTimeout(done, Math.max(_evDurationOr(ev, 400), resolveDur));
+        return;
+    }
+    // Fake response wait (user 2026-07-10): an action-sourced window (a
+    // card WE watched being played parked an originator) just closed with
+    // no response, and it was the OPPONENT's to answer. Hold the queue a
+    // random 0.5–1.5s with the "Waiting…" cursor-follower so an instant
+    // auto-PASS from a react:auto opponent doesn't leak "they had no
+    // possible response". Runs at the CLOSE event deliberately: anything
+    // between open and close (the summoned minion landing on the grid)
+    // has already played. Skipped in sandbox (god view, server pre-drains
+    // trivial windows) and for the local player's own window.
+    if (unansweredOriginator
+            && !sandboxMode
+            && typeof myPlayerIdx === 'number'
+            && poppedWindow
+            && poppedWindow.react_player_idx != null
+            && poppedWindow.react_player_idx !== myPlayerIdx) {
+        var waitMs = 500 + Math.floor(Math.random() * 1000);
+        _showReactWaitFollower(waitMs);
+        setTimeout(done, waitMs);
         return;
     }
     setTimeout(done, _evDurationOr(ev, 400));

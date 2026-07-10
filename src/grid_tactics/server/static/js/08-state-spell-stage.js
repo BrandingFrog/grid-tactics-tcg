@@ -4,7 +4,9 @@
 
 function onGameStart(data) {
     // PREGAME (2026-07-08): tear down any lingering RPS / mulligan UI —
-    // the game proper is starting.
+    // the game proper is starting. Capture the flag first: it gates the
+    // initial-hand deal animation below (user 2026-07-10).
+    var _wasPregame = !!window._pregameActive;
     try { if (typeof cleanupPregameUI === 'function') cleanupPregameUI(); } catch (e) { /* defensive */ }
     // Phase 14.8-04a: a fresh game means the engine event seq counter
     // restarts at 0; reset lastSeenSeq so the first event isn't dropped.
@@ -37,6 +39,21 @@ function onGameStart(data) {
         roomCodeEl.textContent = roomCode;
     }
     renderGame();
+    // Initial-hand deal (user 2026-07-10): coming out of the mulligan, the
+    // kept hand flies from the deck into its slots instead of popping in.
+    // The hand DOM can land a few frames after game_start (renders are
+    // event-paced) — poll briefly until the slots exist.
+    if (_wasPregame && typeof animateInitialHandDeal === 'function') {
+        var _dealTries = 0;
+        (function _tryDeal() {
+            var handEl = document.getElementById('hand-container');
+            if (handEl && handEl.querySelector('.card-frame-hand')) {
+                try { animateInitialHandDeal(); } catch (e) { /* decorative */ }
+                return;
+            }
+            if (++_dealTries < 25) setTimeout(_tryDeal, 100);
+        })();
+    }
 }
 
 // Phase 14.8-05: onStateUpdate is a snapshot-cache commit ONLY for the
@@ -1560,8 +1577,9 @@ function resetGameClientState() {
     selectedMinionId = null;
     interactionMode = null;
 
-    var roomPanel = document.getElementById('room-panel');
-    if (roomPanel) roomPanel.style.display = 'none';
+    // Lobby restructure (user 2026-07-10): the waiting room + rooms browser
+    // are sub-views of the lobby now — drop back to the main view.
+    if (typeof showLobbyView === 'function') showLobbyView('main');
     var roomCodeDisplay = document.getElementById('room-code-display');
     if (roomCodeDisplay) roomCodeDisplay.textContent = '';
     var playerList = document.getElementById('player-list');

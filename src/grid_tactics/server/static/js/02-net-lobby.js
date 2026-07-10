@@ -48,6 +48,10 @@ function initSocket() {
     socket.on('rooms_list', onRoomsList);
     socket.on('player_joined', onPlayerJoined);
     socket.on('player_ready', onPlayerReady);
+    // Lobby restructure (user 2026-07-10): waiting-room leave/close flow.
+    socket.on('room_left', onRoomLeft);
+    socket.on('room_closed', onRoomClosed);
+    socket.on('player_left', onPlayerLeft);
     socket.on('game_start', onGameStart);
     // PREGAME (user 2026-07-08): RPS decides who goes first, then mulligan,
     // then the normal game_start arrives. Handlers live in 10-modals.js.
@@ -342,6 +346,28 @@ function onRoomJoined(data) {
 function onPlayerJoined(data) {
     addPlayerToList(data.display_name, false);
     showLobbyStatus('Opponent joined! Select a deck and ready up.', 'info');
+}
+
+// Lobby restructure (user 2026-07-10): waiting-room leave/close flow.
+// room_left  — ack for OUR leave_room; back to the main lobby view.
+// room_closed — the host left; we were kicked back to the lobby.
+// player_left — the joiner backed out; the room stays open for another.
+function onRoomLeft(_data) {
+    resetRoomPanelToLobby('Left the room.', 'info');
+}
+
+function onRoomClosed(_data) {
+    resetRoomPanelToLobby('The host closed the room.', 'error');
+}
+
+function onPlayerLeft(data) {
+    var name = (data && data.display_name) || null;
+    var items = document.querySelectorAll('#player-list .player-item');
+    items.forEach(function(item) {
+        var nameEl = item.querySelector('.player-item-name');
+        if (nameEl && name && nameEl.textContent === name) item.remove();
+    });
+    showLobbyStatus((name || 'Opponent') + ' left the room.', 'info');
 }
 
 function onPlayerReady(data) {
@@ -691,6 +717,33 @@ function setupLobbyHandlers() {
         });
     }
 
+    // Lobby restructure (user 2026-07-10): open/close the rooms-browser
+    // sub-view, and leave the waiting room from its sub-view.
+    var btnOpenRooms = document.getElementById('btn-open-rooms');
+    if (btnOpenRooms) {
+        btnOpenRooms.addEventListener('click', function() {
+            showLobbyView('rooms');
+            if (socket && socket.connected) socket.emit('list_rooms');
+        });
+    }
+    var btnRoomsBack = document.getElementById('btn-rooms-back');
+    if (btnRoomsBack) {
+        btnRoomsBack.addEventListener('click', function() {
+            showLobbyView('main');
+        });
+    }
+    var btnLeaveRoom = document.getElementById('btn-leave-room');
+    if (btnLeaveRoom) {
+        btnLeaveRoom.addEventListener('click', function() {
+            if (socket && socket.connected && sessionToken) {
+                socket.emit('leave_room', {});
+            } else {
+                // Not actually seated (defensive) — just drop the view.
+                resetRoomPanelToLobby();
+            }
+        });
+    }
+
     // Ask for the initial list so the panel isn't empty on first render.
     if (socket && socket.connected) {
         socket.emit('list_rooms');
@@ -735,11 +788,44 @@ function setupLobbyHandlers() {
     populateDeckSelector();
 }
 
+// Lobby restructure (user 2026-07-10): the lobby now TRANSITIONS between
+// three views instead of cramming everything on one screen —
+//   'main'  — brand + play controls (no overlay)
+//   'rooms' — open-games browser (#rooms-panel) with a back button
+//   'room'  — waiting room (#room-view) with a Leave button
+// The sub-views are opaque overlay children of .lobby2 so they inherit
+// the parchment CSS vars and the 100vh lock.
+function showLobbyView(view) {
+    var rooms = document.getElementById('rooms-panel');
+    var room = document.getElementById('room-view');
+    if (rooms) rooms.style.display = (view === 'rooms') ? '' : 'none';
+    if (room) room.style.display = (view === 'room') ? '' : 'none';
+}
+
 function showRoomPanel() {
-    var panel = document.getElementById('room-panel');
-    if (panel) panel.style.display = '';
+    showLobbyView('room');
     // Refresh deck selector in case decks were saved after page load
     populateDeckSelector();
+}
+
+// Back-out of the waiting room / room-closed cleanup: restore the room
+// panel to its pristine state and drop back to the main lobby view.
+function resetRoomPanelToLobby(statusMsg, statusType) {
+    sessionToken = null;
+    roomCode = null;
+    var playerList = document.getElementById('player-list');
+    if (playerList) playerList.innerHTML = '';
+    var codeDisplay = document.getElementById('room-code-display');
+    if (codeDisplay) codeDisplay.textContent = '';
+    var btnReady = document.getElementById('btn-ready');
+    if (btnReady) {
+        btnReady.disabled = false;
+        if (btnReady.dataset.readyLabelHtml) {
+            btnReady.innerHTML = btnReady.dataset.readyLabelHtml;
+        }
+    }
+    showLobbyView('main');
+    if (statusMsg) showLobbyStatus(statusMsg, statusType || 'info');
 }
 
 function addPlayerToList(name, ready) {

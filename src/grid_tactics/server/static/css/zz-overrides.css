@@ -5655,3 +5655,96 @@ input::selection, textarea::selection { background: rgba(224, 162, 60, 0.45); co
 #screen-deck-builder .card-browser-grid {
   align-content: start !important;
 }
+
+/* Fake react-response wait (user 2026-07-10): while a react window is held
+   open 0.5-1.5s to mask whether the opponent had any response, a small
+   "Waiting..." with animated trailing dots follows the cursor. */
+.react-wait-follower {
+  position: fixed;
+  z-index: 200;
+  pointer-events: none;
+  font-family: 'Alegreya SC', serif;
+  font-weight: 700;
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  color: #e0a23c;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
+  white-space: nowrap;
+}
+.react-wait-follower::after {
+  content: '';
+  animation: react-wait-dots 1.2s steps(1) infinite;
+}
+@keyframes react-wait-dots {
+  0%   { content: ''; }
+  25%  { content: '.'; }
+  50%  { content: '..'; }
+  75%  { content: '...'; }
+}
+
+/* Lobby sub-views (user 2026-07-10): the open-games browser and the
+   waiting room are full-screen views the lobby TRANSITIONS to (each with
+   a back button) instead of cramming everything on one screen — the play
+   column pushed the games list below the fold and #room-panel rendered
+   entirely below the 100vh-locked .lobby2. Sub-views are opaque overlay
+   CHILDREN of .lobby2 so they inherit the parchment CSS vars. */
+#screen-lobby .lobby2-subview {
+  position: absolute; inset: 0; z-index: 6;
+  display: flex; flex-direction: column;
+  padding: calc(var(--u) * 16) calc(var(--u) * 25);
+  background:
+    radial-gradient(120% 120% at 22% 4%, rgba(224, 162, 60, 0.17) 0%, transparent 46%),
+    radial-gradient(150% 150% at 50% 38%, #251a0e 0%, #160f07 56%, #0b0805 100%);
+}
+#screen-lobby .lobby2-subview-center { align-items: center; justify-content: center; }
+#screen-lobby .lobby2-subview-head {
+  flex: 0 0 auto;
+  display: flex; align-items: center; gap: calc(var(--u) * 12);
+  margin-bottom: calc(var(--u) * 10);
+}
+#screen-lobby .lobby2-subview-title {
+  flex: 1;
+  font-family: 'Alegreya SC', serif; font-weight: 700;
+  font-size: calc(var(--u) * 17); letter-spacing: calc(var(--u) * 1.5);
+  color: var(--parch);
+}
+#screen-lobby .lobby2-subview-head #btn-refresh-rooms {
+  background: none; border: none; color: var(--gold);
+  font-family: 'Alegreya SC', serif; font-size: calc(var(--u) * 12);
+  cursor: pointer; letter-spacing: calc(var(--u) * 1);
+}
+#screen-lobby .lobby2-back {
+  font-family: 'Alegreya SC', serif; font-weight: 700;
+  font-size: calc(var(--u) * 13); letter-spacing: calc(var(--u) * 1);
+  color: var(--parch-dim);
+  background: rgba(30, 22, 10, 0.72);
+  border: 1px solid var(--bronze-dk);
+  border-radius: calc(var(--u) * 6);
+  padding: calc(var(--u) * 6) calc(var(--u) * 14);
+  cursor: pointer;
+  transition: color .15s, border-color .15s;
+}
+#screen-lobby .lobby2-back:hover { color: var(--parch); border-color: var(--bronze); }
+#screen-lobby .lobby2-subview-body {
+  flex: 1 1 auto; min-height: 0;
+  overflow-y: auto;
+  display: flex; flex-direction: column; gap: calc(var(--u) * 8);
+  scrollbar-width: thin; scrollbar-color: #6b5730 transparent;
+}
+#screen-lobby .lobby2-subview-body::-webkit-scrollbar { width: 8px; }
+#screen-lobby .lobby2-subview-body::-webkit-scrollbar-thumb { background: #6b5730; border-radius: 4px; }
+/* The sub-view body is the scroller now — undo the old inline-list cap. */
+#screen-lobby #rooms-panel .lobby2-rooms { max-height: none; overflow: visible; flex: 0 0 auto; }
+/* Waiting-room card centers in its sub-view instead of margin-stacking
+   below the play grid. */
+#screen-lobby #room-view .lobby2-room { width: min(92%, calc(var(--u) * 560)); margin: 0; max-height: 100%; overflow-y: auto; }
+#screen-lobby .lobby2-room-headr {
+  display: flex; flex-direction: column; align-items: flex-end;
+  gap: calc(var(--u) * 8);
+}
+/* "Open games ▸" browse button sits with the join row visually. */
+#screen-lobby .lobby2-btn-browse { justify-content: center; }
+
+/* Sub-view header clears the corner fullscreen toggle (it was overlapping
+   the Refresh button at 844x390). */
+#screen-lobby .lobby2-subview-head { padding-right: calc(var(--u) * 40); }

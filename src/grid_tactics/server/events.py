@@ -4,7 +4,7 @@ from dataclasses import fields as _dc_fields
 from enum import IntEnum as _IntEnum
 
 from flask import request
-from flask_socketio import emit, join_room as sio_join_room
+from flask_socketio import emit, join_room as sio_join_room, leave_room as sio_leave_room
 
 from grid_tactics.actions import pass_action
 from grid_tactics.action_resolver import resolve_action
@@ -746,6 +746,36 @@ def register_events(room_manager: RoomManager) -> None:
         })
         # Notify creator
         emit("player_joined", {"display_name": display_name}, to=room.creator.sid)
+        _broadcast_rooms_list()
+
+    @socketio.on("leave_room")
+    def handle_leave_room(_data=None):
+        """Lobby restructure (user 2026-07-10): back out of a WAITING room.
+
+        Only valid before the game starts. The creator leaving closes the
+        room (the joiner gets ``room_closed``); a joiner leaving reopens
+        the seat (the creator gets ``player_left``).
+        """
+        token = _room_manager.get_token_by_sid(request.sid)
+        if token is None:
+            emit("error", {"msg": "Not in a room"})
+            return
+        try:
+            room_code, leaver_name, other, closed = _room_manager.leave_room(token)
+        except ValueError as e:
+            emit("error", {"msg": str(e)})
+            return
+        sio_leave_room(room_code)
+        emit("room_left", {"room_code": room_code})
+        if other is not None and other.sid:
+            if closed:
+                socketio.emit("room_closed", {"room_code": room_code}, to=other.sid)
+            else:
+                socketio.emit(
+                    "player_left",
+                    {"display_name": leaver_name},
+                    to=other.sid,
+                )
         _broadcast_rooms_list()
 
     @socketio.on("ready")

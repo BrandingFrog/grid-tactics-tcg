@@ -1060,14 +1060,13 @@ function renderActionBar() {
         return;
     }
 
-    // Auto-skip behavior gated by the user's react-prompt mode (ON/AUTO/OFF):
+    // Auto-skip behavior gated by the user's react-prompt mode (AUTO/OFF):
     //   OFF  — auto-skip ALWAYS, even if a react card is playable. Useful
     //          when you trust the engine and want minimum interruptions.
     //   AUTO — auto-skip ONLY when no react card is legal (current default).
     //          Pauses for you when you actually have a viable react.
-    //   ON   — never auto-skip. Always require a manual click on the
-    //          floating Skip React button (or play a react card) to
-    //          close the window. YGO-style "always confirm".
+    //   ('ON' — never auto-skip — REMOVED per user 2026-07-10; the fake
+    //   response-wait hourglass masks the information leak it existed for.)
     //
     // Sandbox NOTE: `SandboxSession.apply_action` already drains trivial
     // PASS-only REACT windows server-side and emits one frame per
@@ -1097,8 +1096,8 @@ function renderActionBar() {
             submitAction({ action_type: 4 });
             return;
         }
-        // mode === 'on' OR (mode === 'auto' && hasReactOption): fall through
-        // and let renderActionBar / floating button drive the manual click.
+        // mode === 'auto' && hasReactOption: fall through and let
+        // renderActionBar / floating button drive the manual click.
     }
 
     // Show/refresh the floating Skip React button only AFTER the auto-skip
@@ -1604,6 +1603,78 @@ function _mullFlyToDeck(tile, nid) {
     }
     ghost.addEventListener('transitionend', finish);
     setTimeout(finish, 800);
+}
+
+// Initial-hand deal (user 2026-07-10): after the mulligan resolves and the
+// duel renders, the KEPT hand flies from the deck pile into its slots with
+// a small stagger instead of popping in statically. Mulligan replacement
+// draws (card_drawn source:'mulligan') still fly via the normal draw path;
+// hidden slots register in the F9c in-flight registry so a concurrent
+// renderHand rebuild re-hides them instead of showing doubles.
+function animateInitialHandDeal() {
+    try {
+        var handEl = document.getElementById('hand-container');
+        if (!handEl || typeof renderCardFrame !== 'function') return;
+        var slots = handEl.querySelectorAll('.card-frame-hand');
+        if (!slots.length) return;
+        var handIds = (gameState && gameState.players
+            && typeof myPlayerIdx === 'number'
+            && gameState.players[myPlayerIdx])
+            ? gameState.players[myPlayerIdx].hand : null;
+        if (!Array.isArray(handIds)) return;
+        var from = (typeof _resolveDrawFromPoint === 'function')
+            ? _resolveDrawFromPoint('deck')
+            : { x: window.innerWidth * 0.10, y: window.innerHeight * 0.85 };
+        if (!window.__inFlightHandSlots) window.__inFlightHandSlots = {};
+        Array.prototype.forEach.call(slots, function(slotEl, i) {
+            var nid = handIds[i];
+            var def = cardDefs && cardDefs[nid];
+            var toRect = slotEl.getBoundingClientRect();
+            if (def == null || !toRect.width) return;
+            var slotKey = 'nid:' + nid;
+            window.__inFlightHandSlots[slotKey] = (window.__inFlightHandSlots[slotKey] | 0) + 1;
+            slotEl.style.visibility = 'hidden';
+            setTimeout(function() {
+                var floater = document.createElement('div');
+                floater.className = 'draw-fly-in';
+                floater.style.left = toRect.left + 'px';
+                floater.style.top = toRect.top + 'px';
+                floater.style.width = toRect.width + 'px';
+                floater.style.height = toRect.height + 'px';
+                floater.style.setProperty('--draw-fly-dx',
+                    (from.x - (toRect.left + toRect.width / 2)) + 'px');
+                floater.style.setProperty('--draw-fly-dy',
+                    (from.y - (toRect.top + toRect.height / 2)) + 'px');
+                floater.innerHTML = renderCardFrame(def, {
+                    context: 'hand',
+                    numericId: nid,
+                    interactive: false,
+                    showReactDeploy: false,
+                });
+                document.body.appendChild(floater);
+                var finished = false;
+                function finish() {
+                    if (finished) return;
+                    finished = true;
+                    if (floater.parentNode) floater.parentNode.removeChild(floater);
+                    try {
+                        var reg = window.__inFlightHandSlots;
+                        if (reg && reg[slotKey]) {
+                            reg[slotKey] = reg[slotKey] - 1;
+                            if (reg[slotKey] <= 0) delete reg[slotKey];
+                        }
+                    } catch (e) { /* defensive */ }
+                    var live = (typeof _resolveInFlightSlot === 'function')
+                        ? _resolveInFlightSlot(handEl, slotKey) : null;
+                    if (live) live.style.visibility = '';
+                    slotEl.style.visibility = '';
+                }
+                floater.addEventListener('animationend', finish);
+                setTimeout(finish, 800);
+            }, i * 110);
+        });
+        playSfx('card_play');
+    } catch (e) { /* defensive — the deal is decorative */ }
 }
 
 // Spectator / waiting status line. Persists until replaced or cleaned up

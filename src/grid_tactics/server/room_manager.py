@@ -171,6 +171,48 @@ class RoomManager:
             self._token_role[token] = 'player'
         return token, room
 
+    def leave_room(self, token: str) -> tuple[str, str, PlayerSlot | None, bool]:
+        """Remove a player from their WAITING room (pre-game only).
+
+        Returns ``(room_code, leaver_name, other_slot, room_closed)``.
+        The creator leaving closes the room (any joiner is kicked back to
+        the lobby); a joiner leaving reopens the seat. Raises ValueError
+        if the token is not seated in a waiting room (e.g. the room has
+        already been promoted to a pregame/game).
+        """
+        with self._lock:
+            room_code = self._token_to_room.get(token)
+            if room_code is None:
+                raise ValueError("Not in a room")
+            room = self._rooms.get(room_code)
+            if room is None:
+                raise ValueError("Game already starting — can't leave the room")
+        with room.lock:
+            if room.creator.token == token:
+                leaver_name = room.creator.name
+                other = room.joiner
+                closed = True
+            elif room.joiner is not None and room.joiner.token == token:
+                leaver_name = room.joiner.name
+                other = room.creator
+                closed = False
+                room.joiner = None
+            else:
+                raise ValueError("Token not in this room")
+        with self._lock:
+            gone_tokens = [token]
+            if closed:
+                self._rooms.pop(room_code, None)
+                if other is not None:
+                    gone_tokens.append(other.token)
+            for t in gone_tokens:
+                self._token_to_room.pop(t, None)
+                self._token_role.pop(t, None)
+            gone = set(gone_tokens)
+            for sid in [s for s, t in self._sid_to_token.items() if t in gone]:
+                del self._sid_to_token[sid]
+        return room_code, leaver_name, other, closed
+
     def set_ready(self, token: str) -> tuple[str, WaitingRoom, bool]:
         """Mark player as ready. Returns (room_code, room, both_ready).
 
