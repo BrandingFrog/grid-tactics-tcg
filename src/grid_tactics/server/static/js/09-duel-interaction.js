@@ -490,6 +490,16 @@ function onHandCardClick(handIdx, ownerIdx) {
     // This is the commit half of the two-click-to-cast flow below, so
     // accidentally brushing a magic card doesn't fire it immediately.
     if (selectedHandIdx === handIdx && interactionMode === 'confirm') {
+        // Discard-cost gate (user 2026-07-10): this path used to submit the
+        // FIRST matching legal action verbatim — for a discard-cost card
+        // (Shady Trade Deal) that silently exhausted whichever hand card
+        // the first action happened to name. Paying a cost now always
+        // requires an explicit pick + Accept in the picker.
+        var confirmSacs = getSacrificeChoices(handIdx, null, null);
+        if (confirmSacs.length > 0) {
+            showSacrificePicker(handIdx, null, null, confirmSacs);
+            return;
+        }
         var armed = findCardAction(handIdx, null, null);
         if (armed) submitAction(_playCardPayload(armed));
         clearSelection();
@@ -530,6 +540,16 @@ function onHandCardClick(handIdx, ownerIdx) {
     // on the same card re-selects in case they want to back out.
     if (deployPositions.length === 0 && targetOnly.length === 1) {
         var onlyTarget = targetOnly[0];
+        // Discard-cost gate (user 2026-07-10): the auto-submit skipped the
+        // discard picker entirely, silently paying with an arbitrary card.
+        var onlySacs = getSacrificeChoices(handIdx, null, onlyTarget);
+        if (onlySacs.length > 0) {
+            selectedHandIdx = handIdx;
+            selectedMinionId = null;
+            selectedDeployPos = null;
+            showSacrificePicker(handIdx, null, onlyTarget, onlySacs);
+            return;
+        }
         var onlyMatch = findCardAction(handIdx, null, onlyTarget);
         if (onlyMatch) {
             submitAction(_playCardPayload(onlyMatch));
@@ -699,9 +719,12 @@ function onBoardCellClick(row, col) {
                 highlightBoard();
                 return;
             }
-            // Check for discard-cost choices (discard_cost_tribe card)
+            // Check for discard-cost choices (discard_cost_tribe card).
+            // ALWAYS route through the picker — even with a single eligible
+            // card, paying a cost requires an explicit pick + Accept
+            // (user 2026-07-10; never silently discard from the hand).
             var sacChoices = getSacrificeChoices(selectedHandIdx, [row, col], null);
-            if (sacChoices.length > 1) {
+            if (sacChoices.length > 0) {
                 selectedDeployPos = [row, col];
                 showSacrificePicker(selectedHandIdx, [row, col], null, sacChoices);
                 return;
@@ -711,9 +734,7 @@ function onBoardCellClick(row, col) {
             // currently used by minions, but future-proof) propagates.
             var matched0 = findCardAction(selectedHandIdx, [row, col], null);
             if (matched0) {
-                var payload = _playCardPayload(matched0);
-                if (sacChoices.length === 1) payload.discard_card_index = sacChoices[0];
-                submitAction(payload);
+                submitAction(_playCardPayload(matched0));
             }
         }
         return;
@@ -725,9 +746,11 @@ function onBoardCellClick(row, col) {
             return p[0] === row && p[1] === col;
         });
         if (validTarget) {
-            // Check for discard-cost choices at this combo
+            // Check for discard-cost choices at this combo. ALWAYS route
+            // through the picker — paying a cost requires an explicit
+            // pick + Accept (user 2026-07-10).
             var sacChoices2 = getSacrificeChoices(selectedHandIdx, selectedDeployPos, [row, col]);
-            if (sacChoices2.length > 1) {
+            if (sacChoices2.length > 0) {
                 showSacrificePicker(selectedHandIdx, selectedDeployPos, [row, col], sacChoices2);
                 return;
             }
@@ -737,9 +760,7 @@ function onBoardCellClick(row, col) {
             // drop. First match wins the ally pick for cards with >1 ally.
             var matched = findCardAction(selectedHandIdx, selectedDeployPos, [row, col]);
             if (matched) {
-                var payload = _playCardPayload(matched);
-                if (sacChoices2.length === 1) payload.discard_card_index = sacChoices2[0];
-                submitAction(payload);
+                submitAction(_playCardPayload(matched));
             }
         }
         return;
@@ -1014,7 +1035,11 @@ function hideMinionActionMenu() {
 // required discard count.
 function showSacrificePicker(handIdx, deployPos, targetPos, sacChoices) {
     hideSacrificePicker();
-    var myPlayer = gameState.players[myPlayerIdx];
+    // Sandbox god-view has no seat (myPlayerIdx null) — the paying hand is
+    // the active player's.
+    var _pickerSeat = (typeof myPlayerIdx === 'number')
+        ? myPlayerIdx : (gameState.active_player_idx | 0);
+    var myPlayer = gameState.players[_pickerSeat];
     var playedCardId = myPlayer.hand[handIdx];
     var playedDef = cardDefs[playedCardId];
     var discardCount = (playedDef && playedDef.discard_cost_count) || 1;
