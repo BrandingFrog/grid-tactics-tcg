@@ -268,6 +268,17 @@ function getTileElForMinion(m) {
 // target flash + damage popup -> return tween (300ms) -> apply state.
 // Total ~800ms. State is applied by runQueue's default after done(),
 // so killed minions disappear AFTER the strike, not before.
+// Screen-scoped tile lookup (2026-07-10): an unscoped '.board-cell'
+// selector matches the GAME screen's cells first even when playing in
+// SANDBOX (both boards live in the DOM), so sandbox attack/move visuals
+// silently no-op'd whenever a game had rendered earlier in the session.
+function _boardCellFor(row, col) {
+    var screenSel = (typeof sandboxMode !== 'undefined' && sandboxMode)
+        ? '#screen-sandbox ' : '#screen-game ';
+    return document.querySelector(
+        screenSel + '.board-cell[data-row="' + row + '"][data-col="' + col + '"]');
+}
+
 function playAttackAnimation(job, done) {
     playSfx('attack_hit');
     var payload = (job && job.payload) || {};
@@ -277,10 +288,8 @@ function playAttackAnimation(job, done) {
 
     if (!attackerPos || !targetPos) { setTimeout(done, 0); return; }
 
-    var attackerCell = document.querySelector(
-        '.board-cell[data-row="' + attackerPos[0] + '"][data-col="' + attackerPos[1] + '"]');
-    var targetCell = document.querySelector(
-        '.board-cell[data-row="' + targetPos[0] + '"][data-col="' + targetPos[1] + '"]');
+    var attackerCell = _boardCellFor(attackerPos[0], attackerPos[1]);
+    var targetCell = _boardCellFor(targetPos[0], targetPos[1]);
 
     if (!attackerCell || !targetCell) { setTimeout(done, 0); return; }
 
@@ -426,30 +435,49 @@ function playRangedAttackAnimation(attackerCell, targetCell, damage, done) {
     defs.appendChild(marker);
     svg.appendChild(defs);
 
-    // The line itself: black halo underneath, gold on top, animated draw
-    var halo = document.createElementNS(SVG_NS, 'line');
-    halo.setAttribute('x1', ax); halo.setAttribute('y1', ay);
-    halo.setAttribute('x2', tx); halo.setAttribute('y2', ty);
+    // Aerial arc (user 2026-07-10): the arrow lobs on a quadratic Bézier
+    // instead of a straight line. The bow is PERPENDICULAR to the flight
+    // path (a plain "screen-up" control point degenerates to a straight
+    // line on same-column shots — the common case in a lane game),
+    // preferring the screen-up side so horizontal shots read as a lob.
+    // Height scales with shot distance, capped so close shots stay
+    // shallow. marker orient=auto keeps the arrowhead on the tangent, so
+    // it lands angled into the target.
+    var nx = -uy, ny = ux;
+    if (ny > 0) { nx = -nx; ny = -ny; }
+    var arcH = Math.min(90, len * 0.35);
+    var pathD = 'M ' + ax + ' ' + ay
+        + ' Q ' + (((ax + tx) / 2) + nx * arcH) + ' ' + (((ay + ty) / 2) + ny * arcH)
+        + ' ' + tx + ' ' + ty;
+
+    // The arc itself: black halo underneath, gold on top, animated draw
+    var halo = document.createElementNS(SVG_NS, 'path');
+    halo.setAttribute('d', pathD);
+    halo.setAttribute('fill', 'none');
     halo.setAttribute('stroke', 'rgba(0,0,0,0.85)');
     halo.setAttribute('stroke-width', '7');
     halo.setAttribute('stroke-linecap', 'round');
-    var line = document.createElementNS(SVG_NS, 'line');
-    line.setAttribute('x1', ax); line.setAttribute('y1', ay);
-    line.setAttribute('x2', tx); line.setAttribute('y2', ty);
+    var line = document.createElementNS(SVG_NS, 'path');
+    line.setAttribute('d', pathD);
+    line.setAttribute('fill', 'none');
     line.setAttribute('stroke', '#f0b64e');
     line.setAttribute('stroke-width', '4');
     line.setAttribute('stroke-linecap', 'round');
     line.setAttribute('marker-end', 'url(#ranged-arrowhead)');
 
-    // Stroke-dasharray draw-on effect
-    [halo, line].forEach(function (el) {
-        el.style.strokeDasharray = len + ' ' + len;
-        el.style.strokeDashoffset = len;
-        el.style.transition = 'stroke-dashoffset 350ms ease-out, opacity 300ms ease-out';
-    });
     svg.appendChild(halo);
     svg.appendChild(line);
     document.body.appendChild(svg);
+
+    // Stroke-dasharray draw-on effect — measured on the REAL curve (the
+    // Bézier is longer than the straight-line distance).
+    var pathLen = len;
+    try { pathLen = line.getTotalLength(); } catch (e) { /* fallback */ }
+    [halo, line].forEach(function (el) {
+        el.style.strokeDasharray = pathLen + ' ' + pathLen;
+        el.style.strokeDashoffset = pathLen;
+        el.style.transition = 'stroke-dashoffset 350ms ease-out, opacity 300ms ease-out';
+    });
 
     // Trigger the draw on next frame
     requestAnimationFrame(function () {
@@ -497,10 +525,9 @@ function _duelScaleFor(el) {
 
 function getTileDelta(fromPos, toPos) {
     if (!fromPos || !toPos) return null;
-    var fromCell = document.querySelector(
-        '.board-cell[data-row="' + fromPos[0] + '"][data-col="' + fromPos[1] + '"]');
-    var toCell = document.querySelector(
-        '.board-cell[data-row="' + toPos[0] + '"][data-col="' + toPos[1] + '"]');
+    // Screen-scoped (2026-07-10) — see _boardCellFor.
+    var fromCell = _boardCellFor(fromPos[0], fromPos[1]);
+    var toCell = _boardCellFor(toPos[0], toPos[1]);
     if (!fromCell || !toCell) return null;
     var fr = fromCell.getBoundingClientRect();
     var tr = toCell.getBoundingClientRect();
