@@ -107,6 +107,20 @@ function _updateWaitBadge(which, playerIdx) {
             } catch (e) { /* defensive */ }
         }, 500);
     }
+    // Unified react-wait (user 2026-07-10 MCQ): while the game waits on the
+    // OPPONENT's react decision, show the same cursor "Waiting…" follower
+    // as the fake no-response hold — if the two waits looked different,
+    // the fake hold would be a tell. The avatar hourglass stays for
+    // turn / pending-pick waits.
+    var oppReactWait = waiting && gameState
+        && gameState.phase === 1
+        && gameState.react_player_idx === playerIdx
+        && myPlayerIdx != null && playerIdx !== myPlayerIdx;
+    if (myPlayerIdx != null && playerIdx !== myPlayerIdx
+            && typeof _setReactWaitFollowerPersist === 'function') {
+        _setReactWaitFollowerPersist(!!oppReactWait);
+    }
+    if (oppReactWait) waiting = false;  // no hourglass for this case
     if (waiting) {
         if (!badge) {
             badge = document.createElement('span');

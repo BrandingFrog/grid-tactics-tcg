@@ -1476,6 +1476,9 @@ function playCardPlayed(ev, done) {
             playerIdx: (payload.owner_idx != null
                 ? payload.owner_idx
                 : payload.player_idx),
+            // Declared target tile (user 2026-07-10): pulsed when the cast
+            // is staged so the defender sees WHERE the magic is aimed.
+            targetPos: payload.target_pos || payload.position || null,
             source: 'card_played',
         };
     }
@@ -1526,8 +1529,10 @@ function playCardPlayed(ev, done) {
                 if (pending && pending.numericId != null) {
                     slotState.pendingStageOriginator = null;  // consumed
                     _showSpellStage(pending.numericId, pending.playerIdx);
+                    if (pending.targetPos) _pulseCastTargetTile(pending.targetPos);
                 }
                 _showSpellStage(payload.card_numeric_id, ownerIdx);
+                if (payload.target_pos) _pulseCastTargetTile(payload.target_pos);
             }
             // Phase 14.8-05c: consume the originator we just stashed above
             // so the matching playReactWindowOpened (engine emits one for
@@ -1765,7 +1770,25 @@ function playReactWindowOpened(ev, done) {
         // No stage for passive triggers — the ~500ms blip + effect popup
         // ARE the visual (timing overhaul 2026-07-08, F6/F7).
     } else if (origin && origin.numericId != null) {
-        slotState.pendingStageOriginator = origin;
+        // Split by card type (user 2026-07-10 MCQ): a MINION cast parks —
+        // the minion landing on the grid IS its visual, and the stage only
+        // shows if a react answers it. MAGIC/REACT casts never touch the
+        // board, so the stage is their reveal — slam immediately and pulse
+        // the declared target tile.
+        var originDef = (typeof cardDefs !== 'undefined' && cardDefs)
+            ? cardDefs[origin.numericId] : null;
+        if (originDef && originDef.card_type === 0) {
+            slotState.pendingStageOriginator = origin;
+        } else {
+            try {
+                _showSpellStage(origin.numericId, origin.playerIdx);
+                slammed = true;
+                if (origin.targetPos) _pulseCastTargetTile(origin.targetPos);
+            } catch (e) {
+                // Defensive — a broken render must not crash the eventQueue.
+                console.warn('playReactWindowOpened: _showSpellStage threw', e);
+            }
+        }
     } else {
         // Debug hint — helpful when chasing "spell stage didn't show"
         // regressions. Single-line console log (no scary warnings for
@@ -1867,33 +1890,76 @@ if (typeof document !== 'undefined') {
         }
     });
 }
+function _reactWaitFollowerEnsure() {
+    var f = document.getElementById('react-wait-follower');
+    if (!f) {
+        f = document.createElement('div');
+        f.id = 'react-wait-follower';
+        f.className = 'react-wait-follower';
+        f.textContent = 'Waiting';
+        document.body.appendChild(f);
+    }
+    if (_reactWaitMouse.x != null) {
+        f.style.left = (_reactWaitMouse.x + 14) + 'px';
+        f.style.top = (_reactWaitMouse.y + 18) + 'px';
+    } else {
+        f.style.left = '50%';
+        f.style.top = '58%';
+    }
+    return f;
+}
+
+// Timed variant — the fake no-response hold.
 function _showReactWaitFollower(ms) {
     try {
-        var f = document.getElementById('react-wait-follower');
-        if (!f) {
-            f = document.createElement('div');
-            f.id = 'react-wait-follower';
-            f.className = 'react-wait-follower';
-            f.textContent = 'Waiting';
-            document.body.appendChild(f);
-        }
-        if (_reactWaitMouse.x != null) {
-            f.style.left = (_reactWaitMouse.x + 14) + 'px';
-            f.style.top = (_reactWaitMouse.y + 18) + 'px';
-        } else {
-            f.style.left = '50%';
-            f.style.top = '58%';
-        }
+        var f = _reactWaitFollowerEnsure();
         // Chained windows extend the deadline instead of stacking timers.
         var until = Date.now() + ms;
         f.dataset.until = String(until);
         setTimeout(function() {
             var live = document.getElementById('react-wait-follower');
-            if (live && Number(live.dataset.until || 0) <= Date.now()
+            if (live && !live.dataset.persist
+                    && Number(live.dataset.until || 0) <= Date.now()
                     && live.parentNode) {
                 live.parentNode.removeChild(live);
             }
         }, ms + 30);
+    } catch (e) { /* defensive — purely visual */ }
+}
+
+// Persistent variant — a REAL react-window wait (opponent genuinely
+// deciding). Unified with the fake hold (user 2026-07-10 MCQ): if the two
+// waits looked different, the fake one would be a tell. Toggled from
+// _updateWaitBadge on every pod render.
+function _setReactWaitFollowerPersist(on) {
+    try {
+        var f = document.getElementById('react-wait-follower');
+        if (on) {
+            f = _reactWaitFollowerEnsure();
+            f.dataset.persist = '1';
+        } else if (f) {
+            delete f.dataset.persist;
+            // Don't cut short an active timed hold.
+            if (Number(f.dataset.until || 0) <= Date.now() && f.parentNode) {
+                f.parentNode.removeChild(f);
+            }
+        }
+    } catch (e) { /* defensive — purely visual */ }
+}
+
+// Pulse the declared target tile of a staged cast (user 2026-07-10:
+// "we need to see the targets"). Reuses the trigger-blip target pulse.
+function _pulseCastTargetTile(pos) {
+    try {
+        var tile = (typeof _tileElForPosition === 'function')
+            ? _tileElForPosition(pos) : null;
+        if (!tile) return;
+        tile.classList.remove('anim-trigger-target');
+        void tile.offsetWidth;
+        tile.classList.add('anim-trigger-target');
+        setTimeout(function() {
+            tile.classList.remove('anim-trigger-target');
+        }, 900);
     } catch (e) { /* defensive — purely visual */ }
 }
 

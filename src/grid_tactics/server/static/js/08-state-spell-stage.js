@@ -670,6 +670,8 @@ function _resetSpellStageHard() {
     if (fsb) fsb.hidden = true;
     var rb = document.getElementById('react-banner');
     if (rb) rb.remove();
+    var rwf = document.getElementById('react-wait-follower');
+    if (rwf) rwf.remove();
 }
 var SPELL_STAGE_PER_CARD_MS = 1500;  // 520ms fly-in + 1000ms hold beat ≈ shift starts
 
