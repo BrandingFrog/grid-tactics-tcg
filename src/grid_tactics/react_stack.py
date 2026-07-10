@@ -1120,6 +1120,9 @@ def _resolve_handshake_payout(
     consecutive-pass counter was already reset at detection time
     (_apply_pass) so Handshakes cannot chain.
 
+    Rest variant (user 2026-07-10 v2, ``manual_draw_variant()``): the
+    payout is +1 mana AND a draw for BOTH players instead.
+
     Called from ``_close_end_of_turn_and_flip`` under the
     ``system:turn_flip`` contract (already asserted by the caller).
     """
@@ -1129,17 +1132,68 @@ def _resolve_handshake_payout(
     # predicted with the exact rules the payout loop below applies
     # (full mana → draw, full hand → burn, empty deck → none).
     #
-    # Manual-draw variant (user 2026-07-10): the Handshake payout is a
-    # DRAW for both players (no mana) — the per-pass +1 mana already
-    # happened at each PASS. Full hand overdraw-burns; empty deck pays
-    # nothing. Implemented by treating every player like the standard
-    # rules' full-mana branch.
+    # Rest variant (user 2026-07-10 v2): the Handshake payout gives BOTH
+    # players +1 mana AND a draw — a shared double-rest. Mana caps at
+    # MAX_MANA_CAP; the draw overdraw-burns on a full hand and is skipped
+    # on an empty deck (never fatigue).
     _variant = manual_draw_variant()
+    if _variant:
+        if event_collector is not None:
+            _outcomes = []
+            for idx in (0, 1):
+                player = state.players[idx]
+                if not player.deck:
+                    _reward = "mana"  # nothing to draw — mana only
+                elif len(player.hand) >= MAX_HAND_SIZE:
+                    _reward = "mana_and_burn"
+                else:
+                    _reward = "mana_and_draw"
+                _outcomes.append({"player_idx": idx, "reward": _reward})
+            event_collector.collect(
+                EVT_HANDSHAKE,
+                "system:turn_flip",
+                {"outcomes": _outcomes},
+            )
+        for idx in (0, 1):
+            player = state.players[idx]
+            prev_mana = player.current_mana
+            if prev_mana < MAX_MANA_CAP:
+                player = replace(player, current_mana=prev_mana + 1)
+                if event_collector is not None:
+                    event_collector.collect(
+                        EVT_MANA_CHANGE,
+                        "system:turn_flip",
+                        {
+                            "player_idx": idx,
+                            "prev": prev_mana,
+                            "new": prev_mana + 1,
+                            "delta": 1,
+                            "cause": "handshake",
+                        },
+                    )
+            if player.deck:
+                player, card_id, burned = player.draw_card_with_overdraw()
+                if event_collector is not None:
+                    event_collector.collect(
+                        EVT_CARD_BURNED if burned else EVT_CARD_DRAWN,
+                        "system:turn_flip",
+                        {
+                            "player_idx": idx,
+                            "source": "handshake",
+                            "card_numeric_id": card_id,
+                        },
+                    )
+            state = replace(
+                state,
+                players=_replace_player(state.players, idx, player),
+            )
+        return replace(state, handshake_pending=False, consecutive_passes=0)
+
     if event_collector is not None:
         _predicted: list[dict] = []
         for idx in (0, 1):
             player = state.players[idx]
-            if _variant or player.current_mana >= MAX_MANA_CAP:
+            if player.current_mana >= MAX_MANA_CAP:
                 if player.deck:
                     _predicted.append({
                         "player_idx": idx,
@@ -1161,7 +1215,7 @@ def _resolve_handshake_payout(
 
     for idx in (0, 1):
         player = state.players[idx]
-        if _variant or player.current_mana >= MAX_MANA_CAP:
+        if player.current_mana >= MAX_MANA_CAP:
             # Full mana → draw instead (if possible).
             if player.deck:
                 new_player, card_id, burned = player.draw_card_with_overdraw()

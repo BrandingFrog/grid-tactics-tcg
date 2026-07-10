@@ -4,8 +4,9 @@ Deliberately NOT smart — just goal-directed enough that a solo preview
 feels like a game instead of a punching bag: it resolves pending picks
 (so modal states never stall the drain), sometimes plays reacts, and on
 its turn prefers sacrifice > attack > play (most expensive affordable
-card) > move > draw > pass. Win condition is HP depletion, so damage
-and board presence ARE "towards the goal".
+card) > move > pass (which is a REST under the variant: +1 mana and a
+draw). Win condition is HP depletion, so damage and board presence ARE
+"towards the goal".
 
 Pure function of (state, library, legal_actions); uses stdlib random
 (server-side only — never touches the deterministic engine RNG).
@@ -25,10 +26,6 @@ from grid_tactics.game_state import GameState
 # window — high enough that the human sees the react/spell-stage flow in
 # previews, low enough that it doesn't burn every card immediately.
 REACT_PLAY_CHANCE = 0.5
-
-# Don't DRAW (manual-draw variant) once the hand is this full — spend
-# instead. Below it, drawing beats passing.
-DRAW_HAND_CAP = 6
 
 
 def pick_preview_action(
@@ -99,10 +96,8 @@ def pick_preview_action(
     if ActionType.MOVE in by_type:
         return random.choice(by_type[ActionType.MOVE])
 
-    # Manual-draw variant: refill a thin hand rather than passing.
-    if (ActionType.DRAW in by_type
-            and len(state.players[state.active_player_idx].hand) < DRAW_HAND_CAP):
-        return by_type[ActionType.DRAW][0]
+    # (Rest rework 2026-07-10 v2: DRAW is no longer a legal action — the
+    # PASS fallback below IS the rest, granting +1 mana and a draw.)
 
     # Declines for pending flavours where nothing above applied.
     picked = any_of(

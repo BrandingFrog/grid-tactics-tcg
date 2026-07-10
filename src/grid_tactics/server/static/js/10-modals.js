@@ -1133,39 +1133,21 @@ function renderActionBar() {
                 slot.appendChild(skipBtn);
             }
         } else {
-            // ACTION phase: Draw (manual-draw variant, user 2026-07-10)
-            // stacked ABOVE the Pass button. Only rendered when the server
-            // actually offers DRAW (action_type 3) — under standard rules
-            // it never appears, so no client-side variant flag is needed.
+            // ACTION phase: the free Pass button. Rest rework (user
+            // 2026-07-10 v2): the Draw button is GONE — Pass IS the rest
+            // action (+1 mana and +1 draw, applied by the engine variant).
             var canPassAction = canShowPassButton();
-            var drawLegal = _myTurnToAct
-                && Array.isArray(legalActions)
-                && legalActions.some(function(a) { return a.action_type === 3; });
-            if (canPassAction || drawLegal) {
-                var actionCol = document.createElement('div');
-                actionCol.className = 'action-bar-col';
-                if (drawLegal) {
-                    var drawBtn = document.createElement('button');
-                    drawBtn.className = 'btn btn-action btn-draw-action';
-                    drawBtn.textContent = 'Draw';
-                    drawBtn.title = 'Draw a card — uses your action for this turn';
-                    drawBtn.addEventListener('click', function() {
-                        submitAction({ action_type: 3 });
-                    });
-                    actionCol.appendChild(drawBtn);
-                }
-                if (canPassAction) {
-                    var passBtn = document.createElement('button');
-                    passBtn.className = 'btn btn-action btn-pass btn-pass-action';
-                    passBtn.innerHTML = 'Pass<span class="btn-pass-sub">(+1 mana)</span>';
-                    passBtn.title = 'Pass — gain +1 mana now. 2nd consecutive pass '
-                        + 'seals a Handshake (both players draw a card)';
-                    passBtn.addEventListener('click', function() {
-                        submitAction({ action_type: 4 });
-                    });
-                    actionCol.appendChild(passBtn);
-                }
-                slot.appendChild(actionCol);
+            if (canPassAction) {
+                var passBtn = document.createElement('button');
+                passBtn.className = 'btn btn-action btn-pass btn-pass-action';
+                passBtn.textContent = 'Pass';
+                passBtn.title = 'Pass — rest: gain +1 mana and draw a card. '
+                    + '2nd consecutive pass seals a Handshake '
+                    + '(both players gain a mana and draw)';
+                passBtn.addEventListener('click', function() {
+                    submitAction({ action_type: 4 });
+                });
+                slot.appendChild(passBtn);
             }
         }
 

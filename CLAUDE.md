@@ -8,7 +8,7 @@ A fantasy trading card game on a 5x5 grid with RL-driven strategy discovery. Pla
 **Core Value:** The RL engine that discovers and validates game strategies.
 
 ### Current Rules (authoritative detail: data/turn_structure_spec.md)
-- **ACTIVE RULES EXPERIMENT (2026-07-10, `GT_MANUAL_DRAW=1`, on by default in pvp_server.py)**: NO turn-start auto-draw — **DRAW is a main-phase action** (uses the turn action, needs a non-empty deck); **PASS grants +1 mana immediately**; **Handshake = both players draw a card** (no mana). `GT_MANUAL_DRAW=0` restores the standard rules below, which the bare engine and test suite run by default. Flag: `types.manual_draw_variant()`.
+- **ACTIVE RULES EXPERIMENT (2026-07-10 v2 "Rest", `GT_MANUAL_DRAW=1`, on by default in pvp_server.py)**: NO turn-start auto-draw and NO DRAW action — **PASS is a Rest**: the passer immediately gains **+1 mana AND draws 1** (mana capped at 10; full hand overdraw-burns; empty deck skips the draw, never fatigue). **Handshake = BOTH players gain +1 mana AND draw 1.** Button label stays "Pass". `GT_MANUAL_DRAW=0` restores the standard rules below, which the bare engine and test suite run by default. Flag: `types.manual_draw_variant()`.
 - **Turn Start**: auto-draw 1 + gain 1 mana (pool, 10 = full) → **Rally Phase** (positive triggers) → one action (play/move/attack/sacrifice/pass) → **Decay Phase** (negative triggers, e.g. Burning) → turn end (Handshake payout)
 - **PASS is free**; pass answered by pass = **Handshake** (both players +1 mana at turn end; at full mana, draw instead)
 - **Forward-only movement** in lane (same column), attacks any direction

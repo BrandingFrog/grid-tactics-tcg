@@ -32,7 +32,6 @@ from grid_tactics.actions import (
     decline_trigger_action,
     decline_tutor_action,
     decline_revive_action,
-    draw_action,
     move_action,
     pass_action,
     play_card_action,
@@ -52,7 +51,6 @@ from grid_tactics.enums import (
 from grid_tactics.game_state import GameState
 from grid_tactics.types import (
     BACK_ROW_P1,
-    manual_draw_variant,
     BACK_ROW_P2,
     GRID_COLS,
     GRID_ROWS,
@@ -487,17 +485,14 @@ def _action_phase_actions(
     # Turn-structure redesign 2026-07: DRAW is REMOVED as an action.
     # The draw now happens automatically (and unconditionally) at turn
     # start; action-space slot 1000 stays reserved but is never legal.
-    #
-    # Manual-draw variant (user 2026-07-10): DRAW returns as a legal
-    # main-phase action — it consumes the turn action. Legal while the
-    # deck has cards (a full hand overdraw-burns like every other draw).
-    if manual_draw_variant() and state.players[state.active_player_idx].deck:
-        actions.append(draw_action())
+    # (The 2026-07-10 rest rework briefly revived DRAW; it was removed
+    # again the same day — under the variant, PASS is the rest action.)
 
     # PASS is always legal during the action phase (D-16, CLAUDE.md).
     # Players can voluntarily skip their turn — PASS is FREE (no fatigue;
-    # fatigue now exists only for empty-deck turn-start draws). Manual-draw
-    # variant: PASS grants +1 mana immediately (see _apply_pass).
+    # fatigue now exists only for empty-deck turn-start draws). Rest
+    # variant (user 2026-07-10 v2): PASS grants +1 mana AND draws a card
+    # immediately (see _apply_pass).
     actions.append(pass_action())
 
     return tuple(actions)

@@ -2431,12 +2431,14 @@ function _handshakeRewardFor(payload, idx) {
 // Player-facing text for a Handshake reward value.
 function _handshakeRewardText(reward) {
     switch (reward) {
-        case 'mana':        return '+1 mana';
+        case 'mana':          return '+1 mana';
+        case 'mana_and_draw': return '+1 mana & draws a card';
+        case 'mana_and_burn': return '+1 mana & draws — hand full, it burns!';
         case 'card_drawn':
-        case 'draw':        return 'draws a card';
-        case 'card_burned': return 'draws a card — hand full, it burns!';
-        case 'none':        return 'nothing (deck empty)';
-        default:            return 'draws a card';  // legacy payloads carry no detail
+        case 'draw':          return 'draws a card';
+        case 'card_burned':   return 'draws a card — hand full, it burns!';
+        case 'none':          return 'nothing (deck empty)';
+        default:              return '+1 mana & draws a card';
     }
 }
 

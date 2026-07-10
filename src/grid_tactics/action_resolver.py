@@ -184,7 +184,11 @@ def _can_attack(
 # ---------------------------------------------------------------------------
 
 
-def _apply_pass(state: GameState) -> GameState:
+def _apply_pass(
+    state: GameState,
+    *,
+    event_collector: Optional[EventStream] = None,
+) -> GameState:
     """Apply PASS action — FREE (turn-structure redesign 2026-07).
 
     PASS no longer deals fatigue damage: fatigue now exists ONLY for
@@ -201,20 +205,34 @@ def _apply_pass(state: GameState) -> GameState:
     cannot chain off a single pass pair.
     """
     assert_phase_contract(state, "action:pass_action")
-    # Manual-draw variant (user 2026-07-10): the passer gains +1 mana
-    # IMMEDIATELY (capped). The dispatch site's generic mana-diff emitter
-    # surfaces the EVT_MANA_CHANGE — no manual event needed here.
+    # Rest rework (user 2026-07-10 v2): under the variant, PASS is a REST —
+    # the passer gains +1 mana (capped) AND draws a card (overdraw-burns on
+    # a full hand; empty deck simply skips the draw — never fatigue). The
+    # dispatch site's generic mana-diff emitter surfaces the EVT_MANA_CHANGE;
+    # the draw event is emitted here (it needs the card identity).
     if manual_draw_variant():
-        passer = state.players[state.active_player_idx]
+        passer_idx = state.active_player_idx
+        passer = state.players[passer_idx]
         if passer.current_mana < MAX_MANA_CAP:
-            state = replace(
-                state,
-                players=_replace_player(
-                    state.players,
-                    state.active_player_idx,
-                    replace(passer, current_mana=passer.current_mana + 1),
-                ),
-            )
+            passer = replace(passer, current_mana=passer.current_mana + 1)
+        if passer.deck:
+            passer, _rest_card_id, _rest_burned = passer.draw_card_with_overdraw()
+            if event_collector is not None:
+                event_collector.collect(
+                    EVT_CARD_BURNED if _rest_burned else EVT_CARD_DRAWN,
+                    "action:pass_action",
+                    {
+                        "player_idx": passer_idx,
+                        "source": "rest",
+                        # view_filter redacts the identity for the opponent
+                        # on non-burn draws (same contract as every draw).
+                        "card_numeric_id": _rest_card_id,
+                    },
+                )
+        state = replace(
+            state,
+            players=_replace_player(state.players, passer_idx, passer),
+        )
     new_count = state.consecutive_passes + 1
     if new_count >= 2:
         # Handshake! Reset the streak — no chaining.
@@ -2698,7 +2716,7 @@ def resolve_action(
     # Dispatch to action handler
     if action.action_type == ActionType.PASS:
         _passer_idx = state.active_player_idx
-        state = _apply_pass(state)
+        state = _apply_pass(state, event_collector=event_collector)
         # 2026-07-08: surface the pass on the wire. streak==1 means an
         # unanswered Handshake offer (client shows the palm-up flag);
         # streak==0 with handshake_pending means this pass COMPLETED the
