@@ -314,10 +314,22 @@ function playAttackAnimation(job, done) {
     var pullX = -0.3 * dx, pullY = -0.3 * dy;
     var strikeX = 0.7 * dx, strikeY = 0.7 * dy;
 
+    // "Under the grid" fix (user 2026-07-10) — same as playMoveAnimation's
+    // Bug B: the anim classes' z-index:30 rides the MINION, but that only
+    // escapes the tile while no sibling cell out-stacks it. Lift the whole
+    // attacker CELL above the grid for the lunge (and guarantee overflow)
+    // so the sprite can never pass under neighboring tiles or minions.
+    var prevCellZ = attackerCell.style.zIndex;
+    var prevCellOverflow = attackerCell.style.overflow;
+    attackerCell.style.zIndex = '30';
+    attackerCell.style.overflow = 'visible';
+
     function cleanupAttacker() {
         attackerEl.classList.remove('anim-attack-windup');
         attackerEl.classList.remove('anim-attack-strike');
         attackerEl.style.transform = '';
+        attackerCell.style.zIndex = prevCellZ;
+        attackerCell.style.overflow = prevCellOverflow;
     }
 
     // PHASE A — pullback (0-180ms)
