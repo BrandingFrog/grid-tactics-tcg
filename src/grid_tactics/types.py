@@ -53,6 +53,28 @@ MAX_EFFECT_AMOUNT: int = 100
 # The turn-start draw is now UNCONDITIONAL — see react_stack.py
 # _close_end_of_turn_and_flip. DRAW as an action is removed from legal
 # actions (slot 1000 stays reserved in the action space, never legal).
+#
+# ...EXCEPT under the MANUAL-DRAW rules experiment below.
+
+# ---------------------------------------------------------------------------
+# Rules experiment (user 2026-07-10): MANUAL-DRAW variant.
+#   - NO turn-start auto-draw (and no empty-deck turn-start fatigue);
+#     DRAW returns as a legal main-phase action (consumes the turn action,
+#     overdraw-burns on a full hand, legal only while the deck has cards).
+#   - PASS grants the passer +1 mana IMMEDIATELY (capped at MAX_MANA_CAP).
+#   - Handshake payout: BOTH players DRAW a card (no mana). Full hand
+#     overdraw-burns; empty deck pays nothing.
+# Enabled by env GT_MANUAL_DRAW=1 — pvp_server.py sets it by default, so
+# the live game runs the variant while the test suite / bare engine keep
+# the 2026-07 standard rules. Read at CALL time so tests can flip it with
+# monkeypatch.setenv regardless of import order.
+# ---------------------------------------------------------------------------
+import os
+
+
+def manual_draw_variant() -> bool:
+    """True when the manual-draw rules experiment is active."""
+    return os.environ.get("GT_MANUAL_DRAW", "0") == "1"
 
 # Runaway failsafe ONLY — there is no design-level limit on react chaining
 # (turn-structure redesign 2026-07). This cap exists purely to stop a

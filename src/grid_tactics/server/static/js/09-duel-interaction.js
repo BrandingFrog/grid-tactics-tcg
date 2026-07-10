@@ -1003,12 +1003,14 @@ function showMinionActionMenu(minion, moves, attacks, transforms, canSac) {
         updateHandHighlights();
     });
 
-    // Centered stage modal (user 2026-07-06): grey the board area (right of
-    // the tooltip column) and pop the menu in its middle. Clicking the grey
-    // cancels, mirroring the Cancel button.
+    // Context menu at the clicked tile (user 2026-07-10): the centered
+    // stage modal (2026-07-06) greyed the whole board and could overflow
+    // below the grid when a minion had many options. The backdrop stays
+    // as an invisible click-away catcher; the menu itself anchors beside
+    // the minion's tile, clamped inside the stage.
     var backdrop = document.createElement('div');
     backdrop.id = 'stage-menu-backdrop';
-    backdrop.className = 'stage-modal-backdrop';
+    backdrop.className = 'stage-modal-backdrop ctx-menu-backdrop';
     backdrop.addEventListener('click', function(e) {
         if (e.target !== backdrop) return;
         clearSelection();
@@ -1019,6 +1021,30 @@ function showMinionActionMenu(minion, moves, attacks, transforms, canSac) {
     backdrop.appendChild(menu);
     (document.querySelector('.screen.active .game-layout') || document.body)
         .appendChild(backdrop);
+    // Position in LAYOUT coordinates: rects are viewport px but the menu
+    // lives inside the scaled .game-layout — divide by --duel-scale (same
+    // trick as the spell-stage slam-in, audit 2026-07-07).
+    try {
+        var bdRect = backdrop.getBoundingClientRect();
+        var sc = parseFloat(getComputedStyle(document.documentElement)
+            .getPropertyValue('--duel-scale')) || 1;
+        var bw = bdRect.width / sc;
+        var bh = bdRect.height / sc;
+        var mw = menu.offsetWidth;
+        var mh = menu.offsetHeight;
+        // Prefer the tile's right edge; flip to the left side when it
+        // would clip. Clamp vertically so long menus never sink below
+        // the stage.
+        var mx = (rect.right - bdRect.left) / sc + 6;
+        var my = (rect.top - bdRect.top) / sc - 4;
+        if (mx + mw > bw - 4) {
+            mx = Math.max(4, (rect.left - bdRect.left) / sc - mw - 6);
+        }
+        if (my + mh > bh - 4) my = bh - mh - 4;
+        if (my < 4) my = 4;
+        menu.style.setProperty('--ctx-x', mx + 'px');
+        menu.style.setProperty('--ctx-y', my + 'px');
+    } catch (e) { /* CSS fallback centers it */ }
 }
 
 function hideMinionActionMenu() {

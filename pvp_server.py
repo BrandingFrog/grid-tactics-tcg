@@ -2,7 +2,15 @@
 
 Usage: python pvp_server.py
 """
+import os
 from pathlib import Path
+
+# Rules experiment (user 2026-07-10): the LIVE server runs the manual-draw
+# variant by default (no auto-draw, Draw is an action, PASS = +1 mana now,
+# Handshake = both draw). Set GT_MANUAL_DRAW=0 in the environment to run
+# the 2026-07 standard rules instead. setdefault — an explicit env value
+# (e.g. on Railway) always wins.
+os.environ.setdefault("GT_MANUAL_DRAW", "1")
 
 from grid_tactics.card_library import CardLibrary
 from grid_tactics.server.app import create_app, socketio

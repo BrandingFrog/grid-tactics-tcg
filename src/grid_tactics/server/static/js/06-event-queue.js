@@ -738,7 +738,8 @@ function commitEventToDom(ev) {
                 var _burnFromDeck = (payload.source === 'turn_start'
                     || payload.source === 'handshake'
                     || payload.source === 'card_effect'
-                    || payload.source === 'tutor');
+                    || payload.source === 'tutor'
+                    || payload.source === 'draw_action');
                 if (typeof _pe.deck_count === 'number' && _pe.deck_count > 0 && _burnFromDeck) _pe.deck_count--;
                 // discard_cost burns exhaust a card FROM THE HAND (paid cost
                 // of playing another card, new engine payload 2026-07-08).
@@ -2411,10 +2412,10 @@ function _handshakeRewardText(reward) {
     switch (reward) {
         case 'mana':        return '+1 mana';
         case 'card_drawn':
-        case 'draw':        return 'draws a card (mana full)';
-        case 'card_burned': return 'draws a card (mana full) — hand full, it is exhausted!';
-        case 'none':        return 'nothing (mana full, deck empty)';
-        default:            return '+1 mana';  // legacy payloads carry no detail
+        case 'draw':        return 'draws a card';
+        case 'card_burned': return 'draws a card — hand full, it burns!';
+        case 'none':        return 'nothing (deck empty)';
+        default:            return 'draws a card';  // legacy payloads carry no detail
     }
 }
 

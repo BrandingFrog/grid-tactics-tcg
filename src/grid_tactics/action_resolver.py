@@ -59,7 +59,15 @@ from grid_tactics.game_state import GameState
 from grid_tactics.minion import MinionInstance
 from grid_tactics.phase_contracts import assert_phase_contract
 from grid_tactics.player import Player
-from grid_tactics.types import BACK_ROW_P1, BACK_ROW_P2, GRID_ROWS, PLAYER_1_ROWS, PLAYER_2_ROWS
+from grid_tactics.types import (
+    BACK_ROW_P1,
+    BACK_ROW_P2,
+    GRID_ROWS,
+    MAX_MANA_CAP,
+    PLAYER_1_ROWS,
+    PLAYER_2_ROWS,
+    manual_draw_variant,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -193,6 +201,20 @@ def _apply_pass(state: GameState) -> GameState:
     cannot chain off a single pass pair.
     """
     assert_phase_contract(state, "action:pass_action")
+    # Manual-draw variant (user 2026-07-10): the passer gains +1 mana
+    # IMMEDIATELY (capped). The dispatch site's generic mana-diff emitter
+    # surfaces the EVT_MANA_CHANGE — no manual event needed here.
+    if manual_draw_variant():
+        passer = state.players[state.active_player_idx]
+        if passer.current_mana < MAX_MANA_CAP:
+            state = replace(
+                state,
+                players=_replace_player(
+                    state.players,
+                    state.active_player_idx,
+                    replace(passer, current_mana=passer.current_mana + 1),
+                ),
+            )
     new_count = state.consecutive_passes + 1
     if new_count >= 2:
         # Handshake! Reset the streak — no chaining.
@@ -204,18 +226,40 @@ def _apply_pass(state: GameState) -> GameState:
     return replace(state, consecutive_passes=new_count)
 
 
-def _apply_draw(state: GameState) -> GameState:
+def _apply_draw(
+    state: GameState,
+    *,
+    event_collector: Optional[EventStream] = None,
+) -> GameState:
     """Apply DRAW action. Moves top card from deck to hand.
+
+    Manual-draw variant (user 2026-07-10): DRAW is a legal main-phase
+    action again. A full hand overdraw-burns the drawn card to the
+    Exhaust Pile (revealed) like every other draw path.
 
     Raises ValueError if the active player's deck is empty.
     """
     assert_phase_contract(state, "action:draw")
-    player = state.players[state.active_player_idx]
+    drawer_idx = state.active_player_idx
+    player = state.players[drawer_idx]
     if not player.deck:
         raise ValueError("Cannot draw from empty deck")
-    new_player, _card_id = player.draw_card()
-    new_players = _replace_player(state.players, state.active_player_idx, new_player)
-    return replace(state, players=new_players)
+    new_player, card_id, burned = player.draw_card_with_overdraw()
+    new_players = _replace_player(state.players, drawer_idx, new_player)
+    state = replace(state, players=new_players)
+    if event_collector is not None:
+        event_collector.collect(
+            EVT_CARD_BURNED if burned else EVT_CARD_DRAWN,
+            "action:draw",
+            {
+                "player_idx": drawer_idx,
+                "source": "draw_action",
+                # view_filter redacts the identity for the opponent on
+                # non-burn draws; the drawer's client animates deck→hand.
+                "card_numeric_id": card_id,
+            },
+        )
+    return state
 
 
 def _apply_move(
@@ -2670,15 +2714,10 @@ def resolve_action(
                 },
             )
     elif action.action_type == ActionType.DRAW:
-        state = _apply_draw(state)
-        # Phase 14.8-03a: emit EVT_CARD_DRAWN so the client can animate
-        # the deck → hand transition.
-        if event_collector is not None:
-            event_collector.collect(
-                EVT_CARD_DRAWN,
-                "action:draw",
-                {"player_idx": state.active_player_idx},
-            )
+        # Manual-draw variant (user 2026-07-10): _apply_draw emits its own
+        # EVT_CARD_DRAWN / EVT_CARD_BURNED with the card identity so the
+        # client can animate the deck → hand transition.
+        state = _apply_draw(state, event_collector=event_collector)
     elif action.action_type == ActionType.MOVE:
         # 2026-07 card-audit fix (Furryroach): EVT_MINION_MOVED for the
         # acting minion is now emitted INSIDE _apply_move (before the

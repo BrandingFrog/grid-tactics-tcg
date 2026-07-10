@@ -48,7 +48,12 @@ from grid_tactics.enums import (
 from grid_tactics.game_state import GameState, PendingTrigger
 from grid_tactics.minion import BURN_DAMAGE, MinionInstance
 from grid_tactics.phase_contracts import assert_phase_contract
-from grid_tactics.types import MAX_HAND_SIZE, MAX_MANA_CAP, MAX_REACT_STACK_DEPTH
+from grid_tactics.types import (
+    MAX_HAND_SIZE,
+    MAX_MANA_CAP,
+    MAX_REACT_STACK_DEPTH,
+    manual_draw_variant,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -1123,11 +1128,18 @@ def _resolve_handshake_payout(
     # banner explains the mana/draw beats that follow. Outcomes are
     # predicted with the exact rules the payout loop below applies
     # (full mana → draw, full hand → burn, empty deck → none).
+    #
+    # Manual-draw variant (user 2026-07-10): the Handshake payout is a
+    # DRAW for both players (no mana) — the per-pass +1 mana already
+    # happened at each PASS. Full hand overdraw-burns; empty deck pays
+    # nothing. Implemented by treating every player like the standard
+    # rules' full-mana branch.
+    _variant = manual_draw_variant()
     if event_collector is not None:
         _predicted: list[dict] = []
         for idx in (0, 1):
             player = state.players[idx]
-            if player.current_mana >= MAX_MANA_CAP:
+            if _variant or player.current_mana >= MAX_MANA_CAP:
                 if player.deck:
                     _predicted.append({
                         "player_idx": idx,
@@ -1149,7 +1161,7 @@ def _resolve_handshake_payout(
 
     for idx in (0, 1):
         player = state.players[idx]
-        if player.current_mana >= MAX_MANA_CAP:
+        if _variant or player.current_mana >= MAX_MANA_CAP:
             # Full mana → draw instead (if possible).
             if player.deck:
                 new_player, card_id, burned = player.draw_card_with_overdraw()
@@ -1329,6 +1341,12 @@ def _close_end_of_turn_and_flip(
     # the new active player (AFTER mana regen). Empty deck → escalating
     # fatigue (10/20/30... per player) instead of the draw. Full hand →
     # the drawn card overdraw-burns to the exhaust pile (revealed).
+    #
+    # Manual-draw variant (user 2026-07-10): NO turn-start draw — drawing
+    # is a main-phase ACTION now — and consequently no turn-start fatigue
+    # either (DRAW is simply not offered on an empty deck).
+    if manual_draw_variant():
+        return state
     active_player = state.players[new_active_idx]
     if active_player.deck:
         drawn_player, drawn_card_id, burned = (

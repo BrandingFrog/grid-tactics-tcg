@@ -5748,3 +5748,68 @@ input::selection, textarea::selection { background: rgba(224, 162, 60, 0.45); co
 /* Sub-view header clears the corner fullscreen toggle (it was overlapping
    the Refresh button at 844x390). */
 #screen-lobby .lobby2-subview-head { padding-right: calc(var(--u) * 40); }
+
+/* =========================================================================
+   MANUAL-DRAW VARIANT (user 2026-07-10): Draw button stacked ABOVE Pass;
+   the Pass token gains a small "(+1 mana)" second line.
+   ========================================================================= */
+.hand-action-bar .action-bar-col {
+  display: flex; flex-direction: column; align-items: stretch; gap: 6px;
+}
+/* Pass becomes a two-line token: 'Pass' (::before) / '(+1 mana)' (span).
+   The chevron ::after doesn't fit the stacked layout — drop it. */
+#screen-game .hand-action-bar .btn-pass-action,
+#screen-sandbox .hand-action-bar .btn-pass-action {
+  flex-direction: column !important;
+  gap: 0 !important;
+  padding: 6px 16px !important;
+  line-height: 1.15;
+}
+#screen-game .hand-action-bar .btn-pass-action::after,
+#screen-sandbox .hand-action-bar .btn-pass-action::after {
+  content: none !important;
+}
+#screen-game .hand-action-bar .btn-pass-action .btn-pass-sub,
+#screen-sandbox .hand-action-bar .btn-pass-action .btn-pass-sub {
+  display: block;
+  font-size: 9px;
+  letter-spacing: 0.5px;
+  text-transform: none;
+  color: rgba(32, 23, 9, 0.78);
+}
+/* Draw: worn-bronze token above the gold Pass so Pass stays the primary. */
+#screen-game .hand-action-bar .btn-draw-action,
+#screen-sandbox .hand-action-bar .btn-draw-action {
+  font-family: var(--ui-display) !important;
+  font-weight: 700;
+  font-size: 13px !important;
+  letter-spacing: 1.5px; text-transform: uppercase;
+  color: var(--parch, #f2ead2) !important;
+  background: linear-gradient(180deg, #4a3a1c 0%, #33260f 100%) !important;
+  border: 1px solid var(--bronze, #6b5730) !important;
+  border-radius: 8px !important;
+  padding: 7px 16px !important;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(58, 46, 24, 0.4) !important;
+  cursor: pointer;
+}
+#screen-game .hand-action-bar .btn-draw-action:hover,
+#screen-sandbox .hand-action-bar .btn-draw-action:hover { filter: brightness(1.15); }
+
+/* Minion action menu as a small context menu at the clicked tile (user
+   2026-07-10): the backdrop no longer greys the stage — it is only an
+   invisible click-away catcher — and the menu anchors beside the tile via
+   --ctx-x/--ctx-y set by showMinionActionMenu (clamped to the stage).
+   !important needed to beat the 2026-07-06 centered-modal override above. */
+.game-layout > .stage-modal-backdrop.ctx-menu-backdrop {
+  background: transparent;
+  display: block;
+}
+.stage-modal-backdrop.ctx-menu-backdrop .minion-action-menu {
+  position: absolute !important;
+  transform: none !important;
+  left: var(--ctx-x, 40%) !important;
+  top: var(--ctx-y, 30%) !important;
+  min-width: 130px;
+  max-height: calc(100% - 8px);
+  overflow-y: auto;
+}

@@ -2,6 +2,16 @@
 
 Authoritative turn flow, phase boundaries, react windows, and effect-resolution priority rules for Grid Tactics TCG. Single source of truth when implementing or modifying turn logic, react timing, or stack/queue behavior.
 
+> **ACTIVE RULES EXPERIMENT (2026-07-10) — manual-draw variant** (`GT_MANUAL_DRAW=1`, on by
+> default in `pvp_server.py`; the bare engine / test suite default to the standard rules below):
+> - NO turn-start auto-draw (and no turn-start empty-deck fatigue). **DRAW is a legal
+>   main-phase action** again — it consumes the turn action, requires a non-empty deck,
+>   and overdraw-burns on a full hand.
+> - **PASS grants the passer +1 mana immediately** (capped at 10).
+> - **Handshake payout: BOTH players draw a card** (no mana). Full hand overdraw-burns;
+>   empty deck pays nothing.
+> Everything else in this spec is unchanged. Flag: `grid_tactics.types.manual_draw_variant()`.
+
 Decided by the product owner 2026-07-02. Supersedes the v2 three-phase spec.
 
 Reuse existing UI: the spell-stage center-screen react animation drives react windows; the tutor modal (renderDeckBuilderCard) drives same-player priority picking.
