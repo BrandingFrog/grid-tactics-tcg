@@ -1907,7 +1907,29 @@ function _reactWaitFollowerEnsure() {
         f.style.left = '50%';
         f.style.top = '58%';
     }
+    // Flipping hourglass on the opponent's profile pic for the same wait
+    // (user 2026-07-10). Same lifecycle as the follower.
+    _reactWaitHourglassEnsure();
     return f;
+}
+
+function _reactWaitHourglassEnsure() {
+    try {
+        var wrap = document.querySelector('#screen-game .pod-opp .pod-ava-wrap');
+        if (!wrap || wrap.querySelector('.pod-react-wait-badge')) return;
+        var badge = document.createElement('span');
+        badge.className = 'pod-react-wait-badge';
+        badge.textContent = '⌛';
+        wrap.appendChild(badge);
+    } catch (e) { /* defensive — purely visual */ }
+}
+
+// Remove BOTH react-wait visuals (cursor follower + avatar hourglass).
+function _removeReactWaitVisuals() {
+    var f = document.getElementById('react-wait-follower');
+    if (f && f.parentNode) f.parentNode.removeChild(f);
+    var b = document.querySelector('#screen-game .pod-react-wait-badge');
+    if (b) b.remove();
 }
 
 // Timed variant — the fake no-response hold.
@@ -1920,9 +1942,8 @@ function _showReactWaitFollower(ms) {
         setTimeout(function() {
             var live = document.getElementById('react-wait-follower');
             if (live && !live.dataset.persist
-                    && Number(live.dataset.until || 0) <= Date.now()
-                    && live.parentNode) {
-                live.parentNode.removeChild(live);
+                    && Number(live.dataset.until || 0) <= Date.now()) {
+                _removeReactWaitVisuals();
             }
         }, ms + 30);
     } catch (e) { /* defensive — purely visual */ }
@@ -1941,8 +1962,8 @@ function _setReactWaitFollowerPersist(on) {
         } else if (f) {
             delete f.dataset.persist;
             // Don't cut short an active timed hold.
-            if (Number(f.dataset.until || 0) <= Date.now() && f.parentNode) {
-                f.parentNode.removeChild(f);
+            if (Number(f.dataset.until || 0) <= Date.now()) {
+                _removeReactWaitVisuals();
             }
         }
     } catch (e) { /* defensive — purely visual */ }

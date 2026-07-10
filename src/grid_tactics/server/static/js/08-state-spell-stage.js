@@ -672,6 +672,8 @@ function _resetSpellStageHard() {
     if (rb) rb.remove();
     var rwf = document.getElementById('react-wait-follower');
     if (rwf) rwf.remove();
+    var rwb = document.querySelector('#screen-game .pod-react-wait-badge');
+    if (rwb) rwb.remove();
 }
 var SPELL_STAGE_PER_CARD_MS = 1500;  // 520ms fly-in + 1000ms hold beat ≈ shift starts
 

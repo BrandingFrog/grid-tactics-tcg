@@ -5813,3 +5813,21 @@ input::selection, textarea::selection { background: rgba(224, 162, 60, 0.45); co
   max-height: calc(100% - 8px);
   overflow-y: auto;
 }
+
+/* React-wait hourglass on the opponent's profile pic (user 2026-07-10):
+   flips alongside the cursor "Waiting..." during both real and fake react
+   holds. Separate class from .pod-wait-badge because _updateWaitBadge
+   removes that one on every render while the event queue is busy. Reuses
+   the hourglass-flip keyframes defined for the turn-wait badge above. */
+.pod-react-wait-badge {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 17px;
+  pointer-events: none;
+  z-index: 3;
+  text-shadow: 0 0 6px rgba(224, 162, 60, 0.9), 0 1px 3px rgba(0, 0, 0, 0.9);
+  animation: hourglass-flip 2s ease-in-out infinite;
+}
