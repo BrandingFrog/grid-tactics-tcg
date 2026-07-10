@@ -689,7 +689,10 @@ def _pending_conjure_deploy_actions(
 
     Legal:
       - CONJURE_DEPLOY(position) for each valid empty tile on deployer's side
-      - DECLINE_CONJURE (card goes to hand)
+      - DECLINE_CONJURE (card goes to hand) ONLY when zero deploy tiles
+        exist — conjure must deploy (user 2026-07-10; the to-hand escape
+        was removed, kept solely as the no-tile fallback so the pending
+        state can never wedge).
 
     The conjured card uses standard deploy rules (melee = any friendly tile,
     ranged = back row only).
@@ -705,7 +708,8 @@ def _pending_conjure_deploy_actions(
         conjure_deploy_action(position=pos)
         for pos in deploy_positions
     ]
-    actions.append(decline_conjure_action())
+    if not actions:
+        actions.append(decline_conjure_action())
     return tuple(actions)
 
 

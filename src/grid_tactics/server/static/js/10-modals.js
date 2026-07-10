@@ -631,18 +631,25 @@ function showConjureDeployUI() {
     var cardName = cardNid != null ? findCardNameByNid(cardNid) : 'card';
     banner.textContent = 'Deploy ' + cardName + ' — click a valid tile';
 
-    var skipBtn = document.createElement('button');
-    skipBtn.className = 'tutor-skip-button';
-    skipBtn.style.marginLeft = '12px';
-    skipBtn.style.display = 'inline';
-    skipBtn.textContent = 'To Hand';
-    skipBtn.title = 'Send the conjured card to your hand instead of deploying';
-    skipBtn.addEventListener('click', function(e) {
-        e.stopPropagation();
-        // ActionType.DECLINE_CONJURE = 13
-        submitAction({ action_type: 13 });
-    });
-    banner.appendChild(skipBtn);
+    // Conjure must deploy (user 2026-07-10): the To Hand escape renders
+    // ONLY when the server offers DECLINE_CONJURE — which it now does
+    // solely when the board has zero legal deploy tiles.
+    var declineLegal = Array.isArray(legalActions)
+        && legalActions.some(function(a) { return a.action_type === 13; });
+    if (declineLegal) {
+        var skipBtn = document.createElement('button');
+        skipBtn.className = 'tutor-skip-button';
+        skipBtn.style.marginLeft = '12px';
+        skipBtn.style.display = 'inline';
+        skipBtn.textContent = 'To Hand';
+        skipBtn.title = 'No tile available — the conjured card goes to your hand';
+        skipBtn.addEventListener('click', function(e) {
+            e.stopPropagation();
+            // ActionType.DECLINE_CONJURE = 13
+            submitAction({ action_type: 13 });
+        });
+        banner.appendChild(skipBtn);
+    }
 
     _stageMount().appendChild(banner);
 
