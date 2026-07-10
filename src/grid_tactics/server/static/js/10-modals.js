@@ -1148,9 +1148,8 @@ function renderActionBar() {
                 var passBtn = document.createElement('button');
                 passBtn.className = 'btn btn-action btn-pass btn-pass-action';
                 passBtn.textContent = 'Pass';
-                passBtn.title = 'Pass — rest: gain +1 mana and draw a card. '
-                    + '2nd consecutive pass seals a Handshake '
-                    + '(both players gain a mana and draw)';
+                passBtn.title = 'Pass — free. 2nd consecutive pass seals a '
+                    + 'Handshake (both players gain a mana and draw a card)';
                 passBtn.addEventListener('click', function() {
                     submitAction({ action_type: 4 });
                 });

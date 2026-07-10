@@ -248,6 +248,14 @@ class GameState:
     # Emberplague Rat / Dark Matter Battery every time a burn tick killed).
     decay_resume_pending: bool = False
 
+    # Magic-free-action variant (user 2026-07-10 v3, GT_MANUAL_DRAW=1):
+    # set when the active player casts a MAGIC (non-minion) card — the
+    # cast does NOT consume the turn action. Consumed at the after-action
+    # react-window close, which returns to the caster's ACTION phase
+    # instead of entering END_OF_TURN. Defensively cleared on turn flip.
+    # Appended field with a default — from_dict/serialization tolerant.
+    magic_free_action_pending: bool = False
+
     # Phase 14.8-05: ``last_trigger_blip`` DELETED. Plan 14.8-03a introduced
     # EVT_TRIGGER_BLIP as a first-class EngineEvent in the event stream;
     # plan 14.8-04b added playTriggerBlip as a client slot handler. The

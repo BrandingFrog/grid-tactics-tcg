@@ -564,6 +564,26 @@ def resume_after_trigger_drain(
                 react_context=None,
                 react_return_phase=None,
             )
+        # Magic-free-action variant (user 2026-07-10 v3): same return-to-
+        # caster shortcut as resolve_react_stack's tail — a drained magic
+        # cast hands the action back instead of ending the turn.
+        if state.magic_free_action_pending:
+            if event_collector is not None:
+                event_collector.collect(
+                    EVT_REACT_WINDOW_CLOSED,
+                    "system:close_react_window",
+                    {"return_phase": "action_free_magic"},
+                )
+            return replace(
+                state,
+                phase=TurnPhase.ACTION,
+                react_stack=(),
+                react_player_idx=None,
+                pending_action=None,
+                react_context=None,
+                react_return_phase=None,
+                magic_free_action_pending=False,
+            )
         if event_collector is not None:
             event_collector.collect(
                 EVT_REACT_WINDOW_CLOSED,
@@ -1339,6 +1359,9 @@ def _close_end_of_turn_and_flip(
         phase=TurnPhase.ACTION,
         active_player_idx=new_active_idx,
         turn_number=state.turn_number + 1,
+        # Magic-free-action variant: never carry a stale free-action flag
+        # across the turn flip (wedge-safety).
+        magic_free_action_pending=False,
         players=_replace_player(
             state.players, new_active_idx,
             replace(state.players[new_active_idx], tutored_this_turn=False),
@@ -2938,6 +2961,28 @@ def resolve_react_stack(
                 pending_action=None,
                 react_context=None,
                 react_return_phase=None,
+            )
+
+        # Magic-free-action variant (user 2026-07-10 v3): a MAGIC cast
+        # does not consume the turn action — the after-action window
+        # closes back into the CASTER's ACTION phase instead of entering
+        # END_OF_TURN. The flag was set at cast time in _apply_play_card.
+        if state.magic_free_action_pending:
+            if event_collector is not None:
+                event_collector.collect(
+                    EVT_REACT_WINDOW_CLOSED,
+                    "system:close_react_window",
+                    {"return_phase": "action_free_magic"},
+                )
+            return replace(
+                state,
+                phase=TurnPhase.ACTION,
+                react_stack=(),
+                react_player_idx=None,
+                pending_action=None,
+                react_context=None,
+                react_return_phase=None,
+                magic_free_action_pending=False,
             )
 
         # Phase 14.7-03: after-action react window closed → enter

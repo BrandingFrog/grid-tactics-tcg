@@ -205,34 +205,10 @@ def _apply_pass(
     cannot chain off a single pass pair.
     """
     assert_phase_contract(state, "action:pass_action")
-    # Rest rework (user 2026-07-10 v2): under the variant, PASS is a REST —
-    # the passer gains +1 mana (capped) AND draws a card (overdraw-burns on
-    # a full hand; empty deck simply skips the draw — never fatigue). The
-    # dispatch site's generic mana-diff emitter surfaces the EVT_MANA_CHANGE;
-    # the draw event is emitted here (it needs the card identity).
-    if manual_draw_variant():
-        passer_idx = state.active_player_idx
-        passer = state.players[passer_idx]
-        if passer.current_mana < MAX_MANA_CAP:
-            passer = replace(passer, current_mana=passer.current_mana + 1)
-        if passer.deck:
-            passer, _rest_card_id, _rest_burned = passer.draw_card_with_overdraw()
-            if event_collector is not None:
-                event_collector.collect(
-                    EVT_CARD_BURNED if _rest_burned else EVT_CARD_DRAWN,
-                    "action:pass_action",
-                    {
-                        "player_idx": passer_idx,
-                        "source": "rest",
-                        # view_filter redacts the identity for the opponent
-                        # on non-burn draws (same contract as every draw).
-                        "card_numeric_id": _rest_card_id,
-                    },
-                )
-        state = replace(
-            state,
-            players=_replace_player(state.players, passer_idx, passer),
-        )
+    # Rest rework v3 (user 2026-07-10): PASS gives NO benefit again — the
+    # v2 rest bonus (+1 mana +1 draw) was removed when magic casts stopped
+    # consuming the turn action. The Handshake payout (both players gain
+    # +1 mana AND draw) is unchanged and remains the only pass reward.
     new_count = state.consecutive_passes + 1
     if new_count >= 2:
         # Handshake! Reset the streak — no chaining.
@@ -596,6 +572,12 @@ def _apply_play_card(
     if card_def.card_type == CardType.MINION:
         return _deploy_minion(state, action, card_def, card_numeric_id, active_side, library)
     elif card_def.card_type == CardType.MAGIC:
+        # Magic-free-action variant (user 2026-07-10 v3): casting magic
+        # does NOT consume the turn action. Flag the state; the after-
+        # action react-window close consumes it and returns to the
+        # caster's ACTION phase instead of entering END_OF_TURN.
+        if manual_draw_variant():
+            state = replace(state, magic_free_action_pending=True)
         return _cast_magic(
             state, action, card_def, card_numeric_id, active_side, library,
             event_collector=event_collector,
