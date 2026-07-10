@@ -5789,3 +5789,46 @@ input::selection, textarea::selection { background: rgba(224, 162, 60, 0.45); co
   text-shadow: 0 0 6px rgba(224, 162, 60, 0.9), 0 1px 3px rgba(0, 0, 0, 0.9);
   animation: hourglass-flip 2s ease-in-out infinite;
 }
+
+/* =========================================================================
+   BUFF/DEBUFF STAT TONES (user 2026-07-10): the big arrow badges are gone.
+   The stat NUMBER carries the state — golden pulse on its stroke when the
+   stat is net-better than printed, a slow grey draining animation when
+   net-worse. Applies to board minions (.board-minion-atk/.board-minion-hp
+   wrappers around .stat-num) and the tooltip stat rail (.cf2-stat-val).
+   ========================================================================= */
+@keyframes stat-gold-pulse {
+  0%, 100% {
+    -webkit-text-stroke-color: rgba(224, 162, 60, 0.45);
+    text-shadow: 0 0 3px rgba(255, 216, 115, 0.35);
+  }
+  50% {
+    -webkit-text-stroke-color: #ffd873;
+    text-shadow: 0 0 10px rgba(255, 216, 115, 0.95), 0 0 3px rgba(255, 216, 115, 0.8);
+  }
+}
+@keyframes stat-grey-drain {
+  0% {
+    -webkit-text-stroke-color: rgba(150, 150, 150, 0.75);
+    text-shadow: 0 0 3px rgba(170, 170, 170, 0.45);
+  }
+  60% {
+    -webkit-text-stroke-color: rgba(70, 70, 70, 0.9);
+    text-shadow: 0 7px 8px rgba(90, 90, 90, 0.6);
+  }
+  100% {
+    -webkit-text-stroke-color: rgba(150, 150, 150, 0.75);
+    text-shadow: 0 0 3px rgba(170, 170, 170, 0.45);
+  }
+}
+.stat-buffed .stat-num,
+.cf2-stat-val.stat-buffed {
+  -webkit-text-stroke: 1px rgba(224, 162, 60, 0.45);
+  animation: stat-gold-pulse 1.6s ease-in-out infinite;
+}
+.stat-debuffed .stat-num,
+.cf2-stat-val.stat-debuffed {
+  -webkit-text-stroke: 1px rgba(150, 150, 150, 0.75);
+  color: #b9b3a4 !important;
+  animation: stat-grey-drain 2.8s ease-in-out infinite;
+}

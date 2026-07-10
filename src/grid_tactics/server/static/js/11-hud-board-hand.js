@@ -524,22 +524,23 @@ function renderBoardMinion(minion) {
         ? 'background-image:url(' + _cardArtUrl(cardDef.card_id, true) + ');background-size:cover;background-position:center;'
         : '';
 
-    // Phase 14.3 Wave 7: persistent status badges (burning / buff / debuff).
+    // Buff/debuff rework (user 2026-07-10): the big ⬆️/⬇️ badges are GONE —
+    // the stat number itself already shows the modified value; a stroke
+    // animation carries the state instead: golden pulse when net-BETTER
+    // than the printed stat, slow grey drain when net-WORSE. A stat that
+    // is both buffed and debuffed animates by its NET sign. Burning keeps
+    // its badge (a status, not a stat change).
     var badges = [];
     if (minion.is_burning) {
         badges.push('<span class="minion-badge badge-burning" title="Burning">🔥</span>');
     }
-    if (minion.attack_bonus > 0) {
-        badges.push('<span class="minion-badge badge-buff">⬆️+' + minion.attack_bonus + SWORD + '</span>');
-    } else if (minion.attack_bonus < 0) {
-        badges.push('<span class="minion-badge badge-debuff">⬇️' + minion.attack_bonus + SWORD + '</span>');
-    }
-    if (minion.max_health_bonus && minion.max_health_bonus > 0) {
-        badges.push('<span class="minion-badge badge-buff">⬆️+' + minion.max_health_bonus + HEART + '</span>');
-    }
     var badgesHtml = badges.length
         ? '<div class="minion-badges">' + badges.join('') + '</div>'
         : '';
+    var atkNet = minion.attack_bonus | 0;
+    var hpNet = minion.max_health_bonus | 0;
+    var atkTone = atkNet > 0 ? ' stat-buffed' : (atkNet < 0 ? ' stat-debuffed' : '');
+    var hpTone = hpNet > 0 ? ' stat-buffed' : (hpNet < 0 ? ' stat-debuffed' : '');
 
     return '<div class="board-minion ' + ownerClass + ' ' + typeClass + '" data-numeric-id="' + minion.card_numeric_id + '" style="' + boardArtStyle + '">'
         + '<div class="board-minion-overlay"></div>'
@@ -548,8 +549,8 @@ function renderBoardMinion(minion) {
            noise at cell size */
         + '<div class="board-minion-name">' + cardDef.name + '</div>'
         + '<div class="board-minion-stats">'
-        + '<span class="board-minion-atk"><span class="stat-emoji-bg">' + SWORD_SVG + '</span><span class="stat-num">' + atk + '</span></span>'
-        + '<span class="board-minion-hp"><span class="stat-emoji-bg">' + HEART_SVG + '</span><span class="stat-num">' + hp + '</span></span>'
+        + '<span class="board-minion-atk' + atkTone + '"><span class="stat-emoji-bg">' + SWORD_SVG + '</span><span class="stat-num">' + atk + '</span></span>'
+        + '<span class="board-minion-hp' + hpTone + '"><span class="stat-emoji-bg">' + HEART_SVG + '</span><span class="stat-num">' + hp + '</span></span>'
         + '</div>'
         + badgesHtml
         + '</div>';

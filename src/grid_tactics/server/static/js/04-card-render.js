@@ -13,7 +13,36 @@ function showGameTooltip(numericId, anchorEl, minion, opts) {
     populateTooltip(tooltipEl, numericId, { showRelated: true });
     var hint = document.getElementById(hintId);
     if (hint) hint.style.display = 'none';
+    _applyLiveStatTones(tooltipEl, minion || null);
     _renderMinionStatusPanels(tooltipEl, minion);
+}
+
+// Buff/debuff rework (user 2026-07-10): when the tooltip shows a BOARD
+// minion, patch the printed stat values to the live ones and tag them
+// with the same golden-pulse / grey-drain stroke animation the board
+// stats use. Net sign vs the printed stat decides which — a stat both
+// buffed and debuffed animates by whether it ended up better or worse.
+function _applyLiveStatTones(tooltipEl, minion) {
+    if (!tooltipEl) return;
+    var stats = tooltipEl.querySelectorAll('.cf2-stat');
+    for (var i = 0; i < stats.length; i++) {
+        var lbl = stats[i].querySelector('.cf2-stat-lbl');
+        var val = stats[i].querySelector('.cf2-stat-val');
+        if (!lbl || !val) continue;
+        val.classList.remove('stat-buffed', 'stat-debuffed');
+        if (!minion) continue;  // fresh printed markup — nothing to patch
+        var def = (cardDefs && cardDefs[minion.card_numeric_id]) || {};
+        var net = 0;
+        if (/attack/i.test(lbl.textContent)) {
+            net = minion.attack_bonus | 0;
+            val.textContent = (def.attack || 0) + net;
+        } else if (/health/i.test(lbl.textContent)) {
+            net = minion.max_health_bonus | 0;
+            val.textContent = (def.health || 0) + net;
+        }
+        if (net > 0) val.classList.add('stat-buffed');
+        else if (net < 0) val.classList.add('stat-debuffed');
+    }
 }
 
 function hideGameTooltip(opts) {
@@ -71,28 +100,10 @@ function _renderMinionStatusPanels(tooltipEl, minion) {
         return;
     }
     var panels = [];
-    var atk = minion.attack_bonus | 0;
-    if (atk !== 0) {
-        panels.push({
-            icon: '🗡️',
-            name: (atk > 0 ? '+' : '') + atk + ' Attack',
-            desc: atk > 0
-                ? 'Buffed: deals ' + atk + ' more damage on attack.'
-                : 'Debuffed: deals ' + Math.abs(atk) + ' less damage on attack.',
-            tone: atk > 0 ? 'buff' : 'debuff',
-        });
-    }
-    var hpBonus = minion.max_health_bonus | 0;
-    if (hpBonus !== 0) {
-        panels.push({
-            icon: '🤍',
-            name: (hpBonus > 0 ? '+' : '') + hpBonus + ' Max Health',
-            desc: hpBonus > 0
-                ? 'Buffed: cap raised by ' + hpBonus + ' (heals can fill it).'
-                : 'Debuffed: cap lowered by ' + Math.abs(hpBonus) + '.',
-            tone: hpBonus > 0 ? 'buff' : 'debuff',
-        });
-    }
+    // Buff/debuff rework (user 2026-07-10): the +X Attack / +X Max Health
+    // panels are GONE — they ate the tooltip. The tooltip card's own stat
+    // values are patched to the LIVE numbers with the same golden-pulse /
+    // grey-drain stroke animations as the board (see _applyLiveStatTones).
     if (minion.is_burning) {
         panels.push({
             icon: '🔥',
