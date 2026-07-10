@@ -5777,23 +5777,33 @@ input::selection, textarea::selection { background: rgba(224, 162, 60, 0.45); co
   text-transform: none;
   color: rgba(32, 23, 9, 0.78);
 }
-/* Draw: worn-bronze token above the gold Pass so Pass stays the primary. */
-#screen-game .hand-action-bar .btn-draw-action,
-#screen-sandbox .hand-action-bar .btn-draw-action {
+/* Draw: worn-bronze token above the gold Pass so Pass stays the primary.
+   User 2026-07-10 "isn't themed": two problems — the ghost-bronze
+   secondary rule (button:not(.btn-pass):not(.btn-pass-action), higher
+   specificity) beat the token background, and its translucent fill let
+   the WHITE deck-pile stack behind this corner bleed through, reading
+   as an unthemed white pill. Opaque fill + specificity matched to that
+   rule (this block is later in the file, so the tie breaks our way). */
+#screen-game .hand-action-bar .action-bar-col button.btn-draw-action,
+#screen-sandbox .hand-action-bar .action-bar-col button.btn-draw-action {
   font-family: var(--ui-display) !important;
-  font-weight: 700;
+  font-weight: 700 !important;
   font-size: 13px !important;
   letter-spacing: 1.5px; text-transform: uppercase;
-  color: var(--parch, #f2ead2) !important;
-  background: linear-gradient(180deg, #4a3a1c 0%, #33260f 100%) !important;
-  border: 1px solid var(--bronze, #6b5730) !important;
+  color: var(--gold-lt, #ffd873) !important;
+  background: linear-gradient(180deg, #3d2f15 0%, #241a0a 100%) !important;
+  border: 1px solid var(--gold, #e0a23c) !important;
   border-radius: 8px !important;
   padding: 7px 16px !important;
-  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(58, 46, 24, 0.4) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 216, 115, 0.25),
+    0 3px 10px rgba(0, 0, 0, 0.6) !important;
   cursor: pointer;
 }
-#screen-game .hand-action-bar .btn-draw-action:hover,
-#screen-sandbox .hand-action-bar .btn-draw-action:hover { filter: brightness(1.15); }
+#screen-game .hand-action-bar .action-bar-col button.btn-draw-action:hover,
+#screen-sandbox .hand-action-bar .action-bar-col button.btn-draw-action:hover {
+  filter: brightness(1.2);
+}
 
 /* Minion action menu as a small context menu at the clicked tile (user
    2026-07-10): the backdrop no longer greys the stage — it is only an
