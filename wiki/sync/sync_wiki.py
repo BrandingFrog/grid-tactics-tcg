@@ -432,6 +432,7 @@ def main(argv: list[str] | None = None) -> int:
     # --homepage
     if args.homepage:
         from sync.sync_homepage import sync_main_page
+        from sync.sync_polish import push_cotd_js
 
         try:
             site = get_site()
@@ -442,6 +443,11 @@ def main(argv: list[str] | None = None) -> int:
         print(f"Syncing Main Page{dry_label}...")
         status = sync_main_page(site, dry_run=args.dry_run)
         print(f"Main Page: {status}")
+        # Card of the Day client rotator (user 2026-07-11): baked card
+        # data lives in Common.js — refresh it whenever the homepage
+        # syncs so new cards/tips reach the daily rotation.
+        cotd_status = push_cotd_js(site, dry_run=args.dry_run)
+        print(f"COTD rotator: {cotd_status}")
         return 0
 
     # --showcase

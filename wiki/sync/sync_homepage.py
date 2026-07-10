@@ -52,6 +52,24 @@ def _pick_card_of_the_day(cards_dir: Path | None = None) -> dict | None:
     return cards[h % len(cards)]
 
 
+def _pick_fact(card: dict) -> str:
+    """Pick today's 'Did you know?' fact for the card (user 2026-07-11).
+
+    Pool = the card's tips + rulings + flavour text; the pick rotates
+    with the date so the fact changes on every reset alongside the card.
+    """
+    pool: list[str] = []
+    pool.extend(card.get("tips") or [])
+    pool.extend(card.get("rulings") or [])
+    if card.get("flavour_text"):
+        pool.append(card["flavour_text"])
+    if not pool:
+        return ""
+    today = date.today().isoformat()
+    h = int(hashlib.sha256((today + "fact").encode()).hexdigest(), 16)
+    return pool[h % len(pool)]
+
+
 def main_page_wikitext(cards_dir: Path | None = None) -> str:
     """Return the wikitext for the wiki Main Page.
 
@@ -177,9 +195,26 @@ def main_page_wikitext(cards_dir: Path | None = None) -> str:
         }
         title_bg = _type_colours.get(card_type, "linear-gradient(90deg,#333,#111)")
 
+        # Daily fact row (user 2026-07-11): a reason to care about today's
+        # card. Rotates with the date, same as the pick itself.
+        fact = _pick_fact(cotd)
+        fact_row = ""
+        if fact:
+            fact_row = (
+                f'|-\n'
+                f'| colspan="3" style="padding:8px 10px; background:#241a0a; '
+                f'border-top:1px solid #6b5730; font-size:0.85em; color:#cbb98f;" '
+                f"| \U0001f4dc '''Did you know?''' {fact}\n"
+            )
+
+        # NOTE (user 2026-07-11): the server-rendered table below is only
+        # the sync-day FALLBACK. MediaWiki:Common.js (push_cotd_js in
+        # sync_polish.py) re-renders #cotd-slot client-side from baked
+        # card data, so the card + fact actually rotate at midnight for
+        # every viewer even when no sync has run that day.
         cotd_section = (
             f'== Card of the Day ==\n'
-            f'<div style="display:flex; justify-content:center; margin-bottom:1em;">\n'
+            f'<div id="cotd-slot" style="display:flex; justify-content:center; margin-bottom:1em;">\n'
             f'{{| style="width:280px; border:2px solid #222; border-radius:10px; '
             f'background:#1a1a1a; color:#eee; font-family:sans-serif;"\n'
             f'|-\n'
@@ -205,6 +240,7 @@ def main_page_wikitext(cards_dir: Path | None = None) -> str:
             f'{rules_row}'
             f'{atk_hp_row}'
             f'{react_section}'
+            f'{fact_row}'
             f'|}}\n'
             f'</div>\n'
             f'\n'

@@ -52,4 +52,11 @@ if echo "$CHANGED_FILES" | grep -q "data/cards/"; then
     run_with_retry "cards" python -m sync.sync_wiki --all-cards
 fi
 
+# 4. Homepage + Card-of-the-Day rotator (user 2026-07-11): the COTD now
+# rotates CLIENT-side from card data baked into MediaWiki:Common.js --
+# refresh it when cards change so new cards/tips join the rotation.
+if echo "$CHANGED_FILES" | grep -qE "data/cards/|wiki/sync/"; then
+    run_with_retry "homepage" python -m sync.sync_wiki --homepage
+fi
+
 exit 0

@@ -669,6 +669,143 @@ def push_hud_fonts_js(site, dry_run: bool = False) -> str:
 
 
 # ---------------------------------------------------------------------------
+# Card of the Day — client-side daily rotation (user 2026-07-11)
+# ---------------------------------------------------------------------------
+# The Main Page's server-rendered Card of the Day only refreshes when a
+# wiki sync RUNS (commits) — between syncs the page sits static, so the
+# "daily" pick never actually rotated. This JS re-renders #cotd-slot in
+# the viewer's browser from card data baked in at sync time: the card and
+# its "Did you know?" fact flip at midnight with no cron. The block is
+# marker-REPLACED (not append-once) so card data refreshes on every sync.
+
+_COTD_JS_START = "/* --- Grid Tactics Card of the Day (daily client rotation) --- */"
+_COTD_JS_END = "/* --- end Card of the Day --- */"
+
+
+def _cotd_card_data() -> list[dict]:
+    """Compact per-card data baked into Common.js for the COTD rotator."""
+    import json as _json
+
+    cards_dir = Path(__file__).resolve().parent.parent.parent / "data" / "cards"
+    out: list[dict] = []
+    for f in sorted(cards_dir.glob("*.json")):
+        try:
+            card = _json.loads(f.read_text(encoding="utf-8"))
+        except _json.JSONDecodeError:
+            continue
+        if card.get("deckable", True) is False:
+            continue
+        facts: list[str] = []
+        facts.extend(card.get("tips") or [])
+        facts.extend(card.get("rulings") or [])
+        if card.get("flavour_text"):
+            facts.append(card["flavour_text"])
+        out.append({
+            "n": card.get("name", "?"),
+            "id": card.get("card_id", ""),
+            "t": (card.get("card_type") or "").capitalize(),
+            "e": (card.get("element") or "").capitalize(),
+            "tr": card.get("tribe") or "",
+            "m": card.get("mana_cost", 0),
+            "a": card.get("attack"),
+            "h": card.get("health"),
+            "r": card.get("range"),
+            "facts": facts,
+        })
+    return out
+
+
+_COTD_JS_TEMPLATE = r"""
+(function gtCardOfTheDay() {
+  var slot = document.getElementById('cotd-slot');
+  if (!slot) return;
+  var CARDS = __CARD_DATA__;
+  if (!CARDS.length) return;
+  function h(s) {
+    var x = 5381;
+    for (var i = 0; i < s.length; i++) x = ((x * 33) ^ s.charCodeAt(i)) >>> 0;
+    return x;
+  }
+  function pad(n) { return (n < 10 ? '0' : '') + n; }
+  var d = new Date();
+  var iso = d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
+  var card = CARDS[h(iso) % CARDS.length];
+  var fact = card.facts.length ? card.facts[h(iso + 'fact') % card.facts.length] : '';
+  var pageUrl = '/wiki/Card:' + encodeURIComponent(card.n).replace(/%20/g, '_');
+  var artUrl = '/wiki/Special:FilePath/' + encodeURIComponent(card.id) + '.png';
+  var SWORD = '🗡️';
+  var HEART = '🤍';
+  var SCROLL = '📜';
+  var metaBits = [card.t, card.e];
+  if (card.tr) metaBits.push(card.tr);
+  metaBits.push('Mana ' + card.m);
+  if (card.a != null && card.h != null) metaBits.push(card.a + SWORD + ' ' + card.h + HEART);
+  function esc(s) {
+    return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+  var FONT_BODY = "font-family:'Alegreya',Georgia,serif;";
+  var FONT_HEAD = "font-family:'Alegreya SC',serif;";
+  slot.innerHTML =
+    '<div style="width:300px; border:1px solid #6b5730; border-radius:10px; overflow:hidden;' +
+    ' background:linear-gradient(180deg,#201709,#171006); color:#cbb98f; ' + FONT_BODY +
+    ' box-shadow:0 6px 20px rgba(0,0,0,0.5);">' +
+    '<div style="padding:8px 12px; background:linear-gradient(180deg,#3d2f15,#241a0a);' +
+    ' border-bottom:1px solid #6b5730; text-align:center;">' +
+    '<a href="' + pageUrl + '" style="color:#ffd873; font-weight:700; font-size:1.15em; ' +
+    FONT_HEAD + ' text-decoration:none;">' + esc(card.n) + '</a></div>' +
+    '<a href="' + pageUrl + '"><img src="' + artUrl + '" alt="' + esc(card.n) + '"' +
+    ' style="display:block; width:100%; height:auto;"/></a>' +
+    '<div style="padding:6px 12px; font-size:0.85em; color:#9a865c; text-align:center;' +
+    ' border-top:1px solid #3a2e18;">' + esc(metaBits.join(' ◆ ')) + '</div>' +
+    (fact
+      ? '<div style="padding:8px 12px; background:#241a0a; border-top:1px solid #6b5730;' +
+        ' font-size:0.85em; text-align:left;">' + SCROLL +
+        ' <b style="color:#e0a23c;">Did you know?</b> ' + esc(fact) + '</div>'
+      : '');
+})();
+"""
+
+
+def _cotd_js_block() -> str:
+    import json as _json
+
+    data_json = _json.dumps(
+        _cotd_card_data(), ensure_ascii=True, separators=(",", ":"),
+    )
+    body = _COTD_JS_TEMPLATE.replace("__CARD_DATA__", data_json)
+    return _COTD_JS_START + body + _COTD_JS_END
+
+
+def push_cotd_js(site, dry_run: bool = False) -> str:
+    """Upsert the Card of the Day rotator into MediaWiki:Common.js.
+
+    Marker-REPLACED so refreshed card data (new tips, new cards) lands on
+    every sync instead of only the first. Idempotent when unchanged.
+    """
+    page = site.pages["MediaWiki:Common.js"]
+    current = page.text() if page.exists else ""
+    block = _cotd_js_block()
+
+    if _COTD_JS_START in current and _COTD_JS_END in current:
+        start = current.index(_COTD_JS_START)
+        end = current.index(_COTD_JS_END) + len(_COTD_JS_END)
+        if current[start:end] == block:
+            print("  MediaWiki:Common.js: unchanged (COTD rotator current)")
+            return "unchanged"
+        new_text = current[:start] + block + current[end:]
+    else:
+        new_text = (current.rstrip() + "\n\n" + block + "\n") if current.strip() else block + "\n"
+
+    if dry_run:
+        print("  MediaWiki:Common.js: would-update (COTD rotator)")
+        return "would-update"
+
+    page.edit(new_text, summary="Card of the Day: client-side daily rotation + daily fact")
+    print("  MediaWiki:Common.js: updated (COTD rotator)")
+    return "updated"
+
+
+# ---------------------------------------------------------------------------
 # Mobile CSS
 # ---------------------------------------------------------------------------
 
