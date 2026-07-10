@@ -10,7 +10,14 @@
     "element": "dark",
     "tribe": "Mage",
     "cost_reduction": "dark_matter",
-    "effects": [],
+    "effects": [
+        {
+            "type": "grant_dark_matter",
+            "trigger": "on_summon",
+            "target": "owner_player",
+            "amount": 1
+        }
+    ],
     "tips": [
         "Erebus costs 20 mana minus your Dark Matter pool. At 15 Dark Matter he's a 5-mana 80/80, and at 20+ he's free — the most efficient body in the game.",
         "Grow the pool with Shady Trade Deal and Dark Matter Stash before dropping Erebus. The entire Dark Matter archetype exists to make this card affordable.",

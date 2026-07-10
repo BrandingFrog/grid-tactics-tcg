@@ -334,11 +334,30 @@ class TestPhase1473NewTriggers:
         assert card.effects[0].trigger == TriggerType.ON_END_OF_TURN
 
     def test_gargoyle_sorceress_has_on_summon(self, real_library) -> None:
-        """Gargoyle Sorceress's buff_attack and buff_health effects are on_summon."""
+        """Gargoyle Sorceress's buff_attack and buff_health effects are
+        on_summon — plus the Dark-Mage-wide 'Summon: Dark Matter +1'
+        (user 2026-07-10)."""
         card = real_library.get_by_card_id("gargoyle_sorceress")
-        assert len(card.effects) == 2
+        assert len(card.effects) == 3
         for eff in card.effects:
             assert eff.trigger == TriggerType.ON_SUMMON
+
+    def test_all_dark_mages_grant_dark_matter_on_summon(self, real_library) -> None:
+        """Every Dark Mage carries 'Summon: Dark Matter +1' (user 2026-07-10)."""
+        from grid_tactics.cards import is_dark_mage
+        from grid_tactics.enums import EffectType, TargetType
+
+        dark_mages = [c for c in real_library.all_cards if is_dark_mage(c)]
+        assert len(dark_mages) == 5, [c.card_id for c in dark_mages]
+        for card in dark_mages:
+            grants = [
+                e for e in card.effects
+                if e.effect_type == EffectType.GRANT_DARK_MATTER
+                and e.trigger == TriggerType.ON_SUMMON
+            ]
+            assert len(grants) == 1, card.card_id
+            assert grants[0].amount == 1, card.card_id
+            assert grants[0].target == TargetType.OWNER_PLAYER, card.card_id
 
     def test_blue_diodebot_has_on_summon(self, real_library) -> None:
         """Blue Diodebot tutor effect is on_summon."""

@@ -288,7 +288,8 @@ console.log(JSON.stringify({ desc: getEffectDescription(effects, card) }));
     )
     out = run_js(tmp_path, script)
     assert out["desc"] == (
-        "Gain (DM)[atk][hp]. ×3 if in front of Dark Ranged ally"
+        # 'Summon: ' prefix added 2026-07-10 (ON_SUMMON joined triggerMap).
+        "Summon: Gain (DM)[atk][hp]. ×3 if in front of Dark Ranged ally"
     ), (
         "player_dark_matter buff must render the DM scaling + placement "
         "clause; got %r" % out["desc"]

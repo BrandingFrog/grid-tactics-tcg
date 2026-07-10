@@ -858,7 +858,10 @@ function getEffectDescription(effects, cardData, opts) {
     var noTrigger = !!(opts && opts.noTrigger);
     var isMinion = cardData && cardData.card_type === 0;
     var DM = _dmTokenLive();
-    var triggerMap = {0: isMinion ? 'Summon' : '', 1: 'Death', 2: 'Attack', 3: 'Damaged', 4: 'Move', 5: 'End', 6: 'Discarded', 9: 'Rally', 10: 'Decay'};
+    // 8 (ON_SUMMON) added 2026-07-10 — it was missing, so on-summon effects
+    // (Dark Mage "Summon: Dark Matter +1", Eclipse Shade's burn, diodebot
+    // tutors) rendered with no prefix at all.
+    var triggerMap = {0: isMinion ? 'Summon' : '', 1: 'Death', 2: 'Attack', 3: 'Damaged', 4: 'Move', 5: 'End', 6: 'Discarded', 8: isMinion ? 'Summon' : '', 9: 'Rally', 10: 'Decay'};
     // Coalesce sibling burn-all-minions effects that only differ in
     // target_tribe/target_element into a single rendered clause — so
     // Acidic Rain reads "Burn all Robots, Machines and Metal minions"

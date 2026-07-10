@@ -15,6 +15,12 @@
             "trigger": "on_summon",
             "target": "self_owner",
             "amount": 5
+        },
+        {
+            "type": "grant_dark_matter",
+            "trigger": "on_summon",
+            "target": "owner_player",
+            "amount": 1
         }
     ],
     "tips": [

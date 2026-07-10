@@ -29,6 +29,12 @@
             "scale_with": "player_dark_matter",
             "placement_condition": "front_of_dark_ranged",
             "condition_multiplier": 3
+        },
+        {
+            "type": "grant_dark_matter",
+            "trigger": "on_summon",
+            "target": "owner_player",
+            "amount": 1
         }
     ],
     "tips": [

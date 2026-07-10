@@ -74,6 +74,9 @@ _TRIGGER_PREFIX: dict[int | str, str] = {
     5: "[[End]]", "passive": "[[End]]",
     6: "[[Discarded]]", "on_discard": "[[Discarded]]",
     7: "Passive", "aura": "Passive",
+    # 8 (ON_SUMMON) added 2026-07-10 -- was missing, so on-summon effects
+    # rendered with no prefix (mirrors the game.js triggerMap fix).
+    8: "[[Summon]]", "on_summon": "[[Summon]]",
     # 2026-07 turn structure: ON_START_OF_TURN fires in the Rally Phase,
     # ON_END_OF_TURN in the Decay Phase (both keywords in data/GLOSSARY.md).
     9: "[[Rally]]", "on_start_of_turn": "[[Rally]]",

@@ -9,7 +9,14 @@
     "range": 1,
     "element": "dark",
     "tribe": "Mage",
-    "effects": [],
+    "effects": [
+        {
+            "type": "grant_dark_matter",
+            "trigger": "on_summon",
+            "target": "owner_player",
+            "amount": 1
+        }
+    ],
     "flavour_text": "Aim narrow. The shadow does the widening.",
     "tips": [
         "14🗡️ at 3 mana is the best raw damage per mana for a ranged Dark Mage — deploy it on an open back-row column and start chipping immediately.",
