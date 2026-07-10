@@ -30,21 +30,20 @@ from grid_tactics.types import MAX_EFFECT_AMOUNT, MAX_STAT, MIN_STAT
 def is_dark_mage(card_def: "CardDefinition") -> bool:
     """THE single Dark-Mage predicate (Dark Matter pool redesign 2026-07).
 
-    A "Dark Mage" is a MINION whose tribe is exactly "Mage" (case-
-    insensitive) AND whose element is DARK. Composite tribes ("Mage Rat"
-    Ratchanter, "Mage Undead" Grave Caller) do NOT qualify — they are
-    Mage-adjacent but not Dark Mages.
+    A "Dark Mage" is a MINION with the Mage tribe AND the DARK element.
+    2026-07-10 (user): composite tribes COUNT — "Mage Rat" (Ratchanter)
+    and "Mage Undead" (Grave Caller) are Dark Mages too. Any tribe list
+    containing the word "Mage" qualifies. (Before 2026-07-10 the tribe
+    had to be exactly "Mage".)
 
     Every card effect that targets / counts Dark Mages must route through
     this predicate rather than a bare target_tribe "Mage" filter, so the
     definition lives in exactly one place.
     """
-    return (
-        card_def.card_type == CardType.MINION
-        and card_def.tribe is not None
-        and card_def.tribe.strip().lower() == "mage"
-        and card_def.element == Element.DARK
-    )
+    if card_def.card_type != CardType.MINION or card_def.element != Element.DARK:
+        return False
+    tribe = (card_def.tribe or "").strip().lower()
+    return "mage" in tribe.split()
 
 
 @dataclass(frozen=True, slots=True)

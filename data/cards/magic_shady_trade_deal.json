@@ -25,7 +25,7 @@
     ],
     "rulings": [
         "To play this card, you must discard one other card from your hand (any card, any type). The discarded card goes to the exhaust pile.",
-        "You gain +1 Dark Matter per friendly [[Dark Mage]] on the board (element Dark AND tribe exactly Mage). Dark Mages in hand or deck do not count. With zero Dark Mages on board, the gain is 0.",
+        "You gain +1 Dark Matter per friendly [[Dark Mage]] on the board (element Dark AND the Mage tribe; composite tribes count since 2026-07-10). Dark Mages in hand or deck do not count. With zero Dark Mages on board, the gain is 0.",
         "Dark Matter is a PLAYER pool — the gain credits your pool, not any minion. Both players can always see both pools.",
         "The discarded card may trigger its own on-discard effects (e.g. Dark Matter Stash grants +1 Dark Matter per friendly Dark Mage when discarded).",
         "If you have no other cards in hand, you cannot pay the discard cost and cannot play this card."

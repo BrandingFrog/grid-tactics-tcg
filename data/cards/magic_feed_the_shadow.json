@@ -33,6 +33,6 @@
         "The damage equals the destroyed ally's total 🗡️ (base + attack_bonus) plus YOUR Dark Matter pool at resolution (after the react window closes).",
         "Destroying the ally is a Cost, not an effect — it resolves before the damage and before the Dark Matter gain. If the destroyed ally was a Dark Mage, it is no longer on the board when the gain counts Dark Mages.",
         "If you have no valid ally to destroy, Feed the Shadow cannot be cast.",
-        "The gain credits YOUR pool: +1 Dark Matter per friendly [[Dark Mage]] on the board at resolution (element Dark AND tribe exactly Mage), including one summoned mid-chain by another effect. The gain resolves after the damage, so it does not scale THIS cast."
+        "The gain credits YOUR pool: +1 Dark Matter per friendly [[Dark Mage]] on the board at resolution (element Dark AND the Mage tribe; composite tribes count since 2026-07-10), including one summoned mid-chain by another effect. The gain resolves after the damage, so it does not scale THIS cast."
     ]
 }

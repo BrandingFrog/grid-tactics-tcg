@@ -155,10 +155,10 @@ def _effect_tribe_matches(card_def: CardDefinition, target_tribe: str) -> bool:
 
     Dark Matter pool redesign 2026-07: the special filter value
     "Dark Mage" routes through the single ``is_dark_mage`` predicate
-    (tribe exactly "Mage" AND element DARK) instead of a substring match
-    — a bare "Mage" filter would wrongly include Ratchanter ("Mage Rat")
-    and Grave Caller ("Mage Undead"). Any other value keeps the legacy
-    case-insensitive substring semantics.
+    (Mage tribe AND element DARK; composite tribes count since
+    2026-07-10 — Ratchanter "Mage Rat" and Grave Caller "Mage Undead"
+    are Dark Mages). Any other value keeps the legacy case-insensitive
+    substring semantics.
     """
     normalized = target_tribe.strip().lower()
     if normalized in ("dark mage", "dark_mage"):

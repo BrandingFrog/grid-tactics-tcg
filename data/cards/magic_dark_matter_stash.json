@@ -40,14 +40,14 @@
     "tips": [
         "Best played late when you already have multiple Dark Mages on the board and a fat Dark Matter pool — the gain lands FIRST, so every Dark Mage buffs by the boosted total.",
         "Discard this with Shady Trade Deal for a 2-for-1: Stash's on-discard gain (+1 Dark Matter per Dark Mage) lands immediately as the discard cost is paid, then Shady's own gain resolves after the react window. That's two pool bumps for just 1 mana — and Stash's Dark Matter sticks even if Shady itself gets negated.",
-        "Only true Dark Mages count and benefit: Dark element AND tribe exactly Mage (Shadow Blaster, Eclipse Shade, Gargoyle Sorceress, Matter Possessed, Erebus). Ratchanter (Mage Rat) and Grave Caller (Mage Undead) are NOT Dark Mages — they neither add to the gain nor receive the buff.",
+        "Every Dark Mage counts and benefits: Dark element AND the Mage tribe — Shadow Blaster, Eclipse Shade, Gargoyle Sorceress, Matter Possessed, Erebus, Ratchanter and Grave Caller (composite tribes count since 2026-07-10).",
         "At 5 mana this competes with Erebus for your mana. Since Erebus' cost drops by your Dark Matter pool, a big Stash turn often makes NEXT turn's Erebus nearly free. Use Stash when you need to buff existing Dark Mages rather than deploy a new one.",
         "Sometimes it's better to hold this card as discard fodder than to play it — the on-discard gain costs 0 mana and still grows your pool."
     ],
     "rulings": [
         "When played: FIRST you gain +1 Dark Matter per friendly Dark Mage on the board, THEN every friendly Dark Mage gains +N🗡️/+N🤍 where N is your TOTAL Dark Matter pool AFTER that gain.",
         "Example: you have 3 Dark Mages on board and 2 Dark Matter banked. The gain puts you at 5 Dark Matter, then each of the 3 Dark Mages gets +5🗡️/+5🤍.",
-        "Dark Matter is a PLAYER pool, not per-minion counters — both players can always see both pools. A [[Dark Mage]] is a minion with element Dark and tribe exactly Mage; Ratchanter (Mage Rat) and Grave Caller (Mage Undead) do not qualify.",
+        "Dark Matter is a PLAYER pool, not per-minion counters — both players can always see both pools. A [[Dark Mage]] is a minion with element Dark and the Mage tribe — composite tribes (Ratchanter 'Mage Rat', Grave Caller 'Mage Undead') qualify since 2026-07-10.",
         "If discarded from hand (e.g. paying Shady Trade Deal's cost), the on-discard effect triggers: you gain +1 Dark Matter per friendly Dark Mage on the board. The buff effects do not trigger on discard.",
         "Only Dark Mages on the board when the spell resolves — after the react window closes — count for the gain and receive the buff. A Dark Mage removed during the react window contributes nothing, and ones played later do not retroactively benefit.",
         "With zero Dark Mages on the board the whole cast is a no-op: no gain, no buff — the 5 mana is still spent."

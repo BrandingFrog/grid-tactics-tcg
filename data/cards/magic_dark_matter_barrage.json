@@ -32,7 +32,7 @@
         "Damage is `5 + your Dark Matter pool` at resolution (after the react window closes). The opponent's pool does not contribute.",
         "Damage resolves before the Dark Matter gain, so the newly-gained Dark Matter does NOT scale this cast's damage — it's banked for the next one.",
         "Every enemy minion on the board takes the full amount — range, tribe, and element are irrelevant.",
-        "The gain credits YOUR pool: +1 Dark Matter per friendly [[Dark Mage]] on the board (element Dark AND tribe exactly Mage — Shadow Blaster, Eclipse Shade, Gargoyle Sorceress, Matter Possessed, Erebus). Ratchanter (Mage Rat) and Grave Caller (Mage Undead) do NOT count.",
+        "The gain credits YOUR pool: +1 Dark Matter per friendly [[Dark Mage]] on the board (element Dark AND the Mage tribe — Shadow Blaster, Eclipse Shade, Gargoyle Sorceress, Matter Possessed, Erebus, Ratchanter and Grave Caller; composite tribes count since 2026-07-10).",
         "If you have zero Dark Mages on the board, the gain is a no-op — the damage still resolves and the spell still costs 7 mana."
     ],
     "trivia": [

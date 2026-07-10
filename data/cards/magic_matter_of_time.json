@@ -38,7 +38,7 @@
         "Damage equals your Dark Matter pool when the cast RESOLVES (after the react window closes). At 0 Dark Matter the damage is 0 (the burn and the gain still resolve).",
         "Both the damage and the [[Burn]] hit the same chosen target — one target pick resolves all three effect lines.",
         "Burn is a boolean [[Burning]] status — re-applying it to an already-burning minion is a no-op; the first burn persists until the minion dies.",
-        "The gain credits YOUR pool: +1 Dark Matter per friendly [[Dark Mage]] on the board (element Dark AND tribe exactly Mage). It applies after damage and burn resolve, so newly-gained Dark Matter does not scale THIS cast.",
+        "The gain credits YOUR pool: +1 Dark Matter per friendly [[Dark Mage]] on the board (element Dark AND the Mage tribe; composite tribes count since 2026-07-10). It applies after damage and burn resolve, so newly-gained Dark Matter does not scale THIS cast.",
         "If the target dies to the damage, burn is applied post-mortem to a dead minion and has no effect (the grave doesn't tick)."
     ],
     "trivia": [

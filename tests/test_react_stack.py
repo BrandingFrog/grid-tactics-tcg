@@ -1539,7 +1539,9 @@ class TestSummonCompoundWindows:
         assert len(state.react_stack) == 1
         b_origin = state.react_stack[0]
         assert b_origin.origin_kind == "summon_effect"
-        assert len(b_origin.effect_payload) == 2  # buff_attack + buff_health
+        # buff_attack + buff_health + grant_dark_matter (all Dark Mages
+        # carry 'Summon: Dark Matter +1' since 2026-07-10)
+        assert len(b_origin.effect_payload) == 3
 
         # P2 passes Window B → both effects resolve. 2026-07-08 timing
         # audit (F6): P2's empty hand makes the Decay window PASS-only,

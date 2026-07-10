@@ -17,17 +17,17 @@
         "target": "none"
     },
     "tips": [
-        "Ratchanter is a Mage Rat — NOT a Dark Mage (that requires tribe exactly Mage plus the Dark element). He doesn't count toward Dark Matter gains and doesn't receive Dark Mage buffs like Dark Matter Stash's. He CAN be fetched by To The Ratmobile!'s Rat tutor. He is NOT a promote target for Giant Rat — only Common Rats promote.",
+        "Ratchanter is a Mage Rat — a [[Dark Mage]] (composite tribes count since 2026-07-10): he counts toward Dark Matter gains and receives Dark Mage buffs like Dark Matter Stash's. He CAN be fetched by To The Ratmobile!'s Rat tutor. He is NOT a promote target for Giant Rat — only Common Rats promote.",
         "Each activation buffs all your other Rats on board and conjures a Common Rat from your deck (if any remain). The more Rats you have, the more value each 2-mana activation provides.",
         "The buff applies to every existing ally Rat, not the newly-conjured one. Magnitude is 1 + your Dark Matter pool. At a 3-point pool, each of your existing Rats gets +4 🗡️/+4 🤍 per activation.",
-        "Even though Ratchanter isn't a Dark Mage, his ability still cashes in the pool your true Dark Mages build — a hybrid Rat/Dark Matter deck makes each activation scale.",
+        "Ratchanter is a Dark Mage himself — he grows the pool his ability cashes in, so a hybrid Rat/Dark Matter deck makes each activation scale.",
         "At 15/30 he's tanky enough to survive most early trades. Protect him in the back row and use him as a Rat factory rather than a frontline fighter."
     ],
     "rulings": [
         "Activation costs 2 mana. Buff (Step 1) always fires. Conjure (Step 2) only triggers if at least one Common Rat is in the caster's deck.",
         "The buff explicitly excludes the caster (Ratchanter doesn't buff itself).",
         "Buff magnitude is 1 + YOUR Dark Matter pool (a player resource — pool redesign 2026-07). All three stats (🗡️, max 🤍, current 🤍) increase — the buffed Rats gain usable 🤍, not just a cap raise. Reading the pool does not consume it.",
-        "Ratchanter is NOT a [[Dark Mage]]: his tribe is Mage Rat, not exactly Mage. Per-Dark-Mage gains (Shady Trade Deal, Dark Matter Stash, Illicit Shadow Stones, Feed the Shadow, Matter of Time, Dark Matter Barrage) ignore him, and Dark-Mage-targeted buffs skip him.",
+        "Ratchanter IS a [[Dark Mage]] (Mage Rat — composite tribes count since 2026-07-10). Per-Dark-Mage gains (Shady Trade Deal, Dark Matter Stash, Illicit Shadow Stones, Feed the Shadow, Matter of Time, Dark Matter Barrage) count him, and Dark-Mage-targeted buffs include him.",
         "Conjure goes through the pending_tutor → conjure_deploy flow: caster picks one Common Rat from their deck, then picks an empty tile on their own side to deploy it. The new Rat starts at base stats (no initial buff). Declining deployment sends the Rat to hand instead — if the hand is full (10 cards), it is exhausted (sent to the Exhaust Pile)."
     ],
     "effects": [

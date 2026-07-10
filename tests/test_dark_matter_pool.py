@@ -128,8 +128,8 @@ class TestDarkMagePredicate:
         ("gargoyle_sorceress", True),    # Mage / dark
         ("matter_possessed", True),      # Mage / dark
         ("erebus", True),                # Mage / dark
-        ("ratchanter", False),           # Mage Rat — composite tribe
-        ("grave_caller", False),         # Mage Undead — composite tribe
+        ("ratchanter", True),            # Mage Rat — composite counts (2026-07-10)
+        ("grave_caller", True),          # Mage Undead — composite counts (2026-07-10)
         ("dark_matter_battery", False),  # Machine / dark
         ("rat", False),                  # Rat / earth
         ("dark_matter_stash", False),    # magic card, not a minion
@@ -146,10 +146,11 @@ class TestDarkMagePredicate:
 
 class TestStashPlay:
     def test_zero_dark_mages_is_full_noop(self, library):
-        """Only a Ratchanter (Mage Rat — NOT a Dark Mage) on board: no
-        gain, no buff."""
-        ratchanter = _minion(library, "ratchanter", 0, (0, 0))
-        state = _make_state([ratchanter], p1_dm=0)
+        """Only a Dark Matter Battery (Machine/dark — NOT a Mage) on board:
+        no gain, no buff. (Ratchanter used to play this role — he counts
+        as a Dark Mage since 2026-07-10.)"""
+        battery = _minion(library, "dark_matter_battery", 0, (0, 0))
+        state = _make_state([battery], p1_dm=0)
         result = _cast_stash(state, library)
 
         assert result.players[0].dark_matter == 0
@@ -185,17 +186,18 @@ class TestStashPlay:
             assert b.current_health == base_hp + 5
             assert b.dark_matter_stacks == 0, "minions never hold DM"
 
-    def test_ratchanter_excluded_from_gain_and_buff(self, library):
-        """Ratchanter (Mage Rat) next to a true Dark Mage: gain counts
-        only the Dark Mage, and Ratchanter receives NO buff."""
+    def test_ratchanter_included_in_gain_and_buff(self, library):
+        """Ratchanter (Mage Rat) IS a Dark Mage (composite tribes count
+        since 2026-07-10): next to Shadow Blaster the gain counts BOTH,
+        and Ratchanter receives the buff too."""
         blaster = _minion(library, "shadow_blaster", 0, (0, 0))
         ratchanter = _minion(library, "ratchanter", 1, (0, 1))
         state = _make_state([blaster, ratchanter], p1_dm=0)
         result = _cast_stash(state, library)
 
-        assert result.players[0].dark_matter == 1  # blaster only
-        assert result.get_minion(0).attack_bonus == 1
-        assert result.get_minion(1).attack_bonus == 0  # Ratchanter skipped
+        assert result.players[0].dark_matter == 2  # blaster + ratchanter
+        assert result.get_minion(0).attack_bonus == 2
+        assert result.get_minion(1).attack_bonus == 2  # Ratchanter buffed
 
     def test_gain_emits_dark_matter_change_event(self, library):
         blaster = _minion(library, "shadow_blaster", 0, (0, 0))
@@ -246,8 +248,8 @@ class TestStashDiscard:
         assert all(m.dark_matter_stacks == 0 for m in result.minions)
 
     def test_discard_with_no_dark_mages_is_noop(self, library):
-        ratchanter = _minion(library, "ratchanter", 0, (0, 0))
-        state = _make_state([ratchanter], p1_dm=2)
+        battery = _minion(library, "dark_matter_battery", 0, (0, 0))
+        state = _make_state([battery], p1_dm=2)
         eff = self._discard_effect(library)
         result = resolve_effect(
             state, eff, (0, 0), PlayerSide.PLAYER_1, library,

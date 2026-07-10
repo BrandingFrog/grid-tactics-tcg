@@ -28,7 +28,7 @@
     "rulings": [
         "Range 1 means it attacks 2 tiles orthogonally and 1 tile diagonally (see [[Range X]] in the glossary).",
         "No triggered effects — Summon, Death, Passive, and Attack triggers are all inert. It's a vanilla statline.",
-        "Counts as a [[Dark Mage]] (element Dark, tribe exactly Mage): every per-Dark-Mage Dark Matter gain includes Shadow Blaster, and Dark Matter Stash's buff applies to it. It also satisfies Gargoyle Sorceress's 'Dark ranged ally behind' placement condition — though that tripled buff lands on the Sorceress herself, not on Shadow Blaster.",
+        "Counts as a [[Dark Mage]] (element Dark, the Mage tribe): every per-Dark-Mage Dark Matter gain includes Shadow Blaster, and Dark Matter Stash's buff applies to it. It also satisfies Gargoyle Sorceress's 'Dark ranged ally behind' placement condition — though that tripled buff lands on the Sorceress herself, not on Shadow Blaster.",
         "Not [[Unique]] — multiple copies can exist on the board at once (up to 3 in the deck)."
     ]
 }

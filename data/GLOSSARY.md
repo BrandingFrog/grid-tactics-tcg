@@ -41,7 +41,7 @@ Update this file and the matching `KEYWORD_GLOSSARY` in `src/grid_tactics/server
 | Deal | Deal damage to a target. |
 | Burn | Applies Burning to the affected minions — usually enemies, but some cards burn their own minion (e.g. Eclipse Shade's Summon). |
 | Burning | A burning minion takes 5🤍 in its owner's Decay Phase. Burning is a boolean status — re-applying it does nothing. It persists until the minion dies. |
-| Dark Matter | A stacking PLAYER resource pool, visible to both players. Gains add +1 per friendly Dark Mage on board (a minion with the Dark element and tribe exactly Mage). Dark spells, buffs and costs scale with your pool; reading it never spends it. |
+| Dark Matter | A stacking PLAYER resource pool, visible to both players. Gains add +1 per friendly Dark Mage on board (a minion with the Dark element and the Mage tribe — composite tribes like Mage Rat and Mage Undead count). Dark spells, buffs and costs scale with your pool; reading it never spends it. |
 | Leap | If blocked by an enemy, jump over to the next available tile. Cannot leap allies. If all tiles ahead are enemy-occupied, enables sacrifice. |
 | Conjure | Summon a card from your deck directly to the board. |
 | Revive | Summon a card from the Grave to the board. |
