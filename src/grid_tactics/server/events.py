@@ -1330,7 +1330,10 @@ def register_events(room_manager: RoomManager) -> None:
                     enter_start_of_turn as _enter_start_of_turn,
                 )
                 _auto_advance_counter = 0
-                _AUTO_ADVANCE_MAX = 50
+                # Raised 50 → 120 (preview AI 2026-07-10): the dummy now
+                # takes real actions — its turn can legitimately chain a
+                # play + react windows + pending picks through this loop.
+                _AUTO_ADVANCE_MAX = 120
                 while not session.state.is_game_over:
                     _auto_advance_counter += 1
                     if _auto_advance_counter > _AUTO_ADVANCE_MAX:
@@ -1356,19 +1359,30 @@ def register_events(room_manager: RoomManager) -> None:
                         continue
                     next_actions = legal_actions(session.state, session.library)
                     if len(next_actions) > 0:
-                        # Preview games (2026-07-06): the dummy seat (sid
-                        # None) never acts — auto-PASS its decisions (react
-                        # windows, its whole turn) so play flows back to the
-                        # human instead of stalling forever.
+                        # Preview games (2026-07-06 / AI 2026-07-10): the
+                        # dummy seat (sid None) is played server-side. It
+                        # used to auto-PASS everything; it now runs the
+                        # goal-directed heuristic in preview_ai.py (attack /
+                        # summon / advance / sacrifice, resolves pending
+                        # picks, sometimes reacts) so a solo preview plays
+                        # like a game. Falls back to PASS if the policy
+                        # returns nothing.
                         _d = _decision_idx(session.state)
-                        if (_d is not None
-                                and session.player_sids[_d] is None
-                                and pass_action() in next_actions):
-                            session.state = resolve_action(
-                                session.state, pass_action(), session.library,
-                                event_collector=stream,
+                        if _d is not None and session.player_sids[_d] is None:
+                            from grid_tactics.server.preview_ai import (
+                                pick_preview_action,
                             )
-                            continue
+                            _ai_action = pick_preview_action(
+                                session.state, session.library, next_actions,
+                            )
+                            if _ai_action is None and pass_action() in next_actions:
+                                _ai_action = pass_action()
+                            if _ai_action is not None:
+                                session.state = resolve_action(
+                                    session.state, _ai_action, session.library,
+                                    event_collector=stream,
+                                )
+                                continue
                         # Preview games, audit fix (2026-07-06): the dummy's
                         # auto-PASS opens an AFTER_ACTION react window for the
                         # HUMAN in which PASS is the only legal action —
