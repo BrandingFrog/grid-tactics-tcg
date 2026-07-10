@@ -16,7 +16,14 @@
         "effect_type": "dark_matter_buff",
         "target": "single_target"
     },
-    "effects": [],
+    "effects": [
+        {
+            "type": "grant_dark_matter",
+            "trigger": "on_summon",
+            "target": "owner_player",
+            "amount": 1
+        }
+    ],
     "tips": [
         "Grave Caller's activated ability costs 0 mana — you can buff a target's attack by your Dark Matter pool every turn for free.",
         "Grave Caller is a Mage Undead — NOT a Dark Mage (that requires tribe exactly Mage). He doesn't count toward Dark Matter gains and doesn't receive Dark Mage buffs, but his ability converts the pool your true Dark Mages build into board pressure. He can be summoned via Reanimated Bones transform (3 mana).",

@@ -343,13 +343,20 @@ class TestPhase1473NewTriggers:
             assert eff.trigger == TriggerType.ON_SUMMON
 
     def test_all_dark_mages_grant_dark_matter_on_summon(self, real_library) -> None:
-        """Every Dark Mage carries 'Summon: Dark Matter +1' (user 2026-07-10)."""
+        """Every Dark Mage carries 'Summon: Dark Matter +1' (user 2026-07-10)
+        — plus the two composite-tribe dark mages (Ratchanter 'Mage Rat' and
+        Grave Caller 'Mage Undead'), included by user request the same day.
+        Note: those two still do NOT count for is_dark_mage scaling."""
         from grid_tactics.cards import is_dark_mage
         from grid_tactics.enums import EffectType, TargetType
 
         dark_mages = [c for c in real_library.all_cards if is_dark_mage(c)]
         assert len(dark_mages) == 5, [c.card_id for c in dark_mages]
-        for card in dark_mages:
+        extras = [
+            real_library.get_by_card_id("ratchanter"),
+            real_library.get_by_card_id("grave_caller"),
+        ]
+        for card in dark_mages + extras:
             grants = [
                 e for e in card.effects
                 if e.effect_type == EffectType.GRANT_DARK_MATTER

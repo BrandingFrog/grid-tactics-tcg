@@ -818,6 +818,28 @@ class TestTransformResetAndEvent:
         assert payload["position"] == [0, 1]
         assert payload["new_hp"] == gc_def.health
 
+    def test_transform_fires_new_forms_on_summon_effects(self, library):
+        """Transform-as-summon (user 2026-07-10): transforming counts as
+        summoning the new form — its ON_SUMMON effects fire inline.
+        Reanimated Bones → Grave Caller grants +1 Dark Matter (the
+        Dark-Mage-family 'Summon: Dark Matter +1')."""
+        bones_id = library.get_numeric_id("reanimated_bones")
+        bones = MinionInstance(
+            instance_id=1, card_numeric_id=bones_id,
+            owner=PlayerSide.PLAYER_1, position=(0, 1),
+            current_health=5,
+        )
+        state = _make_state((bones,), p1_mana=5)
+        dm_before = state.players[0].dark_matter
+        state = resolve_action(
+            state,
+            transform_action(minion_id=1, transform_target="grave_caller"),
+            library,
+        )
+        assert state.players[0].dark_matter == dm_before + 1, (
+            "transforming into Grave Caller must grant +1 Dark Matter"
+        )
+
     def test_transform_not_enumerated_when_unaffordable(self, library):
         bones_id = library.get_numeric_id("reanimated_bones")
         bones = MinionInstance(

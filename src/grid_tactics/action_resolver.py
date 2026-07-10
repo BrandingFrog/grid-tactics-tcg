@@ -1269,6 +1269,8 @@ def _apply_sacrifice(
 
 def _apply_transform(
     state: GameState, action: Action, library: CardLibrary,
+    *,
+    event_collector: Optional[EventStream] = None,
 ) -> GameState:
     """Apply TRANSFORM action: convert a board minion into a different card form.
 
@@ -1282,6 +1284,12 @@ def _apply_transform(
       - Replaces the minion's card_numeric_id with the target form
       - Resets current_health to the new form's max HP
       - Resets attack_bonus to 0
+      - Transform-as-summon (user 2026-07-10): the NEW form's ON_SUMMON
+        effects fire inline right after the swap — transforming into a
+        card counts as summoning it (e.g. Reanimated Bones → Grave
+        Caller grants +1 Dark Matter). Inline (no Window-B react window
+        of its own): the transform action already gets the standard
+        AFTER_ACTION react window around the whole action.
     """
     assert_phase_contract(state, "action:transform")
     active_side = _get_active_side(state)
@@ -1348,7 +1356,46 @@ def _apply_transform(
     )
     new_minions = _replace_minion(state.minions, minion.instance_id, new_minion)
 
-    return replace(state, players=new_players, minions=new_minions)
+    state = replace(state, players=new_players, minions=new_minions)
+
+    # Transform-as-summon (user 2026-07-10): fire the new form's ON_SUMMON
+    # effects. Dispatch mirrors resolve_summon_declaration_effects (Window
+    # B) — TUTOR/REVIVE route through their pending shims (no current
+    # transform target uses them, but future ones behave identically);
+    # everything else goes through resolve_effect.
+    on_summon_effects = [
+        e for e in target_card.effects if e.trigger == TriggerType.ON_SUMMON
+    ]
+    if on_summon_effects:
+        from grid_tactics.effect_resolver import (
+            _enter_pending_tutor,
+            resolve_effect,
+        )
+
+        caster_owner = state.players[active_idx].side
+        for effect in on_summon_effects:
+            if effect.effect_type == EffectType.TUTOR:
+                state = _enter_pending_tutor(
+                    state, target_card, caster_owner, library,
+                    amount=max(1, effect.amount or 1),
+                    event_collector=event_collector,
+                    origin="summon_effect",
+                    contract_source="action:transform",
+                )
+            elif effect.effect_type == EffectType.REVIVE:
+                state = _enter_pending_revive(
+                    state, target_card, caster_owner, library,
+                )
+            else:
+                state = resolve_effect(
+                    state, effect, new_minion.position, caster_owner,
+                    library, target_pos=None,
+                    source_minion_id=minion.instance_id,
+                    contract_source="action:transform",
+                    event_collector=event_collector,
+                )
+
+    return state
 
 
 def _apply_activate_ability(
@@ -2803,7 +2850,9 @@ def resolve_action(
             state.get_minion(action.minion_id)
             if action.minion_id is not None else None
         )
-        state = _apply_transform(state, action, library)
+        state = _apply_transform(
+            state, action, library, event_collector=event_collector,
+        )
         # 2026-07 card-audit fix (Reanimated Bones): emit a board event
         # for the swap so the client eventQueue can animate it — since
         # Phase 14.8-05 removed state_update, a TRANSFORM previously

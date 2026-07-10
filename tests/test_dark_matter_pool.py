@@ -384,8 +384,10 @@ class TestTransformAndPool:
         transformed = result.get_minion(0)
         assert transformed.card_numeric_id == library.get_numeric_id("grave_caller")
         assert transformed.dark_matter_stacks == 0
-        # ...but the PLAYER pool is untouched.
-        assert result.players[0].dark_matter == 7
+        # ...but the PLAYER pool is never RESET by a transform. It actually
+        # GROWS by 1 now: transform-as-summon (user 2026-07-10) fires Grave
+        # Caller's 'Summon: Dark Matter +1'.
+        assert result.players[0].dark_matter == 8
 
 
 # ---------------------------------------------------------------------------
