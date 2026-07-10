@@ -9,7 +9,7 @@
     "range": 0,
     "element": "light",
     "tribe": "Undead",
-    "deckable": false,
+    "deckable": true,
     "effects": [
         {
             "type": "passive_heal",

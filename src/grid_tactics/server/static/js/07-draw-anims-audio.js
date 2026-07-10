@@ -202,7 +202,10 @@ var SFX_FILES = {
     nudge_kiss:   '/static/sfx/nudge_kiss.ogg',
 };
 var sfxBuffers = {};
-var sfxVolume = 0.6;
+// 0.6 → 0.2 (user 2026-07-11: 'the sounds are really loud, lower to 20%')
+// — the warm re-sourced set is loudnorm'd to -18 LUFS, hotter than the
+// old Kenney interface beeps at the same element volume.
+var sfxVolume = 0.2;
 var sfxMuted = (function () {
     try { return localStorage.getItem('gt_sfx_muted') === '1'; } catch (e) { return false; }
 })();

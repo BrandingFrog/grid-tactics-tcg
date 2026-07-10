@@ -9,7 +9,7 @@
     "range": 1,
     "element": "dark",
     "tribe": "Mage Undead",
-    "deckable": false,
+    "deckable": true,
     "activated_ability": {
         "name": "Dark Matter Buff",
         "mana_cost": 0,
@@ -29,7 +29,7 @@
         "Grave Caller is a Mage Undead — a [[Dark Mage]] (composite tribes count since 2026-07-10): he counts toward Dark Matter gains, receives Dark Mage buffs, and grants +1 Dark Matter on summon. He can be summoned via Reanimated Bones transform (3 mana), which also fires his summon grant.",
         "Use the buff on your biggest threat each turn. At a 5-point pool, buffing a Giant Rat or Ratchanter with +5🗡️ per turn snowballs quickly.",
         "At range 1, Grave Caller can attack from the second row while staying protected. Alternate between attacking and its 0-cost buff — each counts as your one action for the turn, so pick whichever contributes more that turn.",
-        "Reanimated Bones (1+3 = 4 mana split across turns) is the only way to field Grave Caller in a real match — it never appears in decks or hands, so plan your Bones accordingly."
+        "Grave Caller is deckable (2026-07-11) — run him directly at 4 mana, or cheat him out early via Reanimated Bones (1+3 = 4 mana split across turns, and the transform fires his summon grant)."
     ],
     "rulings": [
         "The activated ability is a single-target BUFF_ATTACK with scale_with=dark_matter and amount=0. The target gains bonus 🗡️ equal to YOUR Dark Matter pool (a player resource — pool redesign 2026-07). Reading the pool does not consume it.",

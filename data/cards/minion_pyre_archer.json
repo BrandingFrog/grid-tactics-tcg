@@ -9,7 +9,7 @@
     "range": 2,
     "element": "fire",
     "tribe": "Archer Undead",
-    "deckable": false,
+    "deckable": true,
     "effects": [
         {
             "type": "burn",
