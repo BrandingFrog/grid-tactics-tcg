@@ -28,22 +28,26 @@ function _renderAccountChip() {
     var a = window.__account;
     var loginBtn = document.getElementById('discord-login-btn');
     var chip = document.getElementById('account-chip');
+    var guest = document.getElementById('guest-chip');
     if (!loginBtn || !chip) return;
-    if (!a.loginAvailable) {
-        loginBtn.style.display = 'none';
-        chip.style.display = 'none';
-        return;
-    }
     if (a.loggedIn && a.user) {
         loginBtn.style.display = 'none';
         chip.style.display = '';
+        if (guest) guest.style.display = 'none';
         var img = document.getElementById('account-chip-avatar');
         var nm = document.getElementById('account-chip-name');
         if (img) img.src = a.user.avatar_url || '';
-        if (nm) nm.textContent = a.user.display_name || a.user.username || 'Player';
+        if (nm) {
+            var _dn = a.user.display_name || a.user.username || 'Player';
+            nm.textContent = _dn;
+            nm.title = _dn;  // full name on hover — the row ellipsizes long names
+        }
     } else {
-        loginBtn.style.display = '';
+        // Guests always see who they are (user /design 2026-07-11); the
+        // Discord door only when the server has OAuth configured.
+        loginBtn.style.display = a.loginAvailable ? '' : 'none';
         chip.style.display = 'none';
+        if (guest) guest.style.display = '';
     }
 }
 

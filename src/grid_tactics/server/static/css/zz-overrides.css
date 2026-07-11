@@ -6041,3 +6041,61 @@ input::selection, textarea::selection { background: rgba(224, 162, 60, 0.45); co
   align-items: center;
   justify-content: center;
 }
+
+/* ---------------------------------------------------------------------------
+   IDENTITY BLOCK in the left brand column (user /design 2026-07-11):
+   guest chip / Discord login / account chip live under the nav, in the
+   nav's design language — 160u rows with the accent left bar. The old
+   right-column 48u CTA sizing is overridden down to nav-row weight here.
+   --------------------------------------------------------------------------- */
+#screen-lobby .lobby2-identity {
+  display: flex; flex-direction: column; gap: calc(var(--u, 1px) * 8);
+  margin-top: calc(var(--u, 1px) * 10);
+  width: calc(var(--u, 1px) * 192);
+  z-index: 2; position: relative;
+}
+#screen-lobby .lobby2-guest-chip {
+  display: inline-flex; align-items: center; gap: calc(var(--u, 1px) * 10);
+  box-sizing: border-box; width: 100%;
+  font-family: 'Alegreya SC', serif; font-weight: 700;
+  font-size: calc(var(--u, 1px) * 13); letter-spacing: calc(var(--u, 1px) * 1);
+  color: var(--parch-mute, #9a865c); background: rgba(30, 22, 10, 0.72);
+  border: 1px solid var(--bronze-dk, #3a2e18);
+  border-left: calc(var(--u, 1px) * 3) solid var(--bronze, #6b5730);
+  border-radius: calc(var(--u, 1px) * 6);
+  padding: calc(var(--u, 1px) * 8) calc(var(--u, 1px) * 16);
+}
+#screen-lobby .lobby2-guest-chip b { color: var(--parch-dim, #cbb98f); }
+#screen-lobby .lobby2-guest-chip .guest-lbl {
+  flex: 1 1 auto; min-width: 0; white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis;
+}
+/* v2 (identity fit): the login affordance is a compact Discord-blue pill
+   INSIDE the guest row — mirrors the account chip's Log out pill, so both
+   states are a single row and the column never crowds the foot. */
+#screen-lobby .guest-login-pill {
+  flex: 0 0 auto;
+  display: inline-flex; align-items: center; gap: calc(var(--u, 1px) * 4);
+  font-family: var(--ui-body, 'Alegreya', serif); font-weight: 700;
+  font-size: calc(var(--u, 1px) * 12);
+  color: #f2ead2;
+  background: linear-gradient(180deg, #5865F2, #4752c4);
+  border: 1px solid #3b45a5;
+  border-radius: calc(var(--u, 1px) * 5);
+  padding: calc(var(--u, 1px) * 4) calc(var(--u, 1px) * 9);
+  cursor: pointer; white-space: nowrap;
+}
+#screen-lobby .guest-login-pill:hover { filter: brightness(1.1); }
+#screen-lobby .guest-login-pill .discord-glyph { font-size: calc(var(--u, 1px) * 12); }
+#screen-lobby .lobby2-identity .account-chip {
+  margin-top: 0;
+  min-height: 0;
+  box-sizing: border-box; width: 100%;
+  padding: calc(var(--u, 1px) * 6) calc(var(--u, 1px) * 12);
+  border-left: calc(var(--u, 1px) * 3) solid var(--gold, #e0a23c);
+  border-radius: calc(var(--u, 1px) * 6);
+  background: rgba(30, 22, 10, 0.72);
+}
+#screen-lobby .lobby2-identity .account-chip-avatar {
+  width: calc(var(--u, 1px) * 24); height: calc(var(--u, 1px) * 24);
+}
