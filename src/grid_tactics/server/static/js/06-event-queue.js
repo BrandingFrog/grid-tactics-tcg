@@ -171,8 +171,15 @@ function canActNow() {
 // in-progress selection may be up. Sandbox god-view: canActNow() returns true
 // and the seat-keyed pending check is a no-op (myPlayerIdx not a number).
 function canShowPassButton() {
+    return canShowSkipButton(4);
+}
+
+// v4.2 (2026-07-11): the Rest button (DRAW slot, action_type 3) shares the
+// exact gates — the engine offers Rest OR Pass, never both, so the action
+// bar renders whichever one is legal in the same slot.
+function canShowSkipButton(actionType) {
     if (!canActNow()) return false;
-    if (!legalActions.some(function(a) { return a.action_type === 4; })) return false;
+    if (!legalActions.some(function(a) { return a.action_type === actionType; })) return false;
     if (_iOwnAPendingDecision()) return false;
     if (_clientActionOverlayOpen()) return false;
     return true;

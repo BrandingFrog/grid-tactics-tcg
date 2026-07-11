@@ -256,6 +256,14 @@ class GameState:
     # Appended field with a default — from_dict/serialization tolerant.
     magic_free_action_pending: bool = False
 
+    # Variant v4.2 (user 2026-07-11): once the active player casts a MAGIC
+    # card this turn, REST transforms into PASS — legal_actions offers PASS
+    # instead of DRAW for the remainder of the turn (no mana+draw skip after
+    # a free magic action). Cleared on turn flip. Unlike
+    # ``magic_free_action_pending`` (consumed at the window close), this
+    # persists across the returned action phase.
+    magic_cast_this_turn: bool = False
+
     # Phase 14.8-05: ``last_trigger_blip`` DELETED. Plan 14.8-03a introduced
     # EVT_TRIGGER_BLIP as a first-class EngineEvent in the event stream;
     # plan 14.8-04b added playTriggerBlip as a client slot handler. The
@@ -422,6 +430,11 @@ class GameState:
             "handshake_pending": self.handshake_pending,
             # Deferred-Decay marker (burn-tick death interrupt resume).
             "decay_resume_pending": self.decay_resume_pending,
+            # Variant v4.2: REST→PASS transform flag — spans client
+            # round-trips within the turn, so it must survive a
+            # to_dict/from_dict round-trip (unlike the transient
+            # magic_free_action_pending, consumed within one cycle).
+            "magic_cast_this_turn": self.magic_cast_this_turn,
             # Phase 14.7-05: simultaneous-trigger priority queue
             "pending_trigger_queue_turn": [
                 {
@@ -678,6 +691,7 @@ class GameState:
             consecutive_passes=int(d.get("consecutive_passes") or 0),
             handshake_pending=bool(d.get("handshake_pending", False)),
             decay_resume_pending=bool(d.get("decay_resume_pending", False)),
+            magic_cast_this_turn=bool(d.get("magic_cast_this_turn", False)),
             pending_trigger_queue_turn=pending_trigger_queue_turn,
             pending_trigger_queue_other=pending_trigger_queue_other,
             pending_trigger_picker_idx=d.get("pending_trigger_picker_idx"),

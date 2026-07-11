@@ -10,6 +10,10 @@ Authoritative turn flow, phase boundaries, react windows, and effect-resolution 
 >   **PASS is a separate action and gives NO benefit** (v4, user 2026-07-11). BOTH
 >   REST and PASS advance the Handshake streak — any two consecutive skips (rest/rest,
 >   rest/pass, pass/pass) seal a Handshake.
+> - **REST and PASS are mutually exclusive** (v4.2, user 2026-07-11): legal_actions
+>   offers REST until the active player casts a MAGIC that turn, after which the skip
+>   transforms into PASS for the remainder of the turn — no mana+draw skip on the free
+>   action a magic hands back (`GameState.magic_cast_this_turn`, cleared on turn flip).
 > - **MAGIC casts do not consume the turn action**: after the cast resolves (including
 >   its react windows / pending modals) play returns to the caster's ACTION phase on the
 >   same turn (`GameState.magic_free_action_pending`, consumed at the after-action

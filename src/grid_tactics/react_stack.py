@@ -1360,8 +1360,10 @@ def _close_end_of_turn_and_flip(
         active_player_idx=new_active_idx,
         turn_number=state.turn_number + 1,
         # Magic-free-action variant: never carry a stale free-action flag
-        # across the turn flip (wedge-safety).
+        # across the turn flip (wedge-safety). magic_cast_this_turn is
+        # per-turn by definition (v4.2 REST→PASS transform).
         magic_free_action_pending=False,
+        magic_cast_this_turn=False,
         players=_replace_player(
             state.players, new_active_idx,
             replace(state.players[new_active_idx], tutored_this_turn=False),

@@ -235,3 +235,71 @@ def test_handshake_pays_out_mana_and_draw_for_both(variant, new_game_state, card
         assert len(state.players[i].hand) == hands_before[i] + 1
         assert state.players[i].current_mana == min(mana_before[i] + 1, MAX_MANA_CAP)
     assert state.handshake_pending is False
+
+
+def test_rest_and_pass_mutually_exclusive(variant, new_game_state, card_library):
+    """v4.2 (user 2026-07-11): only ONE skip is offered at a time — REST
+    before any magic is cast, never both."""
+    actions = legal_actions(new_game_state, card_library)
+    assert draw_action() in actions
+    assert pass_action() not in actions
+
+
+def test_magic_transforms_rest_into_pass(variant, new_game_state, card_library):
+    """v4.2: after casting a MAGIC this turn, the returned action offers
+    PASS instead of REST — no mana+draw skip on the free action."""
+    from dataclasses import replace
+
+    from grid_tactics.enums import ActionType, TurnPhase
+    from grid_tactics.react_stack import handle_react_action
+
+    state = new_game_state
+    caster = state.active_player_idx
+    rain_nid = card_library.get_numeric_id("acidic_rain")
+    players = list(state.players)
+    players[caster] = replace(players[caster], hand=(rain_nid,), current_mana=10)
+    state = replace(state, players=tuple(players))
+    plays = [a for a in legal_actions(state, card_library)
+             if a.action_type == ActionType.PLAY_CARD]
+    state = resolve_action(state, plays[0], card_library)
+    guard = 0
+    while state.phase == TurnPhase.REACT and guard < 10:
+        guard += 1
+        state = handle_react_action(state, pass_action(), card_library)
+    assert state.phase == TurnPhase.ACTION
+    assert state.magic_cast_this_turn is True
+    actions = legal_actions(state, card_library)
+    assert pass_action() in actions
+    assert draw_action() not in actions, "REST must transform into PASS after a magic"
+
+
+def test_rest_pass_transform_resets_next_turn(variant, new_game_state, card_library):
+    """v4.2: magic_cast_this_turn is per-turn — the opponent's fresh turn
+    (and the caster's next turn) offer REST again."""
+    from dataclasses import replace
+
+    from grid_tactics.enums import ActionType, TurnPhase
+    from grid_tactics.react_stack import handle_react_action
+
+    state = new_game_state
+    caster = state.active_player_idx
+    rain_nid = card_library.get_numeric_id("acidic_rain")
+    players = list(state.players)
+    players[caster] = replace(players[caster], hand=(rain_nid,), current_mana=10)
+    state = replace(state, players=tuple(players))
+    plays = [a for a in legal_actions(state, card_library)
+             if a.action_type == ActionType.PLAY_CARD]
+    state = resolve_action(state, plays[0], card_library)
+    guard = 0
+    while state.phase == TurnPhase.REACT and guard < 10:
+        guard += 1
+        state = handle_react_action(state, pass_action(), card_library)
+    # Spend the returned action on the (transformed) PASS, then drain to
+    # the opponent's ACTION phase.
+    state = resolve_action(state, pass_action(), card_library)
+    state = _drain_to_action(state, card_library)
+    assert state.active_player_idx != caster
+    assert state.magic_cast_this_turn is False
+    actions = legal_actions(state, card_library)
+    assert draw_action() in actions
+    assert pass_action() not in actions

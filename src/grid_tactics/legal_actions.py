@@ -509,16 +509,21 @@ def _action_phase_actions(
     # Turn-structure redesign 2026-07: DRAW is REMOVED as an action under
     # the standard rules (slot 1000 reserved).
     #
-    # Variant v4 (user 2026-07-11): the DRAW slot is the REST action —
+    # Variant v4.2 (user 2026-07-11): the DRAW slot is the REST action —
     # +1 mana AND +1 draw, consuming the turn action (see _apply_draw).
-    # Always legal in the variant: an empty deck still grants the mana.
+    # REST and PASS are mutually exclusive: REST is the skip until a MAGIC
+    # is cast this turn, after which it transforms into a plain PASS (no
+    # mana+draw skip on the free action a magic hands back). An empty deck
+    # still leaves REST legal — the mana half is unconditional.
     if manual_draw_variant():
-        actions.append(draw_action())
-
-    # PASS is always legal during the action phase (D-16, CLAUDE.md).
-    # Players can voluntarily skip their turn — PASS is FREE and, under
-    # the variant, gives NO benefit (Rest is the separate rewarded skip).
-    actions.append(pass_action())
+        if state.magic_cast_this_turn:
+            actions.append(pass_action())
+        else:
+            actions.append(draw_action())
+    else:
+        # PASS is always legal during the action phase (D-16, CLAUDE.md)
+        # under the standard rules — players can voluntarily skip.
+        actions.append(pass_action())
 
     return tuple(actions)
 

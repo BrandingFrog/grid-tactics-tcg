@@ -1140,15 +1140,13 @@ function renderActionBar() {
                 slot.appendChild(skipBtn);
             }
         } else {
-            // ACTION phase (variant v4, user 2026-07-11): REST and PASS are
-            // separate actions. Rest (ActionType.DRAW slot, 3) consumes the
-            // action for +1 mana AND +1 draw; Pass (4) gives nothing. The
-            // Rest button only renders when the server offers it, so
-            // standard rules need no client flag.
-            var canPassAction = canShowPassButton();
-            var restLegal = _myTurnToAct
-                && Array.isArray(legalActions)
-                && legalActions.some(function(a) { return a.action_type === 3; });
+            // ACTION phase (variant v4.2, user 2026-07-11): the engine
+            // offers exactly ONE skip — Rest (DRAW slot, 3: +1 mana AND
+            // +1 draw) until a magic is cast this turn, after which it
+            // transforms into Pass (4: no benefit). Render whichever is
+            // legal in the same slot; standard rules only ever offer Pass.
+            var canPassAction = canShowSkipButton(4);
+            var restLegal = canShowSkipButton(3);
             if (canPassAction || restLegal) {
                 var actionCol = document.createElement('div');
                 actionCol.className = 'action-bar-col';

@@ -666,7 +666,13 @@ def _apply_play_card(
         # action react-window close consumes it and returns to the
         # caster's ACTION phase instead of entering END_OF_TURN.
         if manual_draw_variant():
-            state = replace(state, magic_free_action_pending=True)
+            # v4.2: magic_cast_this_turn persists to turn end — it flips
+            # the rewarded REST into a plain PASS (see legal_actions).
+            state = replace(
+                state,
+                magic_free_action_pending=True,
+                magic_cast_this_turn=True,
+            )
         return _cast_magic(
             state, action, card_def, card_numeric_id, active_side, library,
             event_collector=event_collector,
