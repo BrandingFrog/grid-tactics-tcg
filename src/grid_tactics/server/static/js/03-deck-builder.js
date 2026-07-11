@@ -640,6 +640,13 @@ function setupTooltipTabs() {
         reactModeBtn.classList.add('stage-corner-btn');
         gameLayout.appendChild(reactModeBtn);
     }
+    // Animation speed toggle rides in the same corner (MCQ 2026-07-11) —
+    // its birth spot (#room-bar) is display:none in the duel layout.
+    var animSpeedBtn = document.getElementById('anim-speed-btn');
+    if (animSpeedBtn && gameLayout) {
+        animSpeedBtn.classList.add('stage-corner-btn');
+        gameLayout.appendChild(animSpeedBtn);
+    }
     var specBadge = document.getElementById('spectating-badge');
     if (specBadge && gameLayout) gameLayout.appendChild(specBadge);
 }
@@ -681,6 +688,13 @@ function setupLobbyQuickview() {
 
     // Game preview tile: solo preview game on the REAL duel screen (user
     // 2026-07-06 — no sandbox). game_start handles the screen switch.
+    var watchAiBtn = document.getElementById('btn-watch-ai');
+    if (watchAiBtn) {
+        watchAiBtn.addEventListener('click', function() {
+            // AI-vs-AI exhibition (MCQ 2026-07-11): join as spectator.
+            socket.emit('watch_ai_game', { display_name: getCurrentDisplayName() || 'Viewer' });
+        });
+    }
     var previewBtn = document.getElementById('btn-game-preview');
     if (previewBtn) previewBtn.addEventListener('click', function() {
         socket.emit('preview_game', { display_name: getCurrentDisplayName() || 'Preview' });
@@ -867,45 +881,45 @@ function setupDeckDragAndDrop() {
 // adding/changing/removing keywords.
 var KEYWORD_GLOSSARY = {
     // Trigger keywords
-    'Summon': 'This effect activates when the minion is played onto the board.',
-    'Death': 'This effect activates when the minion is destroyed.',
-    'Move': 'This effect activates when the minion moves forward.',
-    'Attack': 'This effect activates when the minion attacks.',
-    'Damaged': 'This effect activates when the minion takes damage.',
-    'Start': 'This effect triggers in the Rally Phase at the start of the owner\'s turn, before any actions.',
-    'End': 'This effect triggers in the Decay Phase at the end of the owner\'s turn, after all actions.',
-    'Rally': 'The Rally Phase is the start-of-turn window (after the auto-draw) where positive once-per-turn effects trigger. "Rally:" effects proc here.',
-    'Decay': 'The Decay Phase is the end-of-turn window where negative once-per-turn effects trigger. "Decay:" effects and Burning ticks proc here.',
-    'Passive': 'This effect is always active while the minion is on the board.',
-    'Active': 'This ability can be used once per turn instead of attacking.',
-    'Discarded': 'This effect triggers when the card is discarded from hand (via a Cost or opponent effect).',
+    'Summon': 'Triggers when the minion is played onto the board.',
+    'Death': 'Triggers when the minion is destroyed.',
+    'Move': 'Triggers when the minion moves forward.',
+    'Attack': 'Triggers when the minion attacks.',
+    'Damaged': 'Triggers when the minion takes damage.',
+    'Start': 'Triggers in the Rally Phase, before any action on the owner\'s turn.',
+    'End': 'Triggers in the Decay Phase, after all actions on the owner\'s turn.',
+    'Rally': 'The Rally Phase is the start-of-turn window in which positive once-per-turn effects trigger.',
+    'Decay': 'The Decay Phase is the end-of-turn window in which negative once-per-turn effects, including Burning damage, trigger.',
+    'Passive': 'Always in effect while the minion is on the board.',
+    'Active': 'May be used once per turn instead of attacking.',
+    'Discarded': 'Triggers when the card is discarded from hand by a Cost or an opponent\'s effect.',
     // Mechanic keywords
-    'Unique': 'Only one copy of this minion can exist on the board per player at a time.',
-    'Melee': 'Attacks adjacent orthogonal tiles (1 tile).',
-    'Range': 'Attacks X+1 tiles orthogonally, X tiles diagonally.',
-    'Tutor': 'Search your deck for a specific card and add it to your hand.',
-    'Promote': 'When this minion dies, specified minion transforms into this card.',
+    'Unique': 'Each player may have at most one copy of this minion on the board at a time.',
+    'Melee': 'Attacks orthogonally adjacent tiles (1 tile).',
+    'Range': 'Attacks up to X+1 tiles orthogonally and up to X tiles diagonally.',
+    'Tutor': 'Search your deck for a specified card and add it to your hand.',
+    'Promote': 'When this minion dies, the specified minion transforms into this card.',
     'March': 'When this minion moves, all other friendly copies of it also advance forward.',
-    'Negate': 'Cancel the effect of an opponent\'s spell or ability.',
-    'React': 'This card can be played during the opponent\'s turn in response to their action.',
-    'Destroy': 'Remove a target minion from the board regardless of its 🤍.',
+    'Negate': 'Cancels the effect of an opponent\'s spell or ability.',
+    'React': 'May be played during the opponent\'s turn in response to their action.',
+    'Destroy': 'Removes the target minion from the board regardless of its 🤍.',
     'Transform': 'Pay mana to transform this minion into another form.',
-    'Cost': 'An additional requirement or modifier that changes how much you pay to play this card.',
-    'Discard': 'Send a card from your hand to the Exhaust Pile.',
-    'Exhaust': 'Send a card to the Exhaust Pile. Cards drawn while your hand is full are also exhausted, revealed.',
-    'Heal': 'Restore 🤍 to a target.',
-    'Deal': 'Deal damage to a target.',
-    'Burn': 'Applies Burning to the affected minions — usually enemies, but some cards burn their own minion (e.g. Eclipse Shade\'s Summon).',
-    'Burning': 'A burning minion takes 5🤍 in its owner\'s Decay Phase. Burning is a boolean status — re-applying it does nothing. It persists until the minion dies.',
-    'Dark Matter': 'A stacking PLAYER resource pool, visible to both players. Gains add +1 per friendly Dark Mage on board (a minion with the Dark element and the Mage tribe — composite tribes like Mage Rat and Mage Undead count). Dark spells, buffs and costs scale with your pool; reading it never spends it.',
-    'Leap': 'If blocked by an enemy, jump over to the next available tile. Cannot leap allies. If all tiles ahead are enemy-occupied, enables sacrifice.',
-    'Conjure': 'Summon a card from your deck directly to the board.',
-    'Sacrifice': 'Move a minion from your opponent’s back row (or Leap it along an all-enemy path) out of the game: it is removed and deals its full 🗡️ as damage to the opponent. “Sacrifice:” effects on a card trigger when that card is sacrificed.',
-    'Cleanse': 'Removes all debuffs from the minion: Burning is cleared and negative \ud83d\udde1\ufe0f/\ud83e\udd0d marks reset to 0. Positive buffs stay; lost health is not restored.',
-    'Untargetable': 'Cannot be targeted by magic cards \u2014 it is never a legal target for a magic card\u2019s single-target effect. Board-wide magic, minions and reacts still affect it.',
-    'Revive': 'Summon minions from the Grave to the board. You pick which eligible grave card to revive and where it deploys (melee: any tile on your side; ranged: back row). Eligibility is limited by the text on the reviving card. Revived minions count as summoned — their Summon effects fire.',
-    'Draw': 'Draw cards from your deck to your hand. If your hand is full (10 cards), the drawn card is sent to the Exhaust Pile, revealed, instead.',
-    'Handshake': 'When a player passes and the opponent\'s previous action was also a pass, a Handshake occurs: at the end of that turn, both players gain +1 mana. A player whose mana is already full draws a card instead. The pass counter then resets — no chaining.',
+    'Cost': 'An additional requirement or modifier on what you pay to play this card.',
+    'Discard': 'Sends a card from your hand to the Exhaust Pile.',
+    'Exhaust': 'Sends a card to the Exhaust Pile; a card drawn while your hand is full is exhausted, revealed.',
+    'Heal': 'Restores 🤍 to a target.',
+    'Deal': 'Deals damage to a target.',
+    'Burn': 'Applies Burning to the affected minions: a Burning minion takes 5🤍 in its owner\'s Decay Phase.',
+    'Burning': 'A Burning minion takes 5🤍 in its owner\'s Decay Phase. Burning does not stack — re-applying it has no effect — and persists until the minion dies.',
+    'Dark Matter': 'A stacking player resource pool, visible to both players. Each gain adds +1 per friendly Dark Mage on the board (a Dark-element minion with the Mage tribe, composite tribes included); effects that read the pool do not spend it.',
+    'Leap': 'If blocked by an enemy, the minion jumps over it to the next available tile; allies cannot be leapt. If every tile ahead is enemy-occupied, the minion may Sacrifice.',
+    'Conjure': 'Summons a card from your deck directly to the board.',
+    'Sacrifice': 'Removes a friendly minion from the game — from the opponent\'s back row, or by Leaping along an all-enemy path — dealing its full 🗡️ as damage to the opponent. "Sacrifice:" effects trigger when that card is sacrificed.',
+    'Cleanse': 'Removes all debuffs from the minion: Burning ends and negative 🗡️/🤍 marks reset to 0. Positive buffs remain; lost 🤍 is not restored.',
+    'Untargetable': 'Cannot be chosen as the target of a magic card\'s single-target effect; board-wide magic, minions, and Reacts still affect it.',
+    'Revive': 'Summons minions from the Grave to the board; the player chooses each grave card eligible under the reviving card\'s text and its deployment tile (melee: any tile on the owner\'s side; ranged: back row). A revived minion counts as summoned and its Summon effect triggers.',
+    'Draw': 'Moves the top card of your deck to your hand; if your hand is full (10 cards), the drawn card is sent to the Exhaust Pile, revealed, instead.',
+    'Handshake': 'When a pass immediately follows the opponent\'s pass, both players gain +1 mana at the end of that turn (a player at full mana draws 1 card instead); the pass counter then resets — Handshakes do not chain.',
 };
 
 // Build the shared content for a card tooltip. Both the deck-builder

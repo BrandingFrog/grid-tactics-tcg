@@ -1002,11 +1002,20 @@ function playInstant(ev, done) {
 // appends the drawn card, commitEventToDom covers hp/mana/phase/move).
 // The post-drain _commitFinalStateSnapshot remains the catch-all.
 
+// Animation speed toggle (MCQ 2026-07-11): 1x / 2x / 4x, persisted.
+// Divides every queue beat routed through _evDurationOr plus the fake
+// react wait; CSS-driven sprite flights keep their own (short) timings.
+function animSpeed() {
+    var v = (typeof window !== 'undefined' && window.__animSpeed) || 1;
+    return (v === 2 || v === 4) ? v : 1;
+}
+
 function _evDurationOr(ev, fallback) {
+    var ms = fallback;
     if (ev && typeof ev.animation_duration_ms === 'number' && ev.animation_duration_ms >= 0) {
-        return ev.animation_duration_ms;
+        ms = ev.animation_duration_ms;
     }
-    return fallback;
+    return Math.round(ms / animSpeed());
 }
 
 function _evTileForPos(pos) {
@@ -2135,7 +2144,7 @@ function playReactWindowClosed(ev, done) {
         var totalCards = _spellStage.chain.length + _spellStageQueue.length;
         var resolveDur = (pendingIn * SPELL_STAGE_PER_CARD_MS)
             + 700 + (totalCards * 550) + 250;
-        setTimeout(done, Math.max(_evDurationOr(ev, 400), resolveDur));
+        setTimeout(done, Math.max(_evDurationOr(ev, 400), Math.round(resolveDur / animSpeed())));
         return;
     }
     // Fake response wait (user 2026-07-10): an action-sourced window (a
@@ -2153,7 +2162,7 @@ function playReactWindowClosed(ev, done) {
             && poppedWindow
             && poppedWindow.react_player_idx != null
             && poppedWindow.react_player_idx !== myPlayerIdx) {
-        var waitMs = 500 + Math.floor(Math.random() * 1000);
+        var waitMs = Math.round((500 + Math.floor(Math.random() * 1000)) / animSpeed());
         _showReactWaitFollower(waitMs);
         setTimeout(done, waitMs);
         return;

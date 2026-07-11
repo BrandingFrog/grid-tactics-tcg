@@ -288,6 +288,40 @@ class RoomManager:
             self._games[room_code] = session
         return session
 
+    def create_ai_watch_game(self) -> tuple[str, GameSession]:
+        """AI-vs-AI exhibition (MCQ 2026-07-11): both seats are dummies
+        driven by the server-side preview AI; viewers join as spectators.
+        The events-layer background stepper advances the game."""
+        preset = get_preset_deck(self._library)
+        seed = secrets.randbelow(2**31)
+        state, rng = GameState.new_game(seed, preset, preset)
+        session = GameSession(
+            state=state,
+            rng=rng,
+            library=self._library,
+            player_tokens=(str(uuid.uuid4()), str(uuid.uuid4())),
+            player_names=("AI Gold", "AI Crimson"),
+            player_sids=[None, None],
+            player_decks=(preset, preset),
+            player_avatars=(_PREVIEW_AI_AVATAR, _PREVIEW_AI_AVATAR),
+        )
+        with self._lock:
+            code = self._generate_code()
+            self._games[code] = session
+        return code, session
+
+    def spectator_count(self, room_code: str) -> int:
+        """How many spectators are attached to a room (AI-watch stepper
+        aborts when the last viewer leaves)."""
+        with self._lock:
+            return len(self._room_spectators.get(room_code, {}))
+
+    def remove_game(self, room_code: str) -> None:
+        """Drop a finished/abandoned session (AI-watch cleanup)."""
+        with self._lock:
+            self._games.pop(room_code, None)
+            self._room_spectators.pop(room_code, None)
+
     def create_preview_game(
         self, display_name: str, sid: str, avatar: str | None = None
     ) -> tuple[str, GameSession]:

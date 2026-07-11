@@ -80,6 +80,39 @@ function _lazyUpgradeArt(rootEl, cardId) {
             .catch(function () { /* silent — badge stays empty */ });
     }
     render();
+
+    // Version-mismatch reload banner (MCQ 2026-07-11): remember the
+    // version this page loaded with; poll every 5 minutes and when the
+    // server has moved on, show a reload pill — but NEVER mid-game (only
+    // while the lobby screen is active). Clicking reloads.
+    var loadedVersion = null;
+    function _pollVersion() {
+        fetch('/static/VERSION.json?t=' + Date.now())
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+                var v = data.version || null;
+                if (!v) return;
+                if (loadedVersion === null) { loadedVersion = v; return; }
+                if (v === loadedVersion) return;
+                var lobby = document.getElementById('screen-lobby');
+                var inLobby = lobby && lobby.classList.contains('active');
+                if (!inLobby) return;  // never interrupt a game
+                if (document.getElementById('version-reload-pill')) return;
+                var pill = document.createElement('button');
+                pill.id = 'version-reload-pill';
+                pill.type = 'button';
+                pill.textContent = '⟳ New version ' + v + ' — tap to reload';
+                pill.addEventListener('click', function () { location.reload(); });
+                document.body.appendChild(pill);
+            })
+            .catch(function () { /* offline — try again next poll */ });
+    }
+    _pollVersion();
+    setInterval(_pollVersion, 5 * 60 * 1000);
+    // Also check when the tab regains focus (common redeploy window).
+    document.addEventListener('visibilitychange', function () {
+        if (!document.hidden) _pollVersion();
+    });
 })();
 
 // =============================================
@@ -144,6 +177,29 @@ function _setReactPromptMode(mode) {
 }
 function _renderReactModeButtons() {
     var mode = _reactPromptMode();
+    // Animation speed toggle (MCQ 2026-07-11): 1x -> 2x -> 4x -> 1x,
+    // persisted per browser.
+    try {
+        var savedSpeed = parseInt(localStorage.getItem('gt-anim-speed') || '1', 10);
+        window.__animSpeed = (savedSpeed === 2 || savedSpeed === 4) ? savedSpeed : 1;
+    } catch (e) { window.__animSpeed = 1; }
+    var speedBtn = document.getElementById('anim-speed-btn');
+    var speedVal = document.getElementById('anim-speed-value');
+    function _paintSpeed() {
+        if (speedVal) speedVal.innerHTML = (window.__animSpeed || 1) + '&times;';
+    }
+    _paintSpeed();
+    // _renderReactModeButtons re-runs on every mode change — bind once.
+    if (speedBtn && !speedBtn.dataset.bound) {
+        speedBtn.dataset.bound = '1';
+        speedBtn.addEventListener('click', function() {
+            var cur = window.__animSpeed || 1;
+            window.__animSpeed = cur === 1 ? 2 : (cur === 2 ? 4 : 1);
+            try { localStorage.setItem('gt-anim-speed', String(window.__animSpeed)); } catch (e) {}
+            _paintSpeed();
+        });
+    }
+
     ['react-mode-btn', 'sandbox-react-mode-btn'].forEach(function(id) {
         var btn = document.getElementById(id);
         if (!btn) return;

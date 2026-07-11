@@ -150,11 +150,32 @@ def pick_preview_action(
         return None
 
     # --- Pending modal states: MUST resolve or the drain stalls ---------
+    # Revive picks (MCQ 2026-07-11): choose the most expensive revivable
+    # grave card, placed on the most advanced legal row — not random.
+    revives = by_type.get(ActionType.REVIVE_PLACE)
+    if revives:
+        p_idx = state.pending_revive_player_idx
+        grave = state.players[p_idx].grave if p_idx is not None else ()
+
+        def rev_score(a: Action):
+            cost = 0
+            try:
+                cost = library.get_by_id(grave[a.card_index]).mana_cost
+            except Exception:
+                pass
+            side = state.players[p_idx].side if p_idx is not None else None
+            adv = 0
+            if a.position is not None and side is not None:
+                adv = a.position[0] if side == PlayerSide.PLAYER_1 else -a.position[0]
+            return (cost, adv)
+
+        best = max(rev_score(a) for a in revives)
+        return random.choice([a for a in revives if rev_score(a) == best])
+
     picked = any_of(
         ActionType.TUTOR_SELECT,
         ActionType.CONJURE_DEPLOY,
         ActionType.DEATH_TARGET_PICK,
-        ActionType.REVIVE_PLACE,
         ActionType.TRIGGER_PICK,
     )
     if picked is not None:
@@ -243,6 +264,20 @@ def pick_preview_action(
                 if len(a.discard_card_indices or ()) == min_discards
             ]
             candidates.append((d.mana_cost, "play", (acts, d)))
+    # Light Wyrm (MCQ 2026-07-11): exhaust plays compete as development.
+    # Their real price is effective cost minus the discount — treat the
+    # PRINTED cost as the value (a 5-mana body for 0-2 mana is a steal,
+    # so weight it slightly above an equal-cost hand play).
+    ex_by_card: dict[int, list[Action]] = {}
+    for a in by_type.get(ActionType.PLAY_FROM_EXHAUST, ()):
+        ex_by_card.setdefault(a.card_index, []).append(a)
+    for ex_idx, acts in ex_by_card.items():
+        try:
+            d = library.get_by_id(player.exhaust[ex_idx])
+        except Exception:
+            continue
+        candidates.append((d.mana_cost + 1, "exhaust", (acts, d)))
+
     for a in by_type.get(ActionType.TRANSFORM, ()):
         cost = 0
         m = state.get_minion(a.minion_id)
@@ -263,7 +298,7 @@ def pick_preview_action(
         if kind == "transform":
             return payload
         acts, d = payload
-        if d.card_type == CardType.MINION:
+        if kind == "exhaust" or d.card_type == CardType.MINION:
             return _pick_deploy(acts, d, my_side)
         return _pick_targeted(acts, d, state, library, my_side)
 

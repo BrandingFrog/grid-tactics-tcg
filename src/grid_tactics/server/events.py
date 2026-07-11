@@ -1155,6 +1155,141 @@ def register_events(room_manager: RoomManager) -> None:
                 "is_spectator": True,
             })
 
+    @socketio.on("watch_ai_game")
+    def handle_watch_ai_game(data=None):
+        """AI-vs-AI exhibition (MCQ 2026-07-11): create a two-dummy game,
+        join the requester as a spectator, and start the background
+        stepper that plays both sides with the preview AI."""
+        data = data or {}
+        display_name = (data.get("display_name") or "Viewer").strip() or "Viewer"
+        code, session = _room_manager.create_ai_watch_game()
+        try:
+            _room_manager.join_as_spectator(code, display_name, request.sid, False)
+        except ValueError as e:
+            emit("error", {"msg": str(e)})
+            return
+        sio_join_room(code)
+        emit("spectator_joined", {
+            "room_code": code,
+            "session_token": None,
+            "god_mode": False,
+        })
+        state_dict = session.state.to_dict()
+        _inject_avatars(session, state_dict)
+        enrich_pending_post_move_attack(session.state, state_dict, session.library)
+        spec_state = filter_state_for_spectator(
+            state_dict, god_mode=False, perspective_idx=0,
+            library=session.library,
+        )
+        enrich_pending_tutor_for_viewer(session.state, spec_state, 0, session.library)
+        enrich_pending_conjure_deploy(session.state, spec_state, 0, session.library)
+        enrich_pending_death_target(session.state, spec_state, 0, session.library)
+        enrich_pending_revive(session.state, spec_state, 0, session.library)
+        enrich_pending_trigger_for_viewer(session.state, spec_state, 0, session.library)
+        emit("game_start", {
+            "your_player_idx": 0,
+            "state": spec_state,
+            "legal_actions": [],
+            "opponent_name": session.player_names[1],
+            "card_defs": _build_card_defs(session.library),
+            "is_spectator": True,
+        })
+        socketio.start_background_task(_ai_watch_stepper, code)
+
+    def _ai_watch_stepper(room_code):
+        """Advance an AI-vs-AI exhibition one beat at a time. Runs until
+        game over or the last spectator leaves; then drops the session."""
+        from grid_tactics.enums import TurnPhase as _TP
+        from grid_tactics.react_stack import (
+            enter_end_of_turn as _enter_end,
+            enter_start_of_turn as _enter_start,
+        )
+        from grid_tactics.server.preview_ai import pick_preview_action
+
+        steps = 0
+        while True:
+            steps += 1
+            if steps > 5000:  # runaway backstop
+                break
+            session = _room_manager.get_game(room_code)
+            if session is None or session.state.is_game_over:
+                break
+            if _room_manager.spectator_count(room_code) == 0:
+                break
+            with session.lock:
+                saved_state = session.state
+                stream = EventStream(next_seq=session.next_event_seq)
+                try:
+                    if session.state.phase == _TP.START_OF_TURN:
+                        session.state = _enter_start(
+                            session.state, session.library, event_collector=stream,
+                        )
+                    elif session.state.phase == _TP.END_OF_TURN:
+                        session.state = _enter_end(
+                            session.state, session.library, event_collector=stream,
+                        )
+                    else:
+                        acts = legal_actions(session.state, session.library)
+                        a = None
+                        if acts:
+                            a = pick_preview_action(session.state, session.library, acts)
+                        if a is None:
+                            a = pass_action()
+                        session.state = resolve_action(
+                            session.state, a, session.library, event_collector=stream,
+                        )
+                except Exception as e:
+                    _debug_report("ai_watch_crash", room_code, session, None, {
+                        "exception": f"{type(e).__name__}: {e}",
+                    })
+                    break
+                session.next_event_seq = stream.next_seq
+                new_state = session.state
+                events = list(stream.events)
+            _ai_watch_emit(session, room_code, new_state, events)
+            if new_state.is_game_over:
+                _ai_watch_emit(session, room_code, new_state, None, game_over=True)
+                break
+            socketio.sleep(0.9)
+        _room_manager.remove_game(room_code)
+
+    def _ai_watch_emit(session, room_code, state, events, game_over=False):
+        """Spectator fanout for the AI-vs-AI stepper. The shared
+        _emit_state_to_players helpers use flask_socketio's request-bound
+        emit(), which raises outside a request context and silently killed
+        the background task — this uses server-side socketio.emit
+        (room-addressed; every viewer in the room is a spectator)."""
+        state_dict = state.to_dict()
+        _inject_avatars(session, state_dict)
+        enrich_pending_post_move_attack(state, state_dict, session.library)
+        spec_state = filter_state_for_spectator(
+            state_dict, god_mode=False, perspective_idx=0,
+            library=session.library,
+        )
+        enrich_pending_tutor_for_viewer(state, spec_state, 0, session.library)
+        enrich_pending_conjure_deploy(state, spec_state, 0, session.library)
+        enrich_pending_death_target(state, spec_state, 0, session.library)
+        enrich_pending_revive(state, spec_state, 0, session.library)
+        enrich_pending_trigger_for_viewer(state, spec_state, 0, session.library)
+        if game_over:
+            socketio.emit("game_over", {
+                "winner": int(state.winner) if state.winner is not None else None,
+                "final_state": spec_state,
+                "your_player_idx": 0,
+                "is_spectator": True,
+            }, to=room_code)
+            return
+        spec_events = filter_engine_events_for_viewer(
+            events or [], 0, god_mode=False, library=session.library,
+        )
+        socketio.emit("engine_events", {
+            "events": [ev.to_dict() for ev in spec_events],
+            "final_state": spec_state,
+            "legal_actions": [],
+            "your_player_idx": 0,
+            "is_spectator": True,
+        }, to=room_code)
+
     @socketio.on("get_card_defs")
     def handle_get_card_defs(data=None):
         defs = _build_card_defs(_room_manager._library)

@@ -6101,3 +6101,31 @@ input::selection, textarea::selection { background: rgba(224, 162, 60, 0.45); co
 #screen-lobby .lobby2-identity .account-chip-avatar {
   width: calc(var(--u, 1px) * 24); height: calc(var(--u, 1px) * 24);
 }
+
+/* Version-mismatch reload pill (MCQ 2026-07-11): lobby-only, bottom
+   center — gold call-to-action in the vintage language. */
+#version-reload-pill {
+  position: fixed;
+  left: 50%;
+  bottom: 18px;
+  transform: translateX(-50%);
+  z-index: 2000;
+  font-family: 'Alegreya SC', Georgia, serif;
+  font-weight: 700;
+  font-size: 14px;
+  letter-spacing: 0.5px;
+  color: #201709;
+  background: linear-gradient(180deg, #ffd873, #e0a23c);
+  border: 1px solid #6b5730;
+  border-radius: 999px;
+  padding: 9px 18px;
+  cursor: pointer;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.55);
+}
+#version-reload-pill:hover { filter: brightness(1.06); }
+
+/* Animation speed toggle in the stage corner (MCQ 2026-07-11). */
+#screen-game .game-layout > #anim-speed-btn.stage-corner-btn {
+  right: 130px; width: auto; padding: 0 8px; font-size: 11px;
+  font-weight: 800; letter-spacing: 0.04em;
+}
