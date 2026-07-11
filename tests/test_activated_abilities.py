@@ -150,3 +150,74 @@ def test_activate_ability_rejected_when_insufficient_mana():
     except ValueError:
         return
     raise AssertionError("Expected ValueError for insufficient mana")
+
+
+def test_conjure_buff_resolves_after_deploy_and_includes_new_rat():
+    """Explicit card-text order (user 2026-07-11): 'Conjure Common Rat.
+    Ally Rats gain …' — the buff lands AFTER the deploy, so the freshly
+    conjured rat receives it too. Regression: the buff used to fire at
+    activation time, before the rat existed (and with no other rats on
+    board, visibly did nothing)."""
+    lib = _lib()
+    rat_nid = lib.get_numeric_id("rat")
+    state, _ = _state_with_ratchanter(lib, mana=5, deck=(rat_nid,))
+    rat_def = lib.get_by_card_id("rat")
+
+    activate = Action(
+        action_type=ActionType.ACTIVATE_ABILITY, minion_id=1, target_pos=None,
+    )
+    state = resolve_action(state, activate, lib)
+    assert state.pending_tutor_player_idx == 0
+    assert state.pending_conjure_buff == "dark_matter"
+
+    state = resolve_action(
+        state, Action(action_type=ActionType.TUTOR_SELECT, card_index=0), lib,
+    )
+    assert state.pending_conjure_deploy_card == rat_nid
+    assert state.pending_conjure_buff == "dark_matter", (
+        "buff must survive the tutor→deploy transition"
+    )
+
+    state = resolve_action(
+        state,
+        Action(action_type=ActionType.CONJURE_DEPLOY, position=(1, 2)),
+        lib,
+    )
+    new_rat = next(
+        m for m in state.minions if m.card_numeric_id == rat_nid
+    )
+    # DM pool 0 → magnitude 1.
+    assert new_rat.attack_bonus == 1, "conjured rat must receive the buff"
+    assert new_rat.max_health_bonus == 1
+    assert new_rat.current_health == rat_def.health + 1
+    assert state.pending_conjure_buff is None
+    assert state.pending_conjure_buff_caster_id is None
+
+
+def test_conjure_whiff_still_buffs_board_rats():
+    """No rat left in deck: the conjure clause whiffs but 'Ally Rats
+    gain …' still resolves, on the rats already on board."""
+    lib = _lib()
+    rat_nid = lib.get_numeric_id("rat")
+    state, _ = _state_with_ratchanter(lib, mana=5, deck=())
+    rat_def = lib.get_by_card_id("rat")
+    board_rat = MinionInstance(
+        instance_id=5, card_numeric_id=rat_nid,
+        owner=PlayerSide.PLAYER_1, position=(1, 1),
+        current_health=rat_def.health,
+    )
+    state = replace(
+        state,
+        minions=state.minions + (board_rat,),
+        board=state.board.place(1, 1, 5),
+        next_minion_id=6,
+    )
+    state = resolve_action(
+        state,
+        Action(action_type=ActionType.ACTIVATE_ABILITY, minion_id=1, target_pos=None),
+        lib,
+    )
+    buffed = state.get_minion(5)
+    assert buffed.attack_bonus == 1
+    assert buffed.current_health == rat_def.health + 1
+    assert state.pending_conjure_buff is None

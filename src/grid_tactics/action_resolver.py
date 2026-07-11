@@ -1633,36 +1633,29 @@ def _is_rat_card(card_def) -> bool:
     return "rat" in parts
 
 
-def _apply_conjure_rat_and_buff(
+def _apply_pending_conjure_buff(
     state: GameState,
     active_idx: int,
-    active_side: PlayerSide,
-    caster: MinionInstance,
-    ability,
+    caster_id: Optional[int],
     library: CardLibrary,
     *,
+    source: str,
     event_collector: Optional[EventStream] = None,
 ) -> GameState:
-    """Rework v2: flat stacking buff + optional tutor-from-deck.
+    """Resolve the deferred conjure buff (user 2026-07-11 explicit order).
 
-    Step 1 (buff, unconditional): for every living friendly minion
-    matching _is_rat_card EXCEPT the caster itself, add
-    ``1 + owning player's Dark Matter pool`` to ``attack_bonus``,
-    ``max_health_bonus`` AND ``current_health`` so the extra HP is
-    usable right away (Dark Matter pool redesign 2026-07 — the old
-    caster-own-stacks scaling is gone; minions never hold DM).
-
-    Step 2 (conjure, conditional): scan the caster's deck for card_id
-    ``rat``. If >=1 matches, enter pending_tutor state with those deck
-    indices so the caller resolves via TUTOR_SELECT / DECLINE_TUTOR.
-    Zero matches -> no pending state, no prompt.
+    Buffs every living friendly rat except the caster by
+    ``1 + owning player's Dark Matter pool`` (attack, max HP AND current
+    HP), then clears the pending_conjure_buff fields. Called at every
+    terminal of the conjure chain — deploy, to-hand decline, tutor
+    decline — and directly when the conjure whiffs (no rat in deck), so
+    a freshly conjured rat is on board before the buff resolves.
     """
+    active_side = state.players[active_idx].side
     magnitude = 1 + state.players[active_idx].dark_matter
-
-    # ---- Step 1: buff friendly rats on board --------------------------
     new_minions_list = list(state.minions)
     for i, m in enumerate(new_minions_list):
-        if m.instance_id == caster.instance_id:
+        if caster_id is not None and m.instance_id == caster_id:
             continue
         if m.owner != active_side:
             continue
@@ -1682,7 +1675,7 @@ def _apply_conjure_rat_and_buff(
         if event_collector is not None:
             event_collector.collect(
                 EVT_MINION_HP_CHANGE,
-                "action:activate_ability",
+                source,
                 {
                     "instance_id": m.instance_id,
                     "new_hp": m.current_health + magnitude,
@@ -1692,21 +1685,68 @@ def _apply_conjure_rat_and_buff(
                     "cause": "buff",
                 },
             )
-    state = replace(state, minions=tuple(new_minions_list))
+    return replace(
+        state,
+        minions=tuple(new_minions_list),
+        pending_conjure_buff=None,
+        pending_conjure_buff_caster_id=None,
+    )
 
-    # ---- Step 2: pending_tutor for common rat from deck ---------------
+
+def _apply_conjure_rat_and_buff(
+    state: GameState,
+    active_idx: int,
+    active_side: PlayerSide,
+    caster: MinionInstance,
+    ability,
+    library: CardLibrary,
+    *,
+    event_collector: Optional[EventStream] = None,
+) -> GameState:
+    """Rework v3 (user 2026-07-11 — explicit card-text order): the card
+    reads "Conjure Common Rat. Ally Rats gain …", so the CONJURE resolves
+    first and the buff lands AFTER it — including the freshly conjured
+    rat.
+
+    Step 1 (conjure, conditional): scan the caster's deck for card_id
+    ``rat``. If >=1 matches, enter pending_tutor state with those deck
+    indices so the caller resolves via TUTOR_SELECT / DECLINE_TUTOR, and
+    stash the buff on ``pending_conjure_buff`` — the terminal of the
+    conjure chain (deploy / to-hand decline / tutor decline) applies it.
+
+    Step 2 (buff): ``1 + owning player's Dark Matter pool`` (read at
+    apply time) added to attack_bonus, max_health_bonus AND
+    current_health of every living friendly rat except the caster —
+    see _apply_pending_conjure_buff. When the conjure can't happen
+    (no rat in deck), the buff applies immediately.
+    """
+    # ---- Step 1: pending_tutor for common rat from deck ---------------
     summon_card_id = ability.summon_card_id or "rat"
     try:
         rat_numeric_id = library.get_numeric_id(summon_card_id)
     except KeyError:
-        return state
+        rat_numeric_id = None
 
-    caster_player = state.players[active_idx]
-    matches = tuple(
-        i for i, cid in enumerate(caster_player.deck) if cid == rat_numeric_id
-    )
+    matches = ()
+    if rat_numeric_id is not None:
+        caster_player = state.players[active_idx]
+        matches = tuple(
+            i for i, cid in enumerate(caster_player.deck) if cid == rat_numeric_id
+        )
     if not matches:
-        return state
+        # Conjure whiffs (no rat left in deck) — the buff clause still
+        # resolves, on the rats already on board.
+        return _apply_pending_conjure_buff(
+            state, active_idx, caster.instance_id, library,
+            source="action:activate_ability",
+            event_collector=event_collector,
+        )
+
+    state = replace(
+        state,
+        pending_conjure_buff="dark_matter",
+        pending_conjure_buff_caster_id=caster.instance_id,
+    )
 
     # Mutex defense -- no other pending state should be active.
     assert state.pending_tutor_player_idx is None
@@ -2404,6 +2444,16 @@ def resolve_action(
                         "source": "conjure_deploy",
                     },
                 )
+            # Deferred conjure buff (user 2026-07-11): "Conjure … . Ally
+            # Rats gain …" resolves in card-text order — the buff lands
+            # now, INCLUDING the rat that just deployed.
+            if state.pending_conjure_buff is not None:
+                state = _apply_pending_conjure_buff(
+                    state, deployer_idx,
+                    state.pending_conjure_buff_caster_id, library,
+                    source="action:conjure_deploy",
+                    event_collector=event_collector,
+                )
         elif action.action_type == ActionType.DECLINE_CONJURE:
             assert_phase_contract(state, "action:decline_conjure")
             # Decline deployment — card goes to hand instead. Overdraw
@@ -2435,6 +2485,15 @@ def resolve_action(
                 pending_conjure_deploy_card=None,
                 pending_conjure_deploy_player_idx=None,
             )
+            # Deferred conjure buff — the conjure resolved (to hand), so
+            # the buff clause fires on the rats already on board.
+            if state.pending_conjure_buff is not None:
+                state = _apply_pending_conjure_buff(
+                    state, deployer_idx,
+                    state.pending_conjure_buff_caster_id, library,
+                    source="action:decline_conjure",
+                    event_collector=event_collector,
+                )
         else:
             raise ValueError(
                 "Pending conjure deploy: must CONJURE_DEPLOY or DECLINE_CONJURE"
@@ -2617,6 +2676,7 @@ def resolve_action(
                     f"{len(state.pending_tutor_matches)} matching pick(s) "
                     "remain; must TUTOR_SELECT"
                 )
+            _decliner_idx = state.pending_tutor_player_idx
             state = replace(
                 state,
                 pending_tutor_player_idx=None,
@@ -2625,6 +2685,15 @@ def resolve_action(
                 pending_tutor_remaining=0,
                 pending_tutor_origin=None,
             )
+            # Deferred conjure buff — a declined conjure pick still
+            # resolves the buff clause on the rats already on board.
+            if state.pending_conjure_buff is not None and _decliner_idx is not None:
+                state = _apply_pending_conjure_buff(
+                    state, _decliner_idx,
+                    state.pending_conjure_buff_caster_id, library,
+                    source="action:decline_tutor",
+                    event_collector=event_collector,
+                )
         else:
             raise ValueError(
                 "Pending tutor: must TUTOR_SELECT or DECLINE_TUTOR"

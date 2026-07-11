@@ -195,6 +195,15 @@ class GameState:
     pending_conjure_deploy_card: Optional[int] = None        # card_numeric_id to deploy
     pending_conjure_deploy_player_idx: Optional[int] = None  # Which player is deploying
 
+    # Conjure buff deferral (user 2026-07-11): Ratchanter's
+    # conjure_rat_and_buff reads "Conjure Common Rat. Ally Rats gain …" —
+    # explicit order, so the buff resolves AFTER the conjure completes
+    # (deploy / to-hand decline / tutor decline) and therefore includes the
+    # freshly conjured rat. These carry the buff through the pending
+    # tutor→deploy chain; cleared when the buff is applied.
+    pending_conjure_buff: Optional[str] = None               # e.g. 'dark_matter'
+    pending_conjure_buff_caster_id: Optional[int] = None     # excluded from the buff
+
     # Pending death-effect machinery (supports modal click-target death
     # triggers).
     #
@@ -482,6 +491,8 @@ class GameState:
             "pending_revive_remaining": int(self.pending_revive_remaining),
             "pending_conjure_deploy_card": self.pending_conjure_deploy_card,
             "pending_conjure_deploy_player_idx": self.pending_conjure_deploy_player_idx,
+            "pending_conjure_buff": self.pending_conjure_buff,
+            "pending_conjure_buff_caster_id": self.pending_conjure_buff_caster_id,
             "pending_death_target": (
                 {
                     "card_numeric_id": int(self.pending_death_target.card_numeric_id),
@@ -707,6 +718,8 @@ class GameState:
             pending_revive_remaining=int(d.get("pending_revive_remaining") or 0),
             pending_conjure_deploy_card=d.get("pending_conjure_deploy_card"),
             pending_conjure_deploy_player_idx=d.get("pending_conjure_deploy_player_idx"),
+            pending_conjure_buff=d.get("pending_conjure_buff"),
+            pending_conjure_buff_caster_id=d.get("pending_conjure_buff_caster_id"),
             pending_death_target=pending_death_target,
             # Phase 14.8-05: last_trigger_blip field deleted. Old saved
             # state dicts carrying this key are tolerated — from_dict uses
