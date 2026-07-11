@@ -259,7 +259,8 @@ def test_preview_pregame_full_flow(alice):
     r = alice.get_received()
     rps = _first(r, "pregame_rps")
     assert rps is not None
-    assert rps["args"][0]["opponent_name"] == "Preview"
+    # Dummy seat renamed Preview -> AI (Play VS AI, user 2026-07-11).
+    assert rps["args"][0]["opponent_name"] == "AI"
     assert _first(r, "game_start") is None
 
     # Dummy auto-picks immediately (rigged to lose so the inert dummy

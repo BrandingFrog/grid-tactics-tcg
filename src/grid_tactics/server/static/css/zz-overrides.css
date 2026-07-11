@@ -5990,3 +5990,23 @@ input::selection, textarea::selection { background: rgba(224, 162, 60, 0.45); co
   z-index: 28;
 }
 .floating-popup { z-index: 40; }
+
+/* Play VS AI (user 2026-07-11): sits at the bottom of the play column —
+   worn-bronze secondary look, slightly separated from the row above. */
+.lobby2-btn.lobby2-btn-vsai {
+  margin-top: 10px;
+  background: linear-gradient(180deg, #3a2c14, #241a0a) !important;
+  border: 1px solid var(--bronze, #6b5730) !important;
+  color: #e0c68a !important;
+}
+.lobby2-btn.lobby2-btn-vsai:hover {
+  border-color: var(--gold, #e0a23c) !important;
+  color: #ffd873 !important;
+}
+
+/* Preview-AI avatar (user 2026-07-11): Surgebot art cropped to its top
+   half — the ?crop=top hint on the URL drives this selector. */
+.pod-ava-img[src*="crop=top"] {
+  object-fit: cover;
+  object-position: 50% 12%;
+}

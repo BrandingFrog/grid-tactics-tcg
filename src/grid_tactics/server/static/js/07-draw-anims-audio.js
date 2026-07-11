@@ -200,6 +200,7 @@ var SFX_FILES = {
     nudge_boom:   '/static/sfx/nudge_boom.ogg',
     nudge_rain:   '/static/sfx/nudge_rain.ogg',
     nudge_kiss:   '/static/sfx/nudge_kiss.ogg',
+    chat_ping:    '/static/sfx/chat_ping.ogg',
 };
 var sfxBuffers = {};
 // 0.6 → 0.2 (user 2026-07-11: 'the sounds are really loud, lower to 20%')

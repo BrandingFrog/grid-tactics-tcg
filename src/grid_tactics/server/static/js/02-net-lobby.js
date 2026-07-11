@@ -176,6 +176,11 @@ function onChatMessage(data) {
         var unreadDot = document.getElementById('chat-unread');
         if (unreadDot) unreadDot.style.display = '';
     }
+    // Message ping (user 2026-07-11): soft two-tone cue on every incoming
+    // message (not our own echoes), regardless of which tab is open.
+    if (!isOwn && typeof playSfx === 'function') {
+        try { playSfx('chat_ping'); } catch (e) { /* defensive */ }
+    }
 
     // Easter egg: opponent typed a nudge keyword -> splat on our screen
     // (MSN-messenger-nudge style). Only fires for recipients, never the sender.
@@ -304,13 +309,9 @@ function onRoomsList(data) {
                      : (Math.floor(age / 3600) + 'h');
         row.querySelector('.lobby2-room-age').textContent = ageLabel;
         row.addEventListener('click', function() {
-            var name = (typeof getCurrentDisplayName === 'function') ? getCurrentDisplayName() : null;
-            if (!name) {
-                showLobbyStatus('Please enter your name first.', 'error');
-                return;
-            }
+            var name = (typeof getCurrentDisplayName === 'function')
+                ? getCurrentDisplayName() : 'Guest';
             myName = name;
-            saveDisplayName(name);
             socket.emit('join_room', { display_name: name, room_code: r.code });
         });
         listEl.appendChild(row);
@@ -591,40 +592,22 @@ function showNameInputUI() {
 }
 
 function getCurrentDisplayName() {
-    // Check if saved-name section is visible — return that, else read input
-    var savedSection = document.getElementById('name-saved-section');
-    if (savedSection && savedSection.style.display !== 'none') {
-        var display = document.getElementById('saved-name-display');
-        return display ? display.textContent.trim() : '';
+    // Discord-only names (user 2026-07-11): the editable lobby input is
+    // gone — logged-in players carry their Discord display name, guests
+    // play as "Guest". (Server-side names still cap at 14 chars.)
+    var a = (typeof window !== 'undefined') && window.__account;
+    if (a && a.loggedIn && a.user) {
+        var dn = a.user.display_name || a.user.username || '';
+        if (dn) return String(dn).slice(0, 14);
     }
-    var nameInput = document.getElementById('input-name');
-    return nameInput ? nameInput.value.trim() : '';
+    return 'Guest';
 }
 
 function setupLobbyHandlers() {
-    // Initialize name UI from localStorage
-    var savedName = loadSavedName();
-    if (savedName) {
-        myName = savedName;
-        showSavedNameUI(savedName);
-    } else {
-        showNameInputUI();
-    }
-
-    // Auto-save callsign as the user types. No explicit Save button; every
-    // keystroke persists to localStorage and updates `myName`. Empty input
-    // just clears the saved value and falls back to guest flow at join time.
-    var nameInputEl = document.getElementById('input-name');
-    var btnSaveName = document.getElementById('btn-save-name');
-    if (btnSaveName) btnSaveName.style.display = 'none';
-    if (nameInputEl) {
-        nameInputEl.addEventListener('input', function() {
-            var name = nameInputEl.value.trim();
-            myName = name;
-            saveDisplayName(name);
-            showLobbyStatus('', '');
-        });
-    }
+    // Discord-only names (user 2026-07-11): no editable input — myName
+    // resolves through getCurrentDisplayName() (Discord name or "Guest").
+    // bootstrapAccount() re-syncs it once /api/me answers.
+    myName = getCurrentDisplayName();
 
     // Fullscreen toggle (user 2026-07-05). Works on desktop + Android;
     // iPhone Safari has no Fullscreen API for elements — hide the button.
@@ -664,12 +647,7 @@ function setupLobbyHandlers() {
     if (btnCreate) {
         btnCreate.addEventListener('click', function() {
             var name = getCurrentDisplayName();
-            if (!name) {
-                showLobbyStatus('Please enter a display name.', 'error');
-                return;
-            }
             myName = name;
-            saveDisplayName(name);
             socket.emit('create_room', { display_name: name });
         });
     }
@@ -681,16 +659,11 @@ function setupLobbyHandlers() {
             var codeInput = document.getElementById('input-room-code');
             var name = getCurrentDisplayName();
             var code = codeInput ? codeInput.value.trim().toUpperCase() : '';
-            if (!name) {
-                showLobbyStatus('Please enter a display name.', 'error');
-                return;
-            }
             if (!code) {
                 showLobbyStatus('Please enter a room code.', 'error');
                 return;
             }
             myName = name;
-            saveDisplayName(name);
             socket.emit('join_room', { display_name: name, room_code: code });
         });
     }
@@ -702,10 +675,6 @@ function setupLobbyHandlers() {
             var codeInput2 = document.getElementById('input-room-code');
             var name = getCurrentDisplayName();
             var code = codeInput2 ? codeInput2.value.trim().toUpperCase() : '';
-            if (!name) {
-                showLobbyStatus('Please enter a display name.', 'error');
-                return;
-            }
             if (!code) {
                 showLobbyStatus('Please enter a room code.', 'error');
                 return;
@@ -713,7 +682,6 @@ function setupLobbyHandlers() {
             var godCb = document.getElementById('god-mode-checkbox');
             var god_mode = !!(godCb && godCb.checked);
             myName = name;
-            saveDisplayName(name);
             socket.emit('spectate_room', { display_name: name, room_code: code, god_mode: god_mode });
         });
     }

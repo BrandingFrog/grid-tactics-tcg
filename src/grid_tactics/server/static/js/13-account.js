@@ -187,18 +187,14 @@ function bootstrapAccount() {
             };
             _renderAccountChip();
             _renderCloudBadge();
+            // Discord-only names (user 2026-07-11): the Discord display
+            // name IS the player name — always adopt it on login.
+            try {
+                if (typeof getCurrentDisplayName === 'function') {
+                    myName = getCurrentDisplayName();
+                }
+            } catch (e) { /* defensive */ }
             if (window.__account.loggedIn) {
-                // Adopt the Discord display name if the player hasn't set one.
-                try {
-                    var input = document.getElementById('input-name');
-                    var stored = (typeof loadSavedName === 'function') ? loadSavedName() : '';
-                    if (!stored && window.__account.user && window.__account.user.display_name) {
-                        var dn = window.__account.user.display_name.slice(0, 14);
-                        if (input) input.value = dn;
-                        myName = dn;
-                        if (typeof saveDisplayName === 'function') saveDisplayName(dn);
-                    }
-                } catch (e) { /* defensive */ }
                 _syncDecksOnLogin();
             }
         })

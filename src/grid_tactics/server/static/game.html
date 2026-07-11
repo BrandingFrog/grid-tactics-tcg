@@ -18,31 +18,31 @@
   <!-- Inline emoji favicon — kills the perpetual /favicon.ico 404 (the only
        console error on live and local). -->
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>&#128481;</text></svg>">
-  <link rel="stylesheet" href="/static/css/01-base-tokens.css?v=0.27.22">
-  <link rel="stylesheet" href="/static/css/02-lobby-deck-builder.css?v=0.27.22">
-  <link rel="stylesheet" href="/static/css/03-duel-layout.css?v=0.27.22">
-  <link rel="stylesheet" href="/static/css/04-animations-overlays.css?v=0.27.22">
-  <link rel="stylesheet" href="/static/css/05-hud-redesign.css?v=0.27.22">
-  <link rel="stylesheet" href="/static/css/06-game-hud.css?v=0.27.22">
-  <link rel="stylesheet" href="/static/css/07-cards-cf2.css?v=0.27.22">
-  <link rel="stylesheet" href="/static/css/zz-overrides.css?v=0.27.22">
+  <link rel="stylesheet" href="/static/css/01-base-tokens.css?v=0.27.23">
+  <link rel="stylesheet" href="/static/css/02-lobby-deck-builder.css?v=0.27.23">
+  <link rel="stylesheet" href="/static/css/03-duel-layout.css?v=0.27.23">
+  <link rel="stylesheet" href="/static/css/04-animations-overlays.css?v=0.27.23">
+  <link rel="stylesheet" href="/static/css/05-hud-redesign.css?v=0.27.23">
+  <link rel="stylesheet" href="/static/css/06-game-hud.css?v=0.27.23">
+  <link rel="stylesheet" href="/static/css/07-cards-cf2.css?v=0.27.23">
+  <link rel="stylesheet" href="/static/css/zz-overrides.css?v=0.27.23">
   <script src="https://cdn.socket.io/4.7.4/socket.io.min.js" defer></script>
   <!-- Modular client JS (2026-07-06): classic scripts sharing one global
        scope — ALL tags must stay `defer` (never async) and in this order;
        socket.io above must load first. -->
-  <script src="/static/js/01-core-state.js?v=0.27.22" defer></script>
-  <script src="/static/js/02-net-lobby.js?v=0.27.22" defer></script>
-  <script src="/static/js/03-deck-builder.js?v=0.27.22" defer></script>
-  <script src="/static/js/04-card-render.js?v=0.27.22" defer></script>
-  <script src="/static/js/05-boot.js?v=0.27.22" defer></script>
-  <script src="/static/js/06-event-queue.js?v=0.27.22" defer></script>
-  <script src="/static/js/07-draw-anims-audio.js?v=0.27.22" defer></script>
-  <script src="/static/js/08-state-spell-stage.js?v=0.27.22" defer></script>
-  <script src="/static/js/09-duel-interaction.js?v=0.27.22" defer></script>
-  <script src="/static/js/10-modals.js?v=0.27.22" defer></script>
-  <script src="/static/js/11-hud-board-hand.js?v=0.27.22" defer></script>
-  <script src="/static/js/12-sandbox.js?v=0.27.22" defer></script>
-  <script src="/static/js/13-account.js?v=0.27.22" defer></script>
+  <script src="/static/js/01-core-state.js?v=0.27.23" defer></script>
+  <script src="/static/js/02-net-lobby.js?v=0.27.23" defer></script>
+  <script src="/static/js/03-deck-builder.js?v=0.27.23" defer></script>
+  <script src="/static/js/04-card-render.js?v=0.27.23" defer></script>
+  <script src="/static/js/05-boot.js?v=0.27.23" defer></script>
+  <script src="/static/js/06-event-queue.js?v=0.27.23" defer></script>
+  <script src="/static/js/07-draw-anims-audio.js?v=0.27.23" defer></script>
+  <script src="/static/js/08-state-spell-stage.js?v=0.27.23" defer></script>
+  <script src="/static/js/09-duel-interaction.js?v=0.27.23" defer></script>
+  <script src="/static/js/10-modals.js?v=0.27.23" defer></script>
+  <script src="/static/js/11-hud-board-hand.js?v=0.27.23" defer></script>
+  <script src="/static/js/12-sandbox.js?v=0.27.23" defer></script>
+  <script src="/static/js/13-account.js?v=0.27.23" defer></script>
 </head>
 <body>
 
@@ -165,11 +165,8 @@
 
       <!-- RIGHT: play -->
       <div class="lobby2-play">
-        <div class="lobby2-field" id="name-input-section">
-          <label class="lobby2-label" for="input-name">Your name</label>
-          <input type="text" id="input-name" class="lobby2-input" placeholder="Enter a name" maxlength="14" autocomplete="off">
-        </div>
-
+        <!-- Name input removed (user 2026-07-11): the display name is the
+             logged-in Discord name; guests play as "Guest". -->
         <!-- Discord login (user 2026-07-08). Hidden unless the server has
              OAuth configured (/api/me login_available). Optional — guests
              play anonymously. -->
@@ -205,6 +202,13 @@
         <button class="lobby2-btn lobby2-btn-ghost lobby2-btn-browse" id="btn-open-rooms" type="button">
           Open games <span class="lobby2-chev">▸</span>
         </button>
+
+        <!-- Play VS AI (user 2026-07-11): replaces the "Game preview"
+             entry that lived in the rooms quickview panel. Same id — the
+             preview_game wiring in 03-deck-builder.js drives it. -->
+        <button class="lobby2-btn lobby2-btn-vsai" id="btn-game-preview" type="button">
+          ⚔ Play VS AI
+        </button>
       </div>
 
       <!-- SUB-VIEW: rooms browser (user 2026-07-10). Full-screen overlay
@@ -225,10 +229,6 @@
                in-progress games — mini board + scores, click to spectate. -->
           <div class="lobby2-quickview" id="lobby-quickview">
             <div class="lobby2-rooms-head"><span>Game view</span><span class="lobby2-qv-tag">testing</span></div>
-            <button class="lobby2-qv-preview" id="btn-game-preview" type="button">
-              <span class="qv-prev-ico" aria-hidden="true">▶</span>
-              <span class="qv-prev-txt">Game preview<small>open the duel stage on this device</small></span>
-            </button>
             <div id="lobby-quickview-list"></div>
           </div>
         </div>

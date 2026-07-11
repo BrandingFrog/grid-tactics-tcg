@@ -608,8 +608,24 @@ function setupDeckBuilderHandlers() {
         btnSave.addEventListener('click', function() {
             var nameInput = document.getElementById('deck-slot-name');
             var name = nameInput ? nameInput.value.trim() : '';
-            if (!name) name = 'Deck ' + (currentSlotIdx + 1);
-            saveDeckSlot(currentSlotIdx, name, Object.assign({}, currentDeck));
+            // Save-by-name (user 2026-07-11 'the game is overwriting my
+            // decks even though i called them differently'): SAVE used to
+            // always write currentSlotIdx (0 unless you loaded a slot), so
+            // a fresh deck under a new name clobbered the loaded one. Now
+            // the NAME picks the slot — an existing name updates that
+            // slot, a new name appends a new one.
+            var slots = loadDeckSlots();
+            if (!name) name = 'Deck ' + (slots.length + 1);
+            var targetIdx = -1;
+            for (var si = 0; si < slots.length; si++) {
+                if ((slots[si].name || '').toLowerCase() === name.toLowerCase()) {
+                    targetIdx = si;
+                    break;
+                }
+            }
+            if (targetIdx === -1) targetIdx = slots.length;  // new slot
+            currentSlotIdx = targetIdx;
+            saveDeckSlot(targetIdx, name, Object.assign({}, currentDeck));
             refreshLoadDropdown();
             populateDeckSelector();  // refresh lobby dropdown too
             showLobbyStatus('Deck saved!', 'info');

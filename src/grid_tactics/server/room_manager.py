@@ -56,6 +56,12 @@ class WaitingRoom:
     lock: threading.Lock = field(default_factory=threading.Lock)
 
 
+# Preview-AI avatar (user 2026-07-11): the dummy seat wears the top half
+# of Sparkfed Surgebot's card art. The ?crop=top hint is inert for static
+# serving; the client CSS crops via an attribute selector.
+_PREVIEW_AI_AVATAR = "/static/art/surgefed_sparkbot.thumb.webp?crop=top"
+
+
 @dataclass
 class PregameSeat:
     """One seat in a pregame (RPS + mulligan) stage.
@@ -319,10 +325,10 @@ class RoomManager:
             rng=rng,
             library=self._library,
             player_tokens=(token, dummy_token),
-            player_names=(display_name or "You", "Preview"),
+            player_names=(display_name or "You", "AI"),
             player_sids=[sid, None],
             player_decks=(preset, preset),
-            player_avatars=(avatar, None),  # dummy opponent has no avatar
+            player_avatars=(avatar, _PREVIEW_AI_AVATAR),  # AI: Surgebot art, top-crop
         )
         with self._lock:
             code = self._generate_code()
@@ -377,7 +383,7 @@ class RoomManager:
             code="",  # assigned under the lock below
             seats=[
                 PregameSeat(token=token, name=display_name or "You", sid=sid, avatar=avatar),
-                PregameSeat(token=dummy_token, name="Preview", sid=None),
+                PregameSeat(token=dummy_token, name="AI", sid=None, avatar=_PREVIEW_AI_AVATAR),
             ],
             preview=True,
         )
