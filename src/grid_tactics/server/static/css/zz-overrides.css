@@ -277,6 +277,9 @@
 
 /* ---------------------------------------------------------------------------
    8. CENTRE — SEARCH INPUT. Text-field recipe, gold focus, no sweep/glow.
+   (2026-07-11: selectors bumped to input.input.… — the legacy cyan rule in
+   05-hud-redesign.css was MORE specific and kept winning, so the deck
+   builder search still rendered on the old theme.)
    --------------------------------------------------------------------------- */
 #screen-deck-builder .hud-armoury-search-wrap {
   position: relative; margin: 12px 14px; display: flex; align-items: center;
@@ -286,7 +289,7 @@
   position: absolute; left: 12px; color: var(--parch-mute); font-size: 15px;
   pointer-events: none;
 }
-#screen-deck-builder input.hud-armoury-search {
+#screen-deck-builder input.input.hud-armoury-search {
   width: 100%; box-sizing: border-box;
   padding: 9px 58px 9px 34px;
   background: var(--field); color: var(--parch);
@@ -294,8 +297,8 @@
   font-family: var(--ui-body); font-size: 14px; letter-spacing: .2px;
   box-shadow: inset 0 1px 3px rgba(0,0,0,0.5); transition: border-color .13s, box-shadow .13s;
 }
-#screen-deck-builder input.hud-armoury-search::placeholder { color: #6a5a3a; font-style: italic; }
-#screen-deck-builder input.hud-armoury-search:focus {
+#screen-deck-builder input.input.hud-armoury-search::placeholder { color: #6a5a3a; font-style: italic; }
+#screen-deck-builder input.input.hud-armoury-search:focus {
   outline: none; border-color: var(--gold);
   box-shadow: 0 0 0 2px rgba(224,162,60,0.22), inset 0 1px 3px rgba(0,0,0,0.5);
 }
