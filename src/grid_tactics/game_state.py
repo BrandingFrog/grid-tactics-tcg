@@ -184,8 +184,13 @@ class GameState:
     # choose WHERE to place each revived minion. One placement per
     # REVIVE_PLACE action; DECLINE_REVIVE stops early.
     pending_revive_player_idx: Optional[int] = None     # Which player is placing
-    pending_revive_card_id: Optional[str] = None        # card_id to revive (e.g. "rat")
+    pending_revive_card_id: Optional[str] = None        # exact-card filter (e.g. "rat"); None = no exact filter
     pending_revive_remaining: int = 0                   # How many more placements allowed
+    # Generalized revive (user 2026-07-11 "like conjure or tutor — supports
+    # anything but limited by the card text"): optional tribe filter; with
+    # BOTH filters None any minion in the grave is revivable. The client
+    # picks WHICH grave card via REVIVE_PLACE.card_index (grave index).
+    pending_revive_tribe: Optional[str] = None
 
     # Phase 14.6: Pending conjure-deploy state (conjure-to-field flow).
     # After TUTOR_SELECT resolves during a conjure (pending_tutor_is_conjure),
@@ -489,6 +494,7 @@ class GameState:
             "pending_revive_player_idx": self.pending_revive_player_idx,
             "pending_revive_card_id": self.pending_revive_card_id,
             "pending_revive_remaining": int(self.pending_revive_remaining),
+            "pending_revive_tribe": self.pending_revive_tribe,
             "pending_conjure_deploy_card": self.pending_conjure_deploy_card,
             "pending_conjure_deploy_player_idx": self.pending_conjure_deploy_player_idx,
             "pending_conjure_buff": self.pending_conjure_buff,
@@ -715,6 +721,7 @@ class GameState:
             pending_tutor_origin=d.get("pending_tutor_origin"),
             pending_revive_player_idx=d.get("pending_revive_player_idx"),
             pending_revive_card_id=d.get("pending_revive_card_id"),
+            pending_revive_tribe=d.get("pending_revive_tribe"),
             pending_revive_remaining=int(d.get("pending_revive_remaining") or 0),
             pending_conjure_deploy_card=d.get("pending_conjure_deploy_card"),
             pending_conjure_deploy_player_idx=d.get("pending_conjure_deploy_player_idx"),

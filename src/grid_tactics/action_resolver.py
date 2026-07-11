@@ -787,62 +787,65 @@ def _enter_pending_revive(
     least one empty deploy cell. Sets pending_revive fields on the state;
     actual placement happens in _apply_revive_place.
     """
-    revive_id = card_def.revive_card_id
-    if not revive_id:
-        return state
-
-    revive_def = library.get_by_card_id(revive_id)
-    if revive_def is None:
-        return state
-
-    revive_numeric_id = library.get_numeric_id(revive_id)
-
+    # Generalized revive (user 2026-07-11 "like conjure or tutor — supports
+    # anything but limited by the card text"): the filter comes from the
+    # card definition — revive_card_id (exact card, e.g. Ratical
+    # Resurrection\'s \'rat\') and/or the REVIVE effect\'s target_tribe;
+    # neither set = any minion in the grave is revivable.
     amount = 0
+    revive_tribe = None
     for eff in card_def.effects:
         if eff.effect_type == EffectType.REVIVE:
             amount = eff.amount
+            revive_tribe = eff.target_tribe
             break
     if amount <= 0:
         return state
 
+    revive_id = card_def.revive_card_id or None
     player_idx = 0 if active_side == PlayerSide.PLAYER_1 else 1
-    player = state.players[player_idx]
 
-    # Check grave has matching cards
-    grave_count = sum(1 for cid in player.grave if cid == revive_numeric_id)
-    if grave_count == 0:
-        return state
-
-    # Check at least one empty deploy cell exists (2026-07 card-audit
-    # fix: the docstring promised this check but it was never
-    # implemented — a full deploy zone forced the player through a
-    # modal whose only legal action was DECLINE_REVIVE). Deploy rows
-    # mirror legal_actions._pending_revive_actions: melee (range 0)
-    # may use any own-side row, ranged only the back row.
-    if player_idx == 0:
-        deploy_rows = (
-            PLAYER_1_ROWS if revive_def.attack_range == 0 else (BACK_ROW_P1,)
-        )
-    else:
-        deploy_rows = (
-            PLAYER_2_ROWS if revive_def.attack_range == 0 else (BACK_ROW_P2,)
-        )
-    has_empty_cell = any(
-        state.board.get(r, c) is None
-        for r in deploy_rows
-        for c in range(5)
-    )
-    if not has_empty_cell:
-        return state
-
-    # Cap at available grave copies
-    actual_amount = min(amount, grave_count)
-
-    return replace(
+    # Tentatively set the pending filter so the shared matcher can run.
+    candidate = replace(
         state,
         pending_revive_player_idx=player_idx,
         pending_revive_card_id=revive_id,
-        pending_revive_remaining=actual_amount,
+        pending_revive_tribe=revive_tribe,
+    )
+    from grid_tactics.legal_actions import revive_grave_matches
+    matches = revive_grave_matches(candidate, library)
+    if not matches:
+        return state
+
+    # Check at least one empty deploy cell exists for at least one match
+    # (2026-07 card-audit fix — a full deploy zone must not open a modal
+    # whose only legal action is DECLINE_REVIVE). Deploy rows mirror
+    # legal_actions._pending_revive_actions per matched card\'s range.
+    player = state.players[player_idx]
+    has_empty_cell = False
+    for grave_idx in matches:
+        m_def = library.get_by_id(player.grave[grave_idx])
+        if player_idx == 0:
+            deploy_rows = (
+                PLAYER_1_ROWS if m_def.attack_range == 0 else (BACK_ROW_P1,)
+            )
+        else:
+            deploy_rows = (
+                PLAYER_2_ROWS if m_def.attack_range == 0 else (BACK_ROW_P2,)
+            )
+        if any(
+            state.board.get(r, c) is None
+            for r in deploy_rows
+            for c in range(5)
+        ):
+            has_empty_cell = True
+            break
+    if not has_empty_cell:
+        return state
+
+    return replace(
+        candidate,
+        pending_revive_remaining=min(amount, len(matches)),
     )
 
 
@@ -865,10 +868,9 @@ def _apply_revive_place(
     """
     assert_phase_contract(state, "action:revive_place")
     player_idx = state.pending_revive_player_idx
-    card_id = state.pending_revive_card_id
     remaining = state.pending_revive_remaining
 
-    if player_idx is None or card_id is None or remaining <= 0:
+    if player_idx is None or remaining <= 0:
         raise ValueError("No pending revive to place")
 
     pos = action.position
@@ -879,17 +881,28 @@ def _apply_revive_place(
     if state.board.get(row, col) is not None:
         raise ValueError(f"Cell ({row}, {col}) is occupied")
 
-    revive_def = library.get_by_card_id(card_id)
-    revive_numeric_id = library.get_numeric_id(card_id)
     active_side = PlayerSide.PLAYER_1 if player_idx == 0 else PlayerSide.PLAYER_2
     player = state.players[player_idx]
 
-    # Remove one copy from grave
+    # Generalized revive (2026-07-11): action.card_index is the GRAVE index
+    # of the picked card (the player\'s choice, like tutor\'s match index).
+    # Validate it against the shared matcher; legacy None picks the first
+    # match (Ratical Resurrection pre-rework behavior).
+    from grid_tactics.legal_actions import revive_grave_matches
+    matches = revive_grave_matches(state, library)
+    if not matches:
+        raise ValueError("No revivable card in grave")
+    grave_idx = action.card_index if action.card_index is not None else matches[0]
+    if grave_idx not in matches:
+        raise ValueError(
+            f"REVIVE_PLACE: grave index {grave_idx} is not a revivable pick"
+        )
+    revive_numeric_id = player.grave[grave_idx]
+    revive_def = library.get_by_id(revive_numeric_id)
+
+    # Remove the picked copy from grave
     grave = list(player.grave)
-    try:
-        grave.remove(revive_numeric_id)
-    except ValueError:
-        raise ValueError(f"No {card_id} in grave to revive")
+    del grave[grave_idx]
 
     # Create minion
     minion = MinionInstance(
@@ -922,31 +935,26 @@ def _apply_revive_place(
     players[player_idx] = new_player
 
     new_remaining = remaining - 1
-    # Check if more copies exist in grave for continued placement
-    more_in_grave = revive_numeric_id in grave  # grave already has one removed
-
-    if new_remaining <= 0 or not more_in_grave:
-        # Done — clear pending
+    new_state = replace(
+        state,
+        board=new_board,
+        minions=state.minions + (minion,),
+        next_minion_id=state.next_minion_id + 1,
+        players=tuple(players),
+        pending_revive_remaining=new_remaining,
+    )
+    # Continue only while picks remain AND the (post-removal) grave still
+    # holds a revivable match under the card-text filter.
+    more_matches = bool(revive_grave_matches(new_state, library))
+    if new_remaining <= 0 or not more_matches:
         return replace(
-            state,
-            board=new_board,
-            minions=state.minions + (minion,),
-            next_minion_id=state.next_minion_id + 1,
-            players=tuple(players),
+            new_state,
             pending_revive_player_idx=None,
             pending_revive_card_id=None,
+            pending_revive_tribe=None,
             pending_revive_remaining=0,
         )
-    else:
-        # More to place
-        return replace(
-            state,
-            board=new_board,
-            minions=state.minions + (minion,),
-            next_minion_id=state.next_minion_id + 1,
-            players=tuple(players),
-            pending_revive_remaining=new_remaining,
-        )
+    return new_state
 
 
 def _resume_after_pending_revive(

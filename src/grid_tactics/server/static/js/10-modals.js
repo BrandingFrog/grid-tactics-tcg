@@ -517,30 +517,43 @@ function showReviveModal() {
     interactionMode = null;   // board inert until a minion is picked
 
     var remaining = gameState.pending_revive_remaining || 0;
-    var cardNid = gameState.pending_revive_card_numeric_id;
-    // Sandbox god-view lacks the per-viewer enrichment — derive the
-    // numeric id from the card_id string so the fan still shows the card.
-    if (cardNid == null && gameState.pending_revive_card_id && window.cardDefs) {
-        var _rcid = gameState.pending_revive_card_id;
-        var _rk = Object.keys(cardDefs).find(function(k) {
-            return cardDefs[k] && cardDefs[k].card_id === _rcid;
-        });
-        if (_rk != null) cardNid = +_rk;
-    }
-    var cardDef = cardNid != null && window.cardDefs ? window.cardDefs[cardNid] : null;
-    var cardName = cardDef ? cardDef.name : 'minion';
     var pendingIdx = gameState.pending_revive_player_idx;
 
-    // One fan tile per revivable copy: remaining, capped by how many
-    // copies actually sit in the reviver's grave (when visible to us).
-    var copies = remaining;
-    try {
-        var grave = gameState.players[pendingIdx] && gameState.players[pendingIdx].grave;
-        if (Array.isArray(grave) && cardNid != null) {
-            var inGrave = grave.filter(function(x) { return x === cardNid; }).length;
-            if (inGrave > 0) copies = Math.min(remaining, inGrave);
+    // Generalized revive (user 2026-07-11): the server enriches
+    // pending_revive_matches = [{grave_idx, card_numeric_id}] — the actual
+    // pickable grave entries under the card-text filter. Fall back to
+    // deriving copies of the single filter card for older frames.
+    var matches = Array.isArray(gameState.pending_revive_matches)
+        ? gameState.pending_revive_matches.slice() : [];
+    if (!matches.length) {
+        var fbNid = gameState.pending_revive_card_numeric_id;
+        if (fbNid == null && gameState.pending_revive_card_id && window.cardDefs) {
+            var _rcid = gameState.pending_revive_card_id;
+            var _rk = Object.keys(cardDefs).find(function(k) {
+                return cardDefs[k] && cardDefs[k].card_id === _rcid;
+            });
+            if (_rk != null) fbNid = +_rk;
         }
-    } catch (e) { /* opponent grave counts may be redacted — keep remaining */ }
+        try {
+            var grave = gameState.players[pendingIdx] && gameState.players[pendingIdx].grave;
+            if (Array.isArray(grave) && fbNid != null) {
+                grave.forEach(function(x, gi) {
+                    if (x === fbNid) matches.push({ grave_idx: gi, card_numeric_id: fbNid });
+                });
+            }
+        } catch (e) { /* defensive */ }
+    }
+    // Newest-first, one tile per unique card (copies are interchangeable).
+    matches.reverse();
+    var seenNids = {};
+    matches = matches.filter(function(m) {
+        if (seenNids[m.card_numeric_id]) return false;
+        seenNids[m.card_numeric_id] = true;
+        return true;
+    });
+    var cardName = (matches.length === 1 && window.cardDefs
+        && cardDefs[matches[0].card_numeric_id])
+        ? cardDefs[matches[0].card_numeric_id].name : 'minion';
 
     var overlay = document.createElement('div');
     overlay.className = 'tutor-modal-overlay revive-modal-overlay-nonblock';
@@ -556,32 +569,40 @@ function showReviveModal() {
     var title = document.createElement('div');
     title.className = 'tutor-modal-title';
     title.id = 'revive-modal-title';
-    title.textContent = 'Revive — pick a ' + cardName + ' to place (' + remaining + ' remaining)';
+    title.textContent = matches.length === 1
+        ? ('Revive — pick a ' + cardName + ' to place (' + remaining + ' remaining)')
+        : ('Revive — pick a minion from the grave (' + remaining + ' remaining)');
     header.appendChild(title);
     modal.appendChild(header);
 
     var fan = document.createElement('div');
     fan.className = 'tutor-modal-fan';
     fan.id = 'revive-modal-fan';
-    for (var i = 0; i < Math.max(1, copies); i++) {
+    matches.forEach(function(match) {
         var tile = document.createElement('div');
         tile.className = 'tutor-modal-card';
-        tile.innerHTML = (typeof renderDeckBuilderCard === 'function' && cardNid != null)
-            ? renderDeckBuilderCard(cardNid, undefined)
-            : ('<div style="padding:20px;color:#cbb98f;">' + cardName + '</div>');
+        var mDef = window.cardDefs && cardDefs[match.card_numeric_id];
+        tile.innerHTML = (typeof renderDeckBuilderCard === 'function' && mDef)
+            ? renderDeckBuilderCard(match.card_numeric_id, undefined)
+            : ('<div style="padding:20px;color:#cbb98f;">' + (mDef ? mDef.name : 'minion') + '</div>');
         tile.addEventListener('click', function(e) {
             e.stopPropagation();
-            // Picked — collapse the fan, arm tile placement.
+            // Picked — remember WHICH grave card, collapse the fan, arm
+            // tile placement (the click branch sends the grave idx).
+            window.__reviveSelectedGraveIdx = match.grave_idx;
             var fanEl = document.getElementById('revive-modal-fan');
             if (fanEl) fanEl.style.display = 'none';
             var t = document.getElementById('revive-modal-title');
-            if (t) t.textContent = 'Place ' + cardName + ' — click a highlighted tile';
+            if (t) {
+                t.textContent = 'Place ' + (mDef ? mDef.name : 'minion')
+                    + ' — click a highlighted tile';
+            }
             interactionMode = 'revive_place';
             try { highlightBoard(); } catch (e2) { /* defensive */ }
             highlightReviveCells();
         });
         fan.appendChild(tile);
-    }
+    });
     modal.appendChild(fan);
 
     var footer = document.createElement('div');
@@ -605,13 +626,18 @@ function showReviveModal() {
 function highlightReviveCells() {
     // Highlight-only: the click handling lives in onBoardCellClick's
     // revive_place branch (rework 2026-07-11 — the old inline cell.onclick
-    // handlers were wiped by every renderBoard rebuild).
+    // handlers were wiped by every renderBoard rebuild). When a grave card
+    // has been picked, only THAT card's deploy cells light up (melee vs
+    // ranged rows differ under the generalized revive).
     if (!window.legalActions) return;
     var screenSel = (typeof sandboxMode !== 'undefined' && sandboxMode)
         ? '#screen-sandbox' : '#screen-game';
+    var pickedIdx = window.__reviveSelectedGraveIdx;
     for (var i = 0; i < legalActions.length; i++) {
         var a = legalActions[i];
         if (a.action_type === 15 && a.position) { // REVIVE_PLACE
+            if (pickedIdx != null && a.card_index != null
+                    && a.card_index !== pickedIdx) continue;
             var cell = document.querySelector(
                 screenSel + ' .board-cell[data-row="' + a.position[0]
                 + '"][data-col="' + a.position[1] + '"]');

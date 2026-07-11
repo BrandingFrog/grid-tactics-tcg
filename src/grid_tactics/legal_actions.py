@@ -609,43 +609,74 @@ def _pending_trigger_picker_actions(
 # ---------------------------------------------------------------------------
 
 
+def revive_grave_matches(state: GameState, library: CardLibrary) -> tuple[int, ...]:
+    """Grave indices revivable under the pending revive's card-text filter.
+
+    Generalized revive (user 2026-07-11): mirrors the tutor/conjure pick.
+    Eligibility: MINION cards only, then the exact-card filter
+    (``pending_revive_card_id``) and/or tribe filter
+    (``pending_revive_tribe``); both None = any minion in the grave.
+    Shared by legal_actions, the resolver's validation, and the server's
+    per-viewer enrichment so all three agree on the pickable set.
+    """
+    player_idx = state.pending_revive_player_idx
+    if player_idx is None:
+        return ()
+    exact = state.pending_revive_card_id
+    tribe = state.pending_revive_tribe
+    out: list[int] = []
+    for i, cid in enumerate(state.players[player_idx].grave):
+        try:
+            cd = library.get_by_id(cid)
+        except KeyError:
+            continue
+        if cd.card_type != CardType.MINION:
+            continue
+        if exact and cd.card_id != exact:
+            continue
+        if tribe and tribe not in (cd.tribe or "").split():
+            continue
+        out.append(i)
+    return tuple(out)
+
+
 def _pending_revive_actions(state: GameState, library: CardLibrary) -> tuple[Action, ...]:
     """Enumerate legal actions while pending_revive is set.
 
     Legal:
-      - REVIVE_PLACE(position) for each empty cell in the player's deploy zone
+      - REVIVE_PLACE(card_index=<grave idx>, position) for each pickable
+        grave card (one representative grave index per unique card — the
+        copies are interchangeable) x each empty cell in that card's
+        deploy zone (melee: any own row; ranged: back row only)
       - DECLINE_REVIVE to stop placing early
     """
     player_idx = state.pending_revive_player_idx
     if player_idx is None:
         return (decline_revive_action(),)
 
-    card_id = state.pending_revive_card_id
-    if card_id is None:
+    matches = revive_grave_matches(state, library)
+    if not matches:
         return (decline_revive_action(),)
 
-    # Check there are still matching cards in grave
-    revive_def = library.get_by_card_id(card_id)
-    if revive_def is None:
-        return (decline_revive_action(),)
-
-    revive_numeric_id = library.get_numeric_id(card_id)
-    player = state.players[player_idx]
-    if revive_numeric_id not in player.grave:
-        return (decline_revive_action(),)
-
-    # Determine valid deploy cells based on card's range
     from grid_tactics.types import PLAYER_1_ROWS, PLAYER_2_ROWS, BACK_ROW_P1, BACK_ROW_P2
-    if player_idx == 0:
-        deploy_rows = PLAYER_1_ROWS if revive_def.attack_range == 0 else (BACK_ROW_P1,)
-    else:
-        deploy_rows = PLAYER_2_ROWS if revive_def.attack_range == 0 else (BACK_ROW_P2,)
+    player = state.players[player_idx]
 
     actions: list[Action] = []
-    for r in deploy_rows:
-        for c in range(5):
-            if state.board.get(r, c) is None:
-                actions.append(revive_place_action(position=(r, c)))
+    for grave_idx in matches:
+        nid = player.grave[grave_idx]
+        # Every match index is a legal pick (copies included) — the client
+        # fan may reference ANY of them, so no representative dedupe here.
+        revive_def = library.get_by_id(nid)
+        if player_idx == 0:
+            deploy_rows = PLAYER_1_ROWS if revive_def.attack_range == 0 else (BACK_ROW_P1,)
+        else:
+            deploy_rows = PLAYER_2_ROWS if revive_def.attack_range == 0 else (BACK_ROW_P2,)
+        for r in deploy_rows:
+            for c in range(5):
+                if state.board.get(r, c) is None:
+                    actions.append(revive_place_action(
+                        position=(r, c), card_index=grave_idx,
+                    ))
 
     actions.append(decline_revive_action())
     return tuple(actions)

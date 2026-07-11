@@ -859,3 +859,59 @@ class TestTransformResetAndEvent:
             if a.action_type == ActionType.TRANSFORM
         }
         assert targets == {"pyre_archer", "grave_caller"}
+
+
+class TestGeneralizedRevivePick:
+    """Generalized revive (user 2026-07-11): REVIVE_PLACE carries the
+    picked GRAVE index — 'like conjure or tutor, supports anything but
+    limited by the card text'. Ratical Resurrection's filter is exact
+    ('rat'), so non-rat grave cards must never be pickable."""
+
+    def test_pick_by_grave_index_skips_nonmatching_cards(self, library):
+        ratical = library.get_numeric_id("ratical_resurrection")
+        rat = library.get_numeric_id("rat")
+        giant = library.get_numeric_id("giant_rat")
+        # Grave: [giant, rat, giant, rat] — only indices 1 and 3 pickable.
+        state = _make_state(
+            p1_hand=(ratical,), p1_grave=(giant, rat, giant, rat),
+        )
+        state = resolve_action(state, play_card_action(card_index=0), library)
+        state = resolve_action(state, pass_action(), library)
+        assert state.pending_revive_player_idx == 0
+        # amount 3 capped by 2 matching rats.
+        assert state.pending_revive_remaining == 2
+
+        from grid_tactics.legal_actions import revive_grave_matches
+        assert revive_grave_matches(state, library) == (1, 3)
+
+        legal = legal_actions(state, library)
+        picks = {a.card_index for a in legal
+                 if a.action_type == ActionType.REVIVE_PLACE}
+        # Every matching grave index is a legal pick (client fans may
+        # reference any copy); non-matching indices are absent.
+        assert picks == {1, 3}
+
+        # Explicit pick by grave index resolves that entry.
+        state = resolve_action(
+            state, revive_place_action((0, 0), card_index=1), library,
+        )
+        p1 = state.players[0]
+        # The cast Ratical Resurrection itself also went to the grave.
+        assert list(p1.grave) == [giant, giant, rat, ratical]
+        assert any(m.card_numeric_id == rat for m in state.minions)
+        # Still pending — one more rat pickable (now at index 2).
+        assert state.pending_revive_player_idx == 0
+        assert revive_grave_matches(state, library) == (2,)
+
+    def test_wrong_grave_index_rejected(self, library):
+        ratical = library.get_numeric_id("ratical_resurrection")
+        rat = library.get_numeric_id("rat")
+        giant = library.get_numeric_id("giant_rat")
+        state = _make_state(p1_hand=(ratical,), p1_grave=(giant, rat))
+        state = resolve_action(state, play_card_action(card_index=0), library)
+        state = resolve_action(state, pass_action(), library)
+        with pytest.raises(ValueError):
+            # Index 0 is the Giant Rat — not a valid pick for filter 'rat'.
+            resolve_action(
+                state, revive_place_action((0, 0), card_index=0), library,
+            )

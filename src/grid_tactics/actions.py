@@ -89,9 +89,21 @@ def decline_tutor_action() -> Action:
     return Action(action_type=ActionType.DECLINE_TUTOR)
 
 
-def revive_place_action(position: tuple[int, int]) -> Action:
-    """Create a REVIVE_PLACE action to deploy a revived minion at position."""
-    return Action(action_type=ActionType.REVIVE_PLACE, position=position)
+def revive_place_action(
+    position: tuple[int, int],
+    card_index: Optional[int] = None,
+) -> Action:
+    """Create a REVIVE_PLACE action to deploy a revived minion at position.
+
+    Generalized revive (2026-07-11): ``card_index`` is the GRAVE index of
+    the card being revived (the pick, mirroring tutor's match index).
+    None keeps the legacy pick-first-match behavior.
+    """
+    return Action(
+        action_type=ActionType.REVIVE_PLACE,
+        position=position,
+        card_index=card_index,
+    )
 
 
 def decline_revive_action() -> Action:

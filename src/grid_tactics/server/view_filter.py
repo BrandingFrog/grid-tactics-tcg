@@ -435,6 +435,18 @@ def enrich_pending_revive(
     else:
         filtered_dict["pending_revive_card_numeric_id"] = None
 
+    # Generalized revive (2026-07-11): the pickable grave entries, mirroring
+    # enrich_pending_tutor's matches. [{grave_idx, card_numeric_id}] — both
+    # players may see them (revives are public grave information).
+    filtered_dict["pending_revive_matches"] = []
+    if pending_idx is not None:
+        from grid_tactics.legal_actions import revive_grave_matches
+        for g_idx in revive_grave_matches(state, library):
+            filtered_dict["pending_revive_matches"].append({
+                "grave_idx": g_idx,
+                "card_numeric_id": state.players[pending_idx].grave[g_idx],
+            })
+
 
 def enrich_pending_trigger_for_viewer(
     state, filtered_dict: dict, viewer_idx: int, library,

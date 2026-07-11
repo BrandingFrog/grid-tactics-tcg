@@ -645,15 +645,23 @@ function onBoardCellClick(row, col) {
     // minion from the revive fan. The old flow had NO cell-click branch —
     // it relied on inline cell.onclick handlers that renderBoard wiped.
     if (interactionMode === 'revive_place') {
-        var revLegal = (legalActions || []).some(function(a) {
+        var pickedGraveIdx = window.__reviveSelectedGraveIdx;
+        var revAction = (legalActions || []).find(function(a) {
             return a.action_type === 15 && a.position
-                && a.position[0] === row && a.position[1] === col;
+                && a.position[0] === row && a.position[1] === col
+                && (pickedGraveIdx == null || a.card_index == null
+                    || a.card_index === pickedGraveIdx);
         });
-        if (!revLegal) return;
+        if (!revAction) return;
         // In-flight guard — suppress the modal until the fresh frame lands.
         window.__reviveSubmittedAtRemaining = (gameState
             && gameState.pending_revive_remaining) || 0;
-        submitAction({ action_type: 15, position: [row, col] }); // REVIVE_PLACE
+        var revPayload = { action_type: 15, position: [row, col] }; // REVIVE_PLACE
+        // Generalized revive (2026-07-11): send the picked grave index.
+        var revIdx = (pickedGraveIdx != null) ? pickedGraveIdx : revAction.card_index;
+        if (revIdx != null) revPayload.card_index = revIdx;
+        window.__reviveSelectedGraveIdx = null;
+        submitAction(revPayload);
         interactionMode = null;
         if (typeof closeReviveModal === 'function') closeReviveModal();
         return;

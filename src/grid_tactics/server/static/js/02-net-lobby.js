@@ -498,10 +498,15 @@ function onError(data) {
             addLogEntry('⚠ ' + msg + ' [' + data.debug_code + ']', 'error');
         } catch (e) { /* defensive */ }
     }
-    // A rejected submit must release the conjure/revive in-flight guards,
-    // or their UIs stay suppressed with the pending gate still open (wedge).
-    window.__conjureDeploySubmitted = false;
-    window.__reviveSubmittedAtRemaining = null;
+    // A rejected submit must release the in-flight guards (conjure /
+    // revive / post-move pick), or their UIs stay suppressed with the
+    // pending gate still open (wedge). typeof-guarded: the node test
+    // harness runs onError without a window global.
+    if (typeof window !== 'undefined') {
+        window.__conjureDeploySubmitted = false;
+        window.__reviveSubmittedAtRemaining = null;
+        window.__postMoveSubmitted = false;
+    }
     // Compliance audit 2026-07-06: during a game the lobby pill is invisible
     // — surface server rejections as a stage toast so the player sees them.
     try {
