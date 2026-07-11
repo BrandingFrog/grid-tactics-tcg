@@ -518,6 +518,15 @@ function showReviveModal() {
 
     var remaining = gameState.pending_revive_remaining || 0;
     var cardNid = gameState.pending_revive_card_numeric_id;
+    // Sandbox god-view lacks the per-viewer enrichment — derive the
+    // numeric id from the card_id string so the fan still shows the card.
+    if (cardNid == null && gameState.pending_revive_card_id && window.cardDefs) {
+        var _rcid = gameState.pending_revive_card_id;
+        var _rk = Object.keys(cardDefs).find(function(k) {
+            return cardDefs[k] && cardDefs[k].card_id === _rcid;
+        });
+        if (_rk != null) cardNid = +_rk;
+    }
     var cardDef = cardNid != null && window.cardDefs ? window.cardDefs[cardNid] : null;
     var cardName = cardDef ? cardDef.name : 'minion';
     var pendingIdx = gameState.pending_revive_player_idx;
