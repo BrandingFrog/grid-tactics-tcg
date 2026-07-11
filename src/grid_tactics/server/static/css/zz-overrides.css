@@ -5997,9 +5997,10 @@ input::selection, textarea::selection { background: rgba(224, 162, 60, 0.45); co
 }
 .floating-popup { z-index: 40; }
 
-/* Play VS AI (user 2026-07-11, design pass v2): the second CTA of the
-   lobby — worn-bronze fill but full CTA typography (16px Alegreya SC vs
-   the ghost Open-games 14px), so it reads as an action, not a footnote. */
+/* Play VS AI + Open games (user 2026-07-11, design pass v3): both carry
+   the same worn-bronze secondary-CTA look — 16px Alegreya SC in bright
+   gold, matching fills and hover glow. */
+.lobby2-btn.lobby2-btn-browse,
 .lobby2-btn.lobby2-btn-vsai {
   margin-top: 10px;
   background: linear-gradient(180deg, #3a2c14, #241a0a) !important;
@@ -6009,6 +6010,7 @@ input::selection, textarea::selection { background: rgba(224, 162, 60, 0.45); co
   letter-spacing: 1px;
   box-shadow: inset 0 1px 0 rgba(255, 216, 115, 0.12), 0 2px 6px rgba(0, 0, 0, 0.4);
 }
+.lobby2-btn.lobby2-btn-browse:hover,
 .lobby2-btn.lobby2-btn-vsai:hover {
   border-color: var(--gold, #e0a23c) !important;
   color: #ffe9a8 !important;
