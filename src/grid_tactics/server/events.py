@@ -2211,6 +2211,29 @@ def register_events(room_manager: RoomManager) -> None:
         token = _room_manager.get_token_by_sid(request.sid)
         if token is not None and _room_manager.get_role(token) == "spectator":
             _room_manager.remove_spectator(token)
+        # Ghost open games (user 2026-07-11): a WAITING room whose creator
+        # closed the tab sat in the Open-games list forever. There is no
+        # reconnect story (a new socket mints a new token), so a
+        # disconnected waiting-room seat is guaranteed dead — vacate it
+        # now via the same leave_room flow the Leave button uses. In-game
+        # sessions are untouched (leave_room raises for those; Phase 15
+        # owns mid-game reconnection).
+        if token is not None:
+            try:
+                room_code, leaver_name, other, closed = _room_manager.leave_room(token)
+            except ValueError:
+                pass  # not seated in a waiting room — nothing to clean
+            else:
+                if other is not None and other.sid:
+                    if closed:
+                        socketio.emit("room_closed", {"room_code": room_code}, to=other.sid)
+                    else:
+                        socketio.emit(
+                            "player_left",
+                            {"display_name": leaver_name},
+                            to=other.sid,
+                        )
+                _broadcast_rooms_list()
         # Phase 14.6: drop any sandbox attached to this SID (sandbox users have
         # no session token, so cleanup must run regardless of the token path).
         _room_manager.remove_sandbox(request.sid)

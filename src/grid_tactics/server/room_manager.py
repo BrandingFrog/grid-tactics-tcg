@@ -61,6 +61,11 @@ class WaitingRoom:
 # serving; the client CSS crops via an attribute selector.
 _PREVIEW_AI_AVATAR = "/static/art/surgefed_sparkbot.thumb.webp?crop=top"
 
+# Unjoined waiting rooms older than this are pruned from the Open-games
+# list (user 2026-07-11 — ghost rooms). 30 minutes: long enough to wait
+# for a friend, short enough that dead rooms don't accumulate.
+OPEN_ROOM_TTL_SECONDS = 30 * 60
+
 
 @dataclass
 class PregameSeat:
@@ -574,6 +579,23 @@ class RoomManager:
         are excluded.
         """
         with self._lock:
+            # Ghost-room TTL (user 2026-07-11): an unjoined room older than
+            # OPEN_ROOM_TTL_SECONDS is pruned at listing time — covers AFK
+            # creators whose tab stays open (disconnected creators are
+            # already vacated eagerly in handle_disconnect).
+            now = time.time()
+            expired = [
+                code for code, room in self._rooms.items()
+                if room.joiner is None
+                and now - room.created_at > OPEN_ROOM_TTL_SECONDS
+            ]
+            for code in expired:
+                room = self._rooms.pop(code)
+                t = room.creator.token
+                self._token_to_room.pop(t, None)
+                self._token_role.pop(t, None)
+                for sid in [s for s, tok in self._sid_to_token.items() if tok == t]:
+                    del self._sid_to_token[sid]
             snapshot = [
                 {
                     "code": room.code,
