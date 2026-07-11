@@ -173,6 +173,11 @@ def derive_keywords(card: dict) -> list[str]:
     if card.get("magic_untargetable"):
         kws.add("Untargetable")
 
+    # Play-from-exhaust (Light Wyrm 2026-07-11)
+    if card.get("playable_from_exhaust"):
+        kws.add("Exhaust")
+        kws.add("Discarded")
+
     # Cost reduction
     if card.get("cost_reduction"):
         kws.add("Cost")
@@ -307,9 +312,20 @@ def build_rules_text(card: dict, name_map: dict[str, str] | None = None) -> str:
     if card.get("magic_untargetable"):
         parts.append("Cannot be targeted by magic cards")
 
+    # Play-from-exhaust (Light Wyrm 2026-07-11)
+    if card.get("playable_from_exhaust"):
+        parts.append(
+            f"[[Discarded]]: May be summoned from the [[Exhaust Pile|Exhaust]] "
+            f"Pile for {card.get('exhaust_play_discount', 0)} less"
+        )
+
     # Cost reduction
     if card.get("cost_reduction") == "dark_matter":
         parts.append("[[Cost]]: Reduce mana cost by ([[Dark Matter]])")
+    elif card.get("cost_reduction") == "wyrms_discarded":
+        parts.append(
+            "[[Cost]]: Costs 1 less for each Wyrm you have discarded"
+        )
     elif card.get("cost_reduction") == "behind_on_board":
         parts.append(
             f"[[Cost]]: Costs {card.get('cost_reduction_amount', 0)} less "

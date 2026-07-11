@@ -200,6 +200,9 @@ PHASE_CONTRACTS: dict[str, frozenset[TurnPhase]] = {
     # action handling).
     "trigger:on_start_of_turn": frozenset({_REACT, _START}),
     "trigger:on_end_of_turn": frozenset({_REACT, _END}),
+    # ON_SACRIFICE (Earth Wyrm 2026-07-11): the revive fires inline inside
+    # the SACRIFICE action resolution — ACTION phase.
+    "trigger:on_sacrifice": frozenset({_ACTION}),
     # AURA is read-time only — never mutates per orchestrator decision
     # #7. We include the entry so any defensive code that accidentally
     # tags `aura` doesn't trip the unknown-source path. Auras MUST NOT
@@ -222,6 +225,7 @@ PHASE_CONTRACTS: dict[str, frozenset[TurnPhase]] = {
     # 20 entries (PASS is split into pass_action + pass_react)
     # ------------------------------------------------------------------
     "action:play_card": frozenset({_ACTION}),
+    "action:play_from_exhaust": frozenset({_ACTION}),
     "action:move": frozenset({_ACTION}),
     "action:attack": frozenset({_ACTION}),
     # DRAW is reserved/legacy (auto-draw replaces it post-14.7-02) but

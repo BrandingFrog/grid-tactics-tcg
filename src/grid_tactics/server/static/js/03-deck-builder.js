@@ -948,6 +948,13 @@ function buildCardTooltipContent(c) {
     if (c.unique) cardTextLines.push('Unique');
     if (c.magic_untargetable) cardTextLines.push('Cannot be targeted by magic cards');
     if (c.cost_reduction === 'dark_matter') cardTextLines.push('Cost: Reduce mana cost by ' + _dmTokenLive());
+    if (c.cost_reduction === 'wyrms_discarded') {
+        cardTextLines.push('Cost: Costs 1 less for each Wyrm you have discarded');
+    }
+    if (c.playable_from_exhaust) {
+        cardTextLines.push('Discarded: May be summoned from the Exhaust Pile for '
+            + (c.exhaust_play_discount || 0) + ' less');
+    }
     if (c.cost_reduction === 'behind_on_board') {
         cardTextLines.push('Cost: Costs ' + (c.cost_reduction_amount || 0)
             + ' less if your opponent has a minion and you have none');
@@ -1029,6 +1036,7 @@ function buildCardTooltipContent(c) {
         addKw('Cost');
         if (c.cost_reduction === 'dark_matter') addKw('Dark Matter');
     }
+    if (c.playable_from_exhaust) { addKw('Exhaust'); addKw('Discarded'); }
     if (c.transform_options && c.transform_options.length > 0) addKw('Transform');
     if (c.react_condition != null) addKw('React');
     if (c.react_condition != null && c.react_effect && c.react_effect.type === 5) addKw('Summon');

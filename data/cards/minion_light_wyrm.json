@@ -1,0 +1,37 @@
+{
+    "card_id": "light_wyrm",
+    "stable_id": 56,
+    "name": "Light Wyrm",
+    "card_type": "minion",
+    "mana_cost": 5,
+    "attack": 33,
+    "health": 33,
+    "range": 0,
+    "element": "light",
+    "tribe": "Wyrm",
+    "cost_reduction": "wyrms_discarded",
+    "playable_from_exhaust": true,
+    "exhaust_play_discount": 2,
+    "effects": [
+        {
+            "type": "draw",
+            "trigger": "on_summon",
+            "target": "self_owner",
+            "amount": 1
+        }
+    ],
+    "deckable": true,
+    "tips": [
+        "Every Wyrm you discard makes it cheaper — a discard-heavy game plan turns it into a 1-2 mana 33🗡️/33🤍.",
+        "Discarding Light Wyrm itself is often correct: from the Exhaust Pile it plays for a further 2 less, and its own discard counts toward the per-Wyrm discount.",
+        "The Dark Wyrm line: discard Light Wyrm + 2 other Wyrms to summon Dark Wyrm for free — Light Wyrm then costs 5−3−2 = 0 from the Exhaust Pile.",
+        "Tree Wyrm's tutor fetches Light Wyrms to keep the discard engine fed."
+    ],
+    "rulings": [
+        "Cost: reduced by 1 for each Wyrm-tribe card in YOUR Exhaust Pile (discards go there, revealed). Copies of Light Wyrm itself count.",
+        "While Light Wyrm is in your Exhaust Pile you may summon it from there for its effective cost minus a further 2 (never below 0). This consumes your turn action and runs the normal summon flow — react windows and Summon: Draw 1 included.",
+        "Playing it from the Exhaust removes it from the pile — the per-Wyrm discount on other copies shrinks by 1.",
+        "Cards burned to the Exhaust by overdraw also count as discarded Wyrms — the pile is the pile.",
+        "Summon: Draw 1 fires after the summon resolves (Window B); a full hand overdraw-burns the drawn card."
+    ]
+}

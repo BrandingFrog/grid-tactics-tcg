@@ -62,7 +62,9 @@ from grid_tactics.types import (
 )
 
 
-def effective_mana_cost(card_def, state: GameState, player_idx: int) -> int:
+def effective_mana_cost(
+    card_def, state: GameState, player_idx: int, library=None,
+) -> int:
     """Compute effective mana cost after cost reductions (e.g. dark_matter).
 
     Returns max(0, base_cost - reduction). Dark Matter pool redesign
@@ -73,6 +75,18 @@ def effective_mana_cost(card_def, state: GameState, player_idx: int) -> int:
     cost = card_def.mana_cost
     if card_def.cost_reduction == "dark_matter":
         cost = max(0, cost - state.players[player_idx].dark_matter)
+    elif card_def.cost_reduction == "wyrms_discarded":
+        # Light Wyrm (2026-07-11): -1 per Wyrm-tribe card in the player's
+        # Exhaust Pile (discards go there) — INCLUDING copies of itself.
+        if library is not None:
+            wyrms = 0
+            for cid in state.players[player_idx].exhaust:
+                try:
+                    if "Wyrm" in (library.get_by_id(cid).tribe or "").split():
+                        wyrms += 1
+                except KeyError:
+                    continue
+            cost = max(0, cost - wyrms)
     elif card_def.cost_reduction == "behind_on_board":
         # Comeback discount (Metal Wyrm 2026-07-11): fixed reduction while
         # the opponent has a living minion and the player has none.
@@ -249,7 +263,7 @@ def _action_phase_actions(
                 ]
 
         # Check mana (D-11), with cost reduction
-        eff_cost = effective_mana_cost(card_def, state, state.active_player_idx)
+        eff_cost = effective_mana_cost(card_def, state, state.active_player_idx, library)
         _mana_mode_ok = player.current_mana >= eff_cost
         if not _mana_mode_ok and not alt_combos:
             continue
@@ -523,6 +537,35 @@ def _action_phase_actions(
                 action_type=ActionType.ACTIVATE_ABILITY,
                 minion_id=minion.instance_id,
                 target_pos=None,
+            ))
+
+    # Light Wyrm (2026-07-11): playable_from_exhaust cards may be summoned
+    # straight out of the Exhaust Pile for effective cost minus
+    # exhaust_play_discount. One action per (unique exhaust card, tile);
+    # card_index carries the EXHAUST index.
+    seen_exhaust_nids: set[int] = set()
+    for ex_idx, ex_nid in enumerate(player.exhaust):
+        if ex_nid in seen_exhaust_nids:
+            continue  # copies are interchangeable
+        try:
+            ex_def = library.get_by_id(ex_nid)
+        except KeyError:
+            continue
+        if not ex_def.playable_from_exhaust or ex_def.card_type != CardType.MINION:
+            continue
+        seen_exhaust_nids.add(ex_nid)
+        ex_cost = max(
+            0,
+            effective_mana_cost(ex_def, state, state.active_player_idx, library)
+            - (ex_def.exhaust_play_discount or 0),
+        )
+        if player.current_mana < ex_cost:
+            continue
+        for pos in _valid_deploy_positions(state, ex_def, player_side):
+            actions.append(Action(
+                action_type=ActionType.PLAY_FROM_EXHAUST,
+                card_index=ex_idx,
+                position=pos,
             ))
 
     # Turn-structure redesign 2026-07: DRAW is REMOVED as an action under

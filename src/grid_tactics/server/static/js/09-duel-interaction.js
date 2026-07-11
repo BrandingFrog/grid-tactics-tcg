@@ -449,7 +449,8 @@ function onHandCardClick(handIdx, ownerIdx) {
             && interactionMode !== 'death_target_pick'
             && interactionMode !== 'post_move_attack_pick'
             && interactionMode !== 'conjure_deploy'
-            && interactionMode !== 'revive_place') {
+            && interactionMode !== 'revive_place'
+            && interactionMode !== 'exhaust_play') {
         return;
     }
     // Spell-stage gate: if a react window just closed and the stage is
@@ -613,7 +614,8 @@ function onBoardCellClick(row, col) {
             && interactionMode !== 'death_target_pick'
             && interactionMode !== 'post_move_attack_pick'
             && interactionMode !== 'conjure_deploy'
-            && interactionMode !== 'revive_place') {
+            && interactionMode !== 'revive_place'
+            && interactionMode !== 'exhaust_play') {
         return;
     }
     // Spell-stage gate: block board interaction while the spell stage
@@ -638,6 +640,26 @@ function onBoardCellClick(row, col) {
         if (!isValidDeath) return;
         // ActionType.DEATH_TARGET_PICK = 14
         submitAction({ action_type: 14, target_pos: [row, col] });
+        return;
+    }
+
+    // Light Wyrm (2026-07-11): tile placement after choosing Summon in
+    // the Exhaust pile modal.
+    if (interactionMode === 'exhaust_play') {
+        var exIdx = window.__exhaustPlayIdx;
+        var exAction = (legalActions || []).find(function(a) {
+            return a.action_type === 19 && a.position
+                && a.position[0] === row && a.position[1] === col
+                && (exIdx == null || a.card_index === exIdx);
+        });
+        if (!exAction) return;
+        window.__exhaustPlayIdx = null;
+        submitAction({
+            action_type: 19,
+            card_index: exAction.card_index,
+            position: [row, col],
+        });
+        interactionMode = null;
         return;
     }
 
@@ -841,7 +863,8 @@ function onBoardMinionClick(minion) {
             && interactionMode !== 'death_target_pick'
             && interactionMode !== 'post_move_attack_pick'
             && interactionMode !== 'conjure_deploy'
-            && interactionMode !== 'revive_place') {
+            && interactionMode !== 'revive_place'
+            && interactionMode !== 'exhaust_play') {
         return;
     }
     // Spell-stage gate: same rationale as onBoardCellClick. Blocks the

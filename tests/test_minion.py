@@ -26,7 +26,7 @@ class TestActionTypeEnum:
         the original 15 plus REVIVE_PLACE and DECLINE_REVIVE from Phase 14,
         plus TRIGGER_PICK and DECLINE_TRIGGER from Phase 14.7-05.
         """
-        assert len(ActionType) == 19
+        assert len(ActionType) == 20  # +PLAY_FROM_EXHAUST (Light Wyrm 2026-07-11)
 
     def test_action_type_is_int(self):
         """ActionType values are ints (IntEnum pattern)."""

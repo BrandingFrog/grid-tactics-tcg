@@ -207,4 +207,5 @@ class ActionType(IntEnum):
     DECLINE_REVIVE = 16     # Decline remaining revive placements
     # Phase 14.7-05: simultaneous-trigger priority picker
     TRIGGER_PICK = 17       # Pick a queued trigger to resolve next (reuses PLAY_CARD[0:N] slots)
-    DECLINE_TRIGGER = 18    # Decline / skip remaining triggers (reuses PASS slot 1001)
+    DECLINE_TRIGGER = 18
+    PLAY_FROM_EXHAUST = 19  # summon a playable_from_exhaust card out of the Exhaust Pile (Light Wyrm 2026-07-11)    # Decline / skip remaining triggers (reuses PASS slot 1001)

@@ -142,6 +142,8 @@ def _build_card_defs(library):
                 "hp_cost": getattr(card, 'hp_cost', None),
                 "revive_card_id": getattr(card, 'revive_card_id', None),
                 "revive_exclude_card_id": getattr(card, 'revive_exclude_card_id', None),
+                "playable_from_exhaust": getattr(card, 'playable_from_exhaust', False),
+                "exhaust_play_discount": getattr(card, 'exhaust_play_discount', 0),
                 "activated_ability": (
                     {
                         "name": card.activated_ability.name,

@@ -501,7 +501,7 @@ def _apply_play_card(
 
     # Check mana (with cost reduction)
     from grid_tactics.legal_actions import effective_mana_cost
-    eff_cost = effective_mana_cost(card_def, state, state.active_player_idx)
+    eff_cost = effective_mana_cost(card_def, state, state.active_player_idx, library)
     # Alternate discard cost (Dark Wyrm, user 2026-07-11): when the action
     # carries exactly alt_cost_discard picks, the card is played for 0 mana
     # and those OTHER hand cards are exhausted below instead.
@@ -1263,6 +1263,77 @@ def _cast_magic(
         # resolve_react_stack returns to ACTION-phase turn advance.
         react_context=ReactContext.AFTER_ACTION,
         react_return_phase=TurnPhase.ACTION,
+    )
+
+
+def _apply_play_from_exhaust(
+    state: GameState, action: Action, library: CardLibrary,
+    *,
+    event_collector: Optional[EventStream] = None,
+) -> GameState:
+    """Summon a playable_from_exhaust card OUT of the Exhaust Pile
+    (Light Wyrm 2026-07-11). Pays effective_mana_cost minus
+    exhaust_play_discount (floor 0), removes the card from the exhaust,
+    then runs the STANDARD summon-declaration flow (_deploy_minion —
+    Window A/B react windows, ON_SUMMON effects) at action.position.
+    Consumes the turn action like a normal play.
+    """
+    assert_phase_contract(state, "action:play_from_exhaust")
+    active_idx = state.active_player_idx
+    player = state.players[active_idx]
+    active_side = player.side
+
+    if (
+        action.card_index is None
+        or action.card_index < 0
+        or action.card_index >= len(player.exhaust)
+    ):
+        raise ValueError(f"Invalid exhaust index: {action.card_index}")
+    card_numeric_id = player.exhaust[action.card_index]
+    card_def = library.get_by_id(card_numeric_id)
+    if not card_def.playable_from_exhaust:
+        raise ValueError(f"{card_def.card_id} cannot be played from the Exhaust Pile")
+    if card_def.card_type != CardType.MINION:
+        raise ValueError("Only minions can be summoned from the Exhaust Pile")
+    if action.position is None:
+        raise ValueError("PLAY_FROM_EXHAUST requires a deploy position")
+
+    from grid_tactics.legal_actions import effective_mana_cost
+    cost = max(
+        0,
+        effective_mana_cost(card_def, state, active_idx, library)
+        - (card_def.exhaust_play_discount or 0),
+    )
+    if player.current_mana < cost:
+        raise ValueError(
+            f"Not enough mana: need {cost}, have {player.current_mana}"
+        )
+
+    new_exhaust = (
+        player.exhaust[:action.card_index]
+        + player.exhaust[action.card_index + 1:]
+    )
+    new_player = replace(
+        player,
+        exhaust=new_exhaust,
+        current_mana=player.current_mana - cost,
+    )
+    if event_collector is not None and cost > 0:
+        event_collector.collect(
+            EVT_MANA_CHANGE,
+            "action:play_from_exhaust",
+            {
+                "player_idx": active_idx,
+                "prev": player.current_mana,
+                "new": player.current_mana - cost,
+                "delta": -cost,
+            },
+        )
+    state = replace(
+        state, players=_replace_player(state.players, active_idx, new_player),
+    )
+    return _deploy_minion(
+        state, action, card_def, card_numeric_id, active_side, library,
     )
 
 
@@ -3022,6 +3093,10 @@ def resolve_action(
         # emission moved into _apply_attack_with_event, shared with the
         # post-move-attack gate.
         state = _apply_attack_with_event(
+            state, action, library, event_collector=event_collector,
+        )
+    elif action.action_type == ActionType.PLAY_FROM_EXHAUST:
+        state = _apply_play_from_exhaust(
             state, action, library, event_collector=event_collector,
         )
     elif action.action_type == ActionType.SACRIFICE:

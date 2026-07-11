@@ -195,6 +195,11 @@ class CardDefinition:
     # sacrifice-revive self-loops). Composes with revive_card_id /
     # target_tribe filters.
     revive_exclude_card_id: Optional[str] = None
+    # Light Wyrm (2026-07-11): the card may be summoned FROM the Exhaust
+    # Pile (where discards go) for its effective cost minus
+    # exhaust_play_discount. Consumes the turn action like a normal play.
+    playable_from_exhaust: bool = False
+    exhaust_play_discount: int = 0
     cost_reduction: Optional[str] = None
     # Fixed amount for conditional reductions (Metal Wyrm 2026-07-11:
     # cost_reduction="behind_on_board" subtracts this while the opponent

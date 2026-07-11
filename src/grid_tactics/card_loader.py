@@ -106,6 +106,8 @@ class CardLoader:
             conjure_buff=data.get("conjure_buff"),
             magic_untargetable=bool(data.get("magic_untargetable", False)),
             revive_exclude_card_id=data.get("revive_exclude_card_id"),
+            playable_from_exhaust=bool(data.get("playable_from_exhaust", False)),
+            exhaust_play_discount=int(data.get("exhaust_play_discount", 0) or 0),
             cost_reduction=data.get("cost_reduction"),
             cost_reduction_amount=data.get("cost_reduction_amount"),
             play_condition=data.get("play_condition"),

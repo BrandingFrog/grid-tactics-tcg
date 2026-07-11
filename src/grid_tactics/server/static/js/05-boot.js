@@ -73,7 +73,7 @@ function showPileModal(title, cardNumericIds, sandboxCtx) {
         empty.textContent = 'Empty.';
         grid.appendChild(empty);
     } else {
-        ids.forEach(function(nid) {
+        ids.forEach(function(nid, revIdx) {
             var c = (allCardDefs && allCardDefs[nid]) || cardDefs[nid];
             if (!c) return;
             var cell = document.createElement('div');
@@ -83,6 +83,44 @@ function showPileModal(title, cardNumericIds, sandboxCtx) {
                 numericId: nid,
                 showReactDeploy: false
             });
+            // Light Wyrm (2026-07-11): playable-from-exhaust cards get a
+            // Summon button in the OWN Exhaust pile when the server offers
+            // a legal PLAY_FROM_EXHAUST for them. Click -> close the modal,
+            // arm the tile-pick mode (09-duel-interaction submits with the
+            // exhaust index).
+            try {
+                if (!sandboxMode && c.playable_from_exhaust
+                        && typeof legalActions !== 'undefined') {
+                    var exPlays = (legalActions || []).filter(function(a) {
+                        return a.action_type === 19 && a.position
+                            && gameState && gameState.players
+                            && gameState.players[myPlayerIdx]
+                            && gameState.players[myPlayerIdx].exhaust[a.card_index] === nid;
+                    });
+                    if (exPlays.length) {
+                        var playBtn = document.createElement('button');
+                        playBtn.className = 'btn btn-secondary pile-exhaust-play';
+                        playBtn.textContent = '\u2694 Summon';
+                        playBtn.addEventListener('click', function(e) {
+                            e.stopPropagation();
+                            window.__exhaustPlayIdx = exPlays[0].card_index;
+                            interactionMode = 'exhaust_play';
+                            var modal = document.getElementById('pileModal');
+                            if (modal) modal.style.display = 'none';
+                            try { highlightBoard(); } catch (e2) { /* defensive */ }
+                            try {
+                                exPlays.forEach(function(a) {
+                                    var sel = '#screen-game .board-cell[data-row="'
+                                        + a.position[0] + '"][data-col="' + a.position[1] + '"]';
+                                    var bc = document.querySelector(sel);
+                                    if (bc) bc.classList.add('cell-valid');
+                                });
+                            } catch (e3) { /* defensive */ }
+                        });
+                        cell.appendChild(playBtn);
+                    }
+                }
+            } catch (e) { /* defensive — pile stays view-only */ }
             // Highlighting a card previews it in the tooltip panel
             cell.addEventListener('mouseenter', function() {
                 showGameTooltip(nid, cell, null, { force: true });
