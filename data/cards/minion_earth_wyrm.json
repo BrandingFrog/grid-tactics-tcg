@@ -1,0 +1,38 @@
+{
+    "card_id": "earth_wyrm",
+    "stable_id": 55,
+    "name": "Earth Wyrm",
+    "card_type": "minion",
+    "mana_cost": 5,
+    "attack": 33,
+    "health": 33,
+    "range": 0,
+    "element": "earth",
+    "tribe": "Wyrm",
+    "effects": [
+        {
+            "type": "draw",
+            "trigger": "on_summon",
+            "target": "self_owner",
+            "amount": 1
+        },
+        {
+            "type": "leap",
+            "trigger": "on_move",
+            "target": "self_owner",
+            "amount": 1
+        }
+    ],
+    "deckable": true,
+    "tips": [
+        "Leap lets it burrow past blockers — a 33🗡️/33🤍 that cannot be body-blocked forces awkward trades.",
+        "A Leap whose path is ALL enemy minions ending past the back row is a Sacrifice line: 33🗡️ straight to the face.",
+        "Tree Wyrm's tutor fetches Earth Wyrms — 'Tutor 2 Wyrms' restocks the burrowers.",
+        "Like Rathopper, it still only moves forward in its column — Leap changes what it can move THROUGH, not where."
+    ],
+    "rulings": [
+        "Leap follows the same rules as Rathopper's: forward in its own column, hopping over occupied tiles to the next empty one.",
+        "Landing rules, react windows, and the post-move attack pick are identical to a normal Move.",
+        "Summon: Draw 1 fires after the summon resolves (Window B); a full hand overdraw-burns the drawn card."
+    ]
+}
