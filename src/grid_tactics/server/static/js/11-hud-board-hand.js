@@ -579,6 +579,24 @@ function renderHand(opts) {
     var legal = opts.legalActions || legalActions;
     if (!handEl) return;
     if (!state) return;
+    // FLIP capture (user 2026-07-11): remember where each card sat before
+    // the rebuild so _flipSlideHandRow can glide survivors to their new
+    // spots instead of teleporting — without this, back-to-back draws look
+    // like the same fly-in twice with no visible "making room" in between.
+    // Keyed nid:occurrence so duplicate cards map stably left-to-right.
+    var _flipOld = null;
+    if (!opts.godView && !(isSpectator && spectatorGodMode)) {
+        _flipOld = {};
+        var _seen = {};
+        var _prevCards = handEl.querySelectorAll('.card-frame-hand');
+        for (var _pi = 0; _pi < _prevCards.length; _pi++) {
+            var _nid = _prevCards[_pi].getAttribute('data-numeric-id');
+            var _occ = (_seen[_nid] = (_seen[_nid] | 0) + 1);
+            if (_prevCards[_pi].style.visibility !== 'hidden') {
+                _flipOld[_nid + ':' + _occ] = _prevCards[_pi].getBoundingClientRect().left;
+            }
+        }
+    }
     handEl.innerHTML = '';
 
     var myPlayer = state.players[ownerIdx];
@@ -665,6 +683,7 @@ function renderHand(opts) {
             Array.prototype.slice.call(handEl.querySelectorAll('.card-frame-hand')),
             HAND_MAXW
         );
+        if (_flipOld) _flipSlideHandRow(handEl, _flipOld);
     }
 
     // Timing overhaul (2026-07-08, F9c): re-hide slots whose draw fly-in is
@@ -714,6 +733,52 @@ function renderHand(opts) {
 var HAND_MAXW = 7 * 58.5 + 6 * 4;   // ≈ 434
 var HAND_ROW_GAP = 4;         // reduced padding (user design): tight but no overlap up to 7
 var HAND_OVERLAP_CAP = 0.45;  // max fraction of a card width they may overlap
+
+// FLIP slide (user 2026-07-11): after a rebuild, glide each surviving card
+// from its captured pre-rebuild position to its new slot, so a draw visibly
+// pushes the hand aside instead of teleporting it. Slides via relative
+// `left` — the cf2 hand card's transform is pinned by a scale(0.25)
+// !important rule (min-font-floor fix), and a relative offset also leaves
+// siblings' LAYOUT rects untouched, so the in-flight draw fly-in still
+// targets the true final slot position. Deltas are screen px; the stage is
+// scaled by --duel-scale, so divide before applying.
+function _flipSlideHandRow(handEl, oldLefts) {
+    var cards = handEl.querySelectorAll('.card-frame-hand');
+    if (!cards.length) return;
+    var scale = 1;
+    try {
+        var screenEl = handEl.closest('#screen-game, #screen-sandbox');
+        if (screenEl) {
+            var sv = parseFloat(getComputedStyle(screenEl).getPropertyValue('--duel-scale'));
+            if (sv > 0) scale = sv;
+        }
+    } catch (e) { /* defensive */ }
+    var seen = {};
+    for (var i = 0; i < cards.length; i++) {
+        var el = cards[i];
+        var nid = el.getAttribute('data-numeric-id');
+        var occ = (seen[nid] = (seen[nid] | 0) + 1);
+        var oldLeft = oldLefts[nid + ':' + occ];
+        if (oldLeft == null) continue;                     // new card — the fly-in owns it
+        if (el.style.visibility === 'hidden') continue;    // in-flight slot
+        var dx = (oldLeft - el.getBoundingClientRect().left) / scale;
+        if (Math.abs(dx) < 2) continue;
+        el.style.transition = 'none';
+        el.style.left = dx + 'px';
+        void el.offsetWidth;                               // commit start frame
+        el.style.transition = 'left 200ms ease';
+        el.style.left = '0px';
+        (function(node) {
+            var release = function() {
+                node.style.transition = '';
+                node.style.left = '';
+                node.removeEventListener('transitionend', release);
+            };
+            node.addEventListener('transitionend', release);
+            setTimeout(release, 350);                      // safety cap
+        })(el);
+    }
+}
 
 function _layoutHandRow(cards, maxW) {
     var n = cards.length;

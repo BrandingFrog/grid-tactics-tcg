@@ -421,23 +421,6 @@ function playRangedAttackAnimation(attackerCell, targetCell, damage, done) {
     svg.style.pointerEvents = 'none';
     svg.style.zIndex = '900';
 
-    // Arrowhead marker
-    var defs = document.createElementNS(SVG_NS, 'defs');
-    var marker = document.createElementNS(SVG_NS, 'marker');
-    marker.setAttribute('id', 'ranged-arrowhead');
-    marker.setAttribute('viewBox', '0 0 10 10');
-    marker.setAttribute('refX', '8');
-    marker.setAttribute('refY', '5');
-    marker.setAttribute('markerWidth', '6');
-    marker.setAttribute('markerHeight', '6');
-    marker.setAttribute('orient', 'auto-start-reverse');
-    var arrowPath = document.createElementNS(SVG_NS, 'path');
-    arrowPath.setAttribute('d', 'M 0 0 L 10 5 L 0 10 z');
-    arrowPath.setAttribute('fill', '#f0b64e');
-    marker.appendChild(arrowPath);
-    defs.appendChild(marker);
-    svg.appendChild(defs);
-
     // Aerial arc (user 2026-07-10): the arrow lobs on a quadratic Bézier
     // instead of a straight line. The bow is PERPENDICULAR to the flight
     // path (a plain "screen-up" control point degenerates to a straight
@@ -466,27 +449,79 @@ function playRangedAttackAnimation(attackerCell, targetCell, damage, done) {
     line.setAttribute('stroke', '#f0b64e');
     line.setAttribute('stroke-width', '4');
     line.setAttribute('stroke-linecap', 'round');
-    line.setAttribute('marker-end', 'url(#ranged-arrowhead)');
 
     svg.appendChild(halo);
     svg.appendChild(line);
+
+    // Projectile (user 2026-07-11 "the ranged arc needs to be animated"):
+    // a real arrow glyph flies along the Bézier, rotating with the
+    // tangent; the gold trail draws on BEHIND it, synced to the same
+    // flight clock. The old marker-end arrowhead sat at the target from
+    // frame one, so the whole thing read as a static line.
+    var arrow = document.createElementNS(SVG_NS, 'g');
+    var shaftHalo = document.createElementNS(SVG_NS, 'line');
+    shaftHalo.setAttribute('x1', '-16'); shaftHalo.setAttribute('y1', '0');
+    shaftHalo.setAttribute('x2', '4');   shaftHalo.setAttribute('y2', '0');
+    shaftHalo.setAttribute('stroke', 'rgba(0,0,0,0.85)');
+    shaftHalo.setAttribute('stroke-width', '6');
+    shaftHalo.setAttribute('stroke-linecap', 'round');
+    var shaft = document.createElementNS(SVG_NS, 'line');
+    shaft.setAttribute('x1', '-16'); shaft.setAttribute('y1', '0');
+    shaft.setAttribute('x2', '4');   shaft.setAttribute('y2', '0');
+    shaft.setAttribute('stroke', '#f0b64e');
+    shaft.setAttribute('stroke-width', '3');
+    shaft.setAttribute('stroke-linecap', 'round');
+    var head = document.createElementNS(SVG_NS, 'path');
+    head.setAttribute('d', 'M 2 -5.5 L 15 0 L 2 5.5 z');
+    head.setAttribute('fill', '#f0b64e');
+    head.setAttribute('stroke', 'rgba(0,0,0,0.85)');
+    head.setAttribute('stroke-width', '1.5');
+    arrow.appendChild(shaftHalo);
+    arrow.appendChild(shaft);
+    arrow.appendChild(head);
+    arrow.style.transition = 'opacity 120ms ease-out';
+    svg.appendChild(arrow);
     document.body.appendChild(svg);
 
-    // Stroke-dasharray draw-on effect — measured on the REAL curve (the
-    // Bézier is longer than the straight-line distance).
+    // Trail hidden until the projectile passes — both driven from the
+    // flight clock below (no CSS transition on dashoffset).
     var pathLen = len;
     try { pathLen = line.getTotalLength(); } catch (e) { /* fallback */ }
     [halo, line].forEach(function (el) {
         el.style.strokeDasharray = pathLen + ' ' + pathLen;
         el.style.strokeDashoffset = pathLen;
-        el.style.transition = 'stroke-dashoffset 350ms ease-out, opacity 300ms ease-out';
+        el.style.transition = 'opacity 300ms ease-out';
     });
 
-    // Trigger the draw on next frame
-    requestAnimationFrame(function () {
-        halo.style.strokeDashoffset = '0';
-        line.style.strokeDashoffset = '0';
-    });
+    var FLIGHT_MS = 350;
+    var flightStart = null;
+    function _flightFrame(ts) {
+        if (flightStart === null) flightStart = ts;
+        var t = Math.min(1, (ts - flightStart) / FLIGHT_MS);
+        var eased = 1 - (1 - t) * (1 - t);   // ease-out
+        var dist = eased * pathLen;
+        var pt, ahead;
+        try {
+            pt = line.getPointAtLength(dist);
+            ahead = line.getPointAtLength(Math.min(pathLen, dist + 2));
+        } catch (e) { pt = null; }
+        if (pt) {
+            var ang = Math.atan2(ahead.y - pt.y, ahead.x - pt.x) * 180 / Math.PI;
+            arrow.setAttribute(
+                'transform',
+                'translate(' + pt.x + ' ' + pt.y + ') rotate(' + ang + ')'
+            );
+            halo.style.strokeDashoffset = pathLen - dist;
+            line.style.strokeDashoffset = pathLen - dist;
+        }
+        if (t < 1) {
+            requestAnimationFrame(_flightFrame);
+        } else {
+            // Impact — the projectile vanishes into the target.
+            arrow.style.opacity = '0';
+        }
+    }
+    requestAnimationFrame(_flightFrame);
 
     setTimeout(function () {
         // Impact: target flash + damage popup

@@ -5874,3 +5874,26 @@ input::selection, textarea::selection { background: rgba(224, 162, 60, 0.45); co
   color: #e08a7a;
   font-weight: 700;
 }
+
+/* ---------------------------------------------------------------------------
+   Trigger-blip tile pulses beneath cards/grid (user 2026-07-11): the
+   source/target box-shadow glows paint at the cell's own stacking level, so
+   adjacent cells and minion cards covered them. Elevate the pulsing cell for
+   the duration of the animation (mirrors the attack-lunge z elevation).
+   --------------------------------------------------------------------------- */
+#screen-game .board-cell.anim-trigger-source,
+#screen-sandbox .board-cell.anim-trigger-source,
+#screen-game .board-cell.anim-trigger-target,
+#screen-sandbox .board-cell.anim-trigger-target {
+  position: relative;
+  z-index: 25;
+}
+
+/* Rally/Decay chip not centered in the game field (user 2026-07-11): the
+   chip mounts in .game-layout (transformed → fixed resolves against it), so
+   left:50% centred it over sidebar+stage. Same stage-midpoint fix as
+   .tutor-toast / .trigger-blip-center-icon above. */
+.game-layout > .phase-flow-chip {
+  position: absolute !important;
+  left: 522px !important;   /* stage midpoint; keeps translate(-50%,-50%) */
+}
