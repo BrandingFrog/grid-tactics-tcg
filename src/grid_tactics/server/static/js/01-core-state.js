@@ -197,6 +197,13 @@ function _renderReactModeButtons() {
             window.__animSpeed = cur === 1 ? 2 : (cur === 2 ? 4 : 1);
             try { localStorage.setItem('gt-anim-speed', String(window.__animSpeed)); } catch (e) {}
             _paintSpeed();
+            // AI-watch pacing: tell the server so the exhibition stepper
+            // matches (no-op for normal games/spectates).
+            try {
+                if (typeof socket !== 'undefined' && socket) {
+                    socket.emit('set_watch_speed', { speed: window.__animSpeed });
+                }
+            } catch (e) { /* defensive */ }
         });
     }
 

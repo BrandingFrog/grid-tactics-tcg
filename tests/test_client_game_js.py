@@ -284,7 +284,11 @@ var jobs = [];
 var window = { __lastFinalState: null };
 function enqueueAnimation(job) { jobs.push(job); }
 function _evDurationOr(ev, fb) { return fb; }
-var setTimeout = function(fn, d) { /* suppress pacing */ };
+function animSpeed() { return 1; }
+var isSpectator = false;
+// Zero-delay callbacks (the non-spectator reveal wrapper) run inline;
+// real pacing timers stay suppressed.
+var setTimeout = function(fn, d) { if (!d) fn(); };
 """
 
 
@@ -443,6 +447,7 @@ var SPELL_STAGE_PER_CARD_MS = 1500;
 function isSpellStageAnimating() { return true; }
 function _spellStageOnReactClosed() {}
 function _evDurationOr(ev, fb) { return fb; }
+function animSpeed() { return 1; }
 """
         + extract_function("playReactWindowClosed")
         + """
@@ -574,7 +579,11 @@ function renderHand() { renderHandCalls++; }
 function updateHandHighlights() {}
 function enqueueAnimation(job) { jobs.push(job); }
 function _evDurationOr(ev, fb) { return fb; }
-var setTimeout = function(fn, d) { /* suppress pacing */ };
+function animSpeed() { return 1; }
+var isSpectator = false;
+// Zero-delay callbacks (the non-spectator reveal wrapper) run inline;
+// real pacing timers stay suppressed.
+var setTimeout = function(fn, d) { if (!d) fn(); };
 """
         + extract_function("playCardDrawn")
         + """

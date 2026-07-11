@@ -37,6 +37,16 @@ function renderRoomBar() {
         turnNum.textContent = 'Turn ' + gameState.turn_number;
     }
 
+    // Spectators can't react — the REACT AUTO/OFF control is meaningless
+    // and was overlapping the speed toggle (user 2026-07-11). Hide it and
+    // let the speed button take its corner slot.
+    var _rmBtn = document.getElementById('react-mode-btn');
+    if (_rmBtn) _rmBtn.style.display = isSpectator ? 'none' : '';
+    var _spBtn = document.getElementById('anim-speed-btn');
+    if (_spBtn && _spBtn.classList.contains('stage-corner-btn')) {
+        _spBtn.style.right = isSpectator ? '72px' : '175px';
+    }
+
     // Phase 14.4: SPECTATING badge visibility + god-mode label.
     var specBadge = document.getElementById('spectating-badge');
     if (specBadge) {

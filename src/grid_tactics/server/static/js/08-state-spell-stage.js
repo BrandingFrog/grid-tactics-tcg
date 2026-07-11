@@ -22,6 +22,9 @@ function onGameStart(data) {
     // first render is already gated correctly.
     if (data.is_spectator || (data.state && data.state.is_spectator)) {
         isSpectator = true;
+        // Spectator game-over shows '{winner} WINS', not VICTORY/DEFEAT
+        // (user 2026-07-11: AI-vs-AI said THEY got the defeat).
+        if (data.player_names) window.__spectPlayerNames = data.player_names;
         if (data.state && typeof data.state.spectator_god_mode === 'boolean') {
             spectatorGodMode = data.state.spectator_god_mode;
         }
@@ -1519,7 +1522,8 @@ function _applyGameOver(data) {
     renderGame();
     var winner = data.final_state && data.final_state.winner;
     if (winner != null && myPlayerIdx != null) {
-        playSfx(winner === myPlayerIdx ? 'victory' : 'defeat');
+        // Spectators aren't a side — end-of-game fanfare, never 'defeat'.
+        playSfx((!isSpectator && winner !== myPlayerIdx) ? 'defeat' : 'victory');
     }
     showGameOver(data);
 }
@@ -1549,9 +1553,15 @@ function showGameOver(data) {
     var iWon = (winner != null) && (winner === myPlayerIdx);
     var isDraw = (winner == null);
 
+    var _specNames = (data && data.player_names) || window.__spectPlayerNames || null;
     var resultEl = document.getElementById('game-over-result');
     if (resultEl) {
-        if (isDraw) {
+        if (isSpectator && !isDraw) {
+            // Viewer is not a side (user 2026-07-11): name the winner.
+            var _wName = (_specNames && _specNames[winner]) || ('Player ' + (winner + 1));
+            resultEl.textContent = _wName.toUpperCase() + ' WINS';
+            resultEl.className = 'game-over-result victory spec-win';
+        } else if (isDraw) {
             resultEl.textContent = 'DRAW';
             resultEl.className = 'game-over-result draw';
         } else if (iWon) {
@@ -1575,9 +1585,13 @@ function showGameOver(data) {
         var selfHpEl   = document.getElementById('game-over-self-hp');
         var oppNameEl  = document.getElementById('game-over-opp-name');
         var oppHpEl    = document.getElementById('game-over-opp-hp');
-        if (selfNameEl) selfNameEl.textContent = (myName || 'You');
+        if (selfNameEl) selfNameEl.textContent = isSpectator
+            ? ((_specNames && _specNames[myPlayerIdx]) || 'Player 1')
+            : (myName || 'You');
         if (selfHpEl)   selfHpEl.textContent   = selfPlayer ? selfPlayer.hp : '?';
-        if (oppNameEl)  oppNameEl.textContent  = (opponentName || 'Opponent');
+        if (oppNameEl)  oppNameEl.textContent  = isSpectator
+            ? ((_specNames && _specNames[1 - myPlayerIdx]) || 'Player 2')
+            : (opponentName || 'Opponent');
         if (oppHpEl)    oppHpEl.textContent    = oppPlayer ? oppPlayer.hp : '?';
     }
 
@@ -1695,6 +1709,8 @@ function resetRematchUI() {
     if (btnRematch) {
         btnRematch.disabled = false;
         btnRematch.textContent = 'Rematch';
+        // Spectators aren't a seat — they can't request a rematch.
+        btnRematch.style.display = isSpectator ? 'none' : '';
     }
     var statusEl = document.getElementById('game-over-status');
     if (statusEl) {

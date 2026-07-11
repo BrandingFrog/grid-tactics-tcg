@@ -6126,6 +6126,18 @@ input::selection, textarea::selection { background: rgba(224, 162, 60, 0.45); co
 
 /* Animation speed toggle in the stage corner (MCQ 2026-07-11). */
 #screen-game .game-layout > #anim-speed-btn.stage-corner-btn {
-  right: 130px; width: auto; padding: 0 8px; font-size: 11px;
+  /* clear of REACT AUTO's ~95px footprint at right:72 (overlap, user
+     2026-07-11); renderRoomBar moves it into that slot for spectators. */
+  right: 175px; width: auto; padding: 0 8px; font-size: 11px;
   font-weight: 800; letter-spacing: 0.04em;
+}
+
+/* AI-watch game over (user 2026-07-11): spectator result is "{NAME} WINS" —
+   longer than VICTORY/DEFEAT, so let it shrink instead of clipping, and
+   keep the overlay above the turn-transition banner (both were z 1000;
+   the banner mounts later in the DOM and painted on top). */
+#game-over-overlay { z-index: 1200 !important; }
+#game-over-overlay .game-over-result.spec-win {
+  font-size: 30px !important;
+  line-height: 1.15;
 }

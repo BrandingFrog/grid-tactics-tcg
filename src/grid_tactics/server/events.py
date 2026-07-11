@@ -1162,7 +1162,18 @@ def register_events(room_manager: RoomManager) -> None:
         stepper that plays both sides with the preview AI."""
         data = data or {}
         display_name = (data.get("display_name") or "Viewer").strip() or "Viewer"
+        # A repeat Watch click must not leave the viewer attached to the
+        # previous room — the old game's frames kept animating under the
+        # new one (user 2026-07-11: 'the game doesn't stop').
+        old_token = _room_manager.get_token_by_sid(request.sid)
+        if old_token is not None and _room_manager.get_spectator(old_token) is not None:
+            old_room = _room_manager.get_room_code_by_token(old_token)
+            _room_manager.remove_spectator(old_token)
+            if old_room:
+                sio_leave_room(old_room)
         code, session = _room_manager.create_ai_watch_game()
+        session.is_ai_watch = True
+        session.watch_speed = 1
         try:
             _room_manager.join_as_spectator(code, display_name, request.sid, False)
         except ValueError as e:
@@ -1191,6 +1202,7 @@ def register_events(room_manager: RoomManager) -> None:
             "state": spec_state,
             "legal_actions": [],
             "opponent_name": session.player_names[1],
+            "player_names": list(session.player_names),
             "card_defs": _build_card_defs(session.library),
             "is_spectator": True,
         })
@@ -1250,7 +1262,12 @@ def register_events(room_manager: RoomManager) -> None:
             if new_state.is_game_over:
                 _ai_watch_emit(session, room_code, new_state, None, game_over=True)
                 break
-            socketio.sleep(0.9)
+            # Viewer speed (user 2026-07-11: 'the speed difference doesn't
+            # seem to matter in ai vs ai') — the client toggle sets
+            # session.watch_speed via set_watch_speed; the stepper paces
+            # to match so 2x/4x actually double/quadruple the game clock.
+            _spd = getattr(session, 'watch_speed', 1) or 1
+            socketio.sleep(0.9 / _spd)
         _room_manager.remove_game(room_code)
 
     def _ai_watch_emit(session, room_code, state, events, game_over=False):
@@ -1277,6 +1294,7 @@ def register_events(room_manager: RoomManager) -> None:
                 "final_state": spec_state,
                 "your_player_idx": 0,
                 "is_spectator": True,
+                "player_names": list(session.player_names),
             }, to=room_code)
             return
         spec_events = filter_engine_events_for_viewer(
@@ -1289,6 +1307,26 @@ def register_events(room_manager: RoomManager) -> None:
             "your_player_idx": 0,
             "is_spectator": True,
         }, to=room_code)
+
+    @socketio.on("set_watch_speed")
+    def handle_set_watch_speed(data=None):
+        """AI-watch pacing (user 2026-07-11): the spectator's speed toggle
+        drives the server stepper too. Only AI-watch sessions accept it."""
+        data = data or {}
+        try:
+            speed = int(data.get("speed", 1))
+        except (TypeError, ValueError):
+            return
+        if speed not in (1, 2, 4):
+            return
+        token = _room_manager.get_token_by_sid(request.sid)
+        room_code = _room_manager.get_room_code_by_token(token) if token else None
+        if room_code is None:
+            return
+        session = _room_manager.get_game(room_code)
+        if session is None or not getattr(session, 'is_ai_watch', False):
+            return
+        session.watch_speed = speed
 
     @socketio.on("get_card_defs")
     def handle_get_card_defs(data=None):

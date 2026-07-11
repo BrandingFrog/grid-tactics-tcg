@@ -1415,6 +1415,36 @@ function playAttackResolved(ev, done) {
     setTimeout(settle, Math.max(_evDurationOr(ev, 500), 3000));
 }
 
+// Tutor reveal (user 2026-07-11): tutored draws are public — show the
+// fetched card face-up center-stage for a beat before it joins the hand.
+// Returns the reveal duration in ms (0 when the reveal can't be built).
+function _showTutorReveal(numericId) {
+    if (numericId == null || !cardDefs || !cardDefs[numericId]) return 0;
+    try {
+        var trv = document.createElement('div');
+        trv.className = 'tutor-reveal';
+        trv.innerHTML =
+            '<div class="tutor-reveal-card">'
+            + renderCardFrame(cardDefs[numericId], {
+                context: 'hand',
+                numericId: numericId,
+                interactive: false,
+                showReactDeploy: false,
+            })
+            + '</div>'
+            + '<div class="tutor-reveal-label">TUTORED FROM DECK</div>';
+        _stageMount().appendChild(trv);
+        var revealMs = Math.round(1200 / animSpeed());
+        setTimeout(function() {
+            trv.classList.add('fade-out');
+            setTimeout(function() {
+                if (trv.parentNode) trv.parentNode.removeChild(trv);
+            }, 250);
+        }, Math.max(revealMs - 250, 100));
+        return revealMs;
+    } catch (e) { return 0; /* defensive — reveal is optional */ }
+}
+
 function playCardDrawn(ev, done) {
     // Payload: {player_idx} (plus optional card_numeric_id when viewer is the
     // drawer per view_filter redaction).
@@ -1471,15 +1501,24 @@ function playCardDrawn(ev, done) {
                 }
             }
         } catch (e) { /* defensive — fall back to last-child targeting */ }
-        enqueueAnimation({
-            type: 'draw_own',
-            cardNumericId: payload.card_numeric_id,
-            fromPos: 'deck',
-            toSlotIndex: newSlotIdx,  // -1 falls back to last hand child
-            stateApplied: true,
-            _fromEventQueue: true,
-            onDone: settle,
-        });
+        // Spectator tutor visibility (user 2026-07-11 'i cant see both
+        // cards hitting his hand'): the perspective seat's draws run
+        // through this own-hand branch, which skipped the center-stage
+        // reveal — right for the player who picked the cards, wrong for
+        // a spectator who didn't. Show it, then fly the card in.
+        var ownRevealMs = (isSpectator && payload.source === 'tutor')
+            ? _showTutorReveal(payload.card_numeric_id) : 0;
+        setTimeout(function() {
+            enqueueAnimation({
+                type: 'draw_own',
+                cardNumericId: payload.card_numeric_id,
+                fromPos: 'deck',
+                toSlotIndex: newSlotIdx,  // -1 falls back to last hand child
+                stateApplied: true,
+                _fromEventQueue: true,
+                onDone: settle,
+            });
+        }, ownRevealMs);
     } else {
         // Element card backs (2026-07): the view filter attaches the drawn
         // card's ELEMENT (and only that) to opponent card_drawn events so
@@ -1517,32 +1556,8 @@ function playCardDrawn(ev, done) {
         // the targets"): tutored draws arrive UNREDACTED (view_filter —
         // searched cards are public), so show the fetched card face-up
         // center-stage for a beat before the hand-row pop-in.
-        var revealMs = 0;
-        if (payload.source === 'tutor' && payload.card_numeric_id != null
-                && cardDefs && cardDefs[payload.card_numeric_id]) {
-            try {
-                var trv = document.createElement('div');
-                trv.className = 'tutor-reveal';
-                trv.innerHTML =
-                    '<div class="tutor-reveal-card">'
-                    + renderCardFrame(cardDefs[payload.card_numeric_id], {
-                        context: 'hand',
-                        numericId: payload.card_numeric_id,
-                        interactive: false,
-                        showReactDeploy: false,
-                    })
-                    + '</div>'
-                    + '<div class="tutor-reveal-label">TUTORED FROM DECK</div>';
-                _stageMount().appendChild(trv);
-                revealMs = 1200;
-                setTimeout(function() {
-                    trv.classList.add('fade-out');
-                    setTimeout(function() {
-                        if (trv.parentNode) trv.parentNode.removeChild(trv);
-                    }, 250);
-                }, revealMs - 250);
-            } catch (e) { revealMs = 0; /* defensive — reveal is optional */ }
-        }
+        var revealMs = (payload.source === 'tutor')
+            ? _showTutorReveal(payload.card_numeric_id) : 0;
         setTimeout(function() {
             enqueueAnimation({
                 type: 'draw_opp',
@@ -1965,7 +1980,7 @@ function playReactWindowOpened(ev, done) {
     if (slammed) {
         var _perCard = (typeof SPELL_STAGE_PER_CARD_MS === 'number')
             ? SPELL_STAGE_PER_CARD_MS : 1500;
-        setTimeout(done, _perCard);
+        setTimeout(done, Math.round(_perCard / animSpeed()));
         return;
     }
     setTimeout(done, 0);
@@ -2220,7 +2235,7 @@ function playPhaseChanged(ev, done) {
                     if (chip.parentNode) chip.parentNode.removeChild(chip);
                 }, 700);
             } catch (e) { /* defensive — chip is purely visual */ }
-            setTimeout(done, 600);
+            setTimeout(done, Math.round(600 / animSpeed()));
             return;
         }
     }
@@ -2591,7 +2606,9 @@ function playHandshake(ev, done) {
     // Pace at the banner's own 2200ms choreography — deliberately NOT
     // _evDurationOr: a shorter wire duration would let the next event
     // (turn banner etc.) play over the still-visible handshake banner.
-    setTimeout(done, 2200);
+    // The speed toggle still divides it: at 2x/4x fast-forward, events
+    // playing under the tail of the banner is the accepted trade.
+    setTimeout(done, Math.round(2200 / animSpeed()));
 }
 
 // overdraw_burn — the drawn card is revealed center-screen for a beat, then
@@ -2851,6 +2868,13 @@ function runQueue() {
         runQueue();
     }
     try {
+        // Fast-forward (user 2026-07-11 'the speed difference doesn't seem
+        // to matter'): at 2x/4x, release the queue after a scaled cap even
+        // if the CSS visual is still finishing — finishJob is idempotent,
+        // and the sprite completes on its own timers while the next beat
+        // starts. 900ms covers the longest single animation at 1x.
+        var _spd = (typeof animSpeed === 'function') ? animSpeed() : 1;
+        if (_spd > 1) setTimeout(finishJob, Math.round(900 / _spd));
         playAnimation(job, finishJob);
     } catch (err) {
         console.error('[animQueue] playAnimation threw for type='
