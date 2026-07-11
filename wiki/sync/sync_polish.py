@@ -28,49 +28,51 @@ from pathlib import Path
 # Constants
 # ---------------------------------------------------------------------------
 
-_DARK_SEARCH_CSS_MARKER = "/* --- Grid Tactics Dark Search --- */"
+_DARK_SEARCH_CSS_MARKER = "/* --- Grid Tactics Dark Search v2 (vintage) --- */"
 
 _DARK_SEARCH_CSS_BLOCK = f"""{_DARK_SEARCH_CSS_MARKER}
-/* Search page: dark background for namespace filter and results */
+/* Search page rethemed to the vintage parchment system (user 2026-07-11:
+   'the search bar is still on the old theme'). Appended AFTER the legacy
+   cyan block so the cascade overrides it. */
 .mw-search-profile-tabs,
 .search-types,
 fieldset#mw-searchoptions {{
-  background: #1a1a1a !important;
-  border-color: #333 !important;
-  color: #eee !important;
+  background: #1d1408 !important;
+  border-color: #3a2e18 !important;
+  color: #e8dcbe !important;
 }}
 
 fieldset#mw-searchoptions legend {{
-  color: #888 !important;
+  color: #9a865c !important;
 }}
 
 fieldset#mw-searchoptions label {{
-  color: #ccc !important;
+  color: #cbb98f !important;
 }}
 
 .mw-search-profile-tabs a {{
-  color: var(--color-link, #00d4ff) !important;
+  color: #e0a23c !important;
 }}
 
 /* Search input */
 #searchText, .mw-searchInput, input[type="search"] {{
-  background: #222 !important;
-  color: #eee !important;
-  border-color: #444 !important;
+  background: #191207 !important;
+  color: #e8dcbe !important;
+  border-color: #6b5730 !important;
 }}
 
 /* Search results */
 .mw-search-results li,
 .searchresults {{
-  color: #ccc;
+  color: #cbb98f;
 }}
 
 .searchresult {{
-  color: #ccc !important;
+  color: #cbb98f !important;
 }}
 
 .mw-search-result-data {{
-  color: #888 !important;
+  color: #9a865c !important;
 }}
 """
 
@@ -1145,9 +1147,11 @@ _FAVICON_JS_BLOCK = f"""{_FAVICON_JS_MARKER}
 """
 
 
-_HERO_SEARCH_CSS_MARKER = "/* --- Grid Tactics Hero Search --- */"
+_HERO_SEARCH_CSS_MARKER = "/* --- Grid Tactics Hero Search v2 (vintage) --- */"
 
 _HERO_SEARCH_CSS_BLOCK = f"""{_HERO_SEARCH_CSS_MARKER}
+/* Hero search rethemed to vintage parchment (user 2026-07-11). Appended
+   AFTER the legacy cyan block so the cascade overrides it. */
 #gt-hero-search {{
   text-align: center;
   margin: 0 auto;
@@ -1166,44 +1170,44 @@ _HERO_SEARCH_CSS_BLOCK = f"""{_HERO_SEARCH_CSS_MARKER}
   flex: 1;
   padding: 0.75em 1.1em;
   font-size: 1rem;
-  background: #0d0d2b !important;
-  color: #e0e0ff !important;
-  border: 2px solid #2a2a5a !important;
+  background: #191207 !important;
+  color: #e8dcbe !important;
+  border: 2px solid #6b5730 !important;
   border-right: none !important;
   border-radius: 8px 0 0 8px !important;
   outline: none !important;
   box-shadow: none !important;
   transition: border-color 0.2s, box-shadow 0.2s;
-  font-family: 'Source Sans 3', 'Source Sans Pro', system-ui, sans-serif;
+  font-family: 'Alegreya', Georgia, serif !important;
 }}
 
 #gt-hero-search input[type="search"]:focus {{
-  border-color: #00d4ff !important;
-  box-shadow: 0 0 12px rgba(0, 212, 255, 0.25) !important;
+  border-color: #e0a23c !important;
+  box-shadow: 0 0 12px rgba(224, 162, 60, 0.3) !important;
 }}
 
 #gt-hero-search input[type="search"]::placeholder {{
-  color: #5a5a8a !important;
+  color: #6a5a3a !important;
 }}
 
 #gt-hero-search button[type="submit"] {{
   padding: 0.75em 1.4em;
-  background: #00d4ff !important;
-  color: #0a0a1a !important;
-  border: 2px solid #00d4ff !important;
+  background: linear-gradient(180deg, #ffd873, #e0a23c) !important;
+  color: #201709 !important;
+  border: 2px solid #6b5730 !important;
   border-radius: 0 8px 8px 0 !important;
   font-weight: 700;
   font-size: 0.95rem;
   cursor: pointer;
-  font-family: 'Montserrat', sans-serif;
+  font-family: 'Alegreya SC', serif !important;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  transition: background 0.2s, box-shadow 0.2s;
+  transition: filter 0.2s, box-shadow 0.2s;
 }}
 
 #gt-hero-search button[type="submit"]:hover {{
-  background: #33e0ff !important;
-  box-shadow: 0 0 16px rgba(0, 212, 255, 0.4) !important;
+  filter: brightness(1.08);
+  box-shadow: 0 0 14px rgba(224, 162, 60, 0.45) !important;
 }}
 """
 
