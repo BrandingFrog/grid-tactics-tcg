@@ -2122,6 +2122,23 @@ def _cleanup_dead_minions(
                     "from_deck": m.from_deck,
                 },
             )
+            # Grave-add beat (user 2026-07-11 "takes a really long time for
+            # minions to go to the grave"): emit the discard HERE, at the
+            # death, for every cleanup path. The old action-tail grave diff
+            # only covered deaths inside a top-level resolve_action — deaths
+            # during react resolution / post-move attacks / trigger drains
+            # emitted nothing, so their grave pile only ticked at drain end,
+            # seconds later. Tokens (from_deck=False) vanish silently.
+            if m.from_deck:
+                event_collector.collect(
+                    EVT_CARD_DISCARDED,
+                    "system:cleanup_dead_minions",
+                    {
+                        "player_idx": 0 if m.owner == PlayerSide.PLAYER_1 else 1,
+                        "card_numeric_id": m.card_numeric_id,
+                        "cause": "death",
+                    },
+                )
 
     # 4. Merge new triggers into existing queues (append preserves any
     # in-flight start/end entries that were already queued).
@@ -3129,16 +3146,10 @@ def resolve_action(
                             "card_numeric_id": _card_id,
                         },
                     )
-            for _card_id in _now_grave[_post_len:]:
-                event_collector.collect(
-                    EVT_CARD_DISCARDED,
-                    "system:cleanup_dead_minions",
-                    {
-                        "player_idx": _idx,
-                        "card_numeric_id": _card_id,
-                        "cause": "death",
-                    },
-                )
+            # Death-sourced grave adds (_post_len onward) now emit inside
+            # _cleanup_dead_minions at the death beat (2026-07-11) — every
+            # cleanup path covered, not just top-level actions. No tail
+            # loop, or action-path deaths would double-emit.
 
     # Win/draw detection (Phase 4) -- after cleanup, before react transition
     state = _check_game_over(state, event_collector=event_collector)
