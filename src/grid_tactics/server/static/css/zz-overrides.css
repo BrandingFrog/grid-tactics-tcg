@@ -5832,3 +5832,31 @@ input::selection, textarea::selection { background: rgba(224, 162, 60, 0.45); co
   color: #b9b3a4 !important;
   animation: stat-grey-drain 2.8s ease-in-out infinite;
 }
+
+/* Rest button (variant v4, user 2026-07-11): worn-bronze token above the
+   gold Pass — same recipe as the retired Draw button, opaque so the white
+   deck stack behind that corner can't bleed through. Specificity matches
+   the ghost-bronze secondary rule; later in the file wins the tie. */
+.hand-action-bar .action-bar-col {
+  display: flex; flex-direction: column; align-items: stretch; gap: 6px;
+}
+#screen-game .hand-action-bar .action-bar-col button.btn-rest-action,
+#screen-sandbox .hand-action-bar .action-bar-col button.btn-rest-action {
+  font-family: var(--ui-display) !important;
+  font-weight: 700 !important;
+  font-size: 13px !important;
+  letter-spacing: 1.5px; text-transform: uppercase;
+  color: var(--gold-lt, #ffd873) !important;
+  background: linear-gradient(180deg, #3d2f15 0%, #241a0a 100%) !important;
+  border: 1px solid var(--gold, #e0a23c) !important;
+  border-radius: 8px !important;
+  padding: 7px 16px !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 216, 115, 0.25),
+    0 3px 10px rgba(0, 0, 0, 0.6) !important;
+  cursor: pointer;
+}
+#screen-game .hand-action-bar .action-bar-col button.btn-rest-action:hover,
+#screen-sandbox .hand-action-bar .action-bar-col button.btn-rest-action:hover {
+  filter: brightness(1.2);
+}

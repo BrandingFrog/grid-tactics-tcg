@@ -96,8 +96,10 @@ def pick_preview_action(
     if ActionType.MOVE in by_type:
         return random.choice(by_type[ActionType.MOVE])
 
-    # (Rest rework 2026-07-10 v2: DRAW is no longer a legal action — the
-    # PASS fallback below IS the rest, granting +1 mana and a draw.)
+    # Variant v4 (2026-07-11): REST (the DRAW slot) beats a dead PASS —
+    # +1 mana and +1 draw for the same action.
+    if ActionType.DRAW in by_type:
+        return by_type[ActionType.DRAW][0]
 
     # Declines for pending flavours where nothing above applied.
     picked = any_of(

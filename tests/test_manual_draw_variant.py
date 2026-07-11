@@ -2,8 +2,9 @@
 
 Variant rules under test:
   - NO turn-start auto-draw (and no turn-start empty-deck fatigue).
-  - DRAW is NOT a legal action; PASS gives NO benefit (the v2 rest bonus
-    was removed when magic became a free action).
+  - REST (on the reserved DRAW action slot) consumes the turn action for
+    +1 mana AND +1 draw; PASS is separate and gives NO benefit
+    (user clarification 2026-07-11, v4).
   - MAGIC casts do not consume the turn action — after the cast (and its
     react windows) play returns to the caster's ACTION phase.
   - Handshake payout: BOTH players gain +1 mana AND draw a card.
@@ -46,13 +47,43 @@ def new_game_state(card_library):
     return state
 
 
-def test_draw_is_not_legal_even_in_variant(variant, new_game_state, card_library):
+def test_rest_is_legal_in_variant(variant, new_game_state, card_library):
+    """v4: the DRAW slot is the REST action — legal in the variant."""
     actions = legal_actions(new_game_state, card_library)
-    assert draw_action() not in actions
+    assert draw_action() in actions
+
+
+def test_rest_grants_mana_and_draw(variant, new_game_state, card_library):
+    state = new_game_state
+    idx = state.active_player_idx
+    mana_before = state.players[idx].current_mana
+    hand_before = len(state.players[idx].hand)
+    deck_before = len(state.players[idx].deck)
+    state = resolve_action(state, draw_action(), card_library)
+    assert state.players[idx].current_mana == min(mana_before + 1, MAX_MANA_CAP)
+    assert len(state.players[idx].hand) == hand_before + 1
+    assert len(state.players[idx].deck) == deck_before - 1
+
+
+def test_rest_empty_deck_mana_only(variant, new_game_state, card_library):
+    from dataclasses import replace
+
+    state = new_game_state
+    idx = state.active_player_idx
+    players = list(state.players)
+    players[idx] = replace(players[idx], deck=())
+    state = replace(state, players=tuple(players))
+    mana_before = state.players[idx].current_mana
+    hand_before = len(state.players[idx].hand)
+    hp_before = state.players[idx].hp
+    state = resolve_action(state, draw_action(), card_library)
+    assert state.players[idx].current_mana == mana_before + 1
+    assert len(state.players[idx].hand) == hand_before  # no draw, no fatigue
+    assert state.players[idx].hp == hp_before
 
 
 def test_pass_grants_nothing(variant, new_game_state, card_library):
-    """v3: PASS is a plain pass again — no mana, no draw."""
+    """v4: PASS is the no-benefit skip — Rest is the rewarded one."""
     state = new_game_state
     idx = state.active_player_idx
     mana_before = state.players[idx].current_mana

@@ -205,10 +205,10 @@ def _apply_pass(
     cannot chain off a single pass pair.
     """
     assert_phase_contract(state, "action:pass_action")
-    # Rest rework v3 (user 2026-07-10): PASS gives NO benefit again — the
-    # v2 rest bonus (+1 mana +1 draw) was removed when magic casts stopped
-    # consuming the turn action. The Handshake payout (both players gain
-    # +1 mana AND draw) is unchanged and remains the only pass reward.
+    # Variant v4 (user 2026-07-11): PASS gives NOTHING — the rest benefit
+    # lives on the separate REST action (ActionType.DRAW slot, see
+    # _apply_draw): +1 mana AND +1 draw, consuming the turn action.
+    # Handshake payout (both players +1 mana AND draw) unchanged.
     new_count = state.consecutive_passes + 1
     if new_count >= 2:
         # Handshake! Reset the streak — no chaining.
@@ -225,17 +225,41 @@ def _apply_draw(
     *,
     event_collector: Optional[EventStream] = None,
 ) -> GameState:
-    """Apply DRAW action. Moves top card from deck to hand.
+    """Apply DRAW action — the variant's REST (user 2026-07-11, v4).
 
-    Manual-draw variant (user 2026-07-10): DRAW is a legal main-phase
-    action again. A full hand overdraw-burns the drawn card to the
-    Exhaust Pile (revealed) like every other draw path.
-
-    Raises ValueError if the active player's deck is empty.
+    Under the variant, the DRAW action slot is the REST: the resting
+    player gains +1 mana (capped at MAX_MANA_CAP) AND draws a card
+    (overdraw-burns on a full hand; an empty deck skips the draw —
+    never fatigue). It consumes the turn action; PASS remains the
+    no-benefit alternative. Under standard rules this is the legacy
+    plain draw (never legal since the 2026-07 redesign).
     """
     assert_phase_contract(state, "action:draw")
     drawer_idx = state.active_player_idx
     player = state.players[drawer_idx]
+    if manual_draw_variant():
+        if player.current_mana < MAX_MANA_CAP:
+            player = replace(player, current_mana=player.current_mana + 1)
+        if player.deck:
+            player, card_id, burned = player.draw_card_with_overdraw()
+            if event_collector is not None:
+                event_collector.collect(
+                    EVT_CARD_BURNED if burned else EVT_CARD_DRAWN,
+                    "action:draw",
+                    {
+                        "player_idx": drawer_idx,
+                        "source": "rest",
+                        # view_filter redacts the identity for the opponent
+                        # on non-burn draws; the drawer's client animates
+                        # deck→hand.
+                        "card_numeric_id": card_id,
+                    },
+                )
+        # Mana diff event comes from the dispatch site's generic emitter.
+        return replace(
+            state,
+            players=_replace_player(state.players, drawer_idx, player),
+        )
     if not player.deck:
         raise ValueError("Cannot draw from empty deck")
     new_player, card_id, burned = player.draw_card_with_overdraw()
@@ -248,8 +272,6 @@ def _apply_draw(
             {
                 "player_idx": drawer_idx,
                 "source": "draw_action",
-                # view_filter redacts the identity for the opponent on
-                # non-burn draws; the drawer's client animates deck→hand.
                 "card_numeric_id": card_id,
             },
         )

@@ -2,10 +2,12 @@
 
 Authoritative turn flow, phase boundaries, react windows, and effect-resolution priority rules for Grid Tactics TCG. Single source of truth when implementing or modifying turn logic, react timing, or stack/queue behavior.
 
-> **ACTIVE RULES EXPERIMENT (2026-07-10 v3)** (`GT_MANUAL_DRAW=1`, on by default in
+> **ACTIVE RULES EXPERIMENT (2026-07-11 v4)** (`GT_MANUAL_DRAW=1`, on by default in
 > `pvp_server.py`; the bare engine / test suite default to the standard rules below):
-> - NO turn-start auto-draw (and no turn-start empty-deck fatigue). DRAW is NOT a legal
->   action; PASS gives NO benefit (the v2 rest bonus was removed the same day).
+> - NO turn-start auto-draw (and no turn-start empty-deck fatigue). **REST** (the
+>   reserved DRAW action slot) consumes the turn action for **+1 mana AND +1 draw**
+>   (overdraw-burns on a full hand; empty deck skips the draw, mana still granted).
+>   **PASS is a separate action and gives NO benefit** (v4, user 2026-07-11).
 > - **MAGIC casts do not consume the turn action**: after the cast resolves (including
 >   its react windows / pending modals) play returns to the caster's ACTION phase on the
 >   same turn (`GameState.magic_free_action_pending`, consumed at the after-action
