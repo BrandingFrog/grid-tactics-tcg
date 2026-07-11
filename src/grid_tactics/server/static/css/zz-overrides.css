@@ -5897,3 +5897,61 @@ input::selection, textarea::selection { background: rgba(224, 162, 60, 0.45); co
   position: absolute !important;
   left: 522px !important;   /* stage midpoint; keeps translate(-50%,-50%) */
 }
+
+/* ---------------------------------------------------------------------------
+   Tutor reveal (user 2026-07-11): tutored cards are public — the fetched
+   card shows face-up centre-stage for a beat before popping into the
+   opponent's hand row. Mounted in .game-layout, so use the stage-midpoint
+   left like the other notices.
+   --------------------------------------------------------------------------- */
+.game-layout > .tutor-reveal {
+  position: absolute;
+  left: 522px;
+  top: 46%;
+  transform: translate(-50%, -50%);
+  z-index: 960;
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  animation: tutor-reveal-in 240ms ease-out;
+  transition: opacity 250ms ease;
+}
+.game-layout > .tutor-reveal.fade-out { opacity: 0; }
+.tutor-reveal-card {
+  filter: drop-shadow(0 8px 22px rgba(0, 0, 0, 0.7))
+          drop-shadow(0 0 14px rgba(224, 162, 60, 0.35));
+}
+.tutor-reveal-label {
+  font-family: var(--ui-display, 'Alegreya SC', Georgia, serif);
+  font-weight: 700;
+  font-size: 12px;
+  letter-spacing: 0.18em;
+  color: #201709;
+  background: linear-gradient(180deg, #f0c96a, var(--gold, #e0a23c));
+  border: 1px solid var(--bronze, #6b5730);
+  border-radius: 999px;
+  padding: 3px 14px;
+}
+@keyframes tutor-reveal-in {
+  from { opacity: 0; transform: translate(-50%, -50%) scale(0.7); }
+  to   { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+}
+
+/* Tutor-reveal card sizing: same 4x/scale(0.25) min-font-floor recipe as
+   .overdraw-reveal-card (cf2 text collapses below browser font floors at
+   thumbnail size otherwise). */
+.tutor-reveal-card {
+  width: 170px;
+  height: 170px;
+  overflow: visible;
+}
+.tutor-reveal-card .card-frame-full.cf2 {
+  width: 680px !important;
+  max-width: none !important;
+  height: 680px !important;
+  max-height: none !important;
+  transform: scale(0.25) !important;
+  transform-origin: top left !important;
+}

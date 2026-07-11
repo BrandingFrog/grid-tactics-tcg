@@ -1456,16 +1456,48 @@ function playCardDrawn(ev, done) {
                 }
             }
         } catch (e) { /* defensive — fall back to last-back targeting */ }
-        enqueueAnimation({
-            type: 'draw_opp',
-            element: (elVal != null) ? elVal : null,
-            stateApplied: true,
-            _fromEventQueue: true,
-            onDone: settle,
-        });
+        // Tutor reveal (user 2026-07-11 "when someone tutors, i should see
+        // the targets"): tutored draws arrive UNREDACTED (view_filter —
+        // searched cards are public), so show the fetched card face-up
+        // center-stage for a beat before the hand-row pop-in.
+        var revealMs = 0;
+        if (payload.source === 'tutor' && payload.card_numeric_id != null
+                && cardDefs && cardDefs[payload.card_numeric_id]) {
+            try {
+                var trv = document.createElement('div');
+                trv.className = 'tutor-reveal';
+                trv.innerHTML =
+                    '<div class="tutor-reveal-card">'
+                    + renderCardFrame(cardDefs[payload.card_numeric_id], {
+                        context: 'hand',
+                        numericId: payload.card_numeric_id,
+                        interactive: false,
+                        showReactDeploy: false,
+                    })
+                    + '</div>'
+                    + '<div class="tutor-reveal-label">TUTORED FROM DECK</div>';
+                _stageMount().appendChild(trv);
+                revealMs = 1200;
+                setTimeout(function() {
+                    trv.classList.add('fade-out');
+                    setTimeout(function() {
+                        if (trv.parentNode) trv.parentNode.removeChild(trv);
+                    }, 250);
+                }, revealMs - 250);
+            } catch (e) { revealMs = 0; /* defensive — reveal is optional */ }
+        }
+        setTimeout(function() {
+            enqueueAnimation({
+                type: 'draw_opp',
+                element: (elVal != null) ? elVal : null,
+                stateApplied: true,
+                _fromEventQueue: true,
+                onDone: settle,
+            });
+        }, revealMs);
     }
     // Safety cap: never let a wedged animQueue freeze the eventQueue.
-    setTimeout(settle, Math.max(_evDurationOr(ev, 350), 3000));
+    setTimeout(settle, Math.max(_evDurationOr(ev, 350), 4500));
 }
 
 function playCardPlayed(ev, done) {

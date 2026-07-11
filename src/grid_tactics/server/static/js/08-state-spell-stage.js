@@ -1184,7 +1184,13 @@ function logEngineEvent(ev) {
             cls = 'damage';
             break;
         case 'card_drawn':
-            if (p.card_numeric_id != null) {
+            if (p.source === 'tutor' && p.card_numeric_id != null) {
+                // Tutored cards are public (user 2026-07-11): name the
+                // fetch for both players.
+                text = _logPlayer(p.player_idx) + ' tutors '
+                     + _logCardName(p.card_numeric_id) + ' from deck';
+                cls = 'card';
+            } else if (p.card_numeric_id != null) {
                 text = _logPlayer(p.player_idx) + ' draws ' + _logCardName(p.card_numeric_id)
                      + (p.source ? ' (' + p.source + ')' : '');
                 cls = 'card';
@@ -1207,8 +1213,19 @@ function logEngineEvent(ev) {
             cls = p.is_react ? 'react' : 'card';
             break;
         case 'card_discarded':
-            text = _logPlayer(p.player_idx) + ' discards ' + _logCardName(p.card_numeric_id)
-                 + ' → graveyard';
+            // Wording by cause (user 2026-07-11): a resolved magic or a
+            // dead minion "goes to" the graveyard — only real discards
+            // (costs, effects) read as "discards".
+            var _dcSrc = ev.contract_source || '';
+            if (p.cause === 'death') {
+                text = _logPlayer(p.player_idx) + "'s " + _logCardName(p.card_numeric_id)
+                     + ' → graveyard';
+            } else if (_dcSrc === 'action:play_card' || p.cause === 'react') {
+                text = _logCardName(p.card_numeric_id) + ' resolves → graveyard';
+            } else {
+                text = _logPlayer(p.player_idx) + ' discards ' + _logCardName(p.card_numeric_id)
+                     + ' → graveyard';
+            }
             cls = 'card';
             break;
         case 'card_burned':

@@ -663,7 +663,15 @@ def filter_engine_events_for_viewer(
         # draw was an overdraw burn (full hand → card revealed to the
         # Exhaust Pile). Burned cards are public info for both players,
         # so the identity keys must survive filtering.
-        if ev.type == EVT_CARD_DRAWN and not _draw_was_burned(ev.payload):
+        # TUTOR REVEALS (user 2026-07-11 "when someone tutors, i should
+        # see the targets"): a tutored card is searched out of the deck
+        # in the open — its identity is public to both players, so
+        # tutor-sourced draws also skip redaction.
+        if (
+            ev.type == EVT_CARD_DRAWN
+            and not _draw_was_burned(ev.payload)
+            and ev.payload.get("source") != "tutor"
+        ):
             owner = ev.payload.get("player_idx")
             if owner is None:
                 # Some emitters use "owner" / "owner_idx" key — be
