@@ -489,6 +489,15 @@ function _showLobbyHeroCard(host, def, instant) {
 function onError(data) {
     var msg = data && data.msg ? data.msg : 'An error occurred.';
     showLobbyStatus(msg, 'error');
+    // Debug-code protocol (2026-07-11): rejections that carry a debug_code
+    // (illegal action, contract violation, resolver crash) also land in the
+    // game log with the code — the same code tags the full context in the
+    // server log, so copying the log line is enough to trace the bug.
+    if (data && data.debug_code && typeof addLogEntry === 'function') {
+        try {
+            addLogEntry('⚠ ' + msg + ' [' + data.debug_code + ']', 'error');
+        } catch (e) { /* defensive */ }
+    }
     // Compliance audit 2026-07-06: during a game the lobby pill is invisible
     // — surface server rejections as a stage toast so the player sees them.
     try {

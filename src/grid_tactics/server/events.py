@@ -175,6 +175,56 @@ def _inject_avatars(session, state_dict):
             players[i]['avatar_url'] = avatars[i]
 
 
+def _debug_report(kind, room_code, session, player_idx, detail):
+    """Log a client-visible failure server-side under a short debug code.
+
+    Returns the code (e.g. ``GT-3F9A2C``). The full context is written to
+    the server log tagged ``[GT-DEBUG] <code>`` — a code surfaced in a
+    client's game log can be grepped straight to its context (locally in
+    the console / server.log, on Railway via ``railway logs``). Used for
+    illegal-action rejections, phase-contract violations, and resolver
+    crashes (user 2026-07-11).
+    """
+    import json
+    import logging
+    import uuid
+
+    code = "GT-" + uuid.uuid4().hex[:6].upper()
+    try:
+        ctx = {"code": code, "kind": kind, "room": room_code, "player_idx": player_idx}
+        if session is not None:
+            st = session.state
+            ctx.update({
+                "turn": st.turn_number,
+                "phase": int(st.phase),
+                "active_player_idx": st.active_player_idx,
+                "react_player_idx": st.react_player_idx,
+                "consecutive_passes": st.consecutive_passes,
+                "magic_cast_this_turn": bool(getattr(st, "magic_cast_this_turn", False)),
+            })
+        ctx.update(detail or {})
+        payload = json.dumps(ctx, default=str)
+    except Exception as ser_err:  # never let the report itself crash the handler
+        payload = f'{{"code": "{code}", "kind": "{kind}", "serialization_error": "{ser_err}"}}'
+    logging.getLogger("grid_tactics.server.debug").warning("[GT-DEBUG] %s", payload)
+    print(f"[GT-DEBUG] {payload}", flush=True)
+    # File sink: the local dev server runs detached (stdout discarded), so
+    # also append to logs/gt-debug.log next to the repo root. On Railway
+    # the print is the durable channel (`railway logs`); the file is a
+    # same-deploy convenience there.
+    try:
+        import datetime
+        import pathlib
+        log_dir = pathlib.Path(__file__).resolve().parents[3] / "logs"
+        log_dir.mkdir(exist_ok=True)
+        stamp = datetime.datetime.now().isoformat(timespec="seconds")
+        with open(log_dir / "gt-debug.log", "a", encoding="utf-8") as f:
+            f.write(f"{stamp} {payload}\n")
+    except OSError:
+        pass
+    return code
+
+
 def _decision_idx(state):
     """Return the player index the server should accept actions from.
 
@@ -1278,7 +1328,17 @@ def register_events(room_manager: RoomManager) -> None:
         with session.lock:
             valid_actions = legal_actions(session.state, session.library)
             if action not in valid_actions:
-                emit("error", {"msg": "Illegal action"})
+                # Debug-code protocol (user 2026-07-11): full context lands
+                # in the server log under the code; the client shows the
+                # code in its game log so a bug report can be traced.
+                code = _debug_report("illegal_action", room_code, session, player_idx, {
+                    "raw_payload": data,
+                    "action": str(action),
+                    "decision_idx": decision_idx,
+                    "legal_count": len(valid_actions),
+                    "legal_sample": [str(a) for a in valid_actions[:25]],
+                })
+                emit("error", {"msg": "Illegal action", "debug_code": code})
                 return
 
             saved_state = session.state  # Phase 14.8-05 M4: snapshot before resolve for OutOfPhaseError rollback
@@ -1432,6 +1492,13 @@ def register_events(room_manager: RoomManager) -> None:
                     sorted(p.name for p in (e.allowed_phases or [])),
                     e.pending_required,
                 )
+                code = _debug_report("phase_contract_violation", room_code, session, player_idx, {
+                    "action": str(action),
+                    "contract_source": e.contract_source,
+                    "violation_phase": e.phase.name if e.phase else None,
+                    "allowed_phases": [p.name for p in (e.allowed_phases or [])],
+                    "pending_required": e.pending_required,
+                })
                 emit("error", {
                     "error_type": "phase_contract_violation",
                     "contract_source": e.contract_source,
@@ -1441,6 +1508,7 @@ def register_events(room_manager: RoomManager) -> None:
                     ],
                     "pending_required": e.pending_required,
                     "unknown_source": bool(getattr(e, "unknown_source", False)),
+                    "debug_code": code,
                     "msg": (
                         f"Action rejected: contract violation "
                         f"({e.contract_source!r} not allowed in phase "
@@ -1453,9 +1521,17 @@ def register_events(room_manager: RoomManager) -> None:
                 # broken effect doesn't crash the server or leave a partial state
                 session.state = saved_state
                 import traceback
+                code = _debug_report("resolver_crash", room_code, session, player_idx, {
+                    "action": str(action),
+                    "exception": f"{type(e).__name__}: {e}",
+                    "traceback": traceback.format_exc(),
+                })
                 print(f"[ERROR] resolve_action raised: {e}", flush=True)
                 traceback.print_exc()
-                emit("error", {"msg": f"Server error resolving action: {e}"})
+                emit("error", {
+                    "msg": f"Server error resolving action: {e}",
+                    "debug_code": code,
+                })
                 return
 
             # Phase 14.8 fix (spell-stage chain leak): several engine paths

@@ -5863,3 +5863,14 @@ input::selection, textarea::selection { background: rgba(224, 162, 60, 0.45); co
 #screen-sandbox .hand-action-bar .action-bar-col button.btn-rest-action:hover {
   filter: brightness(1.2);
 }
+
+/* ---------------------------------------------------------------------------
+   Debug-code protocol (2026-07-11): server rejections (Illegal Action,
+   contract violations, resolver crashes) land in the game log carrying a
+   [GT-XXXXXX] code that tags the full context in the server log.
+   --------------------------------------------------------------------------- */
+.log-entry.log-error {
+  border-left: 2px solid #c0392b;
+  color: #e08a7a;
+  font-weight: 700;
+}

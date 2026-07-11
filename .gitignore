@@ -18,3 +18,6 @@ wandb/
 # Phase 14.6: sandbox slot files are user-local, not committed
 data/sandbox_saves/*
 !data/sandbox_saves/.gitkeep
+
+# GT-DEBUG file sink (server-side debug-code contexts)
+logs/
