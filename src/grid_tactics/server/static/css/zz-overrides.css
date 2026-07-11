@@ -6011,15 +6011,13 @@ input::selection, textarea::selection { background: rgba(224, 162, 60, 0.45); co
   object-position: 50% 12%;
 }
 
-/* Lobby button normalisation (user 2026-07-11): heights ranged 21-46px
-   (Open games / Play VS AI collapsed to text height). One consistent
-   size for every play-column button; Create Game keeps its gold hero
-   styling at the same height. */
+/* Lobby button normalisation v2 (user 2026-07-11): normalise UP to the
+   thick Create-Game size — mobile-first tap targets, not slimmed-down
+   bars. Every play-column button gets the same chunky 48px height. */
 #screen-lobby .lobby2-play .lobby2-btn {
-  min-height: 44px;
-  height: 44px;
-  padding-top: 0;
-  padding-bottom: 0;
+  min-height: 48px;
+  padding-top: 11px;
+  padding-bottom: 11px;
   box-sizing: border-box;
   display: inline-flex;
   align-items: center;
