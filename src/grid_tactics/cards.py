@@ -161,6 +161,11 @@ class CardDefinition:
     # Summoning cost: sacrifice card(s) of this tribe from hand
     discard_cost_tribe: Optional[str] = None
     discard_cost_count: int = 1
+    # Alternate discard cost (Dark Wyrm, user 2026-07-11): the card may be
+    # played EITHER for its mana cost OR for 0 mana by discarding this many
+    # OTHER hand cards (any tribe). None = no alternate cost. Unlike
+    # discard_cost_tribe (a mandatory ADDITIONAL cost), this is a choice.
+    alt_cost_discard: Optional[int] = None
 
     # Transform: on-board minion can be transformed into these cards (costs mana)
     # Each entry is (card_id, mana_cost)

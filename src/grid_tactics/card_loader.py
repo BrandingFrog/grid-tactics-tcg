@@ -96,6 +96,7 @@ class CardLoader:
             tutor_target=CardLoader._parse_tutor_target(data, card_id),
             discard_cost_tribe=data.get("discard_cost_tribe"),
             discard_cost_count=data.get("discard_cost_count", 1),
+            alt_cost_discard=data.get("alt_cost_discard"),
             transform_options=CardLoader._parse_transform_options(data, card_id),
             deckable=data.get("deckable", True),
             flavour_text=data.get("flavour_text"),

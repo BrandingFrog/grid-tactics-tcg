@@ -220,9 +220,26 @@ def _action_phase_actions(
         ):
             continue
 
+        # Alternate discard cost (Dark Wyrm, user 2026-07-11): the card can
+        # be played EITHER for its mana cost (no discards) OR for 0 mana by
+        # discarding alt_cost_discard OTHER hand cards. Enumerate both
+        # modes; the mana gate below only blocks the mana mode.
+        alt_combos: list[tuple[int, ...]] = []
+        if card_def.alt_cost_discard:
+            _alt_others = [j for j in range(len(player.hand)) if j != idx]
+            if len(_alt_others) >= card_def.alt_cost_discard:
+                import itertools as _itertools
+                alt_combos = [
+                    tuple(c)
+                    for c in _itertools.combinations(
+                        _alt_others, card_def.alt_cost_discard,
+                    )
+                ]
+
         # Check mana (D-11), with cost reduction
         eff_cost = effective_mana_cost(card_def, state, state.active_player_idx)
-        if player.current_mana < eff_cost:
+        _mana_mode_ok = player.current_mana >= eff_cost
+        if not _mana_mode_ok and not alt_combos:
             continue
 
         # HP cost — caster must have at least hp_cost HP to self-damage
@@ -253,6 +270,11 @@ def _action_phase_actions(
                 continue  # not enough sacrifice cards -> can't play
             import itertools as _itertools
             sacrifice_combos = [tuple(c) for c in _itertools.combinations(candidates, sac_needed)]
+
+        # Alternate discard cost: the None entry is the pay-mana mode (only
+        # when affordable); each combo is a 0-mana discard mode.
+        if card_def.alt_cost_discard:
+            sacrifice_combos = ([None] if _mana_mode_ok else []) + alt_combos
 
         for sac_combo in sacrifice_combos:
             sac_idx = sac_combo[0] if sac_combo else None

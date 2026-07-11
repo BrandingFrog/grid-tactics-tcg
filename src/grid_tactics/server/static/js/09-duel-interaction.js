@@ -1068,7 +1068,28 @@ function showSacrificePicker(handIdx, deployPos, targetPos, sacChoices) {
     var myPlayer = gameState.players[_pickerSeat];
     var playedCardId = myPlayer.hand[handIdx];
     var playedDef = cardDefs[playedCardId];
-    var discardCount = (playedDef && playedDef.discard_cost_count) || 1;
+    // Alternate discard cost (Dark Wyrm, user 2026-07-11): the discard is
+    // a CHOICE — pay mana instead. isAltCost adds a Pay-Mana button below
+    // when the mana mode is also legal.
+    var isAltCost = !!(playedDef && playedDef.alt_cost_discard);
+    var discardCount = isAltCost
+        ? playedDef.alt_cost_discard
+        : ((playedDef && playedDef.discard_cost_count) || 1);
+    var manaModeAction = null;
+    if (isAltCost) {
+        for (var mi2 = 0; mi2 < legalActions.length; mi2++) {
+            var la2 = legalActions[mi2];
+            if (la2.action_type !== 0 || la2.card_index !== handIdx) continue;
+            if (deployPos) {
+                if (!la2.position || la2.position[0] !== deployPos[0] || la2.position[1] !== deployPos[1]) continue;
+            } else if (la2.position) continue;
+            if (targetPos) {
+                if (!la2.target_pos || la2.target_pos[0] !== targetPos[0] || la2.target_pos[1] !== targetPos[1]) continue;
+            } else if (la2.target_pos) continue;
+            var _ind2 = la2.discard_card_indices || (la2.discard_card_index != null ? [la2.discard_card_index] : []);
+            if (_ind2.length === 0) { manaModeAction = la2; break; }
+        }
+    }
     var picks = [];
 
     // Class names mirror the "discard" semantics (cards go to Exhaust,
@@ -1091,9 +1112,12 @@ function showSacrificePicker(handIdx, deployPos, targetPos, sacChoices) {
     inner.appendChild(row);
 
     function refresh() {
-        title.textContent = discardCount > 1
-            ? 'Pick ' + discardCount + ' cards to Discard'
-            : 'Pick a card to Discard';
+        title.textContent = isAltCost
+            ? ('Discard ' + discardCount + ' to summon for 0'
+               + (manaModeAction ? ' — or pay ' + playedDef.mana_cost + ' mana' : ''))
+            : (discardCount > 1
+                ? 'Pick ' + discardCount + ' cards to Discard'
+                : 'Pick a card to Discard');
         progress.textContent = discardCount > 1
             ? (picks.length + ' / ' + discardCount + ' picked')
             : '';
@@ -1192,6 +1216,18 @@ function showSacrificePicker(handIdx, deployPos, targetPos, sacChoices) {
     var footer = document.createElement('div');
     footer.className = 'discard-picker-footer';
     footer.appendChild(acceptBtn);
+    // Alternate cost: offer the mana mode as an explicit button.
+    if (manaModeAction) {
+        var payBtn = document.createElement('button');
+        payBtn.className = 'btn btn-secondary';
+        payBtn.textContent = 'Pay ' + playedDef.mana_cost + ' Mana';
+        payBtn.title = 'Summon for mana instead of discarding';
+        payBtn.addEventListener('click', function() {
+            hideSacrificePicker();
+            submitAction(_playCardPayload(manaModeAction));
+        });
+        footer.appendChild(payBtn);
+    }
     footer.appendChild(cancel);
     inner.appendChild(footer);
     refresh();

@@ -502,6 +502,18 @@ def _apply_play_card(
     # Check mana (with cost reduction)
     from grid_tactics.legal_actions import effective_mana_cost
     eff_cost = effective_mana_cost(card_def, state, state.active_player_idx)
+    # Alternate discard cost (Dark Wyrm, user 2026-07-11): when the action
+    # carries exactly alt_cost_discard picks, the card is played for 0 mana
+    # and those OTHER hand cards are exhausted below instead.
+    _alt_picks = list(action.discard_card_indices or ())
+    _alt_mode = bool(
+        card_def.alt_cost_discard
+        and len(_alt_picks) == card_def.alt_cost_discard
+        and len(set(_alt_picks)) == len(_alt_picks)
+        and action.card_index not in _alt_picks
+    )
+    if _alt_mode:
+        eff_cost = 0
     if player.current_mana < eff_cost:
         raise ValueError(
             f"Insufficient mana: have {player.current_mana}, need {eff_cost}"
@@ -596,6 +608,50 @@ def _apply_play_card(
                         event_collector=event_collector,
                     )
                 # Pull updated state back (effects may have changed minions)
+                state = tmp_state
+                new_player = state.players[active_idx]
+
+    # Alternate discard cost payment (Dark Wyrm): exhaust the picked cards.
+    # Same pile semantics + events as the mandatory discard_cost above
+    # (hand → Exhaust, EVT_CARD_BURNED source='discard_cost', ON_DISCARD
+    # effects fire). Indices reference the ORIGINAL hand.
+    if _alt_mode:
+        for pick_idx in _alt_picks:
+            if not (0 <= pick_idx < len(player.hand)):
+                raise ValueError(
+                    f"Invalid alternate-cost discard index: {pick_idx}"
+                )
+            discard_id = player.hand[pick_idx]
+            if discard_id not in new_player.hand:
+                raise ValueError(
+                    "Alternate-cost discard card no longer in hand"
+                )
+            new_player = new_player.exhaust_from_hand(discard_id)
+            if event_collector is not None:
+                event_collector.collect(
+                    EVT_CARD_BURNED,
+                    "action:play_card",
+                    {
+                        "player_idx": active_idx,
+                        "card_numeric_id": discard_id,
+                        "source": "discard_cost",
+                    },
+                )
+            discarded_def = library.get_by_id(discard_id)
+            discard_effects = [
+                e for e in discarded_def.effects
+                if e.trigger == TriggerType.ON_DISCARD
+            ]
+            if discard_effects:
+                tmp_players = _replace_player(state.players, active_idx, new_player)
+                tmp_state = replace(state, players=tmp_players)
+                from grid_tactics.effect_resolver import resolve_effect
+                for eff in discard_effects:
+                    tmp_state = resolve_effect(
+                        tmp_state, eff, (0, 0), active_side, library,
+                        contract_source="trigger:on_discard",
+                        event_collector=event_collector,
+                    )
                 state = tmp_state
                 new_player = state.players[active_idx]
 

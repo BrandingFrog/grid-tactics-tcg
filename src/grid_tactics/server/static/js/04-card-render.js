@@ -289,6 +289,9 @@ function renderCardFrame(c, opts) {
         }
     }
     if (c.cost_reduction === 'dark_matter') costLines.push('Cost: Reduce mana cost by ' + _dmTokenLive());
+    // Alternate discard cost (Dark Wyrm, user 2026-07-11) — a CHOICE, not
+    // an additional cost: pay mana OR discard N other cards for free.
+    if (c.alt_cost_discard) costLines.push('Cost: You may discard ' + c.alt_cost_discard + ' cards: ' + c.name + ' costs 0');
     if (c.play_condition === 'discarded_last_turn') costLines.push('Cost: Discard last turn');
     if (c.hp_cost) costLines.push('Cost: Deal ' + c.hp_cost + HEART + ' to own face');
 

@@ -117,6 +117,9 @@ def _build_card_defs(library):
                 "tutor_target": card.tutor_target,
                 "discard_cost_tribe": card.discard_cost_tribe,
                 "discard_cost_count": card.discard_cost_count,
+                # Alternate discard cost (Dark Wyrm, 2026-07-11): pay mana
+                # OR discard N other cards for free.
+                "alt_cost_discard": getattr(card, 'alt_cost_discard', None),
                 "unique": getattr(card, 'unique', False),
                 "deckable": getattr(card, 'deckable', True),
                 "transform_options": [

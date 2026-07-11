@@ -1,0 +1,35 @@
+{
+    "card_id": "dark_wyrm",
+    "stable_id": 52,
+    "name": "Dark Wyrm",
+    "card_type": "minion",
+    "mana_cost": 5,
+    "attack": 33,
+    "health": 33,
+    "range": 0,
+    "element": "dark",
+    "tribe": "Wyrm",
+    "alt_cost_discard": 3,
+    "effects": [
+        {
+            "type": "draw",
+            "trigger": "on_summon",
+            "target": "self_owner",
+            "amount": 1
+        }
+    ],
+    "deckable": true,
+    "tips": [
+        "The discard-3 mode turns a dead hand into a free 33🗡️/33🤍 — and the Summon draw immediately starts refilling.",
+        "Paying the 5 mana keeps your hand intact; discard mode keeps your mana for magic (which no longer costs your action). Pick whichever resource you can spare.",
+        "Tree Wyrm's tutor fetches Dark Wyrms — 'Tutor 2 Wyrms' can chain into a free summon if your hand is stocked.",
+        "It is a Wyrm, not a Mage: despite the Dark element it does NOT count as a Dark Mage and grants no Dark Matter."
+    ],
+    "rulings": [
+        "Dark Wyrm may be played EITHER for its printed 5 mana (no discards) OR for 0 mana by discarding 3 other cards from your hand — your choice when both are affordable.",
+        "The alternate cost needs 3 OTHER cards: Dark Wyrm itself never counts toward its own discard cost.",
+        "Alternate-cost discards go to the Exhaust Pile (revealed), exactly like paid discard costs — they are discards, and ON_DISCARD effects on the discarded cards fire.",
+        "A [[Negate]] on the summon declaration forfeits the cost either way — the mana or the 3 discarded cards are NOT refunded (harsh by design, same as every summon).",
+        "Summon: Draw 1 fires after the summon resolves (Window B); a full hand overdraw-burns the drawn card."
+    ]
+}

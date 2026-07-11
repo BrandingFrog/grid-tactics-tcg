@@ -163,6 +163,11 @@ def derive_keywords(card: dict) -> list[str]:
         kws.add("Cost")
         kws.add("Discard")
 
+    # Alternate discard cost (Dark Wyrm, 2026-07-11)
+    if card.get("alt_cost_discard"):
+        kws.add("Cost")
+        kws.add("Discard")
+
     # Cost reduction
     if card.get("cost_reduction"):
         kws.add("Cost")
@@ -295,6 +300,14 @@ def build_rules_text(card: dict, name_map: dict[str, str] | None = None) -> str:
     # Cost reduction
     if card.get("cost_reduction") == "dark_matter":
         parts.append("[[Cost]]: Reduce mana cost by ([[Dark Matter]])")
+
+    # Alternate discard cost (Dark Wyrm, 2026-07-11): a CHOICE, not an
+    # additional cost — pay mana OR discard N other cards for free.
+    if card.get("alt_cost_discard"):
+        parts.append(
+            f"[[Cost]]: You may [[Discard]] {card['alt_cost_discard']} "
+            f"cards: {card.get('name', 'this card')} costs 0"
+        )
 
     # Standard effects — skip for pure react cards (their effects render in react section)
     is_minion = card.get("card_type", "") == "minion"

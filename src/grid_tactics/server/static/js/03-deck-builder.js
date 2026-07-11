@@ -945,6 +945,7 @@ function buildCardTooltipContent(c) {
     }
     if (c.unique) cardTextLines.push('Unique');
     if (c.cost_reduction === 'dark_matter') cardTextLines.push('Cost: Reduce mana cost by ' + _dmTokenLive());
+    if (c.alt_cost_discard) cardTextLines.push('Cost: You may discard ' + c.alt_cost_discard + ' cards: ' + c.name + ' costs 0');
     if (c.play_condition === 'discarded_last_turn') cardTextLines.push('Cost: Discard last turn');
     if (c.hp_cost) cardTextLines.push('Cost: Deal ' + c.hp_cost + HEART + ' to own face');
     if (effectDesc) cardTextLines.push(effectDesc);
