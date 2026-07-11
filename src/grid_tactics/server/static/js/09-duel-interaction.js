@@ -647,9 +647,16 @@ function onBoardCellClick(row, col) {
         var validPos = (gameState && gameState.pending_conjure_deploy_positions) || [];
         var isValid = validPos.some(function(p) { return p[0] === row && p[1] === col; });
         if (!isValid) return;
+        // In-flight guard (GT-9833FF / GT-997B75): syncPendingConjureDeployUI
+        // re-asserts conjure_deploy mode from the still-stale gameState on
+        // every render, so a second click after submit re-sent the deploy —
+        // rejected server-side as an Illegal action. Suppress re-arming
+        // until a frame with the pending gate cleared arrives.
+        window.__conjureDeploySubmitted = true;
         // ActionType.CONJURE_DEPLOY = 12
         submitAction({ action_type: 12, position: [row, col] });
         interactionMode = null;
+        if (typeof closeConjureDeployUI === 'function') closeConjureDeployUI();
         return;
     }
 

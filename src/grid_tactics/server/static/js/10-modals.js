@@ -595,6 +595,15 @@ function syncPendingConjureDeployUI() {
     }
     var pendingIdx = gameState.pending_conjure_deploy_player_idx;
     if (pendingIdx == null) {
+        // Pending gate cleared — the submitted deploy landed; release the
+        // in-flight guard so the next conjure can arm normally.
+        window.__conjureDeploySubmitted = false;
+        closeConjureDeployUI();
+        return;
+    }
+    // In-flight guard (GT-9833FF): a deploy was already submitted for this
+    // pending gate — don't re-arm the mode off the stale frame.
+    if (window.__conjureDeploySubmitted) {
         closeConjureDeployUI();
         return;
     }
@@ -645,8 +654,11 @@ function showConjureDeployUI() {
         skipBtn.title = 'No tile available — the conjured card goes to your hand';
         skipBtn.addEventListener('click', function(e) {
             e.stopPropagation();
+            // In-flight guard — same double-submit race as tile deploys.
+            window.__conjureDeploySubmitted = true;
             // ActionType.DECLINE_CONJURE = 13
             submitAction({ action_type: 13 });
+            closeConjureDeployUI();
         });
         banner.appendChild(skipBtn);
     }
