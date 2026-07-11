@@ -190,6 +190,11 @@ class CardDefinition:
     # SINGLE_TARGET — board-wide magic still hits it (untargetable, not
     # immune, per user MCQ).
     magic_untargetable: bool = False
+    # Earth Wyrm (2026-07-11): revive filter EXCLUSION — this card_id is
+    # never a legal revive pick for this card's REVIVE effect (prevents
+    # sacrifice-revive self-loops). Composes with revive_card_id /
+    # target_tribe filters.
+    revive_exclude_card_id: Optional[str] = None
     cost_reduction: Optional[str] = None
     # Fixed amount for conditional reductions (Metal Wyrm 2026-07-11:
     # cost_reduction="behind_on_board" subtracts this while the opponent

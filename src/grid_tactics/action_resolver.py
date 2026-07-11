@@ -811,6 +811,7 @@ def _enter_pending_revive(
         pending_revive_player_idx=player_idx,
         pending_revive_card_id=revive_id,
         pending_revive_tribe=revive_tribe,
+        pending_revive_exclude_card_id=card_def.revive_exclude_card_id,
     )
     from grid_tactics.legal_actions import revive_grave_matches
     matches = revive_grave_matches(candidate, library)
@@ -952,6 +953,7 @@ def _apply_revive_place(
             pending_revive_player_idx=None,
             pending_revive_card_id=None,
             pending_revive_tribe=None,
+            pending_revive_exclude_card_id=None,
             pending_revive_remaining=0,
         )
     return new_state
@@ -2361,6 +2363,8 @@ def resolve_action(
                 state,
                 pending_revive_player_idx=None,
                 pending_revive_card_id=None,
+                pending_revive_tribe=None,
+                pending_revive_exclude_card_id=None,
                 pending_revive_remaining=0,
             )
             return _resume_after_pending_revive(
@@ -2826,6 +2830,8 @@ def resolve_action(
                 state,
                 pending_revive_player_idx=None,
                 pending_revive_card_id=None,
+                pending_revive_tribe=None,
+                pending_revive_exclude_card_id=None,
                 pending_revive_remaining=0,
             )
             return _resume_after_pending_revive(
@@ -3025,6 +3031,20 @@ def resolve_action(
             if action.minion_id is not None else None
         )
         state = _apply_sacrifice(state, action, library)
+        # Earth Wyrm (2026-07-11): ON_SACRIFICE revive — the sacrificed
+        # card may revive from the grave (its own copies excluded via
+        # revive_exclude_card_id). Enters the standard pending_revive
+        # gate; the AFTER_ACTION react window defers until it clears.
+        if _pre_sac is not None:
+            _sac_def_fx = library.get_by_id(_pre_sac.card_numeric_id)
+            if any(
+                e.effect_type == EffectType.REVIVE
+                and e.trigger == TriggerType.ON_SACRIFICE
+                for e in _sac_def_fx.effects
+            ):
+                state = _enter_pending_revive(
+                    state, _sac_def_fx, _pre_sac.owner, library,
+                )
         # 2026-07 fix: emit a board event so the client can play the
         # sacrifice-transcend animation — the old deriveAnimationJob wiring
         # was deleted in Phase 14.8-05 and SACRIFICE rendered silently.

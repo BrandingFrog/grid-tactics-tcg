@@ -927,7 +927,7 @@ function getEffectDescription(effects, cardData, opts) {
     // 8 (ON_SUMMON) added 2026-07-10 — it was missing, so on-summon effects
     // (Dark Mage "Summon: Dark Matter +1", Eclipse Shade's burn, diodebot
     // tutors) rendered with no prefix at all.
-    var triggerMap = {0: isMinion ? 'Summon' : '', 1: 'Death', 2: 'Attack', 3: 'Damaged', 4: 'Move', 5: 'End', 6: 'Discarded', 8: isMinion ? 'Summon' : '', 9: 'Rally', 10: 'Decay'};
+    var triggerMap = {0: isMinion ? 'Summon' : '', 1: 'Death', 2: 'Attack', 3: 'Damaged', 4: 'Move', 5: 'End', 6: 'Discarded', 8: isMinion ? 'Summon' : '', 9: 'Rally', 10: 'Decay', 11: 'Sacrifice'};
     // Coalesce sibling burn-all-minions effects that only differ in
     // target_tribe/target_element into a single rendered clause — so
     // Acidic Rain reads "Burn all Robots, Machines and Metal minions"
@@ -1100,8 +1100,16 @@ function getEffectDescription(effects, cardData, opts) {
                 desc += ' per ally ' + dmTribe;
             }
         } else if (type === 17) { // Revive
-            var reviveName = (cardData && cardData.revive_card_id) ? findCardNameById(cardData.revive_card_id) : 'minion';
-            desc = prefix + 'Revive ' + amount + ' ' + reviveName + (amount > 1 ? 's' : '') + ' from Grave';
+            var reviveName = (cardData && cardData.revive_card_id)
+                ? findCardNameById(cardData.revive_card_id)
+                : (eff.target_tribe ? 'a ' + eff.target_tribe : 'minion');
+            if (amount > 1 && cardData && cardData.revive_card_id) {
+                reviveName = amount + ' ' + reviveName + 's';
+            }
+            desc = prefix + 'Revive ' + reviveName + ' from Grave';
+            if (cardData && cardData.revive_exclude_card_id) {
+                desc += ' (except ' + (findCardNameById(cardData.revive_exclude_card_id) || cardData.revive_exclude_card_id) + ')';
+            }
         } else if (type === 18) { // Draw
             var cardText = amount > 1 ? amount + ' cards' : '1 card';
             desc = prefix + 'Draw ' + cardText;

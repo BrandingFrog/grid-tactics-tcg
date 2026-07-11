@@ -643,6 +643,7 @@ def revive_grave_matches(state: GameState, library: CardLibrary) -> tuple[int, .
         return ()
     exact = state.pending_revive_card_id
     tribe = state.pending_revive_tribe
+    exclude = state.pending_revive_exclude_card_id
     out: list[int] = []
     for i, cid in enumerate(state.players[player_idx].grave):
         try:
@@ -655,6 +656,8 @@ def revive_grave_matches(state: GameState, library: CardLibrary) -> tuple[int, .
             continue
         if tribe and tribe not in (cd.tribe or "").split():
             continue
+        if exclude and cd.card_id == exclude:
+            continue  # Earth Wyrm: no sacrifice-revive self-loops
         out.append(i)
     return tuple(out)
 

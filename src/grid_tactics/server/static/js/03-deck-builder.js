@@ -1076,6 +1076,7 @@ function buildCardTooltipContent(c) {
             if (eff.type === 15) addKw('Burning');
             if (eff.type === 16) addKw('Dark Matter');
             if (eff.type === 17) addKw('Revive');
+            if (eff.trigger === 11) addKw('Sacrifice');  // ON_SACRIFICE (Earth Wyrm)
             if (eff.type === 18) addKw('Draw');
             if (eff.type === 19) { addKw('Passive'); addKw('Burn'); }
             if (eff.trigger === 7) addKw('Passive');

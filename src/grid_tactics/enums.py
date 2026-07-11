@@ -159,7 +159,8 @@ class TriggerType(IntEnum):
     # Phase 14.7-03: explicit turn-phase and summon triggers
     ON_SUMMON = 8             # When minion is deployed from hand (14.7-04 opens compound windows)
     ON_START_OF_TURN = 9      # Rally Phase: at the start of the owner's turn, before ACTION
-    ON_END_OF_TURN = 10       # Decay Phase: at the end of the owner's turn (burn ticks here, before the turn passes)
+    ON_END_OF_TURN = 10
+    ON_SACRIFICE = 11  # fires when the minion is SACRIFICED (Earth Wyrm 2026-07-11)       # Decay Phase: at the end of the owner's turn (burn ticks here, before the turn passes)
 
 
 class TargetType(IntEnum):

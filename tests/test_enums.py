@@ -225,7 +225,7 @@ class TestTriggerType:
         # members: ON_PLAY=0, ON_DEATH=1, ON_ATTACK=2, ON_DAMAGED=3,
         # ON_MOVE=4, [5 burned], ON_DISCARD=6, AURA=7, ON_SUMMON=8,
         # ON_START_OF_TURN=9, ON_END_OF_TURN=10.
-        assert len(TriggerType) == 10
+        assert len(TriggerType) == 11  # +ON_SACRIFICE (Earth Wyrm 2026-07-11)
 
     def test_passive_deleted(self) -> None:
         """Phase 14.8-05 regression guard: PASSIVE must NOT be a member.

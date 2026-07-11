@@ -81,6 +81,7 @@ _TRIGGER_PREFIX: dict[int | str, str] = {
     # ON_END_OF_TURN in the Decay Phase (both keywords in data/GLOSSARY.md).
     9: "[[Rally]]", "on_start_of_turn": "[[Rally]]",
     10: "[[Decay]]", "on_end_of_turn": "[[Decay]]",
+    11: "[[Sacrifice]]", "on_sacrifice": "[[Sacrifice]]",
 }
 
 # Both Dark-Matter scale spellings live in card JSONs: 'dark_matter'
@@ -488,9 +489,17 @@ def build_rules_text(card: dict, name_map: dict[str, str] | None = None) -> str:
             desc = "[[Move]]: [[Leap]]"
         elif eff_type == "revive":
             revive_id = eff.get("revive_card_id", "")
-            revive_link = _wikilink(revive_id, name_map) if revive_id else "a card"
+            if revive_id:
+                revive_link = _wikilink(revive_id, name_map)
+            elif eff.get("target_tribe"):
+                revive_link = f"a {eff['target_tribe']}"
+            else:
+                revive_link = "a card"
             up_to = f"up to {amount} " if amount > 1 else ""
             desc = f"{pfx}[[Revive]] {up_to}{revive_link}"
+            if card.get("revive_exclude_card_id"):
+                excl = _wikilink(card["revive_exclude_card_id"], name_map)
+                desc += f" (except {excl})"
         elif eff_type == "draw":
             count_text = f"{amount} cards" if amount > 1 else "1 card"
             desc = f"{pfx}[[Draw]] {count_text}"

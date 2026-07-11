@@ -21,6 +21,13 @@
             "trigger": "on_move",
             "target": "self_owner",
             "amount": 1
+        },
+        {
+            "type": "revive",
+            "trigger": "on_sacrifice",
+            "target": "self_owner",
+            "amount": 1,
+            "target_tribe": "Wyrm"
         }
     ],
     "deckable": true,
@@ -28,11 +35,15 @@
         "Leap lets it burrow past blockers — a 33🗡️/33🤍 that cannot be body-blocked forces awkward trades.",
         "A Leap whose path is ALL enemy minions ending past the back row is a Sacrifice line: 33🗡️ straight to the face.",
         "Tree Wyrm's tutor fetches Earth Wyrms — 'Tutor 2 Wyrms' restocks the burrowers.",
-        "Like Rathopper, it still only moves forward in its column — Leap changes what it can move THROUGH, not where."
+        "Like Rathopper, it still only moves forward in its column — Leap changes what it can move THROUGH, not where.",
+        "Sacrificing it is a two-for-one: 33🗡️ to the face AND a free Wyrm back from the grave."
     ],
     "rulings": [
         "Leap follows the same rules as Rathopper's: forward in its own column, hopping over occupied tiles to the next empty one.",
         "Landing rules, react windows, and the post-move attack pick are identical to a normal Move.",
-        "Summon: Draw 1 fires after the summon resolves (Window B); a full hand overdraw-burns the drawn card."
-    ]
+        "Summon: Draw 1 fires after the summon resolves (Window B); a full hand overdraw-burns the drawn card.",
+        "Sacrifice: Revive fires after the sacrifice damage lands — pick any Wyrm in your graveyard EXCEPT an Earth Wyrm (no self-loops) and place it like a normal revive.",
+        "The revive is optional: the picker's Done button skips it. Declining refunds nothing."
+    ],
+    "revive_exclude_card_id": "earth_wyrm"
 }
