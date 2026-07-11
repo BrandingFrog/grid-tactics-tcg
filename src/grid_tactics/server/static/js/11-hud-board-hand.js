@@ -1084,6 +1084,8 @@ function getEffectDescription(effects, cardData, opts) {
             if (cardData && cardData.conjure_buff === 'dark_matter') {
                 desc += '. Buff all ' + conjureName + ' by Dark Matter';
             }
+        } else if (type === 20) { // Cleanse (Water Wyrm 2026-07-11)
+            desc = prefix + 'Cleanse (removes all debuffs)';
         } else if (type === 15) { // Apply Burning
             var burnAmt = amount || 1;
             desc = prefix + 'Apply ' + burnAmt + ' Burning';

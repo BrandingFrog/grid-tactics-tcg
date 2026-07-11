@@ -168,6 +168,10 @@ def derive_keywords(card: dict) -> list[str]:
         kws.add("Cost")
         kws.add("Discard")
 
+    # Magic untargetability (Water Wyrm 2026-07-11)
+    if card.get("magic_untargetable"):
+        kws.add("Untargetable")
+
     # Cost reduction
     if card.get("cost_reduction"):
         kws.add("Cost")
@@ -297,6 +301,10 @@ def build_rules_text(card: dict, name_map: dict[str, str] | None = None) -> str:
     # Unique tag
     if card.get("unique"):
         parts.append("[[Unique]]")
+
+    # Magic untargetability (Water Wyrm 2026-07-11)
+    if card.get("magic_untargetable"):
+        parts.append("Cannot be targeted by magic cards")
 
     # Cost reduction
     if card.get("cost_reduction") == "dark_matter":
@@ -474,6 +482,8 @@ def build_rules_text(card: dict, name_map: dict[str, str] | None = None) -> str:
             desc = f"Active: Target gains ([[Dark Matter]])🗡️"
         elif eff_type == "passive_heal":
             desc = f"[[Rally]]: [[Heal]] {amount}"
+        elif eff_type == "cleanse":
+            desc = "[[Rally]]: [[Cleanse]] (removes all debuffs)"
         elif eff_type == "leap":
             desc = "[[Move]]: [[Leap]]"
         elif eff_type == "revive":

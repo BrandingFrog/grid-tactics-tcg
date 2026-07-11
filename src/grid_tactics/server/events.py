@@ -131,6 +131,7 @@ def _build_card_defs(library):
                 "summon_token_target": getattr(card, 'summon_token_target', None),
                 "summon_token_cost": getattr(card, 'summon_token_cost', None),
                 "conjure_buff": getattr(card, 'conjure_buff', None),
+                "magic_untargetable": getattr(card, 'magic_untargetable', False),
                 "cost_reduction": getattr(card, 'cost_reduction', None),
                 "cost_reduction_amount": getattr(card, 'cost_reduction_amount', None),
                 "play_condition": getattr(card, 'play_condition', None),

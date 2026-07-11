@@ -343,6 +343,13 @@ def _action_phase_actions(
                 for destroy_ally_id in ally_choices:
                     if has_single_target:
                         enemy_positions = _get_enemy_minion_positions(state, player_side)
+                        # Water Wyrm (2026-07-11): magic-untargetable minions
+                        # are not valid MAGIC targets. With every enemy
+                        # untargetable the magic is simply unplayable.
+                        enemy_positions = [
+                            pos for pos in enemy_positions
+                            if not _magic_untargetable_at(state, library, pos)
+                        ]
                         for target_pos in enemy_positions:
                             actions.append(Action(
                                 action_type=ActionType.PLAY_CARD,
@@ -1234,6 +1241,18 @@ def _valid_deploy_positions(state, card_def, side):
             if state.board.get(row, col) is None:
                 positions.append((row, col))
     return positions
+
+
+def _magic_untargetable_at(state, library, pos) -> bool:
+    """True when the minion at ``pos`` carries magic_untargetable (Water
+    Wyrm 2026-07-11 — magic cards cannot pick it as a SINGLE_TARGET)."""
+    for m in state.minions:
+        if tuple(m.position) == tuple(pos) and m.current_health > 0:
+            try:
+                return bool(library.get_by_id(m.card_numeric_id).magic_untargetable)
+            except KeyError:
+                return False
+    return False
 
 
 def _get_enemy_minion_positions(state, player_side):

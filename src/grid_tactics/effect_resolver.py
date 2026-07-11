@@ -428,6 +428,22 @@ def _apply_effect_to_minion_dispatch(
     elif effect.effect_type == EffectType.PASSIVE_HEAL:
         # Heal self by `amount`, capped at base health.
         return _apply_heal_to_minion(state, minion, effect.amount, library)
+    elif effect.effect_type == EffectType.CLEANSE:
+        # Cleanse (Water Wyrm Rally, 2026-07-11): remove the target's
+        # debuffs — burning cleared, negative attack / max-HP marks reset
+        # to 0. NOT a heal: current_health is untouched (a restored max-HP
+        # cap just leaves room to heal back into).
+        cleaned = replace(
+            minion,
+            is_burning=False,
+            burn_scope="owner",
+            attack_bonus=max(0, minion.attack_bonus),
+            max_health_bonus=max(0, minion.max_health_bonus),
+        )
+        if cleaned == minion:
+            return state  # nothing to cleanse — no-op, no event churn
+        new_minions = _replace_minion(state.minions, minion.instance_id, cleaned)
+        return replace(state, minions=new_minions)
     elif effect.effect_type == EffectType.APPLY_BURNING:
         # Boolean burn: set is_burning=True. No-op if already burning (the
         # existing burn's scope is kept). ``burn_scope`` per spec §7.2 —

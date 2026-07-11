@@ -193,7 +193,7 @@ class TestEffectType:
     def test_member_count(self) -> None:
         # Append-only enum. Current 20 members: the original 18 plus DRAW
         # and BURN_BONUS added by later phases.
-        assert len(EffectType) == 20
+        assert len(EffectType) == 21  # +CLEANSE (Water Wyrm 2026-07-11)
 
     def test_bracket_lookup(self) -> None:
         assert EffectType["DAMAGE"] is EffectType.DAMAGE

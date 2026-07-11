@@ -1,0 +1,40 @@
+{
+    "card_id": "water_wyrm",
+    "stable_id": 54,
+    "name": "Water Wyrm",
+    "card_type": "minion",
+    "mana_cost": 5,
+    "attack": 33,
+    "health": 33,
+    "range": 0,
+    "element": "water",
+    "tribe": "Wyrm",
+    "magic_untargetable": true,
+    "effects": [
+        {
+            "type": "draw",
+            "trigger": "on_summon",
+            "target": "self_owner",
+            "amount": 1
+        },
+        {
+            "type": "cleanse",
+            "trigger": "on_start_of_turn",
+            "target": "self_owner",
+            "amount": 0
+        }
+    ],
+    "deckable": true,
+    "tips": [
+        "Burning slides right off: the Rally Cleanse clears Burning and any stat debuffs every one of your turns.",
+        "Targeted removal magic (Dark Matter Barrage's single-target mode, White Lasercannon-style picks) simply cannot choose it — only board-wide magic, minions, and reacts touch it.",
+        "Tree Wyrm's tutor fetches Water Wyrms — a debuff-proof 33🗡️/33🤍 is the safest body to restock with.",
+        "Cleanse is not a heal: chip damage stays. Pair it with healing if you want the wall to last forever."
+    ],
+    "rulings": [
+        "Cannot be targeted by magic cards: it is never a legal SINGLE_TARGET for a magic card. Area magic (e.g. Acidic Rain) still affects it — untargetable, not immune.",
+        "Rally: Cleanse removes Burning and resets negative 🗡️/🤍 marks to 0. Positive buffs are untouched, and lost health is NOT restored.",
+        "Cleanse fires in the owner's Rally Phase (start of turn), after the turn-start sequence — a burn tick that already resolved in the opponent's Decay Phase is not undone.",
+        "Summon: Draw 1 fires after the summon resolves (Window B); a full hand overdraw-burns the drawn card."
+    ]
+}

@@ -288,6 +288,7 @@ function renderCardFrame(c, opts) {
             costLines.push('Cost: Discard any ' + (sacN > 1 ? sacN + ' ' : '') + c.discard_cost_tribe + (sacN > 1 ? 's' : ''));
         }
     }
+    if (c.magic_untargetable) costLines.push('Cannot be targeted by magic cards');
     if (c.cost_reduction === 'dark_matter') costLines.push('Cost: Reduce mana cost by ' + _dmTokenLive());
     if (c.cost_reduction === 'behind_on_board') {
         costLines.push('Cost: Costs ' + (c.cost_reduction_amount || 0)

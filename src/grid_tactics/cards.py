@@ -186,6 +186,10 @@ class CardDefinition:
     conjure_buff: Optional[str] = None         # buff type applied on conjure (e.g. 'dark_matter')
 
     # Cost reduction: e.g. "dark_matter" reduces mana cost by total DM stacks on board
+    # Water Wyrm (2026-07-11): magic cards cannot pick this minion as a
+    # SINGLE_TARGET — board-wide magic still hits it (untargetable, not
+    # immune, per user MCQ).
+    magic_untargetable: bool = False
     cost_reduction: Optional[str] = None
     # Fixed amount for conditional reductions (Metal Wyrm 2026-07-11:
     # cost_reduction="behind_on_board" subtracts this while the opponent

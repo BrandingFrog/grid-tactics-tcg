@@ -103,6 +103,7 @@ class EffectType(IntEnum):
     REVIVE = 17  # Summon up to `amount` copies of revive_card_id from grave to the board
     DRAW = 18    # Draw `amount` cards from deck to hand
     BURN_BONUS = 19  # Aura: adds `amount` to burn tick damage for this player's burning enemies
+    CLEANSE = 20     # Remove the target's debuffs: burning cleared, negative stat marks reset to 0 (Water Wyrm Rally, 2026-07-11)
 
 
 class ReactCondition(IntEnum):

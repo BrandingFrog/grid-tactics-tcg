@@ -900,6 +900,8 @@ var KEYWORD_GLOSSARY = {
     'Dark Matter': 'A stacking PLAYER resource pool, visible to both players. Gains add +1 per friendly Dark Mage on board (a minion with the Dark element and the Mage tribe — composite tribes like Mage Rat and Mage Undead count). Dark spells, buffs and costs scale with your pool; reading it never spends it.',
     'Leap': 'If blocked by an enemy, jump over to the next available tile. Cannot leap allies. If all tiles ahead are enemy-occupied, enables sacrifice.',
     'Conjure': 'Summon a card from your deck directly to the board.',
+    'Cleanse': 'Removes all debuffs from the minion: Burning is cleared and negative \ud83d\udde1\ufe0f/\ud83e\udd0d marks reset to 0. Positive buffs stay; lost health is not restored.',
+    'Untargetable': 'Cannot be targeted by magic cards \u2014 it is never a legal target for a magic card\u2019s single-target effect. Board-wide magic, minions and reacts still affect it.',
     'Revive': 'Summon minions from the Grave to the board. You pick which eligible grave card to revive and where it deploys (melee: any tile on your side; ranged: back row). Eligibility is limited by the text on the reviving card.',
     'Draw': 'Draw cards from your deck to your hand. If your hand is full (10 cards), the drawn card is sent to the Exhaust Pile, revealed, instead.',
     'Handshake': 'When a player passes and the opponent\'s previous action was also a pass, a Handshake occurs: at the end of that turn, both players gain +1 mana. A player whose mana is already full draws a card instead. The pass counter then resets — no chaining.',
@@ -944,6 +946,7 @@ function buildCardTooltipContent(c) {
         }
     }
     if (c.unique) cardTextLines.push('Unique');
+    if (c.magic_untargetable) cardTextLines.push('Cannot be targeted by magic cards');
     if (c.cost_reduction === 'dark_matter') cardTextLines.push('Cost: Reduce mana cost by ' + _dmTokenLive());
     if (c.cost_reduction === 'behind_on_board') {
         cardTextLines.push('Cost: Costs ' + (c.cost_reduction_amount || 0)
@@ -1021,6 +1024,7 @@ function buildCardTooltipContent(c) {
     if (c.card_type === 0 && c.attack_range != null && c.attack_range === 0) addKw('Melee');
     if (c.card_type === 0 && c.attack_range != null && c.attack_range > 0) addKw('Range');
     if (c.discard_cost_tribe) { addKw('Cost'); addKw('Exhaust'); }
+    if (c.magic_untargetable) addKw('Untargetable');
     if (c.cost_reduction) {
         addKw('Cost');
         if (c.cost_reduction === 'dark_matter') addKw('Dark Matter');
@@ -1066,6 +1070,7 @@ function buildCardTooltipContent(c) {
             if (eff.type === 10) addKw('Burn');
             if (eff.type === 11) { addKw('Active'); addKw('Dark Matter'); }
             if (eff.type === 12) { addKw('Rally'); addKw('Heal'); }  // PASSIVE_HEAL fires in the Rally Phase (ON_START_OF_TURN)
+            if (eff.type === 20) { addKw('Rally'); addKw('Cleanse'); }  // CLEANSE (Water Wyrm)
             if (eff.type === 13) addKw('Leap');
             if (eff.type === 14) addKw('Conjure');
             if (eff.type === 15) addKw('Burning');
