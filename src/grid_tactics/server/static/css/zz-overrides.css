@@ -5518,10 +5518,14 @@ input::selection, textarea::selection { background: rgba(224, 162, 60, 0.45); co
   display: flex; align-items: center; justify-content: center; gap: 8px;
   width: 100%;
   margin-top: 6px;
-  padding: 10px 14px;
+  /* Match the normalised 48px play-column buttons (user 2026-07-11 —
+     'the discord login is skinny still?'). */
+  min-height: 48px;
+  box-sizing: border-box;
+  padding: 11px 14px;
   font-family: var(--ui-display);
   font-weight: 700;
-  font-size: 14px;
+  font-size: 16px;
   letter-spacing: 0.04em;
   color: #f2ead2;
   background: linear-gradient(180deg, #5865F2, #4752c4);
@@ -5535,7 +5539,9 @@ input::selection, textarea::selection { background: rgba(224, 162, 60, 0.45); co
 .account-chip {
   display: flex; align-items: center; gap: 10px;
   margin-top: 6px;
-  padding: 7px 10px;
+  min-height: 48px;
+  box-sizing: border-box;
+  padding: 7px 12px;
   background: rgba(224, 162, 60, 0.08);
   border: 1px solid var(--bronze, #6b5730);
   border-radius: 8px;
