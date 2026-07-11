@@ -5559,12 +5559,15 @@ input::selection, textarea::selection { background: rgba(224, 162, 60, 0.45); co
 }
 .account-logout-btn {
   flex: 0 0 auto;
-  font-family: var(--ui-body); font-size: 11px;
+  /* --u sizing (user 2026-07-11 'Log out text is tiny'): was a fixed
+     11px whisper — now scales with the lobby and reads at chip weight. */
+  font-family: var(--ui-body); font-size: calc(var(--u, 1px) * 13);
   color: var(--parch-dim, #cbb98f);
   background: transparent;
   border: 1px solid var(--bronze-dk, #3a2e18);
-  border-radius: 5px;
-  padding: 4px 8px; cursor: pointer;
+  border-radius: calc(var(--u, 1px) * 5);
+  padding: calc(var(--u, 1px) * 5) calc(var(--u, 1px) * 10);
+  cursor: pointer;
 }
 .account-logout-btn:hover { color: var(--gold, #e0a23c); border-color: var(--gold, #e0a23c); }
 
