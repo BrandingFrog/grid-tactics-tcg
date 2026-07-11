@@ -6050,7 +6050,9 @@ input::selection, textarea::selection { background: rgba(224, 162, 60, 0.45); co
    --------------------------------------------------------------------------- */
 #screen-lobby .lobby2-identity {
   display: flex; flex-direction: column; gap: calc(var(--u, 1px) * 8);
-  margin-top: calc(var(--u, 1px) * 10);
+  /* Sits ABOVE the nav (user 2026-07-11 'put it over the deck builder')
+     — takes the nav's old top offset; the nav keeps its own margin. */
+  margin-top: calc(var(--u, 1px) * 14);
   width: calc(var(--u, 1px) * 192);
   z-index: 2; position: relative;
 }
