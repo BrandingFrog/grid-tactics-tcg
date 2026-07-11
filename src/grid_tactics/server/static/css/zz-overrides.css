@@ -5515,17 +5515,17 @@ input::selection, textarea::selection { background: rgba(224, 162, 60, 0.45); co
    Discord login + account chip + PFP (user 2026-07-08)
    ============================================================ */
 .discord-login-btn {
-  display: flex; align-items: center; justify-content: center; gap: 8px;
+  display: flex; align-items: center; justify-content: center; gap: calc(var(--u, 1px) * 8);
   width: 100%;
-  margin-top: 6px;
-  /* Match the normalised 48px play-column buttons (user 2026-07-11 —
-     'the discord login is skinny still?'). */
-  min-height: 48px;
+  margin-top: calc(var(--u, 1px) * 6);
+  /* Match the normalised play-column buttons, in the lobby's fluid --u
+     unit so desktop scales (user 2026-07-11). */
+  min-height: calc(var(--u, 1px) * 48);
   box-sizing: border-box;
-  padding: 11px 14px;
+  padding: calc(var(--u, 1px) * 11) calc(var(--u, 1px) * 14);
   font-family: var(--ui-display);
   font-weight: 700;
-  font-size: 16px;
+  font-size: calc(var(--u, 1px) * 16);
   letter-spacing: 0.04em;
   color: #f2ead2;
   background: linear-gradient(180deg, #5865F2, #4752c4);
@@ -5537,23 +5537,23 @@ input::selection, textarea::selection { background: rgba(224, 162, 60, 0.45); co
 .discord-login-btn .discord-glyph { font-size: 16px; }
 
 .account-chip {
-  display: flex; align-items: center; gap: 10px;
-  margin-top: 6px;
-  min-height: 48px;
+  display: flex; align-items: center; gap: calc(var(--u, 1px) * 10);
+  margin-top: calc(var(--u, 1px) * 6);
+  min-height: calc(var(--u, 1px) * 48);
   box-sizing: border-box;
-  padding: 7px 12px;
+  padding: calc(var(--u, 1px) * 7) calc(var(--u, 1px) * 12);
   background: rgba(224, 162, 60, 0.08);
   border: 1px solid var(--bronze, #6b5730);
   border-radius: 8px;
 }
 .account-chip-avatar {
-  width: 30px; height: 30px; border-radius: 50%;
+  width: calc(var(--u, 1px) * 30); height: calc(var(--u, 1px) * 30); border-radius: 50%;
   border: 1px solid var(--gold, #e0a23c);
   object-fit: cover; flex: 0 0 auto;
 }
 .account-chip-name {
   flex: 1 1 auto; min-width: 0;
-  font-family: var(--ui-display); font-weight: 700; font-size: 13px;
+  font-family: var(--ui-display); font-weight: 700; font-size: calc(var(--u, 1px) * 14);
   color: var(--parch, #e8dcbe);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
@@ -5997,17 +5997,18 @@ input::selection, textarea::selection { background: rgba(224, 162, 60, 0.45); co
 }
 .floating-popup { z-index: 40; }
 
-/* Play VS AI + Open games (user 2026-07-11, design pass v3): both carry
-   the same worn-bronze secondary-CTA look — 16px Alegreya SC in bright
-   gold, matching fills and hover glow. */
+/* Play VS AI + Open games (user 2026-07-11, design pass v4): both carry
+   the same worn-bronze secondary-CTA look — 16u Alegreya SC in bright
+   gold. Sized in the lobby's fluid --u unit (min(100vw/844,100vh/390))
+   so they scale with the rest of the column on desktop. */
 .lobby2-btn.lobby2-btn-browse,
 .lobby2-btn.lobby2-btn-vsai {
-  margin-top: 10px;
+  margin-top: calc(var(--u, 1px) * 10);
   background: linear-gradient(180deg, #3a2c14, #241a0a) !important;
   border: 1px solid var(--bronze, #6b5730) !important;
   color: #ffd873 !important;
-  font-size: 16px !important;
-  letter-spacing: 1px;
+  font-size: calc(var(--u, 1px) * 16) !important;
+  letter-spacing: calc(var(--u, 1px) * 1);
   box-shadow: inset 0 1px 0 rgba(255, 216, 115, 0.12), 0 2px 6px rgba(0, 0, 0, 0.4);
 }
 .lobby2-btn.lobby2-btn-browse:hover,
@@ -6024,13 +6025,14 @@ input::selection, textarea::selection { background: rgba(224, 162, 60, 0.45); co
   object-position: 50% 12%;
 }
 
-/* Lobby button normalisation v2 (user 2026-07-11): normalise UP to the
-   thick Create-Game size — mobile-first tap targets, not slimmed-down
-   bars. Every play-column button gets the same chunky 48px height. */
+/* Lobby button normalisation v3 (user 2026-07-11): normalise UP to the
+   thick Create-Game size — mobile-first tap targets. Sized in --u so
+   the buttons keep scaling on desktop (v2's fixed px pinned them at
+   48px while the rest of the column grew). */
 #screen-lobby .lobby2-play .lobby2-btn {
-  min-height: 48px;
-  padding-top: 11px;
-  padding-bottom: 11px;
+  min-height: calc(var(--u, 1px) * 48);
+  padding-top: calc(var(--u, 1px) * 11);
+  padding-bottom: calc(var(--u, 1px) * 11);
   box-sizing: border-box;
   display: inline-flex;
   align-items: center;
