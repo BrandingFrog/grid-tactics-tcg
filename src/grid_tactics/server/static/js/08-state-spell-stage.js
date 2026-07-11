@@ -1280,7 +1280,9 @@ function logEngineEvent(ev) {
             detail = true;
             break;
         case 'pass_declared':
-            text = _logPlayer(p.player_idx) + ' passes'
+            // v4 (2026-07-11): REST also advances the Handshake — the
+            // engine tags its declaration with payload.rest.
+            text = _logPlayer(p.player_idx) + (p.rest ? ' rests' : ' passes')
                  + (p.streak === 1 ? ' (Handshake offered 🫴)'
                     : (p.handshake_pending ? ' (Handshake! 🤝)' : ''));
             break;

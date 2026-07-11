@@ -256,10 +256,21 @@ def _apply_draw(
                     },
                 )
         # Mana diff event comes from the dispatch site's generic emitter.
-        return replace(
+        state = replace(
             state,
             players=_replace_player(state.players, drawer_idx, player),
         )
+        # v4 (user 2026-07-11): REST also advances the Handshake streak —
+        # rest/pass in any combination seal a Handshake. Mirrors
+        # _apply_pass exactly (reset on completion, no chaining).
+        new_count = state.consecutive_passes + 1
+        if new_count >= 2:
+            return replace(
+                state,
+                consecutive_passes=0,
+                handshake_pending=True,
+            )
+        return replace(state, consecutive_passes=new_count)
     if not player.deck:
         raise ValueError("Cannot draw from empty deck")
     new_player, card_id, burned = player.draw_card_with_overdraw()
@@ -2760,8 +2771,14 @@ def resolve_action(
     _events_start = len(event_collector.events) if event_collector else 0
 
     # Turn-structure redesign 2026-07: any non-PASS main-phase action
-    # breaks the consecutive-pass streak (Handshake tracking).
-    if action.action_type != ActionType.PASS and state.consecutive_passes != 0:
+    # breaks the consecutive-pass streak (Handshake tracking). Variant v4
+    # (user 2026-07-11): REST (the DRAW slot) also counts toward the
+    # Handshake — rest/pass in any combination seal it — so it does NOT
+    # break the streak (the increment happens inside _apply_draw).
+    _keeps_streak = action.action_type == ActionType.PASS or (
+        action.action_type == ActionType.DRAW and manual_draw_variant()
+    )
+    if not _keeps_streak and state.consecutive_passes != 0:
         state = replace(state, consecutive_passes=0)
 
     # Dispatch to action handler
@@ -2785,8 +2802,23 @@ def resolve_action(
     elif action.action_type == ActionType.DRAW:
         # Manual-draw variant (user 2026-07-10): _apply_draw emits its own
         # EVT_CARD_DRAWN / EVT_CARD_BURNED with the card identity so the
-        # client can animate the deck → hand transition.
+        # client can animate the deck → hand transition. v4: REST also
+        # advances the Handshake streak — surface it like a pass so the
+        # palm-flag / offer toast fire (payload.rest lets the client
+        # word it as a rest).
+        _rester_idx = state.active_player_idx
         state = _apply_draw(state, event_collector=event_collector)
+        if manual_draw_variant() and event_collector is not None:
+            event_collector.collect(
+                EVT_PASS_DECLARED,
+                "action:draw",
+                {
+                    "player_idx": _rester_idx,
+                    "streak": state.consecutive_passes,
+                    "handshake_pending": state.handshake_pending,
+                    "rest": True,
+                },
+            )
     elif action.action_type == ActionType.MOVE:
         # 2026-07 card-audit fix (Furryroach): EVT_MINION_MOVED for the
         # acting minion is now emitted INSIDE _apply_move (before the

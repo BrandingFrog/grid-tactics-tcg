@@ -7,7 +7,9 @@ Authoritative turn flow, phase boundaries, react windows, and effect-resolution 
 > - NO turn-start auto-draw (and no turn-start empty-deck fatigue). **REST** (the
 >   reserved DRAW action slot) consumes the turn action for **+1 mana AND +1 draw**
 >   (overdraw-burns on a full hand; empty deck skips the draw, mana still granted).
->   **PASS is a separate action and gives NO benefit** (v4, user 2026-07-11).
+>   **PASS is a separate action and gives NO benefit** (v4, user 2026-07-11). BOTH
+>   REST and PASS advance the Handshake streak — any two consecutive skips (rest/rest,
+>   rest/pass, pass/pass) seal a Handshake.
 > - **MAGIC casts do not consume the turn action**: after the cast resolves (including
 >   its react windows / pending modals) play returns to the caster's ACTION phase on the
 >   same turn (`GameState.magic_free_action_pending`, consumed at the after-action

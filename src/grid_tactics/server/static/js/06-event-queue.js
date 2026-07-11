@@ -2453,11 +2453,17 @@ function playPassDeclared(ev, done) {
     try {
         var mine = (myPlayerIdx != null && payload.player_idx === myPlayerIdx);
         var who = mine ? 'You' : (opponentName || 'Opponent');
+        // v4 (user 2026-07-11): REST also advances the Handshake — the
+        // engine tags its declaration with payload.rest so the toast
+        // words it correctly.
+        var verb = payload.rest
+            ? (mine ? ' rest' : ' rests')
+            : (mine ? ' pass' : ' passes');
         var toast = document.createElement('div');
         toast.className = 'tutor-toast pass-toast';
         toast.textContent = payload.streak === 1
-            ? ('🫴 ' + who + (mine ? ' pass' : ' passes') + ' — Handshake offered')
-            : ('🤝 ' + who + (mine ? ' pass' : ' passes') + ' — Handshake!');
+            ? ('🫴 ' + who + verb + ' — Handshake offered')
+            : ('🤝 ' + who + verb + ' — Handshake!');
         _stageMount().appendChild(toast);
         setTimeout(function() {
             toast.classList.add('fade-out');

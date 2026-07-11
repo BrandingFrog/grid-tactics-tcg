@@ -131,6 +131,68 @@ def test_magic_cast_returns_to_caster(variant, new_game_state, card_library):
     )
 
 
+def _drain_to_action(state, card_library):
+    """Pass through react windows / bookend phases until an ACTION phase.
+    React-window passes do NOT touch the Handshake streak."""
+    from grid_tactics.enums import TurnPhase
+    from grid_tactics.react_stack import (
+        enter_end_of_turn,
+        enter_start_of_turn,
+        handle_react_action,
+    )
+
+    guard = 0
+    while state.phase != TurnPhase.ACTION and guard < 20:
+        guard += 1
+        if state.phase == TurnPhase.REACT:
+            state = handle_react_action(state, pass_action(), card_library)
+        elif state.phase == TurnPhase.START_OF_TURN:
+            state = enter_start_of_turn(state, card_library)
+        elif state.phase == TurnPhase.END_OF_TURN:
+            state = enter_end_of_turn(state, card_library)
+    assert state.phase == TurnPhase.ACTION, f"stuck in {state.phase}"
+    return state
+
+
+def test_rest_counts_toward_handshake(variant, new_game_state, card_library):
+    """v4 (user 2026-07-11): REST advances the Handshake streak like PASS —
+    a rest answered by a rest (or pass) seals the Handshake."""
+    state = new_game_state
+    first = state.active_player_idx
+    # First skip: REST — streak 1, no handshake yet.
+    state = resolve_action(state, draw_action(), card_library)
+    assert state.consecutive_passes == 1
+    assert state.handshake_pending is False
+    # Drain the after-action window; the turn flips to the opponent.
+    state = _drain_to_action(state, card_library)
+    assert state.active_player_idx == 1 - first
+    # Opponent answers with a REST — Handshake seals, streak resets.
+    state = resolve_action(state, draw_action(), card_library)
+    assert state.handshake_pending is True
+    assert state.consecutive_passes == 0
+
+
+def test_non_rest_action_breaks_streak(variant, new_game_state, card_library):
+    from dataclasses import replace
+
+    from grid_tactics.enums import ActionType
+
+    state = new_game_state
+    state = resolve_action(state, pass_action(), card_library)
+    assert state.consecutive_passes == 1
+    state = _drain_to_action(state, card_library)
+    # A magic cast (free action) is NOT a skip — it breaks the streak.
+    caster = state.active_player_idx
+    rain_nid = card_library.get_numeric_id("acidic_rain")
+    players = list(state.players)
+    players[caster] = replace(players[caster], hand=(rain_nid,), current_mana=10)
+    state = replace(state, players=tuple(players))
+    plays = [a for a in legal_actions(state, card_library)
+             if a.action_type == ActionType.PLAY_CARD]
+    state = resolve_action(state, plays[0], card_library)
+    assert state.consecutive_passes == 0
+
+
 def test_no_turn_start_autodraw(variant, new_game_state, card_library):
     """The incoming player must NOT auto-draw at turn start; only their own
     rest / handshake draws touch their hand."""

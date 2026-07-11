@@ -1156,8 +1156,8 @@ function renderActionBar() {
                     var restBtn = document.createElement('button');
                     restBtn.className = 'btn btn-action btn-rest-action';
                     restBtn.textContent = 'Rest';
-                    restBtn.title = 'Rest — gain 1 mana and draw a card '
-                        + '(uses your action for this turn)';
+                    restBtn.title = 'Rest — gain 1 mana and draw a card (uses your action). '
+                        + 'Counts toward the Handshake like a pass';
                     restBtn.addEventListener('click', function() {
                         submitAction({ action_type: 3 });
                     });
