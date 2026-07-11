@@ -229,8 +229,14 @@ def test_glossary_start_end_burn_rows_updated() -> None:
     rows = _glossary_md_rows()
     assert "Rally Phase" in rows["Start"]
     assert "Decay Phase" in rows["End"]
-    assert "burn their own minion" in rows["Burn"], (
-        "Burn row must cover self-burn cards (Eclipse Shade)"
+    # ISO glossary rewrite (user 2026-07-11): entries are terse and
+    # example-free — the Burn row must state the damage number, not the
+    # old 'usually enemies… burn their own minion' hedge.
+    assert "5" in rows["Burn"] and "Decay Phase" in rows["Burn"], (
+        "Burn row must state the 5-damage Decay tick"
+    )
+    assert "Eclipse Shade" not in rows["Burn"], (
+        "glossary entries carry no card examples (ISO style)"
     )
     assert rows["Burn"] != "Applies Burning to affected enemies."
 
