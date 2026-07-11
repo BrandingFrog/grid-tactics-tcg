@@ -242,12 +242,20 @@ function showFloatingPopup(tileEl, text, variant) {
     var el = document.createElement('div');
     el.className = 'floating-popup ' + variant;
     el.textContent = text;
+    // Blips beneath cards (user 2026-07-11): the popup floats UP out of
+    // its tile and was painted under later-DOM sibling cells / minions.
+    // Elevate the host cell while any popup is live (mirrors the
+    // trigger-pulse z fix); restore only when the last popup leaves.
     tileEl.appendChild(el);
+    tileEl.classList.add('popup-live');
     var removed = false;
     var cleanup = function () {
         if (removed) return;
         removed = true;
         if (el.parentNode) el.parentNode.removeChild(el);
+        if (!tileEl.querySelector('.floating-popup')) {
+            tileEl.classList.remove('popup-live');
+        }
     };
     el.addEventListener('animationend', cleanup);
     setTimeout(cleanup, 2400);

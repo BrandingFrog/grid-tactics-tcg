@@ -498,9 +498,10 @@ function onError(data) {
             addLogEntry('⚠ ' + msg + ' [' + data.debug_code + ']', 'error');
         } catch (e) { /* defensive */ }
     }
-    // A rejected submit must release the conjure in-flight guard, or the
-    // deploy UI stays suppressed with the pending gate still open (wedge).
+    // A rejected submit must release the conjure/revive in-flight guards,
+    // or their UIs stay suppressed with the pending gate still open (wedge).
     window.__conjureDeploySubmitted = false;
+    window.__reviveSubmittedAtRemaining = null;
     // Compliance audit 2026-07-06: during a game the lobby pill is invisible
     // — surface server rejections as a stage toast so the player sees them.
     try {

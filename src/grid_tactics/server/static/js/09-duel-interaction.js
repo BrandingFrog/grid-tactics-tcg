@@ -641,6 +641,24 @@ function onBoardCellClick(row, col) {
         return;
     }
 
+    // Revive rework (user 2026-07-11): tile placement after picking a
+    // minion from the revive fan. The old flow had NO cell-click branch —
+    // it relied on inline cell.onclick handlers that renderBoard wiped.
+    if (interactionMode === 'revive_place') {
+        var revLegal = (legalActions || []).some(function(a) {
+            return a.action_type === 15 && a.position
+                && a.position[0] === row && a.position[1] === col;
+        });
+        if (!revLegal) return;
+        // In-flight guard — suppress the modal until the fresh frame lands.
+        window.__reviveSubmittedAtRemaining = (gameState
+            && gameState.pending_revive_remaining) || 0;
+        submitAction({ action_type: 15, position: [row, col] }); // REVIVE_PLACE
+        interactionMode = null;
+        if (typeof closeReviveModal === 'function') closeReviveModal();
+        return;
+    }
+
     // Phase 14.6: conjure deploy mode. Player picks a tile to deploy the
     // conjured card. Valid positions are highlighted; everything else is inert.
     if (interactionMode === 'conjure_deploy') {
@@ -677,11 +695,18 @@ function onBoardCellClick(row, col) {
             return a.action_type === 2 && a.minion_id === attackerId && a.target_id === enemy.instance_id;
         });
         if (!isValidTargetTile && !isLegalAttack) return;
+        // In-flight guard (user 2026-07-11 "decline attack button stays up
+        // too long"): syncPendingPostMoveAttackUI re-arms off the stale
+        // frame during the drain, keeping the button (and pick mode) up
+        // seconds after the choice. Suppress until the pending gate clears.
+        window.__postMoveSubmitted = true;
         submitAction({
             action_type: 2,
             minion_id: attackerId,
             target_id: enemy.instance_id,
         });
+        interactionMode = null;
+        hideDeclinePostMoveAttackButton();
         return;
     }
 
@@ -1267,6 +1292,15 @@ function getMinionAt(row, col) {
 // premature (and the server would reject ATTACK/DECLINE anyway).
 function syncPendingPostMoveAttackUI() {
     var pendingId = gameState && gameState.pending_post_move_attacker_id;
+    if (pendingId == null) {
+        // Gate cleared — the submitted pick landed; release the guard.
+        window.__postMoveSubmitted = false;
+    } else if (window.__postMoveSubmitted) {
+        // A pick was already submitted for this gate — don't re-arm off
+        // the stale frame (user 2026-07-11).
+        hideDeclinePostMoveAttackButton();
+        return;
+    }
     // PHASE_ACTION = 0 (see PHASE_DISPLAY at top of file).
     var inActionPhase = gameState && gameState.phase === 0;
     if (pendingId != null && inActionPhase) {
@@ -1296,8 +1330,11 @@ function showDeclinePostMoveAttackButton() {
     btn.title = 'End the action without attacking';
     btn.addEventListener('click', function(e) {
         e.stopPropagation();
+        window.__postMoveSubmitted = true;
         // ActionType.DECLINE_POST_MOVE_ATTACK = 8 (Phase 14.1)
         submitAction({ action_type: 8 });
+        interactionMode = null;
+        hideDeclinePostMoveAttackButton();
     });
     var bar = document.getElementById('hand-action-bar');
     (bar || document.body).appendChild(btn);

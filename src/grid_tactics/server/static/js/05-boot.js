@@ -63,7 +63,10 @@ function showPileModal(title, cardNumericIds, sandboxCtx) {
     var layout = document.querySelector('.screen.active .game-layout');
     if (layout && modal.parentElement !== layout) layout.appendChild(modal);
     grid.innerHTML = '';
-    var ids = cardNumericIds || [];
+    // Newest-first (user 2026-07-11): piles append at the END engine-side,
+    // but the modal reads left-to-right — reverse a copy so the most
+    // recent addition leads.
+    var ids = (cardNumericIds || []).slice().reverse();
     if (ids.length === 0) {
         var empty = document.createElement('div');
         empty.className = 'pile-grid-empty';

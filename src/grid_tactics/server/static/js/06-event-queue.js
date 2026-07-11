@@ -623,6 +623,12 @@ function commitEventToDom(ev) {
             }
             break;
 
+        // Sacrifice ghosts (user 2026-07-11): the sacrificed minion was
+        // never removed from the live state at its beat — any later board
+        // rerender in the same batch (turn flip / rally commits) brought
+        // it back for a moment until the drain-end snapshot. Same removal
+        // as minion_died.
+        case "minion_sacrificed":
         // Timing audit (2026-07-06): the dead minion leaves the board AT its
         // death beat — it used to linger at 0 HP until the drain-end commit.
         case "minion_died":
@@ -837,12 +843,27 @@ function _commitMinionHp(state, payload) {
     if (!state || !state.minions || !payload) return false;
     var id = payload.instance_id;
     var newHp = payload.new_hp;
-    if (id == null || typeof newHp !== 'number') return false;
+    if (id == null) return false;
     for (var i = 0; i < state.minions.length; i++) {
         var m = state.minions[i];
         if (m && m.instance_id === id) {
-            m.current_health = newHp;
-            return true;
+            var changed = false;
+            if (typeof newHp === 'number') {
+                m.current_health = newHp;
+                changed = true;
+            }
+            // Buff attack beat (user 2026-07-11): apply the attack/max-HP
+            // halves of a buff at the SAME beat as the HP half — they used
+            // to land only at the drain-end snapshot, so 🗡️ lagged 🤍.
+            if (typeof payload.attack_delta === 'number' && payload.attack_delta !== 0) {
+                m.attack_bonus = (m.attack_bonus | 0) + payload.attack_delta;
+                changed = true;
+            }
+            if (typeof payload.max_health_delta === 'number' && payload.max_health_delta !== 0) {
+                m.max_health_bonus = (m.max_health_bonus | 0) + payload.max_health_delta;
+                changed = true;
+            }
+            return changed;
         }
     }
     return false;
@@ -1194,7 +1215,15 @@ function playMinionHpChange(ev, done) {
     if (!payload) { setTimeout(done, 0); return; }
     var tile = _evTileForPos(payload.position);
     var delta = payload.delta;
-    if (tile && typeof delta === 'number' && delta !== 0) {
+    var atkDelta = payload.attack_delta;
+    // Combined buff (user 2026-07-11): one popup covering both halves so
+    // 🗡️ visibly ticks at the same beat as 🤍.
+    if (tile && typeof atkDelta === 'number' && atkDelta !== 0
+            && typeof delta === 'number' && delta === atkDelta && delta > 0) {
+        try {
+            showFloatingPopup(tile, '+' + atkDelta + '🗡️/+' + delta + '🤍', 'heal');
+        } catch (e) { /* defensive */ }
+    } else if (tile && typeof delta === 'number' && delta !== 0) {
         var text, variant;
         if (delta > 0) {
             text = '💚 +' + delta;
@@ -1207,6 +1236,15 @@ function playMinionHpChange(ev, done) {
             variant = 'combat-damage';
         }
         try { showFloatingPopup(tile, text, variant); } catch (e) { /* defensive */ }
+    } else if (tile && typeof atkDelta === 'number' && atkDelta !== 0) {
+        // Attack-only buff/debuff — previously rendered nothing at all.
+        try {
+            showFloatingPopup(
+                tile,
+                (atkDelta > 0 ? '+' : '') + atkDelta + '🗡️',
+                atkDelta > 0 ? 'heal' : 'combat-damage',
+            );
+        } catch (e) { /* defensive */ }
     }
     setTimeout(done, _evDurationOr(ev, 400));
 }

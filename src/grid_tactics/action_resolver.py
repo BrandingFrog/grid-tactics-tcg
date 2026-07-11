@@ -1680,6 +1680,9 @@ def _apply_pending_conjure_buff(
                     "instance_id": m.instance_id,
                     "new_hp": m.current_health + magnitude,
                     "delta": magnitude,
+                    # 🗡️ ticks at the same beat as 🤍 (user 2026-07-11).
+                    "attack_delta": magnitude,
+                    "max_health_delta": magnitude,
                     "owner_idx": active_idx,
                     "position": list(m.position),
                     "cause": "buff",

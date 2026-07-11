@@ -362,7 +362,14 @@ def _apply_effect_to_minion(
     new_state = _apply_effect_to_minion_dispatch(state, effect, minion, library)
     if event_collector is not None and new_state is not state:
         new_m = new_state.get_minion(minion.instance_id)
-        if new_m is not None and new_m.current_health != minion.current_health:
+        # 2026-07-11 (user: "buff attack gets delayed"): diff ATTACK too —
+        # attack-only buffs previously emitted nothing and combined buffs
+        # lost their attack half until the drain-end snapshot, so 🗡️
+        # visibly lagged 🤍 on the board.
+        if new_m is not None and (
+            new_m.current_health != minion.current_health
+            or new_m.attack_bonus != minion.attack_bonus
+        ):
             event_collector.collect(
                 EVT_MINION_HP_CHANGE,
                 contract_source or "trigger:on_play",
@@ -370,6 +377,10 @@ def _apply_effect_to_minion(
                     "instance_id": minion.instance_id,
                     "new_hp": new_m.current_health,
                     "delta": new_m.current_health - minion.current_health,
+                    "attack_delta": new_m.attack_bonus - minion.attack_bonus,
+                    "max_health_delta": (
+                        new_m.max_health_bonus - minion.max_health_bonus
+                    ),
                     "owner_idx": _player_index_for_side(new_m.owner),
                     "position": list(new_m.position),
                     "cause": getattr(

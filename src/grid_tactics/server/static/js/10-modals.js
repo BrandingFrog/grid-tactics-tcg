@@ -474,100 +474,139 @@ function syncPendingReviveUI() {
     }
     var pendingIdx = gameState.pending_revive_player_idx;
     if (pendingIdx == null) {
+        window.__reviveSubmittedAtRemaining = null;
         if (reviveModalOpen) closeReviveModal();
         if (interactionMode === 'revive_place') interactionMode = null;
         return;
     }
     // Sandbox is god-mode — always show the modal regardless of myPlayerIdx.
     var isPicker = sandboxMode || pendingIdx === myPlayerIdx;
-    if (isPicker) {
-        // Re-assert revive_place mode so highlightBoard draws cell-valid on
-        // REVIVE_PLACE legal tiles. A prior clearSelection() may have wiped
-        // interactionMode even while reviveModalOpen stayed true.
-        interactionMode = 'revive_place';
-        if (!reviveModalOpen) {
-            showReviveModal();
-        }
-    } else {
+    if (!isPicker) {
         if (reviveModalOpen) closeReviveModal();
+        return;
     }
+    var remaining = gameState.pending_revive_remaining || 0;
+    // In-flight guard (revive rework, user 2026-07-11): a placement was
+    // already submitted against THIS remaining count — the frame is stale;
+    // keep the UI down until the fresh frame (remaining decremented or
+    // pending cleared) arrives.
+    if (window.__reviveSubmittedAtRemaining != null) {
+        if (window.__reviveSubmittedAtRemaining === remaining) {
+            if (reviveModalOpen) closeReviveModal();
+            return;
+        }
+        window.__reviveSubmittedAtRemaining = null;
+    }
+    // Tile-place phase (a minion was picked from the fan): keep the mode,
+    // just refresh the highlights after any board rebuild.
+    if (interactionMode === 'revive_place' && reviveModalOpen) {
+        highlightReviveCells();
+        return;
+    }
+    if (!reviveModalOpen) showReviveModal();
 }
 
 function showReviveModal() {
+    // Revive rework (user 2026-07-11): the old banner said "click a
+    // highlighted cell" but relied on inline cell.onclick handlers that
+    // every renderBoard rebuild wiped — clicking did nothing. New flow
+    // mirrors conjure: a horizontal fan of the revivable minions (like the
+    // tutor picker); click one, then click a highlighted tile to place it.
     closeReviveModal();
-    // closeReviveModal clears interactionMode — re-assert picker mode so the
-    // subsequent highlightBoard sees revive_place and draws cell-valid.
     reviveModalOpen = true;
-    interactionMode = 'revive_place';
+    interactionMode = null;   // board inert until a minion is picked
 
     var remaining = gameState.pending_revive_remaining || 0;
     var cardNid = gameState.pending_revive_card_numeric_id;
     var cardDef = cardNid != null && window.cardDefs ? window.cardDefs[cardNid] : null;
     var cardName = cardDef ? cardDef.name : 'minion';
+    var pendingIdx = gameState.pending_revive_player_idx;
 
-    // Revive modal is NON-blocking: the board must remain clickable so the
-    // player can pick a target cell. Overlay uses pointer-events:none; only
-    // the inner banner receives clicks (for the Skip button).
+    // One fan tile per revivable copy: remaining, capped by how many
+    // copies actually sit in the reviver's grave (when visible to us).
+    var copies = remaining;
+    try {
+        var grave = gameState.players[pendingIdx] && gameState.players[pendingIdx].grave;
+        if (Array.isArray(grave) && cardNid != null) {
+            var inGrave = grave.filter(function(x) { return x === cardNid; }).length;
+            if (inGrave > 0) copies = Math.min(remaining, inGrave);
+        }
+    } catch (e) { /* opponent grave counts may be redacted — keep remaining */ }
+
     var overlay = document.createElement('div');
     overlay.className = 'tutor-modal-overlay revive-modal-overlay-nonblock';
     overlay.id = 'revive-modal-overlay';
-    overlay.style.cssText = 'position:fixed;top:70px;left:0;right:0;bottom:auto;background:transparent;backdrop-filter:none;pointer-events:none;display:flex;justify-content:center;z-index:10;';
+    overlay.style.cssText = 'position:fixed;top:56px;left:0;right:0;bottom:auto;background:transparent;backdrop-filter:none;pointer-events:none;display:flex;justify-content:center;z-index:10;';
 
     var modal = document.createElement('div');
     modal.className = 'tutor-modal';
-    modal.style.cssText = 'pointer-events:auto;max-width:480px;background:rgba(23,16,6,0.95);border:2px solid #6b5730;border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.6);';
+    modal.style.cssText = 'pointer-events:auto;max-width:560px;background:rgba(23,16,6,0.95);border:2px solid #6b5730;border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.6);';
 
     var header = document.createElement('div');
     header.className = 'tutor-modal-header';
     var title = document.createElement('div');
     title.className = 'tutor-modal-title';
-    title.textContent = 'Revive: Click a tile to place ' + cardName + ' (' + remaining + ' remaining)';
+    title.id = 'revive-modal-title';
+    title.textContent = 'Revive — pick a ' + cardName + ' to place (' + remaining + ' remaining)';
     header.appendChild(title);
     modal.appendChild(header);
 
-    var body = document.createElement('div');
-    body.style.cssText = 'padding:16px;text-align:center;color:#cbb98f;font-size:14px;';
-    body.textContent = 'Click a highlighted cell on the board to place the revived minion.';
-    modal.appendChild(body);
+    var fan = document.createElement('div');
+    fan.className = 'tutor-modal-fan';
+    fan.id = 'revive-modal-fan';
+    for (var i = 0; i < Math.max(1, copies); i++) {
+        var tile = document.createElement('div');
+        tile.className = 'tutor-modal-card';
+        tile.innerHTML = (typeof renderDeckBuilderCard === 'function' && cardNid != null)
+            ? renderDeckBuilderCard(cardNid, undefined)
+            : ('<div style="padding:20px;color:#cbb98f;">' + cardName + '</div>');
+        tile.addEventListener('click', function(e) {
+            e.stopPropagation();
+            // Picked — collapse the fan, arm tile placement.
+            var fanEl = document.getElementById('revive-modal-fan');
+            if (fanEl) fanEl.style.display = 'none';
+            var t = document.getElementById('revive-modal-title');
+            if (t) t.textContent = 'Place ' + cardName + ' — click a highlighted tile';
+            interactionMode = 'revive_place';
+            try { highlightBoard(); } catch (e2) { /* defensive */ }
+            highlightReviveCells();
+        });
+        fan.appendChild(tile);
+    }
+    modal.appendChild(fan);
 
     var footer = document.createElement('div');
     footer.className = 'tutor-modal-footer';
     var skipBtn = document.createElement('button');
     skipBtn.className = 'btn btn-secondary';
-    skipBtn.textContent = 'Done (skip remaining)';
+    skipBtn.textContent = remaining > 0 ? 'Done (skip remaining)' : 'Done';
     skipBtn.onclick = function() {
+        window.__reviveSubmittedAtRemaining = gameState
+            ? (gameState.pending_revive_remaining || 0) : 0;
         submitAction({ action_type: 16 }); // DECLINE_REVIVE
+        closeReviveModal();
     };
     footer.appendChild(skipBtn);
     modal.appendChild(footer);
 
     overlay.appendChild(modal);
     _stageMount().appendChild(overlay);
-
-    // Highlight valid board cells
-    highlightReviveCells();
 }
 
 function highlightReviveCells() {
-    // Use legalActions to find valid REVIVE_PLACE positions
+    // Highlight-only: the click handling lives in onBoardCellClick's
+    // revive_place branch (rework 2026-07-11 — the old inline cell.onclick
+    // handlers were wiped by every renderBoard rebuild).
     if (!window.legalActions) return;
-    var cells = document.querySelectorAll('.board-cell');
-    cells.forEach(function(cell) {
-        cell.classList.remove('cell-valid');
-    });
+    var screenSel = (typeof sandboxMode !== 'undefined' && sandboxMode)
+        ? '#screen-sandbox' : '#screen-game';
     for (var i = 0; i < legalActions.length; i++) {
         var a = legalActions[i];
         if (a.action_type === 15 && a.position) { // REVIVE_PLACE
-            var r = a.position[0], c = a.position[1];
-            var cell = document.querySelector('.board-cell[data-row="' + r + '"][data-col="' + c + '"]');
-            if (cell) {
-                cell.classList.add('cell-valid');
-                (function(row, col) {
-                    cell.onclick = function() {
-                        submitAction({ action_type: 15, position: [row, col] }); // REVIVE_PLACE
-                    };
-                })(r, c);
-            }
+            var cell = document.querySelector(
+                screenSel + ' .board-cell[data-row="' + a.position[0]
+                + '"][data-col="' + a.position[1] + '"]');
+            if (cell) cell.classList.add('cell-valid');
         }
     }
 }
