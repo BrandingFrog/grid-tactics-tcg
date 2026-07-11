@@ -289,6 +289,10 @@ function renderCardFrame(c, opts) {
         }
     }
     if (c.cost_reduction === 'dark_matter') costLines.push('Cost: Reduce mana cost by ' + _dmTokenLive());
+    if (c.cost_reduction === 'behind_on_board') {
+        costLines.push('Cost: Costs ' + (c.cost_reduction_amount || 0)
+            + ' less if your opponent has a minion and you have none');
+    }
     // Alternate discard cost (Dark Wyrm, user 2026-07-11) — a CHOICE, not
     // an additional cost: pay mana OR discard N other cards for free.
     if (c.alt_cost_discard) costLines.push('Cost: You may discard ' + c.alt_cost_discard + ' cards: ' + c.name + ' costs 0');

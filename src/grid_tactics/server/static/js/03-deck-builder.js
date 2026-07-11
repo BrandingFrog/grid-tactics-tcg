@@ -945,6 +945,10 @@ function buildCardTooltipContent(c) {
     }
     if (c.unique) cardTextLines.push('Unique');
     if (c.cost_reduction === 'dark_matter') cardTextLines.push('Cost: Reduce mana cost by ' + _dmTokenLive());
+    if (c.cost_reduction === 'behind_on_board') {
+        cardTextLines.push('Cost: Costs ' + (c.cost_reduction_amount || 0)
+            + ' less if your opponent has a minion and you have none');
+    }
     if (c.alt_cost_discard) cardTextLines.push('Cost: You may discard ' + c.alt_cost_discard + ' cards: ' + c.name + ' costs 0');
     if (c.play_condition === 'discarded_last_turn') cardTextLines.push('Cost: Discard last turn');
     if (c.hp_cost) cardTextLines.push('Cost: Deal ' + c.hp_cost + HEART + ' to own face');
@@ -1017,7 +1021,10 @@ function buildCardTooltipContent(c) {
     if (c.card_type === 0 && c.attack_range != null && c.attack_range === 0) addKw('Melee');
     if (c.card_type === 0 && c.attack_range != null && c.attack_range > 0) addKw('Range');
     if (c.discard_cost_tribe) { addKw('Cost'); addKw('Exhaust'); }
-    if (c.cost_reduction) { addKw('Cost'); addKw('Dark Matter'); }
+    if (c.cost_reduction) {
+        addKw('Cost');
+        if (c.cost_reduction === 'dark_matter') addKw('Dark Matter');
+    }
     if (c.transform_options && c.transform_options.length > 0) addKw('Transform');
     if (c.react_condition != null) addKw('React');
     if (c.react_condition != null && c.react_effect && c.react_effect.type === 5) addKw('Summon');

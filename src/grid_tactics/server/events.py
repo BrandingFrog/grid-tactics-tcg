@@ -132,6 +132,7 @@ def _build_card_defs(library):
                 "summon_token_cost": getattr(card, 'summon_token_cost', None),
                 "conjure_buff": getattr(card, 'conjure_buff', None),
                 "cost_reduction": getattr(card, 'cost_reduction', None),
+                "cost_reduction_amount": getattr(card, 'cost_reduction_amount', None),
                 "play_condition": getattr(card, 'play_condition', None),
                 "destroy_ally_cost": getattr(card, 'destroy_ally_cost', False),
                 # Legacy alias — old clients still read this key. Remove

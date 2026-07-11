@@ -105,6 +105,7 @@ class CardLoader:
             summon_token_cost=data.get("summon_token_cost"),
             conjure_buff=data.get("conjure_buff"),
             cost_reduction=data.get("cost_reduction"),
+            cost_reduction_amount=data.get("cost_reduction_amount"),
             play_condition=data.get("play_condition"),
             # Accept the new `destroy_ally_cost` JSON key; fall back to the
             # legacy `sacrifice_ally_cost` spelling so older exports still load.

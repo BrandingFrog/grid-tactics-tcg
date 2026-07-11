@@ -187,6 +187,11 @@ class CardDefinition:
 
     # Cost reduction: e.g. "dark_matter" reduces mana cost by total DM stacks on board
     cost_reduction: Optional[str] = None
+    # Fixed amount for conditional reductions (Metal Wyrm 2026-07-11:
+    # cost_reduction="behind_on_board" subtracts this while the opponent
+    # has a living minion and the owner has none). dark_matter-style
+    # reductions ignore it (their amount is the DM pool).
+    cost_reduction_amount: Optional[int] = None
 
     # Play condition: e.g. "discarded_last_turn" — card can only be played if condition met
     play_condition: Optional[str] = None

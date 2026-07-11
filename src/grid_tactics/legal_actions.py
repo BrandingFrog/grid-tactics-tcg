@@ -73,6 +73,18 @@ def effective_mana_cost(card_def, state: GameState, player_idx: int) -> int:
     cost = card_def.mana_cost
     if card_def.cost_reduction == "dark_matter":
         cost = max(0, cost - state.players[player_idx].dark_matter)
+    elif card_def.cost_reduction == "behind_on_board":
+        # Comeback discount (Metal Wyrm 2026-07-11): fixed reduction while
+        # the opponent has a living minion and the player has none.
+        my_side = state.players[player_idx].side
+        i_have = any(
+            m.owner == my_side and m.current_health > 0 for m in state.minions
+        )
+        opp_has = any(
+            m.owner != my_side and m.current_health > 0 for m in state.minions
+        )
+        if opp_has and not i_have:
+            cost = max(0, cost - (card_def.cost_reduction_amount or 0))
     return cost
 
 

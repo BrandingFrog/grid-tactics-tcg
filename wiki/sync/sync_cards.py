@@ -171,7 +171,8 @@ def derive_keywords(card: dict) -> list[str]:
     # Cost reduction
     if card.get("cost_reduction"):
         kws.add("Cost")
-        kws.add("Dark Matter")
+        if card.get("cost_reduction") == "dark_matter":
+            kws.add("Dark Matter")
 
     # Destroy-ally cost (legacy key sacrifice_ally_cost accepted too).
     if card.get("destroy_ally_cost") or card.get("sacrifice_ally_cost"):
@@ -300,6 +301,11 @@ def build_rules_text(card: dict, name_map: dict[str, str] | None = None) -> str:
     # Cost reduction
     if card.get("cost_reduction") == "dark_matter":
         parts.append("[[Cost]]: Reduce mana cost by ([[Dark Matter]])")
+    elif card.get("cost_reduction") == "behind_on_board":
+        parts.append(
+            f"[[Cost]]: Costs {card.get('cost_reduction_amount', 0)} less "
+            "if your opponent has a minion and you have none"
+        )
 
     # Alternate discard cost (Dark Wyrm, 2026-07-11): a CHOICE, not an
     # additional cost — pay mana OR discard N other cards for free.

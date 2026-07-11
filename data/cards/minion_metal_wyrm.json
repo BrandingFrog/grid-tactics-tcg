@@ -1,0 +1,35 @@
+{
+    "card_id": "metal_wyrm",
+    "stable_id": 53,
+    "name": "Metal Wyrm",
+    "card_type": "minion",
+    "mana_cost": 5,
+    "attack": 33,
+    "health": 33,
+    "range": 0,
+    "element": "metal",
+    "tribe": "Wyrm",
+    "cost_reduction": "behind_on_board",
+    "cost_reduction_amount": 3,
+    "effects": [
+        {
+            "type": "draw",
+            "trigger": "on_summon",
+            "target": "self_owner",
+            "amount": 1
+        }
+    ],
+    "deckable": true,
+    "tips": [
+        "The discount is a comeback tool: with an empty board against a developed opponent it drops to 2 mana — a 33🗡️/33🤍 body plus a draw for almost nothing.",
+        "The condition checks the moment you play it: your opponent must have at least one living minion and you must have none.",
+        "Tree Wyrm's tutor fetches Metal Wyrms — 'Tutor 2 Wyrms' can restock your hand with cheap stabilizers.",
+        "Pairs naturally with sacrifice lines: cashing in your last minion for face damage re-arms the discount for your follow-up Metal Wyrm."
+    ],
+    "rulings": [
+        "The reduction applies while your opponent controls at least one living minion AND you control none — checked when the card is played, not when it was drawn.",
+        "The discount is exactly 3: 5 mana becomes 2. It cannot reduce the cost below 0.",
+        "Minions at 0🤍 awaiting cleanup do not count as living for either side of the condition.",
+        "Summon: Draw 1 fires after the summon resolves (Window B); a full hand overdraw-burns the drawn card."
+    ]
+}
