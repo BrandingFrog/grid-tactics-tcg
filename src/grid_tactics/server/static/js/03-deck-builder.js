@@ -903,7 +903,7 @@ var KEYWORD_GLOSSARY = {
     'Sacrifice': 'Move a minion from your opponent’s back row (or Leap it along an all-enemy path) out of the game: it is removed and deals its full 🗡️ as damage to the opponent. “Sacrifice:” effects on a card trigger when that card is sacrificed.',
     'Cleanse': 'Removes all debuffs from the minion: Burning is cleared and negative \ud83d\udde1\ufe0f/\ud83e\udd0d marks reset to 0. Positive buffs stay; lost health is not restored.',
     'Untargetable': 'Cannot be targeted by magic cards \u2014 it is never a legal target for a magic card\u2019s single-target effect. Board-wide magic, minions and reacts still affect it.',
-    'Revive': 'Summon minions from the Grave to the board. You pick which eligible grave card to revive and where it deploys (melee: any tile on your side; ranged: back row). Eligibility is limited by the text on the reviving card.',
+    'Revive': 'Summon minions from the Grave to the board. You pick which eligible grave card to revive and where it deploys (melee: any tile on your side; ranged: back row). Eligibility is limited by the text on the reviving card. Revived minions count as summoned — their Summon effects fire.',
     'Draw': 'Draw cards from your deck to your hand. If your hand is full (10 cards), the drawn card is sent to the Exhaust Pile, revealed, instead.',
     'Handshake': 'When a player passes and the opponent\'s previous action was also a pass, a Handshake occurs: at the end of that turn, both players gain +1 mana. A player whose mana is already full draws a card instead. The pass counter then resets — no chaining.',
 };

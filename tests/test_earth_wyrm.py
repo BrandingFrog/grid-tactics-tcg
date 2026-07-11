@@ -190,3 +190,37 @@ def test_sacrifice_revive_preserves_opponent_sacrifices_react(library):
         if a.action_type == ActionType.PLAY_REACT
     ]
     assert reacts, "Surgefed Sparkbot's sacrifice react must be offered"
+
+
+def test_revived_wyrm_fires_its_summon_draw(library):
+    """MCQ decision 2026-07-11: revive counts as summon — a Dark Wyrm
+    revived by Earth Wyrm's sacrifice draws its Summon card."""
+    from grid_tactics.action_resolver import resolve_action
+    from grid_tactics.actions import Action
+
+    deck = get_preset_deck(library)
+    state, _ = GameState.new_game(seed=41, deck_p1=deck, deck_p2=deck)
+    ew_nid = library.get_numeric_id("earth_wyrm")
+    dw_nid = library.get_numeric_id("dark_wyrm")
+    wyrm = MinionInstance(
+        instance_id=1, card_numeric_id=ew_nid,
+        owner=PlayerSide.PLAYER_1, position=(4, 2), current_health=33,
+    )
+    p1 = replace(state.players[0], grave=(dw_nid,), hand=())
+    state = replace(
+        state, players=(p1, state.players[1]), minions=(wyrm,),
+        board=state.board.place(4, 2, 1), next_minion_id=2,
+    )
+    state = resolve_action(
+        state, Action(action_type=ActionType.SACRIFICE, minion_id=1), library,
+    )
+    place = next(
+        a for a in legal_actions(state, library)
+        if a.action_type == ActionType.REVIVE_PLACE
+    )
+    hand_before = len(state.players[0].hand)
+    state = resolve_action(state, place, library)
+    assert any(m.card_numeric_id == dw_nid for m in state.minions)
+    assert len(state.players[0].hand) == hand_before + 1, (
+        "the revived Dark Wyrm's Summon: Draw 1 must fire"
+    )

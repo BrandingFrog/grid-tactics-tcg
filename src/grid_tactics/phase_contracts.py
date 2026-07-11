@@ -178,6 +178,10 @@ PHASE_CONTRACTS: dict[str, frozenset[TurnPhase]] = {
     # ON_SUMMON only fires inside Window B (AFTER_SUMMON_EFFECT) which
     # is always REACT.
     "trigger:on_summon": frozenset({_REACT}),
+    # Revive-as-summon (MCQ 2026-07-11): revived minions fire their
+    # ON_SUMMON effects inline during the ACTION-phase revive placement
+    # (mirrors action:transform's inline summon semantics).
+    "trigger:on_summon_revive": frozenset({_ACTION}),
     # ON_DEATH allowed in all four phases (orchestrator decision #9 —
     # explicit, NOT wildcard). Death can occur from combat (ACTION),
     # from a react card destroying a minion (REACT), from start-of-turn

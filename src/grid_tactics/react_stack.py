@@ -252,6 +252,16 @@ def _has_triggers_for(
         card_def = library.get_by_id(m.card_numeric_id)
         for effect in card_def.effects:
             if effect.trigger == trigger:
+                # No-op CLEANSE is fully silent (user 2026-07-11): it
+                # neither enqueues (see _enqueue_turn_phase_triggers)
+                # nor counts toward opening the phase react window.
+                if (
+                    effect.effect_type == EffectType.CLEANSE
+                    and not m.is_burning
+                    and m.attack_bonus >= 0
+                    and m.max_health_bonus >= 0
+                ):
+                    continue
                 return True
     return False
 
@@ -299,6 +309,16 @@ def _enqueue_turn_phase_triggers(
         card_def = library.get_by_id(m.card_numeric_id)
         for eff_idx, effect in enumerate(card_def.effects):
             if effect.trigger != trigger:
+                continue
+            # MCQ decision (user 2026-07-11): a CLEANSE with nothing to
+            # cleanse is fully silent — no blip, no fizzle puff, no react
+            # window. Skip enqueueing when the target is already clean.
+            if (
+                effect.effect_type == EffectType.CLEANSE
+                and not m.is_burning
+                and m.attack_bonus >= 0
+                and m.max_health_bonus >= 0
+            ):
                 continue
             owner_idx = 0 if m.owner == PlayerSide.PLAYER_1 else 1
             pt = PendingTrigger(

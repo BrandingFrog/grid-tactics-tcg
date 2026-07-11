@@ -32,7 +32,7 @@
         "Cleanse is not a heal: chip damage stays. Pair it with healing if you want the wall to last forever."
     ],
     "rulings": [
-        "Cannot be targeted by magic cards: it is never a legal SINGLE_TARGET for a magic card. Area magic (e.g. Acidic Rain) still affects it — untargetable, not immune.",
+        "Cannot be targeted by magic cards: it is never a legal SINGLE_TARGET for a magic card's CAST. Area magic (e.g. Acidic Rain) still affects it, and REACT plays — including a dual-mode magic card's react half — may still target it (ruled 2026-07-11: reacts are reacts).",
         "Rally: Cleanse removes Burning and resets negative 🗡️/🤍 marks to 0. Positive buffs are untouched, and lost health is NOT restored.",
         "Cleanse fires in the owner's Rally Phase (start of turn), after the turn-start sequence — a burn tick that already resolved in the opponent's Decay Phase is not undone.",
         "Summon: Draw 1 fires after the summon resolves (Window B); a full hand overdraw-burns the drawn card."

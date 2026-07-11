@@ -26,6 +26,7 @@
         "Fewer than 3 eligible Rats means fewer revives: the modal opens for as many placements as possible (capped by grave count).",
         "You pick each placement cell individually through the revive modal; highlighted cells show legal placements in your zone.",
         "DECLINE_REVIVE ends the revive chain early — unused revives are wasted (no refund of mana or remaining stack).",
-        "Revived Rats come back at base stats (10/10, 0 attack_bonus, 0 DM). They lose any buffs they had before dying."
+        "Revived Rats come back at base stats (10/10, 0 attack_bonus, 0 DM). They lose any buffs they had before dying.",
+        "Revived minions count as SUMMONED (ruled 2026-07-11): a revived minion's Summon effects fire on placement. Common Rats have none, so this changes nothing for the base case."
     ]
 }

@@ -345,6 +345,8 @@ function onRoomJoined(data) {
 }
 
 function onPlayerJoined(data) {
+    // MCQ 2026-07-11: audible ping when someone joins your room.
+    try { if (typeof playSfx === 'function') playSfx('chat_ping'); } catch (e) { /* defensive */ }
     addPlayerToList(data.display_name, false);
     showLobbyStatus('Opponent joined! Select a deck and ready up.', 'info');
 }
@@ -372,6 +374,8 @@ function onPlayerLeft(data) {
 }
 
 function onPlayerReady(data) {
+    // MCQ 2026-07-11: audible ping when the other player readies up.
+    try { if (typeof playSfx === 'function') playSfx('chat_ping'); } catch (e) { /* defensive */ }
     // Mark player as ready in the player list
     var items = document.querySelectorAll('#player-list .player-item');
     items.forEach(function(item) {
@@ -600,7 +604,22 @@ function getCurrentDisplayName() {
         var dn = a.user.display_name || a.user.username || '';
         if (dn) return String(dn).slice(0, 14);
     }
-    return 'Guest';
+    // Distinct guests (MCQ 2026-07-11): a session-stable random tag so
+    // two guests in one room are tellable apart, e.g. Guest-7F2K.
+    try {
+        var tag = sessionStorage.getItem('gt-guest-tag');
+        if (!tag) {
+            var chars = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+            tag = '';
+            for (var gi = 0; gi < 4; gi++) {
+                tag += chars[Math.floor(Math.random() * chars.length)];
+            }
+            sessionStorage.setItem('gt-guest-tag', tag);
+        }
+        return 'Guest-' + tag;
+    } catch (e) {
+        return 'Guest';
+    }
 }
 
 function setupLobbyHandlers() {

@@ -948,7 +948,7 @@ def _apply_revive_place(
     # holds a revivable match under the card-text filter.
     more_matches = bool(revive_grave_matches(new_state, library))
     if new_remaining <= 0 or not more_matches:
-        return replace(
+        new_state = replace(
             new_state,
             pending_revive_player_idx=None,
             pending_revive_card_id=None,
@@ -956,6 +956,36 @@ def _apply_revive_place(
             pending_revive_exclude_card_id=None,
             pending_revive_remaining=0,
         )
+    # MCQ decision (user 2026-07-11): revive COUNTS AS SUMMON — the
+    # revived card's ON_SUMMON effects fire inline (transform precedent;
+    # the glossary calls revive 'summoning from the Grave'). A revived
+    # Dark Wyrm draws 1. Pending-entering effects (tutor/conjure/revive)
+    # only fire once the revive gate is fully clear — the pending
+    # mutexes forbid nesting; today's revivable pool carries only inline
+    # effects (Wyrm draws), so nothing is silently dropped in practice.
+    on_summon_fx = [
+        e for e in revive_def.effects if e.trigger == TriggerType.ON_SUMMON
+    ]
+    if on_summon_fx:
+        pending_types = {EffectType.TUTOR, EffectType.CONJURE, EffectType.REVIVE}
+        gate_busy = new_state.pending_revive_player_idx is not None
+        safe_fx = [
+            e for e in on_summon_fx
+            if not (gate_busy and e.effect_type in pending_types)
+        ]
+        # resolve_effects_for_trigger fires ALL matching effects — only
+        # call it when none were filtered (conservative: a mixed card
+        # skips entirely while the gate is busy rather than half-firing).
+        if safe_fx and len(safe_fx) == len(on_summon_fx):
+            from grid_tactics.effect_resolver import resolve_effects_for_trigger
+            new_state = resolve_effects_for_trigger(
+                new_state, TriggerType.ON_SUMMON, minion, library,
+                # the revive gate may already be cleared here, so the
+                # revive_place contract (which requires the pending field)
+                # doesn't fit — use the canonical summon-trigger source.
+                contract_source="trigger:on_summon_revive",
+                event_collector=event_collector,
+            )
     return new_state
 
 

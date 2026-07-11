@@ -477,14 +477,27 @@ function syncPendingReviveUI() {
         window.__reviveSubmittedAtRemaining = null;
         if (reviveModalOpen) closeReviveModal();
         if (interactionMode === 'revive_place') interactionMode = null;
+        var _revToast = document.getElementById('opponent-reviving-toast');
+        if (_revToast) _revToast.remove();
         return;
     }
     // Sandbox is god-mode — always show the modal regardless of myPlayerIdx.
     var isPicker = sandboxMode || pendingIdx === myPlayerIdx;
     if (!isPicker) {
         if (reviveModalOpen) closeReviveModal();
+        // MCQ 2026-07-11: mirror the tutor toast so a long revive pick
+        // doesn't look like a hang from the other seat.
+        if (!document.getElementById('opponent-reviving-toast')) {
+            var revToast = document.createElement('div');
+            revToast.id = 'opponent-reviving-toast';
+            revToast.className = 'tutor-toast';
+            revToast.textContent = 'Opponent is reviving…';
+            _stageMount().appendChild(revToast);
+        }
         return;
     }
+    var _revToastGone = document.getElementById('opponent-reviving-toast');
+    if (_revToastGone) _revToastGone.remove();
     var remaining = gameState.pending_revive_remaining || 0;
     // In-flight guard (revive rework, user 2026-07-11): a placement was
     // already submitted against THIS remaining count — the frame is stale;

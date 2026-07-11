@@ -43,7 +43,8 @@
         "Landing rules, react windows, and the post-move attack pick are identical to a normal Move.",
         "Summon: Draw 1 fires after the summon resolves (Window B); a full hand overdraw-burns the drawn card.",
         "Sacrifice: Revive fires after the sacrifice damage lands — pick any Wyrm in your graveyard EXCEPT an Earth Wyrm (no self-loops) and place it like a normal revive.",
-        "The revive is optional: the picker's Done button skips it. Declining refunds nothing."
+        "The revive is optional: the picker's Done button skips it. Declining refunds nothing.",
+        "Revived minions count as SUMMONED (ruled 2026-07-11): the revived Wyrm's Summon effects fire — a revived Dark Wyrm draws 1."
     ],
     "revive_exclude_card_id": "earth_wyrm"
 }
