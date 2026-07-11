@@ -2270,7 +2270,9 @@ def resolve_action(
         if action.target_pos is None:
             raise ValueError("DEATH_TARGET_PICK requires a target_pos")
         from grid_tactics.effect_resolver import apply_death_target_pick
-        state = apply_death_target_pick(state, action.target_pos, library)
+        state = apply_death_target_pick(
+            state, action.target_pos, library, event_collector=event_collector,
+        )
         # Phase 14.8-03a: emit pending-modal resolved event for the
         # death-target modal that was open before this action.
         if event_collector is not None:

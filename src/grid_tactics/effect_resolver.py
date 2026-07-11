@@ -23,6 +23,7 @@ from grid_tactics.engine_events import (
     EVT_DARK_MATTER_CHANGE,
     EVT_MINION_HP_CHANGE,
     EVT_MINION_MOVED,
+    EVT_MINION_TRANSFORMED,
     EVT_PENDING_MODAL_OPENED,
     EVT_PENDING_MODAL_RESOLVED,
     EVT_PLAYER_HP_CHANGE,
@@ -1022,6 +1023,7 @@ def resolve_effects_for_trigger(
         elif effect.effect_type == EffectType.PROMOTE:
             state = _apply_promote_on_death(
                 state, minion.card_numeric_id, minion.owner, library,
+                event_collector=event_collector,
             )
         else:
             # Phase 14.7-06: pass source_minion_id so the fizzle gate
@@ -1227,6 +1229,8 @@ def apply_death_target_pick(
     state: GameState,
     target_pos: tuple[int, int],
     library: CardLibrary,
+    *,
+    event_collector: Optional[EventStream] = None,
 ) -> GameState:
     """Resolve the pending death-target modal with the user's pick.
 
@@ -1309,6 +1313,21 @@ def apply_death_target_pick(
         )
         new_minions = _replace_minion(state.minions, picked.instance_id, promoted)
         state = replace(state, minions=new_minions)
+        # PROMOTE beat — see _apply_promote_on_death (silent promotions
+        # desynced the client render).
+        if event_collector is not None:
+            event_collector.collect(
+                EVT_MINION_TRANSFORMED,
+                "action:death_target_pick",
+                {
+                    "instance_id": picked.instance_id,
+                    "from_card_numeric_id": picked.card_numeric_id,
+                    "to_card_numeric_id": target.card_numeric_id,
+                    "owner_idx": target.owner_idx,
+                    "position": list(picked.position),
+                    "new_hp": card_def.health,
+                },
+            )
     else:
         # Future-proof: other effect types that could use this modal path.
         state = resolve_effect(
@@ -1337,6 +1356,8 @@ def _apply_promote_on_death(
     dying_card_numeric_id: int,
     dying_owner: PlayerSide,
     library: CardLibrary,
+    *,
+    event_collector: Optional[EventStream] = None,
 ) -> GameState:
     """PROMOTE on death: transform a friendly ``promote_target`` minion into
     the dying card. Mirrors ``tensor_engine/effects.py::_apply_promote``.
@@ -1409,6 +1430,24 @@ def _apply_promote_on_death(
         burn_scope="owner",
     )
     new_minions = _replace_minion(state.minions, chosen.instance_id, promoted)
+    # PROMOTE beat (user 2026-07-11 GT rat report): promotions resolved
+    # SILENTLY — no event — so the client rendered a mix of stale beats
+    # and the drain-end snapshot (a freshly summoned Common Rat showing
+    # Giant Rat stats over its old HP). EVT_MINION_TRANSFORMED gives the
+    # swap its own animated, logged beat like Reanimated Bones.
+    if event_collector is not None:
+        event_collector.collect(
+            EVT_MINION_TRANSFORMED,
+            "trigger:on_death",
+            {
+                "instance_id": chosen.instance_id,
+                "from_card_numeric_id": target_card_numeric_id,
+                "to_card_numeric_id": dying_card_numeric_id,
+                "owner_idx": int(dying_owner),
+                "position": list(chosen.position),
+                "new_hp": dying_card_def.health,
+            },
+        )
     return replace(state, minions=new_minions)
 
 

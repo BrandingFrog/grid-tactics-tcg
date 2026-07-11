@@ -833,6 +833,7 @@ def _resolve_trigger_and_open_react_window(
                 trigger.source_card_numeric_id,
                 caster_owner,
                 library,
+                event_collector=event_collector,
             )
             # Enqueue-only cleanup: chain-reaction deaths from the
             # promote (rare) enqueue without starting a nested drain.

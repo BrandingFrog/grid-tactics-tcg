@@ -902,6 +902,35 @@ class TestDeathKeywordPromote:
         assert rat_after.current_health == 3  # promote card base hp
         assert rat_after.attack_bonus == 0
 
+    def test_promote_emits_transform_event(self):
+        """Silent promotions desynced the client (user 2026-07-11: a
+        Common Rat rendered as Giant Rat over its old HP). The promote
+        must emit EVT_MINION_TRANSFORMED with the new form + fresh HP."""
+        from grid_tactics.action_resolver import _cleanup_dead_minions
+        from grid_tactics.engine_events import EVT_MINION_TRANSFORMED, EventStream
+
+        lib = _make_death_test_library()
+        promote_nid = lib.get_numeric_id("test_die_promote")
+        rat_nid = lib.get_numeric_id("test_rat")
+        dying = MinionInstance(
+            instance_id=0, card_numeric_id=promote_nid,
+            owner=PlayerSide.PLAYER_1, position=(2, 2), current_health=0,
+        )
+        rat = MinionInstance(
+            instance_id=1, card_numeric_id=rat_nid,
+            owner=PlayerSide.PLAYER_1, position=(1, 0), current_health=1,
+        )
+        state = _make_state(minions=[dying, rat])
+        stream = EventStream()
+        _cleanup_dead_minions(state, lib, event_collector=stream)
+        transforms = [e for e in stream.events if e.type == EVT_MINION_TRANSFORMED]
+        assert len(transforms) == 1
+        pl = transforms[0].payload
+        assert pl["instance_id"] == 1
+        assert pl["from_card_numeric_id"] == rat_nid
+        assert pl["to_card_numeric_id"] == promote_nid
+        assert pl["new_hp"] == 3
+
     def test_promote_unique_constraint_skips_when_copy_alive(self):
         from grid_tactics.action_resolver import _cleanup_dead_minions
 
