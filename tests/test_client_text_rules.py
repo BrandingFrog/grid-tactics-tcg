@@ -289,7 +289,9 @@ console.log(JSON.stringify({ desc: getEffectDescription(effects, card) }));
     out = run_js(tmp_path, script)
     assert out["desc"] == (
         # 'Summon: ' prefix added 2026-07-10 (ON_SUMMON joined triggerMap).
-        "Summon: Gain (DM)[atk][hp]. ×3 if in front of Dark Ranged ally"
+        # Em-dash join (2026-07-11): the card frame splits on '. ' into
+        # bullets, so the multiplier clause must not start a new sentence.
+        "Summon: Gain (DM)[atk][hp] — ×3 if in front of Dark Ranged ally"
     ), (
         "player_dark_matter buff must render the DM scaling + placement "
         "clause; got %r" % out["desc"]
