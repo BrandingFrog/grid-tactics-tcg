@@ -385,7 +385,7 @@ def build_rules_text(card: dict, name_map: dict[str, str] | None = None) -> str:
                     pcond = eff.get("placement_condition")
                     mult = eff.get("condition_multiplier", 1)
                     if pcond == "front_of_dark_ranged" and mult > 1:
-                        desc += f". ×{mult} if placed in front of a [[Dark]] [[Ranged]] ally"
+                        desc += f" — ×{mult} if placed in front of a [[Dark]] [[Ranged]] ally"
                 elif eff_type == "buff_health" and has_pair:
                     continue
                 else:

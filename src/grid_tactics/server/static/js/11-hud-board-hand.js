@@ -921,7 +921,9 @@ function getEffectDescription(effects, cardData, opts) {
                 var selfTarget = (eff.target === 3); // SELF_OWNER
                 desc = prefix + (selfTarget ? 'Gain' : 'Ally ' + tribeName + ' gain') + ' ' + DM + SWORD + (hasMatchingHp ? HEART : '');
                 if (eff.placement_condition === 'front_of_dark_ranged' && eff.condition_multiplier > 1) {
-                    desc += '. ×' + eff.condition_multiplier + ' if in front of Dark Ranged ally';
+                    // Em-dash, not '. ' — the card frame splits effect text on
+                    // '. ' into bullet lines, and this clause is not a sentence.
+                    desc += ' — ×' + eff.condition_multiplier + ' if in front of Dark Ranged ally';
                 }
             } else {
                 desc = prefix + '+' + amount + SWORD;
