@@ -863,6 +863,12 @@ function _commitMinionHp(state, payload) {
                 m.max_health_bonus = (m.max_health_bonus | 0) + payload.max_health_delta;
                 changed = true;
             }
+            // Cleanse beat (audit 2026-07-11): the burning badge clears AT
+            // the cleanse event instead of the drain-end snapshot.
+            if (payload.burning_cleared) {
+                m.is_burning = false;
+                changed = true;
+            }
             return changed;
         }
     }
@@ -1245,6 +1251,10 @@ function playMinionHpChange(ev, done) {
                 atkDelta > 0 ? 'heal' : 'combat-damage',
             );
         } catch (e) { /* defensive */ }
+    } else if (tile && payload.burning_cleared) {
+        // Cleanse that only removed Burning (Water Wyrm's common case) —
+        // give the signature effect a visible beat.
+        try { showFloatingPopup(tile, '\ud83d\udca7 Cleansed', 'heal'); } catch (e) { /* defensive */ }
     }
     setTimeout(done, _evDurationOr(ev, 400));
 }

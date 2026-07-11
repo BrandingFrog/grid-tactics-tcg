@@ -1048,7 +1048,7 @@ def _resolve_trigger_and_open_react_window(
             EVT_REACT_WINDOW_OPENED,
             "system:enter_react",
             {
-                "react_context": rc.name if rc else None,
+                "react_context": rc.name if rc is not None else None,
                 "react_player_idx": 1 - state.active_player_idx,
                 "return_phase": new_return_phase.name if new_return_phase else None,
             },

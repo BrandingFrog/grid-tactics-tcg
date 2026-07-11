@@ -899,10 +899,17 @@ function highlightBoard() {
 
     // Revive placement tile highlighting (Ratical Resurrection modal).
     // Uses legalActions REVIVE_PLACE entries to mark valid tiles.
+    // Audit fix (2026-07-11): respect the picked grave card — a mixed
+    // melee/ranged revive pool has different tiles per pick, and the
+    // unfiltered set lit tiles that were dead on click (the cell-click
+    // branch filters by card_index). Mirrors highlightReviveCells.
     if (interactionMode === 'revive_place' && legalActions) {
+        var _pickedIdx = window.__reviveSelectedGraveIdx;
         for (var _i = 0; _i < legalActions.length; _i++) {
             var _a = legalActions[_i];
             if (_a.action_type === 15 && _a.position) {  // REVIVE_PLACE
+                if (_pickedIdx != null && _a.card_index != null
+                        && _a.card_index !== _pickedIdx) continue;
                 var _cell = document.querySelector('.board-cell[data-row="' + _a.position[0] + '"][data-col="' + _a.position[1] + '"]');
                 if (_cell) _cell.classList.add('cell-valid');
             }

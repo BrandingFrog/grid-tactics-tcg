@@ -211,6 +211,13 @@ def derive_keywords(card: dict) -> list[str]:
             kws.add("Rally")
         if trigger in (10, "on_end_of_turn"):
             kws.add("Decay")
+        # Audit fixes (2026-07-11): on_summon and on_sacrifice were
+        # untagged — Water/Earth/... Wyrms missing from the Summon /
+        # Sacrifice keyword taxonomy.
+        if trigger in (8, "on_summon") and card_type == "minion":
+            kws.add("Summon")
+        if trigger in (11, "on_sacrifice"):
+            kws.add("Sacrifice")
 
         # scale_with
         if eff.get("scale_with") in _DM_SCALES:
@@ -238,6 +245,7 @@ def derive_keywords(card: dict) -> list[str]:
             "revive": "Revive",
             "draw": "Draw",
             "burn_bonus": "Burn",
+            "cleanse": "Cleanse",
         }
         if eff_type in _EFFECT_KW:
             kws.add(_EFFECT_KW[eff_type])

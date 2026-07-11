@@ -12,7 +12,7 @@ from pathlib import Path
 import pytest
 
 from grid_tactics.card_library import CardLibrary
-from grid_tactics.enums import ActionType, EffectType, PlayerSide, TriggerType
+from grid_tactics.enums import ActionType, EffectType, PlayerSide, TriggerType, TurnPhase
 from grid_tactics.game_state import GameState
 from grid_tactics.legal_actions import legal_actions
 from grid_tactics.minion import MinionInstance
@@ -130,3 +130,46 @@ def test_magic_cannot_target_it(library):
     }
     assert (4, 4) in targets, "the rat must remain targetable"
     assert (4, 0) not in targets, "Water Wyrm must not be a magic target"
+
+
+def test_cleanse_fires_through_real_rally_pipeline_with_event(library):
+    """Audit 2026-07-11: drive the ACTUAL start-of-turn trigger queue (not
+    the dispatch helper) — a burning Water Wyrm entering its owner's Rally
+    Phase is cleansed AND the beat emits an event with burning_cleared so
+    the client's 🔥 badge clears at the beat, not at drain end."""
+    from grid_tactics.actions import pass_action
+    from grid_tactics.engine_events import EVT_MINION_HP_CHANGE, EventStream
+    from grid_tactics.react_stack import enter_start_of_turn, handle_react_action
+
+    deck = get_preset_deck(library)
+    state, _ = GameState.new_game(seed=37, deck_p1=deck, deck_p2=deck)
+    wyrm_nid = library.get_numeric_id("water_wyrm")
+    minion = MinionInstance(
+        instance_id=1, card_numeric_id=wyrm_nid,
+        owner=PlayerSide.PLAYER_1, position=(0, 0),
+        current_health=20, is_burning=True,
+    )
+    state = replace(
+        state,
+        minions=(minion,),
+        board=state.board.place(0, 0, 1),
+        next_minion_id=2,
+        active_player_idx=0,
+    )
+    stream = EventStream()
+    state = enter_start_of_turn(state, library, event_collector=stream)
+    guard = 0
+    while state.phase == TurnPhase.REACT and guard < 10:
+        guard += 1
+        state = handle_react_action(
+            state, pass_action(), library, event_collector=stream,
+        )
+    m = state.get_minion(1)
+    assert m.is_burning is False, "Rally Cleanse must clear Burning"
+    assert m.current_health == 20, "Cleanse is not a heal"
+    cleanse_events = [
+        e for e in stream.events
+        if e.type == EVT_MINION_HP_CHANGE and e.payload.get("cause") == "cleanse"
+    ]
+    assert cleanse_events, "the burning-only cleanse must emit a beat event"
+    assert cleanse_events[0].payload["burning_cleared"] is True

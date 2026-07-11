@@ -44,6 +44,7 @@ Update this file and the matching `KEYWORD_GLOSSARY` in `src/grid_tactics/server
 | Dark Matter | A stacking PLAYER resource pool, visible to both players. Gains add +1 per friendly Dark Mage on board (a minion with the Dark element and the Mage tribe — composite tribes like Mage Rat and Mage Undead count). Dark spells, buffs and costs scale with your pool; reading it never spends it. |
 | Leap | If blocked by an enemy, jump over to the next available tile. Cannot leap allies. If all tiles ahead are enemy-occupied, enables sacrifice. |
 | Conjure | Summon a card from your deck directly to the board. |
+| Sacrifice | Move a minion from your opponent's back row (or Leap it along an all-enemy path) out of the game: it is removed and deals its full 🗡️ as damage to the opponent. "Sacrifice:" effects on a card trigger when that card is sacrificed. |
 | Cleanse | Removes all debuffs from the minion: Burning is cleared and negative 🗡️/🤍 marks reset to 0. Positive buffs stay; lost health is not restored. |
 | Untargetable | Cannot be targeted by magic cards — it is never a legal target for a magic card's single-target effect. Board-wide magic, minions and reacts still affect it. |
 | Revive | Summon minions from the Grave to the board. You pick which eligible grave card to revive and where it deploys (melee: any tile on your side; ranged: back row). Eligibility is limited by the text on the reviving card. |

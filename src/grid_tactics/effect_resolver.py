@@ -366,9 +366,16 @@ def _apply_effect_to_minion(
         # attack-only buffs previously emitted nothing and combined buffs
         # lost their attack half until the drain-end snapshot, so 🗡️
         # visibly lagged 🤍 on the board.
+        # Audit fix (2026-07-11): diff EVERY beat-visible field — a Cleanse
+        # that only clears is_burning (the common Water Wyrm case) or only
+        # restores a negative max-HP mark previously emitted NOTHING, so
+        # the burning badge stayed stale until the drain-end snapshot and
+        # the card's signature effect had no causal beat.
         if new_m is not None and (
             new_m.current_health != minion.current_health
             or new_m.attack_bonus != minion.attack_bonus
+            or new_m.max_health_bonus != minion.max_health_bonus
+            or new_m.is_burning != minion.is_burning
         ):
             event_collector.collect(
                 EVT_MINION_HP_CHANGE,
@@ -380,6 +387,9 @@ def _apply_effect_to_minion(
                     "attack_delta": new_m.attack_bonus - minion.attack_bonus,
                     "max_health_delta": (
                         new_m.max_health_bonus - minion.max_health_bonus
+                    ),
+                    "burning_cleared": (
+                        minion.is_burning and not new_m.is_burning
                     ),
                     "owner_idx": _player_index_for_side(new_m.owner),
                     "position": list(new_m.position),

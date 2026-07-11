@@ -976,8 +976,18 @@ def _resume_after_pending_revive(
     up dead minions, check game over, defer on any newly-opened modal,
     then open the AFTER_ACTION react window whose close routes through
     close_end_react_and_advance_turn.
+
+    Audit fix (2026-07-11): PRESERVE the ORIGINAL pending_action (the
+    SACRIFICE / PLAY_CARD that opened the revive) instead of overwriting
+    it with the modal-clearing REVIVE_PLACE/DECLINE_REVIVE — reacts keyed
+    on the triggering action (OPPONENT_SACRIFICES on Surgefed Sparkbot,
+    magic-counter reacts vs Ratical Resurrection) test
+    pending_action.action_type and were silently suppressed whenever a
+    revive gate intervened. Mirrors the death-modal deferral, which
+    keeps pending_action for exactly this reason.
     """
-    state = replace(state, pending_action=action)
+    if state.pending_action is None:
+        state = replace(state, pending_action=action)
     state = _cleanup_dead_minions(state, library, event_collector=event_collector)
     state = _check_game_over(state, event_collector=event_collector)
     if state.is_game_over:
