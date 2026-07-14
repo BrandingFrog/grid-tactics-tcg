@@ -1360,7 +1360,7 @@ def apply_new_turn_resources(
             )
 
     # Both players' opening turns begin at STARTING_MANA; regen starts on
-    # turn 3. The turn-start draw itself is not skipped on turn 2.
+    # turn 3. The late-game automatic draw is handled below.
     if state.turn_number > 2:
         prev_mana = state.players[active_idx].current_mana
         active_player = state.players[active_idx].regenerate_mana(
@@ -1411,7 +1411,9 @@ def apply_new_turn_resources(
                 },
             )
 
-    if manual_draw_variant():
+    # Active rules add the mandatory draw only after the third Fortune
+    # (completed turn 75). Before then, REST remains the only regular draw.
+    if manual_draw_variant() and state.automatic_turn_draw_count == 0:
         return state
 
     active_player = state.players[active_idx]
@@ -1473,24 +1475,22 @@ def _close_end_of_turn_and_flip(
     INSIDE ``enter_start_of_turn`` for the newly-active player. This
     helper is now strictly the turn-flip tail:
     handshake payout, discard bookkeeping, flip active_player_idx /
-    turn_number, regen, turn-start draw (or empty-deck fatigue).
+    turn_number, regen, and the ruleset's turn draw/fatigue clock.
     Phase is set to ACTION as a transient value — the chaining
     call in ``close_end_react_and_advance_turn`` (and ``enter_end_of_turn``
     shortcut path) will invoke ``enter_start_of_turn`` next which sets
     phase=START_OF_TURN and fires burn tick + Start triggers.
 
     Order (turn-structure redesign 2026-07):
-      1. Handshake payout (if pending): BOTH players +1 mana (or draw
-         if full) at the END of the turn the second PASS landed in.
+      1. Handshake payout (if pending) at the end of the resolving turn.
       2. Flip ``discarded_this_turn`` -> ``discarded_last_turn`` for the
          outgoing player and clear this-turn for them.
       3. Flip ``active_player_idx`` and increment ``turn_number``.
       4. Mana regen for new active player (suppressed on turn 2).
-      5. UNCONDITIONAL turn-start draw for the new active player, AFTER
-         mana regen. Empty deck → escalating fatigue (10/20/30... per
-         player, tracked in GameState.fatigue_counts) instead of the
-         draw. Full hand → the drawn card overdraw-burns to the exhaust
-         pile (revealed).
+      5. Turn-start draw after mana regen: legacy rules always draw; active
+         rules begin drawing after the third Fortune. Empty deck → escalating
+         fatigue (10/20/30... per player, tracked in fatigue_counts). Full
+         hand → the card overdraw-burns to the Exhaust Pile, revealed.
 
     Rule-1 bug fix captured here: the old inline resolve_react_stack tail
     did NOT flip ``discarded_this_turn`` -> ``discarded_last_turn`` for

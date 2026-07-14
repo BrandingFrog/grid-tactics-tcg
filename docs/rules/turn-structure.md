@@ -4,7 +4,9 @@ Authoritative turn flow, phase boundaries, react windows, and effect-resolution 
 
 > **ACTIVE RULES (2026-07-14 v5)** (`GT_MANUAL_DRAW=1`, the default for live,
 > headless, and RL play; `GT_MANUAL_DRAW=0` selects legacy compatibility rules):
-> - NO turn-start auto-draw or turn-start empty-deck fatigue.
+> - No turn-start auto-draw before the third Fortune round. After the Fortune
+>   at the end of turn 75, every incoming turn draws 1 automatically; an empty
+>   deck takes escalating 10/20/30... fatigue.
 > - Each player has a public **Action Point bank**: gain 1 on each own turn, bank up
 >   to 3. Every primary action — including MAGIC — spends 1. Reactions,
 >   modal choices, and the optional post-move attack/decline spend 0.
@@ -57,7 +59,9 @@ Priority begins with the turn player in every phase.
 ## 3. Turn Start
 
 Under active rules, the player gains 1 Action Point (cap 3) and gains mana
-equal to the current Fortune ante. There is no automatic draw.
+equal to the current Fortune ante. Before the third Fortune there is no
+automatic draw. Once the Fortune after completed turn 75 resolves, the
+postponed turn 76 and every later turn also draw 1 automatically.
 
 ### 3.1 Mana Pool
 
@@ -67,11 +71,13 @@ Mana is a **single pool** — there are no crystals:
 - Spending mana **permanently depletes** it until rebuilt (+1 per turn, plus Handshake payouts).
 - `MAX_MANA_CAP = 10` — a pool of 10 is "full"; turn-start gain does not raise it past 10.
 
-### 3.2 Fatigue (legacy standard rules only)
+### 3.2 Fatigue
 
-`GT_MANUAL_DRAW=0` retains escalating fatigue on an empty-deck automatic
-turn-start draw. Active rules have no automatic draw, so they have no
-turn-start fatigue; an empty-deck REST still grants its mana and draws nothing.
+An automatic turn draw against an empty deck deals escalating per-player
+fatigue: 10, then 20, then 30, and so on. Active rules start this closing
+clock after the third Fortune (the end of turn 75). Before then, an empty-deck
+REST still grants its mana and draws nothing. `GT_MANUAL_DRAW=0` retains its
+automatic draw and the same fatigue behavior from the beginning.
 
 ### 3.3 Overdraw Burns
 
@@ -257,8 +263,8 @@ If an effect's target is no longer valid at resolution time (destroyed, moved, e
 When touching turn logic, verify:
 
 - [ ] Turn banner renders at turn start with `TURN X` + `PLAYER X`.
-- [ ] Active Turn Start: gain 1 Action Point (cap 3) and Fortune-ante mana; no auto-draw.
-- [ ] Legacy-only empty-deck turn-start draw = escalating fatigue (10/20/30...); active rules never apply turn-start fatigue.
+- [ ] Active Turn Start: gain 1 Action Point (cap 3) and Fortune-ante mana; after the third Fortune also draw 1.
+- [ ] Empty-deck automatic turn draw = escalating fatigue (10/20/30...); active rules enable it after turn 75.
 - [ ] Rally Phase: all once-per-turn positive triggers proc via `ON_START_OF_TURN`; animate with center-screen icon + source/target blip.
 - [ ] Action Phase: each primary action (including MAGIC) costs 1; reactions and continuations cost 0; same player continues while points remain.
 - [ ] REST is the 0-AP rewarded no-action end, banks all points, grants +1 mana + ante cards, and offers Handshake. After an AP is used, only no-effect PASS remains.

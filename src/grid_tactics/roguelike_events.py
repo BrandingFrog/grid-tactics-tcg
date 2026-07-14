@@ -20,7 +20,7 @@ from grid_tactics.game_state import GameState
 from grid_tactics.minion import MinionInstance
 from grid_tactics.phase_contracts import assert_phase_contract
 from grid_tactics.rng import GameRNG
-from grid_tactics.types import MAX_HAND_SIZE, MAX_MANA_CAP
+from grid_tactics.types import DECKOUT_DRAW_ANTE, MAX_HAND_SIZE, MAX_MANA_CAP
 
 ROGUELIKE_EVENT_INTERVAL = int(
     os.environ.get("GT_ROGUELIKE_EVENT_INTERVAL", "25")
@@ -215,6 +215,9 @@ def resolve_roguelike_event_choice(
                 "fortune_ante": state.fortune_ante + 1,
                 "turn_mana_gain": state.fortune_ante + 1,
                 "rest_draw_count": state.fortune_ante + 1,
+                "automatic_turn_draw_count": (
+                    1 if state.fortune_ante + 1 >= DECKOUT_DRAW_ANTE else 0
+                ),
             },
         )
 

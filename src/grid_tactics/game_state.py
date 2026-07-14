@@ -16,7 +16,11 @@ from grid_tactics.enums import PlayerSide, ReactContext, TurnPhase
 from grid_tactics.minion import MinionInstance
 from grid_tactics.player import Player
 from grid_tactics.rng import GameRNG
-from grid_tactics.types import STARTING_HAND_P1, STARTING_HAND_P2
+from grid_tactics.types import (
+    DECKOUT_DRAW_ANTE,
+    STARTING_HAND_P1,
+    STARTING_HAND_P2,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -350,6 +354,11 @@ class GameState:
         """Automatic mana per turn and cards drawn by REST."""
         return 1 + self.fortune_rounds_completed
 
+    @property
+    def automatic_turn_draw_count(self) -> int:
+        """Late-game mandatory draw unlocked by the turn-75 Fortune."""
+        return 1 if self.fortune_ante >= DECKOUT_DRAW_ANTE else 0
+
     def get_minion(self, instance_id: int) -> Optional[MinionInstance]:
         """Find a minion by its instance_id. Returns None if not found."""
         for m in self.minions:
@@ -521,6 +530,7 @@ class GameState:
             # Derived from mirrored history so Fortune resolution can never
             # double-increment it across server/headless resume paths.
             "fortune_ante": self.fortune_ante,
+            "automatic_turn_draw_count": self.automatic_turn_draw_count,
             # Deferred-Decay marker (burn-tick death interrupt resume).
             "decay_resume_pending": self.decay_resume_pending,
             # Deprecated save key retained for backwards compatibility.

@@ -616,7 +616,7 @@
   100% { top: 110vh; opacity: 0; }
 }
 
-/* --- no-action fatigue nudge — big skull + -5❤️ + NO ACTION AVAILABLE --- */
+/* --- legacy no-action nudge overlay (kept for old event replays) --- */
 .nudge-overlay.nudge-no-action {
   display: flex;
   flex-direction: column;

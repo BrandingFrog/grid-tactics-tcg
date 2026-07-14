@@ -55,16 +55,18 @@ MAX_EFFECT_AMOUNT: int = 100
 ACTION_POINTS_PER_TURN: int = 1
 MAX_ACTION_POINTS: int = 3
 
-# NOTE: AUTO_DRAW_ENABLED was DELETED (turn-structure redesign 2026-07).
-# The turn-start draw is now UNCONDITIONAL — see react_stack.py
-# _close_end_of_turn_and_flip. DRAW as an action is removed from legal
-# actions (slot 1000 stays reserved in the action space, never legal).
-#
-# ...EXCEPT under the MANUAL-DRAW rules experiment below.
+# The third completed Fortune round happens after turn 75. At the resulting
+# ante (4), every incoming turn also draws one card; an empty deck therefore
+# starts the existing escalating 10/20/30... fatigue clock.
+DECKOUT_DRAW_ANTE: int = 4
+
+# DRAW slot 1000 is REST under the active contract. Automatic turn draws are
+# disabled before the third Fortune, then become a one-card late-game clock.
 
 # ---------------------------------------------------------------------------
 # Active rules experiment (v5): action bank + REST.
-#   - NO turn-start auto-draw (and no empty-deck turn-start fatigue).
+#   - NO turn-start auto-draw before the third Fortune round.
+#   - At ante 4 (after turn 75), turn start draws 1; an empty deck fatigues.
 #   - Primary actions, including MAGIC, spend one action point.
 #   - REST is the rewarded no-action end: it spends 0, banks all points,
 #     grants +1 mana, draws the Fortune ante, and offers a Handshake.

@@ -1858,9 +1858,9 @@ def register_events(room_manager: RoomManager) -> None:
                 #   (1) No-legal-actions failsafe — legal_actions is empty
                 #       during an ACTION phase. Submit PASS to
                 #       resolve_action. Turn-structure redesign (2026-07):
-                #       PASS is FREE (no fatigue damage) — fatigue now
-                #       exists ONLY for empty-deck turn-start draws under
-                #       legacy rules. Active rules always expose REST, PASS,
+                #       PASS is FREE (no fatigue damage) — fatigue exists
+                #       only for empty-deck automatic turn draws (active rules
+                #       unlock those after turn 75). Active rules expose REST, PASS,
                 #       or an empty-bank PASS failsafe in ACTION, so this
                 #       branch should still be unreachable.
                 #   (2) Phase 14.7-02: legal_actions is empty during
@@ -1868,9 +1868,8 @@ def register_events(room_manager: RoomManager) -> None:
                 #       phases are placeholders. Call the react_stack
                 #       helpers directly — resolve_action does NOT accept
                 #       START/END phase inputs.
-                # Turn-start draw contract (2026-07 redesign): the auto
-                # draw + 1 mana live INSIDE enter_start_of_turn (Rally
-                # entry). No double-draw is possible from this loop:
+                # Turn-start resource work lives inside enter_start_of_turn
+                # (Rally entry). No duplicate draw is possible from this loop:
                 # enter_start_of_turn is invoked at most once per
                 # START_OF_TURN entry because every one of its return
                 # paths leaves the phase (REACT window, ACTION shortcut,

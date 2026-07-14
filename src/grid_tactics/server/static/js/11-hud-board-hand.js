@@ -461,9 +461,12 @@ function showPlayerPreview(playerIdx) {
             + ' · Grave ' + (p.grave ? p.grave.length : 0)
             + ' · Exhaust ' + (p.exhaust ? p.exhaust.length : 0) + '</div>';
         var ante = Math.max(1, state.fortune_ante | 0);
+        var turnDraws = Math.max(0, state.automatic_turn_draw_count | 0);
         body += '<div class="tooltip-text tooltip-action-economy">Turn income: +'
             + ante + ' Mana · Rest: +1 Mana and draw ' + ante
-            + (ante === 1 ? ' card' : ' cards') + '</div>';
+            + (ante === 1 ? ' card' : ' cards')
+            + (turnDraws ? ' · Turn draw: ' + turnDraws + ' (empty deck fatigues)' : '')
+            + '</div>';
         var panels = [];
         // Only surface Dark Matter once the player has stacks (user 2026-07-06).
         if (dm > 0) {

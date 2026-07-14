@@ -1199,10 +1199,9 @@ function renderActionBar() {
     // which EXACTLY trips this auto-skip and causes the client to fire a
     // bogus PASS. That PASS arrives at the server AFTER the drain has
     // already advanced to ACTION phase, where PASS is routed to
-    // `_apply_pass` — inflicting FATIGUE_DAMAGE (5) on the active player
-    // AND flipping the turn a second time. Visible symptoms: phase-LED
+    // `_apply_pass` and flips the turn a second time. Visible symptoms: phase-LED
     // thrash (END/START cycle twice in ~1s), active-player ping-pong,
-    // phantom "-5 HP" popup. Sandbox is god-view with no pace-gated
+    // duplicate turn-advance effects. Sandbox is god-view with no pace-gated
     // opponent — the auto-skip provides zero value here (the server
     // already handles the drain) and actively breaks the per-frame
     // signal contract. Skip it entirely in sandbox mode.
@@ -1572,8 +1571,10 @@ function showRoguelikeChoicesReveal(payload) {
     var subtitle = document.createElement('div');
     subtitle.className = 'tutor-modal-deckline fortune-reveal-rule';
     var newAnte = Math.max(1, (payload && payload.fortune_ante) | 0);
+    var turnDraws = Math.max(0, (payload && payload.automatic_turn_draw_count) | 0);
     subtitle.textContent = 'Both resolve together · Reactions disabled · ANTE UP: +'
-        + newAnte + ' turn Mana · Rest draws ' + newAnte;
+        + newAnte + ' turn Mana · Rest draws ' + newAnte
+        + (turnDraws ? ' · Turn draw ' + turnDraws + ' (empty deck fatigues)' : '');
     header.appendChild(title);
     header.appendChild(subtitle);
     modal.appendChild(header);

@@ -1795,8 +1795,8 @@
 }
 
 /* .btn-draw DELETED (turn-structure redesign 2026-07): DRAW is no longer a
-   legal action — cards auto-draw at turn start. The ACTION-phase slot now
-   hosts the free Pass button (.btn-pass.btn-pass-action). */
+   legal action. REST handles regular draws; the late-game turn draw is
+   automatic. The ACTION-phase slot hosts Pass (.btn-pass.btn-pass-action). */
 .btn-pass-action {
   background: rgba(111, 232, 168, 0.12);
   border-color: #6fe8a8;

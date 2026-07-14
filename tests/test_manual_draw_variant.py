@@ -1,7 +1,7 @@
 """Active action-bank rules v5 — GT_MANUAL_DRAW=1.
 
 Variant rules under test:
-  - NO turn-start auto-draw (and no turn-start empty-deck fatigue).
+  - NO turn-start auto-draw before the third Fortune round.
   - Primary actions spend one banked point (maximum three); MAGIC is normal.
   - REST is the 0-point rewarded no-action end: +1 mana, Fortune-ante draw,
     bank all points, and offer a Handshake.
@@ -194,9 +194,8 @@ def test_non_rest_action_breaks_streak(variant, new_game_state, card_library):
     assert state.consecutive_passes == 0
 
 
-def test_no_turn_start_autodraw(variant, new_game_state, card_library):
-    """The incoming player must NOT auto-draw at turn start; only their own
-    rest / handshake draws touch their hand."""
+def test_no_early_turn_start_autodraw(variant, new_game_state, card_library):
+    """Before the third Fortune, only REST/Handshake draws touch the hand."""
     from grid_tactics.enums import TurnPhase
     from grid_tactics.react_stack import (
         enter_end_of_turn,
