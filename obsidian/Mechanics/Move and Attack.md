@@ -17,7 +17,7 @@ Player-driven Advance Wars-style melee chain. Shipped in [[Phases/v1.1/Phase 14.
 - Python: `src/grid_tactics/game_state.py`, `action_resolver.py`
 - Tensor parity: `tensor_engine/` step kernel
 - Mask: `legal_actions.py`
-- Frontend: `server/static/game.js` two-step click flow
+- Frontend: `server/static/js/` two-step click flow
 
 ## Related
 - [[Range and Attacks]] · [[Movement]] · [[Architecture/Action Space]]

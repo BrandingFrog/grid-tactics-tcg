@@ -1,5 +1,11 @@
-from grid_tactics.db.reader import GameResultReader
+import sys
 from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(REPO_ROOT / "src"))
+
+from grid_tactics.db.reader import GameResultReader  # noqa: E402
+
 r = GameResultReader(Path("/root/output/training.db"))
 runs = r.get_runs()
 for run in runs:

@@ -1,7 +1,7 @@
 """Deck code encoder / decoder.
 
 Cross-platform compact deck serialization shared with the JS client in
-``src/grid_tactics/server/static/game.js``.
+``src/grid_tactics/server/static/js/03-deck-builder.js``.
 
 Two formats supported:
 

@@ -5,9 +5,8 @@
 - Hosts the Flask-SocketIO [[Server]] for live PvP.
 
 ## RL Training — RunPod
-- `deploy_runpod.py` uploads tarball to Supabase Storage.
-- `start_pod.sh` downloads code, installs deps, runs `tensor_train.py`.
-- `manage_pods.py` lifecycle helpers.
+- `scripts/manage_pods.py` archives the required source and uploads it directly to a pod.
+- `scripts/cloud_train.py` is the remote training entrypoint.
 - Pods stream metrics to Supabase.
 
 ## Data — Supabase

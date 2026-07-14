@@ -1,10 +1,11 @@
 @echo off
+set "ROOT=%~dp0..\.."
 echo ============================================
 echo   Grid Tactics TCG - Web Dashboard
 echo   Press Ctrl+C to stop
 echo ============================================
-cd /d "%~dp0"
-start "" /b .venv\Scripts\python.exe dashboard.py
+cd /d "%ROOT%"
+start "" /b "%ROOT%\.venv\Scripts\python.exe" "%ROOT%\scripts\dashboard.py"
 timeout /t 2 /nobreak >nul
 start http://localhost:5000
 echo   Dashboard running at http://localhost:5000

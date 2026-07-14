@@ -216,7 +216,7 @@ The consecutive-pass counter then **resets to 0** — no chaining. The next Hand
 The movement keyword formerly named "Rally" (when this minion moves, all other friendly copies also advance) is renamed **March** everywhere, freeing "Rally" for the phase name:
 
 - `data/GLOSSARY.md`
-- `KEYWORD_GLOSSARY` in `src/grid_tactics/server/static/game.js`
+- `KEYWORD_GLOSSARY` in `src/grid_tactics/server/static/js/03-deck-builder.js`
 - Card JSONs (`rally` → `march` effect key if present, plus card text)
 - Wiki sync handles the rest on commit.
 
@@ -267,7 +267,7 @@ When touching turn logic, verify:
 - [ ] Stack is LIFO — reacts resolve in reverse play order.
 - [ ] Priority rules apply to all effect types, not just Death.
 - [ ] `TurnPhase.START_OF_TURN` / `END_OF_TURN` enum values unchanged; "Rally" / "Decay" used in player-facing text, docs, events, and UI.
-- [ ] Movement keyword renamed Rally → March everywhere (GLOSSARY, game.js `KEYWORD_GLOSSARY`, card JSONs).
+- [ ] Movement keyword renamed Rally → March everywhere (GLOSSARY, browser `KEYWORD_GLOSSARY`, card JSONs).
 - [ ] Existing modals (tutor-style) and animations (spell-stage) are reused, not replaced.
 
 ---

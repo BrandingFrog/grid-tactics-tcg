@@ -16,6 +16,9 @@ import subprocess
 import sys
 from pathlib import Path
 
+REPO_ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(REPO_ROOT / "src"))
+
 # Training config (can be overridden via env vars)
 TOTAL_TIMESTEPS = int(os.environ.get("TRAIN_STEPS", "10_000_000"))
 N_ENVS = int(os.environ.get("TRAIN_ENVS", "16"))
@@ -163,7 +166,7 @@ def create_env(n_envs: int, seed: int, use_shaped_reward: bool = True):
     from grid_tactics.rl.env import GridTacticsEnv
     from grid_tactics.rl.self_play import SelfPlayEnv
 
-    library = CardLibrary.from_directory(Path("data/cards"))
+    library = CardLibrary.from_directory(REPO_ROOT / "data" / "cards")
 
     # Build deck (same logic as training.py)
     from grid_tactics.rl.training import _build_standard_deck

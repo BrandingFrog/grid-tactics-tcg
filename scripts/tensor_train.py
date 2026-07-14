@@ -5,7 +5,7 @@ batches to MaskablePPO for gradient updates. This is 100-1000x faster
 than SB3's built-in VecEnv loop.
 
 Usage on RunPod:
-    PYTHONPATH=src TRAIN_STEPS=100000000 python tensor_train.py
+    PYTHONPATH=src TRAIN_STEPS=100000000 python scripts/tensor_train.py
 """
 
 import json
@@ -20,10 +20,13 @@ import torch
 import torch.nn.functional as F
 from torch.distributions import Categorical
 
+REPO_ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(REPO_ROOT / "src"))
+
 # --- Patch version (reads VERSION.json so it auto-syncs with the web game) ---
 def _load_patch_version():
     try:
-        vf = Path(__file__).parent / "src" / "grid_tactics" / "server" / "static" / "VERSION.json"
+        vf = REPO_ROOT / "src" / "grid_tactics" / "server" / "static" / "VERSION.json"
         if vf.exists():
             import json as _json
             data = _json.loads(vf.read_text(encoding="utf-8"))
@@ -580,7 +583,7 @@ def main():
     from grid_tactics.tensor_engine.constants import ACTION_SPACE_SIZE
     from grid_tactics.types import STARTING_HP
 
-    library = CardLibrary.from_directory(Path("data/cards"))
+    library = CardLibrary.from_directory(REPO_ROOT / "data" / "cards")
 
     # Deck selection:
     #   TRAIN_DECK_CODE="GT1:..." — use a user-supplied deck code (same format

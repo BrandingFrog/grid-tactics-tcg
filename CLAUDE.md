@@ -7,7 +7,7 @@ A fantasy trading card game on a 5x5 grid with RL-driven strategy discovery. Pla
 
 **Core Value:** The RL engine that discovers and validates game strategies.
 
-### Current Rules (authoritative detail: data/turn_structure_spec.md)
+### Current Rules (authoritative detail: docs/rules/turn-structure.md)
 - **ACTIVE RULES EXPERIMENT (2026-07-11 v4, `GT_MANUAL_DRAW=1`, on by default in pvp_server.py)**: NO turn-start auto-draw. **REST** (own button, reserved DRAW action slot 1000) consumes the turn action for **+1 mana AND +1 draw**; **PASS is separate and gives nothing**. Both REST and PASS advance the Handshake streak (any two consecutive skips seal it). REST and PASS are mutually exclusive (v4.2): REST is offered until a MAGIC is cast that turn, after which the skip transforms into PASS (`GameState.magic_cast_this_turn`). **MAGIC casts do NOT consume the turn action** — after the cast (and its react windows) play returns to the caster's ACTION phase (`GameState.magic_free_action_pending`). **Handshake = BOTH players gain +1 mana AND draw 1**. `GT_MANUAL_DRAW=0` restores the standard rules below, which the bare engine and test suite run by default. Flag: `types.manual_draw_variant()`.
 - **Turn Start**: auto-draw 1 + gain 1 mana (pool, 10 = full) → **Rally Phase** (positive triggers) → one action (play/move/attack/sacrifice/pass) → **Decay Phase** (negative triggers, e.g. Burning) → turn end (Handshake payout)
 - **PASS is free**; pass answered by pass = **Handshake** (both players +1 mana at turn end; at full mana, draw instead)
@@ -68,8 +68,8 @@ A fantasy trading card game on a 5x5 grid with RL-driven strategy discovery. Pla
 | Technology | Version | Purpose | Why |
 |------------|---------|---------|-----|
 | RunPod | -- | GPU cloud (RTX 4090) | On-demand 4090s at $0.59/hr. Auto-tune fills 24GB VRAM with 32K parallel games. |
-| tensor_train.py | -- | GPU-native PPO training | Custom training loop bypassing SB3. Collects rollouts on GPU via tensor engine, 100K+ FPS. |
-| deploy_runpod.py | -- | Pod deployment | Downloads code from Supabase Storage, installs deps, starts training with env vars. |
+| scripts/tensor_train.py | -- | GPU-native PPO training | Custom training loop bypassing SB3. Collects rollouts on GPU via tensor engine, 100K+ FPS. |
+| scripts/manage_pods.py | -- | Pod deployment | Archives the required code, uploads it over SSH, installs dependencies, and starts training. |
 ### Testing & Quality
 | Technology | Version | Purpose | Why |
 |------------|---------|---------|-----|
@@ -109,8 +109,8 @@ A fantasy trading card game on a 5x5 grid with RL-driven strategy discovery. Pla
 - **Training -> Supabase**: `supabase-py` REST client writes training_runs, training_snapshots, card_stats, game_results to PostgreSQL.
 - **Supabase -> Dashboard**: Vercel HTML page reads via `supabase-js` anon key. Realtime subscriptions auto-refresh.
 - **Action Masking**: Legal action mask [N, 1262] computed on GPU by `legal_actions.py`. Prevents agent from selecting illegal actions.
-- ~~**Tensor Engine -> Training**: `tensor_train.py` calls `engine.step_batch(actions)` — on hold until rules stabilize.~~
-- ~~**Code Deploy**: `deploy_runpod.py` uploads tarball to Supabase Storage — on hold.~~
+- ~~**Tensor Engine -> Training**: `scripts/tensor_train.py` calls `engine.step_batch(actions)` — on hold until rules stabilize.~~
+- **Code Deploy**: `scripts/manage_pods.py` uploads the required source directly to RunPod and starts `scripts/cloud_train.py`.
 ## Version Compatibility Matrix
 | Package | Version | Python Requirement | Notes |
 |---------|---------|-------------------|-------|
@@ -163,7 +163,7 @@ A fantasy trading card game on a 5x5 grid with RL-driven strategy discovery. Pla
 - **Action space**: 1262 discrete actions. Layout: PLAY_CARD[0:250], MOVE[250:350], ATTACK[350:975], SACRIFICE[975:1000], DRAW[1000], PASS[1001], REACT[1002:1262]. DRAW is reserved but no longer legal (auto-draw at turn start).
 - **Forward movement**: Minions move forward only (P1 down, P2 up) in their column. Attacks any direction.
 - **Testing**: 500+ tests via pytest. Run `pytest tests/ -q` for quick check.
-- **Deploy flow**: Edit code -> rebuild tarball -> upload to Supabase Storage -> terminate pods -> `deploy_runpod.py` launches fresh pods.
+- **RunPod deploy flow**: `python scripts/manage_pods.py launch ...` archives the required files, uploads them over SSH, and starts `scripts/cloud_train.py`.
 <!-- GSD:conventions-end -->
 
 <!-- GSD:architecture-end -->

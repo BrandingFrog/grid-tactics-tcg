@@ -3,15 +3,18 @@
 import sys
 from pathlib import Path
 
-db_path = Path(sys.argv[1]) if len(sys.argv) > 1 else Path("data/training.db")
+REPO_ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(REPO_ROOT / "src"))
+
+db_path = Path(sys.argv[1]) if len(sys.argv) > 1 else REPO_ROOT / "data" / "training.db"
 
 if not db_path.exists():
     print(f"No training database found at {db_path}")
-    print("Run train.bat first to generate training data.")
+    print("Run scripts/windows/train.bat first to generate training data.")
     input("\nPress Enter to close...")
     sys.exit(1)
 
-from grid_tactics.db.reader import GameResultReader
+from grid_tactics.db.reader import GameResultReader  # noqa: E402
 
 reader = GameResultReader(db_path)
 
@@ -23,7 +26,7 @@ print(f"  Database: {db_path}")
 print(f"{'='*60}")
 
 if not runs:
-    print("\n  No training runs found. Run train.bat first.")
+    print("\n  No training runs found. Run scripts/windows/train.bat first.")
     input("\nPress Enter to close...")
     sys.exit(0)
 

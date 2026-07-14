@@ -9,7 +9,7 @@ PyTorch batched implementation under `src/grid_tactics/tensor_engine/`. Runs N g
 
 ## Used By
 - [[RL Training]]
-- `tensor_train.py`
+- `scripts/tensor_train.py`
 
 ## Parity Phases
 - [[../Phases/v1.1/Phase 14.1 Melee Move-and-Attack]] — pending_attack parity

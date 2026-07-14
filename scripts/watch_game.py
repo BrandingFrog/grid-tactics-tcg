@@ -3,17 +3,20 @@
 import os
 import sys
 import time
+from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(REPO_ROOT / "src"))
 
 # Enable ANSI colors on Windows
 os.system("")
 
-from pathlib import Path
-from grid_tactics.card_library import CardLibrary
-from grid_tactics.enums import ActionType, Attribute, CardType, PlayerSide, TurnPhase
-from grid_tactics.game_state import GameState
-from grid_tactics.action_resolver import resolve_action
-from grid_tactics.legal_actions import legal_actions
-from grid_tactics.rng import GameRNG
+from grid_tactics.card_library import CardLibrary  # noqa: E402
+from grid_tactics.enums import ActionType, Attribute, CardType, PlayerSide, TurnPhase  # noqa: E402
+from grid_tactics.game_state import GameState  # noqa: E402
+from grid_tactics.action_resolver import resolve_action  # noqa: E402
+from grid_tactics.legal_actions import legal_actions  # noqa: E402
+from grid_tactics.rng import GameRNG  # noqa: E402
 
 # --- ANSI colors ---
 RESET = "\033[0m"
@@ -52,7 +55,7 @@ DELAY = float(sys.argv[2]) if len(sys.argv) > 2 else 0.4
 TURN_LIMIT = 200
 
 # --- Load cards ---
-library = CardLibrary.from_directory(Path("data/cards"))
+library = CardLibrary.from_directory(REPO_ROOT / "data" / "cards")
 
 # --- Build decks (3 copies of each card) ---
 all_ids = [library.get_numeric_id(c.card_id) for c in library.all_cards]

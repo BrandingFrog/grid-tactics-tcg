@@ -4,7 +4,7 @@ Vanilla JS + Socket.IO client. Single-page web app served by [[Server|Flask]].
 
 ## Files
 - `src/grid_tactics/server/static/index.html`
-- `src/grid_tactics/server/static/game.js`
+- `src/grid_tactics/server/static/js/` (numbered client modules)
 - CSS
 
 ## Features

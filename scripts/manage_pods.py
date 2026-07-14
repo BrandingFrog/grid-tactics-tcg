@@ -1,17 +1,17 @@
 """RunPod GPU Pod Manager — full control over cloud training infrastructure.
 
 Commands:
-    python manage_pods.py launch [--gpu 4090] [--steps 10M] [--method default] [--envs 16]
-    python manage_pods.py experiment                    # Launch multi-method experiment suite
-    python manage_pods.py list                          # List all pods
-    python manage_pods.py status <pod_id>               # Detailed pod status + GPU utilization
-    python manage_pods.py gpu <pod_id>                  # nvidia-smi over SSH
-    python manage_pods.py logs <pod_id>                 # Tail training logs
-    python manage_pods.py download <pod_id> [--dest .]  # Download results via SFTP
-    python manage_pods.py stop <pod_id>                 # Stop + terminate pod
-    python manage_pods.py stop-all                      # Stop all pods
-    python manage_pods.py budget                        # Show cost estimates
-    python manage_pods.py gpus                          # List available GPU types + pricing
+    python scripts/manage_pods.py launch [--gpu 4090] [--steps 10M] [--method default] [--envs 16]
+    python scripts/manage_pods.py experiment                    # Launch multi-method experiment suite
+    python scripts/manage_pods.py list                          # List all pods
+    python scripts/manage_pods.py status <pod_id>               # Detailed pod status + GPU utilization
+    python scripts/manage_pods.py gpu <pod_id>                  # nvidia-smi over SSH
+    python scripts/manage_pods.py logs <pod_id>                 # Tail training logs
+    python scripts/manage_pods.py download <pod_id> [--dest .]  # Download results via SFTP
+    python scripts/manage_pods.py stop <pod_id>                 # Stop + terminate pod
+    python scripts/manage_pods.py stop-all                      # Stop all pods
+    python scripts/manage_pods.py budget                        # Show cost estimates
+    python scripts/manage_pods.py gpus                          # List available GPU types + pricing
 """
 
 import argparse
@@ -27,6 +27,7 @@ from pathlib import Path
 # Config
 # ---------------------------------------------------------------------------
 
+REPO_ROOT = Path(__file__).resolve().parents[1]
 BUDGET_EUR = 140.0
 USD_TO_EUR = 0.92  # approximate conversion
 
@@ -47,8 +48,8 @@ CONTAINER_IMAGE = "runpod/pytorch:2.4.0-py3.11-cuda12.4.1-devel-ubuntu22.04"
 CODE_PATHS = [
     "src/",
     "data/cards/",
-    "cloud_train.py",
-    "check_stats.py",
+    "scripts/cloud_train.py",
+    "scripts/check_stats.py",
 ]
 
 # Pip install that does NOT overwrite the pre-installed GPU PyTorch
@@ -66,12 +67,12 @@ INSTALL_CMD = (
 )
 
 # Cost tracking file
-COST_FILE = Path(__file__).parent / ".pod_costs.json"
+COST_FILE = REPO_ROOT / ".pod_costs.json"
 
 
 def load_api_key():
     """Load RunPod API key from .env file or environment."""
-    env_path = Path(__file__).parent / ".env"
+    env_path = REPO_ROOT / ".env"
     if env_path.exists():
         for line in env_path.read_text().splitlines():
             if line.startswith("RUNPOD_API_KEY=") and not line.startswith("#"):
@@ -97,7 +98,7 @@ def create_code_archive() -> bytes:
     buf = io.BytesIO()
     with tarfile.open(fileobj=buf, mode="w:gz") as tar:
         for code_path in CODE_PATHS:
-            full = Path(__file__).parent / code_path
+            full = REPO_ROOT / code_path
             if full.is_dir():
                 tar.add(str(full), arcname=code_path)
             elif full.is_file():
@@ -150,7 +151,7 @@ def upload_code(ssh, archive_bytes: bytes):
         print("Extracting on pod...")
         ssh.run_commands([
             "cd /workspace && tar xzf code.tar.gz && rm code.tar.gz",
-            "ls -la /workspace/src/ /workspace/data/cards/ /workspace/cloud_train.py",
+            "ls -la /workspace/src/ /workspace/data/cards/ /workspace/scripts/cloud_train.py",
         ])
         print("Code uploaded successfully")
     finally:
@@ -217,7 +218,7 @@ def cmd_launch(args):
         f"TRAIN_SEED={args.seed} "
         f"EVAL_FREQ={max(steps // 20, 50000)} "
         f"EVAL_GAMES=100 "
-        f"python cloud_train.py 2>&1 | tee /workspace/training.log"
+        f"PYTHONPATH=/workspace/src python scripts/cloud_train.py 2>&1 | tee /workspace/training.log"
     )
 
     try:
@@ -264,11 +265,11 @@ def cmd_launch(args):
             print(f"  3. Upload code and run: {train_cmd}")
 
         print(f"\nManagement commands:")
-        print(f"  Status:   python manage_pods.py status {pod_id}")
-        print(f"  GPU:      python manage_pods.py gpu {pod_id}")
-        print(f"  Logs:     python manage_pods.py logs {pod_id}")
-        print(f"  Download: python manage_pods.py download {pod_id}")
-        print(f"  Stop:     python manage_pods.py stop {pod_id}")
+        print(f"  Status:   python scripts/manage_pods.py status {pod_id}")
+        print(f"  GPU:      python scripts/manage_pods.py gpu {pod_id}")
+        print(f"  Logs:     python scripts/manage_pods.py logs {pod_id}")
+        print(f"  Download: python scripts/manage_pods.py download {pod_id}")
+        print(f"  Stop:     python scripts/manage_pods.py stop {pod_id}")
 
         return pod_id
 
@@ -371,7 +372,7 @@ def cmd_experiment(args):
                         f"TRAIN_STEPS={steps} TRAIN_ENVS=16 "
                         f"TRAIN_METHOD={exp['method']} TRAIN_SEED={exp['seed']} "
                         f"EVAL_FREQ={max(steps // 20, 50000)} EVAL_GAMES=100 "
-                        f"python cloud_train.py 2>&1 | tee /workspace/training.log"
+                        f"PYTHONPATH=/workspace/src python scripts/cloud_train.py 2>&1 | tee /workspace/training.log"
                     )
                     ssh.run_commands([f"nohup bash -c '{train_cmd}' &"])
                     print(f"  Training started!")
@@ -389,8 +390,8 @@ def cmd_experiment(args):
     print(f"\n{'=' * 60}")
     print(f"  Launched {len(pod_ids)}/{len(experiments)} experiments")
     print(f"  Pod IDs: {', '.join(pod_ids)}")
-    print(f"\n  Monitor all: python manage_pods.py list")
-    print(f"  Stop all:    python manage_pods.py stop-all")
+    print(f"\n  Monitor all: python scripts/manage_pods.py list")
+    print(f"  Stop all:    python scripts/manage_pods.py stop-all")
     print(f"{'=' * 60}")
 
 

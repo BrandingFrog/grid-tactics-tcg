@@ -17,7 +17,8 @@ The live entrypoint enables the manual-draw rules experiment by default. Set `GT
 | --- | --- |
 | `src/grid_tactics/` | Rules engine, AI/RL integration, persistence, and PvP server package |
 | `src/grid_tactics/server/static/` | Browser game client, CSS, artwork, and sound |
-| `data/` | Card definitions, rules references, and local training data |
+| `data/` | Card definitions and local/generated game and training data |
+| `docs/` | Maintained rules, design notes, and deployment guides |
 | `tests/` | Unit, integration, server, JavaScript-contract, and end-to-end tests |
 | `scripts/` | Maintenance, data-generation, debugging, and verification utilities |
 | `assets/` | Source card artwork used by tooling and documentation |
@@ -26,18 +27,25 @@ The live entrypoint enables the manual-draw rules experiment by default. Set `GT
 | `.planning/` | GSD roadmap, phase plans, decisions, and debugging evidence |
 | `artifacts/` | Local-only browser captures and temporary investigation output |
 
-Root-level Python and shell files are operational entrypoints. In particular, Railway starts `pvp_server.py`, so these files intentionally remain at the repository root.
+The only root-level Python entrypoint is `pvp_server.py`, which Railway starts directly. Developer-operated utilities live in `scripts/`, and Windows launchers live in `scripts/windows/`.
+
+Start with [`docs/README.md`](docs/README.md) for maintained project documentation. Historical planning evidence remains under `.planning/` and is not part of the current documentation contract.
 
 ## Development checks
 
 - Full test suite: `pytest tests/ -q`
 - Focused PvP checks: `pytest tests/server tests/test_pvp_server.py -q`
 - Lint: `ruff check src tests`
+- Local training dashboard: `python scripts/dashboard.py`
+- RunPod manager: `python scripts/manage_pods.py --help`
+- Windows launchers: `scripts/windows/`
 
 Card definitions live in `data/cards/`. When changing a player-facing keyword, update both `data/GLOSSARY.md` and the browser glossary in `src/grid_tactics/server/static/js/03-deck-builder.js`.
 
 ## Deployment
 
 Pushing `master` to `origin` triggers the connected Railway deployment. Railway builds with Nixpacks and starts `python pvp_server.py`. The analytics dashboard and wiki have their own deployment configuration in their respective folders.
+
+See [`docs/deployment.md`](docs/deployment.md) for deployment boundaries and operator commands.
 
 Never commit `.env`, local editor state, browser traces, screenshots, training databases, or generated model outputs.

@@ -3,7 +3,7 @@
 Flask app serving training stats, game replays, card analytics,
 and live cloud training monitoring across RunPod GPU pods.
 
-Run with: .venv/Scripts/python.exe dashboard.py
+Run with: .venv/Scripts/python.exe scripts/dashboard.py
 Open: http://localhost:5000        (local training)
       http://localhost:5000/cloud  (cloud GPU monitoring)
 """
@@ -19,17 +19,18 @@ from pathlib import Path
 
 from flask import Flask, render_template_string, jsonify, request as flask_request
 
-# Add src to path
-sys.path.insert(0, str(Path(__file__).parent / "src"))
+# Resolve application and data paths from the repository rather than the script folder.
+REPO_ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(REPO_ROOT / "src"))
 
-from grid_tactics.db.reader import GameResultReader
-from grid_tactics.card_library import CardLibrary
+from grid_tactics.db.reader import GameResultReader  # noqa: E402
+from grid_tactics.card_library import CardLibrary  # noqa: E402
 
 app = Flask(__name__)
 
-DB_PATH = Path("data/training.db")
-CARDS_PATH = Path("data/cards")
-CLOUD_DB_DIR = Path("data/cloud_dbs")
+DB_PATH = REPO_ROOT / "data" / "training.db"
+CARDS_PATH = REPO_ROOT / "data" / "cards"
+CLOUD_DB_DIR = REPO_ROOT / "data" / "cloud_dbs"
 CLOUD_DB_DIR.mkdir(parents=True, exist_ok=True)
 
 def get_reader():
@@ -411,7 +412,7 @@ TEMPLATE = """
                 <div class="no-data">
                     <h2>No Training Data Yet</h2>
                     <p>Run training first to see stats here:</p>
-                    <p><code>train.bat</code> (quick ~5 min) or <code>train_long.bat</code> (full ~30 min)</p>
+                    <p><code>scripts/windows/train.bat</code> (quick ~5 min) or <code>scripts/windows/train_long.bat</code> (full ~30 min)</p>
                     <p style="margin-top:20px;color:#555">This page auto-refreshes every 30 seconds during training.</p>
                 </div>
             `;
@@ -798,7 +799,7 @@ def _discover_pods():
     """Discover active RunPod pods with SSH access."""
     try:
         import runpod
-        env_path = Path(__file__).parent / ".env"
+        env_path = REPO_ROOT / ".env"
         if env_path.exists():
             for line in env_path.read_text().splitlines():
                 if line.startswith("RUNPOD_API_KEY=") and not line.startswith("#"):
@@ -1093,7 +1094,7 @@ CLOUD_TEMPLATE = """
             app.innerHTML = `<div class="loading" style="animation:none">
                 <h2 style="color:#444;margin-bottom:12px">No Active Pods</h2>
                 <p style="color:#666">Launch training first:</p>
-                <p style="margin-top:8px"><code style="background:#1a1a2e;padding:4px 10px;border-radius:4px;color:#00d4ff">python manage_pods.py launch --gpu 4090</code></p>
+                <p style="margin-top:8px"><code style="background:#1a1a2e;padding:4px 10px;border-radius:4px;color:#00d4ff">python scripts/manage_pods.py launch --gpu 4090</code></p>
             </div>`;
             setTimeout(loadCloud, 15000);
             return;

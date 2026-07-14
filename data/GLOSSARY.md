@@ -1,7 +1,7 @@
 # Keyword Glossary
 
 This file is the source of truth for all card keywords and their descriptions.
-Update this file and the matching `KEYWORD_GLOSSARY` in `src/grid_tactics/server/static/game.js` will be kept in sync.
+Update this file and the matching `KEYWORD_GLOSSARY` in `src/grid_tactics/server/static/js/03-deck-builder.js` will be kept in sync.
 
 ## Trigger Keywords
 

@@ -15,4 +15,4 @@ Client-side serialization of visual effects from server state frames. Shipped in
 - Provides a structural gate for prompt UIs.
 
 ## Files
-- `src/grid_tactics/server/static/game.js`
+- `src/grid_tactics/server/static/js/06-event-queue.js`

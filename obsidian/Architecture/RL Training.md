@@ -2,7 +2,7 @@
 
 ## Strategy
 - **MaskablePPO** (sb3-contrib) for the Gymnasium-wrapped Python env.
-- **Custom tensor PPO loop** in `tensor_train.py` for high-throughput GPU training (bypasses SB3 rollout collection).
+- **Custom tensor PPO loop** in `scripts/tensor_train.py` for high-throughput GPU training (bypasses SB3 rollout collection).
 
 ## Pipeline
 1. Tensor engine collects N parallel rollouts on GPU.
@@ -12,8 +12,8 @@
 
 ## Files
 - `src/grid_tactics/rl/`
-- `tensor_train.py`, `cloud_train.py`
-- `manage_pods.py`, `deploy_runpod.py`
+- `scripts/tensor_train.py`, `scripts/cloud_train.py`
+- `scripts/manage_pods.py`
 
 ## Phases
 - [[../Phases/v1.0/Phase 05 RL Environment Interface]]

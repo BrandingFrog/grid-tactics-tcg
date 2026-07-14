@@ -15,4 +15,4 @@ Search your deck for a specific card and add it to your hand.
 - Phase: [[Phases/v1.1/Phase 14.2 Tutor Choice Prompt]]
 - Python: `src/grid_tactics/effect_resolver.py` (`pending_tutor`)
 - Tensor: `tensor_engine/`
-- Frontend modal: `server/static/game.js`
+- Frontend modal: `server/static/js/10-modals.js`

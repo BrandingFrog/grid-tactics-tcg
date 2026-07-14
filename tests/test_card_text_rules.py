@@ -8,7 +8,7 @@ Guards the 2026-07-03 card-text audit fixes:
   - locked stat notation (dagger/white-heart glyphs) on the corrected lines;
   - data/GLOSSARY.md Start/End/Burn rows and their game.js KEYWORD_GLOSSARY
     mirrors stay in sync (CLAUDE.md convention);
-  - data/turn_structure_spec.md internal-consistency fixes (Stack vs Queue,
+  - docs/rules/turn-structure.md internal-consistency fixes (Stack vs Queue,
     Handshake Action-Phase scoping, Rally/Decay used as phase names);
   - data/tests/tests.json Fallen Paladin UAT scenarios re-timed to the
     Rally Phase.
@@ -27,7 +27,7 @@ from grid_tactics.card_library import CardLibrary
 ROOT = Path(__file__).resolve().parents[1]
 CARDS_DIR = ROOT / "data" / "cards"
 GLOSSARY_MD = ROOT / "data" / "GLOSSARY.md"
-SPEC_MD = ROOT / "data" / "turn_structure_spec.md"
+SPEC_MD = ROOT / "docs" / "rules" / "turn-structure.md"
 TESTS_JSON = ROOT / "data" / "tests" / "tests.json"
 STATIC_DIR = ROOT / "src" / "grid_tactics" / "server" / "static"
 
@@ -252,7 +252,7 @@ def test_glossary_md_matches_game_js_for_changed_keywords() -> None:
 
 
 # ---------------------------------------------------------------------------
-# turn_structure_spec.md internal consistency
+# turn-structure.md internal consistency
 # ---------------------------------------------------------------------------
 
 def test_spec_stack_and_queue_are_separate_entries() -> None:
