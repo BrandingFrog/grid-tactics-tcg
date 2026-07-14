@@ -74,16 +74,24 @@ function setupGameTooltipPin() {
         if (isNaN(nid)) return;
         if (gameTooltipPin && gameTooltipPin.el === el) {
             gameTooltipPin = null;
+            inspectedMinionId = null;
             el.classList.remove('tooltip-pinned-card');
+            if (typeof highlightBoard === 'function') highlightBoard();
             return;
         }
         document.querySelectorAll('.tooltip-pinned-card').forEach(function(x) {
             x.classList.remove('tooltip-pinned-card');
         });
         gameTooltipPin = { nid: nid, el: el };
+        inspectedMinionId = el.classList.contains('board-minion') && el._minionRef
+            ? el._minionRef.instance_id : null;
         el.classList.add('tooltip-pinned-card');
         showGameTooltip(nid, el, el._minionRef || null, { force: true });
-    });
+        if (typeof highlightBoard === 'function') highlightBoard();
+    // Capture before the board-cell action handler. Some cell actions render
+    // the board synchronously, replacing the clicked minion before a bubbling
+    // document listener can recover its instance id.
+    }, true);
 }
 
 // Hearthstone-style stacked status panels rendered as siblings under

@@ -1514,6 +1514,7 @@ function onGameOver(data) {
     // If the queue is still draining, stash the payload — the queued
     // game_over EVENT (playGameOver) shows the overlay at ITS beat, after
     // the killing blow has actually played.
+    if (typeof _gameOverApplied !== 'undefined' && _gameOverApplied) return;
     if (typeof isEventQueueBusy === 'function' && isEventQueueBusy()) {
         window.__pendingGameOverData = data;
         return;
@@ -1522,18 +1523,40 @@ function onGameOver(data) {
 }
 
 function _applyGameOver(data) {
-    gameState = data.final_state;
+    if (typeof _gameOverApplied !== 'undefined' && _gameOverApplied) return;
+    if (typeof _gameOverApplied !== 'undefined') _gameOverApplied = true;
+    window.__pendingGameOverData = null;
+    data = data || {};
+    gameState = data.final_state || gameState;
     legalActions = [];
     // A lethal react can end the game while the spell stage / Skip React
     // pill are still up — park them under the game-over overlay.
-    if (typeof _resetSpellStageHard === 'function') _resetSpellStageHard();
-    renderGame();
-    var winner = data.final_state && data.final_state.winner;
-    if (winner != null && myPlayerIdx != null) {
-        // Spectators aren't a side — end-of-game fanfare, never 'defeat'.
-        playSfx((!isSpectator && winner !== myPlayerIdx) ? 'defeat' : 'victory');
+    try {
+        if (typeof _resetSpellStageHard === 'function') _resetSpellStageHard();
+        renderGame();
+    } catch (renderErr) {
+        // Rendering is best-effort here. The terminal result must still be
+        // visible even if an unrelated board/modal renderer throws.
+        console.error('[gameOver] final render failed', renderErr);
     }
-    showGameOver(data);
+    var winner = gameState && gameState.winner;
+    try {
+        if (winner != null && myPlayerIdx != null) {
+            // Spectators aren't a side — end-of-game fanfare, never 'defeat'.
+            playSfx((!isSpectator && winner !== myPlayerIdx) ? 'defeat' : 'victory');
+        }
+    } catch (audioErr) {
+        console.warn('[gameOver] result audio failed', audioErr);
+    }
+    try {
+        showGameOver(data);
+    } catch (modalErr) {
+        // Last-resort visibility: malformed result copy must not suppress the
+        // terminal window itself.
+        console.error('[gameOver] modal render failed', modalErr);
+        var overlay = document.getElementById('game-over-overlay');
+        if (overlay) overlay.style.display = 'flex';
+    }
 }
 
 // Phase 14 PLAY-03: game over modal
@@ -1620,7 +1643,16 @@ function resetGameClientState() {
     sessionToken = null;
     selectedHandIdx = null;
     selectedMinionId = null;
+    inspectedMinionId = null;
     interactionMode = null;
+    // A pin points at a concrete DOM node from the old board. Clear it along
+    // with the inspection id so reused minion ids cannot paint a stale range
+    // or suppress hover tooltips in the next match.
+    if (typeof gameTooltipPin !== 'undefined') gameTooltipPin = null;
+    document.querySelectorAll('.tooltip-pinned-card').forEach(function(el) {
+        el.classList.remove('tooltip-pinned-card');
+    });
+    if (typeof hideGameTooltip === 'function') hideGameTooltip({ force: true });
 
     // Lobby restructure (user 2026-07-10): the waiting room + rooms browser
     // are sub-views of the lobby now — drop back to the main view.

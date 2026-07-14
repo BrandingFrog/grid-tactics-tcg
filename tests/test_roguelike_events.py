@@ -445,6 +445,48 @@ def test_offer_is_seeded_mirrored_and_limited_to_three(library):
     ]
 
 
+def test_skeleton_crew_offer_exposes_normal_reward_card_metadata(library):
+    pending = _state(
+        phase=TurnPhase.START_OF_TURN,
+        turn=26,
+        pending_roguelike_event_turn=26,
+        pending_roguelike_event_options=(
+            SKELETON_CREW, CLUMSY_GREED, WITH_A_SLAP,
+        ),
+    )
+
+    filtered = filter_state_for_player(pending.to_dict(), 0, library)
+    skeleton = next(
+        option for option in filtered["roguelike_event_options"]
+        if option["id"] == SKELETON_CREW
+    )
+
+    assert skeleton["reward_cards"] == (
+        {"card_id": "reanimated_bones", "count": 2},
+    )
+
+
+def test_sharp_eyed_offer_exposes_prohibition_card_metadata(library):
+    pending = _state(
+        phase=TurnPhase.START_OF_TURN,
+        turn=26,
+        pending_roguelike_event_turn=26,
+        pending_roguelike_event_options=(
+            SHARP_EYED_SCEPTIC, CLUMSY_GREED, WITH_A_SLAP,
+        ),
+    )
+
+    filtered = filter_state_for_player(pending.to_dict(), 0, library)
+    sceptic = next(
+        option for option in filtered["roguelike_event_options"]
+        if option["id"] == SHARP_EYED_SCEPTIC
+    )
+
+    assert sceptic["reward_cards"] == (
+        {"card_id": "prohibition", "count": 1},
+    )
+
+
 def test_grave_expectations_returns_two_then_deals_ceiling_quarter_hp(library):
     rat = library.get_numeric_id("rat")
     prohibition = library.get_numeric_id("prohibition")
@@ -654,11 +696,12 @@ def test_uncharted_fortune_excludes_seen_and_current_offer(library):
         pending_roguelike_event_choices=(None, None),
         roguelike_seen_fortunes=seen,
     )
+    stream = EventStream()
     state = resolve_roguelike_event_choice(
-        state, 0, UNCHARTED_FORTUNE, library,
+        state, 0, UNCHARTED_FORTUNE, library, event_collector=stream,
     )
     state = resolve_roguelike_event_choice(
-        state, 1, WITH_A_SLAP, library,
+        state, 1, WITH_A_SLAP, library, event_collector=stream,
     )
     assert state.roguelike_event_history[0] == (
         f"{UNCHARTED_FORTUNE}:{SKELETON_CREW}",
@@ -666,3 +709,14 @@ def test_uncharted_fortune_excludes_seen_and_current_offer(library):
     assert SKELETON_CREW in state.roguelike_seen_fortunes
     assert len([m for m in state.minions
                 if m.owner == PlayerSide.PLAYER_1]) == 2
+    reveal = next(
+        event for event in stream.events
+        if event.type == EVT_PENDING_MODAL_RESOLVED
+    )
+    rolled = reveal.payload["choices"][0]
+    assert rolled["choice"] == UNCHARTED_FORTUNE
+    assert rolled["resolved_as"] == SKELETON_CREW
+    assert rolled["resolved_option"]["name"] == "Skeleton Crew"
+    assert rolled["resolved_option"]["reward_cards"] == (
+        {"card_id": "reanimated_bones", "count": 2},
+    )

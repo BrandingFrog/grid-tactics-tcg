@@ -523,8 +523,12 @@ function showPlayerPreview(playerIdx) {
                 var meta = eventMeta[parts[0]]
                     || [_roguelikeHistoryLabel(choice), 'Fortune gained.'];
                 if (parts[0] === 'uncharted_fortune') {
-                    meta = [_roguelikeHistoryLabel(choice),
-                        'Granted a fortune not previously seen or offered this game.'];
+                    var rolledMeta = eventMeta[parts[1]];
+                    var rolledDescription = parts[1] === 'fallback'
+                        ? 'No unseen fortune remained; gained 1 mana.'
+                        : (rolledMeta ? rolledMeta[1]
+                            : 'Granted a fortune not previously seen or offered this game.');
+                    meta = [_roguelikeHistoryLabel(choice), rolledDescription];
                 }
                 panels.push('<div class="tooltip-keyword roguelike-player-choice">'
                     + '<span class="tooltip-keyword-name">' + meta[0]

@@ -366,6 +366,9 @@ function showTriggerPickerModal(options) {
     sub.textContent = (options || []).length + ' triggers waiting';
     header.appendChild(title);
     header.appendChild(sub);
+    _attachFortuneMinimizeButton(
+        header, overlay, 'effect order', 'trigger-picker-restore-pill'
+    );
     modal.appendChild(header);
 
     var fan = document.createElement('div');
@@ -452,6 +455,8 @@ function showTriggerPickerModal(options) {
 }
 
 function closeTriggerPickerModal() {
+    var pill = document.getElementById('trigger-picker-restore-pill');
+    if (pill) pill.remove();
     var existing = document.getElementById('trigger-picker-modal-overlay');
     if (existing) existing.remove();
     triggerPickerModalOpen = false;
@@ -535,7 +540,7 @@ function showReviveModal() {
     // highlighted cell" but relied on inline cell.onclick handlers that
     // every renderBoard rebuild wiped — clicking did nothing. New flow
     // mirrors conjure: a horizontal fan of the revivable minions (like the
-    // tutor picker); click one, then click a highlighted tile to place it.
+    // tutor picker); select one, confirm it, then click a highlighted tile.
     closeReviveModal();
     reviveModalOpen = true;
     interactionMode = null;   // board inert until a minion is picked
@@ -600,30 +605,44 @@ function showReviveModal() {
     modal.appendChild(header);
 
     var fan = document.createElement('div');
-    fan.className = 'tutor-modal-fan';
+    fan.className = 'tutor-modal-cards';
     fan.id = 'revive-modal-fan';
+    var selectedRevive = null;
+    var selectedReviveTile = null;
+    var reviveAccept = document.createElement('button');
+    reviveAccept.className = 'tutor-accept-button';
+    reviveAccept.textContent = 'Accept';
+    reviveAccept.disabled = true;
     matches.forEach(function(match) {
         var tile = document.createElement('div');
         tile.className = 'tutor-modal-card';
+        tile.tabIndex = 0;
         var mDef = window.cardDefs && cardDefs[match.card_numeric_id];
         tile.innerHTML = (typeof renderDeckBuilderCard === 'function' && mDef)
             ? renderDeckBuilderCard(match.card_numeric_id, undefined)
             : ('<div style="padding:20px;color:#cbb98f;">' + (mDef ? mDef.name : 'minion') + '</div>');
+        function inspectReviveCard() {
+            try {
+                showGameTooltip(match.card_numeric_id, tile, null, { force: true });
+            } catch (e) { /* defensive */ }
+        }
+        tile.addEventListener('mouseenter', inspectReviveCard);
+        tile.addEventListener('focus', inspectReviveCard);
         tile.addEventListener('click', function(e) {
             e.stopPropagation();
-            // Picked — remember WHICH grave card, collapse the fan, arm
-            // tile placement (the click branch sends the grave idx).
-            window.__reviveSelectedGraveIdx = match.grave_idx;
-            var fanEl = document.getElementById('revive-modal-fan');
-            if (fanEl) fanEl.style.display = 'none';
-            var t = document.getElementById('revive-modal-title');
-            if (t) {
-                t.textContent = 'Place ' + (mDef ? mDef.name : 'minion')
-                    + ' — click a highlighted tile';
+            inspectReviveCard();
+            if (selectedReviveTile) {
+                selectedReviveTile.classList.remove('tutor-card-selected');
             }
-            interactionMode = 'revive_place';
-            try { highlightBoard(); } catch (e2) { /* defensive */ }
-            highlightReviveCells();
+            if (selectedReviveTile === tile) {
+                selectedRevive = null;
+                selectedReviveTile = null;
+            } else {
+                selectedRevive = { match: match, cardDef: mDef };
+                selectedReviveTile = tile;
+                tile.classList.add('tutor-card-selected');
+            }
+            reviveAccept.disabled = selectedRevive == null;
         });
         fan.appendChild(tile);
     });
@@ -631,6 +650,25 @@ function showReviveModal() {
 
     var footer = document.createElement('div');
     footer.className = 'tutor-modal-footer';
+    reviveAccept.addEventListener('click', function(e) {
+        e.stopPropagation();
+        if (!selectedRevive) return;
+        // Confirmed — remember WHICH grave card, collapse the fan, and arm
+        // board placement. The board click sends this grave index.
+        window.__reviveSelectedGraveIdx = selectedRevive.match.grave_idx;
+        fan.style.display = 'none';
+        var t = document.getElementById('revive-modal-title');
+        if (t) {
+            t.textContent = 'Place '
+                + (selectedRevive.cardDef ? selectedRevive.cardDef.name : 'minion')
+                + ' — click a highlighted tile';
+        }
+        reviveAccept.style.display = 'none';
+        interactionMode = 'revive_place';
+        try { highlightBoard(); } catch (e2) { /* defensive */ }
+        highlightReviveCells();
+    });
+    footer.appendChild(reviveAccept);
     var skipBtn = document.createElement('button');
     skipBtn.className = 'btn btn-secondary';
     skipBtn.textContent = remaining > 0 ? 'Done (skip remaining)' : 'Done';
@@ -653,7 +691,7 @@ function highlightReviveCells() {
     // handlers were wiped by every renderBoard rebuild). When a grave card
     // has been picked, only THAT card's deploy cells light up (melee vs
     // ranged rows differ under the generalized revive).
-    if (!window.legalActions) return;
+    if (!Array.isArray(legalActions)) return;
     var screenSel = (typeof sandboxMode !== 'undefined' && sandboxMode)
         ? '#screen-sandbox' : '#screen-game';
     var pickedIdx = window.__reviveSelectedGraveIdx;
@@ -675,6 +713,7 @@ function closeReviveModal() {
     if (existing) existing.remove();
     reviveModalOpen = false;
     if (interactionMode === 'revive_place') interactionMode = null;
+    window.__reviveSelectedGraveIdx = null;
     // Clear cell highlights
     var cells = document.querySelectorAll('.board-cell.cell-valid');
     cells.forEach(function(cell) { cell.classList.remove('cell-valid'); });
@@ -879,12 +918,51 @@ function findCardNameByNid(nid) {
     return 'Card #' + nid;
 }
 
+// Paint a minion's printed attack footprint without implying that an attack is
+// currently legal. Bright target highlights are added separately from actions.
+function _paintAttackRangeFootprint(minionId) {
+    if (minionId == null || !gameState || !gameState.minions) return;
+    var source = null;
+    gameState.minions.forEach(function(m) {
+        if (m.instance_id === minionId) source = m;
+    });
+    if (!source) return;
+    var sourceCard = cardDefs && cardDefs[source.card_numeric_id];
+    var range = (sourceCard && sourceCard.attack_range != null)
+        ? (sourceCard.attack_range | 0) : 0;
+    var sr = source.position[0], sc = source.position[1];
+    for (var rr = 0; rr < 5; rr++) {
+        for (var cc = 0; cc < 5; cc++) {
+            if (rr === sr && cc === sc) continue;
+            var dr = Math.abs(rr - sr);
+            var dc = Math.abs(cc - sc);
+            var manhattan = dr + dc;
+            var orthogonal = (rr === sr || cc === sc);
+            var inRange = range === 0
+                ? (manhattan === 1 && orthogonal)
+                : ((orthogonal && manhattan <= range + 1)
+                    || (dr === dc && dr >= 1 && dr <= range));
+            if (inRange) {
+                var tile = document.querySelector(
+                    '.board-cell[data-row="' + rr + '"][data-col="' + cc + '"]'
+                );
+                if (tile) tile.classList.add('attack-range-footprint');
+            }
+        }
+    }
+}
+
 // Highlight valid board cells based on current selection
 function highlightBoard() {
     document.querySelectorAll('.board-cell').forEach(function(cell) {
         cell.classList.remove('cell-valid', 'cell-attack', 'cell-selected',
                               'attack-range-footprint', 'attack-valid-target');
     });
+    // Inspection is informational and works for either player and spectators.
+    // Paint it before the action-timing gate below.
+    if (typeof inspectedMinionId !== 'undefined' && inspectedMinionId !== null) {
+        _paintAttackRangeFootprint(inspectedMinionId);
+    }
     // Timing audit (2026-07-06): plain selection/targeting highlights only
     // paint when the player can act now. Pending-decision modes (post-move
     // attack pick, death target, conjure deploy, revive) stay live — those
@@ -1028,41 +1106,7 @@ function highlightBoard() {
             // _can_attack (action_resolver.py). This is a cosmetic / UX
             // change only — actual legal targets still come from
             // legalActions via getAttackTargets().
-            var srcMinion = null;
-            (gameState.minions || []).forEach(function(m) {
-                if (m.instance_id === selectedMinionId) srcMinion = m;
-            });
-            if (srcMinion) {
-                var srcCard = cardDefs[srcMinion.card_numeric_id];
-                var range = (srcCard && srcCard.attack_range != null) ? srcCard.attack_range : 0;
-                var sr = srcMinion.position[0], sc = srcMinion.position[1];
-                for (var rr = 0; rr < 5; rr++) {
-                    for (var cc = 0; cc < 5; cc++) {
-                        if (rr === sr && cc === sc) continue;
-                        var manhattan = Math.abs(rr - sr) + Math.abs(cc - sc);
-                        var chebyshev = Math.max(Math.abs(rr - sr), Math.abs(cc - sc));
-                        var orthogonal = (rr === sr || cc === sc);
-                        var inRange = false;
-                        if (range === 0) {
-                            inRange = (manhattan === 1 && orthogonal);
-                        } else {
-                            // Range N star footprint: orthogonal arm reaches
-                            // N+1 tiles; diagonal arm reaches chebyshev<=N
-                            // along the |dr|==|dc| lines.
-                            // Mirrors action_resolver._can_attack.
-                            var dr = Math.abs(rr - sr);
-                            var dc = Math.abs(cc - sc);
-                            var orthogonalInRange = orthogonal && manhattan <= range + 1;
-                            var onDiagonal = (dr === dc && dr >= 1 && chebyshev <= range);
-                            inRange = orthogonalInRange || onDiagonal;
-                        }
-                        if (inRange) {
-                            var tile = document.querySelector('.board-cell[data-row="' + rr + '"][data-col="' + cc + '"]');
-                            if (tile) tile.classList.add('attack-range-footprint');
-                        }
-                    }
-                }
-            }
+            _paintAttackRangeFootprint(selectedMinionId);
             var atkTargets = getAttackTargets(selectedMinionId);
             (gameState.minions || []).forEach(function(m) {
                 if (atkTargets.indexOf(m.instance_id) !== -1) {
@@ -1336,7 +1380,8 @@ var ROGUELIKE_EVENT_FALLBACK_OPTIONS = [
     { id: 'with_a_slap', name: 'With a Slap', glyph: '👋',
       description: 'Handshakes deal +5 damage per stack. Stackable.' },
     { id: 'sharp_eyed_sceptic', name: 'Sharp Eyed Sceptic', glyph: '👁️',
-      description: 'Gain a Prohibition and 1 mana.' },
+      description: 'Gain a Prohibition and 1 mana.',
+      reward_cards: [{ card_id: 'prohibition', count: 1 }] },
     { id: 'grave_expectations', name: 'Grave Expectations', glyph: '⚰️',
       description: 'Return 2 random Grave cards to hand. Lose 25% current HP.' },
     { id: 'pocket_change', name: 'Pocket Change', glyph: '🪙',
@@ -1344,7 +1389,8 @@ var ROGUELIKE_EVENT_FALLBACK_OPTIONS = [
     { id: 'spring_cleaning', name: 'Spring Cleaning', glyph: '🧹',
       description: 'Exhaust your hand. Draw that many cards plus 1.' },
     { id: 'skeleton_crew', name: 'Skeleton Crew', glyph: '🦴',
-      description: 'Summon 2 Reanimated Bones on random empty friendly tiles.' },
+      description: 'Summon 2 Reanimated Bones on random empty friendly tiles.',
+      reward_cards: [{ card_id: 'reanimated_bones', count: 2 }] },
     { id: 'compound_interest', name: 'Compound Interest', glyph: '📈',
       description: 'Gain 1 additional mana at your next 3 turn starts.' },
     { id: 'marked_cards', name: 'Marked Cards', glyph: '🎴',
@@ -1354,6 +1400,95 @@ var ROGUELIKE_EVENT_FALLBACK_OPTIONS = [
     { id: 'uncharted_fallback', name: 'Uncharted Fortune', glyph: '❓',
       description: 'No unseen fortune remained. Gain 1 mana.' }
 ];
+
+function _fortuneCardNumericId(cardId) {
+    var defs = (typeof cardDefs !== 'undefined' && cardDefs) ? cardDefs : null;
+    if (!defs || !cardId) return null;
+    var keys = Object.keys(defs);
+    for (var i = 0; i < keys.length; i++) {
+        if (defs[keys[i]] && defs[keys[i]].card_id === cardId) {
+            return parseInt(keys[i], 10);
+        }
+    }
+    return null;
+}
+
+function _appendFortuneRewardCards(host, option) {
+    var rewards = option && Array.isArray(option.reward_cards)
+        ? option.reward_cards : [];
+    if (!rewards.length || typeof renderDeckBuilderCard !== 'function') return;
+    var row = document.createElement('div');
+    row.className = 'fortune-reward-cards';
+    rewards.forEach(function(reward) {
+        var nid = _fortuneCardNumericId(reward && reward.card_id);
+        if (nid == null || isNaN(nid)) return;
+        var tile = document.createElement('div');
+        tile.className = 'tutor-modal-card fortune-reward-card';
+        tile.setAttribute('data-reward-card-id', reward.card_id);
+        tile.innerHTML = renderDeckBuilderCard(
+            nid, Math.max(1, (reward.count | 0) || 1)
+        );
+        tile.tabIndex = 0;
+        tile.title = 'Inspect ' + ((cardDefs[nid] && cardDefs[nid].name) || reward.card_id);
+        function inspectRewardCard(e) {
+            try { showGameTooltip(nid, tile, null, { force: true }); } catch (err) { /* defensive */ }
+        }
+        tile.addEventListener('mouseenter', inspectRewardCard);
+        tile.addEventListener('focus', inspectRewardCard);
+        tile.addEventListener('click', inspectRewardCard);
+        row.appendChild(tile);
+    });
+    if (row.children.length) host.appendChild(row);
+}
+
+function _renderRoguelikeOptionTile(tile, option) {
+    tile.innerHTML = '';
+    var hasRewardCard = option && Array.isArray(option.reward_cards)
+        && option.reward_cards.length > 0;
+    tile.classList.toggle('roguelike-event-has-reward', !!hasRewardCard);
+    if (!hasRewardCard) {
+        var glyph = document.createElement('div');
+        glyph.className = 'rps-tile-glyph';
+        glyph.textContent = (option && option.glyph) || '';
+        tile.appendChild(glyph);
+    }
+    var label = document.createElement('div');
+    label.className = 'rps-tile-label';
+    label.textContent = (option && option.name) || 'Fortune';
+    tile.appendChild(label);
+    _appendFortuneRewardCards(tile, option);
+    var description = document.createElement('div');
+    description.className = 'roguelike-event-description';
+    description.textContent = (option && option.description) || '';
+    tile.appendChild(description);
+}
+
+function _attachFortuneMinimizeButton(header, overlay, resumeLabel, restoreId) {
+    restoreId = restoreId || 'fortune-restore-pill';
+    var minBtn = document.createElement('button');
+    minBtn.className = 'tutor-min-btn';
+    minBtn.textContent = '▾';
+    minBtn.title = 'Minimise — peek at the board';
+    minBtn.setAttribute(
+        'aria-label', 'Minimise ' + (resumeLabel || 'Fortune') + ' window'
+    );
+    minBtn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        overlay.style.display = 'none';
+        var oldPill = document.getElementById(restoreId);
+        if (oldPill) oldPill.remove();
+        var pill = document.createElement('button');
+        pill.id = restoreId;
+        pill.className = 'tutor-restore-pill fortune-restore-pill';
+        pill.textContent = '▴ Resume ' + (resumeLabel || 'Fortune');
+        pill.addEventListener('click', function() {
+            pill.remove();
+            if (overlay.parentNode) overlay.style.display = '';
+        });
+        _stageMount().appendChild(pill);
+    });
+    header.appendChild(minBtn);
+}
 
 function syncRoguelikeEventUI() {
     if (!gameState || gameState.pending_roguelike_event_turn == null) {
@@ -1386,7 +1521,7 @@ function showRoguelikeEventModal(alreadyPicked) {
     overlay.className = 'tutor-modal-overlay roguelike-event-overlay';
     overlay.id = 'roguelike-event-overlay';
     var modal = document.createElement('div');
-    modal.className = 'tutor-modal pregame-rps-modal roguelike-event-modal';
+    modal.className = 'tutor-modal roguelike-event-modal';
 
     var header = document.createElement('div');
     header.className = 'tutor-modal-header';
@@ -1394,6 +1529,9 @@ function showRoguelikeEventModal(alreadyPicked) {
         '<div class="tutor-modal-title">Choose Your Fortune</div>' +
         '<div class="tutor-modal-deckline">Milestone · Turn ' +
         gameState.pending_roguelike_event_turn + '</div>';
+    _attachFortuneMinimizeButton(
+        header, overlay, 'Fortune', 'fortune-restore-pill'
+    );
     modal.appendChild(header);
 
     var selected = null;
@@ -1417,10 +1555,7 @@ function showRoguelikeEventModal(alreadyPicked) {
         var tile = document.createElement('div');
         tile.className = 'rps-tile roguelike-event-tile';
         tile.setAttribute('data-choice', option.id);
-        tile.innerHTML =
-            '<div class="rps-tile-glyph">' + option.glyph + '</div>' +
-            '<div class="rps-tile-label">' + option.name + '</div>' +
-            '<div class="roguelike-event-description">' + option.description + '</div>';
+        _renderRoguelikeOptionTile(tile, option);
         if (!isSpectator) {
             tile.addEventListener('click', function(e) {
                 e.stopPropagation();
@@ -1465,17 +1600,20 @@ function _roguelikeShowWaiting(modal, choice) {
     if (modal.querySelector('.rps-waiting')) return;
     var wait = document.createElement('div');
     wait.className = 'rps-waiting';
-    wait.innerHTML =
-        '<div class="rps-tile roguelike-event-tile rps-tile-selected rps-tile-static">' +
-            '<div class="rps-tile-glyph">' + (option.glyph || '') + '</div>' +
-            '<div class="rps-tile-label">' + (option.name || '') + '</div>' +
-            '<div class="roguelike-event-description">' + (option.description || '') + '</div>' +
-        '</div>' +
-        '<div class="rps-waiting-text">Choice locked · Waiting for opponent…</div>';
+    var locked = document.createElement('div');
+    locked.className = 'rps-tile roguelike-event-tile rps-tile-selected rps-tile-static';
+    _renderRoguelikeOptionTile(locked, option);
+    var waitingText = document.createElement('div');
+    waitingText.className = 'rps-waiting-text';
+    waitingText.textContent = 'Choice locked · Waiting for opponent…';
+    wait.appendChild(locked);
+    wait.appendChild(waitingText);
     modal.appendChild(wait);
 }
 
 function closeRoguelikeEventModal() {
+    var pill = document.getElementById('fortune-restore-pill');
+    if (pill) pill.remove();
     var existing = document.getElementById('roguelike-event-overlay');
     if (existing && existing.parentNode) existing.parentNode.removeChild(existing);
 }
@@ -1511,8 +1649,8 @@ function _roguelikeOptionById(choiceId) {
 
 function _roguelikeRevealCard(choice) {
     var chosen = choice.option || _roguelikeOptionById(choice.choice);
-    var resolved = choice.resolved_option
-        || _roguelikeOptionById(choice.resolved_as || choice.choice);
+    var resolvedId = choice.resolved_as || choice.choice;
+    var resolved = choice.resolved_option || _roguelikeOptionById(resolvedId);
     var panel = document.createElement('section');
     panel.className = 'fortune-reveal-player';
 
@@ -1523,24 +1661,12 @@ function _roguelikeRevealCard(choice) {
 
     var card = document.createElement('div');
     card.className = 'rps-tile roguelike-event-tile rps-tile-selected rps-tile-static fortune-reveal-card';
-    var glyph = document.createElement('div');
-    glyph.className = 'rps-tile-glyph';
-    glyph.textContent = chosen.glyph || '';
-    var name = document.createElement('div');
-    name.className = 'rps-tile-label';
-    name.textContent = chosen.name || 'Fortune';
-    var description = document.createElement('div');
-    description.className = 'roguelike-event-description';
-    description.textContent = chosen.description || '';
-    card.appendChild(glyph);
-    card.appendChild(name);
-    card.appendChild(description);
+    _renderRoguelikeOptionTile(card, resolved);
 
-    if ((choice.resolved_as || choice.choice) !== choice.choice) {
+    if (resolvedId !== choice.choice) {
         var becomes = document.createElement('div');
         becomes.className = 'fortune-reveal-becomes';
-        becomes.textContent = 'Resolves as ' + (resolved.glyph || '') + ' '
-            + (resolved.name || 'Fortune');
+        becomes.textContent = 'Rolled by ' + (chosen.name || 'Uncharted Fortune');
         card.appendChild(becomes);
     }
     panel.appendChild(card);
@@ -1561,7 +1687,7 @@ function showRoguelikeChoicesReveal(payload) {
     overlay.id = 'roguelike-reveal-overlay';
     overlay.className = 'tutor-modal-overlay roguelike-event-overlay fortune-reveal-overlay';
     var modal = document.createElement('div');
-    modal.className = 'tutor-modal pregame-rps-modal roguelike-event-modal fortune-reveal-modal';
+    modal.className = 'tutor-modal roguelike-event-modal fortune-reveal-modal';
 
     var header = document.createElement('div');
     header.className = 'tutor-modal-header';
@@ -1570,10 +1696,11 @@ function showRoguelikeChoicesReveal(payload) {
     title.textContent = 'Fortunes Revealed';
     var subtitle = document.createElement('div');
     subtitle.className = 'tutor-modal-deckline fortune-reveal-rule';
-    var newAnte = Math.max(1, (payload && payload.fortune_ante) | 0);
+    var turnMana = Math.max(1, (payload && payload.turn_mana_gain) | 0);
+    var restDraws = Math.max(1, (payload && payload.rest_draw_count) | 0);
     var turnDraws = Math.max(0, (payload && payload.automatic_turn_draw_count) | 0);
-    subtitle.textContent = 'Both resolve together · Reactions disabled · ANTE UP: +'
-        + newAnte + ' turn Mana · Rest draws ' + newAnte
+    subtitle.textContent = 'Both resolve together · Reactions disabled · FORTUNE RATE: +'
+        + turnMana + ' turn Mana · Rest draws ' + restDraws
         + (turnDraws ? ' · Turn draw ' + turnDraws + ' (empty deck fatigues)' : '');
     header.appendChild(title);
     header.appendChild(subtitle);
@@ -1619,7 +1746,9 @@ function syncMarkedCardsUI() {
         }
     } else {
         closeMarkedCardsModal();
-        showMarkedCardsWaitingToast();
+        showMarkedCardsWaitingToast(
+            isSpectator ? 'A player is marking cards\u2026' : 'Opponent is marking cards\u2026'
+        );
     }
 }
 
@@ -1629,14 +1758,18 @@ function showMarkedCardsModal(cards) {
     overlay.id = 'marked-cards-overlay';
     overlay.className = 'tutor-modal-overlay roguelike-event-overlay';
     var modal = document.createElement('div');
-    modal.className = 'tutor-modal pregame-rps-modal roguelike-event-modal marked-cards-modal';
+    modal.className = 'tutor-modal roguelike-event-modal marked-cards-modal';
     modal.innerHTML =
         '<div class="tutor-modal-header">' +
           '<div class="tutor-modal-title">Marked Cards</div>' +
           '<div class="tutor-modal-deckline marked-cards-instruction">Choose the card to keep.</div>' +
         '</div>';
+    _attachFortuneMinimizeButton(
+        modal.querySelector('.tutor-modal-header'), overlay, 'Marked Cards',
+        'marked-cards-restore-pill'
+    );
     var row = document.createElement('div');
-    row.className = 'rps-tile-row roguelike-event-row marked-cards-row';
+    row.className = 'tutor-modal-cards marked-cards-row';
     var keepIndex = null;
     var topIndex = null;
     var needsTopChoice = cards.length >= 3;
@@ -1668,16 +1801,12 @@ function showMarkedCardsModal(cards) {
     }
 
     cards.forEach(function(nid, index) {
-        var def = cardDefs && cardDefs[nid];
         var tile = document.createElement('div');
-        tile.className = 'rps-tile roguelike-event-tile marked-cards-tile';
-        tile.innerHTML =
-            '<div class="marked-cards-badge"></div>' +
-            '<div class="rps-tile-glyph">' + ((def && def.mana_cost) || 0) + '</div>' +
-            '<div class="rps-tile-label">' + escapeHtml((def && def.name) || ('Card ' + nid)) + '</div>' +
-            '<div class="roguelike-event-description">' +
-              escapeHtml((def && (def.rules_text || def.description)) || 'Top-deck card') +
-            '</div>';
+        tile.className = 'tutor-modal-card marked-cards-tile';
+        tile.innerHTML = renderDeckBuilderCard(nid, undefined);
+        var badge = document.createElement('div');
+        badge.className = 'marked-cards-badge';
+        tile.appendChild(badge);
         tile.addEventListener('click', function(e) {
             e.stopPropagation();
             if (keepIndex == null) {
@@ -1690,6 +1819,7 @@ function showMarkedCardsModal(cards) {
             } else {
                 keepIndex = index;
             }
+            try { showGameTooltip(nid, tile, null, { force: true }); } catch (e2) { /* defensive */ }
             refresh();
         });
         row.appendChild(tile);
@@ -1722,16 +1852,22 @@ function showMarkedCardsModal(cards) {
 }
 
 function closeMarkedCardsModal() {
+    var pill = document.getElementById('marked-cards-restore-pill');
+    if (pill) pill.remove();
     var overlay = document.getElementById('marked-cards-overlay');
     if (overlay && overlay.parentNode) overlay.parentNode.removeChild(overlay);
 }
 
-function showMarkedCardsWaitingToast() {
-    if (document.getElementById('marked-cards-waiting-toast')) return;
+function showMarkedCardsWaitingToast(message) {
+    var existing = document.getElementById('marked-cards-waiting-toast');
+    if (existing) {
+        existing.textContent = message || 'Opponent is marking cards\u2026';
+        return;
+    }
     var toast = document.createElement('div');
     toast.id = 'marked-cards-waiting-toast';
     toast.className = 'tutor-toast';
-    toast.textContent = 'Opponent is marking cards\u2026';
+    toast.textContent = message || 'Opponent is marking cards\u2026';
     _stageMount().appendChild(toast);
 }
 

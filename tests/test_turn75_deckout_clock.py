@@ -75,6 +75,26 @@ def test_clock_is_off_before_turn_75_fortune_resolves(library):
     assert resolved.fatigue_counts == (0, 0)
 
 
+@pytest.mark.parametrize(
+    ("completed_fortunes", "economy_rate", "automatic_draws"),
+    (
+        (0, 1, 0),
+        (1, 2, 0),
+        (2, 3, 0),
+        (3, 3, 1),
+        (4, 3, 1),
+        (8, 3, 1),
+    ),
+)
+def test_fortune_economy_caps_separately_from_deckout_clock(
+    library, completed_fortunes, economy_rate, automatic_draws,
+):
+    state = _state(library, completed_fortunes=completed_fortunes)
+
+    assert state.fortune_ante == economy_rate
+    assert state.automatic_turn_draw_count == automatic_draws
+
+
 def test_third_fortune_unlocks_one_automatic_turn_draw(library):
     rat = library.get_numeric_id("rat")
     state = _state(library, completed_fortunes=3, deck=(rat,), hand=())
@@ -82,7 +102,7 @@ def test_third_fortune_unlocks_one_automatic_turn_draw(library):
 
     resolved = apply_new_turn_resources(state, event_collector=stream)
 
-    assert state.fortune_ante == 4
+    assert state.fortune_ante == 3
     assert state.automatic_turn_draw_count == 1
     assert resolved.players[0].hand == (rat,)
     assert resolved.players[0].deck == ()
@@ -189,12 +209,17 @@ def test_turn_75_fortune_resume_applies_first_forced_draw(library):
     )
 
     assert state.fortune_rounds_completed == 3
+    assert state.fortune_ante == 3
     assert state.automatic_turn_draw_count == 1
     reveal = next(
         event for event in reveal_stream.events
         if event.type == EVT_PENDING_MODAL_RESOLVED
     )
+    assert reveal.payload["fortune_ante"] == 3
+    assert reveal.payload["turn_mana_gain"] == 3
+    assert reveal.payload["rest_draw_count"] == 3
     assert reveal.payload["automatic_turn_draw_count"] == 1
+    assert reveal.payload["ante_increased"] is False
 
     resumed = apply_new_turn_resources(state)
     assert resumed.players[0].hand == (rat,)

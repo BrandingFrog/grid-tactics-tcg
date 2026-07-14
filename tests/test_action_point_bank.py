@@ -134,9 +134,12 @@ def test_rest_banks_points_draws_ante_and_ends(library):
     state = replace(
         state,
         players=tuple(players),
-        roguelike_event_history=(("a", "b"), ("c", "d")),
+        # Third Fortune: economy remains 3/3 while the separate automatic
+        # turn-draw clock is now enabled.
+        roguelike_event_history=(("a", "b", "c"), ("d", "e", "f")),
     )
     assert state.fortune_ante == 3
+    assert state.automatic_turn_draw_count == 1
     actions = legal_actions(state, library)
     assert draw_action() in actions and pass_action() not in actions
 

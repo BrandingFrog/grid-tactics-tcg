@@ -19,8 +19,8 @@ Authoritative turn flow, phase boundaries, react windows, and effect-resolution 
 > - Two consecutive RESTs seal a Handshake. React-window passes never count.
 > - **Handshake payout: BOTH players gain +1 mana AND draw a card**. REST is the
 >   regular built-in draw source; card effects may draw as written.
-> - Automatic turn mana and REST cards both start at 1. Each completed Fortune round
->   raises both by 1, effective immediately when the postponed incoming turn resumes.
+> - Automatic turn mana and REST cards progress 1/1 → 2/2 after turn 25 →
+>   3/3 after turn 50. The turn-75 Fortune keeps 3/3 and unlocks the automatic draw.
 > Everything else in this spec is unchanged. Flag: `grid_tactics.types.manual_draw_variant()`.
 
 Decided by the product owner 2026-07-02. Supersedes the v2 three-phase spec.
@@ -67,7 +67,8 @@ postponed turn 76 and every later turn also draw 1 automatically.
 
 Mana is a **single pool** — there are no crystals:
 
-- +1 mana at every turn start before any Fortune; +1 more after each completed Fortune round.
+- Turn mana progresses +1 before any Fortune, +2 after turn 25, and +3 after
+  turn 50. It remains +3 after turn 75 and all later Fortune rounds.
 - Spending mana **permanently depletes** it until rebuilt (+1 per turn, plus Handshake payouts).
 - `MAX_MANA_CAP = 10` — a pool of 10 is "full"; turn-start gain does not raise it past 10.
 
@@ -271,7 +272,8 @@ When touching turn logic, verify:
 - [ ] Decay Phase: all once-per-turn negative effects proc via `ON_END_OF_TURN`; Burning ticks 5🤍 in the minion OWNER's Decay Phase.
 - [ ] Trigger machinery supports per-card turn scoping (every turn / owner's turn / opponent's turn) per card wording.
 - [ ] Handshake: REST answered by REST → at turn end BOTH players +1 mana and draw 1 under active rules; counter resets.
-- [ ] Each completed Fortune immediately raises automatic turn mana and REST cards by 1.
+- [ ] Fortune economy is capped: 1/1 initially, 2/2 after turn 25, 3/3 after
+  turn 50; turn 75 stays 3/3 and unlocks one automatic turn draw.
 - [ ] `MAX_HAND_SIZE = 10` constant in `types.py` — no bare literal hand caps remain.
 - [ ] Overdraw burns on ALL draw paths (turn-start, effects, Handshake, tutor-to-hand): card goes to Exhaust Pile, revealed.
 - [ ] React window opens before Rally Phase ends, after each Action Phase action (including each melee sub-action and each compound sub-trigger), and before Decay Phase ends.

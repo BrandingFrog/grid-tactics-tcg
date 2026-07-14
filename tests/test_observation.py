@@ -303,3 +303,26 @@ class TestObservationSpec:
         # Total should equal OBSERVATION_SIZE
         total = sum(s["size"] for s in OBSERVATION_SPEC.values())
         assert total == OBSERVATION_SIZE
+
+
+class TestFortuneClockObservation:
+    """The AI can distinguish turn-50 3/3 from turn-75 3/3 + deckout."""
+
+    def test_separate_late_draw_clock_feature(self, new_game_state, library):
+        before = replace(
+            new_game_state,
+            roguelike_event_history=(("a", "b"), ("a", "b")),
+        )
+        after = replace(
+            new_game_state,
+            roguelike_event_history=(("a", "b", "c"), ("a", "b", "c")),
+        )
+
+        before_obs = encode_observation(before, library, observer_idx=0)
+        after_obs = encode_observation(after, library, observer_idx=0)
+        fortune_offset = OBSERVATION_SPEC["react_context"]["offset"]
+
+        assert before_obs[fortune_offset + 4] == pytest.approx(0.6)
+        assert after_obs[fortune_offset + 4] == pytest.approx(0.6)
+        assert before_obs[fortune_offset + 6] == 0.0
+        assert after_obs[fortune_offset + 6] == 1.0

@@ -20,7 +20,7 @@ from grid_tactics.game_state import GameState
 from grid_tactics.minion import MinionInstance
 from grid_tactics.phase_contracts import assert_phase_contract
 from grid_tactics.rng import GameRNG
-from grid_tactics.types import DECKOUT_DRAW_ANTE, MAX_HAND_SIZE, MAX_MANA_CAP
+from grid_tactics.types import MAX_HAND_SIZE, MAX_MANA_CAP, fortune_rates
 
 ROGUELIKE_EVENT_INTERVAL = int(
     os.environ.get("GT_ROGUELIKE_EVENT_INTERVAL", "25")
@@ -50,13 +50,16 @@ ROGUELIKE_EVENT_CHOICES: tuple[str, ...] = (
     UNCHARTED_FORTUNE,
 )
 
-ROGUELIKE_EVENT_OPTIONS: tuple[dict[str, str], ...] = (
+ROGUELIKE_EVENT_OPTIONS: tuple[dict[str, object], ...] = (
     {"id": CLUMSY_GREED, "name": "Clumsy Greed", "glyph": "🃏",
      "description": "Draw 4. Exhaust 2 random cards from your hand."},
     {"id": WITH_A_SLAP, "name": "With a Slap", "glyph": "👋",
      "description": "Your Handshakes deal +5 damage. Stackable."},
     {"id": SHARP_EYED_SCEPTIC, "name": "Sharp Eyed Sceptic", "glyph": "👁️",
-     "description": "Gain a Prohibition and 1 mana."},
+     "description": "Gain a Prohibition and 1 mana.",
+     "reward_cards": (
+         {"card_id": "prohibition", "count": 1},
+     )},
     {"id": GRAVE_EXPECTATIONS, "name": "Grave Expectations", "glyph": "⚰️",
      "description": "Return 2 random Grave cards to hand. Lose 25% current HP."},
     {"id": POCKET_CHANGE, "name": "Pocket Change", "glyph": "🪙",
@@ -64,7 +67,10 @@ ROGUELIKE_EVENT_OPTIONS: tuple[dict[str, str], ...] = (
     {"id": SPRING_CLEANING, "name": "Spring Cleaning", "glyph": "🧹",
      "description": "Exhaust your hand. Draw that many cards plus 1."},
     {"id": SKELETON_CREW, "name": "Skeleton Crew", "glyph": "🦴",
-     "description": "Summon 2 Reanimated Bones on random empty friendly tiles."},
+     "description": "Summon 2 Reanimated Bones on random empty friendly tiles.",
+     "reward_cards": (
+         {"card_id": "reanimated_bones", "count": 2},
+     )},
     {"id": COMPOUND_INTEREST, "name": "Compound Interest", "glyph": "📈",
      "description": "Gain 1 additional mana at your next 3 turn starts."},
     {"id": MARKED_CARDS, "name": "Marked Cards", "glyph": "🎴",
@@ -76,7 +82,7 @@ ROGUELIKE_EVENT_OPTIONS: tuple[dict[str, str], ...] = (
 _OPTION_BY_ID = {option["id"]: option for option in ROGUELIKE_EVENT_OPTIONS}
 
 
-def _public_option(choice_id: str) -> dict[str, str]:
+def _public_option(choice_id: str) -> dict[str, object]:
     """Return reveal-safe fortune copy for the shared result screen."""
     if choice_id == "uncharted_fallback":
         return {
@@ -189,6 +195,10 @@ def resolve_roguelike_event_choice(
             history_entries.append(choice)
         resolved_choices.append(actual)
 
+    completed_after_resolution = state.fortune_rounds_completed + 1
+    upcoming_ante, upcoming_turn_draws = fortune_rates(
+        completed_after_resolution
+    )
     if event_collector is not None:
         event_collector.collect(
             EVT_PENDING_MODAL_RESOLVED,
@@ -212,12 +222,11 @@ def resolve_roguelike_event_choice(
                 # This mirrored lock completes exactly one Fortune round.
                 # History is the source of truth; expose the upcoming rates
                 # in this pre-final-snapshot event for the reveal UI.
-                "fortune_ante": state.fortune_ante + 1,
-                "turn_mana_gain": state.fortune_ante + 1,
-                "rest_draw_count": state.fortune_ante + 1,
-                "automatic_turn_draw_count": (
-                    1 if state.fortune_ante + 1 >= DECKOUT_DRAW_ANTE else 0
-                ),
+                "fortune_ante": upcoming_ante,
+                "turn_mana_gain": upcoming_ante,
+                "rest_draw_count": upcoming_ante,
+                "automatic_turn_draw_count": upcoming_turn_draws,
+                "ante_increased": upcoming_ante > state.fortune_ante,
             },
         )
 

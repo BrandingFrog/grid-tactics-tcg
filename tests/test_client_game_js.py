@@ -210,6 +210,80 @@ console.log(JSON.stringify({
     assert out["remaining"] == 0
 
 
+def test_drain_queue_applies_stashed_game_over_when_terminal_event_is_missing(tmp_path):
+    """The separate socket frame is a terminal fallback, not dead data.
+
+    If the queued EVT_GAME_OVER beat is skipped or deduplicated, finishing the
+    animation queue must still display the result and consume the payload once.
+    """
+    script = (
+        _DRAIN_STUBS
+        + """
+var gameOverCalls = 0;
+function _applyGameOver(data) {
+    gameOverCalls++;
+    processed.push(data.reason);
+}
+"""
+        + extract_function("drainEventQueue")
+        + """
+window.__pendingGameOverData = { reason: 'fatigue' };
+drainEventQueue();
+drainEventQueue();
+console.log(JSON.stringify({
+    calls: gameOverCalls,
+    processed: processed,
+    pending: window.__pendingGameOverData || null,
+}));
+"""
+    )
+    out = run_js(tmp_path, script)
+    assert out["calls"] == 1
+    assert out["processed"] == ["fatigue"]
+    assert out["pending"] is None
+
+
+def test_queue_reset_drops_terminal_payload_and_idempotence_guard(tmp_path):
+    script = (
+        """
+var eventQueue = [{ type: 'game_over' }];
+var eventRunning = true;
+var lastSeenSeq = 77;
+var _drainFinalApplied = true;
+var _gameOverApplied = true;
+var window = { __pendingGameOverData: { winner: 1 } };
+var slotState = {
+    spellStageChain: [{}], pendingModalKind: 'tutor_select',
+    pendingModalDeadline: 999, lastOriginator: {}, pendingStageOriginator: {},
+    prevDispatchedEvent: {}, lastDispatchedEvent: {}
+};
+var resetCalls = 0;
+var logClears = 0;
+function _resetSpellStageHard() { resetCalls++; }
+function clearGameLog() { logClears++; }
+"""
+        + extract_function("resetEventQueue")
+        + """
+resetEventQueue();
+console.log(JSON.stringify({
+    queue: eventQueue.length,
+    pending: window.__pendingGameOverData || null,
+    applied: _gameOverApplied,
+    resetCalls: resetCalls,
+    logClears: logClears
+}));
+"""
+    )
+    out = run_js(tmp_path, script)
+    assert out == {
+        "queue": 0,
+        "pending": None,
+        "applied": False,
+        "resetCalls": 1,
+        "logClears": 1,
+    }
+
+
 # ---------------------------------------------------------------------------
 # Fix 2: spell-stage chain leak recovery in _commitFinalStateSnapshot
 # ---------------------------------------------------------------------------
@@ -629,6 +703,8 @@ def test_roguelike_event_modal_is_wired_into_render_and_event_queue():
     assert "Stackable." in _SRC
     assert "function showRoguelikeChoicesReveal(payload)" in _SRC
     assert "Both resolve together · Reactions disabled" in _SRC
+    assert "FORTUNE RATE:" in _SRC
+    assert "ANTE UP:" not in extract_function("showRoguelikeChoicesReveal")
     assert "Math.max(_evDurationOr(ev, 0), revealMs)" in _SRC
     assert "Draw 4. Exhaust 2 random cards from your hand." in _SRC
     assert "Exhaust your hand. Draw that many cards plus 1." in _SRC
@@ -642,7 +718,240 @@ def test_roguelike_event_modal_is_wired_into_render_and_event_queue():
     assert "socket.emit('marked_cards_resolve'" in _SRC
     assert "top_order: topOrder" in _SRC
     assert "Opponent is marking cards" in _SRC
+    assert "A player is marking cards" in _SRC
     assert "kind === 'marked_cards'" in _SRC
+    # Fortune uses the same roomy shell and minimise/restore convention as Tutor.
+    assert "function _attachFortuneMinimizeButton" in _SRC
+    assert "fortune-restore-pill" in _SRC
+    assert "marked-cards-restore-pill" in _SRC
+    assert "tutor-modal pregame-rps-modal roguelike-event-modal" not in _SRC
+    # Card-granting fortunes show the normal card face, and Uncharted reveals
+    # the actual result as the primary Fortune rather than hiding it in copy.
+    assert "reward_cards" in _SRC
+    assert "renderDeckBuilderCard(" in extract_function("_appendFortuneRewardCards")
+    reward_cards = extract_function("_appendFortuneRewardCards")
+    assert "showGameTooltip(nid, tile" in reward_cards
+    assert "stopPropagation" not in reward_cards, (
+        "tapping a reward card must still bubble to select its Fortune"
+    )
+    reveal_card = extract_function("_roguelikeRevealCard")
+    assert "_renderRoguelikeOptionTile(card, resolved)" in reveal_card
+    assert "Rolled by " in reveal_card
+
+
+def test_all_direct_card_choices_use_full_card_faces():
+    marked = extract_function("showMarkedCardsModal")
+    assert "tutor-modal-card marked-cards-tile" in marked
+    assert "renderDeckBuilderCard(nid, undefined)" in marked
+    assert "rps-tile-glyph" not in marked
+    assert "rps-tile-label" not in marked
+
+    action_menu = extract_function("showMinionActionMenu")
+    transform_picker = extract_function("showTransformPicker")
+    assert "addBtn('Transform'" in action_menu
+    assert "Transform →" not in action_menu
+    assert "renderDeckBuilderCard(targetNid, undefined)" in transform_picker
+    assert "tutor-modal-card transform-picker-card" in transform_picker
+    assert "tile.addEventListener('focus', inspectTransformCard)" in transform_picker
+    assert "inspectTransformCard();" in transform_picker
+
+
+def test_forced_card_modals_share_tutor_layout_and_minimise_conventions():
+    trigger = extract_function("showTriggerPickerModal")
+    revive = extract_function("showReviveModal")
+    helper = extract_function("_attachFortuneMinimizeButton")
+    assert "trigger-picker-restore-pill" in trigger
+    assert "fan.className = 'tutor-modal-cards'" in revive
+    assert "reviveAccept.className = 'tutor-accept-button'" in revive
+    assert "tile.classList.add('tutor-card-selected')" in revive
+    assert "tile.addEventListener('focus', inspectReviveCard)" in revive
+    assert "showGameTooltip(match.card_numeric_id" in revive
+    revive_highlights = extract_function("highlightReviveCells")
+    assert "Array.isArray(legalActions)" in revive_highlights
+    assert "window.legalActions" not in revive_highlights
+    assert "'Minimise ' + (resumeLabel || 'Fortune') + ' window'" in helper
+
+
+def test_minimised_decision_survives_the_other_modal_cleanup(tmp_path):
+    """Every render syncs both decision modals, including the inactive one."""
+    script = (
+        """
+var nodes = {};
+function makeElement(tag) {
+    return {
+        tagName: tag, id: '', className: '', textContent: '', title: '',
+        style: {}, children: [], parentNode: null, listeners: {},
+        setAttribute: function() {},
+        addEventListener: function(name, fn) { this.listeners[name] = fn; },
+        appendChild: function(child) {
+            child.parentNode = this;
+            this.children.push(child);
+            if (child.id) nodes[child.id] = child;
+            return child;
+        },
+        removeChild: function(child) {
+            this.children = this.children.filter(function(x) { return x !== child; });
+            child.parentNode = null;
+            if (child.id) delete nodes[child.id];
+        },
+        remove: function() {
+            if (this.parentNode) this.parentNode.removeChild(this);
+            else if (this.id) delete nodes[this.id];
+        }
+    };
+}
+var document = {
+    createElement: makeElement,
+    getElementById: function(id) { return nodes[id] || null; }
+};
+var mount = makeElement('mount');
+function _stageMount() { return mount; }
+function minimise(kind, id) {
+    var header = makeElement('header');
+    var overlay = makeElement('overlay');
+    mount.appendChild(overlay);
+    _attachFortuneMinimizeButton(header, overlay, kind, id);
+    header.children[0].listeners.click({ stopPropagation: function() {} });
+    return overlay;
+}
+"""
+        + extract_function("_attachFortuneMinimizeButton")
+        + extract_function("closeRoguelikeEventModal")
+        + extract_function("closeMarkedCardsModal")
+        + """
+var fortuneOverlay = minimise('Fortune', 'fortune-restore-pill');
+closeMarkedCardsModal();
+var fortuneSurvived = !!document.getElementById('fortune-restore-pill');
+document.getElementById('fortune-restore-pill').listeners.click();
+var fortuneRestored = fortuneOverlay.style.display === '';
+
+var markedOverlay = minimise('Marked Cards', 'marked-cards-restore-pill');
+closeRoguelikeEventModal();
+var markedSurvived = !!document.getElementById('marked-cards-restore-pill');
+document.getElementById('marked-cards-restore-pill').listeners.click();
+var markedRestored = markedOverlay.style.display === '';
+
+console.log(JSON.stringify({
+    fortuneSurvived: fortuneSurvived,
+    fortuneRestored: fortuneRestored,
+    markedSurvived: markedSurvived,
+    markedRestored: markedRestored
+}));
+"""
+    )
+    assert run_js(tmp_path, script) == {
+        "fortuneSurvived": True,
+        "fortuneRestored": True,
+        "markedSurvived": True,
+        "markedRestored": True,
+    }
+
+
+def test_pinned_minion_paints_attack_footprint_even_without_action_permission(tmp_path):
+    script = (
+        """
+var painted = [];
+var gameState = { minions: [{
+    instance_id: 7,
+    card_numeric_id: 101,
+    position: [2, 2]
+}] };
+var cardDefs = { 101: { attack_range: 1 } };
+var document = {
+    querySelector: function(selector) {
+        return { classList: { add: function(name) {
+            painted.push({ selector: selector, name: name });
+        } } };
+    }
+};
+"""
+        + extract_function("_paintAttackRangeFootprint")
+        + """
+_paintAttackRangeFootprint(7);
+console.log(JSON.stringify({
+    count: painted.length,
+    classes: painted.map(function(x) { return x.name; }),
+    selectors: painted.map(function(x) { return x.selector; })
+}));
+"""
+    )
+    out = run_js(tmp_path, script)
+    assert out["count"] == 12
+    assert set(out["classes"]) == {"attack-range-footprint"}
+    assert '.board-cell[data-row="2"][data-col="2"]' not in out["selectors"]
+    highlight = extract_function("highlightBoard")
+    assert highlight.index("_paintAttackRangeFootprint(inspectedMinionId)") < highlight.index(
+        "if (!_pendingMode && typeof canActNow"
+    )
+    pin_setup = extract_function("setupGameTooltipPin")
+    assert "}, true);" in pin_setup, "minion inspection must run before board-cell rendering"
+
+
+def test_leaving_a_match_clears_pinned_minion_inspection_state():
+    reset = extract_function("resetGameClientState")
+    assert "inspectedMinionId = null;" in reset
+    assert "gameTooltipPin = null;" in reset
+    assert "hideGameTooltip({ force: true })" in reset
+
+
+def test_game_over_modal_survives_a_final_board_render_exception(tmp_path):
+    script = (
+        """
+var gameState = { winner: null };
+var legalActions = [{ action_type: 1 }];
+var myPlayerIdx = 0;
+var isSpectator = false;
+var _gameOverApplied = false;
+var shown = 0;
+var reset = 0;
+var audio = [];
+var window = { __pendingGameOverData: { winner: 1 } };
+var document = { getElementById: function() { return null; } };
+function _resetSpellStageHard() { reset++; }
+function renderGame() { throw new Error('final render failed'); }
+function playSfx(name) { audio.push(name); }
+function showGameOver(data) { shown++; }
+"""
+        + extract_function("_applyGameOver")
+        + """
+_applyGameOver({ final_state: { winner: 1, players: [{ hp: -9 }, { hp: 100 }] } });
+_applyGameOver({ final_state: { winner: 1, players: [{ hp: -9 }, { hp: 100 }] } });
+console.log(JSON.stringify({
+    shown: shown,
+    reset: reset,
+    winner: gameState.winner,
+    legalCount: legalActions.length,
+    audio: audio
+}));
+"""
+    )
+    out = run_js(tmp_path, script)
+    assert out == {
+        "shown": 1,
+        "reset": 1,
+        "winner": 1,
+        "legalCount": 0,
+        "audio": ["defeat"],
+    }
+    assert "_applyGameOver(eventGameOver)" in extract_function("playGameOver")
+
+
+def test_game_over_overlay_sits_above_fortune_and_fatigue_layers():
+    css = (STATIC_DIR / "css" / "zz-overrides.css").read_text(encoding="utf-8")
+    assert "#game-over-overlay { z-index: 20000 !important; }" in css
+
+
+def test_three_fortune_tiles_fit_the_stage_modal_without_a_scrollbar():
+    css = (STATIC_DIR / "css" / "zz-overrides.css").read_text(encoding="utf-8")
+    assert "max-height: 100% !important;" in css
+    assert "gap: 10px;\n  padding: 8px 12px;" in css
+    assert "overflow-x: hidden;" in css
+    assert "width: 180px;\n  height: 204px;\n  flex: 0 0 180px;" in css
+    # 604px is the real overlay content width: three tiles + two gaps +
+    # horizontal padding must all be visible at once.
+    assert 3 * 180 + 2 * 10 + 2 * 12 <= 604
+    assert ".fortune-reveal-modal {\n  width: 100% !important;\n  max-width: 960px !important;\n  max-height: 100% !important;" in css
+    assert "width: min(190px, 100%);\n  height: 225px;" in css
 
 
 def test_deck_builder_lists_default_to_ascending_mana_cost():

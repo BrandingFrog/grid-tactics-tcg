@@ -417,6 +417,7 @@ let _sandboxPreSnapshot = null;
 // Game interaction state
 let selectedHandIdx = null;  // index of selected hand card (for PLAY_CARD)
 let selectedMinionId = null; // id of selected board minion (for MOVE/ATTACK)
+let inspectedMinionId = null; // pinned board minion whose printed attack range is shown
 let selectedDeployPos = null; // [row, col] when picking target for a minion with on-play effect
 let interactionMode = null;  // 'play', 'move', 'attack', 'move_attack', 'target', 'activate_target', or null
 let selectedAbilityMinionId = null; // minion whose activated ability is being targeted

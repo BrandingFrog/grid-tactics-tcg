@@ -1,7 +1,8 @@
 # Mana System
 
 A single banking pool — not an X/Y refresh. Mana persists across turns. Turn
-income starts at **+1** and rises by 1 after every completed Fortune round.
+income starts at **+1**, becomes **+2** after turn 25 and **+3** after turn 50,
+then stays capped at **+3**. The turn-75 Fortune instead unlocks one automatic draw.
 
 ## Rules
 - Gain 1 Action Point (cap 3) and turn income. After the third Fortune, also draw 1 automatically; an empty deck fatigues.

@@ -55,10 +55,21 @@ MAX_EFFECT_AMOUNT: int = 100
 ACTION_POINTS_PER_TURN: int = 1
 MAX_ACTION_POINTS: int = 3
 
-# The third completed Fortune round happens after turn 75. At the resulting
-# ante (4), every incoming turn also draws one card; an empty deck therefore
-# starts the existing escalating 10/20/30... fatigue clock.
-DECKOUT_DRAW_ANTE: int = 4
+# Fortune progression has two independent axes.  The first two completed
+# rounds raise turn mana / REST cards from 1 to 2 to 3; the third round
+# (after turn 75) holds that economy at 3 and instead unlocks one mandatory
+# turn-start draw.  Keeping these as separate constants prevents "ante 3"
+# from accidentally starting the deckout clock after turn 50.
+FORTUNE_ECONOMY_CAP: int = 3
+DECKOUT_DRAW_FORTUNE_ROUNDS: int = 3
+
+
+def fortune_rates(completed_rounds: int) -> tuple[int, int]:
+    """Return ``(economy_rate, automatic_turn_draws)`` for Fortune progress."""
+    completed = max(0, completed_rounds)
+    economy_rate = min(FORTUNE_ECONOMY_CAP, 1 + completed)
+    automatic_draws = int(completed >= DECKOUT_DRAW_FORTUNE_ROUNDS)
+    return economy_rate, automatic_draws
 
 # DRAW slot 1000 is REST under the active contract. Automatic turn draws are
 # disabled before the third Fortune, then become a one-card late-game clock.
@@ -66,7 +77,8 @@ DECKOUT_DRAW_ANTE: int = 4
 # ---------------------------------------------------------------------------
 # Active rules experiment (v5): action bank + REST.
 #   - NO turn-start auto-draw before the third Fortune round.
-#   - At ante 4 (after turn 75), turn start draws 1; an empty deck fatigues.
+#   - After turn 75 the economy stays at 3/3, turn start draws 1, and an
+#     empty deck fatigues.
 #   - Primary actions, including MAGIC, spend one action point.
 #   - REST is the rewarded no-action end: it spends 0, banks all points,
 #     grants +1 mana, draws the Fortune ante, and offers a Handshake.

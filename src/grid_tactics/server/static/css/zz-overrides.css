@@ -5296,33 +5296,78 @@ input::selection, textarea::selection { background: rgba(224, 162, 60, 0.45); co
 .rps-tile.rps-tile-static,
 .rps-tile.rps-tile-static:hover { cursor: default; transform: none; }
 
-/* Turn-25 roguelike choices reuse the RPS chrome with room for rules text. */
-.roguelike-event-modal { max-width: 720px !important; }
-.marked-cards-modal { max-width: 760px !important; }
-.marked-cards-tile { position: relative; }
-.marked-cards-tile.marked-cards-kept {
-  border-color: #62d48a !important;
-  box-shadow: 0 0 0 2px rgba(98, 212, 138, .5), 0 8px 22px rgba(0, 0, 0, .38) !important;
+/* Turn-25 Fortune windows use the Tutor shell dimensions. They must not carry
+   the pregame-rps-modal class: that class has a 360px cap for the pregame
+   design box and used to crop the Fortune Accept footer. */
+.roguelike-event-modal,
+.marked-cards-modal {
+  max-width: 960px !important;
+  /* Stage-mounted overlays have a definite 350px content box (390px stage
+     minus Tutor's 20px padding). Respect that real box instead of the
+     viewport-oriented 380px Tutor cap. */
+  max-height: 100% !important;
 }
-.marked-cards-tile.marked-cards-top {
-  border-color: #e2b85b !important;
-  box-shadow: 0 0 0 2px rgba(226, 184, 91, .5), 0 8px 22px rgba(0, 0, 0, .38) !important;
+.roguelike-event-modal > .tutor-modal-header,
+.roguelike-event-modal > .tutor-modal-footer {
+  flex: 0 0 auto;
+}
+.marked-cards-row {
+  flex: 1 1 auto;
+  justify-content: center;
+  gap: 12px;
+  min-height: 0;
+  overflow: visible !important;
+}
+.marked-cards-tile { position: relative; }
+.marked-cards-tile.marked-cards-kept > .card-frame-full.cf2 {
+  outline: 12px solid #62d48a !important;
+  outline-offset: -6px !important;
+  filter: drop-shadow(0 0 12px rgba(98, 212, 138, .55));
+}
+.marked-cards-tile.marked-cards-top > .card-frame-full.cf2 {
+  outline: 12px solid #e2b85b !important;
+  outline-offset: -6px !important;
+  filter: drop-shadow(0 0 12px rgba(226, 184, 91, .55));
 }
 .marked-cards-badge {
-  min-height: 18px;
+  position: absolute;
+  z-index: 5;
+  top: 7px;
+  left: 50%;
+  transform: translateX(-50%);
+  min-width: 48px;
+  min-height: 0;
+  padding: 3px 7px;
+  border: 1px solid rgba(244, 223, 158, .75);
+  border-radius: 999px;
+  background: rgba(20, 13, 4, .9);
   color: #f4df9e;
   font: 800 11px/1.2 var(--font-ui, sans-serif);
   letter-spacing: .12em;
+  text-align: center;
+  pointer-events: none;
 }
-.roguelike-event-row { gap: 12px; padding: 20px 16px; }
+.marked-cards-badge:empty { display: none; }
+.roguelike-event-row {
+  gap: 10px;
+  padding: 8px 12px;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: hidden;
+  align-items: center;
+  justify-content: center;
+}
 .roguelike-event-tile {
-  width: 190px;
-  height: 210px;
-  padding: 14px 12px;
+  width: 180px;
+  height: 204px;
+  flex: 0 0 180px;
+  padding: 10px;
   box-sizing: border-box;
   justify-content: flex-start;
 }
-.roguelike-event-tile .rps-tile-glyph { font-size: 42px; margin-top: 8px; }
+.roguelike-event-tile .rps-tile-glyph { font-size: 40px; margin-top: 4px; }
 .roguelike-event-tile .rps-tile-label {
   min-height: 34px;
   text-align: center;
@@ -5331,9 +5376,63 @@ input::selection, textarea::selection { background: rgba(224, 162, 60, 0.45); co
 .roguelike-event-description {
   color: var(--parch-mute, #cbbb95);
   font-family: var(--ui-body, Georgia), serif;
-  font-size: 13px;
-  line-height: 1.35;
+  font-size: 12px;
+  line-height: 1.25;
   text-align: center;
+}
+.roguelike-event-tile.roguelike-event-has-reward { gap: 6px; }
+.fortune-reward-cards {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 76px;
+}
+.fortune-reward-card.tutor-modal-card {
+  width: 76px !important;
+  max-width: 76px !important;
+  flex: 0 0 76px;
+  cursor: zoom-in;
+}
+.fortune-reward-card.tutor-modal-card:hover {
+  transform: none !important;
+  filter: drop-shadow(0 0 8px rgba(224, 162, 60, .55)) !important;
+}
+.fortune-reward-card.tutor-modal-card:hover > .card-frame-full.cf2 {
+  transform: scale(0.25) !important;
+}
+
+/* Card targets use the same full-face selection language as Tutor. */
+.transform-picker-modal { max-width: 720px !important; max-height: 100% !important; }
+.transform-picker-cards { justify-content: center; overflow: visible !important; }
+.transform-picker-card { position: relative; }
+.transform-picker-card-disabled {
+  opacity: .42;
+  filter: grayscale(.75);
+  cursor: not-allowed !important;
+}
+.transform-picker-card-disabled:hover {
+  transform: none !important;
+  filter: grayscale(.75) !important;
+}
+.transform-picker-card-disabled:hover > .card-frame-full.cf2 {
+  transform: scale(.25) !important;
+}
+.transform-cost-pill {
+  position: absolute;
+  z-index: 5;
+  left: 50%;
+  bottom: 7px;
+  transform: translateX(-50%);
+  width: max-content;
+  padding: 4px 8px;
+  border: 1px solid rgba(224, 162, 60, .8);
+  border-radius: 999px;
+  background: rgba(20, 13, 4, .92);
+  color: var(--gold-lt, #ffd873);
+  font: 800 10px/1 var(--font-ui, sans-serif);
+  letter-spacing: .08em;
+  pointer-events: none;
 }
 .roguelike-spectator-wait { text-align: center; padding: 0 0 22px; }
 
@@ -5347,8 +5446,9 @@ input::selection, textarea::selection { background: rgba(224, 162, 60, 0.45); co
 }
 .fortune-reveal-overlay.fortune-reveal-fade { opacity: 0; }
 .fortune-reveal-modal {
-  width: min(720px, 94vw) !important;
-  max-height: min(640px, 92vh);
+  width: 100% !important;
+  max-width: 960px !important;
+  max-height: 100% !important;
   overflow: hidden;
   background:
     radial-gradient(circle at 50% 0, rgba(111, 75, 24, .22), transparent 55%),
@@ -5361,15 +5461,17 @@ input::selection, textarea::selection { background: rgba(224, 162, 60, 0.45); co
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   align-items: center;
-  gap: 18px;
-  padding: 22px 24px 28px;
+  gap: 12px;
+  padding: 10px 16px 14px;
+  min-height: 0;
+  overflow: hidden;
 }
 .fortune-reveal-player {
   min-width: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 9px;
+  gap: 7px;
 }
 .fortune-reveal-player-name {
   max-width: 100%;
@@ -5382,8 +5484,8 @@ input::selection, textarea::selection { background: rgba(224, 162, 60, 0.45); co
   text-transform: uppercase;
 }
 .fortune-reveal-card {
-  width: min(220px, 100%);
-  height: 230px;
+  width: min(190px, 100%);
+  height: 225px;
   background: linear-gradient(180deg, #2e2314, #171109) !important;
   box-shadow: inset 0 0 28px rgba(0, 0, 0, .36),
               0 10px 28px rgba(0, 0, 0, .5);
@@ -6259,11 +6361,10 @@ input::selection, textarea::selection { background: rgba(224, 162, 60, 0.45); co
   font-weight: 800; letter-spacing: 0.04em;
 }
 
-/* AI-watch game over (user 2026-07-11): spectator result is "{NAME} WINS" —
-   longer than VICTORY/DEFEAT, so let it shrink instead of clipping, and
-   keep the overlay above the turn-transition banner (both were z 1000;
-   the banner mounts later in the DOM and painted on top). */
-#game-over-overlay { z-index: 1200 !important; }
+/* Game over is terminal and must sit above Fortune, Tutor, and transient
+   damage/fatigue layers. Spectator result is "{NAME} WINS", so let it shrink
+   instead of clipping. */
+#game-over-overlay { z-index: 20000 !important; }
 #game-over-overlay .game-over-result.spec-win {
   font-size: 30px !important;
   line-height: 1.15;

@@ -68,6 +68,7 @@ function clearSelection() {
     selectedAbilityMinionId = null;
     interactionMode = null;
     hideMinionActionMenu();
+    closeTransformPicker();
     hideDeclinePostMoveAttackButton();
 }
 
@@ -1033,35 +1034,18 @@ function showMinionActionMenu(minion, moves, attacks, transforms, canSac) {
             submitAction({ action_type: 6, minion_id: minion.instance_id });
         });
     }
-    // Transform options — always render EVERY option from the SOURCE card
-    // def's `transform_options` so the player can see the full menu with
-    // per-target costs (the engine charges these, NOT the target card's
-    // base mana_cost). Options the engine did not enumerate in legalActions
-    // (e.g. unaffordable) are shown greyed-out and un-clickable — same
-    // pattern as the activated-ability button above.
+    // Transform is an operation button; the specific card target is chosen
+    // in a Tutor-style full-card picker. This keeps card choices readable on
+    // both pointer and touch devices instead of naming cards in tiny buttons.
     var transformSourceCard = cardDefs[minion.card_numeric_id];
     if (transformSourceCard && transformSourceCard.transform_options &&
         transformSourceCard.transform_options.length > 0) {
-        var legalTransformTargets = {};
-        (transforms || []).forEach(function(t) {
-            legalTransformTargets[t.transform_target] = true;
-        });
-        transformSourceCard.transform_options.forEach(function(opt) {
-            var targetCard = null, targetNid = null;
-            for (var nid in cardDefs) {
-                if (cardDefs[nid].card_id === opt.target) { targetCard = cardDefs[nid]; targetNid = parseInt(nid, 10); break; }
-            }
-            var name = targetCard ? targetCard.name : opt.target;
-            var cost = opt.mana_cost;
-            if (cost == null) cost = targetCard ? targetCard.mana_cost : '?';
-            var transformLegal = !!legalTransformTargets[opt.target];
-            addBtn('Transform → ' + name + ' (' + cost + ')', 'transform', function() {
-                submitAction({
-                    action_type: 7,
-                    minion_id: minion.instance_id,
-                    transform_target: opt.target,
-                });
-            }, !transformLegal, targetNid);
+        addBtn('Transform', 'transform', function() {
+            hideMinionActionMenu();
+            showTransformPicker(
+                minion, transformSourceCard,
+                transformSourceCard.transform_options, transforms || []
+            );
         });
     }
 
@@ -1122,6 +1106,170 @@ function hideMinionActionMenu() {
     if (existing) existing.remove();
     var bd = document.getElementById('stage-menu-backdrop');
     if (bd) bd.remove();
+}
+
+function _transformTargetNumericId(cardId) {
+    for (var nid in cardDefs) {
+        if (cardDefs[nid] && cardDefs[nid].card_id === cardId) {
+            return parseInt(nid, 10);
+        }
+    }
+    return null;
+}
+
+function showTransformPicker(minion, sourceCard, options, legalTransforms) {
+    closeTransformPicker();
+    var legalTargets = {};
+    (legalTransforms || []).forEach(function(action) {
+        legalTargets[action.transform_target] = true;
+    });
+
+    var overlay = document.createElement('div');
+    overlay.id = 'transform-picker-overlay';
+    overlay.className = 'tutor-modal-overlay transform-picker-overlay';
+    var modal = document.createElement('div');
+    modal.className = 'tutor-modal transform-picker-modal';
+
+    var header = document.createElement('div');
+    header.className = 'tutor-modal-header';
+    var title = document.createElement('div');
+    title.className = 'tutor-modal-title';
+    title.textContent = 'Choose a Transformation';
+    var subtitle = document.createElement('div');
+    subtitle.className = 'tutor-modal-deckline transform-picker-instruction';
+    subtitle.textContent = (sourceCard && sourceCard.name ? sourceCard.name : 'This minion')
+        + ' keeps its tile and becomes the selected card.';
+    header.appendChild(title);
+    header.appendChild(subtitle);
+
+    var minBtn = document.createElement('button');
+    minBtn.className = 'tutor-min-btn';
+    minBtn.textContent = '▾';
+    minBtn.title = 'Minimise — peek at the board';
+    minBtn.setAttribute('aria-label', 'Minimise Transformation window');
+    minBtn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        overlay.style.display = 'none';
+        var oldPill = document.getElementById('transform-picker-restore-pill');
+        if (oldPill) oldPill.remove();
+        var pill = document.createElement('button');
+        pill.id = 'transform-picker-restore-pill';
+        pill.className = 'tutor-restore-pill';
+        pill.textContent = '▴ Resume Transformation';
+        pill.addEventListener('click', function() {
+            pill.remove();
+            overlay.style.display = '';
+        });
+        var pillHost = typeof _stageMount === 'function'
+            ? _stageMount()
+            : (document.querySelector('.screen.active .game-layout') || document.body);
+        pillHost.appendChild(pill);
+    });
+    header.appendChild(minBtn);
+    modal.appendChild(header);
+
+    var fan = document.createElement('div');
+    fan.className = 'tutor-modal-cards transform-picker-cards';
+    var selectedTarget = null;
+    var selectedTile = null;
+    var accept = document.createElement('button');
+    accept.className = 'tutor-accept-button';
+    accept.textContent = 'Accept';
+    accept.disabled = true;
+
+    (options || []).forEach(function(opt) {
+        var targetNid = _transformTargetNumericId(opt.target);
+        var targetCard = targetNid == null ? null : cardDefs[targetNid];
+        if (!targetCard || typeof renderDeckBuilderCard !== 'function') return;
+        var cost = opt.mana_cost;
+        if (cost == null) cost = targetCard.mana_cost;
+        var isLegal = !!legalTargets[opt.target];
+        var tile = document.createElement('div');
+        tile.className = 'tutor-modal-card transform-picker-card';
+        tile.innerHTML = renderDeckBuilderCard(targetNid, undefined);
+        tile.setAttribute('data-transform-target', opt.target);
+        tile.setAttribute('aria-disabled', isLegal ? 'false' : 'true');
+        tile.tabIndex = 0;
+        if (!isLegal) tile.classList.add('transform-picker-card-disabled');
+
+        var costPill = document.createElement('div');
+        costPill.className = 'transform-cost-pill';
+        costPill.textContent = 'TRANSFORM · ' + cost + ' MANA';
+        tile.appendChild(costPill);
+        function inspectTransformCard() {
+            try { showGameTooltip(targetNid, tile, null, { force: true }); } catch (e) { /* defensive */ }
+        }
+        tile.addEventListener('mouseenter', inspectTransformCard);
+        tile.addEventListener('focus', inspectTransformCard);
+        if (isLegal) {
+            tile.addEventListener('click', function(e) {
+                e.stopPropagation();
+                if (selectedTile) selectedTile.classList.remove('tutor-card-selected');
+                if (selectedTile === tile) {
+                    selectedTile = null;
+                    selectedTarget = null;
+                } else {
+                    selectedTile = tile;
+                    selectedTarget = opt.target;
+                    tile.classList.add('tutor-card-selected');
+                    try { showGameTooltip(targetNid, tile, null, { force: true }); } catch (e2) { /* defensive */ }
+                }
+                accept.disabled = selectedTarget == null;
+            });
+        } else {
+            tile.title = 'Unavailable with your current mana and Action Points';
+            tile.addEventListener('click', function(e) {
+                e.stopPropagation();
+                inspectTransformCard();
+            });
+        }
+        fan.appendChild(tile);
+    });
+    if (!fan.children.length) {
+        var empty = document.createElement('div');
+        empty.className = 'tutor-modal-empty';
+        empty.textContent = 'No transformation cards are available.';
+        fan.appendChild(empty);
+    }
+    modal.appendChild(fan);
+
+    var footer = document.createElement('div');
+    footer.className = 'tutor-modal-footer';
+    var cancel = document.createElement('button');
+    cancel.className = 'tutor-skip-button';
+    cancel.textContent = 'Cancel';
+    cancel.addEventListener('click', function(e) {
+        e.stopPropagation();
+        closeTransformPicker();
+        clearSelection();
+        highlightBoard();
+        updateHandHighlights();
+    });
+    accept.addEventListener('click', function(e) {
+        e.stopPropagation();
+        if (selectedTarget == null) return;
+        submitAction({
+            action_type: 7,
+            minion_id: minion.instance_id,
+            transform_target: selectedTarget,
+        });
+    });
+    footer.appendChild(cancel);
+    footer.appendChild(accept);
+    modal.appendChild(footer);
+    overlay.appendChild(modal);
+    overlay.addEventListener('click', function(e) { e.stopPropagation(); });
+    var host = typeof _stageMount === 'function'
+        ? _stageMount()
+        : (document.querySelector('.screen.active .game-layout') || document.body);
+    host.appendChild(overlay);
+}
+
+function closeTransformPicker() {
+    var pill = document.getElementById('transform-picker-restore-pill');
+    if (pill) pill.remove();
+    var overlay = document.getElementById('transform-picker-overlay');
+    if (overlay) overlay.remove();
 }
 
 // Discard-cost picker — collects one or more hand-index picks (based on

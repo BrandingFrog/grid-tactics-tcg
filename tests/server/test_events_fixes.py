@@ -27,6 +27,7 @@ from grid_tactics.actions import Action, pass_action
 from grid_tactics.board import Board
 from grid_tactics.card_library import CardLibrary
 from grid_tactics.engine_events import (
+    EVT_GAME_OVER,
     EVT_REACT_WINDOW_CLOSED,
     EVT_REACT_WINDOW_OPENED,
     EventStream,
@@ -223,6 +224,51 @@ def test_fortune_socket_handler_hands_turn_26_back_to_preview_ai(app_and_rm):
         and session.state.phase == TurnPhase.ACTION
         and session.state.active_player_idx == 1
     )
+
+
+def test_turn_76_fatigue_emits_terminal_event_and_socket_frame(app_and_rm):
+    """Regression for a visible -9 HP state without an end-game message."""
+    application, rm = app_and_rm
+    client = _client(application)
+    client.emit("preview_game", {"display_name": "Solo"})
+    client.get_received()
+    session = next(iter(rm._games.values()))
+    players = list(session.state.players)
+    players[0] = replace(players[0], hp=1, deck=())
+    history = ("fortune-1", "fortune-2")
+    session.state = replace(
+        session.state,
+        players=tuple(players),
+        active_player_idx=0,
+        phase=TurnPhase.START_OF_TURN,
+        turn_number=76,
+        pending_roguelike_event_turn=76,
+        pending_roguelike_event_choices=(None, None),
+        pending_roguelike_event_options=(
+            CLUMSY_GREED,
+            SHARP_EYED_SCEPTIC,
+            WITH_A_SLAP,
+        ),
+        roguelike_event_history=(history, history),
+        fatigue_counts=(0, 0),
+        is_game_over=False,
+        winner=None,
+    )
+
+    client.emit("roguelike_event_pick", {"choice": WITH_A_SLAP})
+    received = client.get_received()
+    engine_frame = _find(received, "engine_events")
+    terminal_frame = _find(received, "game_over")
+
+    assert session.state.players[0].hp == -9
+    assert session.state.is_game_over
+    assert session.state.winner == PlayerSide.PLAYER_2
+    assert engine_frame is not None
+    assert EVT_GAME_OVER in [event["type"] for event in engine_frame["events"]]
+    assert engine_frame["final_state"]["players"][0]["hp"] == -9
+    assert terminal_frame is not None
+    assert terminal_frame["final_state"]["is_game_over"] is True
+    assert terminal_frame["winner"] == int(PlayerSide.PLAYER_2)
 
 def test_action_phase_falls_back_to_active_player():
     state = _base_state(active_player_idx=1)

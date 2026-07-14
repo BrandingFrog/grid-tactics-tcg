@@ -107,6 +107,9 @@ var slotState = {
 // would be re-applied every time drainEventQueue is called with an empty
 // queue (which happens on every modal open/close, etc.).
 var _drainFinalApplied = false;
+// One terminal result per queue lifecycle. The engine event and the parallel
+// socket frame deliberately deliver the same outcome through two paths.
+var _gameOverApplied = false;
 
 function resetEventQueue() {
     // Called on game_start, sandbox_state initial open, sandbox reset, sandbox load.
@@ -121,6 +124,8 @@ function resetEventQueue() {
     slotState.prevDispatchedEvent = null;
     slotState.lastDispatchedEvent = null;
     _drainFinalApplied = false;
+    _gameOverApplied = false;
+    window.__pendingGameOverData = null;
     // Audit fix (2026-07-06): a stale spell stage (left up by leave-game /
     // game-over mid-react) must not survive into the next game.
     if (typeof _resetSpellStageHard === 'function') _resetSpellStageHard();
@@ -334,6 +339,23 @@ function drainEventQueue() {
                 _commitFinalStateSnapshot(window.__lastFinalState);
             } catch (e) {
                 console.error("[eventQueue] _commitFinalStateSnapshot failed", e);
+            }
+        }
+        // The parallel game_over socket frame is stashed while lethal
+        // animations drain. EVT_GAME_OVER normally consumes it at its own
+        // beat; this drain-end fallback covers a skipped/deduped/stalled
+        // terminal event so the result window can never disappear.
+        if (window.__pendingGameOverData) {
+            var pendingGameOver = window.__pendingGameOverData;
+            window.__pendingGameOverData = null;
+            try {
+                if (typeof _applyGameOver === 'function') {
+                    _applyGameOver(pendingGameOver);
+                }
+            } catch (gameOverErr) {
+                console.error('[eventQueue] pending game-over fallback failed', gameOverErr);
+                var gameOverOverlay = document.getElementById('game-over-overlay');
+                if (gameOverOverlay) gameOverOverlay.style.display = 'flex';
             }
         }
         return;
@@ -2505,11 +2527,9 @@ function playFizzle(ev, done) {
 //
 // Payload: {winner, reason}
 //
-// NOTE: in live PvP, the snapshot path's onGameOver socket handler also
-// fires with the same winner. showGameOver is idempotent (it just sets
-// overlay.style.display='flex'), so the dual-fire is harmless. In sandbox
-// there is no onGameOver socket path, so this handler is the primary
-// trigger for the overlay.
+// Live PvP also receives the same terminal outcome on the parallel socket
+// path. _applyGameOver owns the idempotence guard so teardown and SFX happen
+// exactly once; sandbox has no separate socket frame.
 function playGameOver(ev, done) {
     if (_passOfferedBy != null) _setPassOffer(null);
     var payload = (ev && ev.payload) || {};
@@ -2523,10 +2543,12 @@ function playGameOver(ev, done) {
             window.__pendingGameOverData = null;
             if (typeof _applyGameOver === 'function') _applyGameOver(pgo);
         } else {
-            showGameOver({
+            var eventGameOver = {
                 winner: payload.winner,
                 final_state: window.__lastFinalState || gameState,
-            });
+            };
+            if (typeof _applyGameOver === 'function') _applyGameOver(eventGameOver);
+            else showGameOver(eventGameOver);
         }
     } catch (e) { /* defensive — overlay is purely visual */ }
     // Game over modal stays up until user dismisses — no queue pacing needed.
