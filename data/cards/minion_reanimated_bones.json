@@ -3,6 +3,7 @@
     "stable_id": 26,
     "name": "Reanimated Bones",
     "card_type": "minion",
+    "deckable": false,
     "mana_cost": 1,
     "attack": 5,
     "health": 5,

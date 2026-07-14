@@ -26,6 +26,10 @@ function renderGame() {
     // renderGame runs from applyStateFrame which the AnimationQueue only
     // calls AFTER the triggering animation completes.
     renderReactBanner();
+    // Mandatory simultaneous milestone choice every 25 completed turns.
+    syncRoguelikeEventUI();
+    // Private follow-up picker for Marked Cards fortunes.
+    syncMarkedCardsUI();
     // Phase 14.1: if server says a melee minion has just moved and a post-move
     // attack decision is pending, auto-enter the attack-pick UI mode and show
     // the decline button. Must run BEFORE highlightBoard so highlights reflect it.
@@ -1375,4 +1379,3 @@ function hideDeclinePostMoveAttackButton() {
     var existing = document.getElementById('decline-post-move-attack-btn');
     if (existing) existing.remove();
 }
-

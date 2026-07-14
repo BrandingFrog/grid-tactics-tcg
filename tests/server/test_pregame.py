@@ -34,6 +34,7 @@ def app(monkeypatch):
     library = CardLibrary.from_directory(Path("data/cards"))
     rm = RoomManager(library)
     register_events(rm)
+    application.config["TEST_ROOM_MANAGER"] = rm
     return application
 
 
@@ -286,6 +287,21 @@ def test_preview_pregame_full_flow(alice):
     draws = [e for e in ev["events"] if e["type"] == "card_drawn"]
     assert len(draws) == 1
     assert draws[0]["payload"]["source"] == "mulligan"
+
+
+def test_play_vs_ai_detaches_same_tab_from_old_ai_spectator_room(app, alice):
+    rm = app.config["TEST_ROOM_MANAGER"]
+    alice.emit("watch_ai_game", {"display_name": "Viewer"})
+    watched = alice.get_received()
+    joined = _first(watched, "spectator_joined")
+    assert joined is not None
+    old_room = joined["args"][0]["room_code"]
+    assert rm.spectator_count(old_room) == 1
+
+    alice.emit("preview_game", {"display_name": "Solo"})
+    preview = alice.get_received()
+    assert _first(preview, "pregame_rps") is not None
+    assert rm.spectator_count(old_room) == 0
 
 
 def test_pregame_disabled_keeps_instant_start(alice, bob, monkeypatch):

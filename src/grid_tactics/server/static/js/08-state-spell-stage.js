@@ -17,17 +17,23 @@ function onGameStart(data) {
     myPlayerIdx = data.your_player_idx;
     legalActions = data.legal_actions;
     opponentName = data.opponent_name;
-    // Phase 14.4: spectators receive is_spectator=true on game_start and in
-    // every state frame. Pick it up from the game_start payload too so the
-    // first render is already gated correctly.
-    if (data.is_spectator || (data.state && data.state.is_spectator)) {
-        isSpectator = true;
+    // A browser tab can move from AI-watch (spectator) to Play VS AI
+    // (player). Derive the role afresh for every game_start; only ever
+    // setting this flag to true leaked spectator action-gating into the
+    // next player game.
+    var startsAsSpectator = !!(
+        data.is_spectator || (data.state && data.state.is_spectator)
+    );
+    isSpectator = startsAsSpectator;
+    spectatorGodMode = startsAsSpectator && !!(
+        data.state && data.state.spectator_god_mode
+    );
+    if (startsAsSpectator) {
         // Spectator game-over shows '{winner} WINS', not VICTORY/DEFEAT
         // (user 2026-07-11: AI-vs-AI said THEY got the defeat).
         if (data.player_names) window.__spectPlayerNames = data.player_names;
-        if (data.state && typeof data.state.spectator_god_mode === 'boolean') {
-            spectatorGodMode = data.state.spectator_god_mode;
-        }
+    } else {
+        delete window.__spectPlayerNames;
     }
     // Reset log for a new game
     clearGameLog();
@@ -1001,10 +1007,9 @@ function playCardFlyAnimation(job, done) {
 // that Phase 14.8-05 deleted server-side, so the log showed only the
 // "Game started." line. The live pipeline is engine_events → onEngineEvents;
 // logEngineEvent() below is called there per event, at enqueue time, in seq
-// order. Plain-text lines accumulate unbounded in window.__gameLog (also
-// copyable from the console); the DOM view is capped at LOG_DOM_CAP entries.
+// order. Both the copyable plain-text history and the scrollable DOM retain
+// the complete match so players can return to turn 1 in long games.
 // =============================================
-var LOG_DOM_CAP = 400;
 var _logTurn = null;                 // maintained from turn_flipped events
 var _logMinions = {};                // instance_id -> {name, owner}
 window.__gameLog = window.__gameLog || [];
@@ -1040,9 +1045,6 @@ function addLogEntry(text, type, opts) {
     // in-progress text selection (copy!) isn't yanked away mid-drag.
     var nearBottom = (entries.scrollHeight - entries.scrollTop - entries.clientHeight) < 40;
     entries.appendChild(entry);
-    while (entries.children.length > LOG_DOM_CAP) {
-        entries.removeChild(entries.firstChild);
-    }
     if (nearBottom) entries.scrollTop = entries.scrollHeight;
 }
 
@@ -1718,4 +1720,3 @@ function resetRematchUI() {
         statusEl.className = 'game-over-status';
     }
 }
-

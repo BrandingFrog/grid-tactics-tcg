@@ -28,6 +28,13 @@ function tutorModalStateKey(matches) {
     return idxs + '|' + full;
 }
 
+function _isTutorSelectionComplete(selectedCount, maxPick, isConjurePick) {
+    // Ordinary tutors are mandatory: if Ratmobile can find two Rats, both
+    // must be chosen in this one picker. Conjure-to-field remains optional
+    // and may accept any non-empty partial choice (or use Skip).
+    return selectedCount > 0 && (isConjurePick || selectedCount >= maxPick);
+}
+
 function syncPendingTutorUI() {
     if (!gameState) {
         if (tutorModalOpen) closeTutorModal();
@@ -217,7 +224,7 @@ function showTutorModal(matches, deckSize, totalCopiesByCardId) {
         acceptBtn.disabled = true;
         acceptBtn.addEventListener('click', function(e) {
             e.stopPropagation();
-            if (!selectedPicks.length) return;
+            if (!_isTutorSelectionComplete(selectedPicks.length, maxPick, isConjurePick)) return;
             // Queue the extras; submit the first. Hide the modal NOW so the
             // deck->hand fly plays over the board, not over the picker.
             window._tutorPickQueue = [];
@@ -234,7 +241,9 @@ function showTutorModal(matches, deckSize, totalCopiesByCardId) {
     function _updateTutorAccept() {
         pickCounter.textContent = 'Selected ' + selectedPicks.length + '/' + maxPick;
         if (acceptBtn) {
-            acceptBtn.disabled = selectedPicks.length === 0;
+            acceptBtn.disabled = !_isTutorSelectionComplete(
+                selectedPicks.length, maxPick, isConjurePick
+            );
             acceptBtn.textContent = selectedPicks.length > 1
                 ? 'Accept (' + selectedPicks.length + ')' : 'Accept';
         }
@@ -267,15 +276,17 @@ function showTutorModal(matches, deckSize, totalCopiesByCardId) {
 function _hideTutorModalForSubmit() {
     var _pill = document.getElementById('tutor-restore-pill');
     if (_pill) _pill.remove();
-    var existing = document.getElementById('tutor-modal-overlay');
-    if (existing) existing.remove();
+    document.querySelectorAll('#tutor-modal-overlay').forEach(function(existing) {
+        existing.remove();
+    });
 }
 
 function closeTutorModal() {
     var _pill = document.getElementById('tutor-restore-pill');
     if (_pill) _pill.remove();
-    var existing = document.getElementById('tutor-modal-overlay');
-    if (existing) existing.remove();
+    document.querySelectorAll('#tutor-modal-overlay').forEach(function(existing) {
+        existing.remove();
+    });
     tutorModalOpen = false;
     tutorModalKey = null;
 }
@@ -1320,6 +1331,417 @@ function renderActionBar() {
 
 
 // =============================================
+// ROGUELIKE MILESTONE EVENT (every 25 completed turns)
+// =============================================
+
+var ROGUELIKE_EVENT_FALLBACK_OPTIONS = [
+    { id: 'clumsy_greed', name: 'Clumsy Greed', glyph: '🃏',
+      description: 'Draw 4. Exhaust 2 random cards from your hand.' },
+    { id: 'with_a_slap', name: 'With a Slap', glyph: '👋',
+      description: 'Handshakes deal +5 damage per stack. Stackable.' },
+    { id: 'sharp_eyed_sceptic', name: 'Sharp Eyed Sceptic', glyph: '👁️',
+      description: 'Gain a Prohibition and 1 mana.' },
+    { id: 'grave_expectations', name: 'Grave Expectations', glyph: '⚰️',
+      description: 'Return 2 random Grave cards to hand. Lose 25% current HP.' },
+    { id: 'pocket_change', name: 'Pocket Change', glyph: '🪙',
+      description: 'Gain 3 mana. Your opponent draws 1 card.' },
+    { id: 'spring_cleaning', name: 'Spring Cleaning', glyph: '🧹',
+      description: 'Exhaust your hand. Draw that many cards plus 1.' },
+    { id: 'skeleton_crew', name: 'Skeleton Crew', glyph: '🦴',
+      description: 'Summon 2 Reanimated Bones on random empty friendly tiles.' },
+    { id: 'compound_interest', name: 'Compound Interest', glyph: '📈',
+      description: 'Gain 1 additional mana at your next 3 turn starts.' },
+    { id: 'marked_cards', name: 'Marked Cards', glyph: '🎴',
+      description: 'See your top 3. Keep 1; order the other 2 on top.' },
+    { id: 'uncharted_fortune', name: 'Uncharted Fortune', glyph: '❓',
+      description: 'Gain a random fortune not yet seen or offered this game.' },
+    { id: 'uncharted_fallback', name: 'Uncharted Fortune', glyph: '❓',
+      description: 'No unseen fortune remained. Gain 1 mana.' }
+];
+
+function syncRoguelikeEventUI() {
+    if (!gameState || gameState.pending_roguelike_event_turn == null) {
+        closeRoguelikeEventModal();
+        return;
+    }
+    var existing = document.getElementById('roguelike-event-overlay');
+    var ownChoice = gameState.pending_roguelike_event_your_choice || null;
+    if (!existing) {
+        showRoguelikeEventModal(ownChoice);
+    } else if (ownChoice) {
+        var modal = existing.querySelector('.roguelike-event-modal');
+        if (modal && !modal.querySelector('.rps-waiting')) {
+            _roguelikeShowWaiting(modal, ownChoice);
+        }
+    }
+}
+
+function _roguelikeOptions() {
+    var options = gameState && gameState.roguelike_event_options;
+    return (options && options.length === 3)
+        ? options : ROGUELIKE_EVENT_FALLBACK_OPTIONS;
+}
+
+function showRoguelikeEventModal(alreadyPicked) {
+    closeRoguelikeChoicesReveal();
+    closeRoguelikeEventModal();
+    var options = _roguelikeOptions();
+    var overlay = document.createElement('div');
+    overlay.className = 'tutor-modal-overlay roguelike-event-overlay';
+    overlay.id = 'roguelike-event-overlay';
+    var modal = document.createElement('div');
+    modal.className = 'tutor-modal pregame-rps-modal roguelike-event-modal';
+
+    var header = document.createElement('div');
+    header.className = 'tutor-modal-header';
+    header.innerHTML =
+        '<div class="tutor-modal-title">Choose Your Fortune</div>' +
+        '<div class="tutor-modal-deckline">Milestone · Turn ' +
+        gameState.pending_roguelike_event_turn + '</div>';
+    modal.appendChild(header);
+
+    var selected = null;
+    var row = document.createElement('div');
+    row.className = 'rps-tile-row roguelike-event-row';
+    var footer = document.createElement('div');
+    footer.className = 'tutor-modal-footer';
+    var accept = document.createElement('button');
+    accept.className = 'tutor-accept-button';
+    accept.textContent = 'Accept';
+    accept.disabled = true;
+    accept.addEventListener('click', function(e) {
+        e.stopPropagation();
+        if (!selected) return;
+        socket.emit('roguelike_event_pick', { choice: selected });
+        _roguelikeShowWaiting(modal, selected);
+    });
+    footer.appendChild(accept);
+
+    options.forEach(function(option) {
+        var tile = document.createElement('div');
+        tile.className = 'rps-tile roguelike-event-tile';
+        tile.setAttribute('data-choice', option.id);
+        tile.innerHTML =
+            '<div class="rps-tile-glyph">' + option.glyph + '</div>' +
+            '<div class="rps-tile-label">' + option.name + '</div>' +
+            '<div class="roguelike-event-description">' + option.description + '</div>';
+        if (!isSpectator) {
+            tile.addEventListener('click', function(e) {
+                e.stopPropagation();
+                var all = row.querySelectorAll('.rps-tile-selected');
+                for (var i = 0; i < all.length; i++) {
+                    all[i].classList.remove('rps-tile-selected');
+                }
+                tile.classList.add('rps-tile-selected');
+                selected = option.id;
+                accept.disabled = false;
+            });
+        } else {
+            tile.classList.add('rps-tile-static');
+        }
+        row.appendChild(tile);
+    });
+    modal.appendChild(row);
+    if (isSpectator) {
+        var status = document.createElement('div');
+        status.className = 'rps-waiting-text roguelike-spectator-wait';
+        status.textContent = 'Players are choosing…';
+        modal.appendChild(status);
+    } else {
+        modal.appendChild(footer);
+    }
+    overlay.appendChild(modal);
+    overlay.addEventListener('click', function(e) { e.stopPropagation(); });
+    _stageMount().appendChild(overlay);
+
+    if (alreadyPicked && !isSpectator) {
+        _roguelikeShowWaiting(modal, alreadyPicked);
+    }
+}
+
+function _roguelikeShowWaiting(modal, choice) {
+    var options = _roguelikeOptions();
+    var option = options.filter(function(o) { return o.id === choice; })[0] || {};
+    var row = modal.querySelector('.rps-tile-row');
+    if (row && row.parentNode) row.parentNode.removeChild(row);
+    var footer = modal.querySelector('.tutor-modal-footer');
+    if (footer && footer.parentNode) footer.parentNode.removeChild(footer);
+    if (modal.querySelector('.rps-waiting')) return;
+    var wait = document.createElement('div');
+    wait.className = 'rps-waiting';
+    wait.innerHTML =
+        '<div class="rps-tile roguelike-event-tile rps-tile-selected rps-tile-static">' +
+            '<div class="rps-tile-glyph">' + (option.glyph || '') + '</div>' +
+            '<div class="rps-tile-label">' + (option.name || '') + '</div>' +
+            '<div class="roguelike-event-description">' + (option.description || '') + '</div>' +
+        '</div>' +
+        '<div class="rps-waiting-text">Choice locked · Waiting for opponent…</div>';
+    modal.appendChild(wait);
+}
+
+function closeRoguelikeEventModal() {
+    var existing = document.getElementById('roguelike-event-overlay');
+    if (existing && existing.parentNode) existing.parentNode.removeChild(existing);
+}
+
+function closeRoguelikeChoicesReveal() {
+    var existing = document.getElementById('roguelike-reveal-overlay');
+    if (existing && existing.parentNode) existing.parentNode.removeChild(existing);
+}
+
+function _roguelikeRevealPlayerLabel(playerIdx) {
+    var names = (typeof window !== 'undefined' && window.__spectPlayerNames)
+        ? window.__spectPlayerNames : null;
+    if (names && names[playerIdx]) return names[playerIdx];
+    if (typeof myPlayerIdx === 'number') {
+        return playerIdx === myPlayerIdx ? 'You' : (opponentName || 'Opponent');
+    }
+    return 'Player ' + (playerIdx + 1);
+}
+
+function _roguelikeOptionById(choiceId) {
+    for (var i = 0; i < ROGUELIKE_EVENT_FALLBACK_OPTIONS.length; i++) {
+        if (ROGUELIKE_EVENT_FALLBACK_OPTIONS[i].id === choiceId) {
+            return ROGUELIKE_EVENT_FALLBACK_OPTIONS[i];
+        }
+    }
+    return {
+        id: choiceId || '',
+        name: choiceId ? choiceId.replace(/_/g, ' ') : 'Unknown Fortune',
+        glyph: '❓',
+        description: 'Fortune resolved.'
+    };
+}
+
+function _roguelikeRevealCard(choice) {
+    var chosen = choice.option || _roguelikeOptionById(choice.choice);
+    var resolved = choice.resolved_option
+        || _roguelikeOptionById(choice.resolved_as || choice.choice);
+    var panel = document.createElement('section');
+    panel.className = 'fortune-reveal-player';
+
+    var player = document.createElement('div');
+    player.className = 'fortune-reveal-player-name';
+    player.textContent = _roguelikeRevealPlayerLabel(choice.player_idx | 0);
+    panel.appendChild(player);
+
+    var card = document.createElement('div');
+    card.className = 'rps-tile roguelike-event-tile rps-tile-selected rps-tile-static fortune-reveal-card';
+    var glyph = document.createElement('div');
+    glyph.className = 'rps-tile-glyph';
+    glyph.textContent = chosen.glyph || '';
+    var name = document.createElement('div');
+    name.className = 'rps-tile-label';
+    name.textContent = chosen.name || 'Fortune';
+    var description = document.createElement('div');
+    description.className = 'roguelike-event-description';
+    description.textContent = chosen.description || '';
+    card.appendChild(glyph);
+    card.appendChild(name);
+    card.appendChild(description);
+
+    if ((choice.resolved_as || choice.choice) !== choice.choice) {
+        var becomes = document.createElement('div');
+        becomes.className = 'fortune-reveal-becomes';
+        becomes.textContent = 'Resolves as ' + (resolved.glyph || '') + ' '
+            + (resolved.name || 'Fortune');
+        card.appendChild(becomes);
+    }
+    panel.appendChild(card);
+    return panel;
+}
+
+// Both picks are public only after both seats have locked.  This reveal owns
+// the event-queue beat, so no effect animation or resumed turn can overtake it.
+function showRoguelikeChoicesReveal(payload) {
+    closeRoguelikeEventModal();
+    closeRoguelikeChoicesReveal();
+    var choices = payload && Array.isArray(payload.choices)
+        ? payload.choices.slice() : [];
+    if (choices.length !== 2) return 0;
+    choices.sort(function(a, b) { return (a.player_idx | 0) - (b.player_idx | 0); });
+
+    var overlay = document.createElement('div');
+    overlay.id = 'roguelike-reveal-overlay';
+    overlay.className = 'tutor-modal-overlay roguelike-event-overlay fortune-reveal-overlay';
+    var modal = document.createElement('div');
+    modal.className = 'tutor-modal pregame-rps-modal roguelike-event-modal fortune-reveal-modal';
+
+    var header = document.createElement('div');
+    header.className = 'tutor-modal-header';
+    var title = document.createElement('div');
+    title.className = 'tutor-modal-title';
+    title.textContent = 'Fortunes Revealed';
+    var subtitle = document.createElement('div');
+    subtitle.className = 'tutor-modal-deckline fortune-reveal-rule';
+    subtitle.textContent = 'Both resolve together · Reactions disabled';
+    header.appendChild(title);
+    header.appendChild(subtitle);
+    modal.appendChild(header);
+
+    var row = document.createElement('div');
+    row.className = 'fortune-reveal-row';
+    row.appendChild(_roguelikeRevealCard(choices[0]));
+    var together = document.createElement('div');
+    together.className = 'fortune-reveal-together';
+    together.textContent = 'SIMULTANEOUS';
+    row.appendChild(together);
+    row.appendChild(_roguelikeRevealCard(choices[1]));
+    modal.appendChild(row);
+    overlay.appendChild(modal);
+    _stageMount().appendChild(overlay);
+
+    var revealMs = 2800;
+    setTimeout(function() { overlay.classList.add('fortune-reveal-fade'); }, 2400);
+    setTimeout(function() {
+        if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+    }, revealMs);
+    return revealMs;
+}
+
+
+// =============================================
+// MARKED CARDS FOLLOW-UP
+// =============================================
+
+function syncMarkedCardsUI() {
+    if (!gameState || gameState.pending_marked_cards_player_idx == null) {
+        closeMarkedCardsModal();
+        closeMarkedCardsWaitingToast();
+        return;
+    }
+    var owns = !isSpectator
+        && gameState.pending_marked_cards_player_idx === myPlayerIdx;
+    if (owns) {
+        closeMarkedCardsWaitingToast();
+        if (!document.getElementById('marked-cards-overlay')) {
+            showMarkedCardsModal(gameState.pending_marked_cards_cards || []);
+        }
+    } else {
+        closeMarkedCardsModal();
+        showMarkedCardsWaitingToast();
+    }
+}
+
+function showMarkedCardsModal(cards) {
+    closeMarkedCardsModal();
+    var overlay = document.createElement('div');
+    overlay.id = 'marked-cards-overlay';
+    overlay.className = 'tutor-modal-overlay roguelike-event-overlay';
+    var modal = document.createElement('div');
+    modal.className = 'tutor-modal pregame-rps-modal roguelike-event-modal marked-cards-modal';
+    modal.innerHTML =
+        '<div class="tutor-modal-header">' +
+          '<div class="tutor-modal-title">Marked Cards</div>' +
+          '<div class="tutor-modal-deckline marked-cards-instruction">Choose the card to keep.</div>' +
+        '</div>';
+    var row = document.createElement('div');
+    row.className = 'rps-tile-row roguelike-event-row marked-cards-row';
+    var keepIndex = null;
+    var topIndex = null;
+    var needsTopChoice = cards.length >= 3;
+    var instruction = modal.querySelector('.marked-cards-instruction');
+    var accept = document.createElement('button');
+    accept.className = 'tutor-accept-button';
+    accept.textContent = 'Accept';
+    accept.disabled = true;
+
+    function refresh() {
+        var tiles = row.querySelectorAll('.marked-cards-tile');
+        for (var i = 0; i < tiles.length; i++) {
+            tiles[i].classList.toggle('marked-cards-kept', i === keepIndex);
+            tiles[i].classList.toggle('marked-cards-top', i === topIndex);
+            var badge = tiles[i].querySelector('.marked-cards-badge');
+            if (badge) badge.textContent = i === keepIndex ? 'KEEP'
+                : (i === topIndex ? 'TOP' : '');
+        }
+        if (keepIndex == null) {
+            instruction.textContent = 'Choose the card to keep.';
+        } else if (needsTopChoice && topIndex == null) {
+            instruction.textContent = 'Now choose which remaining card goes on top.';
+        } else if (!needsTopChoice) {
+            instruction.textContent = 'Keep this card.';
+        } else {
+            instruction.textContent = 'The final card will be second from the top.';
+        }
+        accept.disabled = keepIndex == null || (needsTopChoice && topIndex == null);
+    }
+
+    cards.forEach(function(nid, index) {
+        var def = cardDefs && cardDefs[nid];
+        var tile = document.createElement('div');
+        tile.className = 'rps-tile roguelike-event-tile marked-cards-tile';
+        tile.innerHTML =
+            '<div class="marked-cards-badge"></div>' +
+            '<div class="rps-tile-glyph">' + ((def && def.mana_cost) || 0) + '</div>' +
+            '<div class="rps-tile-label">' + escapeHtml((def && def.name) || ('Card ' + nid)) + '</div>' +
+            '<div class="roguelike-event-description">' +
+              escapeHtml((def && (def.rules_text || def.description)) || 'Top-deck card') +
+            '</div>';
+        tile.addEventListener('click', function(e) {
+            e.stopPropagation();
+            if (keepIndex == null) {
+                keepIndex = index;
+            } else if (index === keepIndex) {
+                keepIndex = null;
+                topIndex = null;
+            } else if (needsTopChoice) {
+                topIndex = index;
+            } else {
+                keepIndex = index;
+            }
+            refresh();
+        });
+        row.appendChild(tile);
+    });
+
+    accept.addEventListener('click', function(e) {
+        e.stopPropagation();
+        if (keepIndex == null || (needsTopChoice && topIndex == null)) return;
+        var other = [];
+        for (var i = 0; i < cards.length; i++) {
+            if (i !== keepIndex && i !== topIndex) other.push(i);
+        }
+        var topOrder = topIndex == null ? other : [topIndex].concat(other);
+        socket.emit('marked_cards_resolve', {
+            keep_index: keepIndex,
+            top_order: topOrder
+        });
+        accept.disabled = true;
+        instruction.textContent = 'Choice locked\u2026';
+    });
+    var footer = document.createElement('div');
+    footer.className = 'tutor-modal-footer';
+    footer.appendChild(accept);
+    modal.appendChild(row);
+    modal.appendChild(footer);
+    overlay.appendChild(modal);
+    overlay.addEventListener('click', function(e) { e.stopPropagation(); });
+    _stageMount().appendChild(overlay);
+    refresh();
+}
+
+function closeMarkedCardsModal() {
+    var overlay = document.getElementById('marked-cards-overlay');
+    if (overlay && overlay.parentNode) overlay.parentNode.removeChild(overlay);
+}
+
+function showMarkedCardsWaitingToast() {
+    if (document.getElementById('marked-cards-waiting-toast')) return;
+    var toast = document.createElement('div');
+    toast.id = 'marked-cards-waiting-toast';
+    toast.className = 'tutor-toast';
+    toast.textContent = 'Opponent is marking cards\u2026';
+    _stageMount().appendChild(toast);
+}
+
+function closeMarkedCardsWaitingToast() {
+    var toast = document.getElementById('marked-cards-waiting-toast');
+    if (toast && toast.parentNode) toast.parentNode.removeChild(toast);
+}
+
+
+// =============================================
 // PREGAME (user 2026-07-08): Rock-Paper-Scissors + Mulligan
 // =============================================
 // Server flow: pregame_rps -> rps_pick -> rps_result (tie replays the
@@ -1337,6 +1759,13 @@ var _pregameClashRunning = false;
 var _pregamePendingMulligan = null;
 
 function onPregameRps(data) {
+    // pregame_rps is only sent to an actual player (spectators receive
+    // pregame_status). Clear any AI-watch role left in a reused tab before
+    // rendering the duel shell, so RPS and the later player controls are not
+    // labelled or gated as spectator UI.
+    isSpectator = false;
+    spectatorGodMode = false;
+    delete window.__spectPlayerNames;
     window._pregameActive = true;
     // Bring up the duel stage NOW (user 2026-07-08: 'the mulligan is showing
     // in the lobby') — the empty board skeleton backs the pregame modals

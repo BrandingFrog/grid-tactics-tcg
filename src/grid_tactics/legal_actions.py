@@ -19,6 +19,7 @@ boolean mask that prevents the agent from selecting invalid actions (D-19).
 
 from __future__ import annotations
 
+from dataclasses import replace
 from typing import Optional
 
 from grid_tactics.action_resolver import _can_attack, _is_orthogonal
@@ -118,6 +119,13 @@ def legal_actions(
     """
     # Game is over -- no actions allowed
     if state.is_game_over:
+        return ()
+
+    # The milestone event is a simultaneous socket-level decision, not a
+    # normal turn action. The postponed turn exposes no gameplay actions.
+    if state.pending_roguelike_event_turn is not None:
+        return ()
+    if state.pending_marked_cards_player_idx is not None:
         return ()
 
     # Pending death-target (phase-agnostic): while a death-triggered modal
@@ -243,6 +251,19 @@ def _action_phase_actions(
             and m.is_alive
             and m.card_numeric_id == card_numeric_id
             for m in state.minions
+        ):
+            continue
+
+        # A revive card with no eligible grave target (or nowhere legal to
+        # place one) cannot resolve its basic effect.  Do not advertise the
+        # cast to humans or AI action masks.  "Up to N" still needs at least
+        # one valid revival; fewer than N remains legal.
+        if any(
+            effect.effect_type == EffectType.REVIVE
+            and effect.trigger == TriggerType.ON_PLAY
+            for effect in card_def.effects
+        ) and not has_valid_revive_target(
+            state, library, state.active_player_idx, card_def,
         ):
             continue
 
@@ -669,6 +690,64 @@ def _pending_trigger_picker_actions(
 # ---------------------------------------------------------------------------
 # Pending revive enumeration
 # ---------------------------------------------------------------------------
+
+
+def has_valid_revive_target(
+    state: GameState,
+    library: CardLibrary,
+    player_idx: int,
+    card_def,
+) -> bool:
+    """Whether ``card_def`` can revive at least one card onto the board.
+
+    This is the pre-cast counterpart of ``_enter_pending_revive``.  It uses
+    the same exact-card/tribe/exclusion filters and the revived minion's own
+    deployment rules, so legal-action masks cannot offer a zero-effect cast.
+    """
+    revive_effect = next(
+        (
+            effect
+            for effect in card_def.effects
+            if effect.effect_type == EffectType.REVIVE
+        ),
+        None,
+    )
+    if revive_effect is None or revive_effect.amount <= 0:
+        return False
+
+    candidate = replace(
+        state,
+        pending_revive_player_idx=player_idx,
+        pending_revive_card_id=card_def.revive_card_id or None,
+        pending_revive_tribe=revive_effect.target_tribe,
+        pending_revive_exclude_card_id=card_def.revive_exclude_card_id,
+    )
+    matches = revive_grave_matches(candidate, library)
+    if not matches:
+        return False
+
+    player = state.players[player_idx]
+    for grave_idx in matches:
+        revive_def = library.get_by_id(player.grave[grave_idx])
+        if player_idx == 0:
+            deploy_rows = (
+                PLAYER_1_ROWS
+                if revive_def.attack_range == 0
+                else (BACK_ROW_P1,)
+            )
+        else:
+            deploy_rows = (
+                PLAYER_2_ROWS
+                if revive_def.attack_range == 0
+                else (BACK_ROW_P2,)
+            )
+        if any(
+            state.board.get(row, col) is None
+            for row in deploy_rows
+            for col in range(GRID_COLS)
+        ):
+            return True
+    return False
 
 
 def revive_grave_matches(state: GameState, library: CardLibrary) -> tuple[int, ...]:

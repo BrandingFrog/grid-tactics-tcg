@@ -342,3 +342,13 @@ def test_preset_deck_valid():
     errors = library.validate_deck(deck)
     assert errors == [], f"Deck validation errors: {errors}"
     assert sum(PRESET_DECK_COUNTS.values()) == MIN_DECK_SIZE
+
+
+def test_ai_watch_game_can_be_created_from_preset():
+    """Reward-only cards must never make the shared AI preset invalid."""
+    library = CardLibrary.from_directory(Path("data/cards"))
+    rm = RoomManager(library)
+    code, session = rm.create_ai_watch_game()
+    assert len(code) > 0
+    assert session.player_sids == [None, None]
+    assert len(session.player_decks[0]) == 40

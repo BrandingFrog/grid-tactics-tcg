@@ -614,3 +614,174 @@ console.log(JSON.stringify({
     )
     assert out["secondSlot"] == -1
     assert out["renderHandCalls"] == 1
+
+
+# ---------------------------------------------------------------------------
+# Roguelike milestone event modal wiring
+# ---------------------------------------------------------------------------
+
+def test_roguelike_event_modal_is_wired_into_render_and_event_queue():
+    assert "function syncRoguelikeEventUI()" in _SRC
+    assert "function closeRoguelikeEventModal()" in _SRC
+    assert "syncRoguelikeEventUI();" in _SRC
+    assert "socket.emit('roguelike_event_pick', { choice: selected })" in _SRC
+    assert "kind === 'roguelike_event'" in _SRC
+    assert "Stackable." in _SRC
+    assert "function showRoguelikeChoicesReveal(payload)" in _SRC
+    assert "Both resolve together · Reactions disabled" in _SRC
+    assert "Math.max(_evDurationOr(ev, 0), revealMs)" in _SRC
+    assert "Draw 4. Exhaust 2 random cards from your hand." in _SRC
+    assert "Exhaust your hand. Draw that many cards plus 1." in _SRC
+    assert "state.roguelike_event_history[playerIdx]" in _SRC
+    assert "roguelike-player-choice" in _SRC
+    assert "Handshakes deal +5 damage per stack." in _SRC
+    assert "function _roguelikePlayerChoiceSummary" in _SRC
+    assert "Chosen fortunes: " in _SRC
+    assert "function syncMarkedCardsUI()" in _SRC
+    assert "syncMarkedCardsUI();" in _SRC
+    assert "socket.emit('marked_cards_resolve'" in _SRC
+    assert "top_order: topOrder" in _SRC
+    assert "Opponent is marking cards" in _SRC
+    assert "kind === 'marked_cards'" in _SRC
+
+
+def test_deck_builder_lists_default_to_ascending_mana_cost():
+    assert "let deckSortField = 'mana';" in _SRC
+    assert "(a.card.mana_cost || 0) - (b.card.mana_cost || 0)" in _SRC
+    game_html = (STATIC_DIR / "game.html").read_text(encoding="utf-8")
+    assert 'id="fsort-field" type="button" title="Cycle sort field">Mana<' in game_html
+
+
+def test_game_log_retains_the_complete_scrollable_match_history():
+    assert "var LOG_DOM_CAP = 400;" not in _SRC
+    assert "entries.removeChild(entries.firstChild)" not in _SRC
+    assert "if (nearBottom) entries.scrollTop = entries.scrollHeight;" in _SRC
+
+
+def test_player_game_start_clears_prior_spectator_role(tmp_path):
+    script = (
+        """
+var window = {};
+var isSpectator = false;
+var spectatorGodMode = false;
+var cardDefs, allCardDefs, gameState, myPlayerIdx, legalActions, opponentName;
+var roomCode = null;
+function cleanupPregameUI() {}
+function resetEventQueue() {}
+function clearGameLog() {}
+function addLogEntry() {}
+function hideGameOver() {}
+function resetRematchUI() {}
+function showScreen() {}
+function renderGame() {}
+var document = { getElementById: function() { return null; } };
+"""
+        + extract_function("onGameStart")
+        + """
+onGameStart({
+    card_defs: {}, state: { is_spectator: true, spectator_god_mode: true },
+    your_player_idx: 0, legal_actions: [], opponent_name: 'AI One',
+    is_spectator: true, player_names: ['AI One', 'AI Two']
+});
+var watched = { spectator: isSpectator, god: spectatorGodMode,
+                names: window.__spectPlayerNames };
+onGameStart({
+    card_defs: {}, state: {}, your_player_idx: 0,
+    legal_actions: [{ action_type: 1 }], opponent_name: 'AI'
+});
+console.log(JSON.stringify({
+    watched: watched,
+    playerSpectator: isSpectator,
+    playerGod: spectatorGodMode,
+    hasSpectatorNames: Object.prototype.hasOwnProperty.call(window, '__spectPlayerNames')
+}));
+"""
+    )
+    out = run_js(tmp_path, script)
+    assert out["watched"]["spectator"] is True
+    assert out["watched"]["god"] is True
+    assert out["playerSpectator"] is False
+    assert out["playerGod"] is False
+    assert out["hasSpectatorNames"] is False
+
+
+def test_player_pregame_clears_prior_spectator_role_before_rps():
+    fn = extract_function("onPregameRps")
+    assert "isSpectator = false;" in fn
+    assert "spectatorGodMode = false;" in fn
+    assert "delete window.__spectPlayerNames;" in fn
+
+
+def test_match_tooltips_do_not_show_deck_builder_related_cards():
+    assert "populateTooltip(tooltipEl, numericId, { showRelated: false });" in _SRC
+
+
+def test_mandatory_multi_tutor_requires_all_picks_in_one_menu(tmp_path):
+    script = (
+        extract_function("_isTutorSelectionComplete")
+        + """
+console.log(JSON.stringify({
+    ratmobileOne: _isTutorSelectionComplete(1, 2, false),
+    ratmobileTwo: _isTutorSelectionComplete(2, 2, false),
+    conjureOne: _isTutorSelectionComplete(1, 2, true)
+}));
+"""
+    )
+    out = run_js(tmp_path, script)
+    assert out == {
+        "ratmobileOne": False,
+        "ratmobileTwo": True,
+        "conjureOne": True,
+    }
+    assert "document.querySelectorAll('#tutor-modal-overlay')" in _SRC
+
+
+def test_floating_combat_text_uses_unclipped_viewport_portal(tmp_path):
+    script = (
+        """
+var appendedToBody = false;
+var appendedToTile = false;
+var popup = {
+    className: '', textContent: '', style: {}, scrollWidth: 120,
+    parentNode: null,
+    addEventListener: function() {}
+};
+var document = {
+    createElement: function() { return popup; },
+    body: {
+        appendChild: function(el) { appendedToBody = true; el.parentNode = this; },
+        removeChild: function() {}
+    }
+};
+var window = { innerWidth: 320 };
+var tile = {
+    getBoundingClientRect: function() {
+        return { left: 0, top: 0, width: 40, height: 40 };
+    },
+    appendChild: function() { appendedToTile = true; }
+};
+function playSfx() {}
+function setTimeout() {}
+"""
+        + extract_function("showFloatingPopup")
+        + """
+showFloatingPopup(tile, '\u2694 -10', 'combat-damage');
+console.log(JSON.stringify({
+    appendedToBody: appendedToBody,
+    appendedToTile: appendedToTile,
+    className: popup.className,
+    left: popup.style.left,
+    top: popup.style.top,
+    fontSize: popup.style.fontSize
+}));
+"""
+    )
+    out = run_js(tmp_path, script)
+    assert out == {
+        "appendedToBody": True,
+        "appendedToTile": False,
+        "className": "floating-popup floating-popup-viewport combat-damage",
+        "left": "73px",
+        "top": "60px",
+        "fontSize": "16px",
+    }

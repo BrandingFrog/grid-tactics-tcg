@@ -21,3 +21,22 @@ data/sandbox_saves/*
 
 # GT-DEBUG file sink (server-side debug-code contexts)
 logs/
+
+# Local editor and browser-automation state
+.claude/settings.local.json
+.obsidian/
+.playwright-mcp/
+.benchmarks/
+
+# Local QA captures. Keep the index, not hundreds of generated screenshots.
+/artifacts/*
+!/artifacts/README.md
+/*.png
+/*.jpg
+/*.jpeg
+/*.svg
+
+# Transient debug output
+*.log
+/expected-tmp.json
+/scripts/*_output.txt

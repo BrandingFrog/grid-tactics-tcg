@@ -1,5 +1,5 @@
 ---
-status: investigating
+status: verifying
 trigger: "spell-stage center-screen chain overlay has lag/stutter and clipping issues after v0.11.31 rewrite"
 created: 2026-04-18T00:00:00Z
 updated: 2026-04-18T14:30:00Z

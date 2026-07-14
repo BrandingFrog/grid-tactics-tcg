@@ -241,22 +241,39 @@ function showFloatingPopup(tileEl, text, variant) {
     else if (variant === 'heal') playSfx('heal');
     else if (variant === 'burn-tick') playSfx('burn_tick');
     var el = document.createElement('div');
-    el.className = 'floating-popup ' + variant;
+    el.className = 'floating-popup floating-popup-viewport ' + variant;
     el.textContent = text;
-    // Blips beneath cards (user 2026-07-11): the popup floats UP out of
-    // its tile and was painted under later-DOM sibling cells / minions.
-    // Elevate the host cell while any popup is live (mirrors the
-    // trigger-pulse z fix); restore only when the last popup leaves.
-    tileEl.appendChild(el);
-    tileEl.classList.add('popup-live');
+
+    // Portal combat text to the viewport instead of nesting it inside the
+    // tilted board cell.  A cell popup inherits the board's 3-D transform
+    // and every clipping ancestor around the duel stage, which can crop the
+    // glyph or number even when the cell itself uses overflow:visible.
+    // getBoundingClientRect already includes the board perspective/scale, so
+    // it gives us the exact on-screen anchor for both live and sandbox boards.
+    var tileRect = tileEl.getBoundingClientRect();
+    var fontPx = Math.max(16, Math.min(26, tileRect.width * 0.36));
+    el.style.fontSize = fontPx + 'px';
+    document.body.appendChild(el);
+
+    // Keep wide blips (e.g. combined buffs / Cleansed) inside the viewport.
+    // The vertical floor protects fully-opaque frames of top-row popups; the
+    // final portion may travel higher only while it is fading to zero.
+    var edgePad = 8;
+    var halfWidth = (el.scrollWidth / 2) + 5; // include text stroke
+    var anchorX = tileRect.left + tileRect.width / 2;
+    anchorX = Math.max(
+        edgePad + halfWidth,
+        Math.min(window.innerWidth - edgePad - halfWidth, anchorX)
+    );
+    var anchorY = Math.max(60, tileRect.top + tileRect.height * 0.30);
+    el.style.left = anchorX + 'px';
+    el.style.top = anchorY + 'px';
+
     var removed = false;
     var cleanup = function () {
         if (removed) return;
         removed = true;
         if (el.parentNode) el.parentNode.removeChild(el);
-        if (!tileEl.querySelector('.floating-popup')) {
-            tileEl.classList.remove('popup-live');
-        }
     };
     el.addEventListener('animationend', cleanup);
     setTimeout(cleanup, 2400);
@@ -912,4 +929,3 @@ if (typeof window !== 'undefined') {
         isAnimating: isAnimating,
     };
 }
-

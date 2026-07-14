@@ -253,6 +253,36 @@ class GameState:
     consecutive_passes: int = 0
     handshake_pending: bool = False
 
+    # Roguelike milestone event (2026-07-14): after every 25 completed
+    # turns, the incoming turn pauses before mana/draw/Rally work until
+    # BOTH players privately lock one option. Effects resolve together,
+    # then the postponed turn resumes. Choice ids live in a fixed two-seat
+    # tuple so the immutable state remains deterministic and serializable.
+    pending_roguelike_event_turn: Optional[int] = None
+    pending_roguelike_event_choices: tuple[Optional[str], Optional[str]] = (
+        None,
+        None,
+    )
+    # The same three seeded-random offers are shown to both players.
+    pending_roguelike_event_options: tuple[str, ...] = ()
+    # Every fortune exposed as an offer (plus hidden random resolutions).
+    # Used by Uncharted Fortune to guarantee an unseen result.
+    roguelike_seen_fortunes: tuple[str, ...] = ()
+    # "With a Slap" is a permanent, stackable per-player modifier.
+    # At every future Handshake, each player deals 5 damage per stack to
+    # their opponent (both can fire in the same Handshake).
+    handshake_slap_stacks: tuple[int, int] = (0, 0)
+    # Public resolved-choice history for player tooltips. Picks are appended
+    # only once BOTH seats lock, so an in-progress choice stays private.
+    roguelike_event_history: tuple[tuple[str, ...], tuple[str, ...]] = ((), ())
+    # Marked Cards is a private follow-up decision after the main fortune
+    # locks. Players resolve sequentially when both picked it.
+    pending_marked_cards_player_idx: Optional[int] = None
+    pending_marked_cards_cards: tuple[int, ...] = ()
+    pending_marked_cards_queue: tuple[int, ...] = ()
+    # Remaining own turn-start bonuses from Compound Interest.
+    compound_interest_turns: tuple[int, int] = (0, 0)
+
     # Turn-structure redesign fixup (2026-07): when the Decay-phase burn
     # tick kills a minion and the death pipeline opens a react window or
     # modal, the remaining Decay work (ON_END_OF_TURN trigger drain +
@@ -443,6 +473,23 @@ class GameState:
             # Turn-structure redesign 2026-07: Handshake tracking.
             "consecutive_passes": self.consecutive_passes,
             "handshake_pending": self.handshake_pending,
+            # Roguelike milestone event + persistent Handshake upgrades.
+            "pending_roguelike_event_turn": self.pending_roguelike_event_turn,
+            "pending_roguelike_event_choices": list(
+                self.pending_roguelike_event_choices
+            ),
+            "pending_roguelike_event_options": list(
+                self.pending_roguelike_event_options
+            ),
+            "roguelike_seen_fortunes": list(self.roguelike_seen_fortunes),
+            "handshake_slap_stacks": list(self.handshake_slap_stacks),
+            "roguelike_event_history": [
+                list(history) for history in self.roguelike_event_history
+            ],
+            "pending_marked_cards_player_idx": self.pending_marked_cards_player_idx,
+            "pending_marked_cards_cards": list(self.pending_marked_cards_cards),
+            "pending_marked_cards_queue": list(self.pending_marked_cards_queue),
+            "compound_interest_turns": list(self.compound_interest_turns),
             # Deferred-Decay marker (burn-tick death interrupt resume).
             "decay_resume_pending": self.decay_resume_pending,
             # Variant v4.2: REST→PASS transform flag — spans client
@@ -709,6 +756,50 @@ class GameState:
             fatigue_counts=tuple(d.get("fatigue_counts", (0, 0))),
             consecutive_passes=int(d.get("consecutive_passes") or 0),
             handshake_pending=bool(d.get("handshake_pending", False)),
+            pending_roguelike_event_turn=d.get("pending_roguelike_event_turn"),
+            pending_roguelike_event_choices=tuple(
+                d.get("pending_roguelike_event_choices") or (None, None)
+            ),
+            pending_roguelike_event_options=tuple(
+                str(option) for option in
+                (d.get("pending_roguelike_event_options") or ())
+            ),
+            roguelike_seen_fortunes=tuple(
+                str(option) for option in
+                (d.get("roguelike_seen_fortunes") or ())
+            ),
+            handshake_slap_stacks=tuple(
+                int(v) for v in (
+                    d.get("handshake_slap_stacks")
+                    or tuple(
+                        1 if enabled else 0
+                        for enabled in d.get(
+                            "handshake_slap_enabled", (False, False)
+                        )
+                    )
+                )
+            ),
+            roguelike_event_history=tuple(
+                tuple(str(choice) for choice in history)
+                for history in (
+                    d.get("roguelike_event_history") or ((), ())
+                )
+            ),
+            pending_marked_cards_player_idx=d.get(
+                "pending_marked_cards_player_idx"
+            ),
+            pending_marked_cards_cards=tuple(
+                int(card_id) for card_id in
+                (d.get("pending_marked_cards_cards") or ())
+            ),
+            pending_marked_cards_queue=tuple(
+                int(player_idx) for player_idx in
+                (d.get("pending_marked_cards_queue") or ())
+            ),
+            compound_interest_turns=tuple(
+                int(turns) for turns in
+                (d.get("compound_interest_turns") or (0, 0))
+            ),
             decay_resume_pending=bool(d.get("decay_resume_pending", False)),
             magic_cast_this_turn=bool(d.get("magic_cast_this_turn", False)),
             pending_trigger_queue_turn=pending_trigger_queue_turn,

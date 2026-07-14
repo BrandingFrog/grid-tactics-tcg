@@ -490,6 +490,37 @@ def _play_to_completion(c1, c2, gs1, gs2, max_iterations=1500):
 
     game_over_data = {}
 
+    def consume_messages():
+        """Update decisions and return any milestone choices the clients owe."""
+        pending_fortunes = {}
+        for idx in (0, 1):
+            for message in clients[idx].get_received():
+                if message["name"] == "engine_events":
+                    data = message["args"][0]
+                    current_actions[idx] = data.get("legal_actions", [])
+                    final_state = data.get("final_state", {})
+                    if (
+                        final_state.get("pending_roguelike_event_turn") is not None
+                        and final_state.get("pending_roguelike_event_your_choice") is None
+                    ):
+                        option_ids = [
+                            item.get("id") if isinstance(item, dict) else item
+                            for item in final_state.get("roguelike_event_options", [])
+                        ]
+                        # Marked Cards needs a second modal. This generic game-loop
+                        # driver chooses another offered fortune so it can keep
+                        # exercising ordinary actions until game over.
+                        choice = next(
+                            (option_id for option_id in option_ids
+                             if option_id and option_id != "marked_cards"),
+                            None,
+                        )
+                        if choice is not None:
+                            pending_fortunes[idx] = choice
+                elif message["name"] == "game_over":
+                    game_over_data[idx] = message["args"][0]
+        return pending_fortunes
+
     for iteration in range(max_iterations):
         # Find who has legal_actions
         decision_idx = None
@@ -506,16 +537,13 @@ def _play_to_completion(c1, c2, gs1, gs2, max_iterations=1500):
         action = current_actions[decision_idx][0]
         clients[decision_idx].emit("submit_action", action)
 
-        # Collect responses from both clients
-        for idx in (0, 1):
-            msgs = clients[idx].get_received()
-
-            for m in msgs:
-                if m["name"] == "engine_events":
-                    data = m["args"][0]
-                    current_actions[idx] = data.get("legal_actions", [])
-                elif m["name"] == "game_over":
-                    game_over_data[idx] = m["args"][0]
+        pending_fortunes = consume_messages()
+        if pending_fortunes:
+            for idx, choice in pending_fortunes.items():
+                clients[idx].emit("roguelike_event_pick", {"choice": choice})
+            # Socket.IO's test client queues the resumed turn synchronously.
+            # Consume it before the next loop checks for legal actions.
+            consume_messages()
 
         if len(game_over_data) == 2:
             return game_over_data[0], game_over_data[1]

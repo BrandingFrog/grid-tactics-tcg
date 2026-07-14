@@ -452,7 +452,7 @@ let deckTapPreviewId = null;    // touch only: last card previewed by a tap (fir
 let deckSearchQuery = '';       // search text
 // Sort control (user 2026-07-05): field cycles via the fsort button,
 // direction via the chevron buttons (1 = asc, -1 = desc).
-let deckSortField = 'name';
+let deckSortField = 'mana';
 let deckSortDir = 1;
 var DECK_SORT_FIELDS = [
     { key: 'name',    label: 'Name' },
@@ -565,4 +565,3 @@ function updateNavLockState() {
         }
     });
 }
-

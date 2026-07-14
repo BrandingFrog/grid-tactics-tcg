@@ -85,7 +85,7 @@ def _build_no_heal_decks(library: CardLibrary) -> tuple[tuple[int, ...], tuple[i
         "giant_rat": 3,
         "to_the_ratmobile": 3,
         "prohibition": 3,
-        "reanimated_bones": 3,
+        "illicit_stones": 3,
         "red_diodebot": 3,
         "emberplague_rat": 3,
         # 13 * 3 = 39, need 1 more (MIN_DECK_SIZE = 40)
@@ -244,7 +244,7 @@ class TestWinMechanism:
     the normal game loop.
     """
 
-    def test_win_via_low_hp_game(self):
+    def test_win_via_low_hp_game(self, monkeypatch):
         """A game where one player starts at 1 HP ends in a win via sacrifice."""
         from grid_tactics.game_state import GameState
         from grid_tactics.legal_actions import legal_actions
@@ -252,6 +252,10 @@ class TestWinMechanism:
 
         library = _load_library()
         deck_p1, deck_p2 = _build_no_heal_decks(library)
+        # This test isolates the original sacrifice win condition. Fortune
+        # rounds can independently damage either player and change its winner.
+        import grid_tactics.roguelike_events as roguelike_events
+        monkeypatch.setattr(roguelike_events, "ROGUELIKE_EVENT_INTERVAL", 10_000)
 
         # Set P2 to 1 HP so any sacrifice kills them
         state, rng = GameState.new_game(0, deck_p1, deck_p2)
@@ -261,6 +265,13 @@ class TestWinMechanism:
         # Run the game loop manually (same logic as run_game)
         turn_limit = 2000
         while not state.is_game_over and state.turn_number <= turn_limit:
+            if (
+                state.pending_roguelike_event_turn is not None
+                or state.pending_marked_cards_player_idx is not None
+            ):
+                from grid_tactics.game_loop import resolve_ai_roguelike_decisions
+                state = resolve_ai_roguelike_decisions(state, library)
+                continue
             actions = legal_actions(state, library)
             action = rng.choice(actions)
             state = resolve_action(state, action, library)

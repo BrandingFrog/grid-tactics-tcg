@@ -196,6 +196,60 @@ class TestRaticalResurrectionTurnAdvance:
         assert kinds <= {ActionType.REVIVE_PLACE, ActionType.DECLINE_REVIVE}
 
 
+class TestRaticalResurrectionCastRequirements:
+    @staticmethod
+    def _ratical_plays(state, library):
+        return [
+            action
+            for action in legal_actions(state, library)
+            if action.action_type == ActionType.PLAY_CARD
+            and action.card_index == 0
+        ]
+
+    def test_no_common_rat_in_grave_makes_cast_illegal(self, library):
+        ratical = library.get_numeric_id("ratical_resurrection")
+        giant = library.get_numeric_id("giant_rat")
+        state = _make_state(p1_hand=(ratical,), p1_grave=(giant,))
+
+        assert self._ratical_plays(state, library) == []
+        with pytest.raises(ValueError, match="no valid revive target"):
+            resolve_action(state, play_card_action(card_index=0), library)
+
+    def test_empty_grave_makes_cast_illegal(self, library):
+        ratical = library.get_numeric_id("ratical_resurrection")
+        state = _make_state(p1_hand=(ratical,))
+
+        assert self._ratical_plays(state, library) == []
+
+    def test_one_common_rat_is_enough_for_up_to_three(self, library):
+        ratical = library.get_numeric_id("ratical_resurrection")
+        rat = library.get_numeric_id("rat")
+        state = _make_state(p1_hand=(ratical,), p1_grave=(rat,))
+
+        assert len(self._ratical_plays(state, library)) == 1
+
+    def test_full_deploy_zone_makes_cast_illegal(self, library):
+        ratical = library.get_numeric_id("ratical_resurrection")
+        rat = library.get_numeric_id("rat")
+        minions = [
+            MinionInstance(
+                instance_id=i,
+                card_numeric_id=rat,
+                owner=PlayerSide.PLAYER_1,
+                position=(i // 5, i % 5),
+                current_health=10,
+            )
+            for i in range(10)
+        ]
+        state = _make_state(
+            minions,
+            p1_hand=(ratical,),
+            p1_grave=(rat, rat, rat),
+        )
+
+        assert self._ratical_plays(state, library) == []
+
+
 # ---------------------------------------------------------------------------
 # 2. Ratical Resurrection: full deploy zone skips the modal
 # ---------------------------------------------------------------------------

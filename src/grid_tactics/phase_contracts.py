@@ -271,6 +271,11 @@ PHASE_CONTRACTS: dict[str, frozenset[TurnPhase]] = {
     # Without REACT in the allowed set, every end-of-turn-via-react path
     # surfaces as a violation.
     "system:turn_flip": frozenset({_REACT, _END, _START}),
+    # The 25-turn roguelike event pauses the incoming turn before its
+    # mana/draw/Rally work. Both private choices therefore resolve while
+    # the state is parked in START_OF_TURN.
+    "system:roguelike_event": frozenset({_START}),
+    "system:marked_cards": frozenset({_START}),
     # Called from turn flip (which has just set phase=ACTION as a transient)
     # OR from initial setup (which bootstraps in END_OF_TURN before the
     # first flip). Plan 14.8-02 widening: ACTION is added because

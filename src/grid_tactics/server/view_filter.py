@@ -14,6 +14,7 @@ from __future__ import annotations
 import copy
 
 from grid_tactics.board import Board
+from grid_tactics.roguelike_events import ROGUELIKE_EVENT_OPTIONS
 from grid_tactics.types import (
     BACK_ROW_P1, BACK_ROW_P2, GRID_COLS, GRID_ROWS,
     PLAYER_1_ROWS, PLAYER_2_ROWS,
@@ -103,7 +104,43 @@ def filter_state_for_player(state_dict: dict, viewer_idx: int, library=None) -> 
     # Strip seed
     filtered.pop("seed", None)
 
+    _filter_roguelike_event_choices(filtered, viewer_idx)
+
     return filtered
+
+
+def _filter_roguelike_event_choices(
+    state_dict: dict, viewer_idx: int | None,
+) -> None:
+    """Expose lock status while keeping the opponent's pick private."""
+    choices = list(
+        state_dict.get("pending_roguelike_event_choices") or (None, None)
+    )
+    while len(choices) < 2:
+        choices.append(None)
+    is_pending = state_dict.get("pending_roguelike_event_turn") is not None
+    own_choice = choices[viewer_idx] if is_pending and viewer_idx in (0, 1) else None
+    state_dict["pending_roguelike_event_chosen"] = [
+        choice is not None for choice in choices[:2]
+    ]
+    state_dict["pending_roguelike_event_your_choice"] = own_choice
+    state_dict["pending_roguelike_event_choices"] = [
+        own_choice if idx == viewer_idx else None for idx in (0, 1)
+    ]
+    offered = set(state_dict.get("pending_roguelike_event_options") or ())
+    state_dict["roguelike_event_options"] = (
+        [dict(option) for option in ROGUELIKE_EVENT_OPTIONS
+         if option["id"] in offered]
+        if is_pending else []
+    )
+
+    # Marked Cards is a private peek. Only its owner receives the card ids;
+    # everyone else receives the count needed for a passive waiting message.
+    marked_owner = state_dict.get("pending_marked_cards_player_idx")
+    marked_cards = list(state_dict.get("pending_marked_cards_cards") or ())
+    state_dict["pending_marked_cards_count"] = len(marked_cards)
+    if viewer_idx != marked_owner:
+        state_dict["pending_marked_cards_cards"] = []
 
 
 def _is_orthogonal(a: tuple[int, int], b: tuple[int, int]) -> bool:
@@ -784,6 +821,9 @@ def filter_state_for_spectator(
         filtered = copy.deepcopy(state_dict)
     else:
         filtered = filter_state_for_player(state_dict, perspective_idx, library)
+    # Spectators may see that each seat locked, but never impersonate a seat
+    # or learn either private choice before simultaneous resolution.
+    _filter_roguelike_event_choices(filtered, None)
     filtered["is_spectator"] = True
     filtered["spectator_god_mode"] = god_mode
     filtered["spectator_perspective"] = perspective_idx

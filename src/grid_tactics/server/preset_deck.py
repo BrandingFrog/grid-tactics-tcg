@@ -14,7 +14,7 @@ PRESET_DECK_COUNTS: dict[str, int] = {
     # 3 copies - cheap core + key threats
     "rat": 3,
     "furryroach": 3,
-    "reanimated_bones": 3,
+    "illicit_stones": 3,
     "red_diodebot": 3,
     "blue_diodebot": 3,
     "green_diodebot": 3,

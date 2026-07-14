@@ -1228,7 +1228,11 @@ def _resolve_handshake_payout(
                 state,
                 players=_replace_player(state.players, idx, player),
             )
-        return replace(state, handshake_pending=False, consecutive_passes=0)
+        state = replace(state, handshake_pending=False, consecutive_passes=0)
+        from grid_tactics.roguelike_events import apply_handshake_slap_damage
+        return apply_handshake_slap_damage(
+            state, event_collector=event_collector,
+        )
 
     if event_collector is not None:
         _predicted: list[dict] = []
@@ -1302,7 +1306,117 @@ def _resolve_handshake_payout(
                     },
                 )
     state = replace(state, handshake_pending=False, consecutive_passes=0)
-    return state
+    from grid_tactics.roguelike_events import apply_handshake_slap_damage
+    return apply_handshake_slap_damage(
+        state, event_collector=event_collector,
+    )
+
+
+def apply_new_turn_resources(
+    state: GameState,
+    *,
+    event_collector: Optional[EventStream] = None,
+) -> GameState:
+    """Apply the incoming player's postponed mana and draw/fatigue work."""
+    active_idx = state.active_player_idx
+
+    # Both players' opening turns begin at STARTING_MANA; regen starts on
+    # turn 3. The turn-start draw itself is not skipped on turn 2.
+    if state.turn_number > 2:
+        prev_mana = state.players[active_idx].current_mana
+        active_player = state.players[active_idx].regenerate_mana()
+        state = replace(
+            state,
+            players=_replace_player(state.players, active_idx, active_player),
+        )
+        if event_collector is not None and active_player.current_mana != prev_mana:
+            event_collector.collect(
+                EVT_MANA_CHANGE,
+                "system:turn_flip",
+                {
+                    "player_idx": active_idx,
+                    "prev": prev_mana,
+                    "new": active_player.current_mana,
+                    "delta": active_player.current_mana - prev_mana,
+                    "cause": "turn_start",
+                },
+            )
+
+    # Compound Interest pays on the owner's next three turn starts. Consume
+    # a charge even at the mana cap, just like a normal scheduled payout.
+    interest = list(state.compound_interest_turns)
+    if interest[active_idx] > 0:
+        interest[active_idx] -= 1
+        prev_mana = state.players[active_idx].current_mana
+        active_player = replace(
+            state.players[active_idx],
+            current_mana=min(MAX_MANA_CAP, prev_mana + 1),
+        )
+        state = replace(
+            state,
+            players=_replace_player(state.players, active_idx, active_player),
+            compound_interest_turns=tuple(interest),
+        )
+        if event_collector is not None and active_player.current_mana != prev_mana:
+            event_collector.collect(
+                EVT_MANA_CHANGE,
+                "system:turn_flip",
+                {
+                    "player_idx": active_idx,
+                    "prev": prev_mana,
+                    "new": active_player.current_mana,
+                    "delta": active_player.current_mana - prev_mana,
+                    "cause": "compound_interest",
+                },
+            )
+
+    if manual_draw_variant():
+        return state
+
+    active_player = state.players[active_idx]
+    if active_player.deck:
+        drawn_player, card_id, burned = active_player.draw_card_with_overdraw()
+        state = replace(
+            state,
+            players=_replace_player(state.players, active_idx, drawn_player),
+        )
+        if event_collector is not None:
+            event_collector.collect(
+                EVT_CARD_BURNED if burned else EVT_CARD_DRAWN,
+                "system:turn_flip",
+                {
+                    "player_idx": active_idx,
+                    "source": "turn_start",
+                    "card_numeric_id": card_id,
+                },
+            )
+        return state
+
+    # Empty-deck fatigue is the only fatigue in the game: 10/20/30...
+    counts = list(state.fatigue_counts)
+    counts[active_idx] += 1
+    damage = counts[active_idx] * 10
+    prev_hp = active_player.hp
+    fatigued_player = active_player.take_damage(damage)
+    state = replace(
+        state,
+        players=_replace_player(state.players, active_idx, fatigued_player),
+        fatigue_counts=tuple(counts),
+    )
+    if event_collector is not None:
+        event_collector.collect(
+            EVT_PLAYER_HP_CHANGE,
+            "system:turn_flip",
+            {
+                "player_idx": active_idx,
+                "prev": prev_hp,
+                "new": fatigued_player.hp,
+                "delta": -damage,
+                "cause": "fatigue",
+            },
+        )
+    from grid_tactics.action_resolver import _check_game_over
+    return _check_game_over(state, event_collector=event_collector)
 
 
 def _close_end_of_turn_and_flip(
@@ -1350,6 +1464,13 @@ def _close_end_of_turn_and_flip(
         state = _resolve_handshake_payout(
             state, event_collector=event_collector,
         )
+        # A stackable With-a-Slap rider can make the Handshake lethal.
+        # Resolve both players' simultaneous packets before deciding whether
+        # the outgoing turn may continue into a turn flip.
+        from grid_tactics.action_resolver import _check_game_over
+        state = _check_game_over(state, event_collector=event_collector)
+        if state.is_game_over:
+            return state
 
     # Flip discard tracking for the outgoing player BEFORE the
     # active-player flip.
@@ -1405,102 +1526,22 @@ def _close_end_of_turn_and_flip(
             },
         )
 
-    # Regenerate mana for the new active player at turn start.
-    # Opening-turn exception (documented — turn_structure_spec.md §3.4):
-    # spec §3's "every turn starts with +1 mana" applies from turn 3
-    # onward. Turn 1 never runs this tail at all (the game starts
-    # directly in P1's ACTION phase; the asymmetric starting hands
-    # 3/4 + STARTING_MANA stand in for the missing turn-start sequence),
-    # and turn 2 skips ONLY the regen: P2's first action must start at
-    # STARTING_MANA to match P1's first action. The turn-start draw
-    # below is NOT skipped on turn 2.
-    if state.turn_number > 2:
-        _pre_regen_mana = state.players[new_active_idx].current_mana
-        new_active_player = state.players[new_active_idx].regenerate_mana()
-        new_players = _replace_player(state.players, new_active_idx, new_active_player)
-        state = replace(state, players=new_players)
-        # 2026-07-08 timing audit (F4): turn-start mana regen previously
-        # emitted nothing — the mana badge only updated at drain end.
-        if (
-            event_collector is not None
-            and new_active_player.current_mana != _pre_regen_mana
-        ):
-            event_collector.collect(
-                EVT_MANA_CHANGE,
-                "system:turn_flip",
-                {
-                    "player_idx": new_active_idx,
-                    "prev": _pre_regen_mana,
-                    "new": new_active_player.current_mana,
-                    "delta": new_active_player.current_mana - _pre_regen_mana,
-                    "cause": "turn_start",
-                },
-            )
-
-    # Turn-structure redesign 2026-07: UNCONDITIONAL turn-start draw for
-    # the new active player (AFTER mana regen). Empty deck → escalating
-    # fatigue (10/20/30... per player) instead of the draw. Full hand →
-    # the drawn card overdraw-burns to the exhaust pile (revealed).
-    #
-    # Manual-draw variant (user 2026-07-10): NO turn-start draw — drawing
-    # is a main-phase ACTION now — and consequently no turn-start fatigue
-    # either (DRAW is simply not offered on an empty deck).
-    if manual_draw_variant():
-        return state
-    active_player = state.players[new_active_idx]
-    if active_player.deck:
-        drawn_player, drawn_card_id, burned = (
-            active_player.draw_card_with_overdraw()
+    # Every 25 completed turns, postpone the incoming turn before regen,
+    # draw/fatigue, or Rally triggers. Both seats must lock a roguelike
+    # choice before the server resumes this exact tail.
+    from grid_tactics.roguelike_events import (
+        is_roguelike_event_boundary,
+        open_roguelike_event,
+    )
+    if is_roguelike_event_boundary(prev_turn):
+        state = replace(state, phase=TurnPhase.START_OF_TURN)
+        return open_roguelike_event(
+            state, event_collector=event_collector,
         )
-        new_players = _replace_player(state.players, new_active_idx, drawn_player)
-        state = replace(state, players=new_players)
-        if event_collector is not None:
-            event_collector.collect(
-                EVT_CARD_BURNED if burned else EVT_CARD_DRAWN,
-                "system:turn_flip",
-                {
-                    "player_idx": new_active_idx,
-                    "source": "turn_start",
-                    # Always included: view_filter redacts the identity for
-                    # the opponent on non-burn draws; the drawer's own
-                    # client needs it to animate the auto-draw into the
-                    # correct hand slot. Burns are public, never redacted.
-                    "card_numeric_id": drawn_card_id,
-                },
-            )
-    else:
-        # Empty-deck fatigue: escalating 10/20/30... damage. This is now
-        # the ONLY fatigue in the game (PASS is free).
-        counts = list(state.fatigue_counts)
-        counts[new_active_idx] += 1
-        fatigue_dmg = counts[new_active_idx] * 10
-        prev_hp = active_player.hp
-        fatigued_player = active_player.take_damage(fatigue_dmg)
-        new_players = _replace_player(state.players, new_active_idx, fatigued_player)
-        state = replace(
-            state,
-            players=new_players,
-            fatigue_counts=tuple(counts),
-        )
-        if event_collector is not None:
-            event_collector.collect(
-                EVT_PLAYER_HP_CHANGE,
-                "system:turn_flip",
-                {
-                    "player_idx": new_active_idx,
-                    "prev": prev_hp,
-                    "new": fatigued_player.hp,
-                    "delta": -fatigue_dmg,
-                    "cause": "fatigue",
-                },
-            )
-        # Fatigue can be lethal — run the game-over check so callers'
-        # is_game_over early-returns fire before entering the new turn.
-        from grid_tactics.action_resolver import _check_game_over
-        state = _check_game_over(state, event_collector=event_collector)
 
-    return state
-
+    return apply_new_turn_resources(
+        state, event_collector=event_collector,
+    )
 
 def enter_start_of_turn(
     state: GameState,
@@ -1527,6 +1568,13 @@ def enter_start_of_turn(
     extend the opening condition to account for opponent react cards
     that match OPPONENT_START_OF_TURN even when no triggers fire.
     """
+    # A milestone event parks the incoming turn in START_OF_TURN. Callers
+    # that normally chain straight into Rally must not bypass the modal.
+    if (
+        state.pending_roguelike_event_turn is not None
+        or state.pending_marked_cards_player_idx is not None
+    ):
+        return state
     assert_phase_contract(state, "system:enter_start_of_turn")
     prev_phase = state.phase
     # 1. Transition to START_OF_TURN phase (even if we shortcut later).
@@ -1976,7 +2024,8 @@ def advance_to_next_turn(
     START_OF_TURN → ACTION) issuing PASS actions against open REACT
     windows and calling the transition helpers directly for START/END
     placeholders. Stops when phase=ACTION for the new active player (or
-    the game ends).
+    the game ends). Non-interactive milestone fortunes and their follow-up
+    choices are resolved with the same deterministic AI policy as run_game().
 
     Used by unit tests that need a full turn cycle without going through
     events.py's server-side auto-PASS loop. Mirrors the safety cap the
@@ -1994,7 +2043,14 @@ def advance_to_next_turn(
             raise RuntimeError(
                 "advance_to_next_turn safety exceeded (>50 iterations)"
             )
-        if state.phase == TurnPhase.REACT:
+        if (
+            state.pending_roguelike_event_turn is not None
+            or state.pending_marked_cards_player_idx is not None
+        ):
+            from grid_tactics.game_loop import resolve_ai_roguelike_decisions
+
+            state = resolve_ai_roguelike_decisions(state, library)
+        elif state.phase == TurnPhase.REACT:
             state = handle_react_action(state, Action(action_type=ActionType.PASS), library)
         elif state.phase == TurnPhase.START_OF_TURN:
             state = enter_start_of_turn(state, library)

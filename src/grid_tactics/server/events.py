@@ -13,6 +13,13 @@ from grid_tactics.enums import TurnPhase
 from grid_tactics.game_state import apply_mulligan
 from grid_tactics.phase_contracts import OutOfPhaseError
 from grid_tactics.legal_actions import legal_actions
+from grid_tactics.roguelike_events import (
+    ROGUELIKE_EVENT_CHOICES,
+    choose_marked_cards_for_ai,
+    choose_roguelike_event_for_ai,
+    resolve_marked_cards_choice,
+    resolve_roguelike_event_choice,
+)
 from grid_tactics.server.action_codec import reconstruct_action, serialize_action
 from grid_tactics.server.app import socketio
 from grid_tactics.server.auth_discord import current_user
@@ -32,6 +39,9 @@ from grid_tactics.server.view_filter import (
 )
 
 _room_manager: RoomManager | None = None
+
+_AI_WATCH_BASE_STEP_SECONDS = 0.9
+_AI_WATCH_FORTUNE_DWELL_SECONDS = 2.4
 
 # PREGAME feature flag (user 2026-07-08): rock-paper-scissors for who goes
 # first + mulligan, run in the SOCKET start paths only (handle_ready /
@@ -252,6 +262,8 @@ def _decision_idx(state):
     guaranteed softlock (plus wrong-player agency) whenever one player
     had 2+ simultaneous start/end-of-turn (or on-death) triggers.
     """
+    if state.pending_marked_cards_player_idx is not None:
+        return int(state.pending_marked_cards_player_idx)
     if getattr(state, "pending_death_target", None) is not None:
         return int(state.pending_death_target.owner_idx)
     if state.pending_trigger_picker_idx is not None:
@@ -740,6 +752,187 @@ def _apply_test_op(sandbox, op):
     raise ValueError(f"Unknown test op: {name!r}")
 
 
+def _resume_after_roguelike_event(session, stream: EventStream) -> None:
+    """Run the postponed turn-start tail after the second choice locks."""
+    from grid_tactics.action_resolver import _check_game_over
+    from grid_tactics.react_stack import (
+        apply_new_turn_resources,
+        enter_start_of_turn,
+    )
+
+    if session.state.is_game_over:
+        return
+    session.state = _check_game_over(
+        session.state, event_collector=stream,
+    )
+    if session.state.is_game_over:
+        return
+    if session.state.pending_marked_cards_player_idx is not None:
+        return
+    session.state = apply_new_turn_resources(
+        session.state, event_collector=stream,
+    )
+    if not session.state.is_game_over:
+        session.state = enter_start_of_turn(
+            session.state, session.library, event_collector=stream,
+        )
+
+
+def _auto_choose_dummy_roguelike_event(session, stream: EventStream) -> bool:
+    """Resolve fortune/Marked Cards decisions for server-controlled seats."""
+    if (
+        session.state.pending_roguelike_event_turn is None
+        and session.state.pending_marked_cards_player_idx is None
+    ):
+        return False
+    moved = False
+    for idx in (0, 1):
+        if session.state.pending_roguelike_event_turn is None:
+            break
+        if (
+            session.player_sids[idx] is None
+            and session.state.pending_roguelike_event_choices[idx] is None
+        ):
+            choice = choose_roguelike_event_for_ai(
+                session.state, idx, session.library,
+            )
+            session.state = resolve_roguelike_event_choice(
+                session.state,
+                idx,
+                choice,
+                session.library,
+                event_collector=stream,
+            )
+            moved = True
+    if moved and session.state.pending_roguelike_event_turn is None:
+        _resume_after_roguelike_event(session, stream)
+
+    while (
+        not session.state.is_game_over
+        and session.state.pending_marked_cards_player_idx is not None
+    ):
+        idx = session.state.pending_marked_cards_player_idx
+        if session.player_sids[idx] is not None:
+            break
+        keep_index, top_order = choose_marked_cards_for_ai(
+            session.state, idx, session.library,
+        )
+        session.state = resolve_marked_cards_choice(
+            session.state, idx, keep_index, top_order,
+            event_collector=stream,
+        )
+        moved = True
+        _resume_after_roguelike_event(session, stream)
+    return moved
+
+
+def _auto_advance_server_controlled_turn(session, stream: EventStream) -> None:
+    """Advance phases and decisions until a seated player must act.
+
+    Preview games use ``None`` SIDs for their AI seat.  This helper is the
+    single hand-off point back to that seat, including after a fortune or a
+    Marked Cards modal finishes.  Keeping the loop here prevents alternate
+    socket handlers from returning with the game parked on the AI's ACTION
+    phase (the turn-26 preview softlock).
+    """
+    from grid_tactics.react_stack import (
+        enter_end_of_turn as _enter_end_of_turn,
+        enter_start_of_turn as _enter_start_of_turn,
+    )
+    from grid_tactics.server.preview_ai import pick_preview_action
+
+    auto_advance_counter = 0
+    auto_advance_max = 120
+    while not session.state.is_game_over:
+        auto_advance_counter += 1
+        if auto_advance_counter > auto_advance_max:
+            raise RuntimeError(
+                "Phase auto-advance loop exceeded safety counter "
+                f"({auto_advance_max} iterations) -- possible infinite-loop "
+                "regression in START/END phase handling."
+            )
+
+        if (
+            session.state.pending_roguelike_event_turn is not None
+            or session.state.pending_marked_cards_player_idx is not None
+        ):
+            _auto_choose_dummy_roguelike_event(session, stream)
+            if (
+                session.state.pending_roguelike_event_turn is not None
+                or session.state.pending_marked_cards_player_idx is not None
+            ):
+                # A human choice is outstanding.  Leave the incoming turn
+                # parked and ship its modal state to the client.
+                break
+            continue
+
+        if session.state.phase == TurnPhase.START_OF_TURN:
+            session.state = _enter_start_of_turn(
+                session.state, session.library, event_collector=stream,
+            )
+            continue
+        if session.state.phase == TurnPhase.END_OF_TURN:
+            session.state = _enter_end_of_turn(
+                session.state, session.library, event_collector=stream,
+            )
+            continue
+
+        next_actions = legal_actions(session.state, session.library)
+        if next_actions:
+            decision_idx = _decision_idx(session.state)
+            if (
+                decision_idx is not None
+                and session.player_sids[decision_idx] is None
+            ):
+                ai_action = pick_preview_action(
+                    session.state, session.library, next_actions,
+                )
+                if ai_action is None and pass_action() in next_actions:
+                    ai_action = pass_action()
+                if ai_action is not None:
+                    session.state = resolve_action(
+                        session.state,
+                        ai_action,
+                        session.library,
+                        event_collector=stream,
+                    )
+                    continue
+
+            # A react window with no playable reaction does not need a human
+            # round trip.  Any real reaction keeps the window open.
+            if (
+                session.state.phase == TurnPhase.REACT
+                and len(next_actions) == 1
+                and pass_action() in next_actions
+            ):
+                session.state = resolve_action(
+                    session.state,
+                    pass_action(),
+                    session.library,
+                    event_collector=stream,
+                )
+                continue
+            break
+
+        # ACTION should always expose PASS.  Retain this as a safe fallback
+        # for malformed states so a game cannot silently wedge.
+        session.state = resolve_action(
+            session.state,
+            pass_action(),
+            session.library,
+            event_collector=stream,
+        )
+
+
+def _ai_watch_step_delay(state, speed: int | float) -> float:
+    """Return spectator pacing, preserving time to read fortune offers."""
+    safe_speed = max(1.0, float(speed or 1))
+    normal_delay = _AI_WATCH_BASE_STEP_SECONDS / safe_speed
+    if state.pending_roguelike_event_turn is not None:
+        return max(_AI_WATCH_FORTUNE_DWELL_SECONDS, normal_delay)
+    return normal_delay
+
+
 def register_events(room_manager: RoomManager) -> None:
     """Register all Socket.IO event handlers with the given room manager."""
     global _room_manager
@@ -946,6 +1139,16 @@ def register_events(room_manager: RoomManager) -> None:
         name = (data.get("display_name") or "Preview").strip() or "Preview"
         u = current_user()
         avatar = u['avatar_url'] if u else None
+        # A tab may start here immediately after watching AI vs AI. Detach it
+        # from that spectator room before assigning its new player token;
+        # otherwise the old stepper keeps sending spectator frames that can
+        # overwrite and action-gate the new Play VS AI game.
+        old_token = _room_manager.get_token_by_sid(request.sid)
+        if old_token is not None and _room_manager.get_spectator(old_token) is not None:
+            old_room = _room_manager.get_room_code_by_token(old_token)
+            _room_manager.remove_spectator(old_token)
+            if old_room:
+                sio_leave_room(old_room)
         # PREGAME (user 2026-07-08): previews run the same RPS + mulligan
         # flow so the human sees the pregame UI; the dummy seat auto-plays.
         if PREGAME_ENABLED:
@@ -1232,7 +1435,12 @@ def register_events(room_manager: RoomManager) -> None:
                 saved_state = session.state
                 stream = EventStream(next_seq=session.next_event_seq)
                 try:
-                    if session.state.phase == _TP.START_OF_TURN:
+                    if (
+                        session.state.pending_roguelike_event_turn is not None
+                        or session.state.pending_marked_cards_player_idx is not None
+                    ):
+                        _auto_choose_dummy_roguelike_event(session, stream)
+                    elif session.state.phase == _TP.START_OF_TURN:
                         session.state = _enter_start(
                             session.state, session.library, event_collector=stream,
                         )
@@ -1267,7 +1475,7 @@ def register_events(room_manager: RoomManager) -> None:
             # session.watch_speed via set_watch_speed; the stepper paces
             # to match so 2x/4x actually double/quadruple the game clock.
             _spd = getattr(session, 'watch_speed', 1) or 1
-            socketio.sleep(0.9 / _spd)
+            socketio.sleep(_ai_watch_step_delay(new_state, _spd))
         _room_manager.remove_game(room_code)
 
     def _ai_watch_emit(session, room_code, state, events, game_over=False):
@@ -1448,6 +1656,117 @@ def register_events(room_manager: RoomManager) -> None:
             to=room_code,
         )
 
+    @socketio.on("roguelike_event_pick")
+    def handle_roguelike_event_pick(data=None):
+        """Record a private milestone choice without normal turn gating."""
+        token = _room_manager.get_token_by_sid(request.sid)
+        if token is None or _room_manager.get_role(token) == "spectator":
+            emit("error", {"msg": "Only seated players can choose an event"})
+            return
+        room_code = _room_manager.get_room_code_by_token(token)
+        session = _room_manager.get_game(room_code) if room_code else None
+        if session is None:
+            emit("error", {"msg": "Game not found"})
+            return
+        player_idx = session.get_player_idx(token)
+        choice = (data or {}).get("choice")
+        if player_idx is None or choice not in ROGUELIKE_EVENT_CHOICES:
+            emit("error", {"msg": "Invalid event choice"})
+            return
+
+        with session.lock:
+            if session.state.is_game_over:
+                emit("error", {"msg": "Game is already over"})
+                return
+            if session.state.pending_roguelike_event_turn is None:
+                emit("error", {"msg": "No roguelike event is pending"})
+                return
+            if session.state.pending_roguelike_event_choices[player_idx] is not None:
+                emit("error", {"msg": "You already chose an event option"})
+                return
+
+            saved_state = session.state
+            stream = EventStream(next_seq=session.next_event_seq)
+            try:
+                session.state = resolve_roguelike_event_choice(
+                    session.state,
+                    player_idx,
+                    choice,
+                    session.library,
+                    event_collector=stream,
+                )
+                if session.state.pending_roguelike_event_turn is None:
+                    _resume_after_roguelike_event(session, stream)
+                # Preview games pair the human with a server-controlled seat,
+                # which strategically resolves its fortune and any follow-up
+                # Marked Cards decision here.
+                _auto_choose_dummy_roguelike_event(session, stream)
+                _auto_advance_server_controlled_turn(session, stream)
+            except (ValueError, OutOfPhaseError) as exc:
+                session.state = saved_state
+                emit("error", {"msg": str(exc)})
+                return
+            session.next_event_seq = stream.next_seq
+            new_state = session.state
+            events = list(stream.events)
+
+        _emit_state_to_players(session, new_state, events=events)
+        if new_state.is_game_over:
+            _emit_game_over(session, new_state)
+
+    @socketio.on("marked_cards_resolve")
+    def handle_marked_cards_resolve(data=None):
+        """Keep one revealed card and privately order the other two."""
+        token = _room_manager.get_token_by_sid(request.sid)
+        if token is None or _room_manager.get_role(token) == "spectator":
+            emit("error", {"msg": "Only seated players can mark cards"})
+            return
+        room_code = _room_manager.get_room_code_by_token(token)
+        session = _room_manager.get_game(room_code) if room_code else None
+        if session is None:
+            emit("error", {"msg": "Game not found"})
+            return
+        player_idx = session.get_player_idx(token)
+        payload = data or {}
+        try:
+            keep_index = int(payload.get("keep_index"))
+            top_order = tuple(int(idx) for idx in payload.get("top_order", ()))
+        except (TypeError, ValueError):
+            emit("error", {"msg": "Invalid Marked Cards choice"})
+            return
+
+        with session.lock:
+            if session.state.is_game_over:
+                emit("error", {"msg": "Game is already over"})
+                return
+            if player_idx != session.state.pending_marked_cards_player_idx:
+                emit("error", {"msg": "Marked Cards is not pending for you"})
+                return
+            saved_state = session.state
+            stream = EventStream(next_seq=session.next_event_seq)
+            try:
+                session.state = resolve_marked_cards_choice(
+                    session.state,
+                    player_idx,
+                    keep_index,
+                    top_order,
+                    event_collector=stream,
+                )
+                _resume_after_roguelike_event(session, stream)
+                _auto_choose_dummy_roguelike_event(session, stream)
+                _auto_advance_server_controlled_turn(session, stream)
+            except (ValueError, OutOfPhaseError) as exc:
+                session.state = saved_state
+                emit("error", {"msg": str(exc)})
+                return
+            session.next_event_seq = stream.next_seq
+            new_state = session.state
+            events = list(stream.events)
+
+        _emit_state_to_players(session, new_state, events=events)
+        if new_state.is_game_over:
+            _emit_game_over(session, new_state)
+
     @socketio.on("submit_action")
     def handle_submit_action(data):
         # Step a: Look up token from SID
@@ -1584,6 +1903,19 @@ def register_events(room_manager: RoomManager) -> None:
                             "infinite-loop regression in START/END phase "
                             "handling."
                         )
+                    if (
+                        session.state.pending_roguelike_event_turn is not None
+                        or session.state.pending_marked_cards_player_idx is not None
+                    ):
+                        _auto_choose_dummy_roguelike_event(session, stream)
+                        if (
+                            session.state.pending_roguelike_event_turn is not None
+                            or session.state.pending_marked_cards_player_idx is not None
+                        ):
+                            # Human choice(s) are still outstanding. Keep the
+                            # incoming turn parked and ship the modal state.
+                            break
+                        continue
                     # 14.7-02 START/END placeholder phases take precedence
                     # over legal_actions (which returns () for them).
                     if session.state.phase == _TurnPhase.START_OF_TURN:

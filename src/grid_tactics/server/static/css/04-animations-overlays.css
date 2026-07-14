@@ -1091,7 +1091,7 @@
   font-weight: 900;
   text-transform: uppercase;
   letter-spacing: 1px;
-  -webkit-text-stroke: 4px #000;
+  -webkit-text-stroke: clamp(2px, 0.14em, 4px) #000;
   paint-order: stroke fill;
   pointer-events: none;
   z-index: 60;
@@ -1117,6 +1117,22 @@
   12%  { transform: translate(-50%, -8px) scale(1.15) rotateX(-20deg); opacity: 1; }
   70%  { transform: translate(-50%, -48px) scale(1.0) rotateX(-20deg); opacity: 1; }
   100% { transform: translate(-50%, -72px) scale(0.95) rotateX(-20deg); opacity: 0; }
+}
+
+/* Viewport-portal variant. Combat text is anchored from the source tile's
+   screen rect and appended directly to body so the tilted board, duel stage,
+   and game-layout cannot clip it. It already faces the camera, so unlike the
+   legacy in-cell animation it must not counter-rotate by 20 degrees. */
+.floating-popup.floating-popup-viewport {
+  position: fixed;
+  z-index: 960;
+  animation-name: popup-rise-viewport;
+}
+@keyframes popup-rise-viewport {
+  0%   { transform: translate(-50%, 0)     scale(0.6);  opacity: 0; }
+  12%  { transform: translate(-50%, -8px)  scale(1.15); opacity: 1; }
+  70%  { transform: translate(-50%, -48px) scale(1);    opacity: 1; }
+  100% { transform: translate(-50%, -72px) scale(0.95); opacity: 0; }
 }
 
 /* Persistent status badges, rendered inside renderBoardMinion. */

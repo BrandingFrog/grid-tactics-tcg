@@ -10,7 +10,10 @@ function showGameTooltip(numericId, anchorEl, minion, opts) {
     var tooltipId = sandboxMode ? 'sandbox-tooltip' : 'game-tooltip';
     var hintId = sandboxMode ? 'sandbox-tooltip-hint' : 'game-tooltip-hint';
     var tooltipEl = document.getElementById(tooltipId);
-    populateTooltip(tooltipEl, numericId, { showRelated: true });
+    // Related-card discovery belongs in the deck builder. In a match it
+    // made inspected AI/opponent cards (especially To The Ratmobile) grow a
+    // seemingly random list of extra cards in the player sidebar.
+    populateTooltip(tooltipEl, numericId, { showRelated: false });
     var hint = document.getElementById(hintId);
     if (hint) hint.style.display = 'none';
     _applyLiveStatTones(tooltipEl, minion || null);
@@ -478,9 +481,9 @@ function renderDeckSidebar() {
         }
     }
 
-    // Flat list, no type groups (user 2026-07-05). Sorted by type then name so
-    // the colour coding still reads in blocks; multi-purpose cards (a minion
-    // or magic card with a react mode) get a gradient stripe.
+    // Flat list, no type groups (user 2026-07-05). Keep the built deck in the
+    // same ascending mana-cost order as the card browser; names stabilize ties.
+    // Multi-purpose cards still get their gradient type stripe.
     var container = document.getElementById('deck-flat');
     if (!container) return;
     var prevScroll = container.scrollTop;
@@ -492,7 +495,8 @@ function renderDeckSidebar() {
         items.push({ numId: numId, name: c.name, count: currentDeck[numId], card: c });
     });
     items.sort(function(a, b) {
-        if (a.card.card_type !== b.card.card_type) return a.card.card_type - b.card.card_type;
+        var costDiff = (a.card.mana_cost || 0) - (b.card.mana_cost || 0);
+        if (costDiff !== 0) return costDiff;
         return a.name.localeCompare(b.name);
     });
     container.innerHTML = '';
@@ -759,4 +763,3 @@ function refreshLoadDropdown() {
         loadSelect.appendChild(opt);
     });
 }
-

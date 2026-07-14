@@ -499,6 +499,23 @@ def _apply_play_card(
                     f"already alive on your board"
                 )
 
+    # Revive cards require at least one matching grave card and one legal
+    # deployment cell. legal_actions applies the same preflight for the UI
+    # and AI mask; re-check here so direct/out-of-band resolver calls cannot
+    # pay for a cast whose core effect is impossible.
+    if any(
+        effect.effect_type == EffectType.REVIVE
+        and effect.trigger == TriggerType.ON_PLAY
+        for effect in card_def.effects
+    ):
+        from grid_tactics.legal_actions import has_valid_revive_target
+        if not has_valid_revive_target(
+            state, library, active_idx, card_def,
+        ):
+            raise ValueError(
+                f"Card '{card_def.card_id}' has no valid revive target"
+            )
+
     # Check mana (with cost reduction)
     from grid_tactics.legal_actions import effective_mana_cost
     eff_cost = effective_mana_cost(card_def, state, state.active_player_idx, library)
@@ -2380,6 +2397,15 @@ def resolve_action(
     # through EVT_TRIGGER_BLIP in the event stream (plan 14.8-03a), which
     # the client's eventQueue plays through a dedicated slot handler
     # (playTriggerBlip in game.js).
+
+    if state.pending_roguelike_event_turn is not None:
+        raise ValueError(
+            "Roguelike event pending: choose an event option before acting"
+        )
+    if state.pending_marked_cards_player_idx is not None:
+        raise ValueError(
+            "Marked Cards pending: finish ordering the revealed cards first"
+        )
 
     # Pending death-target gate (phase-agnostic): while a death-triggered
     # modal is open, the ONLY legal action is DEATH_TARGET_PICK from the

@@ -34,10 +34,20 @@ from grid_tactics.engine_events import (
 from grid_tactics.enums import ActionType, PlayerSide, TurnPhase
 from grid_tactics.game_state import GameState, PendingDeathTarget
 from grid_tactics.player import Player
+from grid_tactics.roguelike_events import (
+    CLUMSY_GREED,
+    SHARP_EYED_SCEPTIC,
+    WITH_A_SLAP,
+)
 from grid_tactics.server.action_codec import serialize_action
 from grid_tactics.server.app import create_app, socketio
 from grid_tactics.server.event_reconcile import reconcile_react_window_events
-from grid_tactics.server.events import _decision_idx, register_events
+from grid_tactics.server.events import (
+    _auto_advance_server_controlled_turn,
+    _ai_watch_step_delay,
+    _decision_idx,
+    register_events,
+)
 from grid_tactics.server.room_manager import RoomManager
 from grid_tactics.server.sandbox_session import SandboxSession
 
@@ -150,9 +160,86 @@ class TestDecisionIdx:
         state = _base_state(phase=TurnPhase.REACT, react_player_idx=1)
         assert _decision_idx(state) == 1
 
-    def test_action_phase_falls_back_to_active_player(self):
-        state = _base_state(active_player_idx=1)
-        assert _decision_idx(state) == 1
+
+def test_preview_ai_resumes_when_fortune_returns_on_its_action(app_and_rm):
+    """Turn 26 must not remain parked when the AI owns the postponed turn."""
+    _application, rm = app_and_rm
+    _code, session = rm.create_preview_game("Solo", "human-sid")
+    session.state = replace(
+        session.state,
+        active_player_idx=1,
+        phase=TurnPhase.ACTION,
+        turn_number=26,
+        pending_roguelike_event_turn=None,
+        pending_roguelike_event_choices=(None, None),
+        pending_roguelike_event_options=(),
+        pending_marked_cards_player_idx=None,
+        pending_marked_cards_cards=(),
+        pending_marked_cards_queue=(),
+    )
+
+    stream = EventStream(next_seq=session.next_event_seq)
+    _auto_advance_server_controlled_turn(session, stream)
+
+    assert not (
+        session.state.turn_number == 26
+        and session.state.phase == TurnPhase.ACTION
+        and session.state.active_player_idx == 1
+    )
+    if not session.state.is_game_over:
+        assert (
+            session.state.pending_roguelike_event_turn is not None
+            or session.state.pending_marked_cards_player_idx is not None
+            or session.player_sids[_decision_idx(session.state)] is not None
+        )
+
+
+def test_fortune_socket_handler_hands_turn_26_back_to_preview_ai(app_and_rm):
+    application, rm = app_and_rm
+    client = _client(application)
+    client.emit("preview_game", {"display_name": "Solo"})
+    client.get_received()
+    session = next(iter(rm._games.values()))
+    session.state = replace(
+        session.state,
+        active_player_idx=1,
+        phase=TurnPhase.START_OF_TURN,
+        turn_number=26,
+        pending_roguelike_event_turn=26,
+        pending_roguelike_event_choices=(None, None),
+        pending_roguelike_event_options=(
+            CLUMSY_GREED,
+            SHARP_EYED_SCEPTIC,
+            WITH_A_SLAP,
+        ),
+    )
+
+    client.emit("roguelike_event_pick", {"choice": WITH_A_SLAP})
+
+    assert not any(msg["name"] == "error" for msg in client.get_received())
+    assert session.state.pending_roguelike_event_turn is None
+    assert not (
+        session.state.turn_number == 26
+        and session.state.phase == TurnPhase.ACTION
+        and session.state.active_player_idx == 1
+    )
+
+def test_action_phase_falls_back_to_active_player():
+    state = _base_state(active_player_idx=1)
+    assert _decision_idx(state) == 1
+
+
+def test_ai_watch_fortune_offer_has_readable_dwell_even_at_4x():
+    normal = _base_state()
+    fortune = replace(
+        normal,
+        phase=TurnPhase.START_OF_TURN,
+        turn_number=51,
+        pending_roguelike_event_turn=51,
+    )
+
+    assert _ai_watch_step_delay(normal, 4) == pytest.approx(0.225)
+    assert _ai_watch_step_delay(fortune, 4) == pytest.approx(2.4)
 
 
 # ---------------------------------------------------------------------------

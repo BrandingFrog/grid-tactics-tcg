@@ -188,6 +188,9 @@ function canShowSkipButton(actionType) {
 function _iOwnAPendingDecision() {
     if (!gameState || typeof myPlayerIdx !== 'number') return false;
     var me = myPlayerIdx;
+    if (gameState.pending_roguelike_event_turn != null
+            && !gameState.pending_roguelike_event_your_choice) return true;
+    if (gameState.pending_marked_cards_player_idx === me) return true;
     if (gameState.pending_tutor_player_idx === me) return true;
     if (gameState.pending_conjure_deploy_player_idx === me) return true;
     if (gameState.pending_revive_player_idx === me) return true;
@@ -2355,6 +2358,7 @@ function playPendingModalOpened(ev, done) {
 function playPendingModalResolved(ev, done) {
     slotState.pendingModalKind = null;
     slotState.pendingModalDeadline = 0;
+    var revealMs = 0;
     try {
         var scrim = document.getElementById('event-queue-blocking-scrim');
         if (scrim && scrim.parentNode) scrim.parentNode.removeChild(scrim);
@@ -2372,8 +2376,16 @@ function playPendingModalResolved(ev, done) {
         });
         if (kind === 'tutor_select' && typeof closeTutorModal === 'function') closeTutorModal();
         if (kind === 'trigger_pick' && typeof closeTriggerPickerModal === 'function') closeTriggerPickerModal();
+        if (kind === 'roguelike_event') {
+            if (typeof showRoguelikeChoicesReveal === 'function') {
+                revealMs = showRoguelikeChoicesReveal(ev.payload || {});
+            } else if (typeof closeRoguelikeEventModal === 'function') {
+                closeRoguelikeEventModal();
+            }
+        }
+        if (kind === 'marked_cards' && typeof closeMarkedCardsModal === 'function') closeMarkedCardsModal();
     } catch (e) { /* defensive */ }
-    setTimeout(done, _evDurationOr(ev, 0));
+    setTimeout(done, Math.max(_evDurationOr(ev, 0), revealMs));
 }
 
 // fizzle — brief puff of smoke at the source tile (or screen center if no
@@ -2920,4 +2932,3 @@ function playAnimation(job, done) {
             return;
     }
 }
-

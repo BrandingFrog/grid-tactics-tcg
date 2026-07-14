@@ -269,6 +269,63 @@ function _avatarDisplayName(playerIdx) {
     return opponentName || ('Player ' + (playerIdx + 1));
 }
 
+function _legacyRoguelikePlayerChoiceSummary(state, playerIdx) {
+    var history = state && state.roguelike_event_history
+        && state.roguelike_event_history[playerIdx];
+    if (!Array.isArray(history) || history.length === 0) return '';
+    var labels = {
+        clumsy_greed: 'Clumsy Greed',
+        with_a_slap: 'With a Slap',
+        sharp_eyed_sceptic: 'Sharp Eyed Sceptic'
+    };
+    var counts = {};
+    history.forEach(function(choice) {
+        counts[choice] = (counts[choice] || 0) + 1;
+    });
+    return ['clumsy_greed', 'with_a_slap', 'sharp_eyed_sceptic']
+        .filter(function(choice) { return counts[choice] > 0; })
+        .map(function(choice) {
+            return labels[choice] + (counts[choice] > 1 ? ' ×' + counts[choice] : '');
+        }).join(', ');
+}
+
+var ROGUELIKE_HISTORY_LABELS = {
+    clumsy_greed: 'Clumsy Greed',
+    with_a_slap: 'With a Slap',
+    sharp_eyed_sceptic: 'Sharp Eyed Sceptic',
+    grave_expectations: 'Grave Expectations',
+    pocket_change: 'Pocket Change',
+    spring_cleaning: 'Spring Cleaning',
+    skeleton_crew: 'Skeleton Crew',
+    compound_interest: 'Compound Interest',
+    marked_cards: 'Marked Cards',
+    uncharted_fortune: 'Uncharted Fortune',
+    fallback: '1 mana'
+};
+
+function _roguelikeHistoryLabel(choice) {
+    var parts = String(choice || '').split(':');
+    var label = ROGUELIKE_HISTORY_LABELS[parts[0]] || parts[0];
+    if (parts[0] === 'uncharted_fortune' && parts[1]) {
+        label += ' \u2192 ' + (ROGUELIKE_HISTORY_LABELS[parts[1]] || parts[1]);
+    }
+    return label;
+}
+
+function _roguelikePlayerChoiceSummary(state, playerIdx) {
+    var history = state && state.roguelike_event_history
+        && state.roguelike_event_history[playerIdx];
+    if (!Array.isArray(history) || history.length === 0) return '';
+    var counts = {};
+    history.forEach(function(choice) {
+        counts[choice] = (counts[choice] || 0) + 1;
+    });
+    return Object.keys(counts).map(function(choice) {
+        return _roguelikeHistoryLabel(choice)
+            + (counts[choice] > 1 ? ' \u00d7' + counts[choice] : '');
+    }).join(', ');
+}
+
 function renderPlayerAvatars() {
     if (!gameState || !gameState.players || myPlayerIdx == null) return;
     _renderAvatarPod('self', myPlayerIdx);
@@ -300,6 +357,10 @@ function _renderAvatarPod(which, playerIdx) {
     }
     var hpEl = document.getElementById('avatar-' + which + '-hp');
     if (hpEl) hpEl.textContent = p.hp;
+    var fortuneSummary = _roguelikePlayerChoiceSummary(gameState, playerIdx);
+    pod.title = fortuneSummary
+        ? 'Chosen fortunes: ' + fortuneSummary
+        : 'View player details';
     // (Dark Matter pod chip removed 2026-07-06 — no DM writes here.)
     if (!pod._gtAvatarBound) {
         pod._gtAvatarBound = true;
@@ -387,6 +448,50 @@ function showPlayerPreview(playerIdx) {
         if (fatigueN > 0) {
             panels.push('<div class="tooltip-keyword"><span class="tooltip-keyword-name">💀 Fatigue ×' + fatigueN
                 + '</span> <span class="tooltip-keyword-desc">— empty-deck turn-start draws deal escalating damage.</span></div>');
+        }
+        // Public milestone history: show every roguelike reward this player
+        // chose, aggregated so repeated stackable Slaps read as ×N.
+        var eventHistory = [];
+        try {
+            if (state.roguelike_event_history
+                    && Array.isArray(state.roguelike_event_history[playerIdx])) {
+                eventHistory = state.roguelike_event_history[playerIdx];
+            }
+        } catch (e) { /* defensive */ }
+        if (eventHistory.length > 0) {
+            var eventCounts = {};
+            eventHistory.forEach(function(choice) {
+                eventCounts[choice] = (eventCounts[choice] || 0) + 1;
+            });
+            var eventMeta = {
+                clumsy_greed: ['🃏 Clumsy Greed', 'Drew 4, then exhausted 2 random cards.'],
+                with_a_slap: ['👋 With a Slap', 'Handshakes deal +5 damage per stack.'],
+                sharp_eyed_sceptic: ['👁️ Sharp Eyed Sceptic', 'Gained a Prohibition and 1 mana.']
+            };
+            Object.assign(eventMeta, {
+                grave_expectations: ['Grave Expectations', 'Returned up to 2 random Grave cards, then lost 25% current HP.'],
+                pocket_change: ['Pocket Change', 'Gained 3 mana; the opponent drew 1 card.'],
+                spring_cleaning: ['Spring Cleaning', 'Exhausted the hand, then drew that many plus 1.'],
+                skeleton_crew: ['Skeleton Crew', 'Summoned 2 Reanimated Bones on random friendly empty tiles.'],
+                compound_interest: ['Compound Interest', 'Gains +1 mana at the next 3 turn starts.'],
+                marked_cards: ['Marked Cards', 'Kept 1 of the top 3 cards and ordered the other 2.']
+            });
+            Object.keys(eventCounts).forEach(function(choice) {
+                var count = eventCounts[choice] || 0;
+                if (!count) return;
+                var parts = String(choice).split(':');
+                var meta = eventMeta[parts[0]]
+                    || [_roguelikeHistoryLabel(choice), 'Fortune gained.'];
+                if (parts[0] === 'uncharted_fortune') {
+                    meta = [_roguelikeHistoryLabel(choice),
+                        'Granted a fortune not previously seen or offered this game.'];
+                }
+                panels.push('<div class="tooltip-keyword roguelike-player-choice">'
+                    + '<span class="tooltip-keyword-name">' + meta[0]
+                    + (count > 1 ? ' ×' + count : '') + '</span> '
+                    + '<span class="tooltip-keyword-desc">— ' + meta[1]
+                    + '</span></div>');
+            });
         }
         if (panels.length === 0) {
             panels.push('<div class="tooltip-text">No player passives active.</div>');
@@ -1141,4 +1246,3 @@ function findCardNameById(cardId) {
     }
     return cardId; // fallback to raw id
 }
-

@@ -5296,6 +5296,133 @@ input::selection, textarea::selection { background: rgba(224, 162, 60, 0.45); co
 .rps-tile.rps-tile-static,
 .rps-tile.rps-tile-static:hover { cursor: default; transform: none; }
 
+/* Turn-25 roguelike choices reuse the RPS chrome with room for rules text. */
+.roguelike-event-modal { max-width: 720px !important; }
+.marked-cards-modal { max-width: 760px !important; }
+.marked-cards-tile { position: relative; }
+.marked-cards-tile.marked-cards-kept {
+  border-color: #62d48a !important;
+  box-shadow: 0 0 0 2px rgba(98, 212, 138, .5), 0 8px 22px rgba(0, 0, 0, .38) !important;
+}
+.marked-cards-tile.marked-cards-top {
+  border-color: #e2b85b !important;
+  box-shadow: 0 0 0 2px rgba(226, 184, 91, .5), 0 8px 22px rgba(0, 0, 0, .38) !important;
+}
+.marked-cards-badge {
+  min-height: 18px;
+  color: #f4df9e;
+  font: 800 11px/1.2 var(--font-ui, sans-serif);
+  letter-spacing: .12em;
+}
+.roguelike-event-row { gap: 12px; padding: 20px 16px; }
+.roguelike-event-tile {
+  width: 190px;
+  height: 210px;
+  padding: 14px 12px;
+  box-sizing: border-box;
+  justify-content: flex-start;
+}
+.roguelike-event-tile .rps-tile-glyph { font-size: 42px; margin-top: 8px; }
+.roguelike-event-tile .rps-tile-label {
+  min-height: 34px;
+  text-align: center;
+  line-height: 1.15;
+}
+.roguelike-event-description {
+  color: var(--parch-mute, #cbbb95);
+  font-family: var(--ui-body, Georgia), serif;
+  font-size: 13px;
+  line-height: 1.35;
+  text-align: center;
+}
+.roguelike-spectator-wait { text-align: center; padding: 0 0 22px; }
+
+/* Shared fortune reveal: both locked picks appear in one non-interactive beat
+   before any of their result animations are allowed to leave the queue. */
+.fortune-reveal-overlay {
+  z-index: 3250;
+  background: rgba(7, 5, 2, .76) !important;
+  backdrop-filter: blur(2px);
+  transition: opacity .4s ease;
+}
+.fortune-reveal-overlay.fortune-reveal-fade { opacity: 0; }
+.fortune-reveal-modal {
+  width: min(720px, 94vw) !important;
+  max-height: min(640px, 92vh);
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 50% 0, rgba(111, 75, 24, .22), transparent 55%),
+    linear-gradient(180deg, rgba(29, 22, 12, .98), rgba(13, 10, 6, .98)) !important;
+  box-shadow: 0 24px 70px rgba(0, 0, 0, .72),
+              inset 0 0 0 1px rgba(224, 162, 60, .22);
+}
+.fortune-reveal-rule { color: #f4df9e; }
+.fortune-reveal-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 18px;
+  padding: 22px 24px 28px;
+}
+.fortune-reveal-player {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 9px;
+}
+.fortune-reveal-player-name {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--gold, #e0a23c);
+  font: 800 14px/1.2 var(--font-ui, sans-serif);
+  letter-spacing: .1em;
+  text-transform: uppercase;
+}
+.fortune-reveal-card {
+  width: min(220px, 100%);
+  height: 230px;
+  background: linear-gradient(180deg, #2e2314, #171109) !important;
+  box-shadow: inset 0 0 28px rgba(0, 0, 0, .36),
+              0 10px 28px rgba(0, 0, 0, .5);
+  animation: fortune-reveal-arrive .45s cubic-bezier(.2, .8, .25, 1) both;
+}
+.fortune-reveal-player:last-child .fortune-reveal-card {
+  animation-delay: .08s;
+}
+.fortune-reveal-together {
+  color: #f4df9e;
+  font: 900 11px/1.15 var(--font-ui, sans-serif);
+  letter-spacing: .12em;
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
+  opacity: .8;
+}
+.fortune-reveal-becomes {
+  margin-top: auto;
+  padding: 7px 8px;
+  border: 1px solid rgba(224, 162, 60, .45);
+  border-radius: 5px;
+  color: #f4df9e;
+  font: 800 11px/1.25 var(--font-ui, sans-serif);
+  text-align: center;
+  text-transform: uppercase;
+}
+@keyframes fortune-reveal-arrive {
+  from { opacity: 0; transform: translateY(16px) scale(.94); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+@media (max-width: 620px), (max-height: 520px) {
+  .fortune-reveal-row { gap: 8px; padding: 12px 10px 16px; }
+  .fortune-reveal-card { height: 190px; padding: 9px 7px; }
+  .fortune-reveal-card .rps-tile-glyph { font-size: 32px; margin-top: 2px; }
+  .fortune-reveal-card .rps-tile-label { font-size: 13px; min-height: 28px; }
+  .fortune-reveal-card .roguelike-event-description { font-size: 11px; }
+  .fortune-reveal-together { font-size: 9px; }
+}
+
 /* Waiting body after Accept (your locked pick + pulsing wait line) */
 .rps-waiting {
   display: flex;
