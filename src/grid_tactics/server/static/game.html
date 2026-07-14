@@ -26,7 +26,10 @@
   <link rel="stylesheet" href="/static/css/06-game-hud.css?v=0.27.49">
   <link rel="stylesheet" href="/static/css/07-cards-cf2.css?v=0.27.49">
   <link rel="stylesheet" href="/static/css/zz-overrides.css?v=0.27.49">
-  <script src="https://cdn.socket.io/4.7.4/socket.io.min.js" defer></script>
+  <!-- Vendored so lobby/game initialization is not blocked by CDN outages,
+       privacy filters, or offline local development. Upstream MIT header is
+       retained in the artifact. -->
+  <script src="/static/vendor/socket.io-4.7.4.min.js" defer></script>
   <!-- Modular client JS (2026-07-06): classic scripts sharing one global
        scope — ALL tags must stay `defer` (never async) and in this order;
        socket.io above must load first. -->
@@ -648,6 +651,7 @@
               </div>
               <div class="pod-row-stats">
                 <span class="pod-mana"><span class="pod-pip"></span><span id="opp-mana">0</span><small>/10</small></span>
+                <span id="opp-action-bank" class="action-bank action-bank-pod" role="meter" aria-valuemin="0" aria-valuemax="3" aria-valuenow="0" aria-label="0 of 3 action points"><span class="action-coin" aria-hidden="true"></span><span class="action-coin" aria-hidden="true"></span><span class="action-coin" aria-hidden="true"></span></span>
               </div>
               <span class="pod-hidden-meta" hidden><span id="opp-name"></span><b id="opp-deck">0</b><b id="opp-hand">0</b></span>
             </div>
@@ -666,6 +670,7 @@
               </div>
               <div class="pod-row-stats">
                 <span class="pod-mana"><span class="pod-pip"></span><span id="self-mana">0</span><small>/10</small></span>
+                <span id="self-action-bank" class="action-bank action-bank-pod" role="meter" aria-valuemin="0" aria-valuemax="3" aria-valuenow="0" aria-label="0 of 3 action points"><span class="action-coin" aria-hidden="true"></span><span class="action-coin" aria-hidden="true"></span><span class="action-coin" aria-hidden="true"></span></span>
               </div>
               <span class="pod-hidden-meta" hidden><span id="self-name"></span><b id="self-deck">0</b><b id="self-hand">0</b></span>
             </div>
@@ -822,14 +827,14 @@
               <!-- 25 cells rendered by renderBoard({ mount: this, state }) -->
             </div>
             <div class="pile-board pile-board-own" data-side="own" aria-label="Your piles">
-              <button class="pile-cell" data-pile="exhaust" title="Your exhaust"><span class="pile-cell-ico">🌀</span><span class="pile-cell-n">0</span><span class="pile-cell-lbl">Exhaust</span></button>
-              <button class="pile-cell" data-pile="grave" title="Your grave"><span class="pile-cell-ico">⚰️</span><span class="pile-cell-n">0</span><span class="pile-cell-lbl">Grave</span></button>
-              <button class="pile-cell pile-cell-deck" data-pile="deck" title="Your deck"><span class="pile-cell-ico">🎴</span><span class="pile-cell-n">0</span><span class="pile-cell-lbl">Deck</span></button>
+              <button class="pile-cell sandbox-pile-btn" data-pile="exhaust" data-player="0" title="Your exhaust"><span class="pile-cell-ico">🌀</span><span class="pile-cell-n" id="sandbox-p0-exhaust">0</span><span class="pile-cell-lbl">Exhaust</span></button>
+              <button class="pile-cell sandbox-pile-btn" data-pile="graveyard" data-player="0" title="Your grave"><span class="pile-cell-ico">⚰️</span><span class="pile-cell-n" id="sandbox-p0-grave">0</span><span class="pile-cell-lbl">Grave</span></button>
+              <button class="pile-cell pile-cell-deck sandbox-pile-btn" data-pile="deck" data-player="0" title="Your deck"><span class="pile-cell-ico">🎴</span><span class="pile-cell-n" id="sandbox-p0-deck-pile">0</span><span class="pile-cell-lbl">Deck</span></button>
             </div>
             <div class="pile-board pile-board-opp" data-side="opp" aria-label="Opponent piles">
-              <button class="pile-cell pile-cell-deck" data-pile="deck" title="Opponent deck"><span class="pile-cell-ico">🎴</span><span class="pile-cell-n">0</span><span class="pile-cell-lbl">Deck</span></button>
-              <button class="pile-cell" data-pile="grave" title="Opponent grave"><span class="pile-cell-ico">⚰️</span><span class="pile-cell-n">0</span><span class="pile-cell-lbl">Grave</span></button>
-              <button class="pile-cell" data-pile="exhaust" title="Opponent exhaust"><span class="pile-cell-ico">🌀</span><span class="pile-cell-n">0</span><span class="pile-cell-lbl">Exhaust</span></button>
+              <button class="pile-cell pile-cell-deck sandbox-pile-btn" data-pile="deck" data-player="1" title="Opponent deck"><span class="pile-cell-ico">🎴</span><span class="pile-cell-n" id="sandbox-p1-deck-pile">0</span><span class="pile-cell-lbl">Deck</span></button>
+              <button class="pile-cell sandbox-pile-btn" data-pile="graveyard" data-player="1" title="Opponent grave"><span class="pile-cell-ico">⚰️</span><span class="pile-cell-n" id="sandbox-p1-grave">0</span><span class="pile-cell-lbl">Grave</span></button>
+              <button class="pile-cell sandbox-pile-btn" data-pile="exhaust" data-player="1" title="Opponent exhaust"><span class="pile-cell-ico">🌀</span><span class="pile-cell-n" id="sandbox-p1-exhaust">0</span><span class="pile-cell-lbl">Exhaust</span></button>
             </div>
           </div>
 
@@ -856,6 +861,7 @@
               <div class="pod-row-stats">
                 <span class="pod-chip">DECK <b id="sandbox-p1-deck">0</b></span>
                 <span class="pod-chip">HAND <b id="sandbox-p1-handcount">0</b></span>
+                <span id="sandbox-p1-action-bank" class="action-bank action-bank-pod" role="meter" aria-valuemin="0" aria-valuemax="3" aria-valuenow="0" aria-label="0 of 3 action points"><span class="action-coin" aria-hidden="true"></span><span class="action-coin" aria-hidden="true"></span><span class="action-coin" aria-hidden="true"></span></span>
               </div>
             </div>
           </div>
@@ -878,6 +884,7 @@
               <div class="pod-row-stats">
                 <span class="pod-chip">HAND <b id="sandbox-p0-handcount">0</b></span>
                 <span class="pod-chip">DECK <b id="sandbox-p0-deck">0</b></span>
+                <span id="sandbox-p0-action-bank" class="action-bank action-bank-pod" role="meter" aria-valuemin="0" aria-valuemax="3" aria-valuenow="0" aria-label="0 of 3 action points"><span class="action-coin" aria-hidden="true"></span><span class="action-coin" aria-hidden="true"></span><span class="action-coin" aria-hidden="true"></span></span>
               </div>
             </div>
           </div>
@@ -943,12 +950,14 @@
                 <label>HP <input type="number" class="input sandbox-cheat-input" data-player="0" data-field="hp"></label>
                 <label>Mana <input type="number" class="input sandbox-cheat-input" data-player="0" data-field="current_mana"></label>
                 <label>Max <input type="number" class="input sandbox-cheat-input" data-player="0" data-field="max_mana"></label>
+                <label>AP <input type="number" min="0" max="3" class="input sandbox-cheat-input" data-player="0" data-field="action_points"></label>
               </div>
               <div class="sandbox-cheat-col" data-player="1">
                 <strong>P2</strong>
                 <label>HP <input type="number" class="input sandbox-cheat-input" data-player="1" data-field="hp"></label>
                 <label>Mana <input type="number" class="input sandbox-cheat-input" data-player="1" data-field="current_mana"></label>
                 <label>Max <input type="number" class="input sandbox-cheat-input" data-player="1" data-field="max_mana"></label>
+                <label>AP <input type="number" min="0" max="3" class="input sandbox-cheat-input" data-player="1" data-field="action_points"></label>
               </div>
             </div>
           </div>

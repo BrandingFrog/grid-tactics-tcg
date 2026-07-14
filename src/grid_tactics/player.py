@@ -16,6 +16,8 @@ from dataclasses import dataclass, replace
 from grid_tactics.enums import PlayerSide
 from grid_tactics.types import (
     MAX_HAND_SIZE,
+    ACTION_POINTS_PER_TURN,
+    MAX_ACTION_POINTS,
     MAX_MANA_CAP,
     MANA_REGEN_PER_TURN,
     STARTING_HP,
@@ -54,6 +56,9 @@ class Player:
     # player STARTING their turn (react_stack turn flip). Appended field —
     # keep at end for positional-construction stability. (2026-07-09)
     tutored_this_turn: bool = False
+    # Public, banked primary-action currency (active rules v5). Appended for
+    # positional-construction and legacy-save stability.
+    action_points: int = 1
 
     # -- Construction -------------------------------------------------------
 
@@ -105,16 +110,18 @@ class Player:
 
     # -- Mana operations ----------------------------------------------------
 
-    def regenerate_mana(self) -> Player:
+    def regenerate_mana(self, amount: int = MANA_REGEN_PER_TURN) -> Player:
         """Regenerate mana per turn.
 
         Banking pool design (D-08):
-          new_current = min(current + MANA_REGEN_PER_TURN, MAX_MANA_CAP)
+          new_current = min(current + amount, MAX_MANA_CAP)
 
         Mana is a single banking pool — unspent mana carries over and the pool
         grows by +1 each turn. Cap (D-07): never exceeds MAX_MANA_CAP.
         """
-        new_current = min(self.current_mana + MANA_REGEN_PER_TURN, MAX_MANA_CAP)
+        if amount < 0:
+            raise ValueError(f"Cannot regenerate negative mana: {amount}")
+        new_current = min(self.current_mana + amount, MAX_MANA_CAP)
         return replace(self, current_mana=new_current)
 
     def spend_mana(self, cost: int) -> Player:
@@ -126,6 +133,21 @@ class Player:
                 f"Insufficient mana: have {self.current_mana}, need {cost}"
             )
         return replace(self, current_mana=self.current_mana - cost)
+
+    def gain_action_points(self, amount: int = ACTION_POINTS_PER_TURN) -> Player:
+        """Bank action points up to the hard cap."""
+        if amount < 0:
+            raise ValueError(f"Cannot gain negative action points: {amount}")
+        return replace(
+            self,
+            action_points=min(MAX_ACTION_POINTS, self.action_points + amount),
+        )
+
+    def spend_action_point(self) -> Player:
+        """Spend one primary-action point."""
+        if self.action_points <= 0:
+            raise ValueError("No action points remaining")
+        return replace(self, action_points=self.action_points - 1)
 
     # -- Hand management ----------------------------------------------------
 

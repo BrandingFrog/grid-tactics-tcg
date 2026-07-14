@@ -63,12 +63,39 @@ function renderRoomBar() {
 // Section 12: renderOpponentInfo() (UI-03)
 // =============================================
 
+function _actionPointValue(player) {
+    return Math.max(0, Math.min(3, (player && player.action_points) | 0));
+}
 
-// Handshake offer flag (user 2026-07-08): after the FIRST pass of a
-// potential handshake, the passer's pill shows a palm-up hand until the
-// opponent answers (pass -> handshake banner, anything else -> flag drops).
-// consecutive_passes === 1 means exactly one unanswered pass, and the
-// passer is whoever is NOT the active player.
+function _actionBankMarkup(points, extraClass) {
+    var value = Math.max(0, Math.min(3, points | 0));
+    var html = '<span class="action-bank ' + (extraClass || '')
+        + '" role="meter" aria-valuemin="0" aria-valuemax="3" aria-valuenow="'
+        + value + '" aria-label="' + value + ' of 3 action points">';
+    for (var i = 0; i < 3; i++) {
+        html += '<span class="action-coin' + (i < value ? ' is-filled' : '')
+            + '" aria-hidden="true"></span>';
+    }
+    return html + '</span>';
+}
+
+function _renderActionBank(id, player) {
+    var bank = document.getElementById(id);
+    if (!bank) return;
+    var value = _actionPointValue(player);
+    bank.setAttribute('aria-valuenow', String(value));
+    bank.setAttribute('aria-label', value + ' of 3 action points');
+    bank.title = value + ' / 3 action points';
+    var coins = bank.querySelectorAll('.action-coin');
+    for (var i = 0; i < coins.length; i++) {
+        coins[i].classList.toggle('is-filled', i < value);
+    }
+}
+
+
+// Handshake offer flag: after the first REST, the rester's pill shows a
+// palm-up hand until the opponent answers (REST completes; PASS/action
+// declines). The legacy consecutive_passes field now tracks RESTs only.
 
 // Waiting indicator (user 2026-07-08): a flipping hourglass over the
 // avatar of whoever the game is waiting on — a pending pick first, then
@@ -158,7 +185,7 @@ function _updatePassFlag(which, playerIdx) {
             flag = document.createElement('span');
             flag.className = 'pod-pass-flag';
             flag.textContent = '🫴';
-            flag.title = 'Passed — handshake offered';
+            flag.title = 'Handshake offered';
             row.appendChild(flag);
         }
     } else if (flag) {
@@ -189,6 +216,7 @@ function renderOpponentInfo() {
     if (oppMana) {
         oppMana.textContent = oppPlayer.current_mana;
     }
+    _renderActionBank('opp-action-bank', oppPlayer);
 
     // Hand count (god-mode spectator has the full hand array instead of a count)
     var oppHand = document.getElementById('opp-hand');
@@ -235,6 +263,7 @@ function renderSelfInfo() {
     if (selfMana) {
         selfMana.textContent = myPlayer.current_mana;
     }
+    _renderActionBank('self-action-bank', myPlayer);
 
     // Hand count
     var selfHand = document.getElementById('self-hand');
@@ -358,9 +387,9 @@ function _renderAvatarPod(which, playerIdx) {
     var hpEl = document.getElementById('avatar-' + which + '-hp');
     if (hpEl) hpEl.textContent = p.hp;
     var fortuneSummary = _roguelikePlayerChoiceSummary(gameState, playerIdx);
-    pod.title = fortuneSummary
-        ? 'Chosen fortunes: ' + fortuneSummary
-        : 'View player details';
+    var apSummary = _actionPointValue(p) + ' / 3 action points';
+    pod.title = (fortuneSummary ? 'Chosen fortunes: ' + fortuneSummary + ' · ' : '')
+        + apSummary + ' · View player details';
     // (Dark Matter pod chip removed 2026-07-06 — no DM writes here.)
     if (!pod._gtAvatarBound) {
         pod._gtAvatarBound = true;
@@ -389,6 +418,7 @@ function showPlayerPreview(playerIdx) {
     var hintId = sandboxMode ? 'sandbox-tooltip-hint' : 'game-tooltip-hint';
     var host = document.getElementById(tooltipId);
     if (!host) return;
+    activePlayerPreviewIdx = playerIdx;
     host.style.display = '';
 
     var name = _avatarDisplayName(playerIdx);
@@ -411,6 +441,9 @@ function showPlayerPreview(playerIdx) {
         var chips = '';
         chips += '<span class="ts-hp">' + (p.hp | 0) + HEART + '</span>';
         chips += '<span class="ts-mana">' + (p.current_mana | 0) + ' Mana</span>';
+        chips += '<span class="ts-actions"><span class="ts-action-label">Actions</span>'
+            + _actionBankMarkup(_actionPointValue(p), 'action-bank-tooltip')
+            + '</span>';
         // Only surface Dark Matter once the player has stacks (user 2026-07-06).
         if (dm > 0) chips += '<span class="ts-dm">🌑 ' + dm + ' Dark Matter</span>';
         statsEl.innerHTML = chips;
@@ -427,6 +460,10 @@ function showPlayerPreview(playerIdx) {
         body += '<div class="tooltip-text">Hand ' + handN + ' · Deck ' + deckN
             + ' · Grave ' + (p.grave ? p.grave.length : 0)
             + ' · Exhaust ' + (p.exhaust ? p.exhaust.length : 0) + '</div>';
+        var ante = Math.max(1, state.fortune_ante | 0);
+        body += '<div class="tooltip-text tooltip-action-economy">Turn income: +'
+            + ante + ' Mana · Rest: +1 Mana and draw ' + ante
+            + (ante === 1 ? ' card' : ' cards') + '</div>';
         var panels = [];
         // Only surface Dark Matter once the player has stacks (user 2026-07-06).
         if (dm > 0) {

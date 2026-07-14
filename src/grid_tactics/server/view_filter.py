@@ -100,6 +100,8 @@ def filter_state_for_player(state_dict: dict, viewer_idx: int, library=None) -> 
         # Dark Matter pool: PUBLIC for both sides. Legacy-safe default
         # for state dicts serialized before the 2026-07 pool redesign.
         player_dict.setdefault("dark_matter", 0)
+        # Banked action points are public profile information.
+        player_dict.setdefault("action_points", 1)
 
     # Strip seed
     filtered.pop("seed", None)

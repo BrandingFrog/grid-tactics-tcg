@@ -1228,11 +1228,9 @@ function renderActionBar() {
     // decision above declined to fire (audit fix 2026-07-06).
     _refreshFloatingSkipReact();
 
-    // Action bar: show Pass / Skip React button.
-    // Turn-structure redesign (2026-07): DRAW is no longer a legal action —
-    // the turn-start auto-draw covers it — so the old "Draw Card" button is
-    // GONE. In its place, ACTION phase shows a free "Pass" button (PASS no
-    // longer deals fatigue damage; two consecutive passes seal a Handshake).
+    // Action bar: show the current end-turn control or Skip React. Under the
+    // active bank rules it begins as REST, then becomes PASS after a point is
+    // spent. Spending the final point auto-ends after the action chain.
     if (slot) {
         // Turn ownership (user 2026-07-08): show Pass/Skip ONLY when it is
         // actually THIS player's turn to act — not merely when a PASS action
@@ -1257,11 +1255,8 @@ function renderActionBar() {
                 slot.appendChild(skipBtn);
             }
         } else {
-            // ACTION phase (variant v4.2, user 2026-07-11): the engine
-            // offers exactly ONE skip — Rest (DRAW slot, 3: +1 mana AND
-            // +1 draw) until a magic is cast this turn, after which it
-            // transforms into Pass (4: no benefit). Render whichever is
-            // legal in the same slot; standard rules only ever offer Pass.
+            // ACTION phase v5: REST is the rewarded no-action turn end. Once
+            // any AP is spent it changes to the no-effect PASS instead.
             var canPassAction = canShowSkipButton(4);
             var restLegal = canShowSkipButton(3);
             if (canPassAction || restLegal) {
@@ -1270,9 +1265,12 @@ function renderActionBar() {
                 if (restLegal) {
                     var restBtn = document.createElement('button');
                     restBtn.className = 'btn btn-action btn-rest-action';
-                    restBtn.textContent = 'Rest';
-                    restBtn.title = 'Rest — gain 1 mana and draw a card (uses your action). '
-                        + 'Counts toward the Handshake like a pass';
+                    var restDraws = Math.max(1, (gameState.fortune_ante | 0));
+                    restBtn.innerHTML = '<span>Rest</span><small>+1M · Draw '
+                        + restDraws + '</small>';
+                    restBtn.title = 'Rest — take no action, bank all action points, gain 1 mana, draw '
+                        + restDraws + (restDraws === 1 ? ' card' : ' cards')
+                        + ', offer a Handshake, and end your turn';
                     restBtn.addEventListener('click', function() {
                         submitAction({ action_type: 3 });
                     });
@@ -1282,8 +1280,7 @@ function renderActionBar() {
                     var passBtn = document.createElement('button');
                     passBtn.className = 'btn btn-action btn-pass btn-pass-action';
                     passBtn.textContent = 'Pass';
-                    passBtn.title = 'Pass — no benefit. 2nd consecutive pass '
-                        + 'seals a Handshake (both players gain a mana and draw a card)';
+                    passBtn.title = 'Pass — end your turn with no effect and bank remaining action points';
                     passBtn.addEventListener('click', function() {
                         submitAction({ action_type: 4 });
                     });
@@ -1574,7 +1571,9 @@ function showRoguelikeChoicesReveal(payload) {
     title.textContent = 'Fortunes Revealed';
     var subtitle = document.createElement('div');
     subtitle.className = 'tutor-modal-deckline fortune-reveal-rule';
-    subtitle.textContent = 'Both resolve together · Reactions disabled';
+    var newAnte = Math.max(1, (payload && payload.fortune_ante) | 0);
+    subtitle.textContent = 'Both resolve together · Reactions disabled · ANTE UP: +'
+        + newAnte + ' turn Mana · Rest draws ' + newAnte;
     header.appendChild(title);
     header.appendChild(subtitle);
     modal.appendChild(header);

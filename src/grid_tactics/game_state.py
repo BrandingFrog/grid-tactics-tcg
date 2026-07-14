@@ -242,13 +242,12 @@ class GameState:
     pending_trigger_picker_idx: Optional[int] = None
 
     # Turn-structure redesign 2026-07: Handshake tracking (appended fields).
-    # ``consecutive_passes`` counts consecutive ACTION-phase PASS actions
-    # across BOTH players (react-window passes do NOT count). When a PASS
-    # lands while the counter is already 1 (i.e. the opponent's
-    # immediately-previous action was also PASS), a Handshake occurs:
+    # Legacy-named ``consecutive_passes`` now counts consecutive REST choices
+    # across both players (react-window passes do not count). A second REST
+    # seals the Handshake; PASS or any paid action clears the offer.
     # ``handshake_pending`` is set and the counter resets to 0 (no
-    # chaining — the next Handshake needs a fresh pair of passes). The
-    # payout (+1 mana each, or a draw if already at MAX_MANA_CAP) happens
+    # chaining — the next Handshake needs a fresh pair of REST choices). The
+    # Payout (+1 mana and draw 1 each under active rules) happens
     # in the end-of-turn tail (react_stack._close_end_of_turn_and_flip).
     consecutive_passes: int = 0
     handshake_pending: bool = False
@@ -293,21 +292,18 @@ class GameState:
     # Emberplague Rat / Dark Matter Battery every time a burn tick killed).
     decay_resume_pending: bool = False
 
-    # Magic-free-action variant (user 2026-07-10 v3, GT_MANUAL_DRAW=1):
-    # set when the active player casts a MAGIC (non-minion) card — the
-    # cast does NOT consume the turn action. Consumed at the after-action
-    # react-window close, which returns to the caster's ACTION phase
-    # instead of entering END_OF_TURN. Defensively cleared on turn flip.
-    # Appended field with a default — from_dict/serialization tolerant.
+    # Deprecated v3/v4 save fields. Active rules v5 never set either flag:
+    # MAGIC is a normal one-point primary action. Keep the defaults so old
+    # serialized states and server diagnostics remain readable.
     magic_free_action_pending: bool = False
-
-    # Variant v4.2 (user 2026-07-11): once the active player casts a MAGIC
-    # card this turn, REST transforms into PASS — legal_actions offers PASS
-    # instead of DRAW for the remainder of the turn (no mana+draw skip after
-    # a free magic action). Cleared on turn flip. Unlike
-    # ``magic_free_action_pending`` (consumed at the window close), this
-    # persists across the returned action phase.
     magic_cast_this_turn: bool = False
+
+    # Active action-bank rules v5. This counter gates REST: it is legal only
+    # before any primary action point has been spent during the current turn.
+    # ``turn_end_requested`` distinguishes REST/PASS from a paid action while
+    # their after-action react window is resolving.
+    actions_spent_this_turn: int = 0
+    turn_end_requested: bool = False
 
     # Phase 14.8-05: ``last_trigger_blip`` DELETED. Plan 14.8-03a introduced
     # EVT_TRIGGER_BLIP as a first-class EngineEvent in the event stream;
@@ -325,6 +321,34 @@ class GameState:
     def inactive_player(self) -> Player:
         """Return the currently inactive (opposing) player."""
         return self.players[1 - self.active_player_idx]
+
+    @property
+    def fortune_rounds_completed(self) -> int:
+        """Number of fully-settled mirrored Fortune rounds.
+
+        The mirrored picks are written to history before their effects are
+        applied.  Marked Cards then opens one or two follow-up decisions, so
+        that newest history row is not complete until the final ordering
+        modal closes.  Keep the previous ante throughout that pending chain;
+        the last ``resolve_marked_cards_choice`` clears the pending fields and
+        makes the round count advance automatically.
+        """
+        completed = min(
+            len(self.roguelike_event_history[0]),
+            len(self.roguelike_event_history[1]),
+        )
+        marked_followup_pending = (
+            self.pending_marked_cards_player_idx is not None
+            or bool(self.pending_marked_cards_queue)
+        )
+        if marked_followup_pending:
+            completed = max(0, completed - 1)
+        return completed
+
+    @property
+    def fortune_ante(self) -> int:
+        """Automatic mana per turn and cards drawn by REST."""
+        return 1 + self.fortune_rounds_completed
 
     def get_minion(self, instance_id: int) -> Optional[MinionInstance]:
         """Find a minion by its instance_id. Returns None if not found."""
@@ -359,6 +383,9 @@ class GameState:
         # Create players with shuffled decks
         p1 = Player.new(PlayerSide.PLAYER_1, shuffled_p1)
         p2 = Player.new(PlayerSide.PLAYER_2, shuffled_p2)
+        # P1's first turn has already begun, so its first point is loaded.
+        # P2 receives its first point when turn 2 starts.
+        p2 = replace(p2, action_points=0)
 
         # Draw starting hands (P1=3, P2=4)
         for _ in range(STARTING_HAND_P1):
@@ -403,6 +430,7 @@ class GameState:
                     # Dark Matter pool redesign 2026-07 — PUBLIC info,
                     # serialized for both players (view_filter keeps it).
                     "dark_matter": p.dark_matter,
+                    "action_points": p.action_points,
                 }
                 for p in self.players
             ],
@@ -490,13 +518,15 @@ class GameState:
             "pending_marked_cards_cards": list(self.pending_marked_cards_cards),
             "pending_marked_cards_queue": list(self.pending_marked_cards_queue),
             "compound_interest_turns": list(self.compound_interest_turns),
+            # Derived from mirrored history so Fortune resolution can never
+            # double-increment it across server/headless resume paths.
+            "fortune_ante": self.fortune_ante,
             # Deferred-Decay marker (burn-tick death interrupt resume).
             "decay_resume_pending": self.decay_resume_pending,
-            # Variant v4.2: REST→PASS transform flag — spans client
-            # round-trips within the turn, so it must survive a
-            # to_dict/from_dict round-trip (unlike the transient
-            # magic_free_action_pending, consumed within one cycle).
+            # Deprecated save key retained for backwards compatibility.
             "magic_cast_this_turn": self.magic_cast_this_turn,
+            "actions_spent_this_turn": self.actions_spent_this_turn,
+            "turn_end_requested": self.turn_end_requested,
             # Phase 14.7-05: simultaneous-trigger priority queue
             "pending_trigger_queue_turn": [
                 {
@@ -581,6 +611,8 @@ class GameState:
 
         Converts lists back to tuples and ints back to enums for full fidelity.
         """
+        active_idx = int(d.get("active_player_idx", 0))
+        turn_number = int(d.get("turn_number", 1))
         players = tuple(
             Player(
                 side=PlayerSide(p["side"]),
@@ -594,8 +626,15 @@ class GameState:
                 discarded_last_turn=p.get("discarded_last_turn", False),
                 # Legacy-safe: pre-redesign save dicts lack the key.
                 dark_matter=int(p.get("dark_matter", 0) or 0),
+                action_points=(
+                    int(p["action_points"] or 0)
+                    if "action_points" in p
+                    # Pre-bank opening saves must not pre-load inactive P2;
+                    # later legacy saves get a conservative one-point bank.
+                    else (0 if turn_number == 1 and idx != active_idx else 1)
+                ),
             )
-            for p in d["players"]
+            for idx, p in enumerate(d["players"])
         )
         board = Board(cells=tuple(d["board"]))
 
@@ -740,7 +779,7 @@ class GameState:
         return cls(
             board=board,
             players=players,  # type: ignore[arg-type]
-            active_player_idx=d["active_player_idx"],
+            active_player_idx=active_idx,
             phase=TurnPhase(d["phase"]),
             turn_number=d["turn_number"],
             seed=d["seed"],
@@ -802,6 +841,8 @@ class GameState:
             ),
             decay_resume_pending=bool(d.get("decay_resume_pending", False)),
             magic_cast_this_turn=bool(d.get("magic_cast_this_turn", False)),
+            actions_spent_this_turn=int(d.get("actions_spent_this_turn") or 0),
+            turn_end_requested=bool(d.get("turn_end_requested", False)),
             pending_trigger_queue_turn=pending_trigger_queue_turn,
             pending_trigger_queue_other=pending_trigger_queue_other,
             pending_trigger_picker_idx=d.get("pending_trigger_picker_idx"),

@@ -20,6 +20,9 @@ function renderGame() {
     renderBoard();
     renderPlayerAvatars();
     renderSelfInfo();
+    if (activePlayerPreviewIdx != null) {
+        showPlayerPreview(activePlayerPreviewIdx);
+    }
     renderHand();
     renderActionBar();
     // Phase 14.3: do not open react window mid-animation; gated because

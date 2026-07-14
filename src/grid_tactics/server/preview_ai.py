@@ -27,7 +27,7 @@ from grid_tactics.enums import (
 from grid_tactics.game_state import GameState
 from grid_tactics.legal_actions import effective_mana_cost
 from grid_tactics.minion import BURN_DAMAGE
-from grid_tactics.types import GRID_ROWS, MAX_HAND_SIZE, MAX_MANA_CAP, manual_draw_variant
+from grid_tactics.types import GRID_ROWS, MAX_HAND_SIZE, MAX_MANA_CAP
 
 _WIN_SCORE = 1_000_000.0
 _IMPOSSIBLE = -1_000_000.0
@@ -439,11 +439,6 @@ def _play_score(
         action,
         {TriggerType.ON_PLAY},
     )
-    # The first magic retains the main action but converts rewarded REST to
-    # a bare PASS.  Charge that real, limited opportunity cost without
-    # pretending the spell consumed the whole turn.
-    if manual_draw_variant() and not state.magic_cast_this_turn:
-        score -= 4.0
     return score
 
 
@@ -627,9 +622,14 @@ def _transform_score(state: GameState, library: CardLibrary, action: Action) -> 
 
 def _rest_score(state: GameState, player_idx: int) -> float:
     player = state.players[player_idx]
-    draw = 7.0 if player.deck and len(player.hand) < MAX_HAND_SIZE else 0.0
+    available_slots = max(0, MAX_HAND_SIZE - len(player.hand))
+    useful_draws = min(state.fortune_ante, len(player.deck), available_slots)
+    draw = useful_draws * 7.0
     mana = 4.0 if player.current_mana < MAX_MANA_CAP else 0.0
-    return draw + mana
+    # REST banks every point, but at a full bank it wastes next turn's AP
+    # regeneration, so prefer a useful primary action there.
+    overflow_cost = 6.0 if player.action_points >= 3 else 0.0
+    return draw + mana - overflow_cost
 
 
 def _trigger_score(state: GameState, library: CardLibrary, action: Action) -> float:
@@ -854,34 +854,8 @@ def pick_preview_action(
             lambda action: _react_score(state, library, player_idx, action),
         )[0]
 
-    # Magic keeps the main action in the live rules.  Take every useful
-    # incremental cast first, but skip no-op or self-harming spells.
-    magic_actions = []
-    for action in actions:
-        if action.action_type != ActionType.PLAY_CARD or action.card_index is None:
-            continue
-        try:
-            card_def = library.get_by_id(state.players[player_idx].hand[action.card_index])
-        except (IndexError, KeyError):
-            continue
-        if card_def.card_type == CardType.MAGIC:
-            magic_actions.append(action)
-    is_manual_draw = manual_draw_variant()
-    if is_manual_draw and magic_actions:
-        magic, score = _best(
-            magic_actions,
-            lambda action: _play_score(state, library, player_idx, action),
-        )
-        if score > 0.0:
-            return magic
-
-    candidates = (
-        [action for action in actions if action not in magic_actions]
-        if is_manual_draw
-        else actions
-    )
-    candidates = candidates or actions
+    # MAGIC now competes normally for the shared action bank.
     return _best(
-        candidates,
+        actions,
         lambda action: _main_score(state, library, player_idx, action),
     )[0]

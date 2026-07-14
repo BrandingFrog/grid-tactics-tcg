@@ -209,6 +209,12 @@ def resolve_roguelike_event_choice(
                     for idx, choice in enumerate(choices)
                 ],
                 "resolution": "simultaneous_no_react",
+                # This mirrored lock completes exactly one Fortune round.
+                # History is the source of truth; expose the upcoming rates
+                # in this pre-final-snapshot event for the reveal UI.
+                "fortune_ante": state.fortune_ante + 1,
+                "turn_mana_gain": state.fortune_ante + 1,
+                "rest_draw_count": state.fortune_ante + 1,
             },
         )
 

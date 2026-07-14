@@ -9,7 +9,7 @@ Grid Tactics is a two-player tactical card game played on a 5x5 board. The activ
 3. Start the game with `python pvp_server.py`.
 4. Open `http://127.0.0.1:5000/`.
 
-The live entrypoint enables the manual-draw rules experiment by default. Set `GT_MANUAL_DRAW=0` to run the standard engine rules.
+The action-bank/REST rules are the default for live, headless, and RL play. Set `GT_MANUAL_DRAW=0` only to run the legacy one-action engine rules.
 
 ## Repository map
 

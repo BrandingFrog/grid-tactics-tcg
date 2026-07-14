@@ -49,4 +49,4 @@ Update this file and the matching `KEYWORD_GLOSSARY` in `src/grid_tactics/server
 | Untargetable | Cannot be chosen as the target of a magic card's single-target effect; board-wide magic, minions, and Reacts still affect it. |
 | Revive | Summons minions from the Grave to the board; the player chooses each grave card eligible under the reviving card's text and its deployment tile (melee: any tile on the owner's side; ranged: back row). A revived minion counts as summoned and its Summon effect triggers. |
 | Draw | Moves the top card of your deck to your hand; if your hand is full (10 cards), the drawn card is sent to the Exhaust Pile, revealed, instead. |
-| Handshake | When a pass immediately follows the opponent's pass, both players gain +1 mana at the end of that turn (a player at full mana draws 1 card instead); the pass counter then resets — Handshakes do not chain. |
+| Handshake | When a REST immediately follows the opponent's REST, both players gain +1 mana and draw 1 at the end of that turn; the REST counter then resets — Handshakes do not chain. PASS or any paid action declines an open offer. |

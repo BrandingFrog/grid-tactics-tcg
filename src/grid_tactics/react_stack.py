@@ -19,6 +19,7 @@ from typing import Optional
 from grid_tactics.actions import Action
 from grid_tactics.card_library import CardLibrary
 from grid_tactics.engine_events import (
+    EVT_ACTION_POINTS_CHANGE,
     EVT_CARD_BURNED,
     EVT_CARD_DISCARDED,
     EVT_CARD_DRAWN,
@@ -501,6 +502,38 @@ def drain_pending_trigger_queue(
     return state
 
 
+def continue_action_or_enter_end(
+    state: GameState,
+    library: CardLibrary,
+    *,
+    event_collector: Optional[EventStream] = None,
+) -> GameState:
+    """Finish one logical action under either turn-rules contract.
+
+    Active rules v5 hands priority back to the same player while a banked
+    point remains. REST/PASS set ``turn_end_requested`` and always enter
+    Decay. Standard rules retain their historical one-action turn.
+    """
+    state = replace(
+        state,
+        react_stack=(),
+        react_player_idx=None,
+        pending_action=None,
+        react_context=None,
+        react_return_phase=None,
+        magic_free_action_pending=False,
+    )
+    if (
+        manual_draw_variant()
+        and not state.turn_end_requested
+        and state.active_player.action_points > 0
+    ):
+        return replace(state, phase=TurnPhase.ACTION)
+    return enter_end_of_turn(
+        state, library, event_collector=event_collector,
+    )
+
+
 def resume_after_trigger_drain(
     state: GameState,
     library: CardLibrary,
@@ -584,41 +617,22 @@ def resume_after_trigger_drain(
                 react_context=None,
                 react_return_phase=None,
             )
-        # Magic-free-action variant (user 2026-07-10 v3): same return-to-
-        # caster shortcut as resolve_react_stack's tail — a drained magic
-        # cast hands the action back instead of ending the turn.
-        if state.magic_free_action_pending:
-            if event_collector is not None:
-                event_collector.collect(
-                    EVT_REACT_WINDOW_CLOSED,
-                    "system:close_react_window",
-                    {"return_phase": "action_free_magic"},
-                )
-            return replace(
-                state,
-                phase=TurnPhase.ACTION,
-                react_stack=(),
-                react_player_idx=None,
-                pending_action=None,
-                react_context=None,
-                react_return_phase=None,
-                magic_free_action_pending=False,
-            )
+        continues = (
+            manual_draw_variant()
+            and not state.turn_end_requested
+            and state.active_player.action_points > 0
+        )
         if event_collector is not None:
             event_collector.collect(
                 EVT_REACT_WINDOW_CLOSED,
                 "system:close_react_window",
-                {"return_phase": "end_of_turn_transition"},
+                {
+                    "return_phase": (
+                        "action_bank" if continues else "end_of_turn_transition"
+                    )
+                },
             )
-        state = replace(
-            state,
-            react_stack=(),
-            react_player_idx=None,
-            pending_action=None,
-            react_context=None,
-            react_return_phase=None,
-        )
-        return enter_end_of_turn(
+        return continue_action_or_enter_end(
             state, library, event_collector=event_collector,
         )
 
@@ -1153,16 +1167,16 @@ def _resolve_handshake_payout(
 ) -> GameState:
     """Pay out a pending Handshake (turn-structure redesign 2026-07).
 
-    Both players PASSed consecutively → at the END of that turn BOTH
-    players gain +1 mana. A player whose mana is already full
+    Under standard rules, two consecutive PASS choices pay at the end of the
+    second turn: both players gain +1 mana. A player whose mana is already full
     (MAX_MANA_CAP) DRAWS A CARD instead (overdraw-burns on a full hand;
     an empty deck means no payout for that player — fatigue exists ONLY
     for turn-start draws). Clears ``handshake_pending``; the
     consecutive-pass counter was already reset at detection time
     (_apply_pass) so Handshakes cannot chain.
 
-    Rest variant (user 2026-07-10 v2, ``manual_draw_variant()``): the
-    payout is +1 mana AND a draw for BOTH players instead.
+    Under active bank rules, two consecutive REST choices create the
+    Handshake and the payout is +1 mana AND a draw for both players.
 
     Called from ``_close_end_of_turn_and_flip`` under the
     ``system:turn_flip`` contract (already asserted by the caller).
@@ -1320,11 +1334,38 @@ def apply_new_turn_resources(
     """Apply the incoming player's postponed mana and draw/fatigue work."""
     active_idx = state.active_player_idx
 
+    # P1's initial point is loaded by new_game. Every later incoming turn,
+    # including P2's first, gains exactly one banked point up to three.
+    if manual_draw_variant():
+        prev_points = state.players[active_idx].action_points
+        active_player = state.players[active_idx].gain_action_points()
+        state = replace(
+            state,
+            players=_replace_player(state.players, active_idx, active_player),
+        )
+        if (
+            event_collector is not None
+            and active_player.action_points != prev_points
+        ):
+            event_collector.collect(
+                EVT_ACTION_POINTS_CHANGE,
+                "system:turn_flip",
+                {
+                    "player_idx": active_idx,
+                    "prev": prev_points,
+                    "new": active_player.action_points,
+                    "delta": active_player.action_points - prev_points,
+                    "cause": "turn_start",
+                },
+            )
+
     # Both players' opening turns begin at STARTING_MANA; regen starts on
     # turn 3. The turn-start draw itself is not skipped on turn 2.
     if state.turn_number > 2:
         prev_mana = state.players[active_idx].current_mana
-        active_player = state.players[active_idx].regenerate_mana()
+        active_player = state.players[active_idx].regenerate_mana(
+            state.fortune_ante
+        )
         state = replace(
             state,
             players=_replace_player(state.players, active_idx, active_player),
@@ -1458,8 +1499,8 @@ def _close_end_of_turn_and_flip(
     """
     assert_phase_contract(state, "system:turn_flip")
 
-    # Handshake payout — the END of the turn in which the second
-    # consecutive PASS landed (turn-structure redesign 2026-07 §6).
+    # Handshake payout at the END of the resolving turn. Active rules create
+    # it from consecutive RESTs; legacy compatibility rules use PASSes.
     if state.handshake_pending:
         state = _resolve_handshake_payout(
             state, event_collector=event_collector,
@@ -1501,11 +1542,11 @@ def _close_end_of_turn_and_flip(
         phase=TurnPhase.ACTION,
         active_player_idx=new_active_idx,
         turn_number=state.turn_number + 1,
-        # Magic-free-action variant: never carry a stale free-action flag
-        # across the turn flip (wedge-safety). magic_cast_this_turn is
-        # per-turn by definition (v4.2 REST→PASS transform).
+        # Never carry deprecated free-magic save flags across a turn flip.
         magic_free_action_pending=False,
         magic_cast_this_turn=False,
+        actions_spent_this_turn=0,
+        turn_end_requested=False,
         players=_replace_player(
             state.players, new_active_idx,
             replace(state.players[new_active_idx], tutored_this_turn=False),
@@ -3042,51 +3083,24 @@ def resolve_react_stack(
                 react_return_phase=None,
             )
 
-        # Magic-free-action variant (user 2026-07-10 v3): a MAGIC cast
-        # does not consume the turn action — the after-action window
-        # closes back into the CASTER's ACTION phase instead of entering
-        # END_OF_TURN. The flag was set at cast time in _apply_play_card.
-        if state.magic_free_action_pending:
-            if event_collector is not None:
-                event_collector.collect(
-                    EVT_REACT_WINDOW_CLOSED,
-                    "system:close_react_window",
-                    {"return_phase": "action_free_magic"},
-                )
-            return replace(
-                state,
-                phase=TurnPhase.ACTION,
-                react_stack=(),
-                react_player_idx=None,
-                pending_action=None,
-                react_context=None,
-                react_return_phase=None,
-                magic_free_action_pending=False,
-            )
-
-        # Phase 14.7-03: after-action react window closed → enter
-        # END_OF_TURN (fires End triggers + opens end react window if any
-        # End triggers exist; otherwise shortcuts to turn-advance). This
-        # replaces the pre-14.7-03 direct call to
-        # close_end_react_and_advance_turn. For plans with no End
-        # triggers (the majority today) enter_end_of_turn shortcuts so
-        # behavior is byte-identical to the old flow.
-        # First, clear the react bookkeeping for the closing window.
+        # Active rules v5: close back to ACTION while another banked point
+        # remains; REST/PASS or the final point proceeds into Decay.
+        continues = (
+            manual_draw_variant()
+            and not state.turn_end_requested
+            and state.active_player.action_points > 0
+        )
         if event_collector is not None:
             event_collector.collect(
                 EVT_REACT_WINDOW_CLOSED,
                 "system:close_react_window",
-                {"return_phase": "end_of_turn_transition"},
+                {
+                    "return_phase": (
+                        "action_bank" if continues else "end_of_turn_transition"
+                    )
+                },
             )
-        state = replace(
-            state,
-            react_stack=(),
-            react_player_idx=None,
-            pending_action=None,
-            react_context=None,
-            react_return_phase=None,
-        )
-        return enter_end_of_turn(
+        return continue_action_or_enter_end(
             state, library, event_collector=event_collector,
         )
     elif return_phase == TurnPhase.START_OF_TURN:

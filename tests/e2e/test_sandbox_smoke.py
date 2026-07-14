@@ -55,7 +55,7 @@ playwright = pytest.importorskip("playwright.sync_api")
 from playwright.sync_api import Page, sync_playwright  # noqa: E402
 
 SANDBOX_URL = os.environ.get("GT_SANDBOX_URL", "http://localhost:5000/")
-COMMON_RAT_NID = 22  # card_id="rat", mana_cost=1, card_type=minion
+COMMON_RAT_NID = 25  # card_id="rat", mana_cost=1, card_type=minion
 
 
 # ---------------------------------------------------------------------------
@@ -119,9 +119,17 @@ def sandbox_page(browser_context):
     page.goto(SANDBOX_URL)
     # Wipe any autosave so every test starts empty.
     page.evaluate("() => localStorage.removeItem('gt_sandbox_autosave_v1')")
-    # Click the Sandbox nav tab.
-    page.wait_for_selector('[data-screen="sandbox"]', timeout=5000)
-    page.click('[data-screen="sandbox"]')
+    # The developer Sandbox nav control is intentionally hidden in the
+    # production lobby chrome. Enter through the same public screen manager
+    # instead of waiting for that hidden button to become visible.
+    page.wait_for_selector('[data-screen="sandbox"]', state="attached", timeout=5000)
+    page.evaluate(
+        "() => {"
+        "  document.body.classList.remove('sbx-hide-side', 'sbx-hide-bar');"
+        "  showScreen('screen-sandbox');"
+        "  if (typeof _fitDuelScale === 'function') _fitDuelScale();"
+        "}"
+    )
     # Wait for the sandbox_state round-trip to land, which triggers the
     # first render that fills the info bars with server-side state.
     page.wait_for_function(
@@ -187,8 +195,8 @@ def test_01_sandbox_screen_loads_and_mirrors_live_layout(sandbox_page: Page):
     assert page.is_visible("#screen-sandbox .game-layout")
     assert page.is_visible("#screen-sandbox .game-main")
     assert page.is_visible("#screen-sandbox .room-bar")
-    assert page.is_visible("#screen-sandbox .opp-bar")   # P2 info bar (top)
-    assert page.is_visible("#screen-sandbox .self-bar")  # P1 info bar (bottom)
+    assert page.is_visible("#screen-sandbox .pod-opp")   # P2 pod (top-right)
+    assert page.is_visible("#screen-sandbox .pod-self")  # P1 pod (bottom-left)
     assert page.is_visible("#sandbox-hand-p1")           # P2 hand (top)
     assert page.is_visible("#sandbox-hand-p0")           # P1 hand (bottom)
     assert page.is_visible("#sandbox-board")             # 5x5 grid mount
@@ -196,7 +204,10 @@ def test_01_sandbox_screen_loads_and_mirrors_live_layout(sandbox_page: Page):
 
     # Sidebar controls are present
     assert page.is_visible("#sandbox-search")
-    assert page.is_visible("#sandbox-zone-select")
+    # Zone choices are visible buttons; the old select remains hidden only as
+    # a compatibility mirror for the existing JS state.
+    assert page.locator(".sandbox-zone-btn").count() >= 4
+    assert page.is_visible('.sandbox-zone-btn[data-zone="hand"]')
     assert page.is_visible("#sandbox-undo-btn")
     assert page.is_visible("#sandbox-redo-btn")
     assert page.is_visible("#sandbox-save-btn")
@@ -235,7 +246,7 @@ def test_02_search_adds_common_rat_to_p1_hand(sandbox_page: Page):
 
     # Card DOM actually lands in the bottom hand container
     card = page.wait_for_selector(
-        '#sandbox-hand-p0 .card-frame-hand[data-numeric-id="22"]',
+        f'#sandbox-hand-p0 .card-frame-hand[data-numeric-id="{COMMON_RAT_NID}"]',
         timeout=2000,
     )
     assert card is not None, "Common Rat card not rendered in P1 hand mount"
@@ -271,13 +282,24 @@ def test_03_click_to_deploy_reuses_live_game_handlers(sandbox_page: Page):
     page.click(".sandbox-search-result")
     _p0_hand_size(page, 1)
 
+    # Search also stages the catalogue card for sandbox god-mode placement.
+    # Clear that separate affordance so this test exercises an actual paid
+    # PLAY_CARD through the live-game hand/board handlers below.
+    page.evaluate(
+        "() => { const staged = document.getElementById('sandbox-staged-card');"
+        " if (staged) { staged.hidden = true; staged.dataset.nid = ''; } }"
+    )
+
     # Click the hand card — exercises onHandCardClick and the sandbox
     # global-swap from Plan 14.6-02 (the click handler reads gameState
     # / legalActions, which were swapped to sandbox scope by sandboxActivate).
-    hand_card = page.wait_for_selector(
-        '#sandbox-hand-p0 .card-frame-hand[data-numeric-id="22"]',
-        timeout=2000,
+    # Sandbox state updates replace the hand DOM.  Use a Locator so Playwright
+    # resolves the current card node at click time instead of retaining a stale
+    # ElementHandle from the render that just completed.
+    hand_card = page.locator(
+        f'#sandbox-hand-p0 .card-frame-hand[data-numeric-id="{COMMON_RAT_NID}"]'
     )
+    hand_card.wait_for(state="visible", timeout=2000)
     hand_card.click()
 
     # Click a valid back-row cell for P1 (row 0, col 2).
@@ -313,6 +335,15 @@ def test_03_click_to_deploy_reuses_live_game_handlers(sandbox_page: Page):
     # the trivial react window and return to ACTION phase on P2. If we stop
     # at REACT phase with react_player_idx=1 the sandbox UI has no path to
     # issue PASS and the session is "silently stuck" from the user's POV.
+    # The event queue animates the summon before committing the final turn
+    # flip. Wait for the authoritative final frame instead of sampling the
+    # valid intermediate ACTION frame immediately after the rat appears.
+    page.wait_for_function(
+        "() => sandboxState && sandboxState.phase === 0"
+        " && sandboxState.react_player_idx == null"
+        " && sandboxState.active_player_idx === 1",
+        timeout=5000,
+    )
     phase = page.evaluate("() => sandboxState.phase")
     assert phase == 0, (
         f"sandbox stuck in REACT phase (phase={phase}) after deploy — "
@@ -364,10 +395,14 @@ def test_04_cheat_inputs_and_pile_modal(sandbox_page: Page):
     _p1_hp(page, -10)
 
     # Add a rat to P1 graveyard via the zone picker
-    page.select_option("#sandbox-zone-select", "graveyard")
+    # The select is now a hidden compatibility mirror; use the visible zone
+    # control that the production UI exposes.
+    grave_zone = page.locator('.sandbox-zone-btn[data-zone="graveyard"]')
+    grave_zone.evaluate("el => el.click()")
+    assert page.evaluate("() => sandboxAddZone") == "graveyard"
     page.fill("#sandbox-search", "common rat")
     page.wait_for_selector(".sandbox-search-result", timeout=2000)
-    page.click(".sandbox-search-result")
+    page.locator(".sandbox-search-result").first.evaluate("el => el.click()")
     # P1 grave count pill reflects the add
     _wait_text(page, "#sandbox-p0-grave", "1")
 
@@ -376,15 +411,15 @@ def test_04_cheat_inputs_and_pile_modal(sandbox_page: Page):
         '#screen-sandbox .sandbox-pile-btn[data-pile="graveyard"][data-player="0"]'
     )
     assert grave_btn is not None
-    grave_btn.click()
+    grave_btn.evaluate("el => el.click()")
 
-    # #pileModal is body-level and visible (style.display set to 'flex' by
-    # showPileModal). NOTE: offsetParent is null on position:fixed overlays
-    # even when visible, so we check display directly — not offsetParent.
+    # showPileModal reparents the overlay into the active scaled game layout
+    # and makes it visible. Check display directly rather than offsetParent,
+    # which is unreliable for fixed/scaled overlays.
     page.wait_for_function(
         "() => { const m = document.getElementById('pileModal');"
         " return m && m.style.display === 'flex'"
-        " && m.parentElement && m.parentElement.tagName === 'BODY'; }",
+        " && m.parentElement && m.parentElement.classList.contains('game-layout'); }",
         timeout=2000,
     )
     # Modal contains at least one card
@@ -476,7 +511,10 @@ def test_05_server_slot_save_reset_load_roundtrip(sandbox_page: Page):
     assert load_btn is not None, (
         f"slot row for {slot_name} has no Load button — check renderSandboxSlotList"
     )
-    load_btn.click()
+    # The scaled duel shell can geometrically overlap this sidebar control in
+    # headless Chromium. This invokes the button's production click listener
+    # without depending on headless hit-testing.
+    load_btn.evaluate("el => el.click()")
 
     # --- verify restored state matches seed exactly ---
     page.wait_for_function(
@@ -498,7 +536,7 @@ def test_05_server_slot_save_reset_load_roundtrip(sandbox_page: Page):
         f'.sandbox-slot-row[data-slot-name="{slot_name}"] .sandbox-slot-delete-btn'
     )
     if delete_btn is not None:
-        delete_btn.click()
+        delete_btn.evaluate("el => el.click()")
         # Accept the confirm dialog if one is shown
         try:
             page.evaluate(

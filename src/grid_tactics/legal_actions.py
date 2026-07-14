@@ -6,8 +6,8 @@ During ACTION phase, enumerates:
   - PLAY_CARD: minion deployment (D-08 melee, D-09 ranged), magic targeting
   - MOVE: all orthogonal adjacent empty cells for owned minions
   - ATTACK: all valid targets in range (D-03) for owned minions
-  - DRAW: if deck is non-empty
-  - PASS: always (D-16)
+  - DRAW: REST under active action-bank rules
+  - PASS: free no-effect turn ender
 
 During REACT phase, enumerates:
   - PLAY_REACT: react-eligible cards (CardType.REACT or is_multi_purpose)
@@ -108,7 +108,8 @@ def legal_actions(
 ) -> tuple[Action, ...]:
     """Return all valid actions for the current game state.
 
-    Never includes illegal actions. PASS is always present (D-16).
+    Never includes illegal actions. Under active rules REST is the initial
+    end-turn choice, then becomes PASS after a paid action.
 
     Args:
         state: Current game state.
@@ -233,6 +234,12 @@ def _action_phase_actions(
     actions: list[Action] = []
     player = state.active_player
     player_side = player.side
+
+    # AP exhaustion normally auto-enters Decay as the preceding react window
+    # closes. A restored/debug state at this boundary gets only the free PASS
+    # failsafe — never a rewarded REST with an empty bank.
+    if manual_draw_variant() and player.action_points <= 0:
+        return (pass_action(),)
 
     # PLAY_CARD enumeration
     for idx, card_numeric_id in enumerate(player.hand):
@@ -589,23 +596,16 @@ def _action_phase_actions(
                 position=pos,
             ))
 
-    # Turn-structure redesign 2026-07: DRAW is REMOVED as an action under
-    # the standard rules (slot 1000 reserved).
-    #
-    # Variant v4.2 (user 2026-07-11): the DRAW slot is the REST action —
-    # +1 mana AND +1 draw, consuming the turn action (see _apply_draw).
-    # REST and PASS are mutually exclusive: REST is the skip until a MAGIC
-    # is cast this turn, after which it transforms into a plain PASS (no
-    # mana+draw skip on the free action a magic hands back). An empty deck
-    # still leaves REST legal — the mana half is unconditional.
+    # Active rules v5: REST (DRAW slot) is the rewarded no-action turn end.
+    # It spends no point and banks the full AP pool. Once any point is spent,
+    # REST disappears and PASS becomes the free no-effect turn ender.
     if manual_draw_variant():
-        if state.magic_cast_this_turn:
-            actions.append(pass_action())
-        else:
+        if state.actions_spent_this_turn == 0:
             actions.append(draw_action())
+        else:
+            actions.append(pass_action())
     else:
-        # PASS is always legal during the action phase (D-16, CLAUDE.md)
-        # under the standard rules — players can voluntarily skip.
+        # Legacy standard rules always permit PASS in ACTION.
         actions.append(pass_action())
 
     return tuple(actions)

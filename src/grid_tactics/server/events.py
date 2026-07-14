@@ -842,7 +842,8 @@ def _auto_advance_server_controlled_turn(session, stream: EventStream) -> None:
     from grid_tactics.server.preview_ai import pick_preview_action
 
     auto_advance_counter = 0
-    auto_advance_max = 120
+    # Three paid actions can each open nested react/modal chains.
+    auto_advance_max = 360
     while not session.state.is_game_over:
         auto_advance_counter += 1
         if auto_advance_counter > auto_advance_max:
@@ -1858,11 +1859,10 @@ def register_events(room_manager: RoomManager) -> None:
                 #       during an ACTION phase. Submit PASS to
                 #       resolve_action. Turn-structure redesign (2026-07):
                 #       PASS is FREE (no fatigue damage) — fatigue now
-                #       exists ONLY for empty-deck turn-start draws, which
-                #       the engine applies inside the turn-start draw
-                #       (Rally entry), not here. With PASS always legal in
-                #       ACTION phase this branch should be unreachable;
-                #       kept as a failsafe.
+                #       exists ONLY for empty-deck turn-start draws under
+                #       legacy rules. Active rules always expose REST, PASS,
+                #       or an empty-bank PASS failsafe in ACTION, so this
+                #       branch should still be unreachable.
                 #   (2) Phase 14.7-02: legal_actions is empty during
                 #       START_OF_TURN / END_OF_TURN phases because those
                 #       phases are placeholders. Call the react_stack
@@ -1890,10 +1890,9 @@ def register_events(room_manager: RoomManager) -> None:
                     enter_start_of_turn as _enter_start_of_turn,
                 )
                 _auto_advance_counter = 0
-                # Raised 50 → 120 (preview AI 2026-07-10): the dummy now
-                # takes real actions — its turn can legitimately chain a
-                # play + react windows + pending picks through this loop.
-                _AUTO_ADVANCE_MAX = 120
+                # Action-bank turns can contain three complete action/react/
+                # modal chains before yielding to the opponent.
+                _AUTO_ADVANCE_MAX = 360
                 while not session.state.is_game_over:
                     _auto_advance_counter += 1
                     if _auto_advance_counter > _AUTO_ADVANCE_MAX:

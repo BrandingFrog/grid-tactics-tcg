@@ -174,9 +174,9 @@ function canShowPassButton() {
     return canShowSkipButton(4);
 }
 
-// v4.2 (2026-07-11): the Rest button (DRAW slot, action_type 3) shares the
-// exact gates — the engine offers Rest OR Pass, never both, so the action
-// bar renders whichever one is legal in the same slot.
+// Active bank rules: Rest (DRAW slot, action_type 3) shares the exact gates.
+// The engine offers REST before a paid action or PASS afterward, so the
+// action bar renders whichever one is currently legal in the same slot.
 function canShowSkipButton(actionType) {
     if (!canActNow()) return false;
     if (!legalActions.some(function(a) { return a.action_type === actionType; })) return false;
@@ -463,7 +463,7 @@ function _commitFinalStateSnapshot(finalState) {
 
 // Handshake-offer surfaces (user 2026-07-08): pod palm flag + a banner at
 // the top of the tooltip sidebar so players not watching the board see it.
-function _setPassOffer(idx) {
+function _setPassOffer(idx, kind) {
     _passOfferedBy = idx;
     try {
         if (typeof renderSelfInfo === 'function' && gameState && gameState.players) {
@@ -478,9 +478,13 @@ function _setPassOffer(idx) {
         return;
     }
     var mine = (myPlayerIdx != null && idx === myPlayerIdx);
+    var isLegacyPass = kind === 'pass';
+    var acted = isLegacyPass ? 'passed' : 'rested';
+    var answer = isLegacyPass ? 'Pass' : 'Rest';
     var txt = mine
-        ? '🫴 You passed — Handshake offered'
-        : '🫴 ' + (opponentName || 'Opponent') + ' passed — pass to Handshake 🤝';
+        ? '🫴 You ' + acted + ' — Handshake offered'
+        : '🫴 ' + (opponentName || 'Opponent') + ' ' + acted
+            + ' — ' + answer + ' to Handshake 🤝';
     if (!note) {
         note = document.createElement('div');
         note.id = 'pass-offer-note';
@@ -548,6 +552,15 @@ function commitEventToDom(ev) {
         case "mana_change":
             // Payload: {player_idx, prev, new, delta}
             if (_commitPlayerField(live, payload.player_idx, 'current_mana', payload['new'])) {
+                if (sbMode) gameState = sandboxState;
+                needsStatsRerender = true;
+            }
+            break;
+
+        case "action_points_change":
+            // Public bank update; commit at the declaration/turn-start beat so
+            // long react and modal chains never leave the pillbox stale.
+            if (_commitPlayerField(live, payload.player_idx, 'action_points', payload['new'])) {
                 if (sbMode) gameState = sandboxState;
                 needsStatsRerender = true;
             }
@@ -652,7 +665,11 @@ function commitEventToDom(ev) {
         // incidentally was removed (it slammed pod numbers to end-of-chain
         // values), which left the card sitting in hand until drain end.
         case "pass_declared":
-            _setPassOffer(payload.streak === 1 ? payload.player_idx : null);
+            var _offersHandshake = !!(payload.rest || payload.offers_handshake);
+            _setPassOffer(
+                _offersHandshake && payload.streak === 1 ? payload.player_idx : null,
+                payload.rest ? 'rest' : 'pass'
+            );
             break;
         case "card_played":
             if (_passOfferedBy != null) _setPassOffer(null);
@@ -755,6 +772,7 @@ function commitEventToDom(ev) {
                     || payload.source === 'handshake'
                     || payload.source === 'card_effect'
                     || payload.source === 'tutor'
+                    || payload.source === 'rest'
                     || payload.source === 'draw_action');
                 if (typeof _pe.deck_count === 'number' && _pe.deck_count > 0 && _burnFromDeck) _pe.deck_count--;
                 // discard_cost burns exhaust a card FROM THE HAND (paid cost
@@ -834,6 +852,12 @@ function commitEventToDom(ev) {
             }
             if (typeof renderPlayerAvatars === 'function') {
                 try { renderPlayerAvatars(); } catch (e) { /* defensive */ }
+            }
+            // Keep an already-open profile synchronized at the same event
+            // beat as its pillbox (not only when the full queue drains).
+            if (activePlayerPreviewIdx != null
+                    && typeof showPlayerPreview === 'function') {
+                try { showPlayerPreview(activePlayerPreviewIdx); } catch (e) { /* defensive */ }
             }
         }
     }
@@ -946,6 +970,7 @@ function playEvent(ev, done) {
         case "card_played":              return playCardPlayed(ev, done);
         case "card_discarded":           return playCardDiscarded(ev, done);
         case "mana_change":              return playManaChange(ev, done);
+        case "action_points_change":     return playInstant(ev, done);
         case "player_hp_change":         return playPlayerHpChange(ev, done);
         // Dark Matter pool redesign (2026-07): a player's DM pool changed.
         case "dark_matter_change":       return playDarkMatterChange(ev, done);
@@ -2584,9 +2609,14 @@ function playPassDeclared(ev, done) {
             : (mine ? ' pass' : ' passes');
         var toast = document.createElement('div');
         toast.className = 'tutor-toast pass-toast';
-        toast.textContent = payload.streak === 1
-            ? ('🫴 ' + who + verb + ' — Handshake offered')
-            : ('🤝 ' + who + verb + ' — Handshake!');
+        var offersHandshake = !!(payload.rest || payload.offers_handshake);
+        if (!offersHandshake) {
+            toast.textContent = who + verb + ' — turn ended';
+        } else {
+            toast.textContent = payload.streak === 1
+                ? ('🫴 ' + who + verb + ' — Handshake offered')
+                : ('🤝 ' + who + verb + ' — Handshake!');
+        }
         _stageMount().appendChild(toast);
         setTimeout(function() {
             toast.classList.add('fade-out');

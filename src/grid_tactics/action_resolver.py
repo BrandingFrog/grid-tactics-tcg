@@ -25,6 +25,7 @@ from grid_tactics.card_library import CardLibrary
 from grid_tactics.cards import CardDefinition
 from grid_tactics.effect_resolver import resolve_effects_for_trigger
 from grid_tactics.engine_events import (
+    EVT_ACTION_POINTS_CHANGE,
     EVT_ATTACK_RESOLVED,
     EVT_CARD_BURNED,
     EVT_CARD_DISCARDED,
@@ -73,6 +74,16 @@ from grid_tactics.types import (
 # ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------
+
+_ACTION_POINT_ACTIONS = frozenset({
+    ActionType.PLAY_CARD,
+    ActionType.MOVE,
+    ActionType.ATTACK,
+    ActionType.SACRIFICE,
+    ActionType.TRANSFORM,
+    ActionType.ACTIVATE_ABILITY,
+    ActionType.PLAY_FROM_EXHAUST,
+})
 
 
 def _replace_player(
@@ -189,29 +200,18 @@ def _apply_pass(
     *,
     event_collector: Optional[EventStream] = None,
 ) -> GameState:
-    """Apply PASS action — FREE (turn-structure redesign 2026-07).
+    """Apply the main-phase PASS for the selected rules contract.
 
-    PASS no longer deals fatigue damage: fatigue now exists ONLY for
-    empty-deck turn-start draws (see react_stack._close_end_of_turn_and_flip,
-    which uses GameState.fatigue_counts as the escalating 10/20/30 counter).
-
-    Handshake tracking: consecutive ACTION-phase passes across BOTH players
-    are counted in GameState.consecutive_passes (react-window passes do NOT
-    count — they route through handle_react_action, never here). When this
-    PASS lands while the counter is already >= 1 (the opponent's
-    immediately-previous action was also PASS), a Handshake occurs:
-    handshake_pending is set (paid out at the end of this turn in
-    _close_end_of_turn_and_flip) and the counter resets to 0 so Handshakes
-    cannot chain off a single pass pair.
+    Active rules v5: PASS ends the turn for no reward, spends no action
+    points, preserves the remaining bank, and declines any Handshake offer.
+    Standard rules retain their historical PASS/PASS Handshake behavior.
     """
     assert_phase_contract(state, "action:pass_action")
-    # Variant v4 (user 2026-07-11): PASS gives NOTHING — the rest benefit
-    # lives on the separate REST action (ActionType.DRAW slot, see
-    # _apply_draw): +1 mana AND +1 draw, consuming the turn action.
-    # Handshake payout (both players +1 mana AND draw) unchanged.
+    if manual_draw_variant():
+        return replace(state, consecutive_passes=0)
+
     new_count = state.consecutive_passes + 1
     if new_count >= 2:
-        # Handshake! Reset the streak — no chaining.
         return replace(
             state,
             consecutive_passes=0,
@@ -225,14 +225,12 @@ def _apply_draw(
     *,
     event_collector: Optional[EventStream] = None,
 ) -> GameState:
-    """Apply DRAW action — the variant's REST (user 2026-07-11, v4).
+    """Apply DRAW — the active rules' zero-point REST action.
 
-    Under the variant, the DRAW action slot is the REST: the resting
-    player gains +1 mana (capped at MAX_MANA_CAP) AND draws a card
-    (overdraw-burns on a full hand; an empty deck skips the draw —
-    never fatigue). It consumes the turn action; PASS remains the
-    no-benefit alternative. Under standard rules this is the legacy
-    plain draw (never legal since the 2026-07 redesign).
+    The resting player preserves the full AP bank, gains +1 mana, and draws
+    the current Fortune ante. An empty deck simply stops the draws; a full
+    hand overdraw-burns. Under standard rules this is the legacy plain draw
+    (not normally legal since the 2026-07 redesign).
     """
     assert_phase_contract(state, "action:draw")
     drawer_idx = state.active_player_idx
@@ -240,7 +238,10 @@ def _apply_draw(
     if manual_draw_variant():
         if player.current_mana < MAX_MANA_CAP:
             player = replace(player, current_mana=player.current_mana + 1)
-        if player.deck:
+        # Fortune raises the number of cards per REST, never its +1 mana.
+        for _ in range(state.fortune_ante):
+            if not player.deck:
+                break
             player, card_id, burned = player.draw_card_with_overdraw()
             if event_collector is not None:
                 event_collector.collect(
@@ -260,9 +261,8 @@ def _apply_draw(
             state,
             players=_replace_player(state.players, drawer_idx, player),
         )
-        # v4 (user 2026-07-11): REST also advances the Handshake streak —
-        # rest/pass in any combination seal a Handshake. Mirrors
-        # _apply_pass exactly (reset on completion, no chaining).
+        # REST is the sole Handshake offer/answer. Two consecutive RESTs
+        # across turns seal it; any paid action or PASS resets the streak.
         new_count = state.consecutive_passes + 1
         if new_count >= 2:
             return replace(
@@ -678,18 +678,8 @@ def _apply_play_card(
     if card_def.card_type == CardType.MINION:
         return _deploy_minion(state, action, card_def, card_numeric_id, active_side, library)
     elif card_def.card_type == CardType.MAGIC:
-        # Magic-free-action variant (user 2026-07-10 v3): casting magic
-        # does NOT consume the turn action. Flag the state; the after-
-        # action react-window close consumes it and returns to the
-        # caster's ACTION phase instead of entering END_OF_TURN.
-        if manual_draw_variant():
-            # v4.2: magic_cast_this_turn persists to turn end — it flips
-            # the rewarded REST into a plain PASS (see legal_actions).
-            state = replace(
-                state,
-                magic_free_action_pending=True,
-                magic_cast_this_turn=True,
-            )
+        # Active rules v5: MAGIC spends the same action point as every other
+        # primary action. The legacy free-magic flags remain false.
         return _cast_magic(
             state, action, card_def, card_numeric_id, active_side, library,
             event_collector=event_collector,
@@ -2914,16 +2904,8 @@ def resolve_action(
         # never opens. Route straight to the Decay phase instead,
         # matching the summon flow when the tutor finds no match.
         if _tutor_origin == "summon_effect":
-            from grid_tactics.react_stack import enter_end_of_turn
-            state = replace(
-                state,
-                react_stack=(),
-                react_player_idx=None,
-                pending_action=None,
-                react_context=None,
-                react_return_phase=None,
-            )
-            return enter_end_of_turn(
+            from grid_tactics.react_stack import continue_action_or_enter_end
+            return continue_action_or_enter_end(
                 state, library, event_collector=event_collector,
             )
         state = replace(
@@ -3030,15 +3012,11 @@ def resolve_action(
         if state.phase == TurnPhase.REACT:
             return state
 
-        # Phase 14.7-08: DECLINE means "no second action" → no second react
-        # window. The post-move react window already opened (and closed)
-        # around the move itself. Advance directly to END_OF_TURN.
-        # Phase 14.8 bugfix: pass event_collector — this path previously
-        # dropped it, so EVT_PHASE_CHANGED / EVT_REACT_WINDOW_OPENED for
-        # the end-of-turn window never reached the client.
+        # DECLINE completes the one-point MOVE chain without another react
+        # window. Under the action bank, continue if another point remains.
         if is_decline:
-            from grid_tactics.react_stack import enter_end_of_turn
-            return enter_end_of_turn(
+            from grid_tactics.react_stack import continue_action_or_enter_end
+            return continue_action_or_enter_end(
                 state, library, event_collector=event_collector,
             )
 
@@ -3063,6 +3041,49 @@ def resolve_action(
     if action.action_type == ActionType.DECLINE_POST_MOVE_ATTACK:
         raise ValueError("DECLINE_POST_MOVE_ATTACK only legal in pending post-move state")
 
+    # Active rules v5: reserve one point for an accepted logical primary
+    # action before dispatch. All pending/modal gates above are continuations
+    # and therefore free. REST is the rewarded no-action turn end and spends
+    # no point; PASS is the no-effect ender after at least one point was used.
+    if manual_draw_variant():
+        active_idx = state.active_player_idx
+        active_player = state.players[active_idx]
+        if action.action_type == ActionType.DRAW:
+            if state.actions_spent_this_turn != 0:
+                raise ValueError("REST is only legal before using an action point")
+            state = replace(
+                state,
+                turn_end_requested=True,
+            )
+        elif action.action_type == ActionType.PASS:
+            if (
+                state.actions_spent_this_turn == 0
+                and active_player.action_points > 0
+            ):
+                raise ValueError("PASS is only legal after using an action point; REST instead")
+            state = replace(state, turn_end_requested=True)
+        elif action.action_type in _ACTION_POINT_ACTIONS:
+            previous_points = active_player.action_points
+            active_player = active_player.spend_action_point()
+            state = replace(
+                state,
+                players=_replace_player(state.players, active_idx, active_player),
+                actions_spent_this_turn=state.actions_spent_this_turn + 1,
+                turn_end_requested=False,
+            )
+            if event_collector is not None:
+                event_collector.collect(
+                    EVT_ACTION_POINTS_CHANGE,
+                    f"action:{action.action_type.name.lower()}",
+                    {
+                        "player_idx": active_idx,
+                        "prev": previous_points,
+                        "new": active_player.action_points,
+                        "delta": -1,
+                        "cause": "action_spent",
+                    },
+                )
+
     # Phase 14.8-03a: snapshot pre-action mana / hp / grave so we can
     # emit MANA_CHANGE / PLAYER_HP_CHANGE / CARD_DISCARDED diffs after
     # the handler runs. Cheap (tuple-of-ints + tuple-len).
@@ -3074,13 +3095,12 @@ def resolve_action(
     # handlers already emitted causally (inline effect emissions).
     _events_start = len(event_collector.events) if event_collector else 0
 
-    # Turn-structure redesign 2026-07: any non-PASS main-phase action
-    # breaks the consecutive-pass streak (Handshake tracking). Variant v4
-    # (user 2026-07-11): REST (the DRAW slot) also counts toward the
-    # Handshake — rest/pass in any combination seal it — so it does NOT
-    # break the streak (the increment happens inside _apply_draw).
-    _keeps_streak = action.action_type == ActionType.PASS or (
-        action.action_type == ActionType.DRAW and manual_draw_variant()
+    # Active rules use REST/REST for Handshake; standard rules retain the
+    # historical PASS/PASS contract. Every other main action breaks an offer.
+    _keeps_streak = (
+        action.action_type == ActionType.DRAW
+        if manual_draw_variant()
+        else action.action_type == ActionType.PASS
     )
     if not _keeps_streak and state.consecutive_passes != 0:
         state = replace(state, consecutive_passes=0)
@@ -3101,15 +3121,13 @@ def resolve_action(
                     "player_idx": _passer_idx,
                     "streak": state.consecutive_passes,
                     "handshake_pending": state.handshake_pending,
+                    "offers_handshake": not manual_draw_variant(),
                 },
             )
     elif action.action_type == ActionType.DRAW:
-        # Manual-draw variant (user 2026-07-10): _apply_draw emits its own
-        # EVT_CARD_DRAWN / EVT_CARD_BURNED with the card identity so the
-        # client can animate the deck → hand transition. v4: REST also
-        # advances the Handshake streak — surface it like a pass so the
-        # palm-flag / offer toast fire (payload.rest lets the client
-        # word it as a rest).
+        # REST emits its own EVT_CARD_DRAWN / EVT_CARD_BURNED events so the
+        # client can animate every ante draw. It also advances the Handshake
+        # streak; surface that declaration for the palm flag and offer toast.
         _rester_idx = state.active_player_idx
         state = _apply_draw(state, event_collector=event_collector)
         if manual_draw_variant() and event_collector is not None:
@@ -3121,6 +3139,7 @@ def resolve_action(
                     "streak": state.consecutive_passes,
                     "handshake_pending": state.handshake_pending,
                     "rest": True,
+                    "offers_handshake": True,
                 },
             )
     elif action.action_type == ActionType.MOVE:

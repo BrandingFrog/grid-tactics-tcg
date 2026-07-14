@@ -654,7 +654,8 @@ def build_action_mask(
             mask[idx] = True
         # Skip actions that encode out of bounds (e.g. hand_idx > MAX_HAND_SIZE)
 
-    # Ensure at least PASS is always legal (fallback safety)
+    # Last-resort mask safety. Active-rule AP exhaustion should already have
+    # auto-ended the turn (or expose its defensive PASS state) before this.
     if not mask.any():
         mask[PASS_IDX] = True
 

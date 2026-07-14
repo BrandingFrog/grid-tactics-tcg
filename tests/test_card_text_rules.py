@@ -1,5 +1,5 @@
 """Regression tests for player-facing card/doc TEXT under the 2026-07 turn
-structure (Rally/Decay phases, one-action turns, mana pool, overdraw burns).
+structure (Rally/Decay phases, action bank, mana pool, overdraw burns).
 
 Guards the 2026-07-03 card-text audit fixes:
   - stale pre-redesign phrasing purged from data/cards/*.json tips/rulings
@@ -262,10 +262,10 @@ def test_spec_stack_and_queue_are_separate_entries() -> None:
     assert "- **Queue:** Priority-ordered list of simultaneous triggers" in spec
 
 
-def test_spec_handshake_scoped_to_action_phase_passes() -> None:
+def test_spec_handshake_scoped_to_action_phase_rests() -> None:
     spec = SPEC_MD.read_text(encoding="utf-8")
-    assert "PASSES as their Action-Phase action" in spec
-    assert "Passes that merely close react windows do not count" in spec
+    assert "A REST offers a Handshake" in spec
+    assert "React-window passes never count" in spec
 
 
 def test_spec_uses_phase_names_not_bare_rally_decay_triggers() -> None:

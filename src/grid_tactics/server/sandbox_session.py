@@ -10,7 +10,7 @@ Responsibilities (Phase 14.6 scope):
   * Hold a GameState + undo/redo deques + the shared CardLibrary
   * Apply real engine actions via ``apply_action``
   * Manually edit the five card zones (DEV-02 / DEV-03)
-  * Cheat player fields (current_mana / max_mana / hp) — full god mode (DEV-06)
+  * Cheat public player resources/stats, including AP — full god mode (DEV-06)
   * Toggle the active player (DEV-05)
   * Import a saved deck into a player's deck zone (DEV-03)
   * Undo / redo at least 50 prior states (DEV-09, HISTORY_MAX >= 50)
@@ -42,8 +42,10 @@ from grid_tactics.board import Board
 from grid_tactics.card_library import CardLibrary
 from grid_tactics.cards import CardType
 from grid_tactics.engine_events import (
+    EVT_ACTION_POINTS_CHANGE,
     EVT_CARD_DISCARDED,
     EVT_CARD_DRAWN,
+    EVT_DARK_MATTER_CHANGE,
     EVT_MANA_CHANGE,
     EVT_MINION_SUMMONED,
     EVT_PHASE_CHANGED,
@@ -66,9 +68,10 @@ HISTORY_MAX = 64  # >= 50 per DEV-09; deque drops oldest on overflow
 SLOT_NAME_RE = re.compile(r"^[a-zA-Z0-9_-]{1,64}$")
 SLOT_DIR = Path("data/sandbox_saves")  # relative to project root
 ZONES = ("hand", "deck_top", "deck_bottom", "graveyard", "exhaust")
-# Dark Matter pool redesign 2026-07: "dark_matter" appended so UAT
-# scenarios / sandbox cheats can set a player's DM pool directly.
-PLAYER_FIELDS = ("current_mana", "max_mana", "hp", "dark_matter")
+# Public resource fields available to UAT/scenario cheats.
+PLAYER_FIELDS = (
+    "current_mana", "max_mana", "hp", "dark_matter", "action_points",
+)
 
 
 # ---------------------------------------------------------------------------
@@ -127,7 +130,9 @@ class SandboxSession:
         construct the frozen dataclasses directly.
         """
         p1 = Player.new(PlayerSide.PLAYER_1, ())
-        p2 = Player.new(PlayerSide.PLAYER_2, ())
+        # Match GameState.new_game: P1's opening turn is already loaded;
+        # P2 receives its first point only when turn 2 begins.
+        p2 = replace(Player.new(PlayerSide.PLAYER_2, ()), action_points=0)
         return GameState(
             board=Board.empty(),
             players=(p1, p2),
@@ -469,7 +474,7 @@ class SandboxSession:
     # ------------------------------------------------------------------
 
     def set_player_field(self, player_idx: int, field: str, value: int) -> None:
-        """Cheat: set ``current_mana`` / ``max_mana`` / ``hp`` on a player to ANY integer.
+        """Cheat: set a supported public resource/stat to any integer.
 
         FULL CHEAT MODE — there is NO validation against game rules. Setting
         ``hp`` to ``-50`` or ``current_mana`` to ``9999`` is allowed. The
@@ -509,7 +514,28 @@ class SandboxSession:
         ):
             return
         self._push_undo()
-        self._state = replace(self._state, active_player_idx=player_idx)
+        players = self._state.players
+        # A manual sandbox switch represents the start of a usable scenario
+        # turn. Preserve an existing bank, but load one point for an empty
+        # seat so the editor never switches directly into forced PASS.
+        if players[player_idx].action_points <= 0:
+            switched_player = replace(players[player_idx], action_points=1)
+            players = (
+                (switched_player, players[1])
+                if player_idx == 0
+                else (players[0], switched_player)
+            )
+        self._state = replace(
+            self._state,
+            players=players,
+            active_player_idx=player_idx,
+            # This control is a scenario-setup turn switch, so no turn-local
+            # action/skip state may leak from the previously controlled seat.
+            actions_spent_this_turn=0,
+            turn_end_requested=False,
+            magic_free_action_pending=False,
+            magic_cast_this_turn=False,
+        )
         self._active_view_idx = player_idx
 
     # ------------------------------------------------------------------
@@ -764,13 +790,16 @@ class SandboxSession:
                 },
             )
         elif verb == "set_player_field":
-            # Generic cheat-field verb — covers set_player_field handler
-            # which can target any of (current_mana, max_mana, hp).
+            # Generic cheat-field verb for all PLAYER_FIELDS resources/stats.
             player_idx = int(payload["player_idx"])
             field = str(payload["field"])
             value = int(payload["value"])
             self.set_player_field(player_idx, field, value)
-            evt_type = EVT_PLAYER_HP_CHANGE if field == "hp" else EVT_MANA_CHANGE
+            evt_type = {
+                "hp": EVT_PLAYER_HP_CHANGE,
+                "action_points": EVT_ACTION_POINTS_CHANGE,
+                "dark_matter": EVT_DARK_MATTER_CHANGE,
+            }.get(field, EVT_MANA_CHANGE)
             stream.collect(
                 evt_type,
                 source,

@@ -8,9 +8,9 @@ A fantasy trading card game on a 5x5 grid with RL-driven strategy discovery. Pla
 **Core Value:** The RL engine that discovers and validates game strategies.
 
 ### Current Rules (authoritative detail: docs/rules/turn-structure.md)
-- **ACTIVE RULES EXPERIMENT (2026-07-11 v4, `GT_MANUAL_DRAW=1`, on by default in pvp_server.py)**: NO turn-start auto-draw. **REST** (own button, reserved DRAW action slot 1000) consumes the turn action for **+1 mana AND +1 draw**; **PASS is separate and gives nothing**. Both REST and PASS advance the Handshake streak (any two consecutive skips seal it). REST and PASS are mutually exclusive (v4.2): REST is offered until a MAGIC is cast that turn, after which the skip transforms into PASS (`GameState.magic_cast_this_turn`). **MAGIC casts do NOT consume the turn action** — after the cast (and its react windows) play returns to the caster's ACTION phase (`GameState.magic_free_action_pending`). **Handshake = BOTH players gain +1 mana AND draw 1**. `GT_MANUAL_DRAW=0` restores the standard rules below, which the bare engine and test suite run by default. Flag: `types.manual_draw_variant()`.
-- **Turn Start**: auto-draw 1 + gain 1 mana (pool, 10 = full) → **Rally Phase** (positive triggers) → one action (play/move/attack/sacrifice/pass) → **Decay Phase** (negative triggers, e.g. Burning) → turn end (Handshake payout)
-- **PASS is free**; pass answered by pass = **Handshake** (both players +1 mana at turn end; at full mana, draw instead)
+- **ACTIVE RULES (2026-07-14 v5, `GT_MANUAL_DRAW=1`, now the runtime default)**: NO turn-start auto-draw. Each player banks **Action Points** (gain 1 on each own turn, cap 3); every primary action, including MAGIC, costs 1. Reactions and modal/post-move continuations cost 0. After an action/react chain, the same player may act again while points remain. **REST** is the existing rewarded no-action turn end: it costs 0 AP, banks the full pool, gives +1 mana, draws the current Fortune ante, and offers a Handshake. Once any AP is spent, REST is unavailable and **PASS** becomes the 0-cost, no-effect turn ender. Two consecutive RESTs seal a Handshake; payout remains both players +1 mana and draw 1. Each completed Fortune round raises automatic turn mana and REST cards by 1, effective immediately on the postponed turn. `GT_MANUAL_DRAW=0` retains legacy compatibility rules.
+- **Turn Start (active rules)**: gain 1 Action Point + gain Fortune-ante mana → **Rally Phase** → spend 0–3 banked actions → **Decay Phase** → turn end (Handshake payout)
+- **PASS is free and has no effect**; REST answered by REST = **Handshake**
 - **Forward-only movement** in lane (same column), attacks any direction
 - **React window** after each action — opponent can counter (LIFO stack, no design depth limit)
 - **Win by HP depletion** only. **Sacrifice** (minion on opponent's back row, or Leap with an all-enemy path) removes the minion and deals its full 🗡️ as damage to the opponent — a damage race, not an instant win
@@ -160,7 +160,7 @@ A fantasy trading card game on a 5x5 grid with RL-driven strategy discovery. Pla
 - **Keyword glossary**: `data/GLOSSARY.md` is the source of truth for all card keywords. When adding/changing/removing keywords, update BOTH `data/GLOSSARY.md` AND the `KEYWORD_GLOSSARY` object in `src/grid_tactics/server/static/js/03-deck-builder.js`. Always keep them in sync.
 - **Enums**: IntEnum for all game constants (numpy/tensor compatible). New values append to end.
 - **Immutable state**: Python engine uses frozen dataclasses + `replace()`. Tensor engine mutates in-place.
-- **Action space**: 1262 discrete actions. Layout: PLAY_CARD[0:250], MOVE[250:350], ATTACK[350:975], SACRIFICE[975:1000], DRAW[1000], PASS[1001], REACT[1002:1262]. DRAW is reserved but no longer legal (auto-draw at turn start).
+- **Action space**: action IDs are unchanged. DRAW slot 1000 is REST under active rules; PASS is 1001. Action points are state, not new action IDs.
 - **Forward movement**: Minions move forward only (P1 down, P2 up) in their column. Attacks any direction.
 - **Testing**: 500+ tests via pytest. Run `pytest tests/ -q` for quick check.
 - **RunPod deploy flow**: `python scripts/manage_pods.py launch ...` archives the required files, uploads them over SSH, and starts `scripts/cloud_train.py`.

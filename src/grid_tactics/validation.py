@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from grid_tactics.types import GRID_SIZE, MAX_MANA_CAP
+from grid_tactics.types import GRID_SIZE, MAX_ACTION_POINTS, MAX_MANA_CAP
 
 if TYPE_CHECKING:
     from grid_tactics.game_state import GameState
@@ -58,6 +58,18 @@ def validate_state(state: GameState) -> list[str]:
                 f"{prefix}: max_mana={player.max_mana} "
                 f"out of range [0, {MAX_MANA_CAP}]"
             )
+
+        if not (0 <= player.action_points <= MAX_ACTION_POINTS):
+            errors.append(
+                f"{prefix}: action_points={player.action_points} "
+                f"out of range [0, {MAX_ACTION_POINTS}]"
+            )
+
+    if not (0 <= state.actions_spent_this_turn <= MAX_ACTION_POINTS):
+        errors.append(
+            f"actions_spent_this_turn={state.actions_spent_this_turn} "
+            f"out of range [0, {MAX_ACTION_POINTS}]"
+        )
 
     # Board duplicate minion check
     minion_ids = [cell for cell in state.board.cells if cell is not None]

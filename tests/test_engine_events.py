@@ -276,7 +276,7 @@ class TestEventTypeCoverage:
             f"DEFAULT_DURATION_MS has unknown event types: {sorted(extra)}"
         )
 
-    def test_23_event_types_total(self):
+    def test_event_types_total(self):
         """Plan 14.8-03a delivered 19 event types per the research doc
         § 'Event types proposed'; the 2026-07 turn-structure redesign
         added EVT_CARD_BURNED (overdraw-burn) and EVT_HANDSHAKE, the
@@ -290,7 +290,7 @@ class TestEventTypeCoverage:
         previously produced NO notification at all). Adding a new type
         requires an explicit roadmap entry, NOT silent expansion.
         """
-        assert len(ALL_EVENT_TYPES) == 25
+        assert len(ALL_EVENT_TYPES) == 26
 
 
 # ---------------------------------------------------------------------------

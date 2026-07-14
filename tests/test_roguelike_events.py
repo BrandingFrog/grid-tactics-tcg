@@ -611,7 +611,9 @@ def test_compound_interest_pays_one_on_next_three_turn_starts(library):
     for _ in range(3):
         state = apply_new_turn_resources(state)
         mana_values.append(state.players[0].current_mana)
-    assert mana_values == [2, 4, 6]
+    # First resolved Fortune raises base turn income to 2; Compound Interest
+    # remains an additional +1 for each of these three starts.
+    assert mana_values == [3, 6, 9]
     assert state.compound_interest_turns == (0, 0)
 
 

@@ -1,9 +1,11 @@
 # Mana System
 
-A single banking pool — not an X/Y refresh. Mana persists across turns and grows by **+1 each turn**.
+A single banking pool — not an X/Y refresh. Mana persists across turns. Turn
+income starts at **+1** and rises by 1 after every completed Fortune round.
 
 ## Rules
-- Auto-draw at turn start, then one action.
+- No active-rules auto-draw. Gain 1 Action Point (cap 3) and turn income.
+- REST costs no Action Point, banks the pool, grants +1 mana, and draws the Fortune ante.
 - Pool is a single integer; UI displays bank total only.
 - Spent on: card play, [[Activated Abilities]], [[Transform]], react card costs.
 

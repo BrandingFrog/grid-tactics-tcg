@@ -14,7 +14,7 @@ server-driven state changes.
 
 Wire-format design:
 
-- 23 ``EVT_*`` constants enumerated explicitly (no wildcards). Listed in
+- ``EVT_*`` constants are enumerated explicitly (no wildcards). Listed in
   ``ALL_EVENT_TYPES`` for runtime validation. (19 from the original
   research doc; +card_burned +handshake from the 2026-07 turn-structure
   redesign; +minion_transformed from the 2026-07 card audit;
@@ -80,6 +80,7 @@ EVT_HANDSHAKE = "handshake"
 
 # Resource events
 EVT_MANA_CHANGE = "mana_change"
+EVT_ACTION_POINTS_CHANGE = "action_points_change"
 EVT_PLAYER_HP_CHANGE = "player_hp_change"
 # Dark Matter pool redesign 2026-07: a player's Dark Matter pool changed
 # (grant_dark_matter resolution). Payload: {player_idx, prev, new, delta,
@@ -102,8 +103,8 @@ EVT_PENDING_MODAL_RESOLVED = "pending_modal_resolved"
 # Edge events
 EVT_FIZZLE = "fizzle"
 EVT_GAME_OVER = "game_over"
-# 2026-07-08: first PASS of a potential Handshake — lets the client flag
-# the passer (palm-up on their pod pill + tooltip banner) until answered.
+# First REST of a potential Handshake — lets the client flag the rester
+# (palm-up on their pod pill + tooltip banner) until answered.
 EVT_PASS_DECLARED = "pass_declared"
 
 
@@ -121,6 +122,7 @@ ALL_EVENT_TYPES: frozenset[str] = frozenset({
     EVT_CARD_BURNED,
     EVT_HANDSHAKE,
     EVT_MANA_CHANGE,
+    EVT_ACTION_POINTS_CHANGE,
     EVT_PLAYER_HP_CHANGE,
     EVT_DARK_MATTER_CHANGE,
     EVT_REACT_WINDOW_OPENED,
@@ -163,6 +165,7 @@ DEFAULT_DURATION_MS: dict[str, int] = {
                                         # (matches playOverdrawBurn choreography)
     EVT_HANDSHAKE: 2200,                # 🤝 payout banner (matches playHandshake)
     EVT_MANA_CHANGE: 0,
+    EVT_ACTION_POINTS_CHANGE: 0,
     EVT_PLAYER_HP_CHANGE: 400,
     EVT_DARK_MATTER_CHANGE: 400,        # pool counter pulse / floating +N
 
@@ -389,6 +392,7 @@ __all__ = [
     "EVT_CARD_BURNED",
     "EVT_HANDSHAKE",
     "EVT_MANA_CHANGE",
+    "EVT_ACTION_POINTS_CHANGE",
     "EVT_PLAYER_HP_CHANGE",
     "EVT_DARK_MATTER_CHANGE",
     "EVT_REACT_WINDOW_OPENED",
@@ -400,6 +404,7 @@ __all__ = [
     "EVT_PENDING_MODAL_RESOLVED",
     "EVT_FIZZLE",
     "EVT_GAME_OVER",
+    "EVT_PASS_DECLARED",
     # Tables
     "ALL_EVENT_TYPES",
     "DEFAULT_DURATION_MS",

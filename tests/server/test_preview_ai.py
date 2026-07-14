@@ -99,6 +99,17 @@ def _pick(state: GameState, library: CardLibrary):
     return picked
 
 
+def _pick_from(state: GameState, library: CardLibrary, predicate):
+    """Exercise target/variant scoring within one strategic action family."""
+    candidates = [
+        action for action in legal_actions(state, library) if predicate(action)
+    ]
+    assert candidates
+    picked = pick_preview_action(state, library, candidates)
+    assert picked in candidates
+    return picked
+
+
 def test_skips_noop_ratchanter_activation_and_moves(library):
     ratchanter = _minion(
         library,
@@ -167,7 +178,12 @@ def test_feed_the_shadow_prefers_guaranteed_kill(library):
         minions=(friendly_rat, enemy_rat, enemy_wyrm),
     )
 
-    picked = _pick(state, library)
+    # With paid Magic, a normal attack may be the better overall AP use. This
+    # regression isolates Feed's target choice once the spell is selected.
+    picked = _pick_from(
+        state, library,
+        lambda action: action.action_type == ActionType.PLAY_CARD,
+    )
 
     assert picked.action_type == ActionType.PLAY_CARD
     assert picked.target_pos == enemy_rat.position
@@ -191,7 +207,10 @@ def test_feed_the_shadow_uses_cheapest_sufficient_fodder(library):
         minions=(friendly_rat, friendly_wyrm, small_target),
     )
 
-    picked = _pick(state, library)
+    picked = _pick_from(
+        state, library,
+        lambda action: action.action_type == ActionType.PLAY_CARD,
+    )
 
     assert picked.action_type == ActionType.PLAY_CARD
     assert picked.destroyed_minion_id == friendly_rat.instance_id
@@ -212,7 +231,16 @@ def test_shady_trade_deal_discards_stash_for_on_discard_synergy(library):
         minions=(dark_mage,),
     )
 
-    picked = _pick(state, library)
+    # Rat deployment can now outrank this paid spell. Keep the regression on
+    # the spell's discard choice rather than restoring obsolete free-Magic
+    # priority across unrelated action families.
+    picked = _pick_from(
+        state, library,
+        lambda action: (
+            action.action_type == ActionType.PLAY_CARD
+            and action.card_index == 0
+        ),
+    )
 
     assert picked.action_type == ActionType.PLAY_CARD
     assert picked.card_index == 0

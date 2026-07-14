@@ -6268,3 +6268,79 @@ input::selection, textarea::selection { background: rgba(224, 162, 60, 0.45); co
   font-size: 30px !important;
   line-height: 1.15;
 }
+
+/* Action bank v5: three public circles; filled points become embossed gold
+   coins. Kept deliberately compact for the scaled player pillboxes. */
+.action-bank {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+.action-coin {
+  position: relative;
+  display: inline-block;
+  width: 13px;
+  height: 13px;
+  box-sizing: border-box;
+  border: 1.5px solid #765b2b;
+  border-radius: 50%;
+  background: rgba(25, 18, 11, 0.72);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.75);
+}
+.action-coin.is-filled {
+  border-color: #ffe59a;
+  background: radial-gradient(circle at 36% 30%, #fff4a8 0 13%, #f5c543 32%, #bd7418 72%, #75400d 100%);
+  box-shadow: inset 0 0 0 2px rgba(116, 62, 8, 0.42), 0 0 5px rgba(255, 196, 55, 0.65);
+}
+.action-coin.is-filled::after {
+  content: '';
+  position: absolute;
+  inset: 3px;
+  border: 1px solid rgba(113, 61, 8, 0.52);
+  border-radius: 50%;
+}
+#screen-game .pod-row-stats {
+  align-items: center;
+  gap: 7px;
+}
+.action-bank-tooltip .action-coin {
+  width: 16px;
+  height: 16px;
+}
+.ts-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 7px;
+  border: 1px solid rgba(216, 166, 71, 0.45);
+  border-radius: 999px;
+  background: rgba(34, 24, 15, 0.72);
+}
+.ts-action-label {
+  color: #eed598;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+.tooltip-action-economy {
+  color: #ead79f;
+}
+.btn-rest-action {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  line-height: 1.05;
+}
+.btn-rest-action small {
+  margin-top: 3px;
+  color: #f0d88f;
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: .02em;
+}
+@media (prefers-reduced-motion: reduce) {
+  .action-coin { transition: none !important; animation: none !important; }
+}

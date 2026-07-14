@@ -5,7 +5,7 @@ Covers:
   - Encode/decode round-trip for all 7 action types
   - Action mask shape and dtype
   - Mask matches legal_actions() for random states
-  - PASS is always legal (mask always has at least one True bit)
+  - Legacy-rule PASS keeps the mask non-empty
   - Reward signal: +1 win, -1 loss, 0 in-progress/draw
 """
 

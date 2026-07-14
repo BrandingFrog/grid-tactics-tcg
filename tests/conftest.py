@@ -39,6 +39,12 @@ os.environ.setdefault("CONTRACT_ENFORCEMENT_MODE", "strict")
 # ---------------------------------------------------------------------------
 os.environ.setdefault("GRID_TACTICS_PREGAME", "0")
 
+# Most historical engine tests assert the legacy one-action contract. The
+# product/headless runtime defaults to the active action-bank rules; keep the
+# legacy suite explicit while focused action-bank tests opt back in with
+# monkeypatch.setenv("GT_MANUAL_DRAW", "1").
+os.environ["GT_MANUAL_DRAW"] = "0"
+
 from grid_tactics.enums import PlayerSide, TurnPhase
 
 

@@ -491,16 +491,24 @@ function renderSandboxStats() {
     // Mana is a banking pool -- single number, not X/Y (matches duel screen).
     setText('sandbox-p0-hp', p0.hp);
     setText('sandbox-p0-mana', p0.current_mana);
+    if (typeof _renderActionBank === 'function') {
+        _renderActionBank('sandbox-p0-action-bank', p0);
+    }
     setText('sandbox-p0-handcount', p0.hand ? p0.hand.length : 0);
     setText('sandbox-p0-deck', p0.deck ? p0.deck.length : 0);
+    setText('sandbox-p0-deck-pile', p0.deck ? p0.deck.length : 0);
     setText('sandbox-p0-grave', p0.grave ? p0.grave.length : 0);
     setText('sandbox-p0-exhaust', p0.exhaust ? p0.exhaust.length : 0);
 
     // Player 2 info bar (top)
     setText('sandbox-p1-hp', p1.hp);
     setText('sandbox-p1-mana', p1.current_mana);
+    if (typeof _renderActionBank === 'function') {
+        _renderActionBank('sandbox-p1-action-bank', p1);
+    }
     setText('sandbox-p1-handcount', p1.hand ? p1.hand.length : 0);
     setText('sandbox-p1-deck', p1.deck ? p1.deck.length : 0);
+    setText('sandbox-p1-deck-pile', p1.deck ? p1.deck.length : 0);
     setText('sandbox-p1-grave', p1.grave ? p1.grave.length : 0);
     setText('sandbox-p1-exhaust', p1.exhaust ? p1.exhaust.length : 0);
 

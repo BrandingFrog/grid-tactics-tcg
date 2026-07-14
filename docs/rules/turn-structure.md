@@ -1,25 +1,24 @@
-# Turn Structure & Priority System — Design Spec (v3)
+# Turn Structure & Priority System — Design Spec (v5)
 
 Authoritative turn flow, phase boundaries, react windows, and effect-resolution priority rules for Grid Tactics TCG. Single source of truth when implementing or modifying turn logic, react timing, or stack/queue behavior.
 
-> **ACTIVE RULES EXPERIMENT (2026-07-11 v4)** (`GT_MANUAL_DRAW=1`, on by default in
-> `pvp_server.py`; the bare engine / test suite default to the standard rules below):
-> - NO turn-start auto-draw (and no turn-start empty-deck fatigue). **REST** (the
->   reserved DRAW action slot) consumes the turn action for **+1 mana AND +1 draw**
->   (overdraw-burns on a full hand; empty deck skips the draw, mana still granted).
->   **PASS is a separate action and gives NO benefit** (v4, user 2026-07-11). BOTH
->   REST and PASS advance the Handshake streak — any two consecutive skips (rest/rest,
->   rest/pass, pass/pass) seal a Handshake.
-> - **REST and PASS are mutually exclusive** (v4.2, user 2026-07-11): legal_actions
->   offers REST until the active player casts a MAGIC that turn, after which the skip
->   transforms into PASS for the remainder of the turn — no mana+draw skip on the free
->   action a magic hands back (`GameState.magic_cast_this_turn`, cleared on turn flip).
-> - **MAGIC casts do not consume the turn action**: after the cast resolves (including
->   its react windows / pending modals) play returns to the caster's ACTION phase on the
->   same turn (`GameState.magic_free_action_pending`, consumed at the after-action
->   react-window close; defensively cleared on turn flip).
-> - **Handshake payout: BOTH players gain +1 mana AND draw a card** — the only built-in
->   draw source besides card effects.
+> **ACTIVE RULES (2026-07-14 v5)** (`GT_MANUAL_DRAW=1`, the default for live,
+> headless, and RL play; `GT_MANUAL_DRAW=0` selects legacy compatibility rules):
+> - NO turn-start auto-draw or turn-start empty-deck fatigue.
+> - Each player has a public **Action Point bank**: gain 1 on each own turn, bank up
+>   to 3. Every primary action — including MAGIC — spends 1. Reactions,
+>   modal choices, and the optional post-move attack/decline spend 0.
+> - After each action and its complete reaction/modal chain, play returns to the same
+>   player's Action Phase while at least one point remains.
+> - **REST** (DRAW slot) is the existing rewarded no-action turn end. It is legal
+>   only before a point is spent, costs 0, banks the full pool, grants +1 mana,
+>   draws the Fortune ante, and offers a Handshake. After any point is spent,
+>   REST changes to **PASS**: cost 0, no effect, end the turn.
+> - Two consecutive RESTs seal a Handshake. React-window passes never count.
+> - **Handshake payout: BOTH players gain +1 mana AND draw a card**. REST is the
+>   regular built-in draw source; card effects may draw as written.
+> - Automatic turn mana and REST cards both start at 1. Each completed Fortune round
+>   raises both by 1, effective immediately when the postponed incoming turn resumes.
 > Everything else in this spec is unchanged. Flag: `grid_tactics.types.manual_draw_variant()`.
 
 Decided by the product owner 2026-07-02. Supersedes the v2 three-phase spec.
@@ -45,9 +44,9 @@ Non-blocking — game state progression runs concurrently. Auto-dismisses after 
 
 Each turn consists of five ordered phases:
 
-1. **Turn Start** — automatic draw + mana gain
+1. **Turn Start** — Action Point gain + automatic mana gain
 2. **Rally Phase** — positive once-per-turn triggers
-3. **Action Phase** — exactly one action
+3. **Action Phase** — spend banked Action Points or end early
 4. **Decay Phase** — negative once-per-turn effects
 5. **Turn End** — Handshake payout, cleanup, turn passes
 
@@ -57,22 +56,22 @@ Priority begins with the turn player in every phase.
 
 ## 3. Turn Start
 
-The active player automatically:
-
-1. **Draws 1 card** (mandatory — not an action).
-2. **Gains 1 mana.**
+Under active rules, the player gains 1 Action Point (cap 3) and gains mana
+equal to the current Fortune ante. There is no automatic draw.
 
 ### 3.1 Mana Pool
 
 Mana is a **single pool** — there are no crystals:
 
-- +1 mana at every turn start.
+- +1 mana at every turn start before any Fortune; +1 more after each completed Fortune round.
 - Spending mana **permanently depletes** it until rebuilt (+1 per turn, plus Handshake payouts).
 - `MAX_MANA_CAP = 10` — a pool of 10 is "full"; turn-start gain does not raise it past 10.
 
-### 3.2 Fatigue (empty-deck draw ONLY)
+### 3.2 Fatigue (legacy standard rules only)
 
-If the deck is **empty** at the turn-start draw, the player takes **fatigue damage instead of drawing**: escalating **10🤍, 20🤍, 30🤍, ...** per empty-deck draw. Fatigue exists **only** here — no other game action deals fatigue damage (in particular, PASS is free — see §5).
+`GT_MANUAL_DRAW=0` retains escalating fatigue on an empty-deck automatic
+turn-start draw. Active rules have no automatic draw, so they have no
+turn-start fatigue; an empty-deck REST still grants its mana and draws nothing.
 
 ### 3.3 Overdraw Burns
 
@@ -82,8 +81,8 @@ If the player's hand is full (`MAX_HAND_SIZE = 10`), the drawn card is sent to t
 
 The full Turn Start sequence (§3) applies from **turn 3 onward**. The game's opening two turns deliberately deviate to keep the first-player advantage in check:
 
-- **Turn 1 (P1's first turn):** NO turn-start draw and NO mana gain. The game begins directly in P1's Action Phase. The asymmetric starting hands (`STARTING_HAND_P1 = 3`, `STARTING_HAND_P2 = 4`) plus both players opening at `STARTING_MANA = 1` stand in for it.
-- **Turn 2 (P2's first turn):** the turn-start draw happens normally, but the **+1 mana gain is suppressed** so P2's first action starts at the same `STARTING_MANA` as P1's first action.
+- **Turn 1 (P1's first turn):** P1 begins directly in Action with 1 point and starting mana.
+- **Turn 2 (P2's first turn):** P2 receives its first Action Point; automatic mana is suppressed because both players already open at `STARTING_MANA = 1`.
 
 Implementation home: `react_stack._close_end_of_turn_and_flip` (the turn-flip tail — turn 1 never runs it; turn 2 skips only the mana regen).
 
@@ -103,22 +102,31 @@ React window opens before the phase ends.
 
 ## 5. Action Phase
 
-The turn player takes **exactly one action**:
+The turn player spends from a shared bank of up to 3 Action Points. Each of
+the following primary actions costs 1:
 
 - Play a card (Minion or Magic, paying its cost)
 - Move a friendly minion
 - Attack with a friendly minion
 - Sacrifice (minion at far edge crosses the board)
+- Transform a friendly minion
+- Play an eligible card from Exhaust
 - Activate a unit's activated ability
-- **PASS**
 
-**DRAW is removed as an action.** Action slot 1000 stays reserved in the action space but is never legal (auto-draw happens at Turn Start).
+REST is not a primary action. Before spending any point, the existing
+end-turn control is **REST**: it costs 0 and banks all points.
 
-**PASS is FREE.** It must NOT deal fatigue damage — fatigue now exists only for empty-deck turn-start draws (§3.2). Passing is a legitimate strategic choice and feeds the Handshake mechanic (§8).
+REST uses the reserved DRAW action slot 1000; no protocol/action-space migration is required.
+
+After spending at least one point, **PASS costs 0 and has no effect.** It ends
+the turn immediately and preserves unspent points. It does not create a Handshake.
+If the final Action Point is spent, the turn passes automatically after that
+action and all of its React/modal continuations finish.
 
 ### 5.1 Melee Exception
 
-Melee minions may take up to two actions in the Action Phase (one `move` + one `attack`) with **two separate react windows** — one after the move, one after the attack.
+MOVE plus its optional melee attack/decline costs 1 total, while retaining
+**two separate react windows** — one after the move, one after the attack.
 
 A React card is only triggered if its condition is valid for the action being reacted to.
 
@@ -189,14 +197,16 @@ See §11 for the wording rules.
 
 ## 8. Handshake
 
-New mechanic. When a player **PASSES as their Action-Phase action** and the opponent's immediately-previous Action-Phase action was **also PASS**, a **Handshake** occurs. (Passes that merely close react windows do not count.)
+A REST offers a Handshake. If the opponent's immediately following turn also
+ends with REST before any intervening paid action, a **Handshake** occurs.
+PASS or a paid action declines/breaks the offer. React-window passes never count.
 
 At the **end of that turn** (Decay/turn-end processing):
 
-- **BOTH players gain +1 mana.**
-- A player whose mana is already full (10) **draws a card instead** (overdraw-burn rules apply — §9).
+- **BOTH players gain +1 mana** (capped at 10).
+- **BOTH players draw 1 card** (overdraw-burn rules apply — §9).
 
-The consecutive-pass counter then **resets to 0** — no chaining. The next Handshake requires a fresh pair of consecutive passes.
+The REST streak then resets — no chaining. The next Handshake requires a fresh pair.
 
 ---
 
@@ -247,13 +257,15 @@ If an effect's target is no longer valid at resolution time (destroyed, moved, e
 When touching turn logic, verify:
 
 - [ ] Turn banner renders at turn start with `TURN X` + `PLAYER X`.
-- [ ] Turn Start: active player auto-draws 1 card AND gains 1 mana (single pool, `MAX_MANA_CAP = 10`) — subject to the documented opening-turn exception (§3.4: no draw/mana on turn 1, no mana gain on turn 2).
-- [ ] Empty deck at turn-start draw = escalating fatigue (10/20/30...) instead of the draw — and NOWHERE else.
+- [ ] Active Turn Start: gain 1 Action Point (cap 3) and Fortune-ante mana; no auto-draw.
+- [ ] Legacy-only empty-deck turn-start draw = escalating fatigue (10/20/30...); active rules never apply turn-start fatigue.
 - [ ] Rally Phase: all once-per-turn positive triggers proc via `ON_START_OF_TURN`; animate with center-screen icon + source/target blip.
-- [ ] Action Phase: exactly one action; DRAW (slot 1000) reserved but never legal; PASS is free and deals NO fatigue.
+- [ ] Action Phase: each primary action (including MAGIC) costs 1; reactions and continuations cost 0; same player continues while points remain.
+- [ ] REST is the 0-AP rewarded no-action end, banks all points, grants +1 mana + ante cards, and offers Handshake. After an AP is used, only no-effect PASS remains.
 - [ ] Decay Phase: all once-per-turn negative effects proc via `ON_END_OF_TURN`; Burning ticks 5🤍 in the minion OWNER's Decay Phase.
 - [ ] Trigger machinery supports per-card turn scoping (every turn / owner's turn / opponent's turn) per card wording.
-- [ ] Handshake: PASS answered by PASS → at turn end BOTH players +1 mana (full-mana player draws instead); counter resets to 0, no chaining.
+- [ ] Handshake: REST answered by REST → at turn end BOTH players +1 mana and draw 1 under active rules; counter resets.
+- [ ] Each completed Fortune immediately raises automatic turn mana and REST cards by 1.
 - [ ] `MAX_HAND_SIZE = 10` constant in `types.py` — no bare literal hand caps remain.
 - [ ] Overdraw burns on ALL draw paths (turn-start, effects, Handshake, tutor-to-hand): card goes to Exhaust Pile, revealed.
 - [ ] React window opens before Rally Phase ends, after each Action Phase action (including each melee sub-action and each compound sub-trigger), and before Decay Phase ends.
@@ -277,7 +289,8 @@ When touching turn logic, verify:
 - **Turn player:** The player whose turn it currently is. Has priority in all simultaneous-effect resolutions.
 - **Rally Phase:** Player-facing name for the start-of-turn trigger phase (`ON_START_OF_TURN`). Positive once-per-turn effects proc here.
 - **Decay Phase:** Player-facing name for the end-of-turn trigger phase (`ON_END_OF_TURN`). Negative once-per-turn effects proc here.
-- **Handshake:** A PASS answered by a PASS. At turn end both players gain +1 mana (a full-mana player draws instead); the pass counter resets.
+- **Action Point:** Public banked currency for primary actions; gain 1 per own turn, cap 3.
+- **Handshake:** A REST answered by REST. Active payout gives both players +1 mana and draw 1.
 - **Fatigue:** Escalating damage (10🤍/20🤍/30🤍...) taken when drawing at turn start with an empty deck. The only source of fatigue in the game.
 - **Overdraw-burn:** A card drawn while the hand is full (10) goes to the Exhaust Pile, revealed, instead of the hand.
 - **March:** Movement keyword (formerly "Rally") — when this minion moves, all other friendly copies also advance.
@@ -286,4 +299,4 @@ When touching turn logic, verify:
 - **Stack:** LIFO structure holding pending reacts — the last react played resolves first (§6).
 - **Queue:** Priority-ordered list of simultaneous triggers — the turn player's effects resolve first, each owner picking the resolution order via the modal card picker (§5.3).
 - **Summon: / Death: / Start (Rally Phase) / End (Decay Phase):** Triggered ability moments. Each opens its own react window when triggered.
-- **Melee sub-action:** One of the two actions a melee minion may take in a single Action Phase (move or attack). Each opens its own react window.
+- **Melee continuation:** The optional attack/decline after MOVE. It costs no additional point but keeps its own react window.

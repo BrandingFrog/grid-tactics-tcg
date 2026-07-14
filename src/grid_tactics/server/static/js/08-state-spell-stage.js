@@ -1266,6 +1266,12 @@ function logEngineEvent(ev) {
                  + ' (' + (_md > 0 ? '+' : '') + _md + ')';
             detail = true;
             break;
+        case 'action_points_change':
+            var _apd = (p.delta != null) ? p.delta : (p.new - p.prev);
+            text = _logPlayer(p.player_idx) + ' AP ' + p.prev + '→' + p.new
+                 + ' (' + (_apd > 0 ? '+' : '') + _apd + ')';
+            detail = true;
+            break;
         case 'player_hp_change':
             if (p.cause === 'fatigue') {
                 text = _logPlayer(p.player_idx) + ' FATIGUE ' + p.delta + ': '

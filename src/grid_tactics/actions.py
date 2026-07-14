@@ -48,12 +48,12 @@ class Action:
 
 
 def pass_action() -> Action:
-    """Create a PASS action (always legal per D-16)."""
+    """Create a PASS action (main-phase turn end or react decline)."""
     return Action(action_type=ActionType.PASS)
 
 
 def draw_action() -> Action:
-    """Create a DRAW action (costs an action per D-15)."""
+    """Create DRAW; under active rules this wire slot represents REST."""
     return Action(action_type=ActionType.DRAW)
 
 

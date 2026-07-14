@@ -112,9 +112,8 @@ class TestBasicLegalActions:
     def test_empty_everything_has_pass(self, library):
         """Empty board, hand, deck -> exactly one action (PASS).
 
-        Per D-16 and CLAUDE.md, PASS is always legal in the ACTION phase
-        so a player is never stuck with zero options. (Fatigue bleed still
-        applies when the player voluntarily passes.)
+        Under the legacy rules selected by tests/conftest.py, PASS is always
+        legal in ACTION so a player is never stuck with zero options.
         """
         state = _make_state()
         actions = legal_actions(state, library)

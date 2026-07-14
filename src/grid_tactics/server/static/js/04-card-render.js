@@ -4,9 +4,11 @@
 // Clicking a card anywhere pins it in the tooltip (user 2026-07-06); while
 // pinned, hover show/hide is ignored unless the caller forces it.
 let gameTooltipPin = null;   // { nid, el }
+var activePlayerPreviewIdx = null;
 
 function showGameTooltip(numericId, anchorEl, minion, opts) {
     if (gameTooltipPin && !(opts && opts.force)) return;
+    activePlayerPreviewIdx = null;
     var tooltipId = sandboxMode ? 'sandbox-tooltip' : 'game-tooltip';
     var hintId = sandboxMode ? 'sandbox-tooltip-hint' : 'game-tooltip-hint';
     var tooltipEl = document.getElementById(tooltipId);
@@ -50,6 +52,7 @@ function _applyLiveStatTones(tooltipEl, minion) {
 
 function hideGameTooltip(opts) {
     if (gameTooltipPin && !(opts && opts.force)) return;
+    activePlayerPreviewIdx = null;
     var tooltipId = sandboxMode ? 'sandbox-tooltip' : 'game-tooltip';
     var hintId = sandboxMode ? 'sandbox-tooltip-hint' : 'game-tooltip-hint';
     var tooltip = document.getElementById(tooltipId);
