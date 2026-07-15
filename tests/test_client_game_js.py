@@ -2246,16 +2246,163 @@ console.log(JSON.stringify({
     }
 
 
-def test_attack_selection_only_paints_legal_targets():
+def test_revive_placement_remains_clickable_while_cast_is_on_spell_stage(tmp_path):
+    """Ratical's pending placement resolves before its cast stage closes."""
+    script = (
+        """
+var sandboxMode = false;
+var interactionMode = 'revive_place';
+var isSpectator = false;
+var legalActions = [
+    { action_type: 15, card_index: 4, position: [1, 2] }
+];
+var gameState = {
+    phase: 1,
+    pending_revive_player_idx: 0,
+    pending_revive_remaining: 3
+};
+var window = {
+    __reviveSelectedGraveIdx: 4,
+    __reviveSubmittedAtRemaining: null
+};
+var submitted = [];
+var closeCalls = 0;
+var document = { getElementById: function() { return null; } };
+function isBoardModalPeekActive() { return false; }
+function canResolvePendingBoardDecisionDuringPeek() { return false; }
+function isEventQueueBusy() { return true; }
+function isSpellStageAnimating() { return true; }
+function isReactWindow() { return true; }
+function submitAction(payload) { submitted.push(payload); }
+function closeReviveModal() { closeCalls++; }
+"""
+        + extract_function("onBoardCellClick")
+        + """
+onBoardCellClick(1, 2);
+console.log(JSON.stringify({
+    submitted: submitted,
+    closeCalls: closeCalls,
+    submittedAt: window.__reviveSubmittedAtRemaining,
+    selectedGraveIdx: window.__reviveSelectedGraveIdx,
+    interactionMode: interactionMode
+}));
+"""
+    )
+    assert run_js(tmp_path, script) == {
+        "submitted": [
+            {"action_type": 15, "position": [1, 2], "card_index": 4}
+        ],
+        "closeCalls": 1,
+        "submittedAt": 3,
+        "selectedGraveIdx": None,
+        "interactionMode": None,
+    }
+
+
+def test_attack_selection_paints_range_without_restoring_inspection_overlay():
     client_js = _load_client_js()
     highlight = extract_function("highlightBoard")
-    assert "attack-range-footprint" not in client_js
-    assert "_paintAttackRangeFootprint" not in client_js
-    assert "pending_attack_range_tiles" not in highlight
+    assert "attack-range-footprint" in client_js
+    assert "function _paintAttackRangeFootprint" in client_js
+    assert "_paintAttackRangeFootprint(selectedMinionId)" in highlight
+    assert "pending_attack_range_tiles" in highlight
     assert "getAttackTargets(selectedMinionId)" in highlight
     assert "cell.classList.add('attack-valid-target')" in highlight
+    assert "inspectedMinionId" not in highlight
     pin_setup = extract_function("setupGameTooltipPin")
     assert "}, true);" in pin_setup, "minion inspection must run before board-cell rendering"
+
+
+def test_clearing_attack_selection_immediately_removes_all_board_indicators(tmp_path):
+    script = (
+        """
+function makeClassList(names) {
+    var values = names.slice();
+    return {
+        remove: function() {
+            for (var i = 0; i < arguments.length; i++) {
+                var target = arguments[i];
+                values = values.filter(function(v) { return v !== target; });
+            }
+        },
+        values: function() { return values.slice().sort(); }
+    };
+}
+var cells = [
+    {classList: makeClassList(['board-cell', 'attack-range-footprint', 'cell-selected'])},
+    {classList: makeClassList(['board-cell', 'cell-attack', 'attack-valid-target', 'other'])}
+];
+var document = {
+    querySelectorAll: function(sel) { return sel === '.board-cell' ? cells : []; }
+};
+var selectedHandIdx = 2;
+var selectedMinionId = 9;
+var selectedDeployPos = [1, 1];
+var selectedAbilityMinionId = 9;
+var interactionMode = 'attack';
+function hideMinionActionMenu() {}
+function closeTransformPicker() {}
+function hideDeclinePostMoveAttackButton() {}
+"""
+        + extract_function("_clearBoardInteractionHighlights")
+        + extract_function("clearSelection")
+        + """
+clearSelection();
+console.log(JSON.stringify({
+    classes: cells.map(function(c) { return c.classList.values(); }),
+    selectedHandIdx: selectedHandIdx,
+    selectedMinionId: selectedMinionId,
+    selectedDeployPos: selectedDeployPos,
+    selectedAbilityMinionId: selectedAbilityMinionId,
+    interactionMode: interactionMode
+}));
+"""
+    )
+    assert run_js(tmp_path, script) == {
+        "classes": [["board-cell"], ["board-cell", "other"]],
+        "selectedHandIdx": None,
+        "selectedMinionId": None,
+        "selectedDeployPos": None,
+        "selectedAbilityMinionId": None,
+        "interactionMode": None,
+    }
+
+
+def test_attack_range_footprint_matches_engine_geometry(tmp_path):
+    script = (
+        r"""
+var painted = [];
+var gameState = {
+    minions: [{instance_id: 9, card_numeric_id: 3, position: [2, 2]}]
+};
+var cardDefs = {3: {attack_range: 0}};
+var document = {
+    querySelector: function(sel) {
+        var m = /data-row=\"(\d+)\"\]\[data-col=\"(\d+)\"/.exec(sel);
+        if (!m) return null;
+        var key = m[1] + ',' + m[2];
+        return {classList: {add: function(cls) { painted.push([key, cls]); }}};
+    }
+};
+"""
+        + extract_function("_paintAttackRangeFootprint")
+        + """
+_paintAttackRangeFootprint(9);
+var melee = painted.map(function(x) { return x[0]; }).sort();
+painted = [];
+cardDefs[3].attack_range = 1;
+_paintAttackRangeFootprint(9);
+var ranged = painted.map(function(x) { return x[0]; }).sort();
+console.log(JSON.stringify({melee: melee, ranged: ranged}));
+"""
+    )
+    assert run_js(tmp_path, script) == {
+        "melee": ["1,2", "2,1", "2,3", "3,2"],
+        "ranged": [
+            "0,2", "1,1", "1,2", "1,3", "2,0", "2,1",
+            "2,3", "2,4", "3,1", "3,2", "3,3", "4,2",
+        ],
+    }
 
 
 def test_explicit_card_origin_controls_live_deck_counter(tmp_path):

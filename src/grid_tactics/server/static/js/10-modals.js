@@ -914,12 +914,45 @@ function findCardNameByNid(nid) {
     return 'Card #' + nid;
 }
 
+// Paint the selected minion's geometric attack range. This is deliberately
+// separate from attack-valid-target: empty/friendly squares explain the
+// weapon's reach, while brighter pulsing enemy squares remain the only
+// clickable legal attacks supplied by the server.
+function _paintAttackRangeFootprint(minionId) {
+    if (minionId == null || !gameState || !gameState.minions) return;
+    var source = null;
+    gameState.minions.forEach(function(m) {
+        if (m.instance_id === minionId) source = m;
+    });
+    if (!source) return;
+    var sourceCard = cardDefs && cardDefs[source.card_numeric_id];
+    var range = (sourceCard && sourceCard.attack_range != null)
+        ? (sourceCard.attack_range | 0) : 0;
+    var sr = source.position[0], sc = source.position[1];
+    for (var rr = 0; rr < 5; rr++) {
+        for (var cc = 0; cc < 5; cc++) {
+            if (rr === sr && cc === sc) continue;
+            var dr = Math.abs(rr - sr);
+            var dc = Math.abs(cc - sc);
+            var manhattan = dr + dc;
+            var orthogonal = (rr === sr || cc === sc);
+            var inRange = range === 0
+                ? (manhattan === 1 && orthogonal)
+                : ((orthogonal && manhattan <= range + 1)
+                    || (dr === dc && dr >= 1 && dr <= range));
+            if (inRange) {
+                var tile = document.querySelector(
+                    '.board-cell[data-row="' + rr + '"][data-col="' + cc + '"]'
+                );
+                if (tile) tile.classList.add('attack-range-footprint');
+            }
+        }
+    }
+}
+
 // Highlight valid board cells based on current selection
 function highlightBoard() {
-    document.querySelectorAll('.board-cell').forEach(function(cell) {
-        cell.classList.remove('cell-valid', 'cell-attack', 'cell-selected',
-                              'attack-valid-target');
-    });
+    _clearBoardInteractionHighlights();
     if (typeof isBoardModalPeekActive === 'function'
             && isBoardModalPeekActive()
             && !canResolvePendingBoardDecisionDuringPeek()) return;
@@ -935,8 +968,14 @@ function highlightBoard() {
         return;
     }
 
-    // Phase 14.1: show only legal targets during a post-move attack pick.
+    // Phase 14.1: post-move attack selection uses the server-authored range
+    // footprint, then overlays the brighter clickable targets.
     if (interactionMode === 'post_move_attack_pick' && gameState) {
+        var rangeTiles = gameState.pending_attack_range_tiles || [];
+        rangeTiles.forEach(function(p) {
+            var rangeCell = document.querySelector('.board-cell[data-row="' + p[0] + '"][data-col="' + p[1] + '"]');
+            if (rangeCell) rangeCell.classList.add('attack-range-footprint');
+        });
         var validTargets = gameState.pending_attack_valid_targets || [];
         validTargets.forEach(function(p) {
             var cell = document.querySelector('.board-cell[data-row="' + p[0] + '"][data-col="' + p[1] + '"]');
@@ -1053,7 +1092,9 @@ function highlightBoard() {
         }
 
         if (interactionMode === 'attack' || interactionMode === 'move_attack') {
-            // Highlight only targets the server says are currently legal.
+            // Show the selected card's complete range, then layer the stronger
+            // legal-target treatment over enemy minions the server permits.
+            _paintAttackRangeFootprint(selectedMinionId);
             var atkTargets = getAttackTargets(selectedMinionId);
             (gameState.minions || []).forEach(function(m) {
                 if (atkTargets.indexOf(m.instance_id) !== -1) {

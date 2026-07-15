@@ -61,6 +61,20 @@ function renderGame() {
 // Section 10b: Game Interaction System
 // =============================================
 
+function _clearBoardInteractionHighlights() {
+    // Selection state and its paint are one lifecycle. Some cancellation
+    // paths (notably post-move Decline Attack) optimistically re-render
+    // while the old mode is still authoritative, then clearSelection after
+    // that render. Removing the classes here prevents those stale range /
+    // target indicators from surviving until the next server frame.
+    document.querySelectorAll('.board-cell').forEach(function(cell) {
+        cell.classList.remove(
+            'cell-valid', 'cell-attack', 'cell-selected',
+            'attack-range-footprint', 'attack-valid-target'
+        );
+    });
+}
+
 function clearSelection() {
     selectedHandIdx = null;
     selectedMinionId = null;
@@ -70,6 +84,7 @@ function clearSelection() {
     hideMinionActionMenu();
     closeTransformPicker();
     hideDeclinePostMoveAttackButton();
+    _clearBoardInteractionHighlights();
 }
 
 function submitAction(actionData, allowDuringBoardPeek) {
@@ -650,16 +665,20 @@ function onBoardCellClick(row, col) {
             && interactionMode !== 'exhaust_play') {
         return;
     }
-    // Spell-stage gate: block board interaction while the spell stage
-    // overlay is animating, so the user can't move / attack / target-pick
-    // an effect during the visible react-window animation. Death-target
-    // picks still pass through (that modal is orthogonal to the spell
-    // stage and must resolve independently).
-    if (isSpellStageAnimating() && interactionMode !== 'death_target_pick') return;
-    // Board clicks are inert during react window EXCEPT when a death
-    // target pick is pending — the modal routes through the cell click
-    // handler and must not be blocked by react-window gating.
-    if (isReactWindow() && interactionMode !== 'death_target_pick') return;
+    // Spell-stage/react gates block ordinary board actions, but not the
+    // board click that resolves a mandatory pending decision. Revive and
+    // Conjure are commonly opened by the spell still parked on the stage;
+    // swallowing their tile click deadlocks that spell (Ratical was the
+    // visible regression). Post-move attack and death targeting follow the
+    // same server-gated decision contract.
+    var _pendingCellDecision = interactionMode === 'death_target_pick'
+        || interactionMode === 'post_move_attack_pick'
+        || interactionMode === 'conjure_deploy'
+        || interactionMode === 'revive_place';
+    if (isSpellStageAnimating() && !_pendingCellDecision) return;
+    // A pending decision is authoritative even if the underlying state is
+    // technically still in REACT while the interrupted chain waits on it.
+    if (isReactWindow() && !_pendingCellDecision) return;
     var isMyTurn = legalActions && legalActions.length > 0;
     if (!isMyTurn) return;
 

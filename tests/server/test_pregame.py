@@ -205,6 +205,15 @@ def test_mulligan_flow_and_replacement_events(alice, bob):
         assert e["payload"]["card_numeric_id"] is None
     # The engine_events final_state carries the full 3-card hand.
     assert len(ev_a["final_state"]["players"][0]["hand"]) == 3
+    # Turn 1 is an explicit final beat, after every mulligan draw, so the
+    # standard turn banner appears without covering the replacement cards.
+    assert ev_a["events"][-1]["type"] == "turn_flipped"
+    assert ev_a["events"][-1]["payload"] == {
+        "prev_turn": 0,
+        "new_turn": 1,
+        "new_active_idx": 0,
+    }
+    assert ev_b["events"][-1]["type"] == "turn_flipped"
     # Hand invariant: nobody gained or lost cards net.
     assert ev_a["final_state"]["players"][1].get("hand_count", 4) == 4
 

@@ -8,7 +8,11 @@ from flask_socketio import emit, join_room as sio_join_room, leave_room as sio_l
 
 from grid_tactics.actions import pass_action
 from grid_tactics.action_resolver import resolve_action
-from grid_tactics.engine_events import EVT_CARD_DRAWN, EventStream
+from grid_tactics.engine_events import (
+    EVT_CARD_DRAWN,
+    EVT_TURN_FLIPPED,
+    EventStream,
+)
 from grid_tactics.enums import TurnPhase
 from grid_tactics.game_state import apply_mulligan
 from grid_tactics.phase_contracts import OutOfPhaseError
@@ -830,6 +834,10 @@ def _finish_pregame(room_code, pregame):
     # Mulligan replacement draws: one EVT_CARD_DRAWN per new card, in a
     # single seq-ordered batch. filter_engine_events_for_viewer redacts
     # the card identity for the opponent exactly like every other draw.
+    # Finish with the initial turn event so Turn 1 uses the same banner/log
+    # path as every later turn. Keeping it after the draws prevents the
+    # banner from blooming over the mulligan hand animation; it is emitted
+    # even when both players kept every card.
     stream = EventStream(next_seq=session.next_event_seq)
     for idx in (0, 1):
         for nid in pregame.mulligan_drawn[idx]:
@@ -838,9 +846,13 @@ def _finish_pregame(room_code, pregame):
                 "card_numeric_id": int(nid),
                 "source": "mulligan",
             })
+    stream.collect(EVT_TURN_FLIPPED, "system:pregame_start", {
+        "prev_turn": 0,
+        "new_turn": int(session.state.turn_number),
+        "new_active_idx": int(session.state.active_player_idx),
+    })
     session.next_event_seq = stream.next_seq
-    if stream.events:
-        _emit_state_to_players(session, session.state, events=list(stream.events))
+    _emit_state_to_players(session, session.state, events=list(stream.events))
 
 
 def _tests_results_path():
