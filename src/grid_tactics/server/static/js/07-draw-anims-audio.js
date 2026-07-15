@@ -621,6 +621,10 @@ function playMoveAnimation(job, done) {
     var payload = (job && job.payload) || {};
     var from = payload.from;
     var to = payload.to;
+    var speed = (typeof animSpeed === 'function') ? animSpeed() : 1;
+    var liftMs = Math.max(1, Math.round(120 / speed));
+    var slideMs = Math.max(1, Math.round(350 / speed));
+    var dropMs = Math.max(1, Math.round(130 / speed));
 
     // Bail to a no-op if we don't have valid coords; runQueue will still
     // apply the state frame after done() because we don't set stateApplied.
@@ -634,6 +638,21 @@ function playMoveAnimation(job, done) {
         // Source minion isn't in the DOM (race / reconnection). Skip visuals.
         setTimeout(done, 0);
         return;
+    }
+
+    // Keep the CSS transitions and JS phase clock on the same speed. Without
+    // this, runQueue's 2x/4x fast-forward cap releases the next event before
+    // Phase C moves the minion to its destination, making AI movement look
+    // like it never happened at the exhibition speeds.
+    var motionRoot = delta.fromCell.closest
+        ? delta.fromCell.closest('.game-layout') : null;
+    if (!motionRoot && typeof document !== 'undefined') {
+        motionRoot = document.documentElement;
+    }
+    if (motionRoot && motionRoot.style && motionRoot.style.setProperty) {
+        motionRoot.style.setProperty('--move-lift-duration', liftMs + 'ms');
+        motionRoot.style.setProperty('--move-slide-duration', slideMs + 'ms');
+        motionRoot.style.setProperty('--move-drop-duration', dropMs + 'ms');
     }
 
     var dx = delta.dx, dy = delta.dy;
@@ -680,9 +699,9 @@ function playMoveAnimation(job, done) {
                 delete animatingTiles[srcKey];
                 try { renderBoard(); } catch (e) { /* defensive */ }
                 done();
-            }, 130);
-        }, 350);
-    }, 120);
+            }, dropMs);
+        }, slideMs);
+    }, liftMs);
 }
 
 // Wave 2: summon animation.

@@ -3,6 +3,7 @@
 // =============================================
 
 function onGameStart(data) {
+    if (typeof window !== 'undefined') window.__legalActionsBeforeSubmit = null;
     // PREGAME (2026-07-08): tear down any lingering RPS / mulligan UI —
     // the game proper is starting. Capture the flag first: it gates the
     // initial-hand deal animation below (user 2026-07-10).
@@ -78,6 +79,7 @@ function onGameStart(data) {
 // detectSpellStageClose) were deleted at the same time — they're
 // referenced only in historical comments below.
 function onStateUpdate(data) {
+    if (typeof window !== 'undefined') window.__legalActionsBeforeSubmit = null;
     var next = data.state;
     var nextLegal = data.legal_actions;
     applyStateFrame(next, nextLegal);
@@ -1643,11 +1645,9 @@ function resetGameClientState() {
     sessionToken = null;
     selectedHandIdx = null;
     selectedMinionId = null;
-    inspectedMinionId = null;
     interactionMode = null;
-    // A pin points at a concrete DOM node from the old board. Clear it along
-    // with the inspection id so reused minion ids cannot paint a stale range
-    // or suppress hover tooltips in the next match.
+    // A pin points at a concrete DOM node from the old board. Clear it so it
+    // cannot suppress hover tooltips in the next match.
     if (typeof gameTooltipPin !== 'undefined') gameTooltipPin = null;
     document.querySelectorAll('.tooltip-pinned-card').forEach(function(el) {
         el.classList.remove('tooltip-pinned-card');

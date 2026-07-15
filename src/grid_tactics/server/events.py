@@ -23,6 +23,7 @@ from grid_tactics.roguelike_events import (
 from grid_tactics.server.action_codec import reconstruct_action, serialize_action
 from grid_tactics.server.app import socketio
 from grid_tactics.server.auth_discord import current_user
+from grid_tactics.server.debug_log import write_debug_record
 from grid_tactics.server.event_reconcile import reconcile_react_window_events
 from grid_tactics.server.room_manager import RoomManager
 from grid_tactics.server.view_filter import (
@@ -42,6 +43,7 @@ _room_manager: RoomManager | None = None
 
 _AI_WATCH_BASE_STEP_SECONDS = 0.9
 _AI_WATCH_FORTUNE_DWELL_SECONDS = 2.4
+_DEBUG_ROOM_SALT = _os.urandom(32)
 
 # PREGAME feature flag (user 2026-07-08): rock-paper-scissors for who goes
 # first + mulligan, run in the SOCKET start paths only (handle_ready /
@@ -190,23 +192,175 @@ def _inject_avatars(session, state_dict):
             players[i]['avatar_url'] = avatars[i]
 
 
+_ACTION_LOG_FIELDS = (
+    "action_type",
+    "card_index",
+    "position",
+    "minion_id",
+    "target_id",
+    "target_pos",
+    "discard_card_index",
+    "discard_card_indices",
+    "transform_target",
+    "destroyed_minion_id",
+)
+_ACTION_LOG_INT_FIELDS = frozenset({
+    "action_type",
+    "card_index",
+    "minion_id",
+    "target_id",
+    "discard_card_index",
+    "destroyed_minion_id",
+})
+_ACTION_LOG_POSITION_FIELDS = frozenset({"position", "target_pos"})
+
+
+def _safe_wire_value(value, depth=0):
+    """Bound untrusted wire values before they enter a server log."""
+    if value is None or isinstance(value, (bool, int, float)):
+        return value
+    if isinstance(value, str):
+        return value[:128]
+    if depth < 2 and isinstance(value, (list, tuple)):
+        return [_safe_wire_value(item, depth + 1) for item in value[:8]]
+    return f"<{type(value).__name__}>"
+
+
+def _safe_action_field(field, value):
+    if field in _ACTION_LOG_INT_FIELDS:
+        return value if type(value) is int else f"<invalid-{type(value).__name__}>"
+    if field in _ACTION_LOG_POSITION_FIELDS:
+        if (
+            isinstance(value, (list, tuple))
+            and len(value) == 2
+            and all(type(item) is int for item in value)
+        ):
+            return list(value)
+        return f"<invalid-{type(value).__name__}>"
+    if field == "discard_card_indices":
+        if (
+            isinstance(value, (list, tuple))
+            and len(value) <= 8
+            and all(type(item) is int for item in value)
+        ):
+            return list(value)
+        return f"<invalid-{type(value).__name__}>"
+    if field == "transform_target":
+        if (
+            isinstance(value, str)
+            and 0 < len(value) <= 64
+            and value.isascii()
+            and all(char.isalnum() or char in "_-:" for char in value)
+        ):
+            return "<valid-str-redacted>"
+        return f"<invalid-{type(value).__name__}>"
+    return f"<invalid-{type(value).__name__}>"
+
+
+def _safe_action_payload(data):
+    if not isinstance(data, dict):
+        return {"payload_type": type(data).__name__}
+    return {
+        field: _safe_action_field(field, data[field])
+        for field in _ACTION_LOG_FIELDS
+        if field in data
+    }
+
+
+def _error_for_log(error, *, include_message=False):
+    if include_message:
+        return f"{type(error).__name__}: {_safe_wire_value(str(error))}"
+    return type(error).__name__
+
+
+def _action_for_log(action):
+    if action is None:
+        return None
+    try:
+        return _safe_action_payload(serialize_action(action))
+    except Exception:
+        action_type = getattr(action, "action_type", None)
+        return {"action_type": f"<invalid-{type(action_type).__name__}>"}
+
+
+def _legal_action_type_counts(actions):
+    counts = {}
+    for action in actions:
+        action_type = getattr(action, "action_type", None)
+        name = getattr(action_type, "name", str(action_type))
+        counts[name] = counts.get(name, 0) + 1
+    return counts
+
+
+def _safe_legal_actions_for_log(session):
+    try:
+        return tuple(legal_actions(session.state, session.library))
+    except Exception:
+        return ()
+
+
+def _illegal_action_detail(source, reason, data, action=None, valid_actions=()):
+    """Build a privacy-safe, bounded illegal-action diagnostic payload."""
+    valid_actions = tuple(valid_actions or ())
+    return {
+        "source": source,
+        "reason": reason,
+        "wire_action": _safe_action_payload(data),
+        "action": _action_for_log(action),
+        "legal_count": len(valid_actions),
+        "legal_action_types": _legal_action_type_counts(valid_actions),
+    }
+
+
+def _session_mode(session):
+    player_sids = getattr(session, "player_sids", ())
+    return "preview" if player_sids and any(sid is None for sid in player_sids) else "pvp"
+
+
 def _debug_report(kind, room_code, session, player_idx, detail):
     """Log a client-visible failure server-side under a short debug code.
 
-    Returns the code (e.g. ``GT-3F9A2C``). The full context is written to
-    the server log tagged ``[GT-DEBUG] <code>`` — a code surfaced in a
-    client's game log can be grepped straight to its context (locally in
-    the console / server.log, on Railway via ``railway logs``). Used for
-    illegal-action rejections, phase-contract violations, and resolver
-    crashes (user 2026-07-11).
+    Returns the code (e.g. ``GT-3F9A2C7E91``). Context is written as bounded
+    JSON Lines to the process log and ``logs/gt-debug.jsonl``. Illegal
+    actions are also copied to ``logs/illegal-actions.jsonl``. Reporting is
+    best-effort and can never interrupt a match.
     """
-    import json
-    import logging
+    import hashlib
     import uuid
 
-    code = "GT-" + uuid.uuid4().hex[:6].upper()
+    code = "GT-" + uuid.uuid4().hex[:10].upper()
+    room_ref = None
+    if room_code is not None:
+        room_ref = hashlib.sha256(
+            _DEBUG_ROOM_SALT + str(room_code).encode("utf-8"),
+        ).hexdigest()[:12]
+    ctx = {
+        "code": code,
+        "kind": kind,
+        "room_ref": room_ref,
+        "player_idx": player_idx,
+    }
     try:
-        ctx = {"code": code, "kind": kind, "room": room_code, "player_idx": player_idx}
+        ctx.update(detail or {})
+    except Exception as detail_err:
+        ctx["detail_error_type"] = type(detail_err).__name__[:64]
+    for private_key in (
+        "room",
+        "room_code",
+        "raw_payload",
+        "sid",
+        "token",
+        "session_token",
+    ):
+        ctx.pop(private_key, None)
+    # Correlation and classification fields cannot be overridden by detail.
+    ctx.update({
+        "code": code,
+        "kind": kind,
+        "room_ref": room_ref,
+        "player_idx": player_idx,
+    })
+    try:
         if session is not None:
             st = session.state
             ctx.update({
@@ -216,27 +370,29 @@ def _debug_report(kind, room_code, session, player_idx, detail):
                 "react_player_idx": st.react_player_idx,
                 "consecutive_passes": st.consecutive_passes,
                 "magic_cast_this_turn": bool(getattr(st, "magic_cast_this_turn", False)),
+                "fortune_ante": getattr(st, "fortune_ante", None),
+                "event_seq": getattr(session, "next_event_seq", None),
+                "pending": {
+                    "fortune": st.pending_roguelike_event_turn is not None,
+                    "marked_cards": st.pending_marked_cards_player_idx is not None,
+                    "death": st.pending_death_target is not None,
+                    "trigger": st.pending_trigger_picker_idx is not None,
+                    "revive": st.pending_revive_player_idx is not None,
+                    "conjure": st.pending_conjure_deploy_player_idx is not None,
+                    "tutor": st.pending_tutor_player_idx is not None,
+                    "post_move": st.pending_post_move_attacker_id is not None,
+                },
             })
-        ctx.update(detail or {})
-        payload = json.dumps(ctx, default=str)
-    except Exception as ser_err:  # never let the report itself crash the handler
-        payload = f'{{"code": "{code}", "kind": "{kind}", "serialization_error": "{ser_err}"}}'
-    logging.getLogger("grid_tactics.server.debug").warning("[GT-DEBUG] %s", payload)
-    print(f"[GT-DEBUG] {payload}", flush=True)
-    # File sink: the local dev server runs detached (stdout discarded), so
-    # also append to logs/gt-debug.log next to the repo root. On Railway
-    # the print is the durable channel (`railway logs`); the file is a
-    # same-deploy convenience there.
-    try:
-        import datetime
-        import pathlib
-        log_dir = pathlib.Path(__file__).resolve().parents[3] / "logs"
-        log_dir.mkdir(exist_ok=True)
-        stamp = datetime.datetime.now().isoformat(timespec="seconds")
-        with open(log_dir / "gt-debug.log", "a", encoding="utf-8") as f:
-            f.write(f"{stamp} {payload}\n")
-    except OSError:
-        pass
+            if player_idx in (0, 1):
+                actor = st.players[player_idx]
+                ctx["actor"] = {
+                    "hp": actor.hp,
+                    "mana": actor.current_mana,
+                    "action_points": actor.action_points,
+                }
+    except Exception as state_err:  # never let the report itself crash the handler
+        ctx["state_context_error_type"] = type(state_err).__name__[:64]
+    write_debug_record(ctx, illegal_action=(kind == "illegal_action"))
     return code
 
 
@@ -826,7 +982,100 @@ def _auto_choose_dummy_roguelike_event(session, stream: EventStream) -> bool:
     return moved
 
 
-def _auto_advance_server_controlled_turn(session, stream: EventStream) -> None:
+class _ServerAIActionError(ValueError):
+    def __init__(self, message, debug_code):
+        super().__init__(message)
+        self.debug_code = debug_code
+
+
+def _resolve_server_ai_action(
+    session,
+    action,
+    valid_actions,
+    stream: EventStream,
+    *,
+    room_code,
+    source,
+    allow_unlisted=False,
+):
+    """Resolve a server-selected action with illegal-action diagnostics."""
+    valid_actions = tuple(valid_actions or ())
+    player_idx = _decision_idx(session.state)
+    wire_action = _action_for_log(action) or {}
+    if action not in valid_actions:
+        reason = (
+            "forced_fallback_not_in_legal_actions"
+            if allow_unlisted
+            else "ai_selection_not_legal"
+        )
+        detail = _illegal_action_detail(
+            source,
+            reason,
+            wire_action,
+            action,
+            valid_actions,
+        )
+        detail.update({"mode": source, "decision_idx": player_idx})
+        code = _debug_report(
+            "illegal_action", room_code, session, player_idx, detail,
+        )
+        if not allow_unlisted:
+            raise _ServerAIActionError(
+                f"Server AI selected an illegal action [{code}]", code,
+            )
+
+    try:
+        return resolve_action(
+            session.state,
+            action,
+            session.library,
+            event_collector=stream,
+        )
+    except OutOfPhaseError as exc:
+        detail = _illegal_action_detail(
+            source,
+            "ai_phase_contract_violation",
+            wire_action,
+            action,
+            valid_actions,
+        )
+        detail.update({
+            "mode": source,
+            "decision_idx": player_idx,
+            "contract_source": exc.contract_source,
+            "violation_phase": exc.phase.name if exc.phase else None,
+        })
+        code = _debug_report(
+            "illegal_action", room_code, session, player_idx, detail,
+        )
+        exc.debug_code = code
+        raise
+    except ValueError as exc:
+        detail = _illegal_action_detail(
+            source,
+            "ai_action_rejected_by_resolver",
+            wire_action,
+            action,
+            valid_actions,
+        )
+        detail.update({
+            "mode": source,
+            "decision_idx": player_idx,
+            "error": _error_for_log(exc, include_message=True),
+        })
+        code = _debug_report(
+            "illegal_action", room_code, session, player_idx, detail,
+        )
+        raise _ServerAIActionError(
+            f"Server AI action rejected [{code}]: {exc}", code,
+        ) from exc
+
+
+def _auto_advance_server_controlled_turn(
+    session,
+    stream: EventStream,
+    room_code="preview",
+) -> None:
     """Advance phases and decisions until a seated player must act.
 
     Preview games use ``None`` SIDs for their AI seat.  This helper is the
@@ -891,11 +1140,13 @@ def _auto_advance_server_controlled_turn(session, stream: EventStream) -> None:
                 if ai_action is None and pass_action() in next_actions:
                     ai_action = pass_action()
                 if ai_action is not None:
-                    session.state = resolve_action(
-                        session.state,
+                    session.state = _resolve_server_ai_action(
+                        session,
                         ai_action,
-                        session.library,
-                        event_collector=stream,
+                        next_actions,
+                        stream,
+                        room_code=room_code,
+                        source="preview_ai",
                     )
                     continue
 
@@ -906,22 +1157,27 @@ def _auto_advance_server_controlled_turn(session, stream: EventStream) -> None:
                 and len(next_actions) == 1
                 and pass_action() in next_actions
             ):
-                session.state = resolve_action(
-                    session.state,
+                session.state = _resolve_server_ai_action(
+                    session,
                     pass_action(),
-                    session.library,
-                    event_collector=stream,
+                    next_actions,
+                    stream,
+                    room_code=room_code,
+                    source="server_auto_pass",
                 )
                 continue
             break
 
         # ACTION should always expose PASS.  Retain this as a safe fallback
         # for malformed states so a game cannot silently wedge.
-        session.state = resolve_action(
-            session.state,
+        session.state = _resolve_server_ai_action(
+            session,
             pass_action(),
-            session.library,
-            event_collector=stream,
+            next_actions,
+            stream,
+            room_code=room_code,
+            source="server_empty_action_fallback",
+            allow_unlisted=True,
         )
 
 
@@ -1435,6 +1691,8 @@ def register_events(room_manager: RoomManager) -> None:
             with session.lock:
                 saved_state = session.state
                 stream = EventStream(next_seq=session.next_event_seq)
+                acts = ()
+                a = None
                 try:
                     if (
                         session.state.pending_roguelike_event_turn is not None
@@ -1451,18 +1709,28 @@ def register_events(room_manager: RoomManager) -> None:
                         )
                     else:
                         acts = legal_actions(session.state, session.library)
-                        a = None
                         if acts:
                             a = pick_preview_action(session.state, session.library, acts)
                         if a is None:
                             a = pass_action()
-                        session.state = resolve_action(
-                            session.state, a, session.library, event_collector=stream,
+                        session.state = _resolve_server_ai_action(
+                            session,
+                            a,
+                            acts,
+                            stream,
+                            room_code=room_code,
+                            source="ai_watch",
+                            allow_unlisted=not acts,
                         )
                 except Exception as e:
-                    _debug_report("ai_watch_crash", room_code, session, None, {
-                        "exception": f"{type(e).__name__}: {e}",
-                    })
+                    session.state = saved_state
+                    if not getattr(e, "debug_code", None):
+                        _debug_report("ai_watch_crash", room_code, session, None, {
+                            "exception": f"{type(e).__name__}: {e}",
+                            "action": _action_for_log(a),
+                            "legal_count": len(acts),
+                            "legal_action_types": _legal_action_type_counts(acts),
+                        })
                     break
                 session.next_event_seq = stream.next_seq
                 new_state = session.state
@@ -1702,10 +1970,13 @@ def register_events(room_manager: RoomManager) -> None:
                 # which strategically resolves its fortune and any follow-up
                 # Marked Cards decision here.
                 _auto_choose_dummy_roguelike_event(session, stream)
-                _auto_advance_server_controlled_turn(session, stream)
+                _auto_advance_server_controlled_turn(session, stream, room_code)
             except (ValueError, OutOfPhaseError) as exc:
                 session.state = saved_state
-                emit("error", {"msg": str(exc)})
+                error_payload = {"msg": str(exc)}
+                if getattr(exc, "debug_code", None):
+                    error_payload["debug_code"] = exc.debug_code
+                emit("error", error_payload)
                 return
             session.next_event_seq = stream.next_seq
             new_state = session.state
@@ -1755,10 +2026,13 @@ def register_events(room_manager: RoomManager) -> None:
                 )
                 _resume_after_roguelike_event(session, stream)
                 _auto_choose_dummy_roguelike_event(session, stream)
-                _auto_advance_server_controlled_turn(session, stream)
+                _auto_advance_server_controlled_turn(session, stream, room_code)
             except (ValueError, OutOfPhaseError) as exc:
                 session.state = saved_state
-                emit("error", {"msg": str(exc)})
+                error_payload = {"msg": str(exc)}
+                if getattr(exc, "debug_code", None):
+                    error_payload["debug_code"] = exc.debug_code
+                emit("error", error_payload)
                 return
             session.next_event_seq = stream.next_seq
             new_state = session.state
@@ -1812,30 +2086,52 @@ def register_events(room_manager: RoomManager) -> None:
 
         # Step g: Check turn
         if player_idx != decision_idx:
-            emit("error", {"msg": "Not your turn"})
+            detail = _illegal_action_detail(
+                "player_socket", "not_decision_player", data,
+            )
+            detail.update({"mode": _session_mode(session), "decision_idx": decision_idx})
+            code = _debug_report(
+                "illegal_action", room_code, session, player_idx, detail,
+            )
+            emit("error", {"msg": "Not your turn", "debug_code": code})
             return
 
         # Step h: Reconstruct action from client payload
         try:
             action = reconstruct_action(data)
         except (ValueError, KeyError, TypeError) as e:
-            emit("error", {"msg": f"Invalid action: {e}"})
+            detail = _illegal_action_detail(
+                "player_socket", "invalid_payload", data,
+            )
+            detail.update({
+                "mode": _session_mode(session),
+                "decision_idx": decision_idx,
+                "error": _error_for_log(e),
+            })
+            code = _debug_report(
+                "illegal_action", room_code, session, player_idx, detail,
+            )
+            emit("error", {"msg": f"Invalid action: {e}", "debug_code": code})
             return
 
         # Step i: Lock, validate, apply
         with session.lock:
             valid_actions = legal_actions(session.state, session.library)
             if action not in valid_actions:
-                # Debug-code protocol (user 2026-07-11): full context lands
-                # in the server log under the code; the client shows the
-                # code in its game log so a bug report can be traced.
-                code = _debug_report("illegal_action", room_code, session, player_idx, {
-                    "raw_payload": data,
-                    "action": str(action),
+                detail = _illegal_action_detail(
+                    "player_socket",
+                    "not_in_legal_actions",
+                    data,
+                    action,
+                    valid_actions,
+                )
+                detail.update({
+                    "mode": _session_mode(session),
                     "decision_idx": decision_idx,
-                    "legal_count": len(valid_actions),
-                    "legal_sample": [str(a) for a in valid_actions[:25]],
                 })
+                code = _debug_report(
+                    "illegal_action", room_code, session, player_idx, detail,
+                )
                 emit("error", {"msg": "Illegal action", "debug_code": code})
                 return
 
@@ -1949,9 +2245,13 @@ def register_events(room_manager: RoomManager) -> None:
                             if _ai_action is None and pass_action() in next_actions:
                                 _ai_action = pass_action()
                             if _ai_action is not None:
-                                session.state = resolve_action(
-                                    session.state, _ai_action, session.library,
-                                    event_collector=stream,
+                                session.state = _resolve_server_ai_action(
+                                    session,
+                                    _ai_action,
+                                    next_actions,
+                                    stream,
+                                    room_code=room_code,
+                                    source="preview_ai",
                                 )
                                 continue
                         # Preview games, audit fix (2026-07-06): the dummy's
@@ -1970,9 +2270,13 @@ def register_events(room_manager: RoomManager) -> None:
                         if (session.state.phase == TurnPhase.REACT
                                 and len(next_actions) == 1
                                 and pass_action() in next_actions):
-                            session.state = resolve_action(
-                                session.state, pass_action(), session.library,
-                                event_collector=stream,
+                            session.state = _resolve_server_ai_action(
+                                session,
+                                pass_action(),
+                                next_actions,
+                                stream,
+                                room_code=room_code,
+                                source="server_auto_pass",
                             )
                             continue
                         break
@@ -1980,10 +2284,22 @@ def register_events(room_manager: RoomManager) -> None:
                     # failsafe. PASS is free under the 2026-07 turn
                     # structure (no fatigue damage attached); this just
                     # advances the turn.
-                    session.state = resolve_action(
-                        session.state, pass_action(), session.library,
-                        event_collector=stream,
+                    session.state = _resolve_server_ai_action(
+                        session,
+                        pass_action(),
+                        next_actions,
+                        stream,
+                        room_code=room_code,
+                        source="server_empty_action_fallback",
+                        allow_unlisted=True,
                     )
+            except _ServerAIActionError as e:
+                session.state = saved_state
+                emit("error", {
+                    "msg": f"Server error resolving action: {e}",
+                    "debug_code": e.debug_code,
+                })
+                return
             except OutOfPhaseError as e:
                 # Phase 14.8-05: strict-mode contract violation. Roll the
                 # session state back to the pre-resolve snapshot (M4), emit
@@ -2000,13 +2316,23 @@ def register_events(room_manager: RoomManager) -> None:
                     sorted(p.name for p in (e.allowed_phases or [])),
                     e.pending_required,
                 )
-                code = _debug_report("phase_contract_violation", room_code, session, player_idx, {
-                    "action": str(action),
-                    "contract_source": e.contract_source,
-                    "violation_phase": e.phase.name if e.phase else None,
-                    "allowed_phases": [p.name for p in (e.allowed_phases or [])],
-                    "pending_required": e.pending_required,
-                })
+                code = getattr(e, "debug_code", None)
+                if not code:
+                    code = _debug_report(
+                        "phase_contract_violation",
+                        room_code,
+                        session,
+                        player_idx,
+                        {
+                            "action": _action_for_log(action),
+                            "contract_source": e.contract_source,
+                            "violation_phase": e.phase.name if e.phase else None,
+                            "allowed_phases": [
+                                p.name for p in (e.allowed_phases or [])
+                            ],
+                            "pending_required": e.pending_required,
+                        },
+                    )
                 emit("error", {
                     "error_type": "phase_contract_violation",
                     "contract_source": e.contract_source,
@@ -2201,7 +2527,19 @@ def register_events(room_manager: RoomManager) -> None:
         try:
             action = reconstruct_action(data)
         except (ValueError, KeyError, TypeError) as e:
-            emit("error", {"msg": f"Invalid action: {e}"})
+            player_idx = _decision_idx(sandbox.state)
+            detail = _illegal_action_detail(
+                "sandbox_socket", "invalid_payload", data,
+            )
+            detail.update({
+                "mode": "sandbox",
+                "decision_idx": player_idx,
+                "error": _error_for_log(e),
+            })
+            code = _debug_report(
+                "illegal_action", "sandbox", sandbox, player_idx, detail,
+            )
+            emit("error", {"msg": f"Invalid action: {e}", "debug_code": code})
             return
         # Phase 14.8-03b: the per-frame on_frame hack from commit 9c414f9
         # is REMOVED. apply_action now returns the full event list across
@@ -2252,11 +2590,48 @@ def register_events(room_manager: RoomManager) -> None:
                 except Exception:
                     pass
 
+            submitted_valid_actions = _safe_legal_actions_for_log(sandbox)
             try:
                 events = sandbox.apply_action(action)
             except ValueError as e:
                 _rollback_sandbox()
-                emit("error", {"msg": str(e)})
+                player_idx = _decision_idx(sandbox.state)
+                if action in submitted_valid_actions:
+                    code = _debug_report(
+                        "sandbox_resolver_rejection",
+                        "sandbox",
+                        sandbox,
+                        player_idx,
+                        {
+                            "source": "sandbox_socket",
+                            "mode": "sandbox",
+                            "reason": "legal_action_failed_in_resolver",
+                            "decision_idx": player_idx,
+                            "action": _action_for_log(action),
+                            "legal_count": len(submitted_valid_actions),
+                            "legal_action_types": _legal_action_type_counts(
+                                submitted_valid_actions,
+                            ),
+                            "error": _error_for_log(e, include_message=True),
+                        },
+                    )
+                else:
+                    detail = _illegal_action_detail(
+                        "sandbox_socket",
+                        "action_rejected",
+                        data,
+                        action,
+                        submitted_valid_actions,
+                    )
+                    detail.update({
+                        "mode": "sandbox",
+                        "decision_idx": player_idx,
+                        "error": _error_for_log(e),
+                    })
+                    code = _debug_report(
+                        "illegal_action", "sandbox", sandbox, player_idx, detail,
+                    )
+                emit("error", {"msg": str(e), "debug_code": code})
                 return
             except OutOfPhaseError as e:
                 # Phase 14.8-05: strict-mode contract violation in sandbox.
@@ -2276,6 +2651,23 @@ def register_events(room_manager: RoomManager) -> None:
                     sorted(p.name for p in (e.allowed_phases or [])),
                     e.pending_required,
                 )
+                player_idx = _decision_idx(sandbox.state)
+                detail = _illegal_action_detail(
+                    "sandbox_socket",
+                    "phase_contract_violation",
+                    data,
+                    action,
+                    submitted_valid_actions,
+                )
+                detail.update({
+                    "mode": "sandbox",
+                    "decision_idx": player_idx,
+                    "contract_source": e.contract_source,
+                    "violation_phase": e.phase.name if e.phase else None,
+                })
+                code = _debug_report(
+                    "illegal_action", "sandbox", sandbox, player_idx, detail,
+                )
                 emit("error", {
                     "error_type": "phase_contract_violation",
                     "contract_source": e.contract_source,
@@ -2285,6 +2677,7 @@ def register_events(room_manager: RoomManager) -> None:
                     ],
                     "pending_required": e.pending_required,
                     "unknown_source": bool(getattr(e, "unknown_source", False)),
+                    "debug_code": code,
                     "msg": (
                         f"Sandbox action rejected: contract violation "
                         f"({e.contract_source!r} not allowed in phase "

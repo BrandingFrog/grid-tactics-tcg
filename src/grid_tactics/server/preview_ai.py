@@ -27,10 +27,16 @@ from grid_tactics.enums import (
 from grid_tactics.game_state import GameState
 from grid_tactics.legal_actions import effective_mana_cost
 from grid_tactics.minion import BURN_DAMAGE
-from grid_tactics.types import GRID_ROWS, MAX_HAND_SIZE, MAX_MANA_CAP
+from grid_tactics.types import (
+    GRID_ROWS,
+    MAX_ACTION_POINTS,
+    MAX_HAND_SIZE,
+    MAX_MANA_CAP,
+)
 
 _WIN_SCORE = 1_000_000.0
 _IMPOSSIBLE = -1_000_000.0
+_ACTION_POINT_OPPORTUNITY_COST = 15.0
 
 
 def _effective_attack(minion, library: CardLibrary) -> int:
@@ -627,8 +633,13 @@ def _rest_score(state: GameState, player_idx: int) -> float:
     draw = useful_draws * 7.0
     mana = 4.0 if player.current_mana < MAX_MANA_CAP else 0.0
     # REST banks every point, but at a full bank it wastes next turn's AP
-    # regeneration, so prefer a useful primary action there.
-    overflow_cost = 6.0 if player.action_points >= 3 else 0.0
+    # regeneration. Value that lost point like a baseline melee advance so
+    # late-game Fortune draws cannot permanently starve useful board actions.
+    overflow_cost = (
+        _ACTION_POINT_OPPORTUNITY_COST
+        if player.action_points >= MAX_ACTION_POINTS
+        else 0.0
+    )
     return draw + mana - overflow_cost
 
 

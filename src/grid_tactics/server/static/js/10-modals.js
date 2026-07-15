@@ -918,51 +918,12 @@ function findCardNameByNid(nid) {
     return 'Card #' + nid;
 }
 
-// Paint a minion's printed attack footprint without implying that an attack is
-// currently legal. Bright target highlights are added separately from actions.
-function _paintAttackRangeFootprint(minionId) {
-    if (minionId == null || !gameState || !gameState.minions) return;
-    var source = null;
-    gameState.minions.forEach(function(m) {
-        if (m.instance_id === minionId) source = m;
-    });
-    if (!source) return;
-    var sourceCard = cardDefs && cardDefs[source.card_numeric_id];
-    var range = (sourceCard && sourceCard.attack_range != null)
-        ? (sourceCard.attack_range | 0) : 0;
-    var sr = source.position[0], sc = source.position[1];
-    for (var rr = 0; rr < 5; rr++) {
-        for (var cc = 0; cc < 5; cc++) {
-            if (rr === sr && cc === sc) continue;
-            var dr = Math.abs(rr - sr);
-            var dc = Math.abs(cc - sc);
-            var manhattan = dr + dc;
-            var orthogonal = (rr === sr || cc === sc);
-            var inRange = range === 0
-                ? (manhattan === 1 && orthogonal)
-                : ((orthogonal && manhattan <= range + 1)
-                    || (dr === dc && dr >= 1 && dr <= range));
-            if (inRange) {
-                var tile = document.querySelector(
-                    '.board-cell[data-row="' + rr + '"][data-col="' + cc + '"]'
-                );
-                if (tile) tile.classList.add('attack-range-footprint');
-            }
-        }
-    }
-}
-
 // Highlight valid board cells based on current selection
 function highlightBoard() {
     document.querySelectorAll('.board-cell').forEach(function(cell) {
         cell.classList.remove('cell-valid', 'cell-attack', 'cell-selected',
-                              'attack-range-footprint', 'attack-valid-target');
+                              'attack-valid-target');
     });
-    // Inspection is informational and works for either player and spectators.
-    // Paint it before the action-timing gate below.
-    if (typeof inspectedMinionId !== 'undefined' && inspectedMinionId !== null) {
-        _paintAttackRangeFootprint(inspectedMinionId);
-    }
     // Timing audit (2026-07-06): plain selection/targeting highlights only
     // paint when the player can act now. Pending-decision modes (post-move
     // attack pick, death target, conjure deploy, revive) stay live — those
@@ -975,14 +936,8 @@ function highlightBoard() {
         return;
     }
 
-    // Phase 14.1: post-move attack-pick layer (rendered first so the brighter
-    // valid-target class can override the footprint visually).
+    // Phase 14.1: show only legal targets during a post-move attack pick.
     if (interactionMode === 'post_move_attack_pick' && gameState) {
-        var rangeTiles = gameState.pending_attack_range_tiles || [];
-        rangeTiles.forEach(function(p) {
-            var cell = document.querySelector('.board-cell[data-row="' + p[0] + '"][data-col="' + p[1] + '"]');
-            if (cell) cell.classList.add('attack-range-footprint');
-        });
         var validTargets = gameState.pending_attack_valid_targets || [];
         validTargets.forEach(function(p) {
             var cell = document.querySelector('.board-cell[data-row="' + p[0] + '"][data-col="' + p[1] + '"]');
@@ -1099,14 +1054,7 @@ function highlightBoard() {
         }
 
         if (interactionMode === 'attack' || interactionMode === 'move_attack') {
-            // Bug 1 unification: render the attack-range footprint AND the
-            // bright valid-target highlight, mirroring the post-move-attack
-            // pick UI. Range tiles are computed client-side from the source
-            // minion's card range using the same geometry as engine
-            // _can_attack (action_resolver.py). This is a cosmetic / UX
-            // change only — actual legal targets still come from
-            // legalActions via getAttackTargets().
-            _paintAttackRangeFootprint(selectedMinionId);
+            // Highlight only targets the server says are currently legal.
             var atkTargets = getAttackTargets(selectedMinionId);
             (gameState.minions || []).forEach(function(m) {
                 if (atkTargets.indexOf(m.instance_id) !== -1) {

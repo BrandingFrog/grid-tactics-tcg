@@ -217,6 +217,7 @@ function _clientActionOverlayOpen() {
 
 function onEngineEvents(payload) {
     if (!payload || !Array.isArray(payload.events)) return;
+    if (typeof window !== 'undefined') window.__legalActionsBeforeSubmit = null;
     var hadEvents = payload.events.length > 0;
     // Timing audit (2026-07-06): a new batch means the board is about to
     // animate — any open minion menu / selection / targeting mode was built

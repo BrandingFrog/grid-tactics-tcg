@@ -64,7 +64,10 @@ def library() -> CardLibrary:
 
 
 @pytest.fixture
-def app_and_rm():
+def app_and_rm(tmp_path, monkeypatch):
+    monkeypatch.setenv("GT_SERVER_LOG_DIR", str(tmp_path))
+    monkeypatch.delenv("GT_DEBUG_LOG_PATH", raising=False)
+    monkeypatch.delenv("GT_ILLEGAL_ACTION_LOG_PATH", raising=False)
     lib = CardLibrary.from_directory(Path("data/cards"))
     rm = RoomManager(lib)
     application = create_app(testing=True)

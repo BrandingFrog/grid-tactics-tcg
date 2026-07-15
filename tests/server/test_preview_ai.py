@@ -125,6 +125,69 @@ def test_skips_noop_ratchanter_activation_and_moves(library):
     assert picked.action_type == ActionType.MOVE
 
 
+def test_full_action_bank_spends_before_rest_after_second_fortune(library):
+    rat = _minion(
+        library,
+        0,
+        "rat",
+        PlayerSide.PLAYER_1,
+        (1, 2),
+    )
+    state = _state(
+        library,
+        deck=("rat", "rat", "rat"),
+        mana=0,
+        minions=(rat,),
+    )
+    player = replace(state.players[0], action_points=3)
+    state = replace(
+        state,
+        players=(player, state.players[1]),
+        roguelike_event_history=(
+            ("clumsy_greed", "with_a_slap"),
+            ("clumsy_greed", "with_a_slap"),
+        ),
+    )
+    assert state.fortune_ante == 3
+    action_types = {action.action_type for action in legal_actions(state, library)}
+    assert {ActionType.DRAW, ActionType.MOVE} <= action_types
+
+    picked = _pick(state, library)
+
+    assert picked.action_type == ActionType.MOVE
+
+
+def test_full_action_bank_can_still_rest_when_no_positive_action_exists(library):
+    pyre_archer = _minion(
+        library,
+        0,
+        "pyre_archer",
+        PlayerSide.PLAYER_1,
+        (1, 2),
+    )
+    state = _state(
+        library,
+        deck=("rat", "rat", "rat"),
+        mana=0,
+        minions=(pyre_archer,),
+    )
+    player = replace(state.players[0], action_points=3)
+    state = replace(
+        state,
+        players=(player, state.players[1]),
+        roguelike_event_history=(
+            ("clumsy_greed", "with_a_slap"),
+            ("clumsy_greed", "with_a_slap"),
+        ),
+    )
+    action_types = {action.action_type for action in legal_actions(state, library)}
+    assert {ActionType.DRAW, ActionType.MOVE} <= action_types
+
+    picked = _pick(state, library)
+
+    assert picked.action_type == ActionType.DRAW
+
+
 @pytest.mark.parametrize(
     ("hand", "deck", "mana"),
     [

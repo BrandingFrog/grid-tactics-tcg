@@ -6,6 +6,7 @@ and a complete end-to-end game via two SocketIO test clients.
 
 Also includes D-03 react card visibility test (plan checker request).
 """
+import json
 from pathlib import Path
 
 import pytest
@@ -17,7 +18,10 @@ from grid_tactics.server.room_manager import RoomManager
 
 
 @pytest.fixture
-def app():
+def app(tmp_path, monkeypatch):
+    monkeypatch.setenv("GT_SERVER_LOG_DIR", str(tmp_path))
+    monkeypatch.delenv("GT_DEBUG_LOG_PATH", raising=False)
+    monkeypatch.delenv("GT_ILLEGAL_ACTION_LOG_PATH", raising=False)
     app = create_app(testing=True)
     library = CardLibrary.from_directory(Path("data/cards"))
     rm = RoomManager(library)
@@ -167,8 +171,9 @@ class TestActionValidation:
         assert len(error_events) == 0, f"Should not get error: {error_events}"
         assert len(update_events) >= 1, "Should receive engine_events after legal action"
 
-    def test_illegal_action_rejected(self, app):
-        """Submitting an action NOT in legal_actions produces error."""
+    def test_illegal_action_rejected(self, app, tmp_path, monkeypatch):
+        """A rejected action returns a code and persists a local record."""
+        monkeypatch.setenv("GT_SERVER_LOG_DIR", str(tmp_path))
         c1, c2, gs1, gs2 = _create_game(app)
         active_idx = gs1["state"]["active_player_idx"]
 
@@ -184,7 +189,19 @@ class TestActionValidation:
         msgs = active_client.get_received()
         error_events = [m for m in msgs if m["name"] == "error"]
         assert len(error_events) >= 1, "Illegal action should produce error"
-        assert "Illegal action" in error_events[0]["args"][0]["msg"]
+        error = error_events[0]["args"][0]
+        assert "Illegal action" in error["msg"]
+        assert error["debug_code"].startswith("GT-")
+
+        records = [
+            json.loads(line)
+            for line in (tmp_path / "illegal-actions.jsonl")
+            .read_text(encoding="utf-8")
+            .splitlines()
+        ]
+        assert records[-1]["code"] == error["debug_code"]
+        assert records[-1]["source"] == "player_socket"
+        assert records[-1]["reason"] == "not_in_legal_actions"
 
     def test_malformed_action_rejected(self, app):
         """Submitting garbage data produces error, no crash."""

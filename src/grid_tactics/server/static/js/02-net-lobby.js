@@ -511,6 +511,19 @@ function onError(data) {
         window.__conjureDeploySubmitted = false;
         window.__reviveSubmittedAtRemaining = null;
         window.__postMoveSubmitted = false;
+        // submitAction removes affordances while waiting for the server. A
+        // rejection means the authoritative state was not advanced, so put
+        // that exact legal-action snapshot back instead of wedging the turn
+        // until a page refresh.
+        if (Array.isArray(window.__legalActionsBeforeSubmit)) {
+            legalActions = window.__legalActionsBeforeSubmit;
+            window.__legalActionsBeforeSubmit = null;
+            try {
+                if (typeof updateHandHighlights === 'function') updateHandHighlights();
+                if (typeof highlightBoard === 'function') highlightBoard();
+                if (typeof renderHand === 'function') renderHand();
+            } catch (e) { /* defensive */ }
+        }
     }
     // Compliance audit 2026-07-06: during a game the lobby pill is invisible
     // — surface server rejections as a stage toast so the player sees them.

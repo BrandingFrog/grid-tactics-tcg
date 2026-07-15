@@ -20,6 +20,16 @@ python pvp_server.py
 
 Then open `http://127.0.0.1:5000/` and verify that the lobby loads.
 
+Rejected gameplay actions are written as JSON Lines to
+`logs/illegal-actions.jsonl` by default. Railway's ordinary container
+filesystem is replaced on deploy; set `GT_SERVER_LOG_DIR` to a mounted volume
+directory, or `GT_ILLEGAL_ACTION_LOG_PATH` to a file on that volume, when the
+history must survive deploys. Logs rotate at 5 MiB with three backups by
+default; tune those limits with `GT_DEBUG_LOG_MAX_BYTES` and
+`GT_DEBUG_LOG_BACKUP_COUNT`. The same sanitized records also go to the process
+log. Records contain a process-salted room reference and normalized action fields, not
+session tokens, player names, hands, decks, or arbitrary client payload keys.
+
 ## Training jobs: RunPod
 
 `scripts/manage_pods.py` builds an in-memory archive containing the Python package, card data, and cloud-training scripts. It uploads that archive and starts `scripts/cloud_train.py` with `PYTHONPATH=/workspace/src`.

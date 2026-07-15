@@ -5,6 +5,7 @@ creates a fresh app + room manager so sandboxes don't leak across tests.
 """
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import Any
 
@@ -30,7 +31,10 @@ from grid_tactics.types import STARTING_HP
 
 
 @pytest.fixture
-def app_and_rm():
+def app_and_rm(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setenv("GT_SERVER_LOG_DIR", str(tmp_path))
+    monkeypatch.delenv("GT_DEBUG_LOG_PATH", raising=False)
+    monkeypatch.delenv("GT_ILLEGAL_ACTION_LOG_PATH", raising=False)
     library = CardLibrary.from_directory(Path("data/cards"))
     rm = RoomManager(library)
     application = create_app(testing=True)
@@ -297,7 +301,12 @@ def test_sandbox_apply_action_legal_draw(client) -> None:
     assert engine_events_after["undo_depth"] >= 1
 
 
-def test_sandbox_apply_illegal_action_returns_error(client) -> None:
+def test_sandbox_apply_illegal_action_returns_error(
+    client,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("GT_SERVER_LOG_DIR", str(tmp_path))
     client.emit("sandbox_create")
     _drain(client)
     # PLAY_CARD with card_index=0 is not legal (hand is empty).
@@ -310,6 +319,17 @@ def test_sandbox_apply_illegal_action_returns_error(client) -> None:
     err = _find(received, "error")
     assert err is not None
     assert "Illegal" in err["msg"] or "illegal" in err["msg"].lower()
+    assert err["debug_code"].startswith("GT-")
+
+    records = [
+        json.loads(line)
+        for line in (tmp_path / "illegal-actions.jsonl")
+        .read_text(encoding="utf-8")
+        .splitlines()
+    ]
+    assert records[-1]["code"] == err["debug_code"]
+    assert records[-1]["mode"] == "sandbox"
+    assert records[-1]["reason"] == "action_rejected"
 
 
 # ---------------------------------------------------------------------------

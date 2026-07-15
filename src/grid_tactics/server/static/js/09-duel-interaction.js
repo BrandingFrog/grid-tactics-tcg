@@ -141,6 +141,10 @@ function submitAction(actionData) {
         // every affordance immediately — glow/highlights must not linger on
         // a hand that can no longer act. The reply repopulates everything.
         if (!sandboxMode) {
+            if (typeof window !== 'undefined') {
+                window.__legalActionsBeforeSubmit = Array.isArray(legalActions)
+                    ? legalActions.slice() : [];
+            }
             legalActions = [];
             try {
                 if (typeof updateHandHighlights === 'function') updateHandHighlights();

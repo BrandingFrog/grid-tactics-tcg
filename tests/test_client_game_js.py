@@ -634,6 +634,50 @@ console.log(JSON.stringify({
     assert out["html"] == "Waiting..."
 
 
+def test_on_error_restores_actions_cleared_while_submit_was_in_flight(tmp_path):
+    assert "window.__legalActionsBeforeSubmit = Array.isArray(legalActions)" in _SRC
+    script = (
+        _ON_ERROR_STUBS
+        + extract_function("onError")
+        + """
+var restored = [{action_type: 1, minion_id: 7, target_pos: [2, 2]}];
+var window = {
+    __legalActionsBeforeSubmit: restored,
+    __conjureDeploySubmitted: true,
+    __reviveSubmittedAtRemaining: 2,
+    __postMoveSubmitted: true,
+};
+var legalActions = [];
+var highlightCalls = 0;
+var handCalls = 0;
+function updateHandHighlights() { highlightCalls++; }
+function highlightBoard() { highlightCalls++; }
+function renderHand() { handCalls++; }
+lobbyActive = false;
+onError({msg: 'Illegal action', debug_code: 'GT-1234567890'});
+console.log(JSON.stringify({
+    legalActions: legalActions,
+    pending: window.__legalActionsBeforeSubmit,
+    highlightCalls: highlightCalls,
+    handCalls: handCalls,
+    guards: [
+        window.__conjureDeploySubmitted,
+        window.__reviveSubmittedAtRemaining,
+        window.__postMoveSubmitted,
+    ],
+}));
+"""
+    )
+    out = run_js(tmp_path, script)
+    assert out["legalActions"] == [
+        {"action_type": 1, "minion_id": 7, "target_pos": [2, 2]}
+    ]
+    assert out["pending"] is None
+    assert out["highlightCalls"] == 2
+    assert out["handCalls"] == 1
+    assert out["guards"] == [False, None, False]
+
+
 # ---------------------------------------------------------------------------
 # Fix 7: playCardDrawn targets the real new hand slot
 # ---------------------------------------------------------------------------
@@ -847,49 +891,20 @@ console.log(JSON.stringify({
     }
 
 
-def test_pinned_minion_paints_attack_footprint_even_without_action_permission(tmp_path):
-    script = (
-        """
-var painted = [];
-var gameState = { minions: [{
-    instance_id: 7,
-    card_numeric_id: 101,
-    position: [2, 2]
-}] };
-var cardDefs = { 101: { attack_range: 1 } };
-var document = {
-    querySelector: function(selector) {
-        return { classList: { add: function(name) {
-            painted.push({ selector: selector, name: name });
-        } } };
-    }
-};
-"""
-        + extract_function("_paintAttackRangeFootprint")
-        + """
-_paintAttackRangeFootprint(7);
-console.log(JSON.stringify({
-    count: painted.length,
-    classes: painted.map(function(x) { return x.name; }),
-    selectors: painted.map(function(x) { return x.selector; })
-}));
-"""
-    )
-    out = run_js(tmp_path, script)
-    assert out["count"] == 12
-    assert set(out["classes"]) == {"attack-range-footprint"}
-    assert '.board-cell[data-row="2"][data-col="2"]' not in out["selectors"]
+def test_attack_selection_only_paints_legal_targets():
+    client_js = _load_client_js()
     highlight = extract_function("highlightBoard")
-    assert highlight.index("_paintAttackRangeFootprint(inspectedMinionId)") < highlight.index(
-        "if (!_pendingMode && typeof canActNow"
-    )
+    assert "attack-range-footprint" not in client_js
+    assert "_paintAttackRangeFootprint" not in client_js
+    assert "pending_attack_range_tiles" not in highlight
+    assert "getAttackTargets(selectedMinionId)" in highlight
+    assert "cell.classList.add('attack-valid-target')" in highlight
     pin_setup = extract_function("setupGameTooltipPin")
     assert "}, true);" in pin_setup, "minion inspection must run before board-cell rendering"
 
 
-def test_leaving_a_match_clears_pinned_minion_inspection_state():
+def test_leaving_a_match_clears_pinned_tooltip_state():
     reset = extract_function("resetGameClientState")
-    assert "inspectedMinionId = null;" in reset
     assert "gameTooltipPin = null;" in reset
     assert "hideGameTooltip({ force: true })" in reset
 
@@ -952,6 +967,78 @@ def test_three_fortune_tiles_fit_the_stage_modal_without_a_scrollbar():
     assert 3 * 180 + 2 * 10 + 2 * 12 <= 604
     assert ".fortune-reveal-modal {\n  width: 100% !important;\n  max-width: 960px !important;\n  max-height: 100% !important;" in css
     assert "width: min(190px, 100%);\n  height: 225px;" in css
+
+
+def test_fortune_reward_count_badge_uses_fixed_design_size():
+    css = (STATIC_DIR / "css" / "zz-overrides.css").read_text(encoding="utf-8")
+    selector = ".fortune-reward-card.tutor-modal-card > .card-count-badge"
+    assert selector in css
+    rule = css.split(selector, 1)[1].split("}", 1)[0]
+    assert "width: 18px !important;" in rule
+    assert "height: 18px !important;" in rule
+    assert "font-size: 9px !important;" in rule
+    assert "var(--mfu)" not in rule, (
+        "Fortune reward badges live inside an already scaled duel stage"
+    )
+
+
+def test_move_animation_phases_scale_with_fast_forward(tmp_path):
+    script = (
+        """
+var delays = [];
+var doneCalls = 0;
+var animatingTiles = {};
+var motionVars = {};
+var motionStyle = {
+    setProperty: function(name, value) { motionVars[name] = value; }
+};
+var minionEl = {
+    classList: { add: function() {} },
+    style: { transform: '' }
+};
+var fromCell = {
+    style: { overflow: '', zIndex: '' },
+    querySelector: function() { return minionEl; },
+    closest: function() { return { style: motionStyle }; }
+};
+var document = { documentElement: { style: motionStyle } };
+function playSfx() {}
+function animSpeed() { return 4; }
+function getTileDelta() {
+    return { dx: 10, dy: 20, fromCell: fromCell, toCell: {} };
+}
+function applyStateFrame() {}
+function renderBoard() {}
+var setTimeout = function(fn, delay) { delays.push(delay); fn(); };
+"""
+        + extract_function("playMoveAnimation")
+        + """
+playMoveAnimation({
+    payload: { from: [1, 2], to: [2, 2] },
+    stateAfter: {},
+    legalActionsAfter: []
+}, function() { doneCalls++; });
+console.log(JSON.stringify({
+    delays: delays,
+    doneCalls: doneCalls,
+    motionVars: motionVars
+}));
+"""
+    )
+    out = run_js(tmp_path, script)
+    assert out["delays"] == [30, 88, 33]
+    assert out["doneCalls"] == 1
+    assert out["motionVars"] == {
+        "--move-lift-duration": "30ms",
+        "--move-slide-duration": "88ms",
+        "--move-drop-duration": "33ms",
+    }
+    css = (STATIC_DIR / "css" / "04-animations-overlays.css").read_text(
+        encoding="utf-8"
+    )
+    assert "var(--move-lift-duration, 120ms)" in css
+    assert "var(--move-slide-duration, 350ms)" in css
+    assert "var(--move-drop-duration, 120ms)" in css
 
 
 def test_deck_builder_lists_default_to_ascending_mana_cost():
