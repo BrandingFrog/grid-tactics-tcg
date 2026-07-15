@@ -1958,4 +1958,190 @@
   outline-color: var(--green) !important;
 }
 
+/* Spring Cleaning: the entire old hand is one visual transaction. Every
+   card appears together, then the batch converges on the correct Exhaust
+   pile. The event queue commits the pile only after this transition ends. */
+.spring-cleaning-exhaust-batch {
+  position: fixed;
+  inset: 0;
+  z-index: 10020;
+  pointer-events: none;
+  overflow: hidden;
+  opacity: 1;
+  background: radial-gradient(circle at 50% 46%,
+      rgba(224, 162, 60, 0.11) 0%,
+      rgba(27, 18, 7, 0.06) 34%,
+      rgba(10, 7, 4, 0) 68%);
+  transition: background var(--spring-fly-ms, 760ms) ease-out;
+}
+.spring-cleaning-exhaust-title {
+  position: absolute;
+  left: 50%;
+  top: 16%;
+  display: grid;
+  grid-template-columns: auto auto;
+  grid-template-rows: auto auto;
+  column-gap: 12px;
+  align-items: center;
+  transform: translate(-50%, -14px) scale(0.92);
+  opacity: 0;
+  color: var(--parch, #e8dcbe);
+  text-align: center;
+  text-shadow: 0 2px 2px #080502, 0 0 14px rgba(224, 162, 60, 0.38);
+  transition: transform var(--spring-intro-ms, 280ms) cubic-bezier(.16, 1.35, .3, 1),
+              opacity var(--spring-intro-ms, 280ms) ease-out;
+}
+.spring-cleaning-exhaust-title strong {
+  align-self: end;
+  font-family: var(--ui-display, Georgia, serif);
+  font-size: clamp(24px, 3.1vw, 46px);
+  line-height: 0.95;
+  letter-spacing: 0.11em;
+  color: #ffd873;
+}
+.spring-cleaning-exhaust-title > span:last-child {
+  grid-column: 2;
+  font-family: var(--ui-body, Georgia, serif);
+  font-size: clamp(11px, 1.15vw, 17px);
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  color: var(--parch-dim, #b7a77e);
+}
+.spring-cleaning-broom {
+  grid-row: 1 / 3;
+  font-size: clamp(38px, 5vw, 70px);
+  line-height: 1;
+  filter: drop-shadow(0 4px 5px rgba(0, 0, 0, 0.65));
+  transform: rotate(-18deg);
+  transform-origin: 70% 76%;
+}
+.spring-cleaning-exhaust-batch.is-present .spring-cleaning-exhaust-title {
+  transform: translate(-50%, 0) scale(1);
+  opacity: 1;
+}
+.spring-cleaning-exhaust-fan {
+  position: absolute;
+  inset: 0;
+}
+.spring-cleaning-exhaust-card {
+  position: absolute;
+  left: 50%;
+  top: 46%;
+  width: clamp(92px, 10.5vw, 150px);
+  height: clamp(92px, 10.5vw, 150px);
+  overflow: visible;
+  opacity: 0;
+  transform-origin: center center;
+  transform: translate(calc(-50% + var(--spring-x, 0px)),
+                       calc(-50% + var(--spring-y, 0px)))
+             rotate(var(--spring-rotate, 0deg)) scale(0.68);
+  filter: drop-shadow(0 12px 18px rgba(0, 0, 0, 0.68));
+  transition: transform var(--spring-intro-ms, 280ms) cubic-bezier(.16, 1.3, .3, 1),
+              opacity var(--spring-intro-ms, 280ms) ease-out,
+              filter var(--spring-intro-ms, 280ms) ease-out;
+  transition-delay: var(--spring-delay, 0ms);
+  will-change: transform, opacity, filter;
+}
+.spring-cleaning-exhaust-batch.is-present .spring-cleaning-exhaust-card {
+  opacity: 1;
+  transform: translate(calc(-50% + var(--spring-x, 0px)),
+                       calc(-50% + var(--spring-y, 0px)))
+             rotate(var(--spring-rotate, 0deg)) scale(1);
+}
+.spring-cleaning-exhaust-card > .card-frame-full.cf2 {
+  width: 100%;
+}
+.spring-cleaning-exhaust-batch.is-exhausting {
+  background: radial-gradient(circle at 50% 46%,
+      rgba(255, 136, 30, 0.16) 0%, rgba(10, 7, 4, 0) 58%);
+}
+.spring-cleaning-exhaust-batch.is-exhausting .spring-cleaning-exhaust-title {
+  opacity: 0;
+  transform: translate(-50%, -8px) scale(0.96);
+  transition-duration: var(--spring-fly-ms, 760ms);
+}
+.spring-cleaning-exhaust-batch.is-exhausting .spring-cleaning-broom {
+  animation: spring-cleaning-broom-sweep var(--spring-fly-ms, 760ms)
+      cubic-bezier(.28, .05, .5, 1) forwards;
+}
+.spring-cleaning-exhaust-batch.is-exhausting .spring-cleaning-exhaust-card {
+  opacity: 0;
+  transform: translate(calc(-50% + var(--spring-target-x, 0px)),
+                       calc(-50% + var(--spring-target-y, 280px)))
+             rotate(var(--spring-target-rotate, 20deg)) scale(0.12);
+  filter: sepia(0.8) saturate(2.2) brightness(1.35)
+          drop-shadow(0 0 18px rgba(255, 126, 24, 0.9));
+  transition-duration: var(--spring-fly-ms, 760ms),
+                       var(--spring-fly-ms, 760ms),
+                       var(--spring-fly-ms, 760ms);
+  transition-timing-function: cubic-bezier(.45, .02, .72, .35), ease-in, ease-in;
+  transition-delay: 0ms;
+}
+.spring-cleaning-fire-line {
+  position: absolute;
+  z-index: 8;
+  left: -6%;
+  right: -6%;
+  top: 45%;
+  height: 10%;
+  border-radius: 50%;
+  opacity: 0;
+  background: linear-gradient(to bottom,
+      rgba(255, 122, 20, 0), rgba(255, 220, 132, 0.98), rgba(164, 45, 5, 0));
+  filter: blur(1px) drop-shadow(0 0 9px rgba(255, 120, 20, 0.95));
+}
+.spring-cleaning-exhaust-batch.is-exhausting .spring-cleaning-fire-line {
+  animation: spring-cleaning-fire-sweep var(--spring-fly-ms, 760ms) ease-in forwards;
+}
+.spring-cleaning-ember {
+  position: absolute;
+  z-index: 9;
+  left: var(--ember-x, 50%);
+  top: 52%;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  opacity: 0;
+  background: radial-gradient(circle, #fff0b8 0%, #ff8a1e 50%, #8f2600 100%);
+  box-shadow: 0 0 6px rgba(255, 126, 24, 0.9);
+}
+.spring-cleaning-exhaust-batch.is-exhausting .spring-cleaning-ember {
+  animation: spring-cleaning-ember var(--spring-fly-ms, 760ms) ease-out forwards;
+}
+.spring-cleaning-card-back {
+  width: 100%;
+  height: 100%;
+  border: 2px solid var(--gold, #e0a23c);
+  border-radius: 8px;
+  background: repeating-linear-gradient(135deg, #211707 0 10px, #33230d 10px 20px);
+  box-shadow: inset 0 0 0 4px #100b04;
+}
+@keyframes spring-cleaning-broom-sweep {
+  0%   { transform: rotate(-18deg); }
+  48%  { transform: rotate(35deg) translateX(6px); }
+  100% { transform: rotate(58deg) translateX(18px); }
+}
+@keyframes spring-cleaning-fire-sweep {
+  0%   { top: 0%; opacity: 0; }
+  14%  { opacity: 1; }
+  82%  { opacity: 0.9; }
+  100% { top: 94%; opacity: 0; }
+}
+@keyframes spring-cleaning-ember {
+  0%   { opacity: 0; transform: translate(0, 0) scale(0.7); }
+  18%  { opacity: 1; }
+  100% { opacity: 0; transform: translate(var(--ember-drift, 0px), -58px) scale(0.2); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .spring-cleaning-exhaust-batch *,
+  .spring-cleaning-exhaust-batch *::before,
+  .spring-cleaning-exhaust-batch *::after {
+    animation-duration: 120ms !important;
+  }
+  .spring-cleaning-exhaust-card,
+  .spring-cleaning-exhaust-title {
+    transition-duration: 120ms !important;
+  }
+}
+
 

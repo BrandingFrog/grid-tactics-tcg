@@ -11,18 +11,18 @@
 //
 // Job shape (draw_own):
 //   { type:'draw_own', cardNumericId:<int>, fromPos:'deck'|'center'|{x,y},
-//     toSlotIndex:<int>, stateApplied:true }
+//     toSlotIndex:<int>, handOwnerIdx:<int>, stateApplied:true }
 // Job shape (draw_opp):
 //   { type:'draw_opp', stateApplied:true }
 
-function _resolveDrawFromPoint(fromPos) {
+function _resolveDrawFromPoint(fromPos, handOwnerIdx) {
     // 'deck' → own deck pile button (closest thing to a deck visual);
     // 'center' → viewport center fallback;
     // {x,y} → absolute coords.
     if (fromPos && typeof fromPos === 'object' && typeof fromPos.x === 'number') {
         return { x: fromPos.x, y: fromPos.y };
     }
-    if (fromPos === 'deck') {
+    if (fromPos === 'deck' || fromPos === 'grave' || fromPos === 'exhaust') {
         // Timing overhaul (2026-07-08, F9a): the old #pileBtnOwnGrave id is
         // dead DOM (zero matches) so draws always flew from viewport
         // center. Use the own DECK pile CELL on the active screen — the
@@ -30,8 +30,17 @@ function _resolveDrawFromPoint(fromPos) {
         // full-viewBox overlay, so its own bounding rect is useless.)
         var screenSel = (typeof sandboxMode !== 'undefined' && sandboxMode)
             ? '#screen-sandbox' : '#screen-game';
+        // God-view and sandbox draws can belong to either player. Resolve
+        // the source pile in the same fixed perspective as the hand mount:
+        // live uses myPlayerIdx; sandbox always lays P1 (index 0) at bottom.
+        var perspectiveIdx = (typeof sandboxMode !== 'undefined' && sandboxMode)
+            ? 0
+            : ((typeof myPlayerIdx === 'number') ? myPlayerIdx : 0);
+        var pileSide = (typeof handOwnerIdx === 'number'
+            && handOwnerIdx !== perspectiveIdx) ? 'opp' : 'own';
         var cell = document.querySelector(
-            screenSel + ' .pile-board[data-side="own"] .pile-cell[data-pile="deck"]');
+            screenSel + ' .pile-board[data-side="' + pileSide
+            + '"] .pile-cell[data-pile="' + fromPos + '"]');
         if (cell) {
             var r = cell.getBoundingClientRect();
             if (r.width > 0) {
@@ -44,15 +53,23 @@ function _resolveDrawFromPoint(fromPos) {
 }
 
 function playDrawOwnAnimation(job, done) {
-    var handEl = document.getElementById('hand-container');
+    var handOwnerIdx = (job && typeof job.handOwnerIdx === 'number')
+        ? job.handOwnerIdx : null;
+    var handEl = (typeof sandboxMode !== 'undefined' && sandboxMode
+            && handOwnerIdx != null)
+        ? document.getElementById('sandbox-hand-p' + handOwnerIdx)
+        : document.getElementById('hand-container');
     if (!handEl) { setTimeout(done, 0); return; }
     var slotIdx = (job && typeof job.toSlotIndex === 'number') ? job.toSlotIndex : -1;
+    var ownerSelector = handOwnerIdx != null
+        ? '[data-owner-idx="' + handOwnerIdx + '"]' : '';
     var slotEl = slotIdx >= 0
-        ? handEl.querySelector('.card-frame-hand[data-hand-idx="' + slotIdx + '"]')
+        ? handEl.querySelector('.card-frame-hand' + ownerSelector
+            + '[data-hand-idx="' + slotIdx + '"]')
         : null;
     // Fallback: last child of hand-container.
     if (!slotEl) {
-        var cards = handEl.querySelectorAll('.card-frame-hand');
+        var cards = handEl.querySelectorAll('.card-frame-hand' + ownerSelector);
         if (cards.length > 0) slotEl = cards[cards.length - 1];
     }
     if (!slotEl) { setTimeout(done, 0); return; }
@@ -63,7 +80,7 @@ function playDrawOwnAnimation(job, done) {
     var toRect = slotEl.getBoundingClientRect();
     var toCx = toRect.left + toRect.width / 2;
     var toCy = toRect.top + toRect.height / 2;
-    var from = _resolveDrawFromPoint(job.fromPos);
+    var from = _resolveDrawFromPoint(job.fromPos, handOwnerIdx);
 
     // Build a floating clone of the hand card at the target position.
     var floater = document.createElement('div');
@@ -93,9 +110,10 @@ function playDrawOwnAnimation(job, done) {
     // registered slots on rebuild, and finish() re-resolves by key, so
     // multi-draws no longer leave a visible duplicate mid-flight.
     if (!window.__inFlightHandSlots) window.__inFlightHandSlots = {};
-    var slotKey = (job && job.cardNumericId != null)
-        ? ('nid:' + job.cardNumericId)
-        : ('idx:' + slotIdx);
+    var slotKey = (handOwnerIdx != null ? 'owner:' + handOwnerIdx + ':' : '')
+        + ((job && job.cardNumericId != null)
+            ? ('nid:' + job.cardNumericId)
+            : ('idx:' + slotIdx));
     window.__inFlightHandSlots[slotKey] = (window.__inFlightHandSlots[slotKey] | 0) + 1;
     slotEl.style.visibility = 'hidden';
 
@@ -128,9 +146,16 @@ function playDrawOwnAnimation(job, done) {
 // registry key inside the given hand container.
 function _resolveInFlightSlot(handEl, key) {
     if (!handEl || !key) return null;
-    var sel = key.indexOf('nid:') === 0
-        ? '.card-frame-hand[data-numeric-id="' + key.slice(4) + '"]'
-        : '.card-frame-hand[data-hand-idx="' + key.slice(4) + '"]';
+    var slotKey = key;
+    var ownerSelector = '';
+    var ownerMatch = /^owner:(\d+):(.*)$/.exec(slotKey);
+    if (ownerMatch) {
+        ownerSelector = '[data-owner-idx="' + ownerMatch[1] + '"]';
+        slotKey = ownerMatch[2];
+    }
+    var sel = slotKey.indexOf('nid:') === 0
+        ? '.card-frame-hand' + ownerSelector + '[data-numeric-id="' + slotKey.slice(4) + '"]'
+        : '.card-frame-hand' + ownerSelector + '[data-hand-idx="' + slotKey.slice(4) + '"]';
     var els;
     try { els = handEl.querySelectorAll(sel); } catch (e) { return null; }
     for (var i = 0; i < els.length; i++) {
@@ -147,7 +172,13 @@ function playDrawOppAnimation(job, done) {
     // child and let the keyframe fire.
     var backs = row.querySelectorAll('.opp-hand-card-back');
     if (backs.length === 0) { setTimeout(done, 0); return; }
-    var target = backs[backs.length - 1];
+    var targetIdx = (job && typeof job.toSlotIndex === 'number'
+        && job.toSlotIndex >= 0 && job.toSlotIndex < backs.length)
+        ? job.toSlotIndex : backs.length - 1;
+    var target = backs[targetIdx];
+    // This element is the animation custodian while it pops in.  The shared
+    // transfer reservation kept the destination hidden before this moment.
+    target.style.visibility = '';
     // Element card backs (2026-07): the draw event carries the element so
     // the pop-in back is tinted even if the state re-render that normally
     // tints it hasn't happened yet.

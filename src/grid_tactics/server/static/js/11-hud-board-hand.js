@@ -763,12 +763,13 @@ function renderHand(opts) {
     // (queue idle + my decision), not raw legalActions — which mid-drain
     // already hold the batch's final frame.
     var isMyTurn = legal && legal.length > 0;
-    if (!sandboxMode && typeof canActNow === 'function' && !canActNow()) {
+    if (typeof canActNow === 'function' && !canActNow()) {
         isMyTurn = false;
     }
 
-    function appendHand(playerObj, label) {
+    function appendHand(playerObj, label, renderedOwnerIdx) {
         if (!playerObj || !playerObj.hand) return;
+        if (renderedOwnerIdx == null) renderedOwnerIdx = ownerIdx;
         if (label) {
             var lbl = document.createElement('div');
             lbl.className = 'spectator-hand-label';
@@ -783,6 +784,16 @@ function renderHand(opts) {
             wrapper.innerHTML = cardHtml;
             if (wrapper.firstChild) {
                 var cardEl = wrapper.firstChild;
+                // God spectators render both face-up hands in this one mount.
+                // Keep the real owner on every slot so draw animations and the
+                // in-flight visibility registry cannot confuse equal hand
+                // indexes/card ids belonging to different players.
+                cardEl.setAttribute('data-owner-idx', String(renderedOwnerIdx));
+                if (typeof _isHandDestinationReserved === 'function'
+                        && _isHandDestinationReserved(
+                            renderedOwnerIdx, handIndex, numericId)) {
+                    cardEl.style.visibility = 'hidden';
+                }
                 // Fan positioning via CSS custom properties
                 cardEl.style.setProperty('--i', handIndex);
                 cardEl.style.setProperty('--n', totalCards);
@@ -799,7 +810,7 @@ function renderHand(opts) {
                         pinHandCardPreview(nid, this);
                         onHandCardClick(idx, owner);
                     });
-                })(handIndex, numericId, ownerIdx);
+                })(handIndex, numericId, renderedOwnerIdx);
                 // Phase 14.6-03: additive "Move to..." affordance in sandbox
                 // mode. The existing play-from-hand click handler above is
                 // unchanged; this button is a sibling affordance.
@@ -817,13 +828,13 @@ function renderHand(opts) {
     // face-up -- the sandbox calls renderHand twice with distinct mounts,
     // once per player, so each mount shows exactly one hand.
     if (opts && opts.godView) {
-        appendHand(myPlayer, null);
+        appendHand(myPlayer, null, ownerIdx);
     } else if (isSpectator && spectatorGodMode) {
         var oppIdx = 1 - ownerIdx;
-        appendHand(state.players[oppIdx], 'Player ' + (oppIdx + 1) + ' hand');
-        appendHand(myPlayer, 'Player ' + (ownerIdx + 1) + ' hand');
+        appendHand(state.players[oppIdx], 'Player ' + (oppIdx + 1) + ' hand', oppIdx);
+        appendHand(myPlayer, 'Player ' + (ownerIdx + 1) + ' hand', ownerIdx);
     } else {
-        appendHand(myPlayer, null);
+        appendHand(myPlayer, null, ownerIdx);
     }
     // Auto-fit names and effects for hand cards
     fitHandCardNames();
@@ -858,9 +869,16 @@ function renderHand(opts) {
                 if (!Object.prototype.hasOwnProperty.call(_reg, _k)) continue;
                 var _want = _reg[_k] | 0;
                 if (_want <= 0) continue;
-                var _sel = _k.indexOf('nid:') === 0
-                    ? '.card-frame-hand[data-numeric-id="' + _k.slice(4) + '"]'
-                    : '.card-frame-hand[data-hand-idx="' + _k.slice(4) + '"]';
+                var _slotKey = _k;
+                var _ownerSel = '';
+                var _ownerMatch = /^owner:(\d+):(.*)$/.exec(_slotKey);
+                if (_ownerMatch) {
+                    _ownerSel = '[data-owner-idx="' + _ownerMatch[1] + '"]';
+                    _slotKey = _ownerMatch[2];
+                }
+                var _sel = _slotKey.indexOf('nid:') === 0
+                    ? '.card-frame-hand' + _ownerSel + '[data-numeric-id="' + _slotKey.slice(4) + '"]'
+                    : '.card-frame-hand' + _ownerSel + '[data-hand-idx="' + _slotKey.slice(4) + '"]';
                 var _cand = handEl.querySelectorAll(_sel);
                 var _hidden = 0;
                 // Hide from the END of the fan (newest slots) first — the

@@ -8,6 +8,9 @@ function onGameStart(data) {
     // the game proper is starting. Capture the flag first: it gates the
     // initial-hand deal animation below (user 2026-07-10).
     var _wasPregame = !!window._pregameActive;
+    if (typeof closeAllBoardModalsForReset === 'function') {
+        closeAllBoardModalsForReset();
+    }
     try { if (typeof cleanupPregameUI === 'function') cleanupPregameUI(); } catch (e) { /* defensive */ }
     // Phase 14.8-04a: a fresh game means the engine event seq counter
     // restarts at 0; reset lastSeenSeq so the first event isn't dropped.
@@ -644,6 +647,79 @@ function _spellStageSourceRect(playerIdxOrPos) {
     return { left: window.innerWidth, top: window.innerHeight / 2, width: 1, height: 1 };
 }
 
+function _plainSpellCastRect(rect) {
+    if (!rect) return null;
+    var left = Number(rect.left);
+    var top = Number(rect.top);
+    var width = Number(rect.width);
+    var height = Number(rect.height);
+    if (!isFinite(left) || !isFinite(top) || !isFinite(width) || !isFinite(height)
+            || width <= 0 || height <= 0) return null;
+    return { left: left, top: top, width: width, height: height };
+}
+
+// Snapshot the exact hand slot while it still exists. playCardPlayed calls
+// this immediately before _retireCardSource rebuilds the hand. The returned
+// object is deliberately detached from the DOMRect so it remains safe to
+// carry through the event queue after the source element has been removed.
+function _captureSpellCastSource(payload, playerIdx) {
+    payload = payload || {};
+    var handIndex = (typeof payload.card_index === 'number')
+        ? payload.card_index
+        : ((typeof payload.source_index === 'number') ? payload.source_index : null);
+    var container = null;
+    if (sandboxMode) {
+        container = document.getElementById('sandbox-hand-p' + playerIdx);
+    } else if (playerIdx === myPlayerIdx || (isSpectator && spectatorGodMode)) {
+        container = document.getElementById('hand-container');
+    } else {
+        container = document.getElementById('oppHandRow');
+    }
+    if (!container) return null;
+
+    var exact = null;
+    if (handIndex != null) {
+        exact = container.querySelector(
+            '.card-frame-hand[data-owner-idx="' + playerIdx
+            + '"][data-hand-idx="' + handIndex + '"]'
+        );
+        // A normal opponent hand is intentionally face-down, but its index is
+        // still public and stable for the duration of the play event.
+        if (!exact && playerIdx !== myPlayerIdx && !(isSpectator && spectatorGodMode)) {
+            var backs = container.querySelectorAll('.opp-hand-card-back');
+            if (handIndex >= 0 && handIndex < backs.length) exact = backs[handIndex];
+        }
+    }
+    if (!exact && payload.card_numeric_id != null) {
+        exact = container.querySelector(
+            '.card-frame-hand[data-owner-idx="' + playerIdx
+            + '"][data-numeric-id="' + payload.card_numeric_id + '"]'
+        );
+    }
+    return exact ? _plainSpellCastRect(exact.getBoundingClientRect()) : null;
+}
+
+function _spellCastPalette(numericId, castKind) {
+    var defs = (typeof cardDefs !== 'undefined' && cardDefs) ? cardDefs : null;
+    var sandboxDefs = (typeof window !== 'undefined' && window.sandboxCardDefs)
+        ? window.sandboxCardDefs : null;
+    var def = (defs && defs[numericId]) || (sandboxDefs && sandboxDefs[numericId]);
+    var color = null;
+    if (def && def.element != null && typeof ELEMENT_MAP !== 'undefined'
+            && ELEMENT_MAP[def.element]) {
+        color = ELEMENT_MAP[def.element].color;
+    }
+    if (!color && typeof TYPE_COLORS !== 'undefined') {
+        color = TYPE_COLORS[castKind === 'react' ? 2 : 1];
+    }
+    color = color || (castKind === 'react' ? 'rgb(194,54,126)' : 'rgb(30,140,120)');
+    var match = /rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/i.exec(color);
+    return {
+        color: color,
+        rgb: match ? (match[1] + ', ' + match[2] + ', ' + match[3]) : '224, 162, 60',
+    };
+}
+
 // Queue for sequential push processing. Without this, rapid-fire pushes
 // (sandbox test runs, or fast human chains) interrupt each other's fly-in
 // transitions because each _doShowSpellStage flushes the previous shift
@@ -652,6 +728,7 @@ function _spellStageSourceRect(playerIdxOrPos) {
 var _spellStageQueue = [];
 var _spellStageBusy = false;
 var _spellStagePendingResolve = false;
+var _spellStageGeneration = 0;
 
 // Audit fix (2026-07-06): hard reset of every spell-stage artifact. The
 // stage was never reset on game over / leave / new game — leaving mid-react
@@ -659,6 +736,7 @@ var _spellStagePendingResolve = false;
 // and a stale chain kept isSpellStageAnimating() true, soft-gating inputs.
 // Also parks the react banner + floating Skip React pill.
 function _resetSpellStageHard() {
+    _spellStageGeneration++;
     if (_spellStage.exitTimer) {
         clearTimeout(_spellStage.exitTimer);
         _spellStage.exitTimer = null;
@@ -676,6 +754,7 @@ function _resetSpellStageHard() {
         els.root.hidden = true;
         els.root.classList.remove('exit');
         els.root.classList.remove('enter');
+        els.root.classList.remove('cast-impact');
     }
     var fsb = document.getElementById('floating-skip-react-btn');
     if (fsb) fsb.hidden = true;
@@ -688,12 +767,18 @@ function _resetSpellStageHard() {
 }
 var SPELL_STAGE_PER_CARD_MS = 1500;  // 520ms fly-in + 1000ms hold beat ≈ shift starts
 
-function _showSpellStage(numericId, sourcePlayerIdx) {
-    _spellStageQueue.push({ nid: numericId, playerIdx: sourcePlayerIdx });
-    if (!_spellStageBusy) _processSpellStageQueue();
+function _showSpellStage(numericId, sourcePlayerIdx, castOptions) {
+    _spellStageQueue.push({
+        nid: numericId,
+        playerIdx: sourcePlayerIdx,
+        options: castOptions || {},
+    });
+    if (!_spellStageBusy) _processSpellStageQueue(_spellStageGeneration);
 }
 
-function _processSpellStageQueue() {
+function _processSpellStageQueue(generation) {
+    if (generation == null) generation = _spellStageGeneration;
+    if (generation !== _spellStageGeneration) return;
     if (_spellStageQueue.length === 0) {
         _spellStageBusy = false;
         if (_spellStagePendingResolve) {
@@ -704,14 +789,19 @@ function _processSpellStageQueue() {
     }
     _spellStageBusy = true;
     var next = _spellStageQueue.shift();
-    _doShowSpellStage(next.nid, next.playerIdx);
-    setTimeout(_processSpellStageQueue, SPELL_STAGE_PER_CARD_MS);
+    _doShowSpellStage(next.nid, next.playerIdx, next.options, generation);
+    setTimeout(function() {
+        _processSpellStageQueue(generation);
+    }, SPELL_STAGE_PER_CARD_MS);
 }
 
 // Slam a card onto its owner's stack with a small random rotation.
 // The first card defines the caster — their cards always land on LEFT;
 // the opponent's reacts always land on RIGHT.
-function _doShowSpellStage(numericId, sourcePlayerIdx) {
+function _doShowSpellStage(numericId, sourcePlayerIdx, castOptions, generation) {
+    castOptions = castOptions || {};
+    if (generation == null) generation = _spellStageGeneration;
+    if (generation !== _spellStageGeneration) return;
     var els = _spellStageEls();
     if (!els.root || !els.left || !els.right) return;
     var html = _spellStageCardHtml(numericId);
@@ -754,15 +844,19 @@ function _doShowSpellStage(numericId, sourcePlayerIdx) {
     var offX = stackDepth === 0 ? 0 : ((Math.random() * 20 - 10) | 0);   // -10..+10 px
     var offY = stackDepth === 0 ? 0 : stackDepth * 8 + ((Math.random() * 6 - 3) | 0);  // grow downward
     var card = document.createElement('div');
-    card.className = 'spell-stage-stack-card';
-    card.innerHTML = html;
+    var castKind = castOptions.castKind === 'react' ? 'react' : 'magic';
+    card.className = 'spell-stage-stack-card cast-' + castKind;
+    card.setAttribute('data-cast-kind', castKind);
+    card.innerHTML = '<div class="spell-cast-ribbon"></div>'
+        + '<div class="spell-cast-sigil"><span></span></div>' + html;
     // Layer: each new card on top.
     card.style.zIndex = String(10 + _spellStage.chain.length);
 
     // Slam-in: pre-position over the source hand at small scale, then
     // animate to the stack with an over-scale punch on landing.
     var stackRect = stack.getBoundingClientRect();
-    var src = _spellStageSourceRect(sourcePlayerIdx);
+    var src = _plainSpellCastRect(castOptions.sourceRect)
+        || _spellStageSourceRect(sourcePlayerIdx);
     var dx = (src.left + src.width / 2) - (stackRect.left + stackRect.width / 2);
     var dy = (src.top + src.height / 2) - (stackRect.top + stackRect.height / 2);
     // Audit fix (2026-07-07): rects are viewport px but the transform runs
@@ -772,12 +866,39 @@ function _doShowSpellStage(numericId, sourcePlayerIdx) {
         .getPropertyValue('--duel-scale')) || 1;
     dx /= _sc;
     dy /= _sc;
+    var srcScale = Math.max(0.2, Math.min(0.72,
+        (src.width / _sc) / Math.max(stackRect.width / _sc, 1)));
+    // Lift the midpoint above the straight line from the hand. The staged
+    // card is the sole visual custodian during this arc: its hand source has
+    // already been retired and its stack destination is this same element.
+    var arcLift = Math.min(180, Math.max(82, Math.abs(dx) * 0.18 + 72));
+    var palette = _spellCastPalette(numericId, castKind);
     var restTransform = 'translate(' + offX + 'px, ' + offY + 'px) rotate(' + rotation + 'deg)';
-    card.style.setProperty('--slam-from', 'translate(' + dx + 'px, ' + dy + 'px) scale(0.4) rotate(0deg)');
-    card.style.setProperty('--slam-mid', restTransform.replace('rotate(', 'scale(1.06) rotate('));
+    card.style.setProperty('--cast-color', palette.color);
+    card.style.setProperty('--cast-rgb', palette.rgb);
+    card.style.setProperty('--slam-from', 'translate(' + dx + 'px, ' + dy + 'px) scale(' + srcScale.toFixed(3) + ') rotate(-9deg)');
+    card.style.setProperty('--slam-arc', 'translate(' + (dx * 0.58).toFixed(1) + 'px, '
+        + (dy * 0.58 - arcLift).toFixed(1) + 'px) scale(0.72) rotate(7deg)');
+    card.style.setProperty('--slam-sweep', 'translate(' + (dx * 0.16).toFixed(1) + 'px, '
+        + (dy * 0.16 - arcLift * 0.42).toFixed(1) + 'px) scale(0.98) rotate(-3deg)');
+    card.style.setProperty('--slam-mid', restTransform.replace('rotate(', 'scale(1.1) rotate('));
     card.style.setProperty('--slam-to', restTransform);
     card.classList.add('slam-in');
     stack.appendChild(card);
+
+    try { if (typeof playSfx === 'function') playSfx('card_play'); } catch (e) { /* decorative */ }
+    setTimeout(function() {
+        if (generation !== _spellStageGeneration || !card.parentNode) return;
+        card.classList.add('cast-landed');
+        els.root.classList.remove('cast-impact');
+        void els.root.offsetWidth;
+        els.root.classList.add('cast-impact');
+        setTimeout(function() {
+            if (generation === _spellStageGeneration && els.root) {
+                els.root.classList.remove('cast-impact');
+            }
+        }, 320);
+    }, 690);
 
     _spellStage.chain.push({
         nid: numericId,
@@ -819,13 +940,16 @@ function _spellStageOnReactClosed() {
 }
 
 function _doSpellStageResolve() {
+    var generation = _spellStageGeneration;
     var els = _spellStageEls();
     if (!els.root || els.root.hidden) return;
     _spellStage.resolving = true;
 
     var chain = _spellStage.chain.slice();
     if (chain.length === 0) {
-        _spellStage.exitTimer = setTimeout(_hideSpellStage, 200);
+        _spellStage.exitTimer = setTimeout(function() {
+            _hideSpellStage(generation);
+        }, 200);
         return;
     }
 
@@ -840,7 +964,8 @@ function _doSpellStageResolve() {
 
     var i = chain.length - 1;
     setTimeout(function() {
-        _resolveSpellStageStep(chain, i, els);
+        if (generation !== _spellStageGeneration) return;
+        _resolveSpellStageStep(chain, i, els, generation);
     }, 700);
 }
 
@@ -848,14 +973,18 @@ function _doSpellStageResolve() {
 // recurse onto the next-down card. No glide, no slot juggling — the
 // stacks are now a stable visual that just gets popped one card at a
 // time.
-function _resolveSpellStageStep(chain, i, els) {
+function _resolveSpellStageStep(chain, i, els, generation) {
+    if (generation == null) generation = _spellStageGeneration;
+    if (generation !== _spellStageGeneration) return;
     if (i < 0) {
         // Hide placeholder before fading the stage so 👍 doesn't outlive
         // the cards.
         if (els.placeholder) {
             els.placeholder.classList.remove('visible', 'confirmed', 'pulse');
         }
-        _spellStage.exitTimer = setTimeout(_hideSpellStage, 250);
+        _spellStage.exitTimer = setTimeout(function() {
+            _hideSpellStage(generation);
+        }, 250);
         return;
     }
 
@@ -869,8 +998,9 @@ function _resolveSpellStageStep(chain, i, els) {
     }
 
     setTimeout(function() {
+        if (generation !== _spellStageGeneration) return;
         if (card && card.parentNode) card.parentNode.removeChild(card);
-        _resolveSpellStageStep(chain, i - 1, els);
+        _resolveSpellStageStep(chain, i - 1, els, generation);
     }, 550);
 }
 
@@ -884,15 +1014,19 @@ function _clearSpellStageTimers() {
     if (_spellStage.exitTimer) { clearTimeout(_spellStage.exitTimer); _spellStage.exitTimer = null; }
 }
 
-function _hideSpellStage() {
+function _hideSpellStage(generation) {
+    if (generation == null) generation = _spellStageGeneration;
+    if (generation !== _spellStageGeneration) return;
     _clearSpellStageTimers();
     var els = _spellStageEls();
     if (!els.root) return;
     els.root.classList.add('exit');
     setTimeout(function() {
+        if (generation !== _spellStageGeneration) return;
         els.root.hidden = true;
         els.root.classList.remove('exit');
         els.root.classList.remove('enter');
+        els.root.classList.remove('cast-impact');
         // Clear stack cards but keep the placeholder element (re-parent
         // it back to the root for next session).
         if (els.left) {
@@ -916,6 +1050,9 @@ function _hideSpellStage() {
         _spellStage.chain = [];
         _spellStage.casterIdx = null;
         _spellStage.resolving = false;
+        if (typeof _releaseStageCardDestinations === 'function') {
+            _releaseStageCardDestinations();
+        }
 
         // Phase 14.8-04b: the old post-stage deferral logic has been
         // DELETED. Previously _hideSpellStage would flush a parked sandbox
@@ -1239,10 +1376,19 @@ function logEngineEvent(ev) {
         case 'overdraw_burn':
         case 'card_overdrawn':
         case 'card_exhausted':
-            text = _logPlayer(p.player_idx)
-                 + (p.source === 'turn_start' ? ' OVERDRAWS — ' : ' ')
-                 + _logCardName(p.card_numeric_id)
-                 + ' EXHAUSTED (' + _logBurnSource(p.source) + ')';
+            if (Array.isArray(p.card_numeric_ids)) {
+                var batchNames = p.card_numeric_ids.map(function(cardId) {
+                    return _logCardName(cardId);
+                });
+                text = _logPlayer(p.player_idx) + ' exhausts '
+                     + batchNames.length + ' cards (Spring Cleaning)'
+                     + (batchNames.length ? ': ' + batchNames.join(', ') : '');
+            } else {
+                text = _logPlayer(p.player_idx)
+                     + (p.source === 'turn_start' ? ' OVERDRAWS — ' : ' ')
+                     + _logCardName(p.card_numeric_id)
+                     + ' EXHAUSTED (' + _logBurnSource(p.source) + ')';
+            }
             cls = 'burn';
             break;
         case 'handshake':
@@ -1579,6 +1725,10 @@ function deriveGameOverReason(finalState) {
 function showGameOver(data) {
     var overlay = document.getElementById('game-over-overlay');
     if (!overlay) return;
+    if (typeof closeNonterminalBoardModals === 'function') {
+        closeNonterminalBoardModals();
+    }
+    disposeBoardModalMinimizer(overlay);
     resetRematchUI();
 
     var finalState = data.final_state;
@@ -1633,10 +1783,18 @@ function showGameOver(data) {
 
 function hideGameOver() {
     var overlay = document.getElementById('game-over-overlay');
-    if (overlay) overlay.style.display = 'none';
+    if (overlay) {
+        disposeBoardModalMinimizer(overlay);
+        overlay.style.display = 'none';
+    }
 }
 
 function resetGameClientState() {
+    if (typeof closeAllBoardModalsForReset === 'function') {
+        closeAllBoardModalsForReset();
+    } else if (typeof disposeAllBoardModalMinimizers === 'function') {
+        disposeAllBoardModalMinimizers();
+    }
     gameState = null;
     legalActions = [];
     myPlayerIdx = null;
@@ -1705,6 +1863,17 @@ function setupGameHandlers() {
     var btnRematch = document.getElementById('btn-rematch');
     if (btnRematch) {
         btnRematch.addEventListener('click', requestRematch);
+    }
+    var gameOverOverlay = document.getElementById('game-over-overlay');
+    var gameOverModal = gameOverOverlay
+        ? gameOverOverlay.querySelector('.game-over-modal') : null;
+    if (gameOverOverlay && gameOverModal) {
+        attachBoardModalMinimizer({
+            overlay: gameOverOverlay,
+            controlsHost: gameOverModal,
+            label: 'Game result',
+            restoreId: 'game-over-restore-pill'
+        });
     }
     var btnMute = document.getElementById('sfx-mute-btn');
     if (btnMute) {

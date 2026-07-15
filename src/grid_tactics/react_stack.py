@@ -2558,6 +2558,8 @@ def _play_react(
                 "player_idx": react_idx,
                 "card_numeric_id": card_numeric_id,
                 "cause": "react",
+                "from_zone": "stage",
+                "destination": "grave",
             },
         )
 

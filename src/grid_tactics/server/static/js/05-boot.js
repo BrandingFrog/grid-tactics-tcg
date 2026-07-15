@@ -52,11 +52,419 @@ function _stageMount() {
     return document.querySelector('.screen.active .game-layout') || document.body;
 }
 
+// Shared board-modal minimise controller.  A minimised decision is a
+// read-only peek: the SAME overlay node stays alive (so selections, scroll,
+// form fields and closure state survive), while every gameplay mutation is
+// gated until the player restores it.  Restore controls live in a tray so
+// independently minimised windows never overlap each other.
+function _boardModalRestoreTray() {
+    var host = _stageMount();
+    var tray = document.getElementById('board-modal-restore-tray');
+    if (!tray) {
+        tray = document.createElement('div');
+        tray.id = 'board-modal-restore-tray';
+        tray.className = 'board-modal-restore-tray';
+        tray.setAttribute('role', 'group');
+        tray.setAttribute('aria-label', 'Minimised windows');
+    }
+    if (tray.parentNode !== host) host.appendChild(tray);
+    return tray;
+}
+
+function isBoardModalPeekActive() {
+    var tray = document.getElementById('board-modal-restore-tray');
+    return !!(tray && tray.children && tray.children.length);
+}
+
+// A second decision can legitimately arrive while an informational window
+// is minimised (for example, a Pile peek followed by a Fortune round).  Its
+// own visible Accept button may resolve that decision, while the board and
+// the actually minimised window remain inert.
+function canResolveVisibleBoardModal(overlayOrId) {
+    var overlay = typeof overlayOrId === 'string'
+        ? document.getElementById(overlayOrId) : overlayOrId;
+    return !!(overlay && overlay.parentNode && !overlay._boardModalIsMinimized
+        && !overlay.hidden && overlay.style.display !== 'none');
+}
+
+function canResolvePendingBoardDecisionDuringPeek() {
+    if (typeof interactionMode === 'undefined') return false;
+    if (interactionMode === 'revive_place') {
+        // Revive deliberately keeps its non-blocking instruction window on
+        // screen during tile placement. If THAT window is the minimised one,
+        // the choice is still read-only; an unrelated old pill must not
+        // deadlock the visible Revive placement.
+        return canResolveVisibleBoardModal('revive-modal-overlay');
+    }
+    return interactionMode === 'post_move_attack_pick'
+        || interactionMode === 'death_target_pick'
+        || interactionMode === 'conjure_deploy';
+}
+
+function _refreshBoardPeekAffordances() {
+    try {
+        var peekActive = isBoardModalPeekActive();
+        if (document.body && document.body.classList) {
+            document.body.classList.toggle(
+                'board-modal-peek-active', peekActive
+            );
+        }
+        // Sandbox cheats bypass submitAction(), so freeze their native
+        // controls explicitly during a read-only board peek.  Remember each
+        // control's prior state so restore does not accidentally enable a
+        // button that was already unavailable for another reason.
+        if (typeof document.querySelectorAll === 'function') {
+            document.querySelectorAll(
+                '#sandbox-control-panel button, #sandbox-control-panel input, '
+                + '#sandbox-control-panel select'
+            ).forEach(function(control) {
+                if (peekActive) {
+                    if (!control.hasAttribute('data-peek-prior-disabled')) {
+                        control.setAttribute(
+                            'data-peek-prior-disabled', control.disabled ? 'true' : 'false'
+                        );
+                    }
+                    control.disabled = true;
+                } else if (control.hasAttribute('data-peek-prior-disabled')) {
+                    control.disabled = control.getAttribute(
+                        'data-peek-prior-disabled'
+                    ) === 'true';
+                    control.removeAttribute('data-peek-prior-disabled');
+                }
+            });
+        }
+        if (typeof updateHandHighlights === 'function') updateHandHighlights();
+        if (typeof highlightBoard === 'function') highlightBoard();
+        if (typeof renderActionBar === 'function') renderActionBar();
+    } catch (e) { /* the controller must never break modal flow */ }
+}
+
+function _removeBoardModalRestorePill(restoreId) {
+    if (!restoreId) return;
+    var pill = document.getElementById(restoreId);
+    if (pill && pill.parentNode) pill.parentNode.removeChild(pill);
+    var tray = document.getElementById('board-modal-restore-tray');
+    if (tray && (!tray.children || tray.children.length === 0)
+            && tray.parentNode) {
+        tray.parentNode.removeChild(tray);
+    }
+    _refreshBoardPeekAffordances();
+}
+
+function disposeBoardModalMinimizer(overlayOrRestoreId) {
+    var overlay = (overlayOrRestoreId && typeof overlayOrRestoreId !== 'string')
+        ? overlayOrRestoreId : null;
+    var restoreId = typeof overlayOrRestoreId === 'string'
+        ? overlayOrRestoreId
+        : (overlay && overlay._boardModalRestoreId);
+    _removeBoardModalRestorePill(restoreId);
+    if (overlay) {
+        if (overlay._boardModalIsMinimized) {
+            overlay.classList.remove('board-modal-is-minimized');
+            overlay.style.display = overlay._boardModalPriorDisplay || '';
+            overlay._boardModalIsMinimized = false;
+        }
+        overlay.removeAttribute('aria-hidden');
+        if (overlay._boardModalMinButton) {
+            overlay._boardModalMinButton.setAttribute('aria-expanded', 'true');
+        }
+    }
+}
+
+function disposeAllBoardModalMinimizers() {
+    var tray = document.getElementById('board-modal-restore-tray');
+    if (tray && tray.children) {
+        Array.prototype.slice.call(tray.children).forEach(function(pill) {
+            var overlay = pill._boardModalOverlay;
+            if (!overlay || !overlay._boardModalIsMinimized) return;
+            overlay.classList.remove('board-modal-is-minimized');
+            overlay.style.display = overlay._boardModalPriorDisplay || '';
+            overlay._boardModalIsMinimized = false;
+            overlay.removeAttribute('aria-hidden');
+            if (overlay._boardModalMinButton) {
+                overlay._boardModalMinButton.setAttribute('aria-expanded', 'true');
+            }
+        });
+    }
+    if (tray && tray.parentNode) tray.parentNode.removeChild(tray);
+    _refreshBoardPeekAffordances();
+}
+
+function attachBoardModalMinimizer(config) {
+    config = config || {};
+    var overlay = config.overlay;
+    var controlsHost = config.controlsHost;
+    if (!overlay || !controlsHost) return null;
+    if (overlay._boardModalMinButton) return overlay._boardModalMinButton;
+
+    var label = config.label || 'window';
+    var restoreId = config.restoreId
+        || ((overlay.id || 'board-modal') + '-restore-pill');
+    var minBtn = document.createElement('button');
+    minBtn.type = 'button';
+    minBtn.className = 'modal-min-btn tutor-min-btn';
+    minBtn.textContent = '\u25be';
+    minBtn.title = 'Minimise \u2014 peek at the board';
+    minBtn.setAttribute('aria-label', 'Minimise ' + label + ' window');
+    minBtn.setAttribute('aria-expanded', 'true');
+    if (overlay.id) minBtn.setAttribute('aria-controls', overlay.id);
+
+    overlay._boardModalRestoreId = restoreId;
+    overlay._boardModalMinButton = minBtn;
+    overlay.setAttribute('data-board-modal-minimisable', 'true');
+
+    minBtn.addEventListener('click', function(e) {
+        if (e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+        overlay._boardModalPriorDisplay = overlay.style.display || '';
+        overlay._boardModalIsMinimized = true;
+        overlay.classList.add('board-modal-is-minimized');
+        overlay.style.display = 'none';
+        overlay.setAttribute('aria-hidden', 'true');
+        minBtn.setAttribute('aria-expanded', 'false');
+        try {
+            if (typeof config.onMinimize === 'function') config.onMinimize();
+        } catch (callbackErr) { /* visual cleanup is best-effort */ }
+        _removeBoardModalRestorePill(restoreId);
+
+        var pill = document.createElement('button');
+        pill.type = 'button';
+        pill.id = restoreId;
+        pill.className = 'tutor-restore-pill board-modal-restore-pill';
+        pill._boardModalOverlay = overlay;
+        pill.textContent = '\u25b4 Resume ' + label;
+        pill.setAttribute('aria-label', 'Restore ' + label + ' window');
+        if (overlay.id) pill.setAttribute('aria-controls', overlay.id);
+        pill.addEventListener('click', function(e2) {
+            if (e2) {
+                e2.preventDefault();
+                e2.stopPropagation();
+            }
+            if (!overlay.parentNode) {
+                _removeBoardModalRestorePill(restoreId);
+                return;
+            }
+            // Restore the overlay before removing its pill. Removing the
+            // pill refreshes board affordances; with another pill still in
+            // the tray, contextual choices such as Revive must already be
+            // visible so their legal tile highlights are repainted.
+            overlay.classList.remove('board-modal-is-minimized');
+            overlay.style.display = overlay._boardModalPriorDisplay || '';
+            overlay._boardModalIsMinimized = false;
+            overlay.removeAttribute('aria-hidden');
+            minBtn.setAttribute('aria-expanded', 'true');
+            _removeBoardModalRestorePill(restoreId);
+            try {
+                if (typeof config.onRestore === 'function') config.onRestore();
+            } catch (callbackErr) { /* visual cleanup is best-effort */ }
+            if (typeof minBtn.focus === 'function') minBtn.focus();
+        });
+        _boardModalRestoreTray().appendChild(pill);
+        _refreshBoardPeekAffordances();
+        if (typeof pill.focus === 'function') pill.focus();
+    });
+
+    if (config.before && config.before.parentNode === controlsHost
+            && typeof controlsHost.insertBefore === 'function') {
+        controlsHost.insertBefore(minBtn, config.before);
+    } else {
+        controlsHost.appendChild(minBtn);
+    }
+    return minBtn;
+}
+
+// Minimisable in-page replacement for sandbox confirm()/prompt() calls.
+// Returns a Promise resolving to true/false for confirm, a string/null for
+// prompt, and the selected value/null for select.
+function showBoardDialog(options) {
+    options = options || {};
+    var prior = document.getElementById('board-dialog-overlay');
+    if (prior && typeof prior._boardDialogFinish === 'function') {
+        prior._boardDialogFinish(null);
+    } else if (prior) {
+        disposeBoardModalMinimizer(prior);
+        prior.remove();
+    }
+
+    return new Promise(function(resolve) {
+        var overlay = document.createElement('div');
+        overlay.id = 'board-dialog-overlay';
+        overlay.className = 'tutor-modal-overlay board-dialog-overlay';
+        var modal = document.createElement('div');
+        modal.className = 'tutor-modal board-dialog-modal';
+        modal.setAttribute('role', 'dialog');
+        modal.setAttribute('aria-modal', 'true');
+        modal.setAttribute('aria-labelledby', 'board-dialog-title');
+
+        var header = document.createElement('div');
+        header.className = 'tutor-modal-header';
+        var title = document.createElement('div');
+        title.id = 'board-dialog-title';
+        title.className = 'tutor-modal-title';
+        title.textContent = options.title || 'Confirm';
+        header.appendChild(title);
+        modal.appendChild(header);
+
+        var body = document.createElement('div');
+        body.className = 'board-dialog-body';
+        if (options.message) {
+            var message = document.createElement('div');
+            message.className = 'board-dialog-message';
+            message.textContent = options.message;
+            body.appendChild(message);
+        }
+
+        var input = null;
+        if (options.mode === 'prompt') {
+            input = document.createElement(options.multiline ? 'textarea' : 'input');
+            input.className = 'board-dialog-input';
+            if (!options.multiline) input.type = 'text';
+            if (options.multiline) input.rows = options.rows || 5;
+            input.value = options.value || '';
+            input.readOnly = !!options.readOnly;
+            input.setAttribute('aria-label', options.inputLabel || options.title || 'Value');
+            body.appendChild(input);
+        } else if (options.mode === 'select') {
+            input = document.createElement('select');
+            input.className = 'board-dialog-input board-dialog-select';
+            input.setAttribute('aria-label', options.inputLabel || options.title || 'Choice');
+            (options.choices || []).forEach(function(choice) {
+                var option = document.createElement('option');
+                option.value = String(choice.value);
+                option.textContent = choice.label;
+                input.appendChild(option);
+            });
+            if (options.value != null) input.value = String(options.value);
+            body.appendChild(input);
+        }
+        modal.appendChild(body);
+
+        var footer = document.createElement('div');
+        footer.className = 'tutor-modal-footer board-dialog-footer';
+        var finished = false;
+        function finish(value) {
+            if (finished) return;
+            finished = true;
+            disposeBoardModalMinimizer(overlay);
+            if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+            resolve(value);
+        }
+        overlay._boardDialogFinish = finish;
+
+        if (options.cancelLabel !== null) {
+            var cancel = document.createElement('button');
+            cancel.type = 'button';
+            cancel.className = 'btn btn-secondary';
+            cancel.textContent = options.cancelLabel || 'Cancel';
+            cancel.addEventListener('click', function() {
+                finish(options.mode === 'confirm' ? false : null);
+            });
+            footer.appendChild(cancel);
+        }
+        var accept = document.createElement('button');
+        accept.type = 'button';
+        accept.className = 'tutor-accept-button';
+        accept.textContent = options.confirmLabel || 'Accept';
+        accept.addEventListener('click', function() {
+            if (options.mode === 'confirm') finish(true);
+            else if (input) finish(input.value);
+            else finish(true);
+        });
+        footer.appendChild(accept);
+        modal.appendChild(footer);
+        overlay.appendChild(modal);
+        overlay.addEventListener('click', function(e) { e.stopPropagation(); });
+        attachBoardModalMinimizer({
+            overlay: overlay,
+            controlsHost: header,
+            label: options.resumeLabel || options.title || 'dialog',
+            restoreId: 'board-dialog-restore-pill'
+        });
+        _stageMount().appendChild(overlay);
+        if (input && typeof input.focus === 'function') input.focus();
+        else if (typeof accept.focus === 'function') accept.focus();
+
+        overlay.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape' && options.cancelLabel !== null) {
+                e.preventDefault();
+                finish(options.mode === 'confirm' ? false : null);
+            } else if (e.key === 'Enter' && !options.multiline) {
+                e.preventDefault();
+                accept.click();
+            }
+        });
+    });
+}
+
+function showBoardNotice(message, isError) {
+    var old = document.getElementById('board-notice-toast');
+    if (old) old.remove();
+    var toast = document.createElement('div');
+    toast.id = 'board-notice-toast';
+    toast.className = 'tutor-toast board-notice-toast'
+        + (isError ? ' board-notice-error' : '');
+    toast.setAttribute('role', isError ? 'alert' : 'status');
+    toast.textContent = message || '';
+    _stageMount().appendChild(toast);
+    setTimeout(function() {
+        if (toast.parentNode) toast.parentNode.removeChild(toast);
+    }, isError ? 4200 : 2800);
+}
+
+// Hard lifecycle boundary used when a duel/sandbox session is abandoned or
+// replaced.  Closing through each modal's own function clears its local
+// selection/interaction state as well as the shared restore pill.  The
+// generic dialog is also settled so callers are never left with a dangling
+// Promise after navigating away.
+function closeNonterminalBoardModals() {
+    var dialog = document.getElementById('board-dialog-overlay');
+    if (dialog && typeof dialog._boardDialogFinish === 'function') {
+        dialog._boardDialogFinish(null);
+    } else if (dialog) {
+        disposeBoardModalMinimizer(dialog);
+        dialog.remove();
+    }
+
+    if (typeof closeTutorModal === 'function') closeTutorModal();
+    if (typeof closeTriggerPickerModal === 'function') closeTriggerPickerModal();
+    if (typeof closeReviveModal === 'function') closeReviveModal();
+    if (typeof closeRoguelikeEventModal === 'function') closeRoguelikeEventModal();
+    if (typeof closeMarkedCardsModal === 'function') closeMarkedCardsModal();
+    if (typeof closeTransformPicker === 'function') closeTransformPicker();
+    if (typeof hideSacrificePicker === 'function') hideSacrificePicker();
+    if (typeof hidePileModal === 'function') hidePileModal();
+    if (typeof closeRpsModal === 'function') closeRpsModal();
+    if (typeof closeMulliganModal === 'function') closeMulliganModal();
+    if (typeof closeBugReporterModal === 'function') closeBugReporterModal();
+}
+
+function closeAllBoardModalsForReset() {
+    closeNonterminalBoardModals();
+    if (typeof hideGameOver === 'function') hideGameOver();
+    disposeAllBoardModalMinimizers();
+
+    var notice = document.getElementById('board-notice-toast');
+    if (notice) notice.remove();
+}
+
+var _openPileModalContext = null;
+
 function showPileModal(title, cardNumericIds, sandboxCtx) {
     var modal = document.getElementById('pileModal');
     var titleEl = document.getElementById('pileModalTitle');
     var grid = document.getElementById('pileModalGrid');
     if (!modal || !titleEl || !grid) return;
+    if (sandboxCtx && sandboxCtx.playerIdx != null && sandboxCtx.pileType) {
+        _openPileModalContext = {
+            title: title || 'Pile',
+            playerIdx: sandboxCtx.playerIdx,
+            pileType: sandboxCtx.pileType,
+            sandbox: !!sandboxCtx.sandbox,
+        };
+    }
+    disposeBoardModalMinimizer(modal);
     titleEl.textContent = title || 'Pile';
     // Center over the STAGE (right of the tooltip column): live inside the
     // active screen's scaled layout so the grey-out skips the tooltip panel.
@@ -103,10 +511,10 @@ function showPileModal(title, cardNumericIds, sandboxCtx) {
                         playBtn.textContent = '\u2694 Summon';
                         playBtn.addEventListener('click', function(e) {
                             e.stopPropagation();
+                            if (isBoardModalPeekActive()) return;
                             window.__exhaustPlayIdx = exPlays[0].card_index;
                             interactionMode = 'exhaust_play';
-                            var modal = document.getElementById('pileModal');
-                            if (modal) modal.style.display = 'none';
+                            hidePileModal();
                             try { highlightBoard(); } catch (e2) { /* defensive */ }
                             try {
                                 exPlays.forEach(function(a) {
@@ -141,8 +549,27 @@ function showPileModal(title, cardNumericIds, sandboxCtx) {
 }
 
 function hidePileModal() {
+    _openPileModalContext = null;
     var modal = document.getElementById('pileModal');
-    if (modal) modal.style.display = 'none';
+    if (modal) {
+        disposeBoardModalMinimizer(modal);
+        modal.style.display = 'none';
+    }
+    document.querySelectorAll('.sandbox-move-popover').forEach(function(popover) {
+        popover.remove();
+    });
+}
+
+function refreshOpenPileModal() {
+    var ctx = _openPileModalContext;
+    var modal = document.getElementById('pileModal');
+    if (!ctx || !modal || modal._boardModalIsMinimized) return;
+    var state = (ctx.sandbox && typeof sandboxState !== 'undefined' && sandboxState)
+        ? sandboxState : gameState;
+    var player = state && state.players && state.players[ctx.playerIdx];
+    if (!player) return;
+    var ids = Array.isArray(player[ctx.pileType]) ? player[ctx.pileType] : [];
+    showPileModal(ctx.title, ids, ctx);
 }
 
 // Element-only opponent hand info (DESIGNED information leak, 2026-07):
@@ -190,6 +617,12 @@ function renderOppHandRow(count, elements) {
         back.className = 'opp-hand-card-back';
         back.style.setProperty('--i', i);
         back.style.setProperty('--n', n);
+        var opponentOwnerIdx = (typeof myPlayerIdx === 'number') ? 1 - myPlayerIdx : null;
+        if (opponentOwnerIdx != null
+                && typeof _isHandDestinationReserved === 'function'
+                && _isHandDestinationReserved(opponentOwnerIdx, i, null)) {
+            back.style.visibility = 'hidden';
+        }
         _tintCardBack(back, (elements && elements.length > i) ? elements[i] : null);
         row.appendChild(back);
     }
@@ -405,6 +838,7 @@ function updatePileButtonCounts() {
             }
         });
     });
+    refreshOpenPileModal();
 }
 
 function setupPileHandlers() {
@@ -427,7 +861,11 @@ function setupPileHandlers() {
             }
             var inSandbox = typeof sandboxState !== 'undefined' && sandboxState &&
                 document.getElementById('screen-sandbox').classList.contains('active');
-            showPileModal(title, ids, inSandbox ? { pileType: kind, playerIdx: idx } : undefined);
+            showPileModal(title, ids, {
+                pileType: kind,
+                playerIdx: idx,
+                sandbox: inSandbox,
+            });
         });
     });
 
@@ -435,6 +873,22 @@ function setupPileHandlers() {
     if (closeBtn) closeBtn.addEventListener('click', hidePileModal);
     var modal = document.getElementById('pileModal');
     if (modal) {
+        var pileHeader = modal.querySelector('.pile-modal-header');
+        if (pileHeader) {
+            attachBoardModalMinimizer({
+                overlay: modal,
+                controlsHost: pileHeader,
+                label: 'Pile',
+                restoreId: 'pile-modal-restore-pill',
+                before: closeBtn,
+                onMinimize: function() {
+                    document.querySelectorAll('.sandbox-move-popover').forEach(
+                        function(popover) { popover.remove(); }
+                    );
+                },
+                onRestore: refreshOpenPileModal,
+            });
+        }
         modal.addEventListener('click', function(e) {
             if (e.target === modal) hidePileModal();
         });

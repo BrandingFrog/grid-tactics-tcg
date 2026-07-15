@@ -8,12 +8,15 @@ import pytest
 from grid_tactics.board import Board
 from grid_tactics.card_library import CardLibrary
 from grid_tactics.engine_events import (
+    EVT_CARD_BURNED,
+    EVT_CARD_DRAWN,
     EVT_PENDING_MODAL_OPENED,
     EVT_PENDING_MODAL_RESOLVED,
     EVT_PLAYER_HP_CHANGE,
     EVT_REACT_WINDOW_OPENED,
     EventStream,
 )
+from grid_tactics.types import MAX_HAND_SIZE
 from grid_tactics.enums import PlayerSide, TurnPhase
 from grid_tactics.game_state import GameState
 from grid_tactics.legal_actions import legal_actions
@@ -221,16 +224,69 @@ def test_clumsy_greed_exhausts_two_random_hand_cards(library):
     assert len(resolved.players[0].deck) == 0
     assert len(resolved.players[0].exhaust) == 2
     assert resolved.players[0].grave == ()
-    assert len([
+    deck_draws = [
         event for event in stream.events
-        if event.type == "card_burned"
+        if event.type == EVT_CARD_DRAWN
+        and event.payload.get("source") == "roguelike_event"
+        and event.payload.get("player_idx") == 0
+    ]
+    hand_exhausts = [
+        event for event in stream.events
+        if event.type == EVT_CARD_BURNED
         and event.payload.get("source") == "clumsy_greed"
-    ]) == 2
+        and event.payload.get("player_idx") == 0
+    ]
+    assert len(deck_draws) == 4
+    assert all(event.payload.get("from_zone") == "deck"
+               for event in deck_draws)
+    assert len(hand_exhausts) == 2
+    assert all(event.payload.get("from_zone") == "hand"
+               for event in hand_exhausts)
+    source_indexes = [event.payload.get("source_index") for event in hand_exhausts]
+    assert all(isinstance(index, int) for index in source_indexes)
+    assert source_indexes == sorted(source_indexes, reverse=True)
     assert not any(
         event.type == "card_discarded"
         and event.payload.get("player_idx") == 0
         for event in stream.events
     )
+
+
+def test_clumsy_greed_last_card_overdraw_is_deck_sourced(library):
+    rat = library.get_numeric_id("rat")
+    stream = EventStream()
+
+    resolved = _resolve_fortunes(
+        _state(
+            p0=_player(
+                PlayerSide.PLAYER_1,
+                hand=(rat,) * MAX_HAND_SIZE,
+                deck=(rat,),
+            ),
+            phase=TurnPhase.START_OF_TURN,
+            turn=26,
+        ),
+        CLUMSY_GREED, WITH_A_SLAP, library,
+        event_collector=stream,
+    )
+
+    deck_burn = next(
+        event for event in stream.events
+        if event.type == EVT_CARD_BURNED
+        and event.payload.get("source") == "roguelike_event"
+        and event.payload.get("player_idx") == 0
+    )
+    hand_exhausts = [
+        event for event in stream.events
+        if event.type == EVT_CARD_BURNED
+        and event.payload.get("source") == "clumsy_greed"
+        and event.payload.get("player_idx") == 0
+    ]
+    assert resolved.players[0].deck == ()
+    assert deck_burn.payload.get("from_zone") == "deck"
+    assert len(hand_exhausts) == 2
+    assert all(event.payload.get("from_zone") == "hand"
+               for event in hand_exhausts)
 
 
 def test_with_a_slap_stacks_and_deals_five_per_stack(library):
@@ -520,6 +576,60 @@ def test_grave_expectations_returns_two_then_deals_ceiling_quarter_hp(library):
     assert len(resolved.players[0].grave) == 1
 
 
+def test_generated_and_grave_overdraws_keep_their_non_deck_origins(library):
+    rat = library.get_numeric_id("rat")
+    prohibition = library.get_numeric_id("prohibition")
+    full_hand = (rat,) * MAX_HAND_SIZE
+
+    sharp_stream = EventStream()
+    sharp = _resolve_fortunes(
+        _state(
+            p0=_player(PlayerSide.PLAYER_1, hand=full_hand, deck=(rat,)),
+            phase=TurnPhase.START_OF_TURN,
+            turn=26,
+        ),
+        SHARP_EYED_SCEPTIC, WITH_A_SLAP, library,
+        event_collector=sharp_stream,
+    )
+    sharp_burn = next(
+        event for event in sharp_stream.events
+        if event.type == EVT_CARD_BURNED
+        and event.payload.get("source") == "roguelike_event"
+        and event.payload.get("player_idx") == 0
+    )
+    assert sharp.players[0].deck == (rat,)
+    assert sharp_burn.payload.get("card_numeric_id") == prohibition
+    assert sharp_burn.payload.get("from_zone") == "generated"
+
+    grave_stream = EventStream()
+    grave_player = replace(
+        _player(PlayerSide.PLAYER_1, hand=full_hand, deck=(rat,)),
+        grave=(rat, prohibition),
+    )
+    grave = _resolve_fortunes(
+        _state(
+            p0=grave_player,
+            phase=TurnPhase.START_OF_TURN,
+            turn=26,
+        ),
+        GRAVE_EXPECTATIONS, WITH_A_SLAP, library,
+        event_collector=grave_stream,
+    )
+    grave_burns = [
+        event for event in grave_stream.events
+        if event.type == EVT_CARD_BURNED
+        and event.payload.get("source") == "grave_expectations"
+        and event.payload.get("player_idx") == 0
+    ]
+    assert grave.players[0].deck == (rat,)
+    assert grave.players[0].grave == ()
+    assert len(grave_burns) == 2
+    assert all(event.payload.get("from_zone") == "grave"
+               for event in grave_burns)
+    assert all(isinstance(event.payload.get("source_index"), int)
+               for event in grave_burns)
+
+
 def test_pocket_change_and_spring_cleaning(library):
     rat = library.get_numeric_id("rat")
     prohibition = library.get_numeric_id("prohibition")
@@ -552,6 +662,33 @@ def test_pocket_change_and_spring_cleaning(library):
     assert len(spring.players[0].exhaust) == 2
     assert len(spring.players[0].grave) == 0
     assert len(spring.players[0].deck) == 1
+
+
+def test_pocket_change_last_card_overdraw_is_deck_sourced(library):
+    rat = library.get_numeric_id("rat")
+    stream = EventStream()
+    resolved = _resolve_fortunes(
+        _state(
+            p0=_player(PlayerSide.PLAYER_1, mana=2),
+            p1=_player(
+                PlayerSide.PLAYER_2,
+                hand=(rat,) * MAX_HAND_SIZE,
+                deck=(rat,),
+            ),
+            phase=TurnPhase.START_OF_TURN,
+            turn=26,
+        ),
+        POCKET_CHANGE, WITH_A_SLAP, library,
+        event_collector=stream,
+    )
+    pocket_burn = next(
+        event for event in stream.events
+        if event.type == EVT_CARD_BURNED
+        and event.payload.get("source") == "pocket_change"
+        and event.payload.get("player_idx") == 1
+    )
+    assert resolved.players[1].deck == ()
+    assert pocket_burn.payload.get("from_zone") == "deck"
 
 
 def test_spring_cleaning_exhausts_without_discard_effects_or_react(
@@ -597,6 +734,72 @@ def test_spring_cleaning_exhausts_without_discard_effects_or_react(
     assert resolved.react_stack == ()
     assert resolved.react_player_idx is None
     assert EVT_REACT_WINDOW_OPENED not in [event.type for event in stream.events]
+
+
+def test_spring_cleaning_batches_only_the_initial_hand_exhaust(library):
+    """The client may batch hand cards, but never a later overdraw burn.
+
+    Starting with a maximum-size hand makes Spring Cleaning draw one more
+    card than can fit.  Both kinds of burn share the same source, so the
+    explicit ``from_zone=hand`` marker is the required animation boundary.
+    """
+    rat_id = library.get_numeric_id("rat")
+    prohibition_id = library.get_numeric_id("prohibition")
+    original_hand = tuple(
+        rat_id if index % 2 == 0 else prohibition_id
+        for index in range(MAX_HAND_SIZE)
+    )
+    stream = EventStream()
+    _resolve_fortunes(
+        _state(
+            p0=_player(
+                PlayerSide.PLAYER_1,
+                hand=original_hand,
+                deck=(rat_id,) * (MAX_HAND_SIZE + 1),
+            ),
+            phase=TurnPhase.START_OF_TURN,
+            turn=26,
+        ),
+        SPRING_CLEANING,
+        WITH_A_SLAP,
+        library,
+        event_collector=stream,
+    )
+    spring_cards = [
+        event for event in stream.events
+        if event.payload.get("player_idx") == 0
+        and event.payload.get("source") == "spring_cleaning"
+        and event.type in (EVT_CARD_BURNED, EVT_CARD_DRAWN)
+    ]
+    hand_exhaust = spring_cards[0]
+    replacement_draws = spring_cards[1:1 + MAX_HAND_SIZE]
+    overdraw = spring_cards[-1]
+
+    assert len(spring_cards) == MAX_HAND_SIZE + 2
+    assert hand_exhaust.type == EVT_CARD_BURNED
+    assert hand_exhaust.payload.get("card_numeric_ids") == list(original_hand)
+    assert hand_exhaust.payload.get("card_count") == MAX_HAND_SIZE
+    assert hand_exhaust.payload.get("from_zone") == "hand"
+    assert hand_exhaust.payload.get("destination") == "exhaust"
+    assert "card_numeric_id" not in hand_exhaust.payload
+    assert all(event.type == EVT_CARD_DRAWN for event in replacement_draws)
+    assert all(event.payload.get("from_zone") == "deck"
+               for event in replacement_draws)
+    assert overdraw.type == EVT_CARD_BURNED
+    assert overdraw.payload.get("card_numeric_id") == rat_id
+    assert "card_numeric_ids" not in overdraw.payload
+    assert overdraw.payload.get("from_zone") == "deck"
+
+    opponent_events = filter_engine_events_for_viewer(
+        stream.events, 1, library=library,
+    )
+    opponent_batch = next(
+        event for event in opponent_events
+        if event.type == EVT_CARD_BURNED
+        and event.payload.get("from_zone") == "hand"
+        and event.payload.get("source") == "spring_cleaning"
+    )
+    assert opponent_batch.payload.get("card_numeric_ids") == list(original_hand)
 
 
 @pytest.mark.parametrize("spring_idx", (0, 1))
@@ -695,10 +898,50 @@ def test_marked_cards_keeps_one_and_privately_orders_other_two(library):
     assert opponent["pending_marked_cards_cards"] == []
     assert opponent["pending_marked_cards_count"] == 3
 
-    resolved = resolve_marked_cards_choice(state, 0, 1, (2, 0))
+    stream = EventStream()
+    resolved = resolve_marked_cards_choice(
+        state, 0, 1, (2, 0), event_collector=stream,
+    )
     assert resolved.pending_marked_cards_player_idx is None
     assert resolved.players[0].hand == (cards[1],)
     assert resolved.players[0].deck == (cards[2], cards[0], cards[3])
+    kept = next(
+        event for event in stream.events
+        if event.type == EVT_CARD_DRAWN
+        and event.payload.get("source") == "marked_cards"
+    )
+    assert kept.payload.get("card_numeric_id") == cards[1]
+    assert kept.payload.get("from_zone") == "deck"
+
+
+def test_marked_cards_last_card_overdraw_is_deck_sourced(library):
+    rat = library.get_numeric_id("rat")
+    state = _resolve_fortunes(
+        _state(
+            p0=_player(
+                PlayerSide.PLAYER_1,
+                hand=(rat,) * MAX_HAND_SIZE,
+                deck=(rat,),
+            ),
+            phase=TurnPhase.START_OF_TURN,
+            turn=26,
+        ),
+        MARKED_CARDS, WITH_A_SLAP, library,
+    )
+    stream = EventStream()
+
+    resolved = resolve_marked_cards_choice(
+        state, 0, 0, (), event_collector=stream,
+    )
+
+    burn = next(
+        event for event in stream.events
+        if event.type == EVT_CARD_BURNED
+        and event.payload.get("source") == "marked_cards"
+    )
+    assert resolved.players[0].deck == ()
+    assert burn.payload.get("card_numeric_id") == rat
+    assert burn.payload.get("from_zone") == "deck"
 
 
 def test_uncharted_fortune_excludes_seen_and_current_offer(library):

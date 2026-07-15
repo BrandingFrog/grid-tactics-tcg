@@ -72,8 +72,19 @@ function clearSelection() {
     hideDeclinePostMoveAttackButton();
 }
 
-function submitAction(actionData) {
+function submitAction(actionData, allowDuringBoardPeek) {
     if (isSpectator) { console.warn('spectator cannot submit action'); return; }
+    var _at = actionData && actionData.action_type;
+    var _modalResolutionTypes = [9, 10, 12, 13, 14, 15, 16, 17, 18];
+    var _pendingBoardResolution = canResolvePendingBoardDecisionDuringPeek()
+        && (_at === 2 || _at === 8);
+    // A minimised window is a board-inspection state, never permission to
+    // start a second action while its original choice remains unresolved.
+    if (typeof isBoardModalPeekActive === 'function'
+            && isBoardModalPeekActive()
+            && !allowDuringBoardPeek
+            && !_pendingBoardResolution
+            && _modalResolutionTypes.indexOf(_at) === -1) return;
     // Spell-stage gate (bug: effect-usable-during-react-window). While the
     // spell stage is still animating on-screen, block every self-initiated
     // action EXCEPT the two that can legitimately close a react window:
@@ -85,7 +96,6 @@ function submitAction(actionData) {
     // and-suspenders defense: the individual click handlers ALSO gate on
     // isSpellStageAnimating() so the click never even reaches this point
     // when the stage is busy.
-    var _at = actionData && actionData.action_type;
     // Phase 14.8 deadlock fix: pending-modal resolution actions must ALSO
     // pass through. While a pending_* gate is set server-side they are the
     // ONLY legal actions, so blocking them on the spell stage could never
@@ -95,7 +105,6 @@ function submitAction(actionData) {
     //   9 TUTOR_SELECT, 10 DECLINE_TUTOR, 12 CONJURE_DEPLOY,
     //   13 DECLINE_CONJURE, 14 DEATH_TARGET_PICK, 15 REVIVE_PLACE,
     //   16 DECLINE_REVIVE, 17 TRIGGER_PICK, 18 DECLINE_TRIGGER
-    var _modalResolutionTypes = [9, 10, 12, 13, 14, 15, 16, 17, 18];
     // Timing audit (2026-07-06): PASS(4) / PLAY_REACT(5) bypass the gates
     // ONLY when a react window actually awaits THIS player — an ACTION-phase
     // PASS is a normal self-initiated action and must wait for the drain.
@@ -452,6 +461,8 @@ function canPlayCard(handIdx) {
 // game passes nothing; own hand is always myPlayerIdx.
 function onHandCardClick(handIdx, ownerIdx) {
     if (isSpectator) return;  // spectators cannot play cards
+    if (typeof isBoardModalPeekActive === 'function'
+            && isBoardModalPeekActive()) return;
     // Timing audit (2026-07-06): while the event queue is draining, the
     // board on screen is older than gameState — selection/targeting must
     // not engage. React clicks (my window) and pending-decision modes stay
@@ -597,18 +608,27 @@ function onHandCardClick(handIdx, ownerIdx) {
 
 // Handle clicking a board cell
 function onBoardCellClick(row, col) {
+    // Must precede the sandbox direct-emit branch below: peek mode is
+    // read-only in both live games and god-view sandbox.
+    var _peekActive = typeof isBoardModalPeekActive === 'function'
+        && isBoardModalPeekActive();
+    var _pendingBoardDecision = canResolvePendingBoardDecisionDuringPeek();
+    if (_peekActive && !_pendingBoardDecision) return;
     // Sandbox: if a card is staged, click-to-place on empty cell
-    if (sandboxMode) {
+    // (never let that convenience path steal a mandatory target/placement
+    // click from Revive, Conjure, death targeting, or post-move attack).
+    if (sandboxMode && !_pendingBoardDecision) {
         var staged = document.getElementById('sandbox-staged-card');
         if (staged && !staged.hidden && staged.dataset.nid) {
             var nid = parseInt(staged.dataset.nid, 10);
             if (!isNaN(nid)) {
-                socket.emit('sandbox_place_on_board', {
+                var stagedPlaced = emitSandboxEvent('sandbox_place_on_board', {
                     player_idx: sandboxAddTargetIdx,
                     card_numeric_id: nid,
                     row: row,
                     col: col,
                 });
+                if (!stagedPlaced) return;
                 // Clear staged card so normal gameplay clicks work
                 staged.hidden = true;
                 staged.dataset.nid = '';
@@ -866,6 +886,9 @@ function onBoardCellClick(row, col) {
 // Handle clicking a board minion
 function onBoardMinionClick(minion) {
     if (isSpectator) return;  // spectators are read-only
+    if (typeof isBoardModalPeekActive === 'function'
+            && isBoardModalPeekActive()
+            && !canResolvePendingBoardDecisionDuringPeek()) return;
     // Timing audit (2026-07-06): while the event queue is draining, the
     // board on screen is older than gameState — selection/targeting must
     // not engage. React clicks (my window) and pending-decision modes stay
@@ -1146,30 +1169,12 @@ function showTransformPicker(minion, sourceCard, options, legalTransforms) {
     header.appendChild(title);
     header.appendChild(subtitle);
 
-    var minBtn = document.createElement('button');
-    minBtn.className = 'tutor-min-btn';
-    minBtn.textContent = '▾';
-    minBtn.title = 'Minimise — peek at the board';
-    minBtn.setAttribute('aria-label', 'Minimise Transformation window');
-    minBtn.addEventListener('click', function(e) {
-        e.stopPropagation();
-        overlay.style.display = 'none';
-        var oldPill = document.getElementById('transform-picker-restore-pill');
-        if (oldPill) oldPill.remove();
-        var pill = document.createElement('button');
-        pill.id = 'transform-picker-restore-pill';
-        pill.className = 'tutor-restore-pill';
-        pill.textContent = '▴ Resume Transformation';
-        pill.addEventListener('click', function() {
-            pill.remove();
-            overlay.style.display = '';
-        });
-        var pillHost = typeof _stageMount === 'function'
-            ? _stageMount()
-            : (document.querySelector('.screen.active .game-layout') || document.body);
-        pillHost.appendChild(pill);
+    attachBoardModalMinimizer({
+        overlay: overlay,
+        controlsHost: header,
+        label: 'Transformation',
+        restoreId: 'transform-picker-restore-pill'
     });
-    header.appendChild(minBtn);
     modal.appendChild(header);
 
     var fan = document.createElement('div');
@@ -1256,7 +1261,7 @@ function showTransformPicker(minion, sourceCard, options, legalTransforms) {
             action_type: 7,
             minion_id: minion.instance_id,
             transform_target: selectedTarget,
-        });
+        }, true);
     });
     footer.appendChild(cancel);
     footer.appendChild(accept);
@@ -1270,10 +1275,11 @@ function showTransformPicker(minion, sourceCard, options, legalTransforms) {
 }
 
 function closeTransformPicker() {
-    var pill = document.getElementById('transform-picker-restore-pill');
-    if (pill) pill.remove();
     var overlay = document.getElementById('transform-picker-overlay');
-    if (overlay) overlay.remove();
+    if (overlay) {
+        disposeBoardModalMinimizer(overlay);
+        overlay.remove();
+    }
 }
 
 // Discard-cost picker — collects one or more hand-index picks (based on
@@ -1329,6 +1335,12 @@ function showSacrificePicker(handIdx, deployPos, targetPos, sacChoices) {
     progress.className = 'discard-picker-progress sacrifice-picker-progress';
     inner.appendChild(title);
     inner.appendChild(progress);
+    attachBoardModalMinimizer({
+        overlay: modal,
+        controlsHost: inner,
+        label: 'Discard choice',
+        restoreId: 'discard-picker-restore-pill'
+    });
     var row = document.createElement('div');
     row.className = 'discard-picker-row sacrifice-picker-row';
     inner.appendChild(row);
@@ -1417,7 +1429,7 @@ function showSacrificePicker(handIdx, deployPos, targetPos, sacChoices) {
             payload.discard_card_indices = sortedPicks;
         }
         hideSacrificePicker();
-        submitAction(payload);
+        submitAction(payload, true);
     }
 
     var acceptBtn = document.createElement('button');
@@ -1446,7 +1458,7 @@ function showSacrificePicker(handIdx, deployPos, targetPos, sacChoices) {
         payBtn.title = 'Summon for mana instead of discarding';
         payBtn.addEventListener('click', function() {
             hideSacrificePicker();
-            submitAction(_playCardPayload(manaModeAction));
+            submitAction(_playCardPayload(manaModeAction), true);
         });
         footer.appendChild(payBtn);
     }
@@ -1459,7 +1471,10 @@ function showSacrificePicker(handIdx, deployPos, targetPos, sacChoices) {
 
 function hideSacrificePicker() {
     var existing = document.getElementById('sacrifice-picker');
-    if (existing) existing.remove();
+    if (existing) {
+        disposeBoardModalMinimizer(existing);
+        existing.remove();
+    }
 }
 
 function getMinionAt(row, col) {

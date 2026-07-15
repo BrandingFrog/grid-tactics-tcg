@@ -934,6 +934,9 @@ def _apply_revive_place(
                 "owner_idx": player_idx,
                 "position": list(pos),
                 "source": "revive",
+                "from_zone": "grave",
+                "source_index": grave_idx,
+                "destination": "board",
             },
         )
 
@@ -3105,6 +3108,11 @@ def resolve_action(
     if not _keeps_streak and state.consecutive_passes != 0:
         state = replace(state, consecutive_passes=0)
 
+    # Card identity retained for the later grave-diff contract.  A played
+    # spell moves hand -> stage at CARD_PLAYED, then stage -> grave at
+    # CARD_DISCARDED; the second event must never search the hand again.
+    _played_card_id: Optional[int] = None
+
     # Dispatch to action handler
     if action.action_type == ActionType.PASS:
         _passer_idx = state.active_player_idx
@@ -3156,7 +3164,6 @@ def resolve_action(
         if event_collector is not None:
             _player = state.players[state.active_player_idx]
             _card_idx = action.card_index
-            _played_card_id: Optional[int] = None
             if _card_idx is not None and 0 <= _card_idx < len(_player.hand):
                 _played_card_id = _player.hand[_card_idx]
             event_collector.collect(
@@ -3331,12 +3338,20 @@ def resolve_action(
             _post_len = _post_action_grave_lens[_idx]
             if action.action_type != ActionType.SACRIFICE:
                 for _card_id in _now_grave[_prev_len:_post_len]:
+                    _is_played_card = (
+                        action.action_type == ActionType.PLAY_CARD
+                        and _played_card_id is not None
+                        and _card_id == _played_card_id
+                    )
                     event_collector.collect(
                         EVT_CARD_DISCARDED,
                         f"action:{action.action_type.name.lower()}",
                         {
                             "player_idx": _idx,
                             "card_numeric_id": _card_id,
+                            "cause": "played" if _is_played_card else "discard",
+                            "from_zone": "stage" if _is_played_card else "hand",
+                            "destination": "grave",
                         },
                     )
             # Death-sourced grave adds (_post_len onward) now emit inside

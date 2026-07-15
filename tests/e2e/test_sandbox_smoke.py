@@ -113,9 +113,6 @@ def sandbox_page(browser_context):
     a fresh localStorage + a fresh sandbox_create on the server.
     """
     page = browser_context.new_page()
-    # Auto-accept all in-page confirm() dialogs (Reset, Delete slot, etc.)
-    # BEFORE the first navigation so the override fires on every load.
-    page.add_init_script("window.confirm = () => true;")
     page.goto(SANDBOX_URL)
     # Wipe any autosave so every test starts empty.
     page.evaluate("() => localStorage.removeItem('gt_sandbox_autosave_v1')")
@@ -422,8 +419,47 @@ def test_04_cheat_inputs_and_pile_modal(sandbox_page: Page):
         " && m.parentElement && m.parentElement.classList.contains('game-layout'); }",
         timeout=2000,
     )
-    # Modal contains at least one card
+    # Modal contains at least one card.
     assert page.query_selector("#pileModalGrid .card-frame") is not None
+
+    # Every persistent board modal can collapse into the shared restore tray.
+    # The exact same pile node/card remains alive, while board actions become
+    # read-only until the modal is restored.
+    reset_control = page.locator("#sandbox-reset-btn")
+    redo_control = page.locator("#sandbox-redo-btn")
+    reset_control.evaluate("el => { el.disabled = false; }")
+    redo_control.evaluate("el => { el.disabled = true; }")
+    min_btn = page.locator("#pileModal .modal-min-btn")
+    assert min_btn.count() == 1
+    min_btn.evaluate("el => el.click()")
+    page.wait_for_function(
+        "() => document.getElementById('pileModal').style.display === 'none'"
+        " && !!document.getElementById('pile-modal-restore-pill')"
+        " && isBoardModalPeekActive() === true",
+        timeout=2000,
+    )
+    assert page.is_visible("#sandbox-board")
+    assert page.evaluate("() => canActNow()") is False
+    assert page.locator("#pileModalGrid .card-frame").count() >= 1
+    assert reset_control.is_disabled()
+    assert redo_control.is_disabled()
+    assert reset_control.get_attribute("data-peek-prior-disabled") == "false"
+    assert redo_control.get_attribute("data-peek-prior-disabled") == "true"
+
+    restore = page.locator("#pile-modal-restore-pill")
+    assert restore.is_visible()
+    restore.evaluate("el => el.click()")
+    page.wait_for_function(
+        "() => document.getElementById('pileModal').style.display === 'flex'"
+        " && !document.getElementById('pile-modal-restore-pill')"
+        " && isBoardModalPeekActive() === false",
+        timeout=2000,
+    )
+    assert page.locator("#pileModalGrid .card-frame").count() >= 1
+    assert not reset_control.is_disabled()
+    assert redo_control.is_disabled()
+    assert reset_control.get_attribute("data-peek-prior-disabled") is None
+    assert redo_control.get_attribute("data-peek-prior-disabled") is None
 
 
 # ---------------------------------------------------------------------------
@@ -495,6 +531,13 @@ def test_05_server_slot_save_reset_load_roundtrip(sandbox_page: Page):
 
     # --- reset the sandbox ---
     page.click("#sandbox-reset-btn")
+    reset_dialog = page.locator("#board-dialog-overlay")
+    reset_dialog.wait_for(state="visible", timeout=2000)
+    assert reset_dialog.locator("#board-dialog-title").inner_text() == "Reset Sandbox"
+    assert reset_dialog.locator(".board-dialog-message").inner_text().startswith(
+        "Reset to empty?"
+    )
+    reset_dialog.locator(".tutor-accept-button").evaluate("el => el.click()")
     page.wait_for_function(
         "() => sandboxState && sandboxState.minions.length === 0"
         " && sandboxState.players[0].hand.length === 0"
@@ -537,10 +580,14 @@ def test_05_server_slot_save_reset_load_roundtrip(sandbox_page: Page):
     )
     if delete_btn is not None:
         delete_btn.evaluate("el => el.click()")
-        # Accept the confirm dialog if one is shown
-        try:
-            page.evaluate(
-                "() => { window.confirm = () => true; }"
-            )
-        except Exception:
-            pass
+        delete_dialog = page.locator("#board-dialog-overlay")
+        delete_dialog.wait_for(state="visible", timeout=2000)
+        assert delete_dialog.locator("#board-dialog-title").inner_text() == (
+            "Delete Sandbox Slot"
+        )
+        delete_dialog.locator(".tutor-accept-button").evaluate("el => el.click()")
+        page.wait_for_selector(
+            f'.sandbox-slot-row[data-slot-name="{slot_name}"]',
+            state="detached",
+            timeout=3000,
+        )

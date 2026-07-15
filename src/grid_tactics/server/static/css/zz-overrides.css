@@ -3746,7 +3746,8 @@ body.ttabs-on #screen-game .game-sidebar { display: none !important; }
 .tooltip-card-art > .card-frame-full.cf2,
 .card-browser-item > .card-frame-full.cf2,
 .draw-fly-in > .card-frame-full.cf2,
-.card-fly-ghost > .card-frame-full.cf2 {
+.card-fly-ghost > .card-frame-full.cf2,
+.spring-cleaning-exhaust-card > .card-frame-full.cf2 {
   width: 400% !important;
   max-width: none !important;
   height: auto !important;
@@ -4398,23 +4399,126 @@ svg.deck-extrude .dx-lbl {
   background: var(--bronze, #6b5730); border-radius: 3px;
 }
 
-/* Tutor minimise (user 2026-07-07) */
+/* Shared board-modal minimise / restore system.  The neutral class powers
+   every persistent board window; tutor-* remains as a compatibility alias. */
+.modal-min-btn,
 .tutor-min-btn {
   margin-left: auto; flex: 0 0 auto;
-  width: 26px; height: 26px;
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 36px; height: 36px; padding: 0;
   background: rgba(30, 20, 8, 0.85); border: 1px solid var(--bronze, #6b5730);
   border-radius: 6px; color: var(--parch, #e8dcbb);
-  font-size: 13px; cursor: pointer; line-height: 1;
+  font-size: 16px; cursor: pointer; line-height: 1;
 }
-.tutor-min-btn:hover { border-color: var(--gold, #e0a23c); color: #fff; }
-.game-layout > .tutor-restore-pill {
-  position: absolute; left: 522px; bottom: 84px; transform: translateX(-50%);
-  z-index: 920; padding: 6px 14px;
+.modal-min-btn:hover,
+.modal-min-btn:focus-visible,
+.tutor-min-btn:hover,
+.tutor-min-btn:focus-visible {
+  border-color: var(--gold, #e0a23c); color: #fff;
+  outline: none;
+}
+.board-modal-restore-tray {
+  position: fixed;
+  left: 50%; bottom: max(16px, env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  z-index: 31000;
+  display: flex; flex-direction: column-reverse; align-items: center; gap: 6px;
+  pointer-events: none;
+}
+.board-modal-is-minimized[data-board-modal-minimisable="true"] {
+  display: none !important;
+}
+.game-layout > .board-modal-restore-tray {
+  position: absolute;
+  left: 522px; bottom: 84px;
+}
+.board-modal-restore-pill,
+.tutor-restore-pill {
+  position: static;
+  min-height: 36px;
+  z-index: 1; padding: 8px 14px;
   background: rgba(30, 20, 8, 0.92); border: 1.5px solid var(--gold, #e0a23c);
   border-radius: 8px; color: var(--gold, #e0a23c);
   font-family: 'Alegreya SC', Georgia, serif; font-weight: 700;
   font-size: 12px; letter-spacing: 0.08em; cursor: pointer;
   animation: react-pulse 1.8s ease-in-out infinite;
+  pointer-events: auto;
+  white-space: nowrap;
+}
+.board-modal-restore-pill:hover,
+.board-modal-restore-pill:focus-visible {
+  color: #fff; border-color: #ffe199; outline: none;
+}
+body.board-modal-peek-active #sandbox-control-panel {
+  opacity: 0.62;
+  pointer-events: none;
+}
+
+/* Static/non-header modal shells place the shared control in their corner. */
+#game-over-overlay .game-over-modal,
+.discard-picker-modal,
+.sacrifice-picker-modal {
+  position: relative;
+}
+#game-over-overlay .game-over-modal > .modal-min-btn,
+.discard-picker-modal > .modal-min-btn,
+.sacrifice-picker-modal > .modal-min-btn {
+  position: absolute;
+  top: 8px; right: 8px;
+  margin-left: 0;
+  z-index: 4;
+}
+.bug-modal-head > .modal-min-btn {
+  position: absolute;
+  top: -2px; right: 36px;
+  margin-left: 0;
+}
+.discard-picker-title,
+.sacrifice-picker-title { padding-right: 52px !important; }
+#pileModal .pile-modal-header { gap: 7px; }
+
+/* Generic sandbox confirm/prompt/select replacement. */
+.board-dialog-modal {
+  width: min(460px, calc(100% - 28px)) !important;
+  max-height: calc(100% - 28px) !important;
+}
+.board-dialog-body {
+  display: flex; flex-direction: column; gap: 10px;
+  padding: 16px 18px;
+  overflow: auto;
+}
+.board-dialog-message {
+  color: var(--parch, #e8dcbb);
+  font-family: var(--ui-body);
+  font-size: 14px;
+  line-height: 1.4;
+  white-space: pre-line;
+}
+.board-dialog-input {
+  width: 100%; box-sizing: border-box;
+  padding: 9px 10px;
+  border: 1px solid var(--bronze, #6b5730);
+  border-radius: 6px;
+  background: #120d06;
+  color: var(--parch, #e8dcbb);
+  font: 13px/1.35 var(--ui-body);
+  resize: vertical;
+}
+.board-dialog-input:focus {
+  border-color: var(--gold, #e0a23c);
+  outline: 1px solid rgba(224, 162, 60, 0.35);
+}
+.board-dialog-footer { gap: 8px; }
+.board-notice-toast {
+  top: 52px !important;
+  max-width: 440px;
+  text-align: center;
+}
+.board-notice-error { border-color: #a94d38 !important; color: #ffd0bd !important; }
+
+@media (prefers-reduced-motion: reduce) {
+  .board-modal-restore-pill,
+  .tutor-restore-pill { animation: none !important; }
 }
 
 /* Related cards in the GAME/SANDBOX tooltip wear the vintage type too

@@ -321,6 +321,7 @@ def resolve_marked_cards_choice(
                 "player_idx": player_idx,
                 "source": "marked_cards",
                 "card_numeric_id": keep_card,
+                "from_zone": "deck",
             },
         )
     queue = tuple(state.pending_marked_cards_queue)
@@ -518,15 +519,19 @@ def _apply_clumsy_greed(state, idx, event_turn, events):
         if not player.deck:
             break
         player, card_id, burned = player.draw_card_with_overdraw()
-        _collect_card(events, idx, card_id, burned, "roguelike_event")
+        _collect_card(
+            events, idx, card_id, burned, "roguelike_event",
+            from_zone="deck",
+        )
     order = GameRNG(state.seed + event_turn * 1009 + idx * 9176).shuffle(
         tuple(range(len(player.hand)))
     )
     exhaust_indexes = frozenset(order[:2])
-    exhausted = tuple(
-        card_id for hand_idx, card_id in enumerate(player.hand)
+    exhausted_with_indexes = tuple(
+        (hand_idx, card_id) for hand_idx, card_id in enumerate(player.hand)
         if hand_idx in exhaust_indexes
     )
+    exhausted = tuple(card_id for _, card_id in exhausted_with_indexes)
     kept = tuple(
         card_id for hand_idx, card_id in enumerate(player.hand)
         if hand_idx not in exhaust_indexes
@@ -537,7 +542,9 @@ def _apply_clumsy_greed(state, idx, event_turn, events):
         exhaust=player.exhaust + exhausted,
     )
     if events is not None:
-        for card_id in exhausted:
+        # Emit high indexes first so sequential client-side source retirement
+        # never shifts the index of the next physical copy.
+        for hand_idx, card_id in reversed(exhausted_with_indexes):
             events.collect(
                 EVT_CARD_BURNED,
                 "system:roguelike_event",
@@ -545,6 +552,8 @@ def _apply_clumsy_greed(state, idx, event_turn, events):
                     "player_idx": idx,
                     "card_numeric_id": card_id,
                     "source": "clumsy_greed",
+                    "from_zone": "hand",
+                    "source_index": hand_idx,
                     "destination": "exhaust",
                 },
             )
@@ -555,7 +564,10 @@ def _apply_sharp(state, idx, library, events):
     player = state.players[idx]
     card_id = library.get_numeric_id("prohibition")
     player, burned = player.add_to_hand_with_overdraw(card_id)
-    _collect_card(events, idx, card_id, burned, "roguelike_event")
+    _collect_card(
+        events, idx, card_id, burned, "roguelike_event",
+        from_zone="generated",
+    )
     state = replace(state, players=_replace_player(state.players, idx, player))
     return _gain_mana(state, idx, 1, "roguelike_event", events)
 
@@ -566,14 +578,22 @@ def _apply_grave_expectations(state, idx, event_turn, events):
         tuple(range(len(player.grave)))
     )
     picked = tuple(order[:2])
-    picked_cards = [player.grave[i] for i in picked]
+    picked_cards = [(grave_idx, player.grave[grave_idx]) for grave_idx in picked]
     grave = list(player.grave)
     for grave_idx in sorted(picked, reverse=True):
         del grave[grave_idx]
     player = replace(player, grave=tuple(grave))
-    for card_id in picked_cards:
+    retired_grave_indexes = []
+    for grave_idx, card_id in picked_cards:
+        client_source_index = grave_idx - sum(
+            prior_idx < grave_idx for prior_idx in retired_grave_indexes
+        )
         player, burned = player.add_to_hand_with_overdraw(card_id)
-        _collect_card(events, idx, card_id, burned, "grave_expectations")
+        _collect_card(
+            events, idx, card_id, burned, "grave_expectations",
+            from_zone="grave", source_index=client_source_index,
+        )
+        retired_grave_indexes.append(grave_idx)
     damage = max(1, (player.hp + 3) // 4)
     prev_hp = player.hp
     player = player.take_damage(damage)
@@ -591,7 +611,10 @@ def _apply_pocket_change_draw(state, opponent_idx, events):
         state = replace(
             state, players=_replace_player(state.players, opponent_idx, opponent),
         )
-        _collect_card(events, opponent_idx, card_id, burned, "pocket_change")
+        _collect_card(
+            events, opponent_idx, card_id, burned, "pocket_change",
+            from_zone="deck",
+        )
     return state
 
 
@@ -603,17 +626,32 @@ def _apply_spring_cleaning(state, idx, events):
         hand=(),
         exhaust=player.exhaust + exhausted,
     )
-    for card_id in exhausted:
-        if events is not None:
-            events.collect(EVT_CARD_BURNED, "system:roguelike_event",
-                           {"player_idx": idx, "card_numeric_id": card_id,
-                            "source": "spring_cleaning",
-                            "destination": "exhaust"})
+    if exhausted and events is not None:
+        # One atomic public event: the client removes the whole hand before
+        # showing every card together, commits the Exhaust pile only after
+        # that batch animation lands, then continues into the draw events.
+        # Keep an ordered tuple/list rather than a set so duplicate cards are
+        # represented exactly once per physical copy.
+        events.collect(
+            EVT_CARD_BURNED,
+            "system:roguelike_event",
+            {
+                "player_idx": idx,
+                "card_numeric_ids": list(exhausted),
+                "card_count": len(exhausted),
+                "source": "spring_cleaning",
+                "from_zone": "hand",
+                "destination": "exhaust",
+            },
+        )
     for _ in range(len(exhausted) + 1):
         if not player.deck:
             break
         player, card_id, burned = player.draw_card_with_overdraw()
-        _collect_card(events, idx, card_id, burned, "spring_cleaning")
+        _collect_card(
+            events, idx, card_id, burned, "spring_cleaning",
+            from_zone="deck",
+        )
     return replace(state, players=_replace_player(state.players, idx, player))
 
 
@@ -691,12 +729,17 @@ def _gain_mana(state, idx, amount, cause, events):
     return replace(state, players=_replace_player(state.players, idx, player))
 
 
-def _collect_card(events, idx, card_id, burned, source):
+def _collect_card(
+    events, idx, card_id, burned, source, *, from_zone, source_index=None,
+):
     if events is not None:
+        payload = {"player_idx": idx, "source": source,
+                   "card_numeric_id": card_id,
+                   "from_zone": from_zone}
+        if source_index is not None:
+            payload["source_index"] = source_index
         events.collect(EVT_CARD_BURNED if burned else EVT_CARD_DRAWN,
-                       "system:roguelike_event",
-                       {"player_idx": idx, "source": source,
-                        "card_numeric_id": card_id})
+                       "system:roguelike_event", payload)
 
 
 def _replace_player(players: tuple, idx: int, player) -> tuple:

@@ -68,6 +68,20 @@ var _animTileStart = {};
 
 var eventQueue = [];          // EngineEvent[]
 var eventRunning = false;     // a slot handler is currently animating
+// Each websocket frame owns its own authoritative snapshot.  Events remain
+// in the legacy flat FIFO for the many slot handlers below, but every event
+// carries a pointer to the batch that produced it.  This prevents a later AI
+// frame from replacing the snapshot while an older frame is still animating.
+var _eventBatchSerial = 0;
+var _activeEventBatch = null;
+// Reset/load/new-game increments this token.  Any callback captured under an
+// older token becomes inert, so a late animation can never write into the new
+// session.
+var _clientLifecycleEpoch = 0;
+// One visual custodian per physical card transfer.  A record exists from the
+// moment the source is retired until the destination is allowed to render.
+var _cardTransferSerial = 0;
+var _cardTransfers = Object.create(null);
 var lastSeenSeq = -1;         // monotonic guard against re-delivery / out-of-order
                               // Server's session.next_event_seq (plan 03b M3)
                               // drives this; -1 sentinel = "no events seen yet";
@@ -98,6 +112,10 @@ var slotState = {
     // already covered the kill (attacker/defender_killed on the same id).
     prevDispatchedEvent: null,
     lastDispatchedEvent: null,
+    // Stage cards have custody of their physical copy until the resolve-pop
+    // removes them.  Their grave destinations are masked from every interim
+    // snapshot and released together when the stage closes.
+    deferredStageGraves: [],
 };
 
 // Phase 14.8-05b: guard so the post-drain wholesale commit of
@@ -111,10 +129,109 @@ var _drainFinalApplied = false;
 // socket frame deliberately deliver the same outcome through two paths.
 var _gameOverApplied = false;
 
+function _newCardTransfer(spec) {
+    spec = spec || {};
+    var id = 'transfer-' + (++_cardTransferSerial);
+    _cardTransfers[id] = {
+        id: id,
+        epoch: _clientLifecycleEpoch,
+        ownerIdx: spec.ownerIdx,
+        cardNumericId: spec.cardNumericId,
+        fromZone: spec.fromZone || null,
+        toZone: spec.toZone || null,
+        sourceIndex: (typeof spec.sourceIndex === 'number') ? spec.sourceIndex : null,
+        destinationIndex: (typeof spec.destinationIndex === 'number')
+            ? spec.destinationIndex : null,
+        status: 'in_flight',
+    };
+    if (typeof window !== 'undefined') window.__cardTransfers = _cardTransfers;
+    return id;
+}
+
+function _cardTransfer(id) {
+    return id && _cardTransfers[id] ? _cardTransfers[id] : null;
+}
+
+function _finishCardTransfer(id) {
+    var record = _cardTransfer(id);
+    if (!record) return;
+    record.status = 'committed';
+    delete _cardTransfers[id];
+}
+
+function _isHandDestinationReserved(ownerIdx, handIndex, numericId) {
+    for (var id in _cardTransfers) {
+        if (!Object.prototype.hasOwnProperty.call(_cardTransfers, id)) continue;
+        var tr = _cardTransfers[id];
+        if (!tr || tr.epoch !== _clientLifecycleEpoch || tr.status !== 'in_flight') continue;
+        if (tr.toZone !== 'hand' || tr.ownerIdx !== ownerIdx) continue;
+        if (tr.destinationIndex === handIndex
+                && (numericId == null || tr.cardNumericId == null
+                    || tr.cardNumericId === numericId)) return true;
+    }
+    return false;
+}
+
+function _clearCardTransfers() {
+    _cardTransfers = Object.create(null);
+    if (typeof window !== 'undefined') {
+        window.__cardTransfers = _cardTransfers;
+        window.__inFlightHandSlots = {};
+    }
+}
+
+function _activateEventBatch(batch) {
+    if (!batch || batch.epoch !== _clientLifecycleEpoch) return false;
+    _activeEventBatch = batch;
+    // Compatibility bridge for handlers that still read these globals.  The
+    // values now belong to the event being dispatched, never the newest frame.
+    window.__lastFinalState = batch.finalState || null;
+    window.__lastLegalActions = batch.legalActions || [];
+    window.__lastSandboxMeta = batch.sandboxMeta || null;
+    return true;
+}
+
+function _commitEventBatch(batch) {
+    if (!batch || batch.committed || batch.epoch !== _clientLifecycleEpoch) return;
+    batch.committed = true;
+    _activateEventBatch(batch);
+    if (batch.finalState) {
+        try {
+            _commitFinalStateSnapshot(batch.finalState);
+        } catch (e) {
+            console.error('[eventQueue] batch snapshot commit failed', e);
+        }
+    }
+}
+
+function _removeAnimationArtifacts() {
+    if (typeof document === 'undefined' || !document.querySelectorAll) return;
+    var selectors = [
+        '.draw-fly-in', '.card-fly-ghost', '.spring-cleaning-exhaust-batch',
+        '.overdraw-reveal', '.tutor-card-reveal', '.floating-popup-viewport'
+    ];
+    try {
+        document.querySelectorAll(selectors.join(',')).forEach(function(el) {
+            if (el && el.parentNode) el.parentNode.removeChild(el);
+        });
+    } catch (e) { /* reset must remain best-effort */ }
+}
+
 function resetEventQueue() {
     // Called on game_start, sandbox_state initial open, sandbox reset, sandbox load.
+    _clientLifecycleEpoch++;
     eventQueue.length = 0;
     eventRunning = false;
+    _activeEventBatch = null;
+    // The animation queue is part of the same lifecycle.  Clearing only the
+    // event queue left old jobs and callbacks alive across reset/load.
+    if (typeof animQueue !== 'undefined' && animQueue) animQueue.length = 0;
+    if (typeof animRunning !== 'undefined') animRunning = false;
+    _clearCardTransfers();
+    _removeAnimationArtifacts();
+    window.__lastFinalState = null;
+    window.__lastLegalActions = [];
+    window.__lastSandboxMeta = null;
     lastSeenSeq = -1;
     slotState.spellStageChain.length = 0;
     slotState.pendingModalKind = null;
@@ -123,6 +240,7 @@ function resetEventQueue() {
     slotState.pendingStageOriginator = null;
     slotState.prevDispatchedEvent = null;
     slotState.lastDispatchedEvent = null;
+    slotState.deferredStageGraves.length = 0;
     _drainFinalApplied = false;
     _gameOverApplied = false;
     window.__pendingGameOverData = null;
@@ -151,6 +269,8 @@ function isEventQueueBusy() {
     return eventRunning || eventQueue.length > 0 || animBusy;
 }
 function canActNow() {
+    if (typeof isBoardModalPeekActive === 'function'
+            && isBoardModalPeekActive()) return false;
     if (typeof sandboxMode !== 'undefined' && sandboxMode) return true;
     if (isEventQueueBusy()) return false;
     if (!legalActions || legalActions.length === 0) return false;
@@ -209,6 +329,8 @@ function _iOwnAPendingDecision() {
 
 function _clientActionOverlayOpen() {
     if (typeof document === 'undefined') return false;
+    if (typeof isBoardModalPeekActive === 'function'
+            && isBoardModalPeekActive()) return true;
     if (document.getElementById('sacrifice-picker')) return true;
     if (document.getElementById('minion-action-menu')) return true;
     if (typeof interactionMode !== 'undefined' && interactionMode !== null) return true;
@@ -231,6 +353,21 @@ function onEngineEvents(payload) {
             if (typeof hideActionBarButtons === 'function') hideActionBarButtons();
         } catch (e) { /* defensive */ }
     }
+    var batch = {
+        id: ++_eventBatchSerial,
+        epoch: _clientLifecycleEpoch,
+        finalState: payload.final_state || null,
+        legalActions: payload.legal_actions || [],
+        sandboxMeta: {
+            active_view_idx: payload.active_view_idx,
+            undo_depth: payload.undo_depth,
+            redo_depth: payload.redo_depth,
+            is_sandbox: !!payload.is_sandbox,
+        },
+        committed: false,
+        playedCards: Object.create(null),
+    };
+    var acceptedEvents = 0;
     payload.events.forEach(function(ev) {
         if (typeof ev.seq !== 'number') return;
         if (ev.seq <= lastSeenSeq) {
@@ -244,7 +381,10 @@ function onEngineEvents(payload) {
         // queue is FIFO) — not here at enqueue, which spoiled the whole
         // batch seconds ahead of the animations. The seq guard above still
         // dedupes reconnect replays before anything is queued or logged.
+        ev._clientBatch = batch;
+        ev._clientLifecycleEpoch = _clientLifecycleEpoch;
         eventQueue.push(ev);
+        acceptedEvents++;
     });
     // Phase 14.8-05b: stash final_state + arm the post-drain commit. The
     // post-action state_update / sandbox_state wire format is gone (plan 05
@@ -253,17 +393,17 @@ function onEngineEvents(payload) {
     // incremental work; when the queue drains fully, we apply final_state
     // wholesale as a catch-all for anything the incremental path didn't
     // cover (summons, deaths, card moves, hand/graveyard counts).
-    if (payload.final_state) {
-        window.__lastFinalState = payload.final_state;
-        window.__lastLegalActions = payload.legal_actions || [];
-        // Also stash per-sandbox fields so the post-drain commit can
-        // preserve view_idx / undo / redo depths when we reassign state.
-        window.__lastSandboxMeta = {
-            active_view_idx: payload.active_view_idx,
-            undo_depth: payload.undo_depth,
-            redo_depth: payload.redo_depth,
-            is_sandbox: !!payload.is_sandbox,
-        };
+    // A snapshot-only frame still needs an ordered place in the FIFO.  The
+    // private sentinel is never logged or animated; it commits its own batch
+    // only after every older frame has finished.
+    if (acceptedEvents === 0 && payload.final_state) {
+        eventQueue.push({
+            type: '__client_snapshot__',
+            payload: {},
+            _clientBatch: batch,
+            _clientLifecycleEpoch: _clientLifecycleEpoch,
+            _clientSnapshotOnly: true,
+        });
     }
     // Arm the wholesale-apply guard so the next full drain commits
     // final_state once. If this frame carried zero events (pure state
@@ -311,14 +451,7 @@ function drainEventQueue() {
             } catch (e) { /* defensive */ }
             // Fall through to the normal drain below.
         } else if (!resolvedQueued) {
-            if (!_drainFinalApplied && window.__lastFinalState) {
-                _drainFinalApplied = true;
-                try {
-                    _commitFinalStateSnapshot(window.__lastFinalState);
-                } catch (e) {
-                    console.error("[eventQueue] _commitFinalStateSnapshot failed", e);
-                }
-            }
+            _commitEventBatch(_activeEventBatch);
             return;
         }
         // resolvedQueued: fall through — keep draining so the queued
@@ -334,14 +467,8 @@ function drainEventQueue() {
         // the paladin scenario regression happens: HP stays at 30 forever
         // because the snapshot-path was deleted in plan 05 but no
         // replacement state-commit path was wired up.
-        if (!_drainFinalApplied && window.__lastFinalState) {
-            _drainFinalApplied = true;
-            try {
-                _commitFinalStateSnapshot(window.__lastFinalState);
-            } catch (e) {
-                console.error("[eventQueue] _commitFinalStateSnapshot failed", e);
-            }
-        }
+        _commitEventBatch(_activeEventBatch);
+        _activeEventBatch = null;
         // The parallel game_over socket frame is stashed while lethal
         // animations drain. EVT_GAME_OVER normally consumes it at its own
         // beat; this drain-end fallback covers a skipped/deduped/stalled
@@ -362,7 +489,22 @@ function drainEventQueue() {
         return;
     }
     var ev = eventQueue.shift();
+    var evBatch = ev && ev._clientBatch;
+    if (evBatch && _activeEventBatch !== evBatch) {
+        _commitEventBatch(_activeEventBatch);
+        if (!_activateEventBatch(evBatch)) {
+            drainEventQueue();
+            return;
+        }
+    }
+    if (ev && ev._clientSnapshotOnly) {
+        _commitEventBatch(evBatch);
+        _activeEventBatch = null;
+        drainEventQueue();
+        return;
+    }
     eventRunning = true;
+    var dispatchEpoch = _clientLifecycleEpoch;
     slotState.prevDispatchedEvent = slotState.lastDispatchedEvent || null;
     slotState.lastDispatchedEvent = ev;
     // Log at the beat (timing audit 2026-07-06): the line lands as the
@@ -371,8 +513,14 @@ function drainEventQueue() {
     try { logEngineEvent(ev); } catch (e) { console.warn('[gameLog] format error', e); }
     try {
         playEvent(ev, function onSlotDone() {
+            if (dispatchEpoch !== _clientLifecycleEpoch) return;
             eventRunning = false;
             try { commitEventToDom(ev); } catch (e) { /* defensive */ }
+            var nextEvent = eventQueue.length > 0 ? eventQueue[0] : null;
+            if (!nextEvent || nextEvent._clientBatch !== evBatch) {
+                _commitEventBatch(evBatch);
+                _activeEventBatch = null;
+            }
             drainEventQueue();
         });
     } catch (err) {
@@ -396,6 +544,7 @@ function _commitFinalStateSnapshot(finalState) {
         // Sandbox is god-mode — gameState mirrors sandboxState when the
         // sandbox tab is active. Keep them in lockstep.
         gameState = finalState;
+        _maskDeferredStageGraves(gameState);
         myPlayerIdx = 0;
         if (window.__lastLegalActions) {
             sandboxLegalActions = window.__lastLegalActions;
@@ -438,6 +587,7 @@ function _commitFinalStateSnapshot(finalState) {
         }
     } else {
         gameState = finalState;
+        _maskDeferredStageGraves(gameState);
         if (window.__lastLegalActions) legalActions = window.__lastLegalActions;
         if (typeof renderGame === 'function') {
             try { renderGame(); } catch (e) { /* defensive */ }
@@ -516,6 +666,167 @@ function _setPassOffer(idx, kind) {
     note.textContent = txt;
 }
 
+function _rerenderHandOwner(ownerIdx) {
+    try {
+        var live = sandboxMode ? sandboxState : gameState;
+        var player = live && live.players && live.players[ownerIdx];
+        if (sandboxMode) {
+            gameState = sandboxState;
+            if (typeof renderSandbox === 'function') renderSandbox();
+        } else if (isSpectator && spectatorGodMode) {
+            if (typeof renderHand === 'function') renderHand();
+        } else if (ownerIdx === myPlayerIdx) {
+            if (typeof renderHand === 'function') renderHand();
+        } else if (typeof renderOppHandRow === 'function' && player) {
+            var count = player.hand_count != null
+                ? player.hand_count : (Array.isArray(player.hand) ? player.hand.length : 0);
+            renderOppHandRow(count, player.hand_elements || null);
+        }
+    } catch (e) { /* projection remains recoverable at batch commit */ }
+}
+
+// Retire a source zone at animation launch.  Destination handlers commit
+// later, at landing.  Returning the exact removed index lets duplicate card
+// definitions remain stable within the client projection.
+function _retireCardSource(payload, ownerIdx, defaultFromZone) {
+    payload = payload || {};
+    if (payload._clientSourceRemoved) return payload._clientSourceIndex;
+    var fromZone = payload.from_zone || defaultFromZone;
+    if (!fromZone || fromZone === 'generated' || fromZone === 'stage') return null;
+    var live = sandboxMode ? sandboxState : gameState;
+    var player = live && live.players && live.players[ownerIdx];
+    if (!player) return null;
+    var numericId = payload.card_numeric_id;
+    var requestedIndex = (typeof payload.source_index === 'number')
+        ? payload.source_index
+        : ((typeof payload.card_index === 'number') ? payload.card_index : null);
+    var removedIndex = null;
+
+    if (fromZone === 'hand') {
+        if (Array.isArray(player.hand)) {
+            var handIdx = requestedIndex;
+            if (handIdx == null
+                    || (numericId != null && player.hand[handIdx] !== numericId)) {
+                handIdx = player.hand.indexOf(numericId);
+            }
+            if (handIdx >= 0) {
+                player.hand.splice(handIdx, 1);
+                removedIndex = handIdx;
+            }
+        } else if (typeof player.hand_count === 'number' && player.hand_count > 0) {
+            player.hand_count--;
+        }
+        _rerenderHandOwner(ownerIdx);
+    } else if (fromZone === 'grave') {
+        if (Array.isArray(player.grave)) {
+            var graveIdx = requestedIndex;
+            if (graveIdx == null
+                    || (numericId != null && player.grave[graveIdx] !== numericId)) {
+                graveIdx = player.grave.indexOf(numericId);
+            }
+            if (graveIdx >= 0) {
+                player.grave.splice(graveIdx, 1);
+                removedIndex = graveIdx;
+            }
+        } else if (typeof player.grave_count === 'number' && player.grave_count > 0) {
+            player.grave_count--;
+        }
+    } else if (fromZone === 'deck') {
+        if (typeof player.deck_count === 'number' && player.deck_count > 0) {
+            player.deck_count--;
+        }
+        if (Array.isArray(player.deck) && player.deck.length > 0) {
+            removedIndex = 0;
+            player.deck.shift();
+        }
+    }
+
+    payload._clientSourceRemoved = true;
+    payload._clientSourceIndex = removedIndex;
+    try {
+        if (typeof updatePileButtonCounts === 'function') updatePileButtonCounts();
+    } catch (e) { /* visual counter is best-effort */ }
+    return removedIndex;
+}
+
+function _batchPlayedCardKey(ownerIdx, numericId) {
+    return String(ownerIdx) + ':' + String(numericId);
+}
+
+function _markBatchPlayedCard(ev, ownerIdx, numericId) {
+    var batch = ev && ev._clientBatch;
+    if (!batch || numericId == null) return;
+    var key = _batchPlayedCardKey(ownerIdx, numericId);
+    batch.playedCards[key] = (batch.playedCards[key] | 0) + 1;
+}
+
+function _consumeBatchPlayedCard(ev, ownerIdx, numericId) {
+    var batch = ev && ev._clientBatch;
+    if (!batch || numericId == null) return false;
+    var key = _batchPlayedCardKey(ownerIdx, numericId);
+    var count = batch.playedCards[key] | 0;
+    if (count <= 0) return false;
+    if (count === 1) delete batch.playedCards[key];
+    else batch.playedCards[key] = count - 1;
+    return true;
+}
+
+function _deferStageGraveDestination(payload) {
+    if (!payload || payload.card_numeric_id == null) return null;
+    var transferId = _newCardTransfer({
+        ownerIdx: payload.player_idx,
+        cardNumericId: payload.card_numeric_id,
+        fromZone: 'stage',
+        toZone: 'grave',
+    });
+    slotState.deferredStageGraves.push({
+        transferId: transferId,
+        ownerIdx: payload.player_idx,
+        cardNumericId: payload.card_numeric_id,
+        masked: false,
+    });
+    payload._clientStageDeferred = true;
+    payload._clientTransferId = transferId;
+    return transferId;
+}
+
+function _maskDeferredStageGraves(state) {
+    if (!state || !state.players || !slotState.deferredStageGraves.length) return;
+    slotState.deferredStageGraves.forEach(function(record) {
+        // Re-evaluate against every authoritative batch.  A later effect may
+        // legitimately move the card beyond the grave before the stage exits.
+        record.masked = false;
+        var player = state.players[record.ownerIdx];
+        if (!player) return;
+        if (Array.isArray(player.grave)) {
+            var idx = player.grave.lastIndexOf(record.cardNumericId);
+            if (idx !== -1) {
+                player.grave.splice(idx, 1);
+                record.masked = true;
+            }
+        } else if (typeof player.grave_count === 'number' && player.grave_count > 0) {
+            player.grave_count--;
+            record.masked = true;
+        }
+    });
+}
+
+function _releaseStageCardDestinations() {
+    if (!slotState.deferredStageGraves.length) return;
+    var live = sandboxMode ? sandboxState : gameState;
+    slotState.deferredStageGraves.forEach(function(record) {
+        var player = live && live.players && live.players[record.ownerIdx];
+        if (player && record.masked) {
+            if (Array.isArray(player.grave)) player.grave.push(record.cardNumericId);
+            else if (typeof player.grave_count === 'number') player.grave_count++;
+        }
+        _finishCardTransfer(record.transferId);
+    });
+    slotState.deferredStageGraves.length = 0;
+    try { if (typeof updatePileButtonCounts === 'function') updatePileButtonCounts(); }
+    catch (e) { /* destination is still correct in state */ }
+}
+
 function commitEventToDom(ev) {
     // Per-event state-commit + re-render hook. Plan 04a kept this a no-op
     // because the snapshot path (state_update / sandbox_state) committed
@@ -567,6 +878,14 @@ function commitEventToDom(ev) {
         case "player_hp_change":
             // Payload: {player_idx, prev, new, delta}
             if (_commitPlayerField(live, payload.player_idx, 'hp', payload['new'])) {
+                if (sbMode) gameState = sandboxState;
+                needsStatsRerender = true;
+            }
+            // Fatigue is only possible when this player's turn-start draw
+            // found an empty deck. Reconcile that public invariant as a
+            // backstop for any earlier missed/legacy deck-origin burn.
+            if (payload.cause === 'fatigue'
+                    && _commitFatigueDeckEmpty(live, payload)) {
                 if (sbMode) gameState = sandboxState;
                 needsStatsRerender = true;
             }
@@ -698,7 +1017,9 @@ function commitEventToDom(ev) {
             if (_passOfferedBy != null) _setPassOffer(null);
             if (live && live.players && live.players[payload.owner_idx]) {
                 var _pp = live.players[payload.owner_idx];
-                if (Array.isArray(_pp.hand) && typeof payload.card_index === 'number'
+                if (payload._clientSourceRemoved) {
+                    // Source ownership moved at animation launch.
+                } else if (Array.isArray(_pp.hand) && typeof payload.card_index === 'number'
                         && _pp.hand[payload.card_index] === payload.card_numeric_id) {
                     _pp.hand.splice(payload.card_index, 1);
                 } else if (Array.isArray(_pp.hand)) {
@@ -735,12 +1056,14 @@ function commitEventToDom(ev) {
                 // AFTER a game_start whose state already reflects the
                 // post-mulligan deck — decrementing again would under-count
                 // the pile, so gate 'mulligan' like the conjure sources.
-                var _fromDeck = (payload.source !== 'conjure'
-                    && payload.source !== 'decline_conjure'
-                    && payload.source !== 'mulligan');
-                if (_fromDeck) {
+                var _fromDeck = (payload.from_zone != null)
+                    ? payload.from_zone === 'deck'
+                    : (payload.source !== 'conjure'
+                        && payload.source !== 'decline_conjure'
+                        && payload.source !== 'mulligan');
+                if (_fromDeck && !payload._clientSourceRemoved) {
                     if (typeof _pd.deck_count === 'number' && _pd.deck_count > 0) _pd.deck_count--;
-                    else if (Array.isArray(_pd.deck) && _pd.deck.length) _pd.deck.pop();
+                    if (Array.isArray(_pd.deck) && _pd.deck.length) _pd.deck.shift();
                 }
                 needsStatsRerender = true;
             }
@@ -748,8 +1071,10 @@ function commitEventToDom(ev) {
         case "card_discarded":
             if (live && live.players && live.players[payload.player_idx]) {
                 var _pg = live.players[payload.player_idx];
-                if (Array.isArray(_pg.grave) && payload.card_numeric_id != null) _pg.grave.push(payload.card_numeric_id);
-                else if (typeof _pg.grave_count === 'number') _pg.grave_count++;
+                if (!payload._clientStageDeferred) {
+                    if (Array.isArray(_pg.grave) && payload.card_numeric_id != null) _pg.grave.push(payload.card_numeric_id);
+                    else if (typeof _pg.grave_count === 'number') _pg.grave_count++;
+                }
                 // Timing overhaul (2026-07-08, F3): the discarded card also
                 // leaves the HAND at this beat — but ONLY when it is
                 // actually found in the hand array. This event fires for
@@ -761,7 +1086,12 @@ function commitEventToDom(ev) {
                 // outright for those causes (new optional engine field;
                 // old payloads carry no cause and rely on the in-hand check).
                 var _pileOnly = (payload.cause === 'death'
-                    || payload.cause === 'sacrifice');
+                    || payload.cause === 'sacrifice'
+                    || payload.cause === 'played'
+                    || payload.cause === 'react'
+                    || payload.from_zone === 'stage'
+                    || payload._clientFromPlayed
+                    || payload._clientSourceRemoved);
                 if (!_pileOnly
                         && Array.isArray(_pg.hand) && payload.card_numeric_id != null) {
                     var _di = _pg.hand.indexOf(payload.card_numeric_id);
@@ -785,25 +1115,47 @@ function commitEventToDom(ev) {
         case "card_burned":
             if (live && live.players && live.players[payload.player_idx]) {
                 var _pe = live.players[payload.player_idx];
-                if (Array.isArray(_pe.exhaust) && payload.card_numeric_id != null) _pe.exhaust.push(payload.card_numeric_id);
-                else if (typeof _pe.exhaust_count === 'number') _pe.exhaust_count++;
+                var _burnCards = Array.isArray(payload.card_numeric_ids)
+                    ? payload.card_numeric_ids : [payload.card_numeric_id];
+                var _burnCount = (typeof payload.card_count === 'number')
+                    ? payload.card_count : _burnCards.length;
+                if (Array.isArray(_pe.exhaust)) {
+                    _burnCards.forEach(function(cardId) {
+                        if (cardId != null) _pe.exhaust.push(cardId);
+                    });
+                } else if (typeof _pe.exhaust_count === 'number') {
+                    _pe.exhaust_count += _burnCount;
+                }
                 // Timing overhaul (2026-07-08, F3): every from-deck burn
                 // source ticks the deck pile at its beat, not just the
                 // turn-start overdraw. discard_cost / conjure burns come
                 // from the hand, not the deck — excluded.
-                var _burnFromDeck = (payload.source === 'turn_start'
-                    || payload.source === 'handshake'
-                    || payload.source === 'card_effect'
-                    || payload.source === 'tutor'
-                    || payload.source === 'rest'
-                    || payload.source === 'draw_action');
-                if (typeof _pe.deck_count === 'number' && _pe.deck_count > 0 && _burnFromDeck) _pe.deck_count--;
+                var _burnFromDeck = (payload.from_zone != null)
+                    ? payload.from_zone === 'deck'
+                    : (payload.source === 'turn_start'
+                        || payload.source === 'handshake'
+                        || payload.source === 'card_effect'
+                        || payload.source === 'tutor'
+                        || payload.source === 'rest'
+                        || payload.source === 'draw_action'
+                        || payload.source === 'spring_cleaning'
+                        || payload.source === 'pocket_change'
+                        || payload.source === 'marked_cards');
+                if (_burnFromDeck && !payload._clientSourceRemoved) {
+                    if (typeof _pe.deck_count === 'number' && _pe.deck_count > 0) {
+                        _pe.deck_count--;
+                    }
+                    if (Array.isArray(_pe.deck) && _pe.deck.length) {
+                        _pe.deck.shift();
+                    }
+                }
                 // discard_cost burns exhaust a card FROM THE HAND (paid cost
                 // of playing another card, new engine payload 2026-07-08).
                 // Splice only on an exact in-hand match — never blind, and
                 // never for other sources (a turn-start overdraw burn must
                 // not eat an unrelated hand copy of the same card).
-                if (payload.source === 'discard_cost'
+                if (!payload._clientSourceRemoved
+                        && payload.source === 'discard_cost'
                         && Array.isArray(_pe.hand) && payload.card_numeric_id != null) {
                     var _bi = _pe.hand.indexOf(payload.card_numeric_id);
                     if (_bi !== -1) {
@@ -975,6 +1327,52 @@ function _commitPlayerField(state, playerIdx, field, value) {
     return true;
 }
 
+// Empty-deck fatigue is an authoritative public fact, not a prediction.
+// Clamp both filtered deck_count and any god/sandbox deck array so a stale
+// last-card counter can never contradict the fatigue beat. Returns true only
+// when it changed the live projection.
+function _commitFatigueDeckEmpty(state, payload) {
+    if (!state || !state.players || !payload || payload.cause !== 'fatigue') {
+        return false;
+    }
+    var player = state.players[payload.player_idx];
+    if (!player) return false;
+    var changed = false;
+    if (player.deck_count !== 0) {
+        player.deck_count = 0;
+        changed = true;
+    }
+    if (Array.isArray(player.deck) && player.deck.length > 0) {
+        player.deck.length = 0;
+        changed = true;
+    }
+    return changed;
+}
+
+// Reconcile the deck counter BEFORE the fatigue nudge mounts. HP still waits
+// for commitEventToDom at the end of the beat, preserving impact timing.
+function _showFatigueDeckEmptyImmediately(payload) {
+    var sbMode = (typeof sandboxMode !== 'undefined' && sandboxMode);
+    var live = sbMode ? sandboxState : gameState;
+    if (!live || !live.players || !payload || payload.cause !== 'fatigue'
+            || !live.players[payload.player_idx]) return;
+    _commitFatigueDeckEmpty(live, payload);
+    if (sbMode) gameState = sandboxState;
+    try {
+        if (typeof updatePileButtonCounts === 'function') updatePileButtonCounts();
+        if (sbMode) {
+            if (typeof renderSandboxStats === 'function') renderSandboxStats();
+        } else {
+            if (typeof renderSelfInfo === 'function') renderSelfInfo();
+            if (typeof renderOpponentInfo === 'function') renderOpponentInfo();
+        }
+        if (activePlayerPreviewIdx != null
+                && typeof showPlayerPreview === 'function') {
+            showPlayerPreview(activePlayerPreviewIdx);
+        }
+    } catch (e) { /* final snapshot remains authoritative */ }
+}
+
 function playEvent(ev, done) {
     // Dispatcher — maps event type to slot handler. Each handler MUST call
     // done() when its animation completes (or immediately for instant events).
@@ -1080,6 +1478,9 @@ function playMinionSummoned(ev, done) {
     // Payload: {instance_id, card_numeric_id, owner_idx, position}
     var payload = ev && ev.payload;
     if (!payload || !payload.position) { setTimeout(done, 0); return; }
+    if (payload.from_zone === 'grave' || payload.source === 'revive') {
+        _retireCardSource(payload, payload.owner_idx, 'grave');
+    }
     // Phase 14.8 fix: the snapshot path that used to pre-apply the
     // post-summon state was DELETED in plan 05, and commitEventToDom does
     // no incremental commit for minion_summoned — so at animation time
@@ -1501,54 +1902,72 @@ function playCardDrawn(ev, done) {
     // drawer per view_filter redaction).
     var payload = ev && ev.payload;
     if (!payload) { setTimeout(done, 0); return; }
+    var eventEpoch = (typeof ev._clientLifecycleEpoch === 'number')
+        ? ev._clientLifecycleEpoch : _clientLifecycleEpoch;
+    var playerIdx = payload.player_idx;
+    _retireCardSource(payload, playerIdx, 'deck');
     // Single-clock pacing (F1): gate done() on the draw job's actual
     // completion (onDone bridge) with a safety cap, mirroring
     // playMinionSummoned.
     var settled = false;
+    var transferId = null;
     var settle = function() {
+        if (eventEpoch !== _clientLifecycleEpoch) return;
         if (settled) return;
         settled = true;
+        _finishCardTransfer(transferId);
+        _rerenderHandOwner(playerIdx);
         done();
     };
-    var playerIdx = payload.player_idx;
+    var isGodSpectator = !sandboxMode && isSpectator && spectatorGodMode;
     var isOwn = sandboxMode
-        ? true  // sandbox sees both hands
-        : (playerIdx === myPlayerIdx);
+        || isGodSpectator  // both hands are face-up in these viewer modes
+        || (playerIdx === myPlayerIdx);
     if (isOwn && payload.card_numeric_id != null) {
-        // Phase 14.8 fix: under the post-plan-05 pipeline the hand DOM is
-        // only rebuilt by the post-drain final-state commit, so at
-        // animation time the "last hand child" fallback pointed at the
-        // last card of the PRE-draw hand — the fly-in hid an unrelated
-        // card for ~800ms and the actually-drawn card popped in seconds
-        // later with no animation. Incrementally append the drawn card to
-        // the live hand, re-render, and target the real new slot. The
-        // final_state hand length caps the append so paths that already
-        // synced players wholesale (counter-react chain refresh) never
-        // double-append.
+        // Reserve one hidden destination per causal draw before the flight.
+        // This cannot be derived from the batch's net final hand size: an
+        // effect may draw several cards and move some away later in the same
+        // batch. Sequence deduplication belongs to onEngineEvents.
         var newSlotIdx = -1;
         try {
             var live = sandboxMode ? sandboxState : gameState;
             var livePlayer = live && live.players && live.players[playerIdx];
             if (livePlayer && Array.isArray(livePlayer.hand)) {
-                var fsHand = null;
-                var fs = window.__lastFinalState;
-                if (fs && fs.players && fs.players[playerIdx]
-                    && Array.isArray(fs.players[playerIdx].hand)) {
-                    fsHand = fs.players[playerIdx].hand;
-                }
-                if (fsHand === null || livePlayer.hand.length < fsHand.length) {
+                // Each draw event reserves exactly one causal destination.
+                // Never cap against the batch's net final hand size: Draw 4
+                // then Exhaust 2 still needs four distinct landing slots.
+                if (payload.source !== 'mulligan') {
+                    newSlotIdx = livePlayer.hand.length;
+                    transferId = _newCardTransfer({
+                        ownerIdx: playerIdx,
+                        cardNumericId: payload.card_numeric_id,
+                        fromZone: payload.from_zone || 'deck',
+                        toZone: 'hand',
+                        sourceIndex: payload._clientSourceIndex,
+                        destinationIndex: newSlotIdx,
+                    });
                     livePlayer.hand.push(payload.card_numeric_id);
-                    newSlotIdx = livePlayer.hand.length - 1;
                     if (sandboxMode) {
                         gameState = sandboxState;  // keep sandbox alias in sync
                         if (typeof renderSandbox === 'function') renderSandbox();
-                    } else if (playerIdx === myPlayerIdx
+                    } else if ((playerIdx === myPlayerIdx || isGodSpectator)
                                && typeof renderHand === 'function') {
                         renderHand();
                     }
                     if (typeof updateHandHighlights === 'function') {
                         try { updateHandHighlights(); } catch (e) { /* defensive */ }
                     }
+                } else {
+                    // game_start already contains mulligan replacements.
+                    newSlotIdx = livePlayer.hand.lastIndexOf(payload.card_numeric_id);
+                    transferId = _newCardTransfer({
+                        ownerIdx: playerIdx,
+                        cardNumericId: payload.card_numeric_id,
+                        fromZone: payload.from_zone || 'deck',
+                        toZone: 'hand',
+                        destinationIndex: newSlotIdx,
+                    });
+                    _rerenderHandOwner(playerIdx);
                 }
             }
         } catch (e) { /* defensive — fall back to last-child targeting */ }
@@ -1560,11 +1979,13 @@ function playCardDrawn(ev, done) {
         var ownRevealMs = (isSpectator && payload.source === 'tutor')
             ? _showTutorReveal(payload.card_numeric_id) : 0;
         setTimeout(function() {
+            if (eventEpoch !== _clientLifecycleEpoch) return;
             enqueueAnimation({
                 type: 'draw_own',
                 cardNumericId: payload.card_numeric_id,
-                fromPos: 'deck',
+                fromPos: payload.from_zone || 'deck',
                 toSlotIndex: newSlotIdx,  // -1 falls back to last hand child
+                handOwnerIdx: playerIdx,
                 stateApplied: true,
                 _fromEventQueue: true,
                 onDone: settle,
@@ -1575,29 +1996,28 @@ function playCardDrawn(ev, done) {
         // card's ELEMENT (and only that) to opponent card_drawn events so
         // the pop-in back can carry the tint. Accept both key spellings.
         var elVal = (payload.element != null) ? payload.element : payload.card_element;
-        // Incrementally commit the opponent hand-size delta + element list
-        // and re-render the row NOW (mirrors the own-draw fix above): the
-        // final-state snapshot only lands post-drain, so without this the
-        // pop-in would target the PRE-draw last back. The final_state
-        // hand_count caps the increment so wholesale-synced paths never
-        // double-append.
+        // Incrementally reserve the opponent's next face-down slot. The
+        // shared transfer ledger keeps it hidden until its pop-in begins.
         try {
             if (!sandboxMode && gameState && gameState.players) {
                 var liveOpp = gameState.players[playerIdx];
                 if (liveOpp && liveOpp.hand_count != null) {
-                    var fsCount = null;
-                    var fs2 = window.__lastFinalState;
-                    if (fs2 && fs2.players && fs2.players[playerIdx]) {
-                        var fsp = fs2.players[playerIdx];
-                        fsCount = (fsp.hand_count != null)
-                            ? fsp.hand_count
-                            : (Array.isArray(fsp.hand) ? fsp.hand.length : null);
-                    }
-                    if (fsCount === null || liveOpp.hand_count < fsCount) {
+                    var oppSlotIdx = Math.max(0, liveOpp.hand_count | 0);
+                    transferId = _newCardTransfer({
+                        ownerIdx: playerIdx,
+                        cardNumericId: payload.card_numeric_id,
+                        fromZone: payload.from_zone || 'deck',
+                        toZone: 'hand',
+                        destinationIndex: payload.source === 'mulligan'
+                            ? Math.max(0, oppSlotIdx - 1) : oppSlotIdx,
+                    });
+                    if (payload.source !== 'mulligan') {
                         liveOpp.hand_count = (liveOpp.hand_count | 0) + 1;
                         if (Array.isArray(liveOpp.hand_elements)) {
                             liveOpp.hand_elements.push(elVal != null ? elVal : null);
                         }
+                        renderOppHandRow(liveOpp.hand_count, _playerHandElements(liveOpp));
+                    } else {
                         renderOppHandRow(liveOpp.hand_count, _playerHandElements(liveOpp));
                     }
                 }
@@ -1610,9 +2030,13 @@ function playCardDrawn(ev, done) {
         var revealMs = (payload.source === 'tutor')
             ? _showTutorReveal(payload.card_numeric_id) : 0;
         setTimeout(function() {
+            if (eventEpoch !== _clientLifecycleEpoch) return;
             enqueueAnimation({
                 type: 'draw_opp',
                 element: (elVal != null) ? elVal : null,
+                handOwnerIdx: playerIdx,
+                toSlotIndex: _cardTransfer(transferId)
+                    ? _cardTransfer(transferId).destinationIndex : -1,
                 stateApplied: true,
                 _fromEventQueue: true,
                 onDone: settle,
@@ -1633,6 +2057,25 @@ function playCardPlayed(ev, done) {
     // action-triggered react windows) can slam the card onto the spell
     // stage LEFT slot. See slotState.lastOriginator comment.
     var payload = (ev && ev.payload) || {};
+    var playedEventEpoch = (ev && typeof ev._clientLifecycleEpoch === 'number')
+        ? ev._clientLifecycleEpoch : _clientLifecycleEpoch;
+    var playedOwnerIdx = payload.owner_idx != null
+        ? payload.owner_idx : payload.player_idx;
+    // Capture the precise source slot BEFORE retiring the card.  Source
+    // retirement immediately re-renders the hand, so waiting until the spell
+    // stage opens loses the physical origin and makes every cast appear to
+    // launch from the centre of the whole hand row.
+    var playedSourceRect = null;
+    if (payload.card_numeric_id != null && playedOwnerIdx != null
+            && typeof _captureSpellCastSource === 'function') {
+        try {
+            playedSourceRect = _captureSpellCastSource(payload, playedOwnerIdx);
+        } catch (e) { /* fallback to the hand-row rect in the stage module */ }
+    }
+    if (payload.card_numeric_id != null && playedOwnerIdx != null) {
+        _retireCardSource(payload, playedOwnerIdx, 'hand');
+        _markBatchPlayedCard(ev, playedOwnerIdx, payload.card_numeric_id);
+    }
     if (payload.card_numeric_id != null) {
         slotState.lastOriginator = {
             numericId: payload.card_numeric_id,
@@ -1642,6 +2085,8 @@ function playCardPlayed(ev, done) {
             // Declared target tile (user 2026-07-10): pulsed when the cast
             // is staged so the defender sees WHERE the magic is aimed.
             targetPos: payload.target_pos || payload.position || null,
+            sourceRect: playedSourceRect,
+            castKind: payload.is_react ? 'react' : 'magic',
             source: 'card_played',
         };
     }
@@ -1664,6 +2109,7 @@ function playCardPlayed(ev, done) {
             // hand fan layout doesn't shift mid-slam — the gap stays
             // until the deferred render collapses it cleanly.
             try {
+                if (!payload._clientSourceRemoved) {
                 var srcContainerId = sandboxMode
                     ? ('sandbox-hand-p' + ownerIdx)
                     : (ownerIdx === myPlayerIdx ? 'hand-container' : 'oppHandRow');
@@ -1676,6 +2122,7 @@ function playCardPlayed(ev, done) {
                         // the visual; the deferred render fixes counts).
                         srcCards[0].style.visibility = 'hidden';
                     }
+                }
                 }
             } catch (_) { /* defensive */ }
             // Step 1: slam the card from hand to stage. Source rect is the
@@ -1691,10 +2138,16 @@ function playCardPlayed(ev, done) {
                 var pending = slotState.pendingStageOriginator;
                 if (pending && pending.numericId != null) {
                     slotState.pendingStageOriginator = null;  // consumed
-                    _showSpellStage(pending.numericId, pending.playerIdx);
+                    _showSpellStage(pending.numericId, pending.playerIdx, {
+                        sourceRect: pending.sourceRect || null,
+                        castKind: pending.castKind || 'magic',
+                    });
                     if (pending.targetPos) _pulseCastTargetTile(pending.targetPos);
                 }
-                _showSpellStage(payload.card_numeric_id, ownerIdx);
+                _showSpellStage(payload.card_numeric_id, ownerIdx, {
+                    sourceRect: playedSourceRect,
+                    castKind: 'react',
+                });
                 if (payload.target_pos) _pulseCastTargetTile(payload.target_pos);
             }
             // Phase 14.8-05c: consume the originator we just stashed above
@@ -1745,6 +2198,7 @@ function playCardPlayed(ev, done) {
             // a jarring shuffle. Deferring lets the slam land cleanly,
             // then the hand collapses afterwards.
             setTimeout(function() {
+                if (playedEventEpoch !== _clientLifecycleEpoch) return;
                 try {
                     // Timing audit (2026-07-06): targeted refresh only — a
                     // full renderGame here re-lit future-frame affordances
@@ -1780,6 +2234,20 @@ function playCardDiscarded(ev, done) {
         setTimeout(done, 0);
         return;
     }
+    // A played spell/react already left the hand at card_played.  This event
+    // is stage -> grave; never search the remaining hand for an identical
+    // definition.  New server payloads state that directly, while the
+    // batch-local marker keeps reconnect/legacy frames safe.
+    var fromPlayed = payload.cause === 'played'
+        || payload.cause === 'react'
+        || payload.from_zone === 'stage'
+        || _consumeBatchPlayedCard(ev, payload.player_idx, payload.card_numeric_id);
+    if (fromPlayed) {
+        payload._clientFromPlayed = true;
+        _deferStageGraveDestination(payload);
+        setTimeout(done, 0);
+        return;
+    }
     var slotEl = null;
     try {
         var containerId = sandboxMode
@@ -1810,6 +2278,7 @@ function playCardDiscarded(ev, done) {
         // the flying ghost. The F3 commit + renderHand at done() collapses
         // the gap cleanly.
         slotEl.style.visibility = 'hidden';
+        _retireCardSource(payload, payload.player_idx, 'hand');
         var ownIdx = sandboxMode ? 0 : myPlayerIdx;
         enqueueAnimation({
             type: 'card_fly',
@@ -1841,6 +2310,7 @@ function playPlayerHpChange(ev, done) {
     // NO dedicated fatigue event type. Fire the DECK EMPTY — FATIGUE skull
     // nudge here and hold the queue long enough for it to register.
     if (payload.cause === 'fatigue') {
+        _showFatigueDeckEmptyImmediately(payload);
         try {
             triggerFatigueNudge(delta < 0 ? -delta : null, payload.player_idx);
         } catch (e) { /* defensive — nudge is purely visual */ }
@@ -2073,7 +2543,10 @@ function playReactWindowOpened(ev, done) {
             slotState.pendingStageOriginator = origin;
         } else {
             try {
-                _showSpellStage(origin.numericId, origin.playerIdx);
+                _showSpellStage(origin.numericId, origin.playerIdx, {
+                    sourceRect: origin.sourceRect || null,
+                    castKind: origin.castKind || 'magic',
+                });
                 slammed = true;
                 if (origin.targetPos) _pulseCastTargetTile(origin.targetPos);
             } catch (e) {
@@ -2143,7 +2616,10 @@ function playReactWindowOpened(ev, done) {
         try {
             var pOrigin = slotState.pendingStageOriginator;
             slotState.pendingStageOriginator = null;  // consumed
-            _showSpellStage(pOrigin.numericId, pOrigin.playerIdx);
+            _showSpellStage(pOrigin.numericId, pOrigin.playerIdx, {
+                sourceRect: pOrigin.sourceRect || null,
+                castKind: pOrigin.castKind || 'magic',
+            });
             slammed = true;
         } catch (e) {
             // Defensive — a broken render must not crash the eventQueue.
@@ -2160,7 +2636,11 @@ function playReactWindowOpened(ev, done) {
     if (slammed) {
         var _perCard = (typeof SPELL_STAGE_PER_CARD_MS === 'number')
             ? SPELL_STAGE_PER_CARD_MS : 1500;
-        setTimeout(done, Math.round(_perCard / animSpeed()));
+        // The flight/sigil CSS runs on a real-time clock. Fast-forwarding only
+        // this queue slot lets react_window_closed remove the stage while the
+        // card is still mid-arc (especially visible at 4x). Keep stage ceremony
+        // pacing unscaled; combat/event animations may still use animSpeed().
+        setTimeout(done, _perCard);
         return;
     }
     setTimeout(done, 0);
@@ -2339,8 +2819,14 @@ function playReactWindowClosed(ev, done) {
         var totalCards = _spellStage.chain.length + _spellStageQueue.length;
         var resolveDur = (pendingIn * SPELL_STAGE_PER_CARD_MS)
             + 700 + (totalCards * 550) + 250;
-        setTimeout(done, Math.max(_evDurationOr(ev, 400), Math.round(resolveDur / animSpeed())));
+        // Spell-stage CSS/timers currently run on their real clock.  Do not
+        // scale only the queue wait or later events will overtake the cards.
+        setTimeout(done, Math.max(_evDurationOr(ev, 400), resolveDur));
         return;
+    }
+    if (chainEmpty && !stageUp
+            && typeof _releaseStageCardDestinations === 'function') {
+        _releaseStageCardDestinations();
     }
     // Fake response wait (user 2026-07-10): an action-sourced window (a
     // card WE watched being played parked an originator) just closed with
@@ -2810,15 +3296,218 @@ function playHandshake(ev, done) {
 // primitive (playCardFlyAnimation). Payload: {player_idx, card_numeric_id}.
 // Overdrawn cards are revealed to BOTH players, so card_numeric_id should
 // always be present; if redaction strips it, fall back to a text blip.
+function _removeSpringCleaningHandBeforeAnimation(payload) {
+    payload = payload || {};
+    var cards = Array.isArray(payload.card_numeric_ids)
+        ? payload.card_numeric_ids : [];
+    var count = (typeof payload.card_count === 'number')
+        ? payload.card_count : cards.length;
+    var live = sandboxMode ? sandboxState : gameState;
+    var player = live && live.players && live.players[payload.player_idx];
+    if (!player) return;
+
+    // Remove exactly the pre-cleaning cards when a full hand array is
+    // available. This preserves any defensively pre-applied replacement
+    // draws, while the normal event pipeline still goes N -> 0 here.
+    if (Array.isArray(player.hand)) {
+        var removed = 0;
+        cards.forEach(function(cardId) {
+            var idx = player.hand.indexOf(cardId);
+            if (idx === -1) return;
+            player.hand.splice(idx, 1);
+            removed++;
+        });
+        // A redacted/legacy payload may lack one or more identities. Spring
+        // Cleaning always exhausts the old hand, so consume the remaining
+        // declared count from the front rather than leaving ghost cards up.
+        var remaining = Math.max(0, count - removed);
+        if (remaining > 0) player.hand.splice(0, remaining);
+    }
+    if (typeof player.hand_count === 'number') {
+        player.hand_count = Math.max(0, player.hand_count - count);
+    }
+    if (Array.isArray(player.hand_elements)) {
+        player.hand_elements.splice(0, Math.min(count, player.hand_elements.length));
+    }
+
+    // The old hand must be gone before the first batch-animation frame.
+    try {
+        if (sandboxMode) {
+            gameState = sandboxState;
+            if (typeof renderSandbox === 'function') renderSandbox();
+        } else if (isSpectator && spectatorGodMode) {
+            // God spectators keep both full, face-up hands in #hand-container;
+            // rebuilding only the face-down opponent row leaves stale cards.
+            if (typeof renderHand === 'function') renderHand();
+        } else if (payload.player_idx === myPlayerIdx) {
+            if (typeof renderHand === 'function') renderHand();
+        } else if (typeof renderOppHandRow === 'function') {
+            var handCount = (player.hand_count != null)
+                ? player.hand_count : (Array.isArray(player.hand) ? player.hand.length : 0);
+            renderOppHandRow(handCount, player.hand_elements || null);
+        }
+        if (!sandboxMode && typeof renderSelfInfo === 'function') renderSelfInfo();
+        if (!sandboxMode && typeof renderOpponentInfo === 'function') renderOpponentInfo();
+    } catch (e) { /* defensive: state is still correct if a render fails */ }
+}
+
+function playSpringCleaningExhaustBatch(ev, done) {
+    var payload = (ev && ev.payload) || {};
+    var cardIds = Array.isArray(payload.card_numeric_ids)
+        ? payload.card_numeric_ids.slice() : [];
+    if (cardIds.length === 0) {
+        setTimeout(done, 0);
+        return;
+    }
+    // State/DOM ordering is deliberate: hand first, overlay second, Exhaust
+    // pile only in commitEventToDom after this handler calls done().
+    _removeSpringCleaningHandBeforeAnimation(payload);
+
+    var reducedMotion = false;
+    try {
+        reducedMotion = !!(window.matchMedia
+            && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+    } catch (e) { /* default choreography */ }
+    var speed = (typeof animSpeed === 'function') ? Math.max(1, animSpeed()) : 1;
+    var introMs = reducedMotion ? 20 : Math.round(280 / speed);
+    var holdMs = reducedMotion ? 80 : Math.round(420 / speed);
+    var flyMs = reducedMotion ? 120 : Math.round(760 / speed);
+
+    var overlay = document.createElement('div');
+    overlay.className = 'spring-cleaning-exhaust-batch';
+    overlay.setAttribute('aria-hidden', 'true');
+    overlay.setAttribute('data-player-idx', String(payload.player_idx));
+    overlay.setAttribute('data-card-count', String(cardIds.length));
+    overlay.style.setProperty('--spring-intro-ms', introMs + 'ms');
+    overlay.style.setProperty('--spring-fly-ms', flyMs + 'ms');
+
+    var title = document.createElement('div');
+    title.className = 'spring-cleaning-exhaust-title';
+    title.innerHTML = '<span class="spring-cleaning-broom">&#129529;</span>'
+        + '<strong>SPRING CLEANING</strong>'
+        + '<span>HAND &rarr; EXHAUST</span>';
+    overlay.appendChild(title);
+
+    var fan = document.createElement('div');
+    fan.className = 'spring-cleaning-exhaust-fan';
+    overlay.appendChild(fan);
+
+    var viewportW = (typeof window.innerWidth === 'number' && window.innerWidth)
+        || (document.documentElement && document.documentElement.clientWidth)
+        || 1280;
+    var span = Math.min(viewportW * 0.76, Math.max(0, (cardIds.length - 1) * 112));
+    var step = cardIds.length > 1 ? span / (cardIds.length - 1) : 0;
+    var mid = (cardIds.length - 1) / 2;
+    var cardEls = [];
+    cardIds.forEach(function(cardId, index) {
+        var card = document.createElement('div');
+        card.className = 'spring-cleaning-exhaust-card';
+        card.setAttribute('data-numeric-id', String(cardId));
+        var offset = -span / 2 + step * index;
+        var distance = index - mid;
+        card.style.setProperty('--spring-x', offset + 'px');
+        card.style.setProperty('--spring-y', (Math.abs(distance) * 5) + 'px');
+        card.style.setProperty('--spring-rotate', (distance * 2.8) + 'deg');
+        card.style.setProperty('--spring-delay', (Math.min(index, 5) * 18) + 'ms');
+        var def = (cardId != null && cardDefs) ? cardDefs[cardId] : null;
+        if (def) {
+            card.innerHTML = renderCardFrame(def, {
+                context: 'hand',
+                numericId: cardId,
+                interactive: false,
+                showReactDeploy: false,
+            });
+        } else {
+            card.innerHTML = '<div class="spring-cleaning-card-back"></div>';
+        }
+        var fireLine = document.createElement('div');
+        fireLine.className = 'spring-cleaning-fire-line';
+        card.appendChild(fireLine);
+        for (var emberIdx = 0; emberIdx < 3; emberIdx++) {
+            var ember = document.createElement('i');
+            ember.className = 'spring-cleaning-ember';
+            ember.style.setProperty('--ember-x', (18 + emberIdx * 31) + '%');
+            ember.style.setProperty('--ember-drift', ((emberIdx - 1) * 18) + 'px');
+            card.appendChild(ember);
+        }
+        fan.appendChild(card);
+        cardEls.push(card);
+    });
+
+    document.body.appendChild(overlay);
+    var finished = false;
+    function finish() {
+        if (finished) return;
+        finished = true;
+        overlay.setAttribute('data-phase', 'landed');
+        if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+        done();
+    }
+
+    var raf = (typeof window.requestAnimationFrame === 'function')
+        ? window.requestAnimationFrame.bind(window)
+        : function(callback) { setTimeout(callback, 0); };
+    raf(function() {
+        raf(function() {
+            overlay.setAttribute('data-phase', 'showing');
+            overlay.classList.add('is-present');
+            setTimeout(function() {
+                var ownIdx = sandboxMode ? 0 : myPlayerIdx;
+                var zone = payload.player_idx === ownIdx ? 'exhaust_own' : 'exhaust_opp';
+                var target = (typeof _zoneButton === 'function') ? _zoneButton(zone) : null;
+                var viewportH = (typeof window.innerHeight === 'number' && window.innerHeight)
+                    || (document.documentElement && document.documentElement.clientHeight)
+                    || 720;
+                var targetRect = target ? target.getBoundingClientRect() : null;
+                var targetX = targetRect
+                    ? targetRect.left + targetRect.width / 2
+                    : (payload.player_idx === ownIdx ? viewportW * 0.12 : viewportW * 0.88);
+                var targetY = targetRect
+                    ? targetRect.top + targetRect.height / 2
+                    : viewportH * 0.72;
+                cardEls.forEach(function(card, index) {
+                    card.style.setProperty('--spring-target-x',
+                        (targetX - viewportW / 2 + (index - mid) * 2) + 'px');
+                    card.style.setProperty('--spring-target-y',
+                        (targetY - viewportH * 0.46) + 'px');
+                    card.style.setProperty('--spring-target-rotate',
+                        ((index - mid) * 8 + 20) + 'deg');
+                });
+                overlay.setAttribute('data-phase', 'exhausting');
+                overlay.classList.add('is-exhausting');
+                try { if (typeof playSfx === 'function') playSfx('burn_tick'); }
+                catch (e) { /* muted/unavailable */ }
+
+                var transitionsLeft = cardEls.length;
+                cardEls.forEach(function(card) {
+                    card.addEventListener('transitionend', function onEnd(event) {
+                        if (event && event.propertyName && event.propertyName !== 'transform') return;
+                        card.removeEventListener('transitionend', onEnd);
+                        transitionsLeft--;
+                        if (transitionsLeft <= 0) finish();
+                    });
+                });
+                setTimeout(finish, flyMs + 180);
+            }, introMs + holdMs);
+        });
+    });
+}
+
 function playOverdrawBurn(ev, done) {
     var payload = (ev && ev.payload) || {};
+    if (payload.source === 'spring_cleaning'
+            && payload.from_zone === 'hand'
+            && Array.isArray(payload.card_numeric_ids)) {
+        playSpringCleaningExhaustBatch(ev, done);
+        return;
+    }
     var ownIdx = sandboxMode ? 0 : myPlayerIdx;
     var zone = (payload.player_idx === ownIdx) ? 'exhaust_own' : 'exhaust_opp';
     // Timing overhaul (2026-07-08, F10): a discard-cost burn is a PAID cost
     // of playing another card, not an overdraw — no 1900ms "HAND FULL"
     // center-reveal ceremony. Short hand→exhaust fly instead. Old payloads
     // carry no source and keep the full overdraw treatment.
-    if (payload.source === 'discard_cost') {
+    if (payload.from_zone === 'hand' || payload.source === 'discard_cost') {
         var dcSlot = null;
         try {
             var dcContainerId = sandboxMode
@@ -2837,6 +3526,7 @@ function playOverdrawBurn(ev, done) {
             }
         } catch (e) { /* defensive */ }
         if (!dcSlot || payload.card_numeric_id == null) {
+            _retireCardSource(payload, payload.player_idx, 'hand');
             setTimeout(done, 0);
             return;
         }
@@ -2849,6 +3539,7 @@ function playOverdrawBurn(ev, done) {
         try {
             var dcRect = dcSlot.getBoundingClientRect();
             dcSlot.style.visibility = 'hidden';
+            _retireCardSource(payload, payload.player_idx, 'hand');
             enqueueAnimation({
                 type: 'card_fly',
                 fromRect: dcRect,
@@ -2862,6 +3553,7 @@ function playOverdrawBurn(ev, done) {
         setTimeout(dcSettle, 3000);
         return;
     }
+    _retireCardSource(payload, payload.player_idx, payload.from_zone || 'deck');
     var def = (payload.card_numeric_id != null && cardDefs)
         ? cardDefs[payload.card_numeric_id] : null;
     if (!def) {
@@ -3016,6 +3708,8 @@ if (typeof window !== 'undefined') {
 }
 
 function enqueueAnimation(job) {
+    if (!job) return;
+    job._clientLifecycleEpoch = _clientLifecycleEpoch;
     animQueue.push(job);
     runQueue();
 }
@@ -3024,7 +3718,15 @@ function runQueue() {
     if (animRunning) return;
     if (animQueue.length === 0) return;
     var job = animQueue.shift();
+    if (job && job._clientLifecycleEpoch == null) {
+        job._clientLifecycleEpoch = _clientLifecycleEpoch;
+    }
+    if (!job || job._clientLifecycleEpoch !== _clientLifecycleEpoch) {
+        runQueue();
+        return;
+    }
     animRunning = true;
+    var jobEpoch = _clientLifecycleEpoch;
     // Phase 14.8 hardening: a synchronous throw inside any animation branch
     // used to latch animRunning=true FOREVER — every later enqueueAnimation
     // returned at the top guard and no visual ever played again for the
@@ -3035,6 +3737,7 @@ function runQueue() {
     // in case a branch throws AFTER scheduling its own done callback.
     var jobFinished = false;
     function finishJob() {
+        if (jobEpoch !== _clientLifecycleEpoch) return;
         if (jobFinished) return;
         jobFinished = true;
         // Apply the buffered state frame AFTER the animation completes,
@@ -3067,8 +3770,9 @@ function runQueue() {
         // if the CSS visual is still finishing — finishJob is idempotent,
         // and the sprite completes on its own timers while the next beat
         // starts. 900ms covers the longest single animation at 1x.
-        var _spd = (typeof animSpeed === 'function') ? animSpeed() : 1;
-        if (_spd > 1) setTimeout(finishJob, Math.round(900 / _spd));
+        // Logical completion is driven only by the visual's completion
+        // callback.  Speed must never release ownership while its ghost is
+        // still mounted.
         playAnimation(job, finishJob);
     } catch (err) {
         console.error('[animQueue] playAnimation threw for type='

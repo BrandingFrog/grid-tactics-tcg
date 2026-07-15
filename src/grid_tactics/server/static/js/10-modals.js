@@ -126,27 +126,12 @@ function showTutorModal(matches, deckSize, totalCopiesByCardId) {
     pickCounter.className = 'tutor-modal-deckline';
     pickCounter.textContent = 'Selected 0/' + maxPick;
     header.appendChild(pickCounter);
-    // Minimise (user 2026-07-07): peek at the board mid-pick. The pick is
-    // MANDATORY — while minimised only the restore pill acts (all other
-    // inputs stay illegal server-side and gate-blocked client-side).
-    var minBtn = document.createElement('button');
-    minBtn.className = 'tutor-min-btn';
-    minBtn.textContent = '▾';
-    minBtn.title = 'Minimise — peek at the board';
-    minBtn.addEventListener('click', function(e) {
-        e.stopPropagation();
-        overlay.style.display = 'none';
-        var pill = document.createElement('button');
-        pill.id = 'tutor-restore-pill';
-        pill.className = 'tutor-restore-pill';
-        pill.textContent = '▴ Resume card pick';
-        pill.addEventListener('click', function() {
-            pill.remove();
-            overlay.style.display = '';
-        });
-        _stageMount().appendChild(pill);
+    attachBoardModalMinimizer({
+        overlay: overlay,
+        controlsHost: header,
+        label: 'card pick',
+        restoreId: 'tutor-restore-pill'
     });
-    header.appendChild(minBtn);
     modal.appendChild(header);
 
     // Mandatory tutoring (2026-07): a full hand does NOT exempt the pick —
@@ -274,17 +259,15 @@ function showTutorModal(matches, deckSize, totalCopiesByCardId) {
 // tutorModalKey — syncPendingTutorUI then won't re-show the same pending
 // state while the pick round-trips (and the deck->hand fly stays visible).
 function _hideTutorModalForSubmit() {
-    var _pill = document.getElementById('tutor-restore-pill');
-    if (_pill) _pill.remove();
     document.querySelectorAll('#tutor-modal-overlay').forEach(function(existing) {
+        disposeBoardModalMinimizer(existing);
         existing.remove();
     });
 }
 
 function closeTutorModal() {
-    var _pill = document.getElementById('tutor-restore-pill');
-    if (_pill) _pill.remove();
     document.querySelectorAll('#tutor-modal-overlay').forEach(function(existing) {
+        disposeBoardModalMinimizer(existing);
         existing.remove();
     });
     tutorModalOpen = false;
@@ -366,9 +349,12 @@ function showTriggerPickerModal(options) {
     sub.textContent = (options || []).length + ' triggers waiting';
     header.appendChild(title);
     header.appendChild(sub);
-    _attachFortuneMinimizeButton(
-        header, overlay, 'effect order', 'trigger-picker-restore-pill'
-    );
+    attachBoardModalMinimizer({
+        overlay: overlay,
+        controlsHost: header,
+        label: 'effect order',
+        restoreId: 'trigger-picker-restore-pill'
+    });
     modal.appendChild(header);
 
     var fan = document.createElement('div');
@@ -455,10 +441,11 @@ function showTriggerPickerModal(options) {
 }
 
 function closeTriggerPickerModal() {
-    var pill = document.getElementById('trigger-picker-restore-pill');
-    if (pill) pill.remove();
     var existing = document.getElementById('trigger-picker-modal-overlay');
-    if (existing) existing.remove();
+    if (existing) {
+        disposeBoardModalMinimizer(existing);
+        existing.remove();
+    }
     triggerPickerModalOpen = false;
 }
 
@@ -602,6 +589,12 @@ function showReviveModal() {
         ? ('Revive — pick a ' + cardName + ' to place (' + remaining + ' remaining)')
         : ('Revive — pick a minion from the grave (' + remaining + ' remaining)');
     header.appendChild(title);
+    attachBoardModalMinimizer({
+        overlay: overlay,
+        controlsHost: header,
+        label: 'Revive',
+        restoreId: 'revive-modal-restore-pill'
+    });
     modal.appendChild(header);
 
     var fan = document.createElement('div');
@@ -710,7 +703,10 @@ function highlightReviveCells() {
 
 function closeReviveModal() {
     var existing = document.getElementById('revive-modal-overlay');
-    if (existing) existing.remove();
+    if (existing) {
+        disposeBoardModalMinimizer(existing);
+        existing.remove();
+    }
     reviveModalOpen = false;
     if (interactionMode === 'revive_place') interactionMode = null;
     window.__reviveSelectedGraveIdx = null;
@@ -924,6 +920,9 @@ function highlightBoard() {
         cell.classList.remove('cell-valid', 'cell-attack', 'cell-selected',
                               'attack-valid-target');
     });
+    if (typeof isBoardModalPeekActive === 'function'
+            && isBoardModalPeekActive()
+            && !canResolvePendingBoardDecisionDuringPeek()) return;
     // Timing audit (2026-07-06): plain selection/targeting highlights only
     // paint when the player can act now. Pending-decision modes (post-move
     // attack pick, death target, conjure deploy, revive) stay live — those
@@ -1071,6 +1070,16 @@ function highlightBoard() {
 
 // Highlight playable hand cards
 function updateHandHighlights() {
+    if (typeof isBoardModalPeekActive === 'function'
+            && isBoardModalPeekActive()) {
+        document.querySelectorAll('.card-frame-hand').forEach(function(card) {
+            card.classList.remove(
+                'card-playable', 'card-selected-hand', 'card-react-playable',
+                'card-confirm-armed'
+            );
+        });
+        return;
+    }
     if (isReactWindow()) {
         // Timing audit (2026-07-06): react glow only for the seat that may
         // actually react (live games; sandbox god-view keeps both).
@@ -1411,33 +1420,6 @@ function _renderRoguelikeOptionTile(tile, option) {
     tile.appendChild(description);
 }
 
-function _attachFortuneMinimizeButton(header, overlay, resumeLabel, restoreId) {
-    restoreId = restoreId || 'fortune-restore-pill';
-    var minBtn = document.createElement('button');
-    minBtn.className = 'tutor-min-btn';
-    minBtn.textContent = '▾';
-    minBtn.title = 'Minimise — peek at the board';
-    minBtn.setAttribute(
-        'aria-label', 'Minimise ' + (resumeLabel || 'Fortune') + ' window'
-    );
-    minBtn.addEventListener('click', function(e) {
-        e.stopPropagation();
-        overlay.style.display = 'none';
-        var oldPill = document.getElementById(restoreId);
-        if (oldPill) oldPill.remove();
-        var pill = document.createElement('button');
-        pill.id = restoreId;
-        pill.className = 'tutor-restore-pill fortune-restore-pill';
-        pill.textContent = '▴ Resume ' + (resumeLabel || 'Fortune');
-        pill.addEventListener('click', function() {
-            pill.remove();
-            if (overlay.parentNode) overlay.style.display = '';
-        });
-        _stageMount().appendChild(pill);
-    });
-    header.appendChild(minBtn);
-}
-
 function syncRoguelikeEventUI() {
     if (!gameState || gameState.pending_roguelike_event_turn == null) {
         closeRoguelikeEventModal();
@@ -1477,9 +1459,12 @@ function showRoguelikeEventModal(alreadyPicked) {
         '<div class="tutor-modal-title">Choose Your Fortune</div>' +
         '<div class="tutor-modal-deckline">Milestone · Turn ' +
         gameState.pending_roguelike_event_turn + '</div>';
-    _attachFortuneMinimizeButton(
-        header, overlay, 'Fortune', 'fortune-restore-pill'
-    );
+    attachBoardModalMinimizer({
+        overlay: overlay,
+        controlsHost: header,
+        label: 'Fortune',
+        restoreId: 'fortune-restore-pill'
+    });
     modal.appendChild(header);
 
     var selected = null;
@@ -1494,6 +1479,7 @@ function showRoguelikeEventModal(alreadyPicked) {
     accept.addEventListener('click', function(e) {
         e.stopPropagation();
         if (!selected) return;
+        if (!canResolveVisibleBoardModal(overlay)) return;
         socket.emit('roguelike_event_pick', { choice: selected });
         _roguelikeShowWaiting(modal, selected);
     });
@@ -1560,10 +1546,11 @@ function _roguelikeShowWaiting(modal, choice) {
 }
 
 function closeRoguelikeEventModal() {
-    var pill = document.getElementById('fortune-restore-pill');
-    if (pill) pill.remove();
     var existing = document.getElementById('roguelike-event-overlay');
-    if (existing && existing.parentNode) existing.parentNode.removeChild(existing);
+    if (existing) {
+        disposeBoardModalMinimizer(existing);
+        if (existing.parentNode) existing.parentNode.removeChild(existing);
+    }
 }
 
 function closeRoguelikeChoicesReveal() {
@@ -1712,10 +1699,12 @@ function showMarkedCardsModal(cards) {
           '<div class="tutor-modal-title">Marked Cards</div>' +
           '<div class="tutor-modal-deckline marked-cards-instruction">Choose the card to keep.</div>' +
         '</div>';
-    _attachFortuneMinimizeButton(
-        modal.querySelector('.tutor-modal-header'), overlay, 'Marked Cards',
-        'marked-cards-restore-pill'
-    );
+    attachBoardModalMinimizer({
+        overlay: overlay,
+        controlsHost: modal.querySelector('.tutor-modal-header'),
+        label: 'Marked Cards',
+        restoreId: 'marked-cards-restore-pill'
+    });
     var row = document.createElement('div');
     row.className = 'tutor-modal-cards marked-cards-row';
     var keepIndex = null;
@@ -1776,6 +1765,7 @@ function showMarkedCardsModal(cards) {
     accept.addEventListener('click', function(e) {
         e.stopPropagation();
         if (keepIndex == null || (needsTopChoice && topIndex == null)) return;
+        if (!canResolveVisibleBoardModal(overlay)) return;
         var other = [];
         for (var i = 0; i < cards.length; i++) {
             if (i !== keepIndex && i !== topIndex) other.push(i);
@@ -1800,10 +1790,11 @@ function showMarkedCardsModal(cards) {
 }
 
 function closeMarkedCardsModal() {
-    var pill = document.getElementById('marked-cards-restore-pill');
-    if (pill) pill.remove();
     var overlay = document.getElementById('marked-cards-overlay');
-    if (overlay && overlay.parentNode) overlay.parentNode.removeChild(overlay);
+    if (overlay) {
+        disposeBoardModalMinimizer(overlay);
+        if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+    }
 }
 
 function showMarkedCardsWaitingToast(message) {
@@ -1910,6 +1901,12 @@ function showRpsPickModal(data) {
     sub.className = 'tutor-modal-deckline';
     sub.textContent = 'Winner goes first';
     header.appendChild(sub);
+    attachBoardModalMinimizer({
+        overlay: overlay,
+        controlsHost: header,
+        label: 'Rock Paper Scissors',
+        restoreId: 'pregame-rps-restore-pill'
+    });
     modal.appendChild(header);
 
     var selectedPick = null;
@@ -1925,6 +1922,7 @@ function showRpsPickModal(data) {
     acceptBtn.addEventListener('click', function(e) {
         e.stopPropagation();
         if (!selectedPick) return;
+        if (!canResolveVisibleBoardModal(overlay)) return;
         socket.emit('rps_pick', { pick: selectedPick });
         _rpsShowWaiting(modal, selectedPick);
     });
@@ -1983,7 +1981,10 @@ function _rpsShowWaiting(modal, pick) {
 
 function closeRpsModal() {
     var existing = document.getElementById('pregame-rps-overlay');
-    if (existing && existing.parentNode) existing.parentNode.removeChild(existing);
+    if (existing) {
+        disposeBoardModalMinimizer(existing);
+        if (existing.parentNode) existing.parentNode.removeChild(existing);
+    }
 }
 
 function onRpsResult(data) {
@@ -2132,6 +2133,12 @@ function showMulliganModal(data) {
     counter.className = 'tutor-modal-deckline';
     counter.textContent = 'Redraw 0';
     header.appendChild(counter);
+    attachBoardModalMinimizer({
+        overlay: overlay,
+        controlsHost: header,
+        label: 'Mulligan',
+        restoreId: 'pregame-mulligan-restore-pill'
+    });
     modal.appendChild(header);
 
     var fan = document.createElement('div');
@@ -2175,12 +2182,13 @@ function showMulliganModal(data) {
 
     acceptBtn.addEventListener('click', function(e) {
         e.stopPropagation();
+        if (!canResolveVisibleBoardModal(overlay)) return;
         var indices = selected.map(function(s) { return s.idx; });
         // Decorative: the picked cards fly to the deck pile as ghosts.
         try {
             selected.forEach(function(s) { _mullFlyToDeck(s.tile, s.nid); });
         } catch (e2) { /* defensive */ }
-        if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+        closeMulliganModal();
         socket.emit('mulligan_pick', { hand_indices: indices });
         if (!(data && data.opponent_resolved)) {
             _pregameToast('Waiting for opponent…');
@@ -2197,7 +2205,10 @@ function showMulliganModal(data) {
 
 function closeMulliganModal() {
     var existing = document.getElementById('pregame-mull-overlay');
-    if (existing && existing.parentNode) existing.parentNode.removeChild(existing);
+    if (existing) {
+        disposeBoardModalMinimizer(existing);
+        if (existing.parentNode) existing.parentNode.removeChild(existing);
+    }
 }
 
 // card_fly-style ghost from a mulliganed tile to the own deck pile.
@@ -2351,8 +2362,9 @@ function cleanupPregameUI() {
     window._pregameActive = false;
     _pregameClashRunning = false;
     _pregamePendingMulligan = null;
-    ['pregame-rps-overlay', 'pregame-mull-overlay', 'rps-clash-overlay',
-     'pregame-status-toast'].forEach(function(id) {
+    closeRpsModal();
+    closeMulliganModal();
+    ['rps-clash-overlay', 'pregame-status-toast'].forEach(function(id) {
         var el = document.getElementById(id);
         if (el && el.parentNode) el.parentNode.removeChild(el);
     });

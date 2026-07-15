@@ -13,6 +13,14 @@
 // P1 / P2" button mutates state.active_player_idx server-side; it does
 // NOT change which DOM mount renders which player's hand.
 
+function emitSandboxEvent(eventName, payload) {
+    if (typeof isBoardModalPeekActive === 'function'
+            && isBoardModalPeekActive()) return false;
+    if (!socket) return false;
+    socket.emit(eventName, payload);
+    return true;
+}
+
 // ----- Global-swap strategy ------------------------------------------------
 // The live game's renderers and click handlers read 5 module-level globals:
 //   gameState, myPlayerIdx, legalActions, isSpectator, spectatorGodMode
@@ -51,6 +59,9 @@ function sandboxActivate() {
 }
 
 function sandboxDeactivate() {
+    if (typeof closeAllBoardModalsForReset === 'function') {
+        closeAllBoardModalsForReset();
+    }
     sandboxMode = false;
     if (_sandboxPreSnapshot) {
         gameState = _sandboxPreSnapshot.gameState;
@@ -122,7 +133,7 @@ function _wireTestsOnce() {
             // Re-run the current test's setup without consuming the slot —
             // lets the user retry after mis-clicking.
             if (_testsState.currentId) {
-                socket.emit('tests_load', { id: _testsState.currentId });
+                _requestTestsScenario(_testsState.currentId);
             } else if (_testsState.list.length > 0) {
                 _loadCurrentTest();
             }
@@ -135,6 +146,14 @@ function _wireTestsOnce() {
             var mini = ov.classList.toggle('is-minimized');
             minBtn.textContent = mini ? '▢' : '▁';
             minBtn.title = mini ? 'Expand' : 'Minimize';
+            minBtn.setAttribute('aria-expanded', mini ? 'false' : 'true');
+            minBtn.setAttribute(
+                'aria-label', mini ? 'Restore Tests window' : 'Minimise Tests window'
+            );
+            if (mini) {
+                var tocPanel = document.getElementById('tests-toc-panel');
+                if (tocPanel) tocPanel.hidden = true;
+            }
         });
         // Phase 14.8-05c: TOC button. Toggles the jump-to-test panel.
         var tocBtn = document.getElementById('tests-toc');
@@ -202,6 +221,18 @@ function _wireTestsOnce() {
     }
 }
 
+// Loading a Tests scenario replaces the entire sandbox board. Any decision,
+// pile, or restore pill belongs to the previous scenario and must not survive
+// into the new one. The Tests overlay has its own compact header state (not a
+// shared restore pill), so this cleanup deliberately preserves that panel.
+function _requestTestsScenario(testId) {
+    if (!testId) return;
+    if (typeof closeAllBoardModalsForReset === 'function') {
+        closeAllBoardModalsForReset();
+    }
+    socket.emit('tests_load', { id: testId });
+}
+
 function _loadCurrentTest() {
     var t = _testsState.list[_testsState.index];
     if (!t) return;
@@ -209,7 +240,7 @@ function _loadCurrentTest() {
     _setTestsTitle(t.title || t.id);
     _setTestsInstructions('');
     _setTestsExpected('');
-    socket.emit('tests_load', { id: t.id });
+    _requestTestsScenario(t.id);
 }
 
 // Phase 14.8-05c: render the table-of-contents jump panel. Each row is
@@ -301,15 +332,15 @@ function initSandboxScreen() {
         var raw = localStorage.getItem(SANDBOX_AUTOSAVE_KEY);
         if (raw) {
             var payload = JSON.parse(raw);
-            socket.emit('sandbox_load', { payload: payload });
+            emitSandboxEvent('sandbox_load', { payload: payload });
             restored = true;
         }
     } catch (e) { /* corrupt -- just create fresh */ }
     if (!restored) {
-        socket.emit('sandbox_create');
+        emitSandboxEvent('sandbox_create');
     }
     // Refresh server slot list every time the screen activates
-    socket.emit('sandbox_list_slots');
+    emitSandboxEvent('sandbox_list_slots');
 }
 
 function setupSandboxSocketHandlers() {
@@ -591,7 +622,7 @@ function setupSandboxToolbar() {
             if (!row) return;
             var nid = parseInt(row.dataset.nid, 10);
             // Add to currently selected zone immediately
-            socket.emit('sandbox_add_card_to_zone', {
+            emitSandboxEvent('sandbox_add_card_to_zone', {
                 player_idx: sandboxAddTargetIdx,
                 card_numeric_id: nid,
                 zone: sandboxAddZone,
@@ -639,28 +670,35 @@ function setupSandboxToolbar() {
     document.querySelectorAll('.sandbox-control-btn').forEach(function(btn) {
         btn.addEventListener('click', function() {
             var idx = parseInt(btn.dataset.control, 10);
-            socket.emit('sandbox_set_active_player', { player_idx: idx });
+            emitSandboxEvent('sandbox_set_active_player', { player_idx: idx });
         });
     });
 
     // ---- A5. Undo / Redo / Reset ----
     var undoBtn = document.getElementById('sandbox-undo-btn');
-    if (undoBtn) undoBtn.addEventListener('click', function() { socket.emit('sandbox_undo'); });
+    if (undoBtn) undoBtn.addEventListener('click', function() { emitSandboxEvent('sandbox_undo'); });
     var redoBtn = document.getElementById('sandbox-redo-btn');
-    if (redoBtn) redoBtn.addEventListener('click', function() { socket.emit('sandbox_redo'); });
+    if (redoBtn) redoBtn.addEventListener('click', function() { emitSandboxEvent('sandbox_redo'); });
     var resetBtn = document.getElementById('sandbox-reset-btn');
     if (resetBtn) resetBtn.addEventListener('click', function() {
-        if (confirm('Reset sandbox to empty? This will clear undo history.')) {
+        showBoardDialog({
+            mode: 'confirm',
+            title: 'Reset Sandbox',
+            message: 'Reset to empty? This will clear undo history.',
+            confirmLabel: 'Reset',
+            resumeLabel: 'Reset Sandbox'
+        }).then(function(confirmed) {
+            if (!confirmed) return;
             // Phase 14.8-04a: server's SandboxSession._next_event_seq resets
             // to 0 on reset(); match that client-side.
             if (typeof resetEventQueue === 'function') resetEventQueue();
-            socket.emit('sandbox_reset');
-        }
+            emitSandboxEvent('sandbox_reset');
+        });
     });
 
     // ---- A6. Save / Load (client-side JSON file) ----
     var saveBtn = document.getElementById('sandbox-save-btn');
-    if (saveBtn) saveBtn.addEventListener('click', function() { socket.emit('sandbox_save'); });
+    if (saveBtn) saveBtn.addEventListener('click', function() { emitSandboxEvent('sandbox_save'); });
     var loadBtn = document.getElementById('sandbox-load-btn');
     var fileInput = document.getElementById('sandbox-load-file');
     if (loadBtn && fileInput) {
@@ -675,9 +713,9 @@ function setupSandboxToolbar() {
                     // Phase 14.8-04a: server's load_dict() resets
                     // _next_event_seq to 0; match client-side.
                     if (typeof resetEventQueue === 'function') resetEventQueue();
-                    socket.emit('sandbox_load', { payload: payload });
+                    emitSandboxEvent('sandbox_load', { payload: payload });
                 } catch (err) {
-                    alert('Invalid JSON file: ' + err.message);
+                    showBoardNotice('Invalid JSON file: ' + err.message, true);
                 }
                 fileInput.value = '';
             };
@@ -693,26 +731,50 @@ function setupSandboxToolbar() {
         var code = sandboxEncodeShareCode(payload);
         if (navigator.clipboard && navigator.clipboard.writeText) {
             navigator.clipboard.writeText(code).then(function() {
-                alert('Sandbox code copied to clipboard (' + code.length + ' chars)');
+                showBoardNotice('Sandbox code copied (' + code.length + ' chars)');
             }, function() {
-                window.prompt('Copy this sandbox code:', code);
+                showBoardDialog({
+                    mode: 'prompt',
+                    title: 'Copy Sandbox Code',
+                    message: 'Copy this code, then restore the window when finished.',
+                    value: code,
+                    multiline: true,
+                    readOnly: true,
+                    confirmLabel: 'Done',
+                    cancelLabel: null
+                });
             });
         } else {
-            window.prompt('Copy this sandbox code:', code);
+            showBoardDialog({
+                mode: 'prompt',
+                title: 'Copy Sandbox Code',
+                value: code,
+                multiline: true,
+                readOnly: true,
+                confirmLabel: 'Done',
+                cancelLabel: null
+            });
         }
     });
     var pasteBtn = document.getElementById('sandbox-paste-btn');
     if (pasteBtn) pasteBtn.addEventListener('click', function() {
-        var code = window.prompt('Paste sandbox code:');
-        if (!code) return;
-        try {
-            var payload = sandboxDecodeShareCode(code.trim());
-            // Phase 14.8-04a: matches server's load_dict() seq reset.
-            if (typeof resetEventQueue === 'function') resetEventQueue();
-            socket.emit('sandbox_load', { payload: payload });
-        } catch (err) {
-            alert('Invalid sandbox code: ' + err.message);
-        }
+        showBoardDialog({
+            mode: 'prompt',
+            title: 'Paste Sandbox Code',
+            message: 'Paste a shared sandbox code below.',
+            multiline: true,
+            confirmLabel: 'Load'
+        }).then(function(code) {
+            if (!code) return;
+            try {
+                var payload = sandboxDecodeShareCode(code.trim());
+                // Phase 14.8-04a: matches server's load_dict() seq reset.
+                if (typeof resetEventQueue === 'function') resetEventQueue();
+                emitSandboxEvent('sandbox_load', { payload: payload });
+            } catch (err) {
+                showBoardNotice('Invalid sandbox code: ' + err.message, true);
+            }
+        });
     });
 
     // ---- B. Cheat inputs (DEV-06) --------------------------------------
@@ -727,7 +789,7 @@ function setupSandboxToolbar() {
             if (raw === '') return;
             var value = parseInt(raw, 10);
             if (Number.isNaN(value)) return;
-            socket.emit('sandbox_set_player_field', {
+            emitSandboxEvent('sandbox_set_player_field', {
                 player_idx: playerIdx,
                 field: field,
                 value: value,
@@ -749,37 +811,50 @@ function setupSandboxToolbar() {
     if (importDeckBtn) importDeckBtn.addEventListener('click', function() {
         var slots = (typeof loadDeckSlots === 'function') ? loadDeckSlots() : [];
         if (!slots.length) {
-            alert('No saved decks found. Build one in the Deck Builder first.');
+            showBoardNotice('No saved decks found. Build one in the Deck Builder first.', true);
             return;
         }
-        var lines = slots.map(function(s, i) {
+        var deckChoices = slots.map(function(s, i) {
             var total = (typeof getDeckTotal === 'function') ? getDeckTotal(s.cards) : '?';
-            return i + ': ' + s.name + ' (' + total + ' cards)';
+            return { value: i, label: s.name + ' (' + total + ' cards)' };
         });
-        var choiceStr = window.prompt('Pick a deck to import:\n' + lines.join('\n') + '\n\nEnter index:');
-        if (choiceStr == null) return;
-        var choice = parseInt(choiceStr, 10);
-        if (Number.isNaN(choice) || choice < 0 || choice >= slots.length) {
-            alert('Invalid choice');
-            return;
-        }
-        var targetStr = window.prompt('Import to which player? Enter 1 or 2:');
-        if (targetStr == null) return;
-        var targetIdx = parseInt(targetStr, 10) - 1;
-        if (targetIdx !== 0 && targetIdx !== 1) {
-            alert('Player must be 1 or 2');
-            return;
-        }
-        var deckMap = slots[choice].cards || {};
-        var flat = [];
-        Object.keys(deckMap).forEach(function(nidStr) {
-            var nid = parseInt(nidStr, 10);
-            var count = deckMap[nidStr];
-            for (var k = 0; k < count; k++) flat.push(nid);
-        });
-        socket.emit('sandbox_import_deck', {
-            player_idx: targetIdx,
-            deck_card_ids: flat,
+        showBoardDialog({
+            mode: 'select',
+            title: 'Import Deck',
+            message: 'Choose a saved deck.',
+            choices: deckChoices,
+            confirmLabel: 'Next'
+        }).then(function(choiceStr) {
+            if (choiceStr == null) return;
+            var choice = parseInt(choiceStr, 10);
+            if (Number.isNaN(choice) || choice < 0 || choice >= slots.length) {
+                showBoardNotice('Invalid deck choice.', true);
+                return;
+            }
+            showBoardDialog({
+                mode: 'select',
+                title: 'Import Deck',
+                message: 'Choose the player who receives this deck.',
+                choices: [
+                    { value: 0, label: 'Player 1' },
+                    { value: 1, label: 'Player 2' }
+                ],
+                confirmLabel: 'Import'
+            }).then(function(targetStr) {
+                if (targetStr == null) return;
+                var targetIdx = parseInt(targetStr, 10);
+                var deckMap = slots[choice].cards || {};
+                var flat = [];
+                Object.keys(deckMap).forEach(function(nidStr) {
+                    var nid = parseInt(nidStr, 10);
+                    var count = deckMap[nidStr];
+                    for (var k = 0; k < count; k++) flat.push(nid);
+                });
+                emitSandboxEvent('sandbox_import_deck', {
+                    player_idx: targetIdx,
+                    deck_card_ids: flat,
+                });
+            });
         });
     });
 
@@ -788,16 +863,19 @@ function setupSandboxToolbar() {
     if (slotSaveBtn) slotSaveBtn.addEventListener('click', function() {
         var input = document.getElementById('sandbox-slot-name');
         var name = (input && input.value || '').trim();
-        if (!name) { alert('Enter a slot name'); return; }
+        if (!name) { showBoardNotice('Enter a slot name.', true); return; }
         if (!/^[a-zA-Z0-9_-]{1,64}$/.test(name)) {
-            alert('Slot name must be 1-64 chars of letters, digits, underscore, or dash.');
+            showBoardNotice(
+                'Slot name must be 1-64 chars: letters, digits, underscore, or dash.',
+                true
+            );
             return;
         }
-        socket.emit('sandbox_save_slot', { slot_name: name });
+        emitSandboxEvent('sandbox_save_slot', { slot_name: name });
     });
     var slotRefreshBtn = document.getElementById('sandbox-slot-refresh-btn');
     if (slotRefreshBtn) slotRefreshBtn.addEventListener('click', function() {
-        socket.emit('sandbox_list_slots');
+        emitSandboxEvent('sandbox_list_slots');
     });
 }
 
@@ -824,7 +902,7 @@ function openSandboxMovePopover(anchorEl, playerIdx, cardNumericId, srcZone) {
         btn.textContent = z.label;
         btn.addEventListener('click', function(e) {
             e.stopPropagation();
-            socket.emit('sandbox_move_card', {
+            emitSandboxEvent('sandbox_move_card', {
                 player_idx: playerIdx,
                 card_numeric_id: cardNumericId,
                 src_zone: srcZone,
@@ -882,7 +960,7 @@ function sandboxStageCard(nid) {
         staged.addEventListener('click', function() {
             var clickNid = parseInt(staged.dataset.nid, 10);
             if (isNaN(clickNid)) return;
-            socket.emit('sandbox_add_card_to_zone', {
+            emitSandboxEvent('sandbox_add_card_to_zone', {
                 player_idx: sandboxAddTargetIdx,
                 card_numeric_id: clickNid,
                 zone: sandboxAddZone,
@@ -923,7 +1001,7 @@ function sandboxWireDropZones() {
             e.preventDefault();
             var nid = parseInt(e.dataTransfer.getData('text/plain'), 10);
             if (isNaN(nid)) return;
-            socket.emit('sandbox_add_card_to_zone', {
+            emitSandboxEvent('sandbox_add_card_to_zone', {
                 player_idx: playerIdx,
                 card_numeric_id: nid,
                 zone: zone,
@@ -975,7 +1053,7 @@ function sandboxWireDropZones() {
             if (isNaN(nid)) return;
             var row = parseInt(cell.dataset.row, 10);
             var col = parseInt(cell.dataset.col, 10);
-            socket.emit('sandbox_place_on_board', {
+            emitSandboxEvent('sandbox_place_on_board', {
                 player_idx: sandboxAddTargetIdx,
                 card_numeric_id: nid,
                 row: row,
@@ -1017,15 +1095,20 @@ function renderSandboxSlotList(slots) {
         loadBtn.addEventListener('click', function() {
             // Phase 14.8-04a: server's load_dict resets _next_event_seq.
             if (typeof resetEventQueue === 'function') resetEventQueue();
-            socket.emit('sandbox_load_slot', { slot_name: name });
+            emitSandboxEvent('sandbox_load_slot', { slot_name: name });
         });
         var deleteBtn = document.createElement('button');
         deleteBtn.className = 'btn btn-sm sandbox-slot-delete-btn';
         deleteBtn.textContent = 'Delete';
         deleteBtn.addEventListener('click', function() {
-            if (confirm('Delete server slot "' + name + '"? This cannot be undone.')) {
-                socket.emit('sandbox_delete_slot', { slot_name: name });
-            }
+            showBoardDialog({
+                mode: 'confirm',
+                title: 'Delete Sandbox Slot',
+                message: 'Delete "' + name + '"? This cannot be undone.',
+                confirmLabel: 'Delete'
+            }).then(function(confirmed) {
+                if (confirmed) emitSandboxEvent('sandbox_delete_slot', { slot_name: name });
+            });
         });
         row.appendChild(nameSpan);
         row.appendChild(loadBtn);
@@ -1095,6 +1178,7 @@ function renderSandboxToolbarState() {
 // =============================================
 (function bugReporter() {
     var fab = null, modal = null, statusEl = null, severity = 'annoying';
+    var bugOpenGeneration = 0;
     // Ring buffer of recent engine events for context.
     var recentEvents = [];
     var MAX_RECENT = 50;
@@ -1112,6 +1196,18 @@ function renderSandboxToolbarState() {
         modal.querySelectorAll('[data-bug-close]').forEach(function(el) {
             el.addEventListener('click', closeModal);
         });
+        var bugHead = modal.querySelector('.bug-modal-head');
+        var bugClose = modal.querySelector('.bug-modal-close');
+        if (bugHead) {
+            attachBoardModalMinimizer({
+                overlay: modal,
+                controlsHost: bugHead,
+                label: 'Bug report',
+                restoreId: 'bug-report-restore-pill',
+                before: bugClose
+            });
+        }
+        window.closeBugReporterModal = closeModal;
         modal.querySelectorAll('.bug-sev').forEach(function(btn) {
             btn.addEventListener('click', function() {
                 modal.querySelectorAll('.bug-sev').forEach(function(b) { b.classList.remove('is-active'); });
@@ -1187,6 +1283,9 @@ function renderSandboxToolbarState() {
     var pendingScreenshot = null;
 
     function openModal() {
+        var openGeneration = ++bugOpenGeneration;
+        disposeBoardModalMinimizer(modal);
+        modal.hidden = true;
         statusEl.textContent = '';
         statusEl.className = 'bug-modal-status';
         document.getElementById('bug-title').value = '';
@@ -1199,6 +1298,7 @@ function renderSandboxToolbarState() {
         // delay on first click while html2canvas downloads + runs;
         // subsequent clicks are sub-100ms because the lib is cached.
         captureScreenshot().then(function(b64) {
+            if (openGeneration !== bugOpenGeneration) return;
             pendingScreenshot = b64;
             modal.hidden = false;
             setTimeout(function() {
@@ -1256,7 +1356,12 @@ function renderSandboxToolbarState() {
             });
         }).catch(function() { return null; });
     }
-    function closeModal() { if (modal) modal.hidden = true; }
+    function closeModal() {
+        if (!modal) return;
+        bugOpenGeneration++;
+        disposeBoardModalMinimizer(modal);
+        modal.hidden = true;
+    }
 
     function captureGameState() {
         // Prefer the most recent authoritative final state stashed by
