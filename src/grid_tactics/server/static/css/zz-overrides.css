@@ -6431,6 +6431,34 @@ input::selection, textarea::selection { background: rgba(224, 162, 60, 0.45); co
   border-radius: 999px;
   background: rgba(34, 24, 15, 0.72);
 }
+/* The vintage tooltip layer above intentionally makes every stat child an
+   inline-block.  Player Actions is the exception: its label and coin bank
+   are one flex row, with no inherited per-span baseline margin. */
+#screen-game .tooltip-stats .ts-actions,
+#screen-sandbox .tooltip-stats .ts-actions {
+  display: inline-flex !important;
+  align-items: center !important;
+  vertical-align: middle;
+}
+#screen-game .tooltip-stats .ts-actions .ts-action-label,
+#screen-sandbox .tooltip-stats .ts-actions .ts-action-label {
+  display: block !important;
+  margin: 0 !important;
+  line-height: 16px !important;
+}
+#screen-game .tooltip-stats .ts-actions .action-bank-tooltip,
+#screen-sandbox .tooltip-stats .ts-actions .action-bank-tooltip {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 3px;
+  margin: 0 !important;
+  line-height: 0;
+}
+#screen-game .tooltip-stats .ts-actions .action-coin,
+#screen-sandbox .tooltip-stats .ts-actions .action-coin {
+  display: block !important;
+  margin: 0 !important;
+}
 .ts-action-label {
   color: #eed598;
   font-size: 10px;

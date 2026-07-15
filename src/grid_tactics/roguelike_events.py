@@ -374,6 +374,7 @@ def apply_handshake_slap_damage(
                 {"player_idx": target_idx, "prev": prev_hp, "new": target.hp,
                  "delta": -damage, "cause": "handshake_slap",
                  "source_player_idx": source_idx, "stacks": stacks},
+                animation_duration_ms=1150,
             )
     return state
 

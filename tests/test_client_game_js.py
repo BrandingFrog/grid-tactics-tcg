@@ -903,6 +903,161 @@ def test_attack_selection_only_paints_legal_targets():
     assert "}, true);" in pin_setup, "minion inspection must run before board-cell rendering"
 
 
+def test_handshake_slap_routes_to_impact_animation():
+    hp_handler = extract_function("playPlayerHpChange")
+    route = "if (payload.cause === 'handshake_slap')"
+    assert route in hp_handler
+    assert hp_handler.index(route) < hp_handler.index("if (payload.cause === 'fatigue')")
+    assert "playHandshakeSlap(ev, done);" in hp_handler
+    assert "_showPlayerHpDamagePopup(payload);" in hp_handler
+
+
+def test_handshake_slap_hits_at_170_degrees_and_stacks_once(tmp_path):
+    script = (
+        """
+var timers = [];
+var played = [];
+var commits = 0;
+var popupDeltas = [];
+var doneCalls = 0;
+
+function makeClassList() {
+    var values = [];
+    return {
+        add: function(name) { if (values.indexOf(name) < 0) values.push(name); },
+        remove: function(name) { values = values.filter(function(x) { return x !== name; }); },
+        contains: function(name) { return values.indexOf(name) >= 0; }
+    };
+}
+function makeStyle() {
+    var values = {};
+    return {
+        setProperty: function(name, value) { values[name] = value; },
+        removeProperty: function(name) { delete values[name]; },
+        values: values
+    };
+}
+function makeElement(tag) {
+    var el = {
+        tagName: tag,
+        id: '',
+        className: '',
+        textContent: '',
+        children: [],
+        parentNode: null,
+        classList: makeClassList(),
+        style: makeStyle(),
+        offsetWidth: 844,
+        appendChild: function(child) { child.parentNode = el; el.children.push(child); },
+        removeChild: function(child) {
+            el.children = el.children.filter(function(x) { return x !== child; });
+            child.parentNode = null;
+        },
+        remove: function() { if (el.parentNode) el.parentNode.removeChild(el); },
+        setAttribute: function() {}
+    };
+    return el;
+}
+
+var screen = makeElement('section');
+screen.classList.add('screen');
+screen.classList.add('active');
+var mount = makeElement('main');
+mount.closest = function() { return screen; };
+var document = {
+    createElement: makeElement,
+    getElementById: function() { return null; },
+    querySelector: function(selector) { return selector === '.screen.active' ? screen : null; }
+};
+var window = { matchMedia: function() { return { matches: false }; } };
+function _stageMount() { return mount; }
+function animSpeed() { return 1; }
+function _evDurationOr(ev, fallback) { return ev.animation_duration_ms || fallback; }
+function playSfx(name) { played.push(name); }
+function commitEventToDom() { commits++; }
+function _showPlayerHpDamagePopup(payload) { popupDeltas.push(payload.delta); }
+var setTimeout = function(fn, delay) { timers.push({ fn: fn, delay: delay }); return timers.length; };
+"""
+        + extract_function("playHandshakeSlap")
+        + """
+var ev = {
+    animation_duration_ms: 1150,
+    payload: {
+        player_idx: 1,
+        source_player_idx: 0,
+        delta: -10,
+        stacks: 2,
+        cause: 'handshake_slap'
+    }
+};
+playHandshakeSlap(ev, function() { doneCalls++; });
+var overlay = mount.children[0];
+var texts = [];
+function collectText(el) {
+    if (el.textContent) texts.push(el.textContent);
+    el.children.forEach(collectText);
+}
+collectText(overlay);
+var beforeImpact = { played: played.length, commits: commits, popups: popupDeltas.length };
+var impactTimer = timers.filter(function(t) { return t.delay === 724; })[0];
+var finishTimer = timers.filter(function(t) { return t.delay === 1150; })[0];
+impactTimer.fn();
+var atImpact = {
+    played: played.slice(),
+    commits: commits,
+    popups: popupDeltas.slice(),
+    impactClass: overlay.classList.contains('handshake-slap-impact'),
+    shaking: screen.classList.contains('handshake-slap-shaking')
+};
+finishTimer.fn();
+console.log(JSON.stringify({
+    beforeImpact: beforeImpact,
+    impactDelay: impactTimer.delay,
+    finishDelay: finishTimer.delay,
+    atImpact: atImpact,
+    asciiTexts: texts.filter(function(text) { return /^[\x00-\x7F]*$/.test(text); }),
+    handChildCount: overlay.children[1].children.length,
+    doneCalls: doneCalls,
+    overlayCountAfterFinish: mount.children.length
+}));
+"""
+    )
+    assert run_js(tmp_path, script) == {
+        "beforeImpact": {"played": 0, "commits": 0, "popups": 0},
+        "impactDelay": 724,
+        "finishDelay": 1150,
+        "atImpact": {
+            "played": ["slap"],
+            "commits": 1,
+            "popups": [-10],
+            "impactClass": True,
+            "shaking": True,
+        },
+        "asciiTexts": ["SLAP!", "-10 HP"],
+        "handChildCount": 2,
+        "doneCalls": 1,
+        "overlayCountAfterFinish": 0,
+    }
+
+
+def test_handshake_slap_css_tracks_exact_arc_and_accessibility():
+    css = (STATIC_DIR / "css" / "04-animations-overlays.css").read_text(
+        encoding="utf-8"
+    )
+    assert "@keyframes handshake-slap-swing" in css
+    assert "rotate(20deg)" in css
+    assert "62.963%" in css
+    assert "rotate(-150deg)" in css
+    assert "rotate(-250deg)" in css
+    assert "transform-origin: 50% 82%;" in css
+    assert "@keyframes handshake-slap-screen-shake" in css
+    shake = css.split("@keyframes handshake-slap-screen-shake", 1)[1]
+    assert "translate: -8px 3px;" in shake
+    assert "@media (prefers-reduced-motion: reduce)" in css
+    assert ".screen.handshake-slap-shaking { animation: none !important; }" in css
+    assert "slap:         '/static/sfx/attack_hit.ogg'" in _SRC
+
+
 def test_leaving_a_match_clears_pinned_tooltip_state():
     reset = extract_function("resetGameClientState")
     assert "gameTooltipPin = null;" in reset

@@ -475,6 +475,9 @@ def test_hud_has_three_coin_banks_and_profile_renderer():
     event_queue = Path(
         "src/grid_tactics/server/static/js/06-event-queue.js"
     ).read_text(encoding="utf-8")
+    css = Path(
+        "src/grid_tactics/server/static/css/zz-overrides.css"
+    ).read_text(encoding="utf-8")
     socket_client = Path(
         "src/grid_tactics/server/static/vendor/socket.io-4.7.4.min.js"
     )
@@ -487,6 +490,11 @@ def test_hud_has_three_coin_banks_and_profile_renderer():
     assert html.count('class="action-coin"') >= 12
     assert "_actionBankMarkup" in hud
     assert "action-bank-tooltip" in hud
+    assert ".tooltip-stats .ts-actions" in css
+    assert ".ts-actions .action-bank-tooltip" in css
+    assert ".ts-actions .action-coin" in css
+    assert "display: inline-flex !important" in css
+    assert "margin: 0 !important" in css
     assert "end your turn with no effect" in action_bar
     assert "showPlayerPreview(activePlayerPreviewIdx)" in render_game
     assert "payload.source === 'rest'" in event_queue

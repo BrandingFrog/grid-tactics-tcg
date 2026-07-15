@@ -1829,6 +1829,13 @@ function playPlayerHpChange(ev, done) {
     var payload = ev && ev.payload;
     if (!payload || typeof payload.delta !== 'number') { setTimeout(done, 0); return; }
     var delta = payload.delta;
+    // With a Slap lands as its own HP-change packet after the Handshake
+    // payout. Route it through the full-screen swing so its sound, shake,
+    // damage popup, and visible HP tick all meet at the 170-degree impact.
+    if (payload.cause === 'handshake_slap') {
+        playHandshakeSlap(ev, done);
+        return;
+    }
     // Fatigue (turn-structure redesign 2026-07): the engine emits empty-deck
     // turn-start fatigue as player_hp_change with cause="fatigue" — there is
     // NO dedicated fatigue event type. Fire the DECK EMPTY — FATIGUE skull
@@ -1840,24 +1847,7 @@ function playPlayerHpChange(ev, done) {
     }
     // Only negatives get the damage popup (heals on player HP are rare and
     // covered by green shield popup on the HP stat — snapshot path handles).
-    if (delta < 0) {
-        var el = document.getElementById(_hpStatElementId(payload.player_idx));
-        if (el) {
-            var rect = el.getBoundingClientRect();
-            var pop = document.createElement('div');
-            pop.className = 'damage-popup hp-damage-popup';
-            pop.style.position = 'fixed';
-            pop.style.left = (rect.left + rect.width / 2 - 20) + 'px';
-            pop.style.top = (rect.top - 8) + 'px';
-            pop.textContent = String(delta);
-            document.body.appendChild(pop);
-            el.classList.add('hp-flash');
-            setTimeout(function() {
-                if (pop.parentNode) pop.parentNode.removeChild(pop);
-                el.classList.remove('hp-flash');
-            }, 950);
-        }
-    }
+    if (delta < 0) _showPlayerHpDamagePopup(payload);
     // Fatigue paces longer than a plain HP tick so the skull nudge lands
     // before the next queued event (turn banner etc.) plays over it.
     if (payload.cause === 'fatigue') {
@@ -1865,6 +1855,145 @@ function playPlayerHpChange(ev, done) {
         return;
     }
     setTimeout(done, _evDurationOr(ev, 400));
+}
+
+// Shared player-HP damage beat. Ordinary damage calls this immediately;
+// With a Slap waits until the hand reaches 170 degrees.
+function _showPlayerHpDamagePopup(payload) {
+    if (!payload || typeof document === 'undefined') return;
+    var el = document.getElementById(_hpStatElementId(payload.player_idx));
+    if (!el) return;
+    var rect = el.getBoundingClientRect();
+    var pop = document.createElement('div');
+    pop.className = 'damage-popup hp-damage-popup';
+    pop.style.position = 'fixed';
+    pop.style.left = (rect.left + rect.width / 2 - 20) + 'px';
+    pop.style.top = (rect.top - 8) + 'px';
+    pop.textContent = String(payload.delta);
+    document.body.appendChild(pop);
+    el.classList.add('hp-flash');
+    setTimeout(function() {
+        if (pop.parentNode) pop.parentNode.removeChild(pop);
+        el.classList.remove('hp-flash');
+    }, 950);
+}
+
+// With a Slap: one swing per causal HP packet (stacked fortunes increase the
+// damage badge rather than spawning duplicate hands). The hand travels a
+// full 270 degrees counter-clockwise from bottom-center. Impact is exactly
+// 170 / 270 through the clock, matching the explicit CSS keyframe.
+function playHandshakeSlap(ev, done) {
+    var payload = (ev && ev.payload) || {};
+    var reducedMotion = false;
+    try {
+        reducedMotion = !!(window.matchMedia
+            && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+    } catch (e) { /* no media-query API */ }
+
+    var totalMs = _evDurationOr(ev, 1150);
+    if (reducedMotion) totalMs = Math.min(totalMs, Math.round(360 / animSpeed()));
+    var impactMs = Math.round(totalMs * (170 / 270));
+    var shakeMs = Math.max(90, Math.round(340 / animSpeed()));
+    var impactFxMs = Math.max(120, Math.round(380 / animSpeed()));
+    var overlay = null;
+    var shakeTarget = null;
+    var finished = false;
+    var impacted = false;
+
+    try {
+        var existing = document.getElementById('nudge-handshake-slap');
+        if (existing) existing.remove();
+        overlay = document.createElement('div');
+        overlay.id = 'nudge-handshake-slap';
+        overlay.className = 'nudge-overlay nudge-handshake-slap';
+        overlay.setAttribute('aria-hidden', 'true');
+        overlay.style.setProperty('--slap-duration', totalMs + 'ms');
+        overlay.style.setProperty('--slap-impact-duration', impactFxMs + 'ms');
+
+        var trail = document.createElement('div');
+        trail.className = 'slap-arc-trail';
+        overlay.appendChild(trail);
+
+        var hand = document.createElement('div');
+        hand.className = 'handshake-slap-hand';
+        var glyph = document.createElement('span');
+        glyph.className = 'handshake-slap-glyph';
+        glyph.textContent = '👋';
+        hand.appendChild(glyph);
+        if ((payload.stacks | 0) > 1) {
+            var stackBadge = document.createElement('span');
+            stackBadge.className = 'handshake-slap-stack';
+            stackBadge.textContent = '×' + (payload.stacks | 0);
+            hand.appendChild(stackBadge);
+        }
+        overlay.appendChild(hand);
+
+        var flash = document.createElement('div');
+        flash.className = 'handshake-slap-flash';
+        overlay.appendChild(flash);
+
+        var burst = document.createElement('div');
+        burst.className = 'handshake-slap-burst';
+        var word = document.createElement('div');
+        word.className = 'handshake-slap-word';
+        word.textContent = 'SLAP!';
+        burst.appendChild(word);
+        var damage = document.createElement('div');
+        damage.className = 'handshake-slap-damage';
+        damage.textContent = String(payload.delta || -(5 * Math.max(1, payload.stacks | 0))) + ' HP';
+        burst.appendChild(damage);
+        overlay.appendChild(burst);
+
+        var mount = _stageMount();
+        mount.appendChild(overlay);
+        shakeTarget = (mount.closest && mount.closest('.screen'))
+            || document.querySelector('.screen.active');
+    } catch (e) {
+        overlay = null;  // animation is cosmetic; preserve queue progress
+    }
+
+    function impact() {
+        if (impacted) return;
+        impacted = true;
+        if (overlay) overlay.classList.add('handshake-slap-impact');
+        try { playSfx('slap'); } catch (e) { /* muted/unavailable */ }
+
+        // Commit the numeric HP at the hit rather than after the recoil tail.
+        // drainEventQueue's end commit is intentionally idempotent.
+        try { commitEventToDom(ev); } catch (e) { /* final snapshot is fallback */ }
+        try { _showPlayerHpDamagePopup(payload); } catch (e) { /* visual only */ }
+
+        if (!reducedMotion && shakeTarget && shakeTarget.classList) {
+            shakeTarget.classList.remove('handshake-slap-shaking');
+            if (shakeTarget.style && shakeTarget.style.setProperty) {
+                shakeTarget.style.setProperty('--slap-shake-duration', shakeMs + 'ms');
+            }
+            // Restart cleanly for the second player's queued Slap.
+            void shakeTarget.offsetWidth;
+            shakeTarget.classList.add('handshake-slap-shaking');
+            setTimeout(function() {
+                if (shakeTarget && shakeTarget.classList) {
+                    shakeTarget.classList.remove('handshake-slap-shaking');
+                }
+            }, shakeMs);
+        }
+    }
+
+    function finish() {
+        if (finished) return;
+        finished = true;
+        if (overlay && overlay.parentNode) overlay.parentNode.removeChild(overlay);
+        if (shakeTarget && shakeTarget.classList) {
+            shakeTarget.classList.remove('handshake-slap-shaking');
+            if (shakeTarget.style && shakeTarget.style.removeProperty) {
+                shakeTarget.style.removeProperty('--slap-shake-duration');
+            }
+        }
+        done();
+    }
+
+    setTimeout(impact, impactMs);
+    setTimeout(finish, totalMs);
 }
 
 // ----- 9 harder slot handlers (Plan 14.8-04b, Task 1) ----------------

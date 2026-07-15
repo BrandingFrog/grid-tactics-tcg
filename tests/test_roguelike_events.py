@@ -262,6 +262,12 @@ def test_with_a_slap_stacks_and_deals_five_per_stack(library):
     hp_event = next(ev for ev in stream.events if ev.type == EVT_PLAYER_HP_CHANGE)
     assert hp_event.payload["delta"] == -10
     assert hp_event.payload["stacks"] == 2
+    assert hp_event.payload["cause"] == "handshake_slap"
+    assert hp_event.payload["source_player_idx"] == 0
+    assert hp_event.payload["player_idx"] == 1
+    assert hp_event.payload["prev"] == state.players[1].hp
+    assert hp_event.payload["new"] == damaged.players[1].hp
+    assert hp_event.animation_duration_ms == 1150
 
 
 def test_both_players_slap_during_same_handshake():
@@ -271,10 +277,21 @@ def test_both_players_slap_during_same_handshake():
         p0=_player(PlayerSide.PLAYER_1, hp=30),
         p1=_player(PlayerSide.PLAYER_2, hp=30),
     )
-    paid = _resolve_handshake_payout(state)
+    stream = EventStream()
+    paid = _resolve_handshake_payout(state, event_collector=stream)
     assert paid.players[0].hp == 25
     assert paid.players[1].hp == 20
     assert not paid.handshake_pending
+    slap_events = [
+        event for event in stream.events
+        if event.type == EVT_PLAYER_HP_CHANGE
+        and event.payload.get("cause") == "handshake_slap"
+    ]
+    assert [event.payload["source_player_idx"] for event in slap_events] == [0, 1]
+    assert [event.payload["player_idx"] for event in slap_events] == [1, 0]
+    assert [event.payload["delta"] for event in slap_events] == [-10, -5]
+    assert [event.payload["stacks"] for event in slap_events] == [2, 1]
+    assert all(event.animation_duration_ms == 1150 for event in slap_events)
 
 
 def test_postponed_resources_resume_once(library):

@@ -711,6 +711,195 @@
   animation: no-action-pop 400ms 450ms cubic-bezier(.16,1.5,.3,1) backwards;
 }
 
+/* --- With a Slap fortune: 270-degree counter-clockwise emoji swing ---
+   The event queue sets --slap-duration from the server's causal HP event.
+   Rotation begins at 20deg and ends at -250deg: exactly 270deg CCW. The
+   62.963% keyframe is 170/270 through the arc and matches the JS impact
+   timer that fires sound, HP, flash, and screen shake. */
+.nudge-overlay.nudge-handshake-slap {
+  overflow: hidden;
+  isolation: isolate;
+  background: radial-gradient(circle at 50% 45%, rgba(255, 214, 112, 0.08), transparent 42%);
+}
+
+.handshake-slap-hand {
+  position: absolute;
+  left: 50%;
+  bottom: -8%;
+  z-index: 3;
+  width: 160px;
+  height: 160px;
+  display: grid;
+  place-items: center;
+  transform-origin: 50% 82%;
+  opacity: 0;
+  will-change: transform, opacity, filter;
+  animation: handshake-slap-swing var(--slap-duration, 1150ms) linear both;
+}
+
+.handshake-slap-glyph {
+  display: block;
+  font-size: 148px;
+  line-height: 1;
+  filter: drop-shadow(0 9px 3px rgba(0, 0, 0, 0.35))
+          drop-shadow(0 18px 18px rgba(0, 0, 0, 0.6));
+}
+
+.handshake-slap-stack {
+  position: absolute;
+  right: -4px;
+  top: 0;
+  min-width: 34px;
+  height: 34px;
+  padding: 0 7px;
+  box-sizing: border-box;
+  display: grid;
+  place-items: center;
+  border: 3px solid #2a1609;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #ffe48a, #d99027);
+  color: #241306;
+  font-family: var(--ui-display, 'Montserrat', sans-serif);
+  font-size: 19px;
+  font-weight: 900;
+  line-height: 1;
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.55);
+}
+
+.slap-arc-trail {
+  position: absolute;
+  left: 50%;
+  bottom: -58px;
+  z-index: 1;
+  width: 390px;
+  height: 290px;
+  border: 9px solid transparent;
+  border-top-color: rgba(255, 224, 132, 0.58);
+  border-right-color: rgba(224, 162, 60, 0.3);
+  border-radius: 50%;
+  opacity: 0;
+  filter: drop-shadow(0 0 8px rgba(255, 184, 65, 0.42));
+  transform: translateX(-43%) rotate(-24deg);
+  animation: handshake-slap-trail var(--slap-duration, 1150ms) ease-out both;
+}
+
+.handshake-slap-flash {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  opacity: 0;
+  background: radial-gradient(circle at 50% 45%,
+      rgba(255, 249, 207, 0.88) 0%, rgba(224, 162, 60, 0.35) 21%,
+      rgba(181, 98, 58, 0.14) 42%, transparent 68%);
+}
+
+.handshake-slap-burst {
+  position: absolute;
+  left: 50%;
+  top: 45%;
+  z-index: 4;
+  opacity: 0;
+  transform: translate(-50%, -50%) rotate(-8deg) scale(0.35);
+  text-align: center;
+  pointer-events: none;
+}
+
+.handshake-slap-word {
+  color: #fff1bc;
+  font-family: var(--ui-display, 'Montserrat', sans-serif);
+  font-size: 68px;
+  font-weight: 900;
+  line-height: 0.9;
+  letter-spacing: 4px;
+  text-shadow: 4px 4px 0 #281407, -3px 3px 0 #281407,
+               3px -3px 0 #281407, -3px -3px 0 #281407,
+               0 0 18px rgba(255, 90, 35, 0.9);
+}
+
+.handshake-slap-damage {
+  margin-top: 10px;
+  color: #ff6654;
+  font-family: var(--ui-display, 'Montserrat', sans-serif);
+  font-size: 28px;
+  font-weight: 900;
+  line-height: 1;
+  letter-spacing: 2px;
+  text-shadow: 2px 2px 0 #1b0c05, -2px 2px 0 #1b0c05,
+               2px -2px 0 #1b0c05, -2px -2px 0 #1b0c05;
+}
+
+.nudge-handshake-slap.handshake-slap-impact .handshake-slap-flash {
+  animation: handshake-slap-flash var(--slap-impact-duration, 380ms) ease-out both;
+}
+
+.nudge-handshake-slap.handshake-slap-impact .handshake-slap-burst {
+  animation: handshake-slap-burst var(--slap-impact-duration, 380ms)
+             cubic-bezier(.16, 1.45, .3, 1) both;
+}
+
+/* Individual `translate` composes with the duel screen's existing scaled
+   transform, so impact shake never snaps or resizes the 844x390 stage. */
+.screen.handshake-slap-shaking {
+  animation: handshake-slap-screen-shake var(--slap-shake-duration, 340ms)
+             cubic-bezier(.36, .07, .19, .97) both;
+}
+
+@keyframes handshake-slap-swing {
+  0%      { opacity: 0; transform: translate(-50%, 58%) rotate(20deg) scale(.72); }
+  3.704%  { opacity: 1; transform: translate(-50%, 20%) rotate(10deg) scale(.82); }
+  25.926% { opacity: 1; transform: translate(calc(-50% + 120px), -5%) rotate(-50deg) scale(.95); }
+  44.444% { opacity: 1; transform: translate(calc(-50% + 135px), -55%) rotate(-100deg) scale(1.03); }
+  62.963% { opacity: 1; transform: translate(-50%, -110%) rotate(-150deg) scale(1.16); filter: brightness(1.22); }
+  81.481% { opacity: 1; transform: translate(calc(-50% - 120px), -145%) rotate(-200deg) scale(.98); }
+  96.296% { opacity: 1; transform: translate(calc(-50% - 205px), -180%) rotate(-240deg) scale(.88); }
+  100%    { opacity: 0; transform: translate(calc(-50% - 225px), -190%) rotate(-250deg) scale(.8); }
+}
+
+@keyframes handshake-slap-trail {
+  0%, 18% { opacity: 0; transform: translateX(-43%) rotate(-24deg) scale(.78); }
+  42%     { opacity: .35; }
+  62.963% { opacity: .78; transform: translateX(-43%) rotate(-24deg) scale(1); }
+  88%, 100% { opacity: 0; transform: translateX(-43%) rotate(-24deg) scale(1.08); }
+}
+
+@keyframes handshake-slap-flash {
+  0%   { opacity: .95; }
+  32%  { opacity: .42; }
+  100% { opacity: 0; }
+}
+
+@keyframes handshake-slap-burst {
+  0%   { opacity: 0; transform: translate(-50%, -50%) rotate(-8deg) scale(.35); }
+  42%  { opacity: 1; transform: translate(-50%, -50%) rotate(4deg) scale(1.12); }
+  72%  { opacity: 1; transform: translate(-50%, -50%) rotate(-2deg) scale(1); }
+  100% { opacity: 0; transform: translate(-50%, -50%) rotate(0) scale(1.08); }
+}
+
+@keyframes handshake-slap-screen-shake {
+  0%, 100% { translate: 0 0; }
+  10% { translate: -8px 3px; }
+  20% { translate: 7px -5px; }
+  32% { translate: -6px -3px; }
+  45% { translate: 8px 4px; }
+  58% { translate: -5px 2px; }
+  72% { translate: 4px -3px; }
+  86% { translate: -2px 1px; }
+}
+
+@keyframes handshake-slap-reduced {
+  0%   { opacity: 0; transform: translate(-50%, -75%) scale(.85); }
+  62.963% { opacity: 1; transform: translate(-50%, -95%) scale(1.08); }
+  100% { opacity: 0; transform: translate(-50%, -95%) scale(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .handshake-slap-hand {
+    animation-name: handshake-slap-reduced;
+  }
+  .slap-arc-trail { display: none; }
+  .screen.handshake-slap-shaking { animation: none !important; }
+}
+
 /* --- overdraw burn reveal — turn-structure redesign (2026-07) ---
    A draw with a full hand (10 cards) reveals the card center-screen, then
    playOverdrawBurn hands off to the card_fly ghost toward the Exhaust pile.

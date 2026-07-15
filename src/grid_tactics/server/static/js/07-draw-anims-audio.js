@@ -190,6 +190,7 @@ var SFX_FILES = {
     card_play:    '/static/sfx/card_play.ogg',
     move:         '/static/sfx/move.ogg',
     attack_hit:   '/static/sfx/attack_hit.ogg',
+    slap:         '/static/sfx/attack_hit.ogg', // semantic alias; replaceable later
     damage:       '/static/sfx/damage.ogg',
     heal:         '/static/sfx/heal.ogg',
     burn_tick:    '/static/sfx/burn_tick.ogg',
