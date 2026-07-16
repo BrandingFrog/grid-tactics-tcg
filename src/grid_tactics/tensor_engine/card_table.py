@@ -35,6 +35,7 @@ class CardTable:
         effect_type: torch.Tensor,
         effect_trigger: torch.Tensor,
         effect_target: torch.Tensor,
+        effect_target_side: torch.Tensor,
         effect_amount: torch.Tensor,
         num_effects: torch.Tensor,
         react_condition: torch.Tensor,
@@ -75,6 +76,7 @@ class CardTable:
         self.effect_type = effect_type
         self.effect_trigger = effect_trigger
         self.effect_target = effect_target
+        self.effect_target_side = effect_target_side
         self.effect_amount = effect_amount
         self.num_effects = num_effects
         self.react_condition = react_condition
@@ -139,6 +141,7 @@ class CardTable:
         effect_type = torch.full((n, MAX_EFFECTS_PER_CARD), -1, dtype=torch.int32)
         effect_trigger = torch.full((n, MAX_EFFECTS_PER_CARD), -1, dtype=torch.int32)
         effect_target = torch.full((n, MAX_EFFECTS_PER_CARD), -1, dtype=torch.int32)
+        effect_target_side = torch.zeros((n, MAX_EFFECTS_PER_CARD), dtype=torch.int32)
         effect_amount = torch.zeros((n, MAX_EFFECTS_PER_CARD), dtype=torch.int32)
         num_effects = torch.zeros(n, dtype=torch.int32)
         react_condition = torch.full((n,), -1, dtype=torch.int32)
@@ -184,6 +187,9 @@ class CardTable:
                 effect_type[i, j] = eff.effect_type.value
                 effect_trigger[i, j] = eff.trigger.value
                 effect_target[i, j] = eff.target.value
+                effect_target_side[i, j] = {
+                    None: 0, "all": 0, "enemy": 1, "friendly": 2,
+                }[eff.target_side]
                 effect_amount[i, j] = eff.amount
             num_effects[i] = len(card.effects)
 
@@ -322,6 +328,7 @@ class CardTable:
             effect_type=effect_type.to(device),
             effect_trigger=effect_trigger.to(device),
             effect_target=effect_target.to(device),
+            effect_target_side=effect_target_side.to(device),
             effect_amount=effect_amount.to(device),
             num_effects=num_effects.to(device),
             react_condition=react_condition.to(device),

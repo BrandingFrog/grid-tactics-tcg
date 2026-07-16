@@ -76,6 +76,7 @@ function _clearBoardInteractionHighlights() {
 }
 
 function clearSelection() {
+    var wasReactTargeting = interactionMode === 'react_target';
     selectedHandIdx = null;
     selectedMinionId = null;
     selectedDeployPos = null;
@@ -85,6 +86,12 @@ function clearSelection() {
     closeTransformPicker();
     hideDeclinePostMoveAttackButton();
     _clearBoardInteractionHighlights();
+    if (wasReactTargeting && window.__spellStageAutoMinimized) {
+        window.__spellStageAutoMinimized = false;
+        if (typeof setSpellStageMinimized === 'function') {
+            setSpellStageMinimized(false);
+        }
+    }
 }
 
 function submitAction(actionData, allowDuringBoardPeek) {
@@ -206,6 +213,26 @@ function getLegalReactCardIndices() {
         }
     });
     return indices;
+}
+
+function getLegalReactActions(handIdx) {
+    return (legalActions || []).filter(function(a) {
+        return a.action_type === 5 && a.card_index === handIdx;
+    });
+}
+
+function getReactTargetPositions(handIdx) {
+    var seen = {};
+    var positions = [];
+    getLegalReactActions(handIdx).forEach(function(a) {
+        if (!a.target_pos) return;
+        var key = a.target_pos[0] + ',' + a.target_pos[1];
+        if (!seen[key]) {
+            seen[key] = true;
+            positions.push(a.target_pos);
+        }
+    });
+    return positions;
 }
 
 // Describe the pending opponent action for the react banner
@@ -488,6 +515,7 @@ function onHandCardClick(handIdx, ownerIdx) {
             && interactionMode !== 'post_move_attack_pick'
             && interactionMode !== 'conjure_deploy'
             && interactionMode !== 'revive_place'
+            && interactionMode !== 'react_target'
             && interactionMode !== 'exhaust_play') {
         return;
     }
@@ -506,14 +534,37 @@ function onHandCardClick(handIdx, ownerIdx) {
         if (sandboxMode && ownerIdx != null && gameState && ownerIdx !== gameState.react_player_idx) {
             return;  // this hand isn't the reacting side — inert click
         }
-        var reactAction = null;
-        legalActions.forEach(function(a) {
-            if (a.action_type === 5 && a.card_index === handIdx) reactAction = a;
-        });
-        if (reactAction) {
-            var payload = { action_type: 5, card_index: handIdx };
-            if (reactAction.target_pos) payload.target_pos = reactAction.target_pos;
-            submitAction(payload);
+        if (selectedHandIdx === handIdx && interactionMode === 'react_target') {
+            clearSelection();
+            highlightBoard();
+            updateHandHighlights();
+            return;
+        }
+        var reactActions = getLegalReactActions(handIdx);
+        var reactTargets = getReactTargetPositions(handIdx);
+        if (reactTargets.length > 0) {
+            // Do not play a targeted react until its complete action has
+            // been chosen. Collapse the existing stage so the reacting
+            // player can inspect and target the board first.
+            selectedHandIdx = handIdx;
+            selectedMinionId = null;
+            selectedDeployPos = null;
+            interactionMode = 'react_target';
+            window.__reactTargetCardNumericId = gameState
+                && gameState.players && gameState.players[gameState.react_player_idx]
+                && gameState.players[gameState.react_player_idx].hand
+                ? gameState.players[gameState.react_player_idx].hand[handIdx]
+                : null;
+            window.__spellStageAutoMinimized = true;
+            if (typeof setSpellStageMinimized === 'function') {
+                setSpellStageMinimized(true);
+            }
+            highlightBoard();
+            updateHandHighlights();
+            return;
+        }
+        if (reactActions.length > 0) {
+            submitAction({ action_type: 5, card_index: handIdx });
         }
         return;
     }
@@ -572,34 +623,8 @@ function onHandCardClick(handIdx, ownerIdx) {
         return;
     }
 
-    // Magic with exactly ONE legal target — auto-arm AND auto-target on
-    // first click. Users kept failing to click the highlighted tile (the
-    // enemy minion draws over the cell) so for a one-target spell there's
-    // nothing for them to resolve — just submit directly. A second click
-    // on the same card re-selects in case they want to back out.
-    if (deployPositions.length === 0 && targetOnly.length === 1) {
-        var onlyTarget = targetOnly[0];
-        // Discard-cost gate (user 2026-07-10): the auto-submit skipped the
-        // discard picker entirely, silently paying with an arbitrary card.
-        var onlySacs = getSacrificeChoices(handIdx, null, onlyTarget);
-        if (onlySacs.length > 0) {
-            selectedHandIdx = handIdx;
-            selectedMinionId = null;
-            selectedDeployPos = null;
-            showSacrificePicker(handIdx, null, onlyTarget, onlySacs);
-            return;
-        }
-        var onlyMatch = findCardAction(handIdx, null, onlyTarget);
-        if (onlyMatch) {
-            submitAction(_playCardPayload(onlyMatch));
-            clearSelection();
-            highlightBoard();
-            updateHandHighlights();
-            return;
-        }
-    }
-
-    // Magic with target selection: no deploy positions, only target_pos
+    // Targeted magic always asks for its target before the card is spent
+    // or placed on the spell stage, even when only one legal target exists.
     if (deployPositions.length === 0 && targetOnly.length > 0) {
         selectedHandIdx = handIdx;
         selectedMinionId = null;
@@ -662,6 +687,7 @@ function onBoardCellClick(row, col) {
             && interactionMode !== 'post_move_attack_pick'
             && interactionMode !== 'conjure_deploy'
             && interactionMode !== 'revive_place'
+            && interactionMode !== 'react_target'
             && interactionMode !== 'exhaust_play') {
         return;
     }
@@ -674,7 +700,8 @@ function onBoardCellClick(row, col) {
     var _pendingCellDecision = interactionMode === 'death_target_pick'
         || interactionMode === 'post_move_attack_pick'
         || interactionMode === 'conjure_deploy'
-        || interactionMode === 'revive_place';
+        || interactionMode === 'revive_place'
+        || interactionMode === 'react_target';
     if (isSpellStageAnimating() && !_pendingCellDecision) return;
     // A pending decision is authoritative even if the underlying state is
     // technically still in REACT while the interrupted chain waits on it.
@@ -756,6 +783,29 @@ function onBoardCellClick(row, col) {
         submitAction({ action_type: 12, position: [row, col] });
         interactionMode = null;
         if (typeof closeConjureDeployUI === 'function') closeConjureDeployUI();
+        return;
+    }
+
+    // Targeted react pre-commit. The card remains in hand and no mana is
+    // spent until a complete legal target/placement has been selected.
+    if (interactionMode === 'react_target' && selectedHandIdx !== null) {
+        var reactMatch = getLegalReactActions(selectedHandIdx).find(function(a) {
+            return a.target_pos
+                && a.target_pos[0] === row && a.target_pos[1] === col;
+        });
+        if (!reactMatch) return;
+        if (typeof previewSpellStageTarget === 'function') {
+            previewSpellStageTarget(
+                window.__reactTargetCardNumericId,
+                [row, col],
+                'react'
+            );
+        }
+        submitAction({
+            action_type: 5,
+            card_index: selectedHandIdx,
+            target_pos: [row, col],
+        });
         return;
     }
 
@@ -873,6 +923,16 @@ function onBoardCellClick(row, col) {
             // drop. First match wins the ally pick for cards with >1 ally.
             var matched = findCardAction(selectedHandIdx, selectedDeployPos, [row, col]);
             if (matched) {
+                if (typeof previewSpellStageTarget === 'function') {
+                    var castOwnerIdx = sandboxMode && gameState
+                        ? gameState.active_player_idx : myPlayerIdx;
+                    var castNid = gameState && gameState.players
+                        && gameState.players[castOwnerIdx]
+                        && gameState.players[castOwnerIdx].hand
+                        ? gameState.players[castOwnerIdx].hand[selectedHandIdx]
+                        : null;
+                    previewSpellStageTarget(castNid, [row, col], 'magic');
+                }
                 submitAction(_playCardPayload(matched));
             }
         }
@@ -918,16 +978,21 @@ function onBoardMinionClick(minion) {
             && interactionMode !== 'post_move_attack_pick'
             && interactionMode !== 'conjure_deploy'
             && interactionMode !== 'revive_place'
+            && interactionMode !== 'react_target'
             && interactionMode !== 'exhaust_play') {
         return;
     }
     // Spell-stage gate: same rationale as onBoardCellClick. Blocks the
     // action-menu open + attack/target routing so a click on a minion
     // during the spell-stage animation is inert (except death-target).
-    if (isSpellStageAnimating() && interactionMode !== 'death_target_pick') return;
+    if (isSpellStageAnimating()
+            && interactionMode !== 'death_target_pick'
+            && interactionMode !== 'react_target') return;
     // Board clicks are inert during react window EXCEPT when a death
     // target pick is pending (see onBoardCellClick comment).
-    if (isReactWindow() && interactionMode !== 'death_target_pick') return;
+    if (isReactWindow()
+            && interactionMode !== 'death_target_pick'
+            && interactionMode !== 'react_target') return;
     var isMyTurn = legalActions && legalActions.length > 0;
     if (!isMyTurn) return;
 
@@ -941,6 +1006,11 @@ function onBoardMinionClick(minion) {
     // Death-target pick mode: defer to the cell click path so the same
     // valid-target filter runs.
     if (interactionMode === 'death_target_pick') {
+        onBoardCellClick(minion.position[0], minion.position[1]);
+        return;
+    }
+
+    if (interactionMode === 'react_target') {
         onBoardCellClick(minion.position[0], minion.position[1]);
         return;
     }

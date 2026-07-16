@@ -25,7 +25,7 @@ def apply_effects_batch(
     trigger: int,                  # TriggerType enum value to match
     caster_owners: torch.Tensor,   # [N] int32 (0 or 1)
     caster_slots: torch.Tensor,    # [N] int32 (minion slot of caster, -1 if no minion)
-    target_flat_pos: torch.Tensor,  # [N] int32 (flat board pos for SINGLE_TARGET, -1 if none)
+    target_flat_pos: torch.Tensor,  # [N] int32 (flat board pos for board targets, -1 if none)
     card_table,                    # CardTable
     mask: torch.Tensor,            # [N] bool -- which games to apply effects to
 ):
@@ -43,6 +43,7 @@ def apply_effects_batch(
         etype = card_table.effect_type[safe_ids, eff_idx]       # [N]
         etrigger = card_table.effect_trigger[safe_ids, eff_idx]  # [N]
         etarget = card_table.effect_target[safe_ids, eff_idx]   # [N]
+        etarget_side = card_table.effect_target_side[safe_ids, eff_idx]  # [N]
         eamount = card_table.effect_amount[safe_ids, eff_idx]   # [N]
 
         # Only active if: trigger matches, effect exists, and game is masked
@@ -61,7 +62,10 @@ def apply_effects_batch(
         _apply_tutor(state, active & (etype == 8), card_ids, caster_owners, card_table)
         _apply_destroy(state, active & (etype == 9), etarget, target_flat_pos)
         # Phase 14.3: APPLY_BURNING (15) — grant burning_stacks to target minion
-        _apply_burning(state, active & (etype == 15), etarget, eamount, target_flat_pos)
+        _apply_burning(
+            state, active & (etype == 15), etarget, eamount,
+            caster_owners, target_flat_pos, etarget_side,
+        )
         # GRANT_DARK_MATTER (16): add `amount` dark_matter_stacks to target.
         _apply_grant_dark_matter(
             state, active & (etype == 16), etarget, eamount, target_flat_pos,
@@ -71,7 +75,10 @@ def apply_effects_batch(
         # PASSIVE-trigger BURN aura (Emberplague Rat) is handled separately
         # in _fire_passive_effects_batch via passive_burn_amount and never
         # reaches this dispatch.
-        _apply_burning(state, active & (etype == 10), etarget, eamount, target_flat_pos)
+        _apply_burning(
+            state, active & (etype == 10), etarget, eamount,
+            caster_owners, target_flat_pos, etarget_side,
+        )
 
 
 def _find_minion_slot_at_pos(state, flat_pos: torch.Tensor) -> torch.Tensor:
@@ -420,10 +427,13 @@ def _apply_tutor(state, active, card_ids, caster_owners, card_table):
     )
 
 
-def _apply_burning(state, active, etarget, eamount, target_flat_pos):
-    """APPLY_BURNING: set is_burning=True on the target minion.
+def _apply_burning(
+    state, active, etarget, eamount, caster_owners, target_flat_pos,
+    etarget_side,
+):
+    """APPLY_BURNING: set is_burning=True on matching minions.
 
-    Boolean status — no-op if target is already burning. SINGLE_TARGET only.
+    Boolean status — no-op if a matching minion is already burning.
     """
     if not active.any():
         return
@@ -439,6 +449,27 @@ def _apply_burning(state, active, etarget, eamount, target_flat_pos):
             safe_slot = slot.clamp(min=0)
             cur = state.is_burning[arange_n, safe_slot]
             state.is_burning[arange_n, safe_slot] = cur | valid
+
+    # ROW (8): geometry comes from target_flat_pos; side filtering comes from
+    # the EffectDefinition metadata encoded in CardTable.
+    row_target = active & (etarget == 8) & (target_flat_pos >= 0)
+    if row_target.any():
+        chosen_row = target_flat_pos // GRID_COLS
+        for slot_idx in range(MAX_MINIONS):
+            is_ally = state.minion_owner[:, slot_idx] == caster_owners
+            side_matches = (
+                (etarget_side == 0)
+                | ((etarget_side == 1) & ~is_ally)
+                | ((etarget_side == 2) & is_ally)
+            )
+            is_match_in_row = (
+                state.minion_alive[:, slot_idx]
+                & side_matches
+                & (state.minion_row[:, slot_idx] == chosen_row)
+            )
+            hit = row_target & is_match_in_row
+            if hit.any():
+                state.is_burning[:, slot_idx] |= hit
 
 
 def _apply_grant_dark_matter(state, active, etarget, eamount, target_flat_pos):

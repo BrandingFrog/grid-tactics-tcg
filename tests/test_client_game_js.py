@@ -3055,3 +3055,77 @@ console.log(JSON.stringify({
         "top": "60px",
         "fontSize": "16px",
     }
+
+
+def test_targeted_react_waits_for_board_pick_before_submit(tmp_path):
+    """Sparkfed-style reacts minimise, target, then commit exactly once."""
+    script = (
+        """
+var window = {};
+var isSpectator = false;
+var sandboxMode = false;
+var myPlayerIdx = 0;
+var interactionMode = null;
+var selectedHandIdx = null;
+var selectedMinionId = null;
+var selectedDeployPos = null;
+var selectedAbilityMinionId = null;
+var gameState = {
+    phase: 1,
+    react_player_idx: 0,
+    players: [{hand: [33]}, {hand_count: 0}]
+};
+var legalActions = [
+    {action_type: 5, card_index: 0, target_pos: [0, 0]},
+    {action_type: 5, card_index: 0, target_pos: [1, 2]}
+];
+var submitted = [];
+var minimized = [];
+var previews = [];
+function isBoardModalPeekActive() { return false; }
+function canResolvePendingBoardDecisionDuringPeek() { return false; }
+function isEventQueueBusy() { return false; }
+function isSpellStageAnimating() { return true; }
+function isReactWindow() { return true; }
+function highlightBoard() {}
+function updateHandHighlights() {}
+function setSpellStageMinimized(value) { minimized.push(value); }
+function previewSpellStageTarget(nid, pos, kind) {
+    previews.push({nid: nid, pos: pos, kind: kind});
+}
+function submitAction(payload) { submitted.push(payload); }
+"""
+        + extract_function("getLegalReactActions")
+        + extract_function("getReactTargetPositions")
+        + extract_function("onHandCardClick")
+        + extract_function("onBoardCellClick")
+        + """
+onHandCardClick(0, 0);
+var afterCard = {
+    submitted: submitted.slice(),
+    mode: interactionMode,
+    selected: selectedHandIdx,
+    minimized: minimized.slice()
+};
+onBoardCellClick(1, 2);
+console.log(JSON.stringify({
+    afterCard: afterCard,
+    submitted: submitted,
+    previews: previews
+}));
+"""
+    )
+    assert run_js(tmp_path, script) == {
+        "afterCard": {
+            "submitted": [],
+            "mode": "react_target",
+            "selected": 0,
+            "minimized": [True],
+        },
+        "submitted": [
+            {"action_type": 5, "card_index": 0, "target_pos": [1, 2]},
+        ],
+        "previews": [
+            {"nid": 33, "pos": [1, 2], "kind": "react"},
+        ],
+    }

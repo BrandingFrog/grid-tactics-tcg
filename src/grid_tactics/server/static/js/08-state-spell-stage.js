@@ -720,6 +720,90 @@ function _spellCastPalette(numericId, castKind) {
     };
 }
 
+var _castTargetPreview = null;
+
+function _spellTargetKindForCard(numericId, castKind) {
+    var def = (cardDefs && cardDefs[numericId])
+        || (window.sandboxCardDefs && window.sandboxCardDefs[numericId]);
+    if (!def) return 'cell';
+    var effects = [];
+    if (castKind === 'react' && def.react_effect) {
+        effects = [def.react_effect];
+    } else {
+        effects = def.effects || [];
+    }
+    return effects.some(function(effect) { return effect.target === 8; })
+        ? 'row' : 'cell';
+}
+
+function clearSpellStageTargetHighlights() {
+    document.querySelectorAll('.board-cell.spell-target-cell, .board-cell.spell-target-row')
+        .forEach(function(cell) {
+            cell.classList.remove('spell-target-cell', 'spell-target-row');
+        });
+}
+
+function paintSpellStageTargetHighlights() {
+    clearSpellStageTargetHighlights();
+    var target = _castTargetPreview;
+    if (!target && _spellStage.chain && _spellStage.chain.length > 0) {
+        for (var i = _spellStage.chain.length - 1; i >= 0; i--) {
+            if (_spellStage.chain[i].targetPos) {
+                target = _spellStage.chain[i];
+                break;
+            }
+        }
+    }
+    if (!target || !target.targetPos) return;
+    var row = target.targetPos[0];
+    var col = target.targetPos[1];
+    if (target.targetKind === 'row') {
+        document.querySelectorAll('.board-cell[data-row="' + row + '"]')
+            .forEach(function(cell) { cell.classList.add('spell-target-row'); });
+        return;
+    }
+    var cell = document.querySelector(
+        '.board-cell[data-row="' + row + '"][data-col="' + col + '"]'
+    );
+    if (cell) cell.classList.add('spell-target-cell');
+}
+
+function previewSpellStageTarget(numericId, targetPos, castKind) {
+    _castTargetPreview = targetPos ? {
+        nid: numericId,
+        targetPos: targetPos.slice ? targetPos.slice() : targetPos,
+        targetKind: _spellTargetKindForCard(numericId, castKind),
+    } : null;
+    paintSpellStageTargetHighlights();
+}
+
+function setSpellStageMinimized(minimized) {
+    var els = _spellStageEls();
+    if (!els.root) return;
+    var shouldMinimize = !!minimized;
+    els.root.classList.toggle('is-minimized', shouldMinimize);
+    var btn = document.getElementById('spell-stage-minimize');
+    if (btn) {
+        btn.setAttribute('aria-expanded', shouldMinimize ? 'false' : 'true');
+        btn.setAttribute('aria-label', shouldMinimize
+            ? 'Restore Spell Stage' : 'Minimise Spell Stage');
+        btn.title = shouldMinimize ? 'Restore Spell Stage' : 'Minimise Spell Stage';
+        btn.textContent = shouldMinimize ? 'Spell Stage ▴' : '▾';
+    }
+    paintSpellStageTargetHighlights();
+}
+
+if (typeof document !== 'undefined') {
+    var _spellStageMinButton = document.getElementById('spell-stage-minimize');
+    if (_spellStageMinButton) {
+        _spellStageMinButton.addEventListener('click', function(e) {
+            e.stopPropagation();
+            var root = document.getElementById('spell-stage');
+            setSpellStageMinimized(!(root && root.classList.contains('is-minimized')));
+        });
+    }
+}
+
 // Queue for sequential push processing. Without this, rapid-fire pushes
 // (sandbox test runs, or fast human chains) interrupt each other's fly-in
 // transitions because each _doShowSpellStage flushes the previous shift
@@ -747,6 +831,8 @@ function _resetSpellStageHard() {
     _spellStageQueue = [];
     _spellStageBusy = false;
     _spellStagePendingResolve = false;
+    _castTargetPreview = null;
+    clearSpellStageTargetHighlights();
     var els = _spellStageEls();
     if (els.left) els.left.innerHTML = '';
     if (els.right) els.right.innerHTML = '';
@@ -755,7 +841,9 @@ function _resetSpellStageHard() {
         els.root.classList.remove('exit');
         els.root.classList.remove('enter');
         els.root.classList.remove('cast-impact');
+        els.root.classList.remove('is-minimized');
     }
+    setSpellStageMinimized(false);
     var fsb = document.getElementById('floating-skip-react-btn');
     if (fsb) fsb.hidden = true;
     var rb = document.getElementById('react-banner');
@@ -905,7 +993,11 @@ function _doShowSpellStage(numericId, sourcePlayerIdx, castOptions, generation) 
         playerIdx: sourcePlayerIdx,
         el: card,
         side: goesToLeft ? 'left' : 'right',
+        targetPos: castOptions.targetPos || null,
+        targetKind: _spellTargetKindForCard(numericId, castKind),
     });
+    _castTargetPreview = null;
+    paintSpellStageTargetHighlights();
 
     // Move the placeholder to the OTHER stack (the one now waiting to
     // react) and pulse it. Skip on first card too — opponent owes a
@@ -1050,6 +1142,9 @@ function _hideSpellStage(generation) {
         _spellStage.chain = [];
         _spellStage.casterIdx = null;
         _spellStage.resolving = false;
+        _castTargetPreview = null;
+        clearSpellStageTargetHighlights();
+        setSpellStageMinimized(false);
         if (typeof _releaseStageCardDestinations === 'function') {
             _releaseStageCardDestinations();
         }

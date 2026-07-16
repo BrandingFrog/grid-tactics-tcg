@@ -379,11 +379,12 @@ class ActionEncoder:
                 return play_card_action(card_index=hand_idx, position=cell_pos)
             elif card_def.card_type == CardType.MAGIC:
                 # Check if targeted
-                has_single_target = any(
-                    e.trigger == TriggerType.ON_PLAY and e.target == TargetType.SINGLE_TARGET
+                has_board_target = any(
+                    e.trigger == TriggerType.ON_PLAY
+                    and e.target in (TargetType.SINGLE_TARGET, TargetType.ROW)
                     for e in card_def.effects
                 )
-                if has_single_target:
+                if has_board_target:
                     return play_card_action(card_index=hand_idx, target_pos=cell_pos)
                 else:
                     # Untargeted magic

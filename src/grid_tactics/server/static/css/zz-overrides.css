@@ -6599,3 +6599,18 @@ input::selection, textarea::selection { background: rgba(224, 162, 60, 0.45); co
 @media (prefers-reduced-motion: reduce) {
   .action-coin { transition: none !important; animation: none !important; }
 }
+
+/* Target-before-react contract: the stage collapses into a board-safe
+   restore pill, while the committed target remains visible underneath. */
+.game-layout > .spell-stage.is-minimized {
+  top: auto !important;
+  bottom: 84px !important;
+}
+.board-cell.spell-target-cell,
+.board-cell.spell-target-row {
+  background: rgba(190, 48, 38, 0.3) !important;
+  border-color: rgba(235, 82, 60, 0.94) !important;
+  box-shadow:
+    inset 0 0 0 3px rgba(235, 82, 60, 0.82),
+    0 0 14px rgba(210, 55, 38, 0.48) !important;
+}

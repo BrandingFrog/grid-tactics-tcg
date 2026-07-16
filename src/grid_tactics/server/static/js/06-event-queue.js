@@ -2141,12 +2141,14 @@ function playCardPlayed(ev, done) {
                     _showSpellStage(pending.numericId, pending.playerIdx, {
                         sourceRect: pending.sourceRect || null,
                         castKind: pending.castKind || 'magic',
+                        targetPos: pending.targetPos || null,
                     });
                     if (pending.targetPos) _pulseCastTargetTile(pending.targetPos);
                 }
                 _showSpellStage(payload.card_numeric_id, ownerIdx, {
                     sourceRect: playedSourceRect,
                     castKind: 'react',
+                    targetPos: payload.target_pos || null,
                 });
                 if (payload.target_pos) _pulseCastTargetTile(payload.target_pos);
             }
@@ -2546,6 +2548,7 @@ function playReactWindowOpened(ev, done) {
                 _showSpellStage(origin.numericId, origin.playerIdx, {
                     sourceRect: origin.sourceRect || null,
                     castKind: origin.castKind || 'magic',
+                    targetPos: origin.targetPos || null,
                 });
                 slammed = true;
                 if (origin.targetPos) _pulseCastTargetTile(origin.targetPos);
@@ -2619,6 +2622,7 @@ function playReactWindowOpened(ev, done) {
             _showSpellStage(pOrigin.numericId, pOrigin.playerIdx, {
                 sourceRect: pOrigin.sourceRect || null,
                 castKind: pOrigin.castKind || 'magic',
+                targetPos: pOrigin.targetPos || null,
             });
             slammed = true;
         } catch (e) {

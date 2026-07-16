@@ -564,6 +564,38 @@ def _resolve_all_enemies(
     return state
 
 
+def _resolve_row(
+    state: GameState,
+    effect: EffectDefinition,
+    caster_owner: PlayerSide,
+    library: CardLibrary,
+    target_pos: Optional[tuple[int, int]],
+    *,
+    contract_source: Optional[str] = None,
+    event_collector: Optional[EventStream] = None,
+) -> GameState:
+    """Resolve an area effect on filtered occupants of the chosen row."""
+    if target_pos is None:
+        return state
+    target_row = target_pos[0]
+    if target_row < 0 or target_row >= 5:
+        return state
+    target_side = effect.target_side or "all"
+    for minion in state.minions:
+        if minion.current_health <= 0 or minion.position[0] != target_row:
+            continue
+        if target_side == "enemy" and minion.owner == caster_owner:
+            continue
+        if target_side == "friendly" and minion.owner != caster_owner:
+            continue
+        state = _apply_effect_to_minion(
+            state, effect, minion, library,
+            contract_source=contract_source,
+            event_collector=event_collector,
+        )
+    return state
+
+
 def _resolve_adjacent(
     state: GameState,
     effect: EffectDefinition,
@@ -924,6 +956,12 @@ def resolve_effect(
     elif scaled_effect.target == TargetType.ALL_ENEMIES:
         return _resolve_all_enemies(
             state, scaled_effect, caster_owner, library,
+            contract_source=contract_source,
+            event_collector=event_collector,
+        )
+    elif scaled_effect.target == TargetType.ROW:
+        return _resolve_row(
+            state, scaled_effect, caster_owner, library, target_pos,
             contract_source=contract_source,
             event_collector=event_collector,
         )

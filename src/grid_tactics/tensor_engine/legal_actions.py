@@ -331,7 +331,8 @@ def _compute_play_card_mask(mask, state, card_table, phase_mask, ap, arange_n,
     deploy_rows = deploy_masks[ap.unsqueeze(1).expand_as(is_ranged), is_ranged]
     play_out |= (deploy_rows & board_empty.unsqueeze(1) & is_minion.unsqueeze(2))
 
-    # MAGIC cards: check for SINGLE_TARGET ON_PLAY effects
+    # MAGIC cards: check for board-targeted ON_PLAY effects. ROW uses the
+    # same 25 encoded cells as SINGLE_TARGET; resolution consumes its row.
     eff_triggers = card_table.effect_trigger[card_ids_flat].reshape(N, MAX_HAND, MAX_EFFECTS_PER_CARD)
     eff_targets = card_table.effect_target[card_ids_flat].reshape(N, MAX_HAND, MAX_EFFECTS_PER_CARD)
     n_effects = card_table.num_effects[card_ids_flat].reshape(N, MAX_HAND)
@@ -339,13 +340,18 @@ def _compute_play_card_mask(mask, state, card_table, phase_mask, ap, arange_n,
     eff_idx_range = torch.arange(MAX_EFFECTS_PER_CARD, device=device)
     eff_valid = eff_idx_range < n_effects.unsqueeze(2)
     has_single_target = (eff_valid & (eff_triggers == 0) & (eff_targets == 0)).any(dim=2)
+    has_row_target = (eff_valid & (eff_triggers == 0) & (eff_targets == 8)).any(dim=2)
 
     # Targeted magic -> enemy positions
     targeted_magic = is_magic & has_single_target
     play_out |= (targeted_magic.unsqueeze(2) & enemy_pos_mask.unsqueeze(1))
 
+    # Row magic -> every board cell is a legal row selector.
+    row_magic = is_magic & has_row_target
+    play_out |= row_magic.unsqueeze(2)
+
     # Untargeted magic -> cell 0
-    untargeted_magic = is_magic & ~has_single_target
+    untargeted_magic = is_magic & ~has_single_target & ~has_row_target
     play_out[:, :, 0] |= untargeted_magic
 
     # Write to mask: [N, 250]
@@ -650,6 +656,7 @@ def _compute_react_phase_mask(mask, state, card_table, phase_mask):
 
     has_negate = (eff_valid & (eff_types == 4)).any(dim=2)
     has_single_target = (eff_valid & (eff_targets == 0)).any(dim=2)
+    has_row_target = (eff_valid & (eff_targets == 8)).any(dim=2)
 
     # Multi-purpose effect properties
     re_type = card_table.react_effect_type[card_ids_flat].reshape(N, MAX_HAND)
@@ -658,13 +665,18 @@ def _compute_react_phase_mask(mask, state, card_table, phase_mask):
     # Sentinel categories
     cat_negate = is_pure_react & has_negate
     cat_pr_targeted_no = is_pure_react & ~has_negate & has_single_target & ~has_any_minion.unsqueeze(1)
-    cat_pr_untargeted = is_pure_react & ~has_negate & ~has_single_target
+    cat_pr_untargeted = is_pure_react & ~has_negate & ~has_single_target & ~has_row_target
+    cat_pr_row = is_pure_react & ~has_negate & has_row_target
     cat_multi_st_no = is_multi_react & (re_target == 0) & (re_type != 5) & ~has_any_minion.unsqueeze(1)
     cat_multi_other = is_multi_react & (re_type != 5) & (re_target != 0)
 
     react_out[:, :, 25] = (
         cat_negate | cat_pr_targeted_no | cat_pr_untargeted | cat_multi_st_no | cat_multi_other
     )
+
+    # A row-targeted react may select any cell; the selected row is consumed
+    # when the effect resolves.
+    react_out[:, :, :25] |= cat_pr_row.unsqueeze(2)
 
     # Targeted categories: minion positions
     cat_pr_targeted_has = is_pure_react & ~has_negate & has_single_target & has_any_minion.unsqueeze(1)

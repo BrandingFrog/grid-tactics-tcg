@@ -1,0 +1,28 @@
+{
+    "card_id": "wall_of_inferno",
+    "stable_id": 57,
+    "name": "Wall of Inferno",
+    "card_type": "magic",
+    "mana_cost": 2,
+    "element": "fire",
+    "effects": [
+        {
+            "type": "burn",
+            "trigger": "on_play",
+            "target": "row",
+            "target_side": "enemy",
+            "amount": 0
+        }
+    ],
+    "tips": [
+        "Choose any tile to mark its entire row. Every enemy minion in that row becomes Burning after the react window resolves.",
+        "A crowded row gives the best value, but an empty row is still a legal target when you need to bait a response.",
+        "Wall of Inferno never burns your own minions, even when both players have units in the chosen row."
+    ],
+    "rulings": [
+        "Targeting happens before the spell enters the spell stage. The chosen row stays highlighted while either player inspects the board.",
+        "Burn all living enemy minions in the chosen row. Friendly minions and enemy minions in other rows are unaffected.",
+        "Burn is non-stacking. An enemy that is already Burning remains Burning with its existing scope.",
+        "If the chosen row is empty when Wall of Inferno resolves, the spell resolves with no effect."
+    ]
+}

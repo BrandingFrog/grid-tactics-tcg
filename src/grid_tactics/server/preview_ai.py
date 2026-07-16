@@ -164,6 +164,16 @@ def _effect_targets(
         ]
     if effect.target == TargetType.ALL_ENEMIES:
         candidates = [m for m in living if m.owner != owner_side]
+    elif effect.target == TargetType.ROW and action.target_pos is not None:
+        candidates = [
+            m for m in living
+            if m.position[0] == action.target_pos[0]
+            and (
+                effect.target_side in (None, "all")
+                or (effect.target_side == "enemy" and m.owner != owner_side)
+                or (effect.target_side == "friendly" and m.owner == owner_side)
+            )
+        ]
     elif effect.target == TargetType.ALL_ALLIES:
         candidates = [m for m in living if m.owner == owner_side]
     elif effect.target == TargetType.ALL_MINIONS:

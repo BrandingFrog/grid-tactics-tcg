@@ -174,6 +174,7 @@ class TargetType(IntEnum):
     ALL_ALLIES = 5       # Hits all friendly minions (optionally filtered by target_tribe)
     ALL_MINIONS = 6      # Hits every living minion (both sides), optionally filtered by target_tribe and/or target_element
     OWNER_PLAYER = 7     # Affects the owning/casting player directly (Dark Matter pool redesign 2026-07 — e.g. grant_dark_matter with target "owner_player"). Append-only value.
+    ROW = 8              # Player chooses a board row; effect metadata filters its occupants. Append-only.
 
 
 # ---------------------------------------------------------------------------

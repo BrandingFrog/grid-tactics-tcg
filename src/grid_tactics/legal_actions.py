@@ -373,6 +373,10 @@ def _action_phase_actions(
                     e.trigger == TriggerType.ON_PLAY and e.target == TargetType.SINGLE_TARGET
                     for e in card_def.effects
                 )
+                has_row_target = any(
+                    e.trigger == TriggerType.ON_PLAY and e.target == TargetType.ROW
+                    for e in card_def.effects
+                )
 
                 # Sacrifice ally cost: enumerate ally minion choices
                 ally_choices: list[Optional[int]] = [None]
@@ -383,7 +387,20 @@ def _action_phase_actions(
                     ally_choices = [m.instance_id for m in friendly]
 
                 for destroy_ally_id in ally_choices:
-                    if has_single_target:
+                    if has_row_target:
+                        # Aim row magic by clicking any board cell. The
+                        # resolver intentionally consumes only target_pos[0].
+                        for target_row in range(GRID_ROWS):
+                            for target_col in range(GRID_COLS):
+                                actions.append(Action(
+                                    action_type=ActionType.PLAY_CARD,
+                                    card_index=idx,
+                                    target_pos=(target_row, target_col),
+                                    discard_card_index=sac_idx,
+                                    discard_card_indices=sac_indices,
+                                    destroyed_minion_id=destroy_ally_id,
+                                ))
+                    elif has_single_target:
                         enemy_positions = _get_enemy_minion_positions(state, player_side)
                         # Water Wyrm (2026-07-11): magic-untargetable minions
                         # are not valid MAGIC targets. With every enemy
@@ -1273,7 +1290,18 @@ def _react_phase_actions(
                     e.target == TargetType.SINGLE_TARGET
                     for e in card_def.effects
                 )
-                if has_single_target:
+                has_row_target = any(
+                    e.target == TargetType.ROW
+                    for e in card_def.effects
+                )
+                if has_row_target:
+                    for target_row in range(GRID_ROWS):
+                        for target_col in range(GRID_COLS):
+                            actions.append(play_react_action(
+                                card_index=idx,
+                                target_pos=(target_row, target_col),
+                            ))
+                elif has_single_target:
                     enemy_positions = _get_enemy_minion_positions(state, react_side)
                     friendly_positions = _get_friendly_minion_positions(state, react_side)
                     all_target_positions = list(set(enemy_positions + friendly_positions))
@@ -1323,6 +1351,14 @@ def _react_phase_actions(
                         ))
                     if not all_target_positions:
                         actions.append(play_react_action(card_index=idx))
+                elif (card_def.react_effect is not None
+                        and card_def.react_effect.target == TargetType.ROW):
+                    for target_row in range(GRID_ROWS):
+                        for target_col in range(GRID_COLS):
+                            actions.append(play_react_action(
+                                card_index=idx,
+                                target_pos=(target_row, target_col),
+                            ))
                 else:
                     actions.append(play_react_action(card_index=idx))
 
@@ -1333,7 +1369,32 @@ def _react_phase_actions(
             if not _check_react_condition(card_def.react_condition, state, library):
                 continue
             if react_player.current_mana >= card_def.react_mana_cost:
-                actions.append(play_react_action(card_index=idx))
+                has_row_target = any(
+                    e.target == TargetType.ROW
+                    for e in card_def.effects
+                )
+                has_single_target = any(
+                    e.target == TargetType.SINGLE_TARGET
+                    for e in card_def.effects
+                )
+                if has_row_target:
+                    for target_row in range(GRID_ROWS):
+                        for target_col in range(GRID_COLS):
+                            actions.append(play_react_action(
+                                card_index=idx,
+                                target_pos=(target_row, target_col),
+                            ))
+                elif has_single_target:
+                    target_positions = list(set(
+                        _get_enemy_minion_positions(state, react_side)
+                        + _get_friendly_minion_positions(state, react_side)
+                    ))
+                    for target_pos in target_positions:
+                        actions.append(play_react_action(
+                            card_index=idx, target_pos=target_pos,
+                        ))
+                else:
+                    actions.append(play_react_action(card_index=idx))
 
     # PASS always legal
     actions.append(pass_action())

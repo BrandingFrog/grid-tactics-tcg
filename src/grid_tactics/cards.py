@@ -61,6 +61,7 @@ class EffectDefinition:
     scale_with: Optional[str] = None  # "dark_matter" / "player_dark_matter" (both read the CASTER PLAYER's Dark Matter pool — pool redesign 2026-07), "dark_mages" (grant_dark_matter only: amount × friendly Dark Mages on board), "destroyed_attack", "destroyed_attack_plus_dm" (destroyed ally's attack + caster player's DM pool)
     target_tribe: Optional[str] = None  # filter ALL_ALLIES/ALL_MINIONS to only this tribe (e.g. "Mage")
     target_element: Optional[str] = None  # filter ALL_MINIONS to only this element (e.g. "metal"); combined with target_tribe as OR
+    target_side: Optional[str] = None  # ROW occupancy filter: "enemy" | "friendly" | "all"
     placement_condition: Optional[str] = None  # e.g. "front_of_dark_ranged" — positional condition
     condition_multiplier: int = 1  # multiplier applied when placement_condition is met
     # Turn-structure redesign 2026-07 (spec §7.2/§11): per-card turn scoping
@@ -79,6 +80,7 @@ class EffectDefinition:
     up_to: bool = False
 
     _VALID_SCOPES = ("owner", "opponent", "every")
+    _VALID_TARGET_SIDES = ("enemy", "friendly", "all")
 
     def __post_init__(self) -> None:
         if not (0 <= self.amount <= MAX_EFFECT_AMOUNT):
@@ -89,6 +91,14 @@ class EffectDefinition:
             raise ValueError(
                 f"Effect scope '{self.scope}' invalid. "
                 f"Valid: {list(self._VALID_SCOPES)} (or omit for the default)"
+            )
+        if (
+            self.target_side is not None
+            and self.target_side not in self._VALID_TARGET_SIDES
+        ):
+            raise ValueError(
+                f"Effect target_side '{self.target_side}' invalid. "
+                f"Valid: {list(self._VALID_TARGET_SIDES)} (or omit)"
             )
 
 

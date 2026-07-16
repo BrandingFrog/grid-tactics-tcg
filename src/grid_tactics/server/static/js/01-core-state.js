@@ -360,7 +360,11 @@ const EFFECT_TYPE_NAMES = [
     'Deploy Self', 'March Forward', 'Promote', 'Tutor', 'Destroy'
 ];
 const TRIGGER_NAMES = ['On Play', 'On Death', 'On Attack', 'On Damaged', 'On Move'];
-const TARGET_NAMES = ['Single Target', 'All Enemies', 'Adjacent', 'Self/Owner'];
+const TARGET_NAMES = [
+    'Single Target', 'All Enemies', 'Adjacent', 'Self/Owner',
+    'Opponent Player', 'All Allies', 'All Minions', 'Owner Player',
+    'Row'
+];
 
 const MAX_DECK_SIZE = 40;
 const MAX_COPIES = 3;

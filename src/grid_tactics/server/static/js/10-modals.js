@@ -953,6 +953,9 @@ function _paintAttackRangeFootprint(minionId) {
 // Highlight valid board cells based on current selection
 function highlightBoard() {
     _clearBoardInteractionHighlights();
+    if (typeof paintSpellStageTargetHighlights === 'function') {
+        paintSpellStageTargetHighlights();
+    }
     if (typeof isBoardModalPeekActive === 'function'
             && isBoardModalPeekActive()
             && !canResolvePendingBoardDecisionDuringPeek()) return;
@@ -963,7 +966,8 @@ function highlightBoard() {
     var _pendingMode = interactionMode === 'post_move_attack_pick'
         || interactionMode === 'death_target_pick'
         || interactionMode === 'conjure_deploy'
-        || interactionMode === 'revive_place';
+        || interactionMode === 'revive_place'
+        || interactionMode === 'react_target';
     if (!_pendingMode && typeof canActNow === 'function' && !canActNow()) {
         return;
     }
@@ -1060,17 +1064,25 @@ function highlightBoard() {
         });
     }
 
+    if (interactionMode === 'react_target' && selectedHandIdx !== null) {
+        getReactTargetPositions(selectedHandIdx).forEach(function(p) {
+            var cell = document.querySelector('.board-cell[data-row="' + p[0] + '"][data-col="' + p[1] + '"]');
+            if (cell) cell.classList.add('cell-valid');
+        });
+    }
+
     if (interactionMode === 'target' && selectedHandIdx !== null) {
         // Highlight locked deploy position (if any) as selected
         if (selectedDeployPos) {
             var depCell = document.querySelector('.board-cell[data-row="' + selectedDeployPos[0] + '"][data-col="' + selectedDeployPos[1] + '"]');
             if (depCell) depCell.classList.add('cell-selected');
         }
-        // Highlight target candidates in red
+        // Target selection is a pre-cast placement step. Green means the
+        // click is legal; committed targets turn red on the spell stage.
         var targets = getTargetPositions(selectedHandIdx, selectedDeployPos);
         targets.forEach(function(p) {
             var cell = document.querySelector('.board-cell[data-row="' + p[0] + '"][data-col="' + p[1] + '"]');
-            if (cell) cell.classList.add('cell-attack');
+            if (cell) cell.classList.add('cell-valid');
         });
     }
 

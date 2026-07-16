@@ -280,13 +280,16 @@ class TestTargetType:
             assert isinstance(member, IntEnum)
 
     def test_member_count(self) -> None:
-        # Append-only. 8 members: SINGLE_TARGET, ALL_ENEMIES, ADJACENT,
+        # Append-only. 9 members: SINGLE_TARGET, ALL_ENEMIES, ADJACENT,
         # SELF_OWNER, OPPONENT_PLAYER, ALL_ALLIES, ALL_MINIONS,
-        # OWNER_PLAYER (Dark Matter pool redesign 2026-07).
-        assert len(TargetType) == 8
+        # OWNER_PLAYER, ROW.
+        assert len(TargetType) == 9
 
     def test_owner_player_value(self) -> None:
         assert TargetType.OWNER_PLAYER == 7
+
+    def test_row_value(self) -> None:
+        assert TargetType.ROW == 8
 
     def test_bracket_lookup(self) -> None:
         assert TargetType["SINGLE_TARGET"] is TargetType.SINGLE_TARGET

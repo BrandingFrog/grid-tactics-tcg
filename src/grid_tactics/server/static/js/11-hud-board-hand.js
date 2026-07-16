@@ -1245,7 +1245,17 @@ function getEffectDescription(effects, cardData, opts) {
                 else burnTarget = ' all ' + joined.slice(0, -1).join(', ') + ' and ' + joined.slice(-1)[0];
                 if (elements.length > 0) burnTarget += ' minions';
             } else {
-                burnTarget = {0: ' target', 1: ' all enemies', 2: ' adjacent enemies', 3: ' self'}[eff.target] || '';
+                burnTarget = {
+                    0: ' target',
+                    1: ' all enemies',
+                    2: ' adjacent enemies',
+                    3: ' self'
+                }[eff.target] || '';
+                if (eff.target === 8) {
+                    var rowSide = eff.target_side === 'enemy' ? 'enemy '
+                        : (eff.target_side === 'friendly' ? 'friendly ' : '');
+                    burnTarget = ' all ' + rowSide + 'minions in a row';
+                }
             }
             desc = prefix + 'Burn' + burnTarget;
         } else if (type === 11) { // Dark Matter Buff
