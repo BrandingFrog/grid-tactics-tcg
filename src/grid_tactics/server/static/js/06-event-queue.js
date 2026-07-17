@@ -451,7 +451,21 @@ function drainEventQueue() {
             } catch (e) { /* defensive */ }
             // Fall through to the normal drain below.
         } else if (!resolvedQueued) {
-            _commitEventBatch(_activeEventBatch);
+            // A modal may require several server round-trips before it is
+            // resolved (Ratmobile tutors two cards). While the gate is
+            // parked, a later frame carries the refreshed pending options
+            // but its events cannot dispatch yet. Commit the NEWEST queued
+            // batch snapshot so syncPending*UI can submit the next pick;
+            // recommitting only _activeEventBatch leaves the browser stuck
+            // on the original pre-pick state forever.
+            var gatedBatch = _activeEventBatch;
+            for (var bi = eventQueue.length - 1; bi >= 0; bi--) {
+                if (eventQueue[bi] && eventQueue[bi]._clientBatch) {
+                    gatedBatch = eventQueue[bi]._clientBatch;
+                    break;
+                }
+            }
+            _commitEventBatch(gatedBatch);
             return;
         }
         // resolvedQueued: fall through — keep draining so the queued

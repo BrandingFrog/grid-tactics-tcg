@@ -401,15 +401,34 @@ def _action_phase_actions(
                                     destroyed_minion_id=destroy_ally_id,
                                 ))
                     elif has_single_target:
-                        enemy_positions = _get_enemy_minion_positions(state, player_side)
-                        # Water Wyrm (2026-07-11): magic-untargetable minions
-                        # are not valid MAGIC targets. With every enemy
-                        # untargetable the magic is simply unplayable.
-                        enemy_positions = [
-                            pos for pos in enemy_positions
-                            if not _magic_untargetable_at(state, library, pos)
+                        single_effects = [
+                            e for e in card_def.effects
+                            if e.trigger == TriggerType.ON_PLAY
+                            and e.target == TargetType.SINGLE_TARGET
                         ]
-                        for target_pos in enemy_positions:
+                        target_positions: set[tuple[int, int]] = set()
+                        for effect in single_effects:
+                            # SINGLE_TARGET magic historically defaults to
+                            # enemies.  Cards may opt into friendly or all
+                            # targets with the same target_side field used by
+                            # ROW effects (Fire Extinguisher, 2026-07-17).
+                            side = effect.target_side or "enemy"
+                            if side in ("enemy", "all"):
+                                target_positions.update(
+                                    _get_enemy_minion_positions(state, player_side)
+                                )
+                            if side in ("friendly", "all"):
+                                target_positions.update(
+                                    _get_friendly_minion_positions(state, player_side)
+                                )
+                        # Water Wyrm (2026-07-11): magic-untargetable minions
+                        # are not valid MAGIC targets. With every candidate
+                        # untargetable the magic is simply unplayable.
+                        target_positions = {
+                            pos for pos in target_positions
+                            if not _magic_untargetable_at(state, library, pos)
+                        }
+                        for target_pos in sorted(target_positions):
                             actions.append(Action(
                                 action_type=ActionType.PLAY_CARD,
                                 card_index=idx, target_pos=target_pos,

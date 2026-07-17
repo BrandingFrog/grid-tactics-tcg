@@ -1117,6 +1117,20 @@ def _apply_trigger_pick(
     # modal if the queue still has 2+ entries after this resolution.
     state = replace(state, pending_trigger_picker_idx=None)
 
+    # Pair the EVT_PENDING_MODAL_OPENED emitted by the trigger drain with a
+    # resolved beat before any trigger animation/react-window events. Without
+    # this, the browser's event-queue modal gate remains latched forever.
+    if event_collector is not None:
+        event_collector.collect(
+            EVT_PENDING_MODAL_RESOLVED,
+            "action:trigger_pick",
+            {
+                "modal_kind": "trigger_pick",
+                "owner_idx": picker,
+                "picked_queue_idx": pick_idx,
+            },
+        )
+
     state = _resolve_trigger_and_open_react_window(
         state, picked, is_turn_queue=is_turn_queue, library=library,
         event_collector=event_collector,
@@ -1170,6 +1184,20 @@ def _apply_decline_trigger(
             state,
             pending_trigger_queue_other=(),
             pending_trigger_picker_idx=None,
+        )
+
+    # DECLINE_TRIGGER closes the same event-queue gate as TRIGGER_PICK. Keep
+    # this before the resumed drain so subsequent animations play only after
+    # the picker has visibly retired.
+    if event_collector is not None:
+        event_collector.collect(
+            EVT_PENDING_MODAL_RESOLVED,
+            "action:decline_trigger",
+            {
+                "modal_kind": "trigger_pick",
+                "owner_idx": picker,
+                "declined": True,
+            },
         )
 
     # Re-enter drain — the other queue (if any) continues from where it

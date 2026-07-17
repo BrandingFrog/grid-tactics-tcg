@@ -79,6 +79,10 @@ def apply_effects_batch(
             state, active & (etype == 10), etarget, eamount,
             caster_owners, target_flat_pos, etarget_side,
         )
+        _apply_cleanse(
+            state, active & (etype == 20), etarget,
+            caster_owners, target_flat_pos, etarget_side,
+        )
 
 
 def _find_minion_slot_at_pos(state, flat_pos: torch.Tensor) -> torch.Tensor:
@@ -94,6 +98,44 @@ def _find_minion_slot_at_pos(state, flat_pos: torch.Tensor) -> torch.Tensor:
     N = flat_pos.shape[0]
     arange_n = torch.arange(N, device=flat_pos.device)
     return state.board[arange_n, row, col]  # [N] minion slot index or -1
+
+
+def _apply_cleanse(state, active, etarget, caster_owners, target_flat_pos,
+                   etarget_side):
+    """CLEANSE: clear Burning and negative stat marks on a valid target."""
+    if not active.any():
+        return
+    single = active & (etarget == 0)
+    if not single.any():
+        return
+    N = active.shape[0]
+    arange_n = torch.arange(N, device=active.device)
+    slot = _find_minion_slot_at_pos(state, target_flat_pos)
+    safe_slot = slot.clamp(min=0)
+    valid = single & (slot >= 0) & state.minion_alive[arange_n, safe_slot]
+    owner = state.minion_owner[arange_n, safe_slot]
+    valid &= (
+        (etarget_side == 0)
+        | ((etarget_side == 1) & (owner != caster_owners))
+        | ((etarget_side == 2) & (owner == caster_owners))
+    )
+    if not valid.any():
+        return
+    state.is_burning[arange_n, safe_slot] = torch.where(
+        valid,
+        torch.tensor(False, device=active.device),
+        state.is_burning[arange_n, safe_slot],
+    )
+    state.minion_atk_bonus[arange_n, safe_slot] = torch.where(
+        valid,
+        state.minion_atk_bonus[arange_n, safe_slot].clamp_min(0),
+        state.minion_atk_bonus[arange_n, safe_slot],
+    )
+    state.minion_max_health_bonus[arange_n, safe_slot] = torch.where(
+        valid,
+        state.minion_max_health_bonus[arange_n, safe_slot].clamp_min(0),
+        state.minion_max_health_bonus[arange_n, safe_slot],
+    )
 
 
 def _apply_damage(state, active, etarget, eamount, caster_owners, caster_slots, target_flat_pos, card_table):

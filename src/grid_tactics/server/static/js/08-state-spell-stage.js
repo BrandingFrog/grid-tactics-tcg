@@ -58,7 +58,10 @@ function onGameStart(data) {
     // event-paced) — poll briefly until the slots exist.
     if (_wasPregame && typeof animateInitialHandDeal === 'function') {
         var _dealTries = 0;
+        var _dealEpoch = (typeof _clientLifecycleEpoch === 'number')
+            ? _clientLifecycleEpoch : null;
         (function _tryDeal() {
+            if (_dealEpoch !== null && _dealEpoch !== _clientLifecycleEpoch) return;
             var handEl = document.getElementById('hand-container');
             if (handEl && handEl.querySelector('.card-frame-hand')) {
                 try { animateInitialHandDeal(); } catch (e) { /* decorative */ }

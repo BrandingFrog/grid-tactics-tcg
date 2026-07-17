@@ -906,6 +906,19 @@ def resolve_effect(
         state, effect, caster_pos, source_minion_id, target_pos,
     ):
         return state
+    # target_side also constrains SINGLE_TARGET effects.  It was originally
+    # introduced for ROW occupancy filters, but friendly utility magic needs
+    # the same authoritative resolution-time check (not only a UI/legal-mask
+    # hint).  Omitted keeps the legacy resolver behaviour; legal enumeration
+    # still defaults ordinary targeted magic to enemies.
+    if effect.target == TargetType.SINGLE_TARGET and effect.target_side:
+        target_minion = _find_minion_at_pos(state.minions, target_pos)
+        if target_minion is None:
+            return state
+        if effect.target_side == "friendly" and target_minion.owner != caster_owner:
+            return state
+        if effect.target_side == "enemy" and target_minion.owner == caster_owner:
+            return state
     # Dark Matter pool redesign 2026-07: GRANT_DARK_MATTER is intercepted
     # here — it ALWAYS credits the caster PLAYER's pool, never a minion,
     # regardless of the (possibly legacy) target on the JSON effect.

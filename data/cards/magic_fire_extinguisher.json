@@ -1,0 +1,26 @@
+{
+    "card_id": "fire_extinguisher",
+    "stable_id": 58,
+    "name": "Fire Extinguisher",
+    "card_type": "magic",
+    "mana_cost": 0,
+    "element": "water",
+    "effects": [
+        {
+            "type": "cleanse",
+            "trigger": "on_play",
+            "target": "single_target",
+            "target_side": "friendly",
+            "amount": 0
+        }
+    ],
+    "tips": [
+        "Put out Burning before the minion reaches its next Decay Phase.",
+        "Fire Extinguisher costs no mana, but casting it still spends an action point."
+    ],
+    "rulings": [
+        "Choose a friendly minion before the spell enters the spell stage.",
+        "Cleanse removes Burning and negative attack or maximum-health marks. It does not heal damage.",
+        "The target is still protected by the normal react window; negating Fire Extinguisher leaves its debuffs in place."
+    ]
+}

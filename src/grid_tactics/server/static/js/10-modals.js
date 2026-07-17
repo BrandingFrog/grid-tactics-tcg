@@ -1886,11 +1886,46 @@ var RPS_LABELS = { rock: 'Rock', paper: 'Paper', scissors: 'Scissors' };
 var _pregameClashRunning = false;
 var _pregamePendingMulligan = null;
 
+// A pregame begins BEFORE its game_start snapshot arrives.  On a second game
+// in the same tab that means the previous match is still mounted unless we
+// make this an explicit lifecycle boundary here.  Retire authoritative play
+// state and every card-bearing duel mount, but keep room/session identity so
+// the RPS + mulligan socket flow can continue normally.
+function _beginPregameClientLifecycle() {
+    if (window._pregameActive) return;
+    window._pregameActive = true;
+    try {
+        if (typeof closeAllBoardModalsForReset === 'function') {
+            closeAllBoardModalsForReset();
+        }
+    } catch (e) { /* defensive */ }
+    try {
+        if (typeof resetEventQueue === 'function') resetEventQueue();
+    } catch (e2) { /* defensive */ }
+
+    gameState = null;
+    legalActions = [];
+    selectedHandIdx = null;
+    selectedMinionId = null;
+    interactionMode = null;
+    if (typeof gameTooltipPin !== 'undefined') gameTooltipPin = null;
+    try {
+        if (typeof hideGameTooltip === 'function') hideGameTooltip({ force: true });
+    } catch (e3) { /* defensive */ }
+
+    ['game-board', 'hand-container', 'oppHandRow', 'hand-action-bar',
+     'action-bar-slot'].forEach(function(id) {
+        var el = document.getElementById(id);
+        if (el) el.innerHTML = '';
+    });
+}
+
 function onPregameRps(data) {
     // pregame_rps is only sent to an actual player (spectators receive
     // pregame_status). Clear any AI-watch role left in a reused tab before
     // rendering the duel shell, so RPS and the later player controls are not
     // labelled or gated as spectator UI.
+    _beginPregameClientLifecycle();
     isSpectator = false;
     spectatorGodMode = false;
     delete window.__spectPlayerNames;
@@ -2153,6 +2188,8 @@ function _pregameBanner(line1, line2) {
 }
 
 function onPregameMulligan(data) {
+    // Defensive direct-entry path for a reconnect/resync that lands after RPS.
+    _beginPregameClientLifecycle();
     window._pregameActive = true;
     if (_pregameClashRunning) {
         // Server sends this right behind rps_result -- hold it until the
@@ -2184,7 +2221,10 @@ function showMulliganModal(data) {
     header.appendChild(title);
     var counter = document.createElement('div');
     counter.className = 'tutor-modal-deckline';
-    counter.textContent = 'Redraw 0';
+    var openingCount = hand.length;
+    var seatLabel = data && data.your_player_idx === 0
+        ? 'Going first' : 'Going second';
+    counter.textContent = seatLabel + ' · ' + openingCount + ' cards · Redraw 0';
     header.appendChild(counter);
     attachBoardModalMinimizer({
         overlay: overlay,
@@ -2204,7 +2244,8 @@ function showMulliganModal(data) {
     acceptBtn.textContent = 'Keep hand';
 
     function _updateMullAccept() {
-        counter.textContent = 'Redraw ' + selected.length;
+        counter.textContent = seatLabel + ' · ' + openingCount
+            + ' cards · Redraw ' + selected.length;
         acceptBtn.textContent = selected.length
             ? 'Mulligan (' + selected.length + ')' : 'Keep hand';
     }
@@ -2324,6 +2365,8 @@ function _mullFlyToDeck(tile, nid) {
 // renderHand rebuild re-hides them instead of showing doubles.
 function animateInitialHandDeal() {
     try {
+        var dealEpoch = (typeof _clientLifecycleEpoch === 'number')
+            ? _clientLifecycleEpoch : null;
         var handEl = document.getElementById('hand-container');
         if (!handEl || typeof renderCardFrame !== 'function') return;
         var slots = handEl.querySelectorAll('.card-frame-hand');
@@ -2346,6 +2389,10 @@ function animateInitialHandDeal() {
             window.__inFlightHandSlots[slotKey] = (window.__inFlightHandSlots[slotKey] | 0) + 1;
             slotEl.style.visibility = 'hidden';
             setTimeout(function() {
+                if (dealEpoch !== null && dealEpoch !== _clientLifecycleEpoch) {
+                    slotEl.style.visibility = '';
+                    return;
+                }
                 var floater = document.createElement('div');
                 floater.className = 'draw-fly-in';
                 floater.style.left = toRect.left + 'px';

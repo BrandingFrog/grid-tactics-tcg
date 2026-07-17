@@ -911,7 +911,7 @@ var KEYWORD_GLOSSARY = {
     'Deal': 'Deals damage to a target.',
     'Burn': 'Applies Burning to the affected minions: a Burning minion takes 5🤍 in its owner\'s Decay Phase.',
     'Burning': 'A Burning minion takes 5🤍 in its owner\'s Decay Phase. Burning does not stack — re-applying it has no effect — and persists until the minion dies.',
-    'Dark Matter': 'A stacking player resource pool, visible to both players. Each gain adds +1 per friendly Dark Mage on the board (a Dark-element minion with the Mage tribe, composite tribes included); effects that read the pool do not spend it.',
+    'Dark Matter': 'A stacking player resource pool, visible to both players. Gain the amount stated by the resolving effect; only effects that explicitly say “per friendly Dark Mage” scale with friendly Dark Mages. Effects that read the pool do not spend it.',
     'Leap': 'If blocked by an enemy, the minion jumps over it to the next available tile; allies cannot be leapt. If every tile ahead is enemy-occupied, the minion may Sacrifice.',
     'Conjure': 'Summons a card from your deck directly to the board.',
     'Sacrifice': 'Removes a friendly minion from the game — from the opponent\'s back row, or by Leaping along an all-enemy path — dealing its full 🗡️ as damage to the opponent. "Sacrifice:" effects trigger when that card is sacrificed.',
@@ -1094,7 +1094,7 @@ function buildCardTooltipContent(c) {
             if (eff.type === 10) addKw('Burn');
             if (eff.type === 11) { addKw('Active'); addKw('Dark Matter'); }
             if (eff.type === 12) { addKw('Rally'); addKw('Heal'); }  // PASSIVE_HEAL fires in the Rally Phase (ON_START_OF_TURN)
-            if (eff.type === 20) { addKw('Rally'); addKw('Cleanse'); }  // CLEANSE (Water Wyrm)
+            if (eff.type === 20) addKw('Cleanse');
             if (eff.type === 13) addKw('Leap');
             if (eff.type === 14) addKw('Conjure');
             if (eff.type === 15) addKw('Burning');

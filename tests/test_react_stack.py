@@ -1725,6 +1725,132 @@ class TestPhase14_7_05_TriggerQueue:
         assert result.pending_trigger_queue_turn == ()
         assert result.pending_trigger_picker_idx is None
 
+    def test_trigger_pick_emits_modal_resolved_before_trigger_events(self, library):
+        """Accept must release the client event-queue modal gate."""
+        from grid_tactics.action_resolver import resolve_action
+        from grid_tactics.actions import trigger_pick_action
+        from grid_tactics.engine_events import (
+            EVT_PENDING_MODAL_RESOLVED,
+            EVT_TRIGGER_BLIP,
+            EventStream,
+        )
+        from grid_tactics.react_stack import enter_start_of_turn
+
+        state = self._build_state_with_paladins(library, count=2)
+        state = enter_start_of_turn(state, library)
+        stream = EventStream()
+        result = resolve_action(
+            state, trigger_pick_action(queue_idx=1), library,
+            event_collector=stream,
+        )
+
+        assert result.pending_trigger_picker_idx is None
+        event_types = [event.type for event in stream.events]
+        assert event_types.count(EVT_PENDING_MODAL_RESOLVED) == 1
+        assert (
+            event_types.index(EVT_PENDING_MODAL_RESOLVED)
+            < event_types.index(EVT_TRIGGER_BLIP)
+        )
+        resolved = stream.events[event_types.index(EVT_PENDING_MODAL_RESOLVED)]
+        assert resolved.payload == {
+            "modal_kind": "trigger_pick",
+            "owner_idx": 0,
+            "picked_queue_idx": 1,
+        }
+
+    def test_decline_trigger_emits_modal_resolved(self, library):
+        """Skip remaining must also release the client modal gate."""
+        from grid_tactics.action_resolver import resolve_action
+        from grid_tactics.actions import decline_trigger_action
+        from grid_tactics.engine_events import (
+            EVT_PENDING_MODAL_RESOLVED,
+            EventStream,
+        )
+        from grid_tactics.react_stack import enter_start_of_turn
+
+        state = self._build_state_with_paladins(library, count=2)
+        state = enter_start_of_turn(state, library)
+        stream = EventStream()
+        result = resolve_action(
+            state, decline_trigger_action(), library,
+            event_collector=stream,
+        )
+
+        assert result.pending_trigger_picker_idx is None
+        resolved = [
+            event for event in stream.events
+            if event.type == EVT_PENDING_MODAL_RESOLVED
+        ]
+        assert len(resolved) == 1
+        assert resolved[0].payload == {
+            "modal_kind": "trigger_pick",
+            "owner_idx": 0,
+            "declined": True,
+        }
+
+    def test_two_noop_decay_cards_resolve_without_wedging(self, library):
+        """Screenshot regression: Battery + Emberplague can both no-op."""
+        from grid_tactics.action_resolver import resolve_action
+        from grid_tactics.actions import trigger_pick_action
+        from grid_tactics.engine_events import (
+            EVT_PENDING_MODAL_RESOLVED,
+            EventStream,
+        )
+        from grid_tactics.react_stack import enter_end_of_turn
+
+        battery_id = library.get_numeric_id("dark_matter_battery")
+        ember_id = library.get_numeric_id("emberplague_rat")
+        rat_id = library.get_numeric_id("rat")
+        battery = MinionInstance(
+            instance_id=0, card_numeric_id=battery_id,
+            owner=PlayerSide.PLAYER_1, position=(0, 0), current_health=20,
+        )
+        ember = MinionInstance(
+            instance_id=1, card_numeric_id=ember_id,
+            owner=PlayerSide.PLAYER_1, position=(1, 2), current_health=24,
+        )
+        board = Board.empty().place(0, 0, 0).place(1, 2, 1)
+        p1 = Player(
+            side=PlayerSide.PLAYER_1, hp=STARTING_HP,
+            current_mana=0, max_mana=0, hand=(), deck=(rat_id,), grave=(),
+            dark_matter=0,
+        )
+        p2 = Player(
+            side=PlayerSide.PLAYER_2, hp=STARTING_HP,
+            current_mana=0, max_mana=0, hand=(), deck=(rat_id,), grave=(),
+        )
+        state = GameState(
+            board=board, players=(p1, p2), active_player_idx=0,
+            phase=TurnPhase.ACTION, turn_number=1, seed=42,
+            minions=(battery, ember), next_minion_id=2,
+        )
+        stream = EventStream()
+
+        state = enter_end_of_turn(state, library, event_collector=stream)
+        assert state.pending_trigger_picker_idx == 0
+        assert len(state.pending_trigger_queue_turn) == 2
+
+        # Battery has zero Dark Matter and Emberplague has no adjacent enemy;
+        # both effects fizzle, but accepting either order must release the
+        # picker gate and leave a legal continuation.
+        state = resolve_action(
+            state, trigger_pick_action(queue_idx=0), library,
+            event_collector=stream,
+        )
+        assert state.pending_trigger_picker_idx is None
+        assert state.pending_trigger_queue_turn == ()
+        assert any(e.type == EVT_PENDING_MODAL_RESOLVED for e in stream.events)
+
+        safety = 0
+        while state.phase == TurnPhase.REACT and safety < 10:
+            state = resolve_action(
+                state, pass_action(), library, event_collector=stream,
+            )
+            safety += 1
+        assert safety < 10
+        assert state.phase == TurnPhase.ACTION
+        assert state.active_player_idx == 1
+
     def test_two_triggers_second_fires_after_first(self, library):
         """Regression test for drain-recheck ordering (Warning 8 fix).
 

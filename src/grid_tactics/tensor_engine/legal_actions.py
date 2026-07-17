@@ -226,7 +226,7 @@ def _compute_action_phase_mask(mask, state, card_table, phase_mask):
     # --- PLAY_CARD ---
     _compute_play_card_mask(
         mask, state, card_table, phase_mask, ap, arange_n,
-        player_mana, hand_sizes, board_empty, enemy_alive,
+        player_mana, hand_sizes, board_empty, friendly_alive, enemy_alive,
         minion_flat, num_cards
     )
 
@@ -249,7 +249,8 @@ def _compute_action_phase_mask(mask, state, card_table, phase_mask):
 
 
 def _compute_play_card_mask(mask, state, card_table, phase_mask, ap, arange_n,
-                             player_mana, hand_sizes, board_empty, enemy_alive,
+                             player_mana, hand_sizes, board_empty,
+                             friendly_alive, enemy_alive,
                              minion_flat, num_cards):
     """Compute PLAY_CARD legal actions -- fully vectorized."""
     N = mask.shape[0]
@@ -271,6 +272,8 @@ def _compute_play_card_mask(mask, state, card_table, phase_mask, ap, arange_n,
     # Enemy minion positions on grid: [N, 25]
     enemy_pos_mask = torch.zeros(N, GRID_SIZE, dtype=torch.bool, device=device)
     enemy_pos_mask.scatter_(1, minion_flat, enemy_alive & state.minion_alive)
+    friendly_pos_mask = torch.zeros(N, GRID_SIZE, dtype=torch.bool, device=device)
+    friendly_pos_mask.scatter_(1, minion_flat, friendly_alive & state.minion_alive)
 
     # Gather all card IDs for active player's hand: [N, MAX_HAND]
     all_card_ids = state.hands[arange_n, ap]
@@ -335,6 +338,9 @@ def _compute_play_card_mask(mask, state, card_table, phase_mask, ap, arange_n,
     # same 25 encoded cells as SINGLE_TARGET; resolution consumes its row.
     eff_triggers = card_table.effect_trigger[card_ids_flat].reshape(N, MAX_HAND, MAX_EFFECTS_PER_CARD)
     eff_targets = card_table.effect_target[card_ids_flat].reshape(N, MAX_HAND, MAX_EFFECTS_PER_CARD)
+    eff_target_sides = card_table.effect_target_side[card_ids_flat].reshape(
+        N, MAX_HAND, MAX_EFFECTS_PER_CARD
+    )
     n_effects = card_table.num_effects[card_ids_flat].reshape(N, MAX_HAND)
 
     eff_idx_range = torch.arange(MAX_EFFECTS_PER_CARD, device=device)
@@ -342,9 +348,20 @@ def _compute_play_card_mask(mask, state, card_table, phase_mask, ap, arange_n,
     has_single_target = (eff_valid & (eff_triggers == 0) & (eff_targets == 0)).any(dim=2)
     has_row_target = (eff_valid & (eff_triggers == 0) & (eff_targets == 8)).any(dim=2)
 
-    # Targeted magic -> enemy positions
+    # Targeted magic defaults to enemy positions (side 0/1); side 2 opts into
+    # friendly targets.  This mirrors Python target_side enumeration.
     targeted_magic = is_magic & has_single_target
-    play_out |= (targeted_magic.unsqueeze(2) & enemy_pos_mask.unsqueeze(1))
+    single = eff_valid & (eff_triggers == 0) & (eff_targets == 0)
+    targets_friendly = (single & (eff_target_sides == 2)).any(dim=2)
+    targets_enemy = (single & (eff_target_sides != 2)).any(dim=2)
+    play_out |= (
+        (targeted_magic & targets_enemy).unsqueeze(2)
+        & enemy_pos_mask.unsqueeze(1)
+    )
+    play_out |= (
+        (targeted_magic & targets_friendly).unsqueeze(2)
+        & friendly_pos_mask.unsqueeze(1)
+    )
 
     # Row magic -> every board cell is a legal row selector.
     row_magic = is_magic & has_row_target

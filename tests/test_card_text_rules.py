@@ -244,11 +244,18 @@ def test_glossary_start_end_burn_rows_updated() -> None:
 def test_glossary_md_matches_game_js_for_changed_keywords() -> None:
     md = _glossary_md_rows()
     js = _game_js_glossary()
-    for keyword in ("Start", "End", "Burn", "Burning"):
+    for keyword in ("Start", "End", "Burn", "Burning", "Dark Matter"):
         assert md[keyword] == js[keyword], (
             f"GLOSSARY.md and game.js KEYWORD_GLOSSARY disagree on "
             f"{keyword!r}:\n  md: {md[keyword]}\n  js: {js[keyword]}"
         )
+
+
+def test_dark_matter_glossary_does_not_multiply_every_gain() -> None:
+    row = _glossary_md_rows()["Dark Matter"]
+    assert "Each gain adds +1 per friendly Dark Mage" not in row
+    assert "only effects that explicitly say" in row
+    assert "do not spend it" in row
 
 
 # ---------------------------------------------------------------------------

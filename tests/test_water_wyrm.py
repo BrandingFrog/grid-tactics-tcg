@@ -106,7 +106,8 @@ def test_magic_cannot_target_it(library):
         if c.card_type == CardType.MAGIC
         and not c.destroy_ally_cost
         and any(e.trigger == TriggerType.ON_PLAY
-                and e.target == TargetType.SINGLE_TARGET for e in c.effects)
+                and e.target == TargetType.SINGLE_TARGET
+                and e.target_side != "friendly" for e in c.effects)
     )
     magic_nid = library.get_numeric_id(magic.card_id)
     wyrm = MinionInstance(

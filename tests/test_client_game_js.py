@@ -106,6 +106,7 @@ def run_js(tmp_path: Path, script: str) -> dict:
 _DRAIN_STUBS = """
 var processed = [];
 var commitCalls = 0;
+var committedMarkers = [];
 var eventRunning = false;
 var _drainFinalApplied = false;
 var _clientLifecycleEpoch = 0;
@@ -121,7 +122,10 @@ var slotState = {
     lastOriginator: null,
 };
 var eventQueue = [];
-function _commitFinalStateSnapshot(fs) { commitCalls++; }
+function _commitFinalStateSnapshot(fs) {
+    commitCalls++;
+    if (fs && fs.marker) committedMarkers.push(fs.marker);
+}
 function _activateEventBatch(batch) { _activeEventBatch = batch; return true; }
 function _commitEventBatch(batch) {
     if (batch && !batch.committed) {
@@ -221,6 +225,52 @@ console.log(JSON.stringify({
     assert out["gate"] is None
     assert out["processed"] == ["turn_flipped"]
     assert out["remaining"] == 0
+
+
+def test_multi_pick_modal_commits_latest_parked_batch(tmp_path):
+    """Ratmobile's first pick keeps the tutor gate open. The next server
+    frame must refresh the modal from its new final_state even though the
+    frame's card-drawn event remains parked behind that same gate."""
+    script = (
+        _DRAIN_STUBS
+        + extract_function("drainEventQueue")
+        + """
+slotState.pendingModalKind = 'tutor_select';
+slotState.pendingModalDeadline = Date.now() + 300000;
+var originalBatch = {
+    committed: true,
+    finalState: {marker: 'before-first-pick'}
+};
+var secondPickBatch = {
+    committed: false,
+    finalState: {
+        marker: 'after-first-pick',
+        pending_tutor_remaining: 1,
+        pending_tutor_matches: [{match_idx: 0, card_numeric_id: 10}]
+    }
+};
+_activeEventBatch = originalBatch;
+eventQueue.push({
+    type: 'card_drawn', seq: 6, payload: {},
+    _clientBatch: secondPickBatch
+});
+drainEventQueue();
+console.log(JSON.stringify({
+    processed: processed,
+    committed: secondPickBatch.committed,
+    markers: committedMarkers,
+    gate: slotState.pendingModalKind,
+    remaining: eventQueue.length
+}));
+"""
+    )
+    assert run_js(tmp_path, script) == {
+        "processed": [],
+        "committed": True,
+        "markers": ["after-first-pick"],
+        "gate": "tutor_select",
+        "remaining": 1,
+    }
 
 
 def test_drain_queue_applies_stashed_game_over_when_terminal_event_is_missing(tmp_path):
@@ -2980,6 +3030,75 @@ def test_player_pregame_clears_prior_spectator_role_before_rps():
     assert "isSpectator = false;" in fn
     assert "spectatorGodMode = false;" in fn
     assert "delete window.__spectPlayerNames;" in fn
+
+
+def test_second_game_pregame_retires_first_game_cards_and_queues(tmp_path):
+    script = (
+        """
+var window = { _pregameActive: false };
+var gameState = { turn_number: 88 };
+var legalActions = [{ action_type: 1 }];
+var selectedHandIdx = 4;
+var selectedMinionId = 17;
+var interactionMode = 'attack';
+var gameTooltipPin = { old: true };
+var roomCode = 'KEEP';
+var sessionToken = 'KEEP-TOKEN';
+var closeCalls = 0;
+var resetCalls = 0;
+var tooltipCalls = 0;
+var nodes = {};
+['game-board', 'hand-container', 'oppHandRow', 'hand-action-bar',
+ 'action-bar-slot'].forEach(function(id) { nodes[id] = { innerHTML: 'OLD' }; });
+var document = { getElementById: function(id) { return nodes[id] || null; } };
+function closeAllBoardModalsForReset() { closeCalls++; }
+function resetEventQueue() { resetCalls++; }
+function hideGameTooltip() { tooltipCalls++; }
+"""
+        + extract_function("_beginPregameClientLifecycle")
+        + """
+_beginPregameClientLifecycle();
+_beginPregameClientLifecycle();
+console.log(JSON.stringify({
+    active: window._pregameActive,
+    closeCalls: closeCalls,
+    resetCalls: resetCalls,
+    tooltipCalls: tooltipCalls,
+    stateCleared: gameState === null,
+    legalCount: legalActions.length,
+    selections: [selectedHandIdx, selectedMinionId, interactionMode],
+    mounts: Object.keys(nodes).map(function(id) { return nodes[id].innerHTML; }),
+    roomCode: roomCode,
+    sessionToken: sessionToken
+}));
+"""
+    )
+    assert run_js(tmp_path, script) == {
+        "active": True,
+        "closeCalls": 1,
+        "resetCalls": 1,
+        "tooltipCalls": 1,
+        "stateCleared": True,
+        "legalCount": 0,
+        "selections": [None, None, None],
+        "mounts": ["", "", "", "", ""],
+        "roomCode": "KEEP",
+        "sessionToken": "KEEP-TOKEN",
+    }
+
+
+def test_mulligan_explains_three_card_first_player_and_four_card_second_player():
+    modal = extract_function("showMulliganModal")
+    assert "data.your_player_idx === 0" in modal
+    assert "'Going first' : 'Going second'" in modal
+    assert "openingCount = hand.length" in modal
+
+
+def test_initial_deal_callbacks_are_scoped_to_the_current_game_lifecycle():
+    start = extract_function("onGameStart")
+    deal = extract_function("animateInitialHandDeal")
+    assert "_dealEpoch !== _clientLifecycleEpoch" in start
+    assert "dealEpoch !== _clientLifecycleEpoch" in deal
 
 
 def test_match_tooltips_do_not_show_deck_builder_related_cards():
