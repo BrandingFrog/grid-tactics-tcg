@@ -78,6 +78,9 @@ class EffectDefinition:
     # already caps every tutor at the number of matches in deck; this only
     # drives whether the card text says "up to N".
     up_to: bool = False
+    # Fire Extinguisher uses the Cleanse keyword but narrows its payload to
+    # Burning. Water Wyrm omits this and keeps full-debuff Cleanse semantics.
+    burn_only: bool = False
 
     _VALID_SCOPES = ("owner", "opponent", "every")
     _VALID_TARGET_SIDES = ("enemy", "friendly", "all")

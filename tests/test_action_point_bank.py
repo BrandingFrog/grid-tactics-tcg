@@ -120,7 +120,7 @@ def test_magic_costs_one_action_point(library):
     assert state.active_player_idx == 0
 
 
-def test_rest_banks_points_draws_ante_and_ends(library):
+def test_rest_banks_points_draws_one_and_ends(library):
     state = _game(library)
     rat = library.get_numeric_id("rat")
     players = list(state.players)
@@ -134,19 +134,19 @@ def test_rest_banks_points_draws_ante_and_ends(library):
     state = replace(
         state,
         players=tuple(players),
-        # Third Fortune: economy remains 3/3 while the separate automatic
-        # turn-draw clock is now enabled.
+        # Fortune history no longer changes REST or turn income.
         roguelike_event_history=(("a", "b", "c"), ("d", "e", "f")),
     )
-    assert state.fortune_ante == 3
-    assert state.automatic_turn_draw_count == 1
+    assert state.fortune_ante == 1
+    assert state.rest_draw_count == 1
+    assert state.automatic_turn_draw_count == 0
     actions = legal_actions(state, library)
     assert draw_action() in actions and pass_action() not in actions
 
     state = resolve_action(state, draw_action(), library)
     assert state.players[0].action_points == 3
     assert state.players[0].current_mana == 2
-    assert len(state.players[0].hand) == 3
+    assert len(state.players[0].hand) == 1
     assert state.consecutive_passes == 1
     state = _drain_to_action(state, library)
 
@@ -410,7 +410,7 @@ def test_sandbox_matches_opening_bank_and_resets_turn_local_flags(library):
     assert events[0].payload["new"] == 3
 
 
-def test_completed_fortune_raises_postponed_turn_ante_once(library):
+def test_turn_10_mana_increase_is_independent_from_fortune_choice(library):
     state = _game(library)
     players = list(state.players)
     players[0] = replace(players[0], current_mana=0, action_points=0)
@@ -418,23 +418,26 @@ def test_completed_fortune_raises_postponed_turn_ante_once(library):
         state,
         players=tuple(players),
         phase=TurnPhase.START_OF_TURN,
-        turn_number=26,
-        pending_roguelike_event_turn=26,
+        turn_number=11,
+        pending_roguelike_event_turn=11,
         pending_roguelike_event_options=(WITH_A_SLAP,),
     )
     state = resolve_roguelike_event_choice(
         state, 0, WITH_A_SLAP, library,
     )
     assert state.fortune_ante == 1
+    assert state.turn_mana_gain == 2
     state = resolve_roguelike_event_choice(
         state, 1, WITH_A_SLAP, library,
     )
-    assert state.fortune_ante == 2
+    assert state.fortune_ante == 1
+    assert state.turn_mana_gain == 2
 
     state = apply_new_turn_resources(state)
     assert state.players[0].current_mana == 2
     assert state.players[0].action_points == 1
-    assert state.fortune_ante == 2
+    assert state.fortune_ante == 1
+    assert state.turn_mana_gain == 2
 
 
 def test_serialization_and_views_keep_public_bank_and_ante(library):
@@ -452,11 +455,15 @@ def test_serialization_and_views_keep_public_bank_and_ante(library):
     restored = GameState.from_dict(state.to_dict())
     assert tuple(player.action_points for player in restored.players) == (3, 2)
     assert restored.actions_spent_this_turn == 1
-    assert restored.fortune_ante == 2
+    assert restored.fortune_ante == 1
+    assert restored.rest_draw_count == 1
+    assert restored.turn_mana_gain == 1
 
     filtered = filter_state_for_player(restored.to_dict(), 0, library)
     assert [player["action_points"] for player in filtered["players"]] == [3, 2]
-    assert filtered["fortune_ante"] == 2
+    assert filtered["fortune_ante"] == 1
+    assert filtered["rest_draw_count"] == 1
+    assert filtered["turn_mana_gain"] == 1
 
 
 def test_hud_has_three_coin_banks_and_profile_renderer():

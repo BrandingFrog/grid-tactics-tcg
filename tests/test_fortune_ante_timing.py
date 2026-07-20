@@ -1,4 +1,4 @@
-"""Focused Fortune-ante timing across Marked Cards follow-ups."""
+"""Fortune follow-ups do not mutate the independent turn economy."""
 
 from pathlib import Path
 
@@ -54,9 +54,9 @@ def _pending_fortune(
         ),
         active_player_idx=0,
         phase=TurnPhase.START_OF_TURN,
-        turn_number=26 + 25 * prior_rounds,
+        turn_number=6 + 5 * prior_rounds,
         seed=71,
-        pending_roguelike_event_turn=26 + 25 * prior_rounds,
+        pending_roguelike_event_turn=6 + 5 * prior_rounds,
         pending_roguelike_event_options=(MARKED_CARDS, WITH_A_SLAP),
         roguelike_event_history=(history, history),
     )
@@ -76,7 +76,7 @@ def _lock_both(
     )
 
 
-def test_single_marked_cards_holds_ante_until_its_choice_resolves(library):
+def test_single_marked_cards_keeps_rest_and_mana_rates_stable(library):
     state = _lock_both(
         _pending_fortune(library), MARKED_CARDS, WITH_A_SLAP, library,
     )
@@ -93,10 +93,11 @@ def test_single_marked_cards_holds_ante_until_its_choice_resolves(library):
     state = resolve_marked_cards_choice(state, 0, 0, (1, 2))
     assert state.pending_marked_cards_player_idx is None
     assert state.fortune_rounds_completed == 1
-    assert state.fortune_ante == 2
+    assert state.fortune_ante == 1
+    assert state.turn_mana_gain == 1
 
 
-def test_two_marked_cards_hold_ante_through_both_sequential_modals(library):
+def test_two_marked_cards_keep_turn_10_mana_rate_through_followups(library):
     state = _lock_both(
         _pending_fortune(library, prior_rounds=1),
         MARKED_CARDS,
@@ -109,18 +110,21 @@ def test_two_marked_cards_hold_ante_through_both_sequential_modals(library):
     assert state.pending_marked_cards_player_idx == 0
     assert state.pending_marked_cards_queue == (1,)
     assert state.fortune_rounds_completed == 1
-    assert state.fortune_ante == 2
+    assert state.fortune_ante == 1
+    assert state.turn_mana_gain == 2
 
     state = resolve_marked_cards_choice(state, 0, 0, (1, 2))
     assert state.pending_marked_cards_player_idx == 1
     assert state.pending_marked_cards_queue == ()
     assert state.fortune_rounds_completed == 1
-    assert state.fortune_ante == 2
+    assert state.fortune_ante == 1
+    assert state.turn_mana_gain == 2
 
     state = resolve_marked_cards_choice(state, 1, 0, (1, 2))
     assert state.pending_marked_cards_player_idx is None
     assert state.fortune_rounds_completed == 2
-    assert state.fortune_ante == 3
+    assert state.fortune_ante == 1
+    assert state.turn_mana_gain == 2
 
 
 def test_marked_cards_with_no_available_followup_completes_immediately(library):
@@ -134,4 +138,4 @@ def test_marked_cards_with_no_available_followup_completes_immediately(library):
     assert state.pending_marked_cards_player_idx is None
     assert state.pending_marked_cards_queue == ()
     assert state.fortune_rounds_completed == 1
-    assert state.fortune_ante == 2
+    assert state.fortune_ante == 1

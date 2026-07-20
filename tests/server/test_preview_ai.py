@@ -125,7 +125,7 @@ def test_skips_noop_ratchanter_activation_and_moves(library):
     assert picked.action_type == ActionType.MOVE
 
 
-def test_full_action_bank_spends_before_rest_after_second_fortune(library):
+def test_full_action_bank_spends_before_rest_regardless_of_fortune_history(library):
     rat = _minion(
         library,
         0,
@@ -148,7 +148,7 @@ def test_full_action_bank_spends_before_rest_after_second_fortune(library):
             ("clumsy_greed", "with_a_slap"),
         ),
     )
-    assert state.fortune_ante == 3
+    assert state.fortune_ante == 1
     action_types = {action.action_type for action in legal_actions(state, library)}
     assert {ActionType.DRAW, ActionType.MOVE} <= action_types
 
@@ -157,7 +157,7 @@ def test_full_action_bank_spends_before_rest_after_second_fortune(library):
     assert picked.action_type == ActionType.MOVE
 
 
-def test_full_action_bank_can_still_rest_when_no_positive_action_exists(library):
+def test_full_action_bank_prefers_advancing_over_one_card_rest(library):
     pyre_archer = _minion(
         library,
         0,
@@ -185,7 +185,7 @@ def test_full_action_bank_can_still_rest_when_no_positive_action_exists(library)
 
     picked = _pick(state, library)
 
-    assert picked.action_type == ActionType.DRAW
+    assert picked.action_type == ActionType.MOVE
 
 
 @pytest.mark.parametrize(

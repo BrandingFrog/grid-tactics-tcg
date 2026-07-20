@@ -508,7 +508,10 @@ def build_rules_text(card: dict, name_map: dict[str, str] | None = None) -> str:
         elif eff_type == "passive_heal":
             desc = f"[[Rally]]: [[Heal]] {amount}"
         elif eff_type == "cleanse":
-            desc = "[[Rally]]: [[Cleanse]] (removes all debuffs)"
+            if eff.get("burn_only"):
+                desc = f"{pfx}Cleanse Burning from a friendly minion"
+            else:
+                desc = "[[Rally]]: [[Cleanse]] all debuffs"
         elif eff_type == "leap":
             desc = "[[Move]]: [[Leap]]"
         elif eff_type == "revive":

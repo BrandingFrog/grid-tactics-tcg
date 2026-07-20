@@ -1094,7 +1094,7 @@ function buildCardTooltipContent(c) {
             if (eff.type === 10) addKw('Burn');
             if (eff.type === 11) { addKw('Active'); addKw('Dark Matter'); }
             if (eff.type === 12) { addKw('Rally'); addKw('Heal'); }  // PASSIVE_HEAL fires in the Rally Phase (ON_START_OF_TURN)
-            if (eff.type === 20) addKw('Cleanse');
+            if (eff.type === 20 && !eff.burn_only) addKw('Cleanse');
             if (eff.type === 13) addKw('Leap');
             if (eff.type === 14) addKw('Conjure');
             if (eff.type === 15) addKw('Burning');

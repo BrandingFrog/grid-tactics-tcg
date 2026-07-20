@@ -369,7 +369,12 @@ def _effects_value(
                     value += (-1.0 if friendly else 1.0) * (BURN_DAMAGE + 2.0)
                     burned.add(target.instance_id)
             elif effect.effect_type == EffectType.CLEANSE and friendly:
-                if target.is_burning or target.attack_bonus < 0 or target.max_health_bonus < 0:
+                if target.is_burning:
+                    value += 5.0
+                elif (
+                    not effect.burn_only
+                    and (target.attack_bonus < 0 or target.max_health_bonus < 0)
+                ):
                     value += 5.0
     return value
 
@@ -639,7 +644,7 @@ def _transform_score(state: GameState, library: CardLibrary, action: Action) -> 
 def _rest_score(state: GameState, player_idx: int) -> float:
     player = state.players[player_idx]
     available_slots = max(0, MAX_HAND_SIZE - len(player.hand))
-    useful_draws = min(state.fortune_ante, len(player.deck), available_slots)
+    useful_draws = min(state.rest_draw_count, len(player.deck), available_slots)
     draw = useful_draws * 7.0
     mana = 4.0 if player.current_mana < MAX_MANA_CAP else 0.0
     # REST banks every point, but at a full bank it wastes next turn's AP

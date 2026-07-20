@@ -216,6 +216,12 @@ class CardLoader:
                     f"BURN_DAMAGE in grid_tactics/minion.py."
                 )
 
+        if data.get("burn_only") and effect_type != EffectType.CLEANSE:
+            raise ValueError(
+                f"Card '{card_id}': {context} burn_only is valid only for "
+                "a CLEANSE effect"
+            )
+
         return EffectDefinition(
             effect_type=effect_type,
             trigger=trigger,
@@ -229,6 +235,7 @@ class CardLoader:
             condition_multiplier=data.get("condition_multiplier", 1),
             scope=scope,
             up_to=bool(data.get("up_to", False)),
+            burn_only=bool(data.get("burn_only", False)),
         )
 
     _TUTOR_SELECTOR_KEYS = frozenset({"tribe", "element", "card_type"})

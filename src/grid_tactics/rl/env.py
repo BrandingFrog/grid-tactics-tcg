@@ -154,6 +154,19 @@ class GridTacticsEnv(gymnasium.Env):
             action = pass_action()
             self.state = resolve_action(self.state, action, self.library)
 
+        # Fortune rounds are synchronized system decisions, not policy action
+        # slots. Resolve them with the same deterministic AI used by headless
+        # games before building the next mask; otherwise the modal pause has
+        # zero legal actions and would be mistaken for an automatic loss.
+        if (
+            self.state.pending_roguelike_event_turn is not None
+            or self.state.pending_marked_cards_player_idx is not None
+        ):
+            from grid_tactics.game_loop import resolve_ai_roguelike_decisions
+            self.state = resolve_ai_roguelike_decisions(
+                self.state, self.library,
+            )
+
         # Check termination conditions
         terminated = self.state.is_game_over
 

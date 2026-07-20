@@ -26,6 +26,7 @@ from pathlib import Path
 import pytest
 
 import grid_tactics.types as gt_types
+import grid_tactics.roguelike_events as roguelike_events
 from grid_tactics.actions import Action, move_action, pass_action
 from grid_tactics.board import Board
 from grid_tactics.card_library import CardLibrary
@@ -56,6 +57,12 @@ from grid_tactics.types import (
 @pytest.fixture(scope="module")
 def library():
     return CardLibrary.from_directory(Path("data/cards"))
+
+
+@pytest.fixture(autouse=True)
+def isolate_turn_structure_from_fortune_rounds(monkeypatch):
+    """These tests exercise phase mechanics, not the Fortune interruption."""
+    monkeypatch.setattr(roguelike_events, "ROGUELIKE_EVENT_INTERVAL", 10_000)
 
 
 def _player(side, hand=(), deck=(), grave=(), mana=5, hp=STARTING_HP):

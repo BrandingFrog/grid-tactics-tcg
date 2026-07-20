@@ -38,6 +38,7 @@ def test_definition(library):
     assert any(
         e.effect_type == EffectType.CLEANSE
         and e.trigger == TriggerType.ON_START_OF_TURN
+        and not e.burn_only
         for e in w.effects
     )
 

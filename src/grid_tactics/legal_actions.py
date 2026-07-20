@@ -413,14 +413,26 @@ def _action_phase_actions(
                             # targets with the same target_side field used by
                             # ROW effects (Fire Extinguisher, 2026-07-17).
                             side = effect.target_side or "enemy"
+                            effect_positions: set[tuple[int, int]] = set()
                             if side in ("enemy", "all"):
-                                target_positions.update(
+                                effect_positions.update(
                                     _get_enemy_minion_positions(state, player_side)
                                 )
                             if side in ("friendly", "all"):
-                                target_positions.update(
+                                effect_positions.update(
                                     _get_friendly_minion_positions(state, player_side)
                                 )
+                            if (
+                                effect.effect_type == EffectType.CLEANSE
+                                and effect.burn_only
+                            ):
+                                # Fire Extinguisher cannot target a clean
+                                # minion merely to spend the card/action.
+                                effect_positions = {
+                                    pos for pos in effect_positions
+                                    if _burning_minion_at(state, pos)
+                                }
+                            target_positions.update(effect_positions)
                         # Water Wyrm (2026-07-11): magic-untargetable minions
                         # are not valid MAGIC targets. With every candidate
                         # untargetable the magic is simply unplayable.
@@ -1458,6 +1470,16 @@ def _magic_untargetable_at(state, library, pos) -> bool:
             except KeyError:
                 return False
     return False
+
+
+def _burning_minion_at(state, pos) -> bool:
+    """Whether ``pos`` contains a living minion with Burning."""
+    return any(
+        tuple(m.position) == tuple(pos)
+        and m.current_health > 0
+        and m.is_burning
+        for m in state.minions
+    )
 
 
 def _get_enemy_minion_positions(state, player_side):

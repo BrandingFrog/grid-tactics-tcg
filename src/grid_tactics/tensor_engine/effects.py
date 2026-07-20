@@ -45,6 +45,7 @@ def apply_effects_batch(
         etarget = card_table.effect_target[safe_ids, eff_idx]   # [N]
         etarget_side = card_table.effect_target_side[safe_ids, eff_idx]  # [N]
         eamount = card_table.effect_amount[safe_ids, eff_idx]   # [N]
+        eburn_only = card_table.effect_burn_only[safe_ids, eff_idx]  # [N]
 
         # Only active if: trigger matches, effect exists, and game is masked
         active = mask & (etrigger == trigger) & (eff_idx < card_table.num_effects[safe_ids])
@@ -81,7 +82,7 @@ def apply_effects_batch(
         )
         _apply_cleanse(
             state, active & (etype == 20), etarget,
-            caster_owners, target_flat_pos, etarget_side,
+            caster_owners, target_flat_pos, etarget_side, eburn_only,
         )
 
 
@@ -101,7 +102,7 @@ def _find_minion_slot_at_pos(state, flat_pos: torch.Tensor) -> torch.Tensor:
 
 
 def _apply_cleanse(state, active, etarget, caster_owners, target_flat_pos,
-                   etarget_side):
+                   etarget_side, burn_only):
     """CLEANSE: clear Burning and negative stat marks on a valid target."""
     if not active.any():
         return
@@ -127,12 +128,12 @@ def _apply_cleanse(state, active, etarget, caster_owners, target_flat_pos,
         state.is_burning[arange_n, safe_slot],
     )
     state.minion_atk_bonus[arange_n, safe_slot] = torch.where(
-        valid,
+        valid & ~burn_only,
         state.minion_atk_bonus[arange_n, safe_slot].clamp_min(0),
         state.minion_atk_bonus[arange_n, safe_slot],
     )
     state.minion_max_health_bonus[arange_n, safe_slot] = torch.where(
-        valid,
+        valid & ~burn_only,
         state.minion_max_health_bonus[arange_n, safe_slot].clamp_min(0),
         state.minion_max_health_bonus[arange_n, safe_slot],
     )

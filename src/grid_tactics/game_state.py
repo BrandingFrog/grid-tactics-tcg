@@ -19,7 +19,7 @@ from grid_tactics.rng import GameRNG
 from grid_tactics.types import (
     STARTING_HAND_P1,
     STARTING_HAND_P2,
-    fortune_rates,
+    turn_economy_rates,
 )
 
 
@@ -256,7 +256,7 @@ class GameState:
     consecutive_passes: int = 0
     handshake_pending: bool = False
 
-    # Roguelike milestone event (2026-07-14): after every 25 completed
+    # Roguelike milestone event: after every 5 completed
     # turns, the incoming turn pauses before mana/draw/Rally work until
     # BOTH players privately lock one option. Effects resolve together,
     # then the postponed turn resumes. Choice ids live in a fixed two-seat
@@ -351,14 +351,25 @@ class GameState:
 
     @property
     def fortune_ante(self) -> int:
-        """Automatic mana per turn and cards drawn by REST."""
-        economy_rate, _ = fortune_rates(self.fortune_rounds_completed)
-        return economy_rate
+        """Backward-compatible alias for the number of cards drawn by REST."""
+        return self.rest_draw_count
+
+    @property
+    def turn_mana_gain(self) -> int:
+        """Automatic mana gained after the previous turn completes."""
+        turn_mana, _, _ = turn_economy_rates(self.turn_number)
+        return turn_mana
+
+    @property
+    def rest_draw_count(self) -> int:
+        """Cards drawn by REST; independent from Fortune and turn mana."""
+        _, rest_draws, _ = turn_economy_rates(self.turn_number)
+        return rest_draws
 
     @property
     def automatic_turn_draw_count(self) -> int:
-        """Late-game mandatory draw unlocked by the turn-75 Fortune."""
-        _, automatic_draws = fortune_rates(self.fortune_rounds_completed)
+        """Late-game mandatory draw unlocked after 75 completed turns."""
+        _, _, automatic_draws = turn_economy_rates(self.turn_number)
         return automatic_draws
 
     def get_minion(self, instance_id: int) -> Optional[MinionInstance]:
@@ -529,9 +540,11 @@ class GameState:
             "pending_marked_cards_cards": list(self.pending_marked_cards_cards),
             "pending_marked_cards_queue": list(self.pending_marked_cards_queue),
             "compound_interest_turns": list(self.compound_interest_turns),
-            # Derived from mirrored history so Fortune resolution can never
-            # double-increment it across server/headless resume paths.
+            # Derived turn-economy values. ``fortune_ante`` remains as a
+            # compatibility alias for older clients and saved fixtures.
             "fortune_ante": self.fortune_ante,
+            "turn_mana_gain": self.turn_mana_gain,
+            "rest_draw_count": self.rest_draw_count,
             "automatic_turn_draw_count": self.automatic_turn_draw_count,
             # Deferred-Decay marker (burn-tick death interrupt resume).
             "decay_resume_pending": self.decay_resume_pending,

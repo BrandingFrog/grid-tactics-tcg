@@ -5409,7 +5409,7 @@ input::selection, textarea::selection { background: rgba(224, 162, 60, 0.45); co
 .rps-tile.rps-tile-static,
 .rps-tile.rps-tile-static:hover { cursor: default; transform: none; }
 
-/* Turn-25 Fortune windows use the Tutor shell dimensions. They must not carry
+/* Fortune windows use the Tutor shell dimensions. They must not carry
    the pregame-rps-modal class: that class has a 360px cap for the pregame
    design box and used to crop the Fortune Accept footer. */
 .roguelike-event-modal,

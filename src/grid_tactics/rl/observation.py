@@ -46,7 +46,7 @@ OBSERVATION_SPEC: dict = {
     "my_resources": {"offset": 270, "size": 5, "description": "mana, max_mana, hp, deck_size, grave_size"},
     "opponent_visible": {"offset": 275, "size": 4, "description": "opponent hp, mana, hand_size, deck_size"},
     "game_context": {"offset": 279, "size": 3, "description": "turn_number, is_action_phase, am_i_active"},
-    "react_context": {"offset": 282, "size": 10, "description": "react state, AP banks, Fortune rate/clock, actions spent, 3 reserved"},
+    "react_context": {"offset": 282, "size": 10, "description": "react state, AP banks, turn mana rate/clock, actions spent, 3 reserved"},
 }
 
 
@@ -117,10 +117,9 @@ def encode_observation(
     obs[offset + 1] = len(state.react_stack) / MAX_REACT_STACK_DEPTH
     obs[offset + 2] = me.action_points / MAX_ACTION_POINTS
     obs[offset + 3] = opponent.action_points / MAX_ACTION_POINTS
-    # Preserve the existing /5 scale for trained-checkpoint compatibility.
-    # The economy caps at 3; the separate slot below distinguishes the
-    # turn-50 3/3 state from the post-turn-75 deckout clock.
-    obs[offset + 4] = min(state.fortune_ante, 5) / 5.0
+    # Turn income scales to the normal 10-mana cap. The separate slot below
+    # distinguishes the post-turn-75 deckout clock from the income rate.
+    obs[offset + 4] = min(state.turn_mana_gain, 10) / 10.0
     obs[offset + 5] = state.actions_spent_this_turn / MAX_ACTION_POINTS
     obs[offset + 6] = float(state.automatic_turn_draw_count)
     # obs[offset + 7:offset + 10] remain 0.0 (reserved)

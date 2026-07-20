@@ -55,33 +55,40 @@ MAX_EFFECT_AMOUNT: int = 100
 ACTION_POINTS_PER_TURN: int = 1
 MAX_ACTION_POINTS: int = 3
 
-# Fortune progression has two independent axes.  The first two completed
-# rounds raise turn mana / REST cards from 1 to 2 to 3; the third round
-# (after turn 75) holds that economy at 3 and instead unlocks one mandatory
-# turn-start draw.  Keeping these as separate constants prevents "ante 3"
-# from accidentally starting the deckout clock after turn 50.
-FORTUNE_ECONOMY_CAP: int = 3
-DECKOUT_DRAW_FORTUNE_ROUNDS: int = 3
+# Turn economy is deliberately independent from Fortune frequency. Fortune
+# offers can be rebalanced without silently accelerating mana, REST draws, or
+# the late-game deckout clock.
+MANA_RATE_TURN_INTERVAL: int = 10
+REST_DRAW_COUNT: int = 1
+DECKOUT_DRAW_START_TURN: int = 75
 
 
-def fortune_rates(completed_rounds: int) -> tuple[int, int]:
-    """Return ``(economy_rate, automatic_turn_draws)`` for Fortune progress."""
-    completed = max(0, completed_rounds)
-    economy_rate = min(FORTUNE_ECONOMY_CAP, 1 + completed)
-    automatic_draws = int(completed >= DECKOUT_DRAW_FORTUNE_ROUNDS)
-    return economy_rate, automatic_draws
+def turn_economy_rates(turn_number: int) -> tuple[int, int, int]:
+    """Return ``(turn_mana, rest_draws, automatic_turn_draws)``.
+
+    ``turn_number`` is the incoming/current turn, so ``turn_number - 1`` is
+    the number of fully completed turns. The first increase therefore applies
+    to turn 11, immediately after turn 10 has completed.
+    """
+    completed_turns = max(0, int(turn_number) - 1)
+    turn_mana = min(
+        MAX_MANA_CAP,
+        MANA_REGEN_PER_TURN + completed_turns // MANA_RATE_TURN_INTERVAL,
+    )
+    automatic_draws = int(completed_turns >= DECKOUT_DRAW_START_TURN)
+    return turn_mana, REST_DRAW_COUNT, automatic_draws
 
 # DRAW slot 1000 is REST under the active contract. Automatic turn draws are
-# disabled before the third Fortune, then become a one-card late-game clock.
+# disabled through turn 75, then become a one-card late-game clock.
 
 # ---------------------------------------------------------------------------
 # Active rules experiment (v5): action bank + REST.
-#   - NO turn-start auto-draw before the third Fortune round.
-#   - After turn 75 the economy stays at 3/3, turn start draws 1, and an
-#     empty deck fatigues.
+#   - NO turn-start auto-draw before 75 completed turns.
+#   - Turn mana rises by one after every 10 completed turns, capped at 10.
+#   - After turn 75, turn start draws 1 and an empty deck fatigues.
 #   - Primary actions, including MAGIC, spend one action point.
 #   - REST is the rewarded no-action end: it spends 0, banks all points,
-#     grants +1 mana, draws the Fortune ante, and offers a Handshake.
+#     grants +1 mana, draws one card, and offers a Handshake.
 #   - After any point is spent REST becomes PASS: free, no effect, end turn.
 #   - Handshake payout remains +1 mana AND draw 1 for both players.
 # This is now the default rules contract for live, headless, and RL play.

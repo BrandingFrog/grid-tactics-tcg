@@ -37,6 +37,7 @@ class CardTable:
         effect_target: torch.Tensor,
         effect_target_side: torch.Tensor,
         effect_amount: torch.Tensor,
+        effect_burn_only: torch.Tensor,
         num_effects: torch.Tensor,
         react_condition: torch.Tensor,
         is_react_eligible: torch.Tensor,
@@ -78,6 +79,7 @@ class CardTable:
         self.effect_target = effect_target
         self.effect_target_side = effect_target_side
         self.effect_amount = effect_amount
+        self.effect_burn_only = effect_burn_only
         self.num_effects = num_effects
         self.react_condition = react_condition
         self.is_react_eligible = is_react_eligible
@@ -143,6 +145,7 @@ class CardTable:
         effect_target = torch.full((n, MAX_EFFECTS_PER_CARD), -1, dtype=torch.int32)
         effect_target_side = torch.zeros((n, MAX_EFFECTS_PER_CARD), dtype=torch.int32)
         effect_amount = torch.zeros((n, MAX_EFFECTS_PER_CARD), dtype=torch.int32)
+        effect_burn_only = torch.zeros((n, MAX_EFFECTS_PER_CARD), dtype=torch.bool)
         num_effects = torch.zeros(n, dtype=torch.int32)
         react_condition = torch.full((n,), -1, dtype=torch.int32)
         is_react_eligible = torch.zeros(n, dtype=torch.bool)
@@ -191,6 +194,7 @@ class CardTable:
                     None: 0, "all": 0, "enemy": 1, "friendly": 2,
                 }[eff.target_side]
                 effect_amount[i, j] = eff.amount
+                effect_burn_only[i, j] = eff.burn_only
             num_effects[i] = len(card.effects)
 
             # Audit-followup: precompute LEAP / PASSIVE amounts so the move
@@ -330,6 +334,7 @@ class CardTable:
             effect_target=effect_target.to(device),
             effect_target_side=effect_target_side.to(device),
             effect_amount=effect_amount.to(device),
+            effect_burn_only=effect_burn_only.to(device),
             num_effects=num_effects.to(device),
             react_condition=react_condition.to(device),
             is_react_eligible=is_react_eligible.to(device),

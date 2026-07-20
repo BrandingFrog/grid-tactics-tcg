@@ -20,10 +20,14 @@ from grid_tactics.game_state import GameState
 from grid_tactics.minion import MinionInstance
 from grid_tactics.phase_contracts import assert_phase_contract
 from grid_tactics.rng import GameRNG
-from grid_tactics.types import MAX_HAND_SIZE, MAX_MANA_CAP, fortune_rates
+from grid_tactics.types import (
+    MAX_HAND_SIZE,
+    MAX_MANA_CAP,
+    turn_economy_rates,
+)
 
 ROGUELIKE_EVENT_INTERVAL = int(
-    os.environ.get("GT_ROGUELIKE_EVENT_INTERVAL", "25")
+    os.environ.get("GT_ROGUELIKE_EVENT_INTERVAL", "5")
 )
 
 CLUMSY_GREED = "clumsy_greed"
@@ -195,11 +199,10 @@ def resolve_roguelike_event_choice(
             history_entries.append(choice)
         resolved_choices.append(actual)
 
-    completed_after_resolution = state.fortune_rounds_completed + 1
-    upcoming_ante, upcoming_turn_draws = fortune_rates(
-        completed_after_resolution
-    )
     if event_collector is not None:
+        previous_turn_mana, _, _ = turn_economy_rates(
+            max(1, state.turn_number - 1)
+        )
         event_collector.collect(
             EVT_PENDING_MODAL_RESOLVED,
             "system:roguelike_event",
@@ -222,11 +225,11 @@ def resolve_roguelike_event_choice(
                 # This mirrored lock completes exactly one Fortune round.
                 # History is the source of truth; expose the upcoming rates
                 # in this pre-final-snapshot event for the reveal UI.
-                "fortune_ante": upcoming_ante,
-                "turn_mana_gain": upcoming_ante,
-                "rest_draw_count": upcoming_ante,
-                "automatic_turn_draw_count": upcoming_turn_draws,
-                "ante_increased": upcoming_ante > state.fortune_ante,
+                "fortune_ante": state.rest_draw_count,
+                "turn_mana_gain": state.turn_mana_gain,
+                "rest_draw_count": state.rest_draw_count,
+                "automatic_turn_draw_count": state.automatic_turn_draw_count,
+                "ante_increased": state.turn_mana_gain > previous_turn_mana,
             },
         )
 

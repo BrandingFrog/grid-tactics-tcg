@@ -166,7 +166,7 @@ class TestDecisionIdx:
 
 
 def test_preview_ai_resumes_when_fortune_returns_on_its_action(app_and_rm):
-    """Turn 26 must not remain parked when the AI owns the postponed turn."""
+    """The AI must not remain parked when it owns a postponed turn."""
     _application, rm = app_and_rm
     _code, session = rm.create_preview_game("Solo", "human-sid")
     session.state = replace(

@@ -14,13 +14,14 @@ Covers:
 
 from __future__ import annotations
 
+from dataclasses import replace
 from pathlib import Path
 
 import numpy as np
 import pytest
 
 from grid_tactics.card_library import CardLibrary
-from grid_tactics.rl.action_space import ACTION_SPACE_SIZE
+from grid_tactics.rl.action_space import ACTION_SPACE_SIZE, PASS_IDX
 from grid_tactics.rl.env import GridTacticsEnv
 from grid_tactics.rl.observation import OBSERVATION_SIZE
 
@@ -154,6 +155,26 @@ class TestStep:
 
         # Observation should change after taking an action
         assert not np.array_equal(obs1, obs2)
+
+    def test_step_auto_resolves_turn_5_fortune_round(self, env):
+        """A system Fortune pause is not exposed as a false terminal state."""
+        env.reset(seed=42)
+        players = (
+            replace(env.state.players[0], action_points=0),
+            env.state.players[1],
+        )
+        env.state = replace(env.state, turn_number=5, players=players)
+
+        # Ending an action turn still gives the opponent its normal chance to
+        # react, so the second PASS closes that window and advances the turn.
+        env.step(PASS_IDX)
+        _, _, terminated, truncated, info = env.step(PASS_IDX)
+
+        assert not terminated
+        assert not truncated
+        assert env.state.turn_number == 6
+        assert env.state.pending_roguelike_event_turn is None
+        assert info["action_mask"].any()
 
 
 class TestActionMasks:

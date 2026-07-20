@@ -1,4 +1,4 @@
-"""Regression coverage for synchronized 25-turn roguelike events."""
+"""Regression coverage for synchronized 5-turn roguelike events."""
 
 from dataclasses import replace
 from pathlib import Path
@@ -89,19 +89,19 @@ def _state(*, p0=None, p1=None, turn=25, phase=TurnPhase.END_OF_TURN, **kwargs):
     return GameState(**defaults)
 
 
-def test_turn_25_opens_event_before_incoming_resources(library):
+def test_turn_5_opens_event_before_incoming_resources(library):
     rat = library.get_numeric_id("rat")
     p1 = _player(PlayerSide.PLAYER_1, deck=(rat, rat), mana=2)
     stream = EventStream()
 
     parked = _close_end_of_turn_and_flip(
-        _state(p1=p1), library, event_collector=stream,
+        _state(p1=p1, turn=5), library, event_collector=stream,
     )
 
-    assert parked.turn_number == 26
+    assert parked.turn_number == 6
     assert parked.active_player_idx == 1
     assert parked.phase == TurnPhase.START_OF_TURN
-    assert parked.pending_roguelike_event_turn == 26
+    assert parked.pending_roguelike_event_turn == 6
     assert parked.players[1].current_mana == 2
     assert parked.players[1].deck == (rat, rat)
     assert legal_actions(parked, library) == ()
@@ -111,9 +111,9 @@ def test_turn_25_opens_event_before_incoming_resources(library):
 
 @pytest.mark.parametrize(
     ("completed_turn", "incoming_turn"),
-    ((25, 26), (50, 51), (75, 76), (100, 101)),
+    ((5, 6), (10, 11), (15, 16), (20, 21)),
 )
-def test_fortune_round_recurs_every_25_completed_turns(
+def test_fortune_round_recurs_every_5_completed_turns(
     library, completed_turn, incoming_turn,
 ):
     parked = _close_end_of_turn_and_flip(
@@ -130,9 +130,9 @@ def test_non_boundary_turn_continues_normally(library):
     rat = library.get_numeric_id("rat")
     p1 = _player(PlayerSide.PLAYER_2, deck=(rat, rat), mana=2)
     advanced = _close_end_of_turn_and_flip(
-        _state(p1=p1, turn=24), library,
+        _state(p1=p1, turn=4), library,
     )
-    assert advanced.turn_number == 25
+    assert advanced.turn_number == 5
     assert advanced.pending_roguelike_event_turn is None
     assert advanced.players[1].current_mana == 3
     assert len(advanced.players[1].deck) == 1
@@ -354,7 +354,7 @@ def test_postponed_resources_resume_once(library):
     rat = library.get_numeric_id("rat")
     pending = _state(
         p1=_player(PlayerSide.PLAYER_2, deck=(rat, rat), mana=2),
-        turn=26,
+        turn=6,
         phase=TurnPhase.START_OF_TURN,
         active_player_idx=1,
     )
@@ -864,7 +864,7 @@ def test_compound_interest_pays_one_on_next_three_turn_starts(library):
         _state(
             p0=_player(PlayerSide.PLAYER_1, mana=0, deck=()),
             phase=TurnPhase.START_OF_TURN,
-            turn=26,
+            turn=6,
         ),
         COMPOUND_INTEREST, WITH_A_SLAP, library,
     )
@@ -873,9 +873,9 @@ def test_compound_interest_pays_one_on_next_three_turn_starts(library):
     for _ in range(3):
         state = apply_new_turn_resources(state)
         mana_values.append(state.players[0].current_mana)
-    # First resolved Fortune raises base turn income to 2; Compound Interest
-    # remains an additional +1 for each of these three starts.
-    assert mana_values == [3, 6, 9]
+    # Fortunes no longer alter economy. Base income is still 1 this early;
+    # Compound Interest remains an additional +1 on each start.
+    assert mana_values == [2, 4, 6]
     assert state.compound_interest_turns == (0, 0)
 
 

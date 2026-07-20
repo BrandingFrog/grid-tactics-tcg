@@ -228,7 +228,7 @@ def _apply_draw(
     """Apply DRAW — the active rules' zero-point REST action.
 
     The resting player preserves the full AP bank, gains +1 mana, and draws
-    the current Fortune ante. An empty deck simply stops the draws; a full
+    the current REST draw count. An empty deck simply stops the draws; a full
     hand overdraw-burns. Under standard rules this is the legacy plain draw
     (not normally legal since the 2026-07 redesign).
     """
@@ -238,8 +238,8 @@ def _apply_draw(
     if manual_draw_variant():
         if player.current_mana < MAX_MANA_CAP:
             player = replace(player, current_mana=player.current_mana + 1)
-        # Fortune raises the number of cards per REST, never its +1 mana.
-        for _ in range(state.fortune_ante):
+        # REST draw count is independent from Fortune and turn income.
+        for _ in range(state.rest_draw_count):
             if not player.deck:
                 break
             player, card_id, burned = player.draw_card_with_overdraw()

@@ -37,6 +37,7 @@ def _state(
     library: CardLibrary,
     *,
     completed_fortunes: int,
+    turn_number: int = 75,
     deck: tuple[int, ...] = (),
     hand: tuple[int, ...] = (),
     exhaust: tuple[int, ...] = (),
@@ -58,17 +59,20 @@ def _state(
     return replace(
         state,
         players=tuple(players),
-        turn_number=76 if completed_fortunes >= 3 else 75,
+        turn_number=turn_number,
         roguelike_event_history=(history, history),
     )
 
 
 def test_clock_is_off_before_turn_75_fortune_resolves(library):
-    state = _state(library, completed_fortunes=2, deck=(), hand=())
+    state = _state(
+        library, completed_fortunes=14, turn_number=75, deck=(), hand=(),
+    )
 
     resolved = apply_new_turn_resources(state)
 
-    assert state.fortune_ante == 3
+    assert state.rest_draw_count == 1
+    assert state.turn_mana_gain == 8
     assert state.automatic_turn_draw_count == 0
     assert resolved.players[0].hand == ()
     assert resolved.players[0].hp == 100
@@ -76,33 +80,40 @@ def test_clock_is_off_before_turn_75_fortune_resolves(library):
 
 
 @pytest.mark.parametrize(
-    ("completed_fortunes", "economy_rate", "automatic_draws"),
+    ("turn_number", "mana_rate", "automatic_draws"),
     (
-        (0, 1, 0),
-        (1, 2, 0),
-        (2, 3, 0),
-        (3, 3, 1),
-        (4, 3, 1),
-        (8, 3, 1),
+        (1, 1, 0),
+        (10, 1, 0),
+        (11, 2, 0),
+        (21, 3, 0),
+        (75, 8, 0),
+        (76, 8, 1),
+        (101, 10, 1),
     ),
 )
-def test_fortune_economy_caps_separately_from_deckout_clock(
-    library, completed_fortunes, economy_rate, automatic_draws,
+def test_turn_economy_and_deckout_clock(
+    library, turn_number, mana_rate, automatic_draws,
 ):
-    state = _state(library, completed_fortunes=completed_fortunes)
+    state = _state(
+        library, completed_fortunes=0, turn_number=turn_number,
+    )
 
-    assert state.fortune_ante == economy_rate
+    assert state.rest_draw_count == 1
+    assert state.turn_mana_gain == mana_rate
     assert state.automatic_turn_draw_count == automatic_draws
 
 
-def test_third_fortune_unlocks_one_automatic_turn_draw(library):
+def test_turn_76_unlocks_one_automatic_turn_draw(library):
     rat = library.get_numeric_id("rat")
-    state = _state(library, completed_fortunes=3, deck=(rat,), hand=())
+    state = _state(
+        library, completed_fortunes=15, turn_number=76, deck=(rat,), hand=(),
+    )
     stream = EventStream()
 
     resolved = apply_new_turn_resources(state, event_collector=stream)
 
-    assert state.fortune_ante == 3
+    assert state.rest_draw_count == 1
+    assert state.turn_mana_gain == 8
     assert state.automatic_turn_draw_count == 1
     assert resolved.players[0].hand == (rat,)
     assert resolved.players[0].deck == ()
@@ -119,7 +130,8 @@ def test_late_turn_draw_overdraws_to_exhaust(library):
     full_hand = (rat,) * MAX_HAND_SIZE
     state = _state(
         library,
-        completed_fortunes=3,
+        completed_fortunes=15,
+        turn_number=76,
         deck=(rat,),
         hand=full_hand,
     )
@@ -134,7 +146,9 @@ def test_late_turn_draw_overdraws_to_exhaust(library):
 
 
 def test_empty_deck_fatigue_escalates_each_own_turn(library):
-    state = _state(library, completed_fortunes=3, deck=(), hand=())
+    state = _state(
+        library, completed_fortunes=15, turn_number=76, deck=(), hand=(),
+    )
     first_stream = EventStream()
 
     first = apply_new_turn_resources(state, event_collector=first_stream)
@@ -161,7 +175,8 @@ def test_empty_deck_fatigue_escalates_each_own_turn(library):
 def test_late_fatigue_can_end_the_game(library):
     state = _state(
         library,
-        completed_fortunes=3,
+        completed_fortunes=15,
+        turn_number=76,
         deck=(),
         hand=(),
         hp=5,
@@ -174,24 +189,29 @@ def test_late_fatigue_can_end_the_game(library):
     assert resolved.players[0].hp == -5
 
 
-def test_pending_third_fortune_does_not_start_clock_early(library):
+def test_pending_marked_cards_does_not_change_turn_75_clock(library):
     rat = library.get_numeric_id("rat")
-    state = _state(library, completed_fortunes=3, deck=(rat,))
+    state = _state(
+        library, completed_fortunes=15, turn_number=76, deck=(rat,),
+    )
     pending = replace(
         state,
         pending_marked_cards_player_idx=0,
         pending_marked_cards_cards=(rat,),
     )
 
-    assert pending.fortune_rounds_completed == 2
-    assert pending.automatic_turn_draw_count == 0
+    assert pending.fortune_rounds_completed == 14
+    assert pending.automatic_turn_draw_count == 1
     assert state.automatic_turn_draw_count == 1
     assert state.to_dict()["automatic_turn_draw_count"] == 1
 
 
 def test_turn_75_fortune_resume_applies_first_forced_draw(library):
     rat = library.get_numeric_id("rat")
-    state = _state(library, completed_fortunes=2, deck=(rat,), hand=())
+    state = _state(
+        library, completed_fortunes=14, turn_number=76,
+        deck=(rat,), hand=(),
+    )
     state = replace(
         state,
         phase=TurnPhase.START_OF_TURN,
@@ -208,16 +228,17 @@ def test_turn_75_fortune_resume_applies_first_forced_draw(library):
         event_collector=reveal_stream,
     )
 
-    assert state.fortune_rounds_completed == 3
-    assert state.fortune_ante == 3
+    assert state.fortune_rounds_completed == 15
+    assert state.fortune_ante == 1
+    assert state.turn_mana_gain == 8
     assert state.automatic_turn_draw_count == 1
     reveal = next(
         event for event in reveal_stream.events
         if event.type == EVT_PENDING_MODAL_RESOLVED
     )
-    assert reveal.payload["fortune_ante"] == 3
-    assert reveal.payload["turn_mana_gain"] == 3
-    assert reveal.payload["rest_draw_count"] == 3
+    assert reveal.payload["fortune_ante"] == 1
+    assert reveal.payload["turn_mana_gain"] == 8
+    assert reveal.payload["rest_draw_count"] == 1
     assert reveal.payload["automatic_turn_draw_count"] == 1
     assert reveal.payload["ante_increased"] is False
 

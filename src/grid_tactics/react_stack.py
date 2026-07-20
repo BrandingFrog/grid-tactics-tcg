@@ -1364,7 +1364,7 @@ def apply_new_turn_resources(
     if state.turn_number > 2:
         prev_mana = state.players[active_idx].current_mana
         active_player = state.players[active_idx].regenerate_mana(
-            state.fortune_ante
+            state.turn_mana_gain
         )
         state = replace(
             state,
@@ -1411,8 +1411,8 @@ def apply_new_turn_resources(
                 },
             )
 
-    # Active rules add the mandatory draw only after the third Fortune
-    # (completed turn 75). Before then, REST remains the only regular draw.
+    # Active rules add the mandatory draw after completed turn 75. This clock
+    # is independent from Fortune cadence; before then REST is the regular draw.
     if manual_draw_variant() and state.automatic_turn_draw_count == 0:
         return state
 
@@ -1488,7 +1488,7 @@ def _close_end_of_turn_and_flip(
       3. Flip ``active_player_idx`` and increment ``turn_number``.
       4. Mana regen for new active player (suppressed on turn 2).
       5. Turn-start draw after mana regen: legacy rules always draw; active
-         rules begin drawing after the third Fortune. Empty deck → escalating
+         rules begin after completed turn 75. Empty deck → escalating
          fatigue (10/20/30... per player, tracked in fatigue_counts). Full
          hand → the card overdraw-burns to the Exhaust Pile, revealed.
 
@@ -1567,7 +1567,7 @@ def _close_end_of_turn_and_flip(
             },
         )
 
-    # Every 25 completed turns, postpone the incoming turn before regen,
+    # Every 5 completed turns, postpone the incoming turn before regen,
     # draw/fatigue, or Rally triggers. Both seats must lock a roguelike
     # choice before the server resumes this exact tail.
     from grid_tactics.roguelike_events import (

@@ -431,8 +431,12 @@ class TestMaskShape:
 class TestMaskMatchesLegal:
     """Test that mask matches legal_actions() for many game states."""
 
-    def test_mask_matches_legal(self, library, encoder):
+    def test_mask_matches_legal(self, library, encoder, monkeypatch):
         """For 100 random game states, mask matches legal_actions() exactly."""
+        import grid_tactics.roguelike_events as roguelike_events
+        monkeypatch.setattr(
+            roguelike_events, "ROGUELIKE_EVENT_INTERVAL", 10_000,
+        )
         card_counts = {
             "rat": 3, "furryroach": 3,
             "blue_diodebot": 3, "red_diodebot": 3,

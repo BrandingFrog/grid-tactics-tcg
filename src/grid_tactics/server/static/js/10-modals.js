@@ -1318,7 +1318,8 @@ function renderActionBar() {
                 if (restLegal) {
                     var restBtn = document.createElement('button');
                     restBtn.className = 'btn btn-action btn-rest-action';
-                    var restDraws = Math.max(1, (gameState.fortune_ante | 0));
+                    var restDraws = Math.max(1, ((gameState.rest_draw_count == null
+                        ? gameState.fortune_ante : gameState.rest_draw_count) | 0));
                     restBtn.innerHTML = '<span>Rest</span><small>+1M · Draw '
                         + restDraws + '</small>';
                     restBtn.title = 'Rest — take no action, bank all action points, gain 1 mana, draw '
@@ -1381,7 +1382,7 @@ function renderActionBar() {
 
 
 // =============================================
-// ROGUELIKE MILESTONE EVENT (every 25 completed turns)
+// ROGUELIKE MILESTONE EVENT (every 5 completed turns)
 // =============================================
 
 var ROGUELIKE_EVENT_FALLBACK_OPTIONS = [
@@ -1687,7 +1688,7 @@ function showRoguelikeChoicesReveal(payload) {
     var turnMana = Math.max(1, (payload && payload.turn_mana_gain) | 0);
     var restDraws = Math.max(1, (payload && payload.rest_draw_count) | 0);
     var turnDraws = Math.max(0, (payload && payload.automatic_turn_draw_count) | 0);
-    subtitle.textContent = 'Both resolve together · Reactions disabled · FORTUNE RATE: +'
+    subtitle.textContent = 'Both resolve together · Reactions disabled · TURN ECONOMY: +'
         + turnMana + ' turn Mana · Rest draws ' + restDraws
         + (turnDraws ? ' · Turn draw ' + turnDraws + ' (empty deck fatigues)' : '');
     header.appendChild(title);

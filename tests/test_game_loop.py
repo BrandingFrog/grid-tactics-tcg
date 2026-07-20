@@ -304,6 +304,12 @@ class TestWinMechanism:
             while not state.is_game_over and state.turn_number <= 2000:
                 actions = legal_actions(state, library)
                 if not actions:
+                    if state.pending_roguelike_event_turn is not None:
+                        from grid_tactics.game_loop import (
+                            resolve_ai_roguelike_decisions,
+                        )
+                        state = resolve_ai_roguelike_decisions(state, library)
+                        continue
                     # Zero-legal-actions edge case (auto-pass scenario the
                     # server handles in production). Treat as a stalemate
                     # for the purposes of this random-agent smoke test.

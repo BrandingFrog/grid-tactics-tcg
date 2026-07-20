@@ -1720,7 +1720,7 @@ def test_roguelike_event_modal_is_wired_into_render_and_event_queue():
     assert "Stackable." in _SRC
     assert "function showRoguelikeChoicesReveal(payload)" in _SRC
     assert "Both resolve together · Reactions disabled" in _SRC
-    assert "FORTUNE RATE:" in _SRC
+    assert "TURN ECONOMY:" in _SRC
     assert "ANTE UP:" not in extract_function("showRoguelikeChoicesReveal")
     assert "Math.max(_evDurationOr(ev, 0), revealMs)" in _SRC
     assert "Draw 4. Exhaust 2 random cards from your hand." in _SRC

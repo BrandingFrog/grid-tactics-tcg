@@ -447,8 +447,14 @@ def _apply_effect_to_minion_dispatch(
             minion,
             is_burning=False,
             burn_scope="owner",
-            attack_bonus=max(0, minion.attack_bonus),
-            max_health_bonus=max(0, minion.max_health_bonus),
+            attack_bonus=(
+                minion.attack_bonus
+                if effect.burn_only else max(0, minion.attack_bonus)
+            ),
+            max_health_bonus=(
+                minion.max_health_bonus
+                if effect.burn_only else max(0, minion.max_health_bonus)
+            ),
         )
         if cleaned == minion:
             return state  # nothing to cleanse — no-op, no event churn

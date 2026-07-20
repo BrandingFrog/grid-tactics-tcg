@@ -1094,7 +1094,7 @@ def _auto_advance_server_controlled_turn(
     single hand-off point back to that seat, including after a fortune or a
     Marked Cards modal finishes.  Keeping the loop here prevents alternate
     socket handlers from returning with the game parked on the AI's ACTION
-    phase (the turn-26 preview softlock).
+    phase (the post-Fortune preview softlock).
     """
     from grid_tactics.react_stack import (
         enter_end_of_turn as _enter_end_of_turn,

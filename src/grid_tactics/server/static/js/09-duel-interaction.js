@@ -29,7 +29,7 @@ function renderGame() {
     // renderGame runs from applyStateFrame which the AnimationQueue only
     // calls AFTER the triggering animation completes.
     renderReactBanner();
-    // Mandatory simultaneous milestone choice every 25 completed turns.
+    // Mandatory simultaneous Fortune choice every 5 completed turns.
     syncRoguelikeEventUI();
     // Private follow-up picker for Marked Cards fortunes.
     syncMarkedCardsUI();

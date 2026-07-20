@@ -338,6 +338,12 @@ def _compute_play_card_mask(mask, state, card_table, phase_mask, ap, arange_n,
     # same 25 encoded cells as SINGLE_TARGET; resolution consumes its row.
     eff_triggers = card_table.effect_trigger[card_ids_flat].reshape(N, MAX_HAND, MAX_EFFECTS_PER_CARD)
     eff_targets = card_table.effect_target[card_ids_flat].reshape(N, MAX_HAND, MAX_EFFECTS_PER_CARD)
+    eff_types = card_table.effect_type[card_ids_flat].reshape(
+        N, MAX_HAND, MAX_EFFECTS_PER_CARD
+    )
+    eff_burn_only = card_table.effect_burn_only[card_ids_flat].reshape(
+        N, MAX_HAND, MAX_EFFECTS_PER_CARD
+    )
     eff_target_sides = card_table.effect_target_side[card_ids_flat].reshape(
         N, MAX_HAND, MAX_EFFECTS_PER_CARD
     )
@@ -352,8 +358,10 @@ def _compute_play_card_mask(mask, state, card_table, phase_mask, ap, arange_n,
     # friendly targets.  This mirrors Python target_side enumeration.
     targeted_magic = is_magic & has_single_target
     single = eff_valid & (eff_triggers == 0) & (eff_targets == 0)
-    targets_friendly = (single & (eff_target_sides == 2)).any(dim=2)
-    targets_enemy = (single & (eff_target_sides != 2)).any(dim=2)
+    burn_only_cleanse = single & (eff_types == 20) & eff_burn_only
+    normal_single = single & ~burn_only_cleanse
+    targets_friendly = (normal_single & (eff_target_sides == 2)).any(dim=2)
+    targets_enemy = (normal_single & (eff_target_sides != 2)).any(dim=2)
     play_out |= (
         (targeted_magic & targets_enemy).unsqueeze(2)
         & enemy_pos_mask.unsqueeze(1)
@@ -361,6 +369,31 @@ def _compute_play_card_mask(mask, state, card_table, phase_mask, ap, arange_n,
     play_out |= (
         (targeted_magic & targets_friendly).unsqueeze(2)
         & friendly_pos_mask.unsqueeze(1)
+    )
+    # Fire Extinguisher only targets a minion that is currently Burning.
+    # Gather the status of each occupied board cell without relying on a
+    # scatter with duplicate dead-slot positions.
+    board_slots = state.board.reshape(N, GRID_SIZE)
+    safe_board_slots = board_slots.clamp(min=0).long()
+    burning_pos_mask = (
+        (board_slots >= 0)
+        & state.is_burning.gather(1, safe_board_slots)
+    )
+    burn_cleanse_friendly = (
+        burn_only_cleanse & (eff_target_sides == 2)
+    ).any(dim=2)
+    burn_cleanse_enemy = (
+        burn_only_cleanse & (eff_target_sides != 2)
+    ).any(dim=2)
+    play_out |= (
+        (targeted_magic & burn_cleanse_friendly).unsqueeze(2)
+        & friendly_pos_mask.unsqueeze(1)
+        & burning_pos_mask.unsqueeze(1)
+    )
+    play_out |= (
+        (targeted_magic & burn_cleanse_enemy).unsqueeze(2)
+        & enemy_pos_mask.unsqueeze(1)
+        & burning_pos_mask.unsqueeze(1)
     )
 
     # Row magic -> every board cell is a legal row selector.

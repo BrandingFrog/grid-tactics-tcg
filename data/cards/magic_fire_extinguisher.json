@@ -11,6 +11,7 @@
             "trigger": "on_play",
             "target": "single_target",
             "target_side": "friendly",
+            "burn_only": true,
             "amount": 0
         }
     ],
@@ -20,7 +21,7 @@
     ],
     "rulings": [
         "Choose a friendly minion before the spell enters the spell stage.",
-        "Cleanse removes Burning and negative attack or maximum-health marks. It does not heal damage.",
-        "The target is still protected by the normal react window; negating Fire Extinguisher leaves its debuffs in place."
+        "This Cleanse removes Burning only. Attack and maximum-health penalties remain.",
+        "Only a currently Burning friendly minion is a valid target. The target is still protected by the normal react window."
     ]
 }

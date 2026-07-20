@@ -460,11 +460,14 @@ function showPlayerPreview(playerIdx) {
         body += '<div class="tooltip-text">Hand ' + handN + ' · Deck ' + deckN
             + ' · Grave ' + (p.grave ? p.grave.length : 0)
             + ' · Exhaust ' + (p.exhaust ? p.exhaust.length : 0) + '</div>';
-        var ante = Math.max(1, state.fortune_ante | 0);
+        var turnMana = Math.max(1, (state.turn_mana_gain == null
+            ? state.fortune_ante : state.turn_mana_gain) | 0);
+        var restDraws = Math.max(1, (state.rest_draw_count == null
+            ? state.fortune_ante : state.rest_draw_count) | 0);
         var turnDraws = Math.max(0, state.automatic_turn_draw_count | 0);
         body += '<div class="tooltip-text tooltip-action-economy">Turn income: +'
-            + ante + ' Mana · Rest: +1 Mana and draw ' + ante
-            + (ante === 1 ? ' card' : ' cards')
+            + turnMana + ' Mana · Rest: +1 Mana and draw ' + restDraws
+            + (restDraws === 1 ? ' card' : ' cards')
             + (turnDraws ? ' · Turn draw: ' + turnDraws + ' (empty deck fatigues)' : '')
             + '</div>';
         var panels = [];
@@ -1272,7 +1275,9 @@ function getEffectDescription(effects, cardData, opts) {
                 desc += '. Buff all ' + conjureName + ' by Dark Matter';
             }
         } else if (type === 20) { // Cleanse (Water Wyrm 2026-07-11)
-            desc = prefix + 'Cleanse (removes all debuffs)';
+            desc = eff.burn_only
+                ? prefix + 'Cleanse Burning from a friendly minion'
+                : prefix + 'Cleanse all debuffs';
         } else if (type === 15) { // Apply Burning
             var burnAmt = amount || 1;
             desc = prefix + 'Apply ' + burnAmt + ' Burning';
